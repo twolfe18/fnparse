@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import travis.Vector;
@@ -9,16 +11,27 @@ import edu.jhu.hlt.fnparse.util.Sentence;
 
 public class BasicTargetFeatures implements TargetFeature {
 
+	// TODO replace with Alphabet
 	private Map<String, Integer> featIdx = new HashMap<String, Integer>();
+	private List<String> revFeatIdx = new ArrayList<String>();
 	
 	@Override
-	public String getName() { return "BasicTargetFeatures"; }
+	public String getDescription() { return "BasicTargetFeatures"; }
 
+	@Override
+	public String getFeatureName(int i) {
+		if(i >= revFeatIdx.size() || i < 0)
+			throw new RuntimeException(String.format("i=%d featDim=%d", i, revFeatIdx.size()));
+		return getDescription() + ":" + revFeatIdx.get(i);
+	}
+	
 	@Override
 	public Vector getFeatures(Frame f, int targetIdx, Sentence s) {
 		Vector v = Vector.sparse();
 		
 		v.add(index("null-bias"), f == Frame.NULL_FRAME ? 1d : 0d);
+		
+		v.add(index("target-pos=" + s.getPos(targetIdx)), 1d);
 		
 		String hypLU = String.format("%s.%s",
 				s.getWord(targetIdx),
@@ -40,5 +53,7 @@ public class BasicTargetFeatures implements TargetFeature {
 		}
 		return i;
 	}
+	
+	public int cardinality() { return 3; }
 
 }
