@@ -68,6 +68,16 @@ public class Semaforic implements FrameNetParser {
 	
 	@Override
 	public void train(List<FrameInstance> examples) {
+		trainTargetIdentification(examples);
+		trainArgumentIdentification(examples);
+	}
+	
+	public void trainTargetIdentification(List<FrameInstance> examples) {
+		// setup a factor graph with only frame trigger nodes
+		
+	}
+	
+	public void trainArgumentIdentification(List<FrameInstance> examples) {
 		throw new RuntimeException("implement me");
 	}
 	
