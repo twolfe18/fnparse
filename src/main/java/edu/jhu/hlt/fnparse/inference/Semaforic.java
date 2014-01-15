@@ -14,6 +14,8 @@ public class Semaforic implements FrameNetParser {
 
 	private Random rand;
 	private double[] weights;
+	
+	// used for dummy prediction
 	private Frame dummyFrame = new Frame("dummy-frame",
 		new String[] {"mock.v", "imitate.v"}, new String[] {"Agent", "Patient"});
 	

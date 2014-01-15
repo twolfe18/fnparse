@@ -11,7 +11,9 @@ public class Frame {
 		this.roles = roles;
 	}
 	
+	public String getLexicalUnit(int i) { return lexicalUnits[i]; }
 	public int numLexicalUnits() { return lexicalUnits.length; }
+	public String getRow(int i) { return roles[i]; }
 	public int numRoles() { return roles.length; }
 	public String getName() { return name; }
 	
