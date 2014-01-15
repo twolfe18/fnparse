@@ -1,3 +1,24 @@
 
 adding this for a test
 
+1. We use Java7
+2. Framenet database contains the following files 
+   (the xsl files are just stylesheets)
+   (The schema folder contains all schemas)
+   (The meat is in the directories)
+   | Directory | Index xml      | XSD                             |                                                                                                                                                                   |
+   | frame     | yes            | frame.xsd, frameIndex.xsd       |                                                                                                                                                                   |
+   | lu        | yes            | lexUnit.xsd, luIndex.xsd        |                                                                                                                                                                   |
+   | fulltext  | yes            | fullText.xsd, fulltextIndex.xsd |                                                                                                                                                                   |
+   |           | frRelation.xml | frameRelations.xsd              |                                                                                                                                                                   |
+   |           | semTypes.xml   | semTypes.xsd                    |                                                                                                                                                                   |
+   |           |                | header.xsd                      | Header information included in full-text and lexunit annotation   to provide document and corpus information relevant to all sentences contained in the document. |
+   |           |                | sentence.xsd                    | FN Sentence annotation schema, used in full text and lexunit xml outputs                                                                                          |
+   Corresponding to xsd definitions there are xml files.
+   | XML Files         | Description                                 |
+   | frRelation.xml    |                                             |
+   | frameIndex.xml    |                                             |
+   | fulltextIndex.xml |                                             |
+   | luIndex.xml       | This contains the LU and its related frame. The LU is always the trigger |
+   | semTypes.xml      |                                             |
+   |                   |                                             |
