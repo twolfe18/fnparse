@@ -9,16 +9,20 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleFactory;
 import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.FgExampleListBuilder;
+import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
+import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
+import edu.jhu.gm.feat.FactorTemplate;
 import edu.jhu.gm.feat.FactorTemplateList;
+import edu.jhu.gm.feat.Feature;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.feat.ObsFeatureExtractor;
 import edu.jhu.gm.model.ExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
-import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.features.BasicTargetFeatures;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
@@ -26,6 +30,7 @@ import edu.jhu.hlt.fnparse.util.Frame;
 import edu.jhu.hlt.fnparse.util.FrameInstance;
 import edu.jhu.hlt.fnparse.util.Sentence;
 import edu.jhu.hlt.fnparse.util.Span;
+import edu.jhu.util.Alphabet;
 
 
 public class Semaforic implements FrameNetParser {
@@ -135,6 +140,7 @@ public class Semaforic implements FrameNetParser {
 
 		@Override
 		public FeatureVector calcObsFeatureVector(int factorId) {
+			
 			return features.get(factorId);
 		}
 
@@ -143,6 +149,7 @@ public class Semaforic implements FrameNetParser {
 				FactorGraph fgLatPred, VarConfig goldConfig,
 				FactorTemplateList fts) {
 			
+			// ==== COMPUTE FEATURES ====
 			int n = sentenceLength();
 			for(int i=0; i<n; i++) {
 				Vector full = Vector.sparse(true);
@@ -152,6 +159,15 @@ public class Semaforic implements FrameNetParser {
 				}
 				FeatureVector fv = null;	// (FeatureVector) full;	// TOOD real conversion
 				features.add(fv);
+			}
+			
+			// ==== TELL FactorTemplateList WHAT THE FEATURES ARE ====
+			Alphabet<Feature> alphabet = fts.getTemplateByKey("targetModel").getAlphabet();
+			VarSet vars = null;
+			fts.add(new FactorTemplate(vars, alphabet, "targetModel"));
+			for(int i=0; i<this.targetFeatures.cardinality(); i++) {
+				String featName = String.format("feat%d", i);
+				alphabet.lookupIndex(new Feature(featName));
 			}
 		}
 
@@ -196,13 +212,19 @@ public class Semaforic implements FrameNetParser {
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
 		
-		FactorTemplateList fts = null;	// TODO how?
+		FactorTemplateList fts = new FactorTemplateList();
 		FgExampleFactory exampleFactory = new TravisFgExampleFactory(examples, targetFeatures);
-		FgExampleListBuilder dataBuilder = null;	// TODO how?
+		FgExamplesBuilderPrm prm = new FgExamplesBuilderPrm();
+		prm.cacheType = CacheType.MEMORY_STORE;
+		FgExampleListBuilder dataBuilder = new FgExampleListBuilder(prm);
 		FgExampleList data = dataBuilder.getInstance(fts, exampleFactory);
 		
-		FgModel model = null;
-		trainer.train(model, data);
+		boolean includeUnsupportedFeatures = true;
+		FgModel model = new FgModel(data, includeUnsupportedFeatures);
+		model = trainer.train(model, data);
+		
+		double[] params = new double[model.getNumParams()];
+		model.updateDoublesFromModel(params);
 		
 		// TODO figure out how to get parameters out of FgModel
 		// it doesn't seem like there is an obvious way (getter)

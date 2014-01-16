@@ -59,10 +59,4 @@ public class Frame {
 		}
 		return frameList;
 	}
-	
-	public static void main(String[] args) {
-		for(Frame f : allFrames()) {
-			System.out.println(f);
-		}
-	}
 }

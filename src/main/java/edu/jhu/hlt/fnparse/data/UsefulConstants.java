@@ -10,5 +10,3 @@ public class UsefulConstants {
 	public static final File frameXMLDirPath = new File(dataPath, "frame/");
 	public static final File fullTextXMLDirPath = new File(dataPath, "fulltext/");
 }
-    
-    
