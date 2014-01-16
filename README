@@ -15,10 +15,25 @@ adding this for a test
    |           |                | header.xsd                      | Header information included in full-text and lexunit annotation   to provide document and corpus information relevant to all sentences contained in the document. |
    |           |                | sentence.xsd                    | FN Sentence annotation schema, used in full text and lexunit xml outputs                                                                                          |
    Corresponding to xsd definitions there are xml files.
-   | XML Files         | Description                                 |
-   | frRelation.xml    |                                             |
-   | frameIndex.xml    |                                             |
-   | fulltextIndex.xml |                                             |
-   | luIndex.xml       | This contains the LU and its related frame. The LU is always the trigger |
-   | semTypes.xml      |                                             |
-   |                   |                                             |
+   | XML Files                          | Description                                                                                                                                                                                                                     |
+   | frRelation.xml                     | This describes all the frameRelations. There are 18 types. Every Type has relations inside this e.g. Change_of_consistency, Event are related by relation of type inheritance. and even the FE-FE mapping is defined in the XML |
+   | frameIndex.xml                     | 1019 frames just their names and an ID.                                                                                                                                                                                         |
+   | fulltextIndex.xml                  | The list of filenames and corpus names                                                                                                                                                                                          |
+   | luIndex.xml                        | This contains the LU and its related frame. The LU is always the trigger                                                                                                                                                        |
+   | semTypes.xml                       | Semantic type annotations                                                                                                                                                                                                       |
+   | frame/<framename>.xml              |                                                                                                                                                                                                                                 |
+   | lu/lu<luID>.xml                    | This contains the valences(relaizations), the lexeme, the header(corpus frame)                                                                                                                                                  |
+   | fulltext/<corpusname__description> |                                                                                                                                                                                                                                 |
+      
+      The annoset 1950929 is 
+      luID.xml
+       <FERealization total="19"> #this means that the number of times the "Benefit" Frame Element was actually relaized in corpus with paricular pattern for the Frame Element.
+            <FE name="Benefit"/>
+            <pattern total="5">
+                <valenceUnit GF="" PT="DNI" FE="Benefit"/>
+                <annoSet ID="1950929"/> ...
+            </pattern>
+
+   Frame names start with capital letter (note that frames are referred to by names and lu by ids)
+   Full text ANC__110CYL067
+3. The usage of this requires System.getProperty("toydataPath"). toydatapath is the path to the toydata folder.
