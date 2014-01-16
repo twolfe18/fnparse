@@ -15,14 +15,14 @@ public class DataUtil {
 
 	public static Map<Sentence, List<FrameInstance>> groupBySentence(List<FrameInstance> fis) {
 		throw new RuntimeException("implement me");
+		
 	}
 
-	public static HashMap parseFrameIndexXML(File f, int numFrames) throws Exception {
-		HashMap r = new HashMap();
+	public static String[] parseFrameIndexXML(File f, int numFrames) throws Exception {
+		
 		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 		DocumentBuilder db = dbf.newDocumentBuilder();
 		Document doc = db.parse(f);
-		int id[] = new int[numFrames];
 		String name[] = new String[numFrames];
 
 		// Parse frameIndex.xml(in fileName) to populate the id and name arrays
@@ -30,17 +30,14 @@ public class DataUtil {
 		assert numFrames == list.getLength();
 		for(int i=0; i < numFrames; i++){
 			Element element = (Element)list.item(i);
-			id[i]=Integer.parseInt(element.getAttribute("ID"));
 			name[i]=element.getAttribute("name");
 		}
-		r.put("id", id);
-		r.put("name", name); 
-		return r;
+		return name;
 	}
 
 
-	public static HashMap lexicalUnitAndRolesOfFrame(String frameName) throws Exception {
-		HashMap h = new HashMap();
+	public static HashMap<String, String[]> lexicalUnitAndRolesOfFrame(String frameName) throws Exception {
+		HashMap<String, String[]> h = new HashMap<String, String[]>();
 		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 		DocumentBuilder db = dbf.newDocumentBuilder();
 		Document doc = db.parse(new File(UsefulConstants.frameXMLDirPath, frameName + ".xml"));
@@ -63,15 +60,4 @@ public class DataUtil {
 		h.put("role", role);
 		return h;
 	}
-
-	// TODO: Convert to unit test.
-	// public static void main(String[] args){
-	// 	HashMap tmp = parseFrameIndexXML( "//export//a15//prastog3//framenetparser//repo//toydata//frameIndex.xml", 1019);
-	// 	int id[] = (int[]) tmp.get("id");
-	// 	String name[] = (String []) tmp.get("name");
-	// 	for(int i = 0 ; i < 1019; i++){
-	// 	    System.out.println(name[i]);
-	// 	};
-	// }
-
 }

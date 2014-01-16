@@ -31,14 +31,12 @@ public class FrameIndex {
 		if(allFrames == null) {
 			allFrames = new ArrayList<Frame>();
 			try{
-				HashMap tmp = DataUtil.parseFrameIndexXML(UsefulConstants.frameIndexXMLPath, UsefulConstants.framesInFrameNet);
-				int id[] = (int[]) tmp.get("id");
-				String name[] = (String []) tmp.get("name");	    
+				String name[] = DataUtil.parseFrameIndexXML(UsefulConstants.frameIndexXMLPath, UsefulConstants.framesInFrameNet);
 				for(int i=0; i < UsefulConstants.framesInFrameNet; i++){
 					HashMap tmp2 = DataUtil.lexicalUnitAndRolesOfFrame(name[i]);
 					String lexicalUnit[] = (String []) tmp2.get("lexicalUnit");
 					String role[] = (String []) tmp2.get("role");	    
-					allFrames.add(new Frame(id[i], name[i], lexicalUnit, role));
+					allFrames.add(new Frame(i, name[i], lexicalUnit, role));
 				}
 				allFrames.add(nullFrame);
 			}
