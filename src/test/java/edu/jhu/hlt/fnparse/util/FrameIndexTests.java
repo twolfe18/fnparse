@@ -4,7 +4,6 @@ package edu.jhu.hlt.fnparse.util;
 import java.util.*;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.UsefulConstants;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 
 public class FrameIndexTests {
@@ -14,7 +13,7 @@ public class FrameIndexTests {
 		long start = System.currentTimeMillis();
 		FrameIndex frameIndex = new FrameIndex();
 		List<Frame> allFrames = frameIndex.allFrames();
-		if(allFrames.size() != UsefulConstants.framesInFrameNet + 1)	// +1 for nullFrame
+		if(allFrames.size() != frameIndex.framesInFrameNet + 1)	// +1 for nullFrame
 			throw new RuntimeException();
 		long time = System.currentTimeMillis() - start;
 		
