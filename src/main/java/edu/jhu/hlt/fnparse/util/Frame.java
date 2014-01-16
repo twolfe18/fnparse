@@ -38,6 +38,13 @@ public class Frame {
 	public static final Frame NULL_FRAME = new Frame(0, "NOT-A-FRAME", null, null);
 
 	/**
+	 * get a frame by its id (constant time)
+	 */
+	public static Frame getFrame(int id) {
+		throw new RuntimeException("implement me");
+	}
+	
+	/**
 	 * includes NULL_FRAME
 	 */
 	public static List<Frame> allFrames() {

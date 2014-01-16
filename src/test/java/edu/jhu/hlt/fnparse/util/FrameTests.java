@@ -21,7 +21,6 @@ public class FrameTests {
 		System.out.printf("reading %d frames took %.2f sec\n", allFrames.size(), time/1000d);
 		if(max != allFrames.size()-1)
 			throw new RuntimeException("max=" + max + ", allFrames.size=" + allFrames.size());
-		
 	}
 	
 }
