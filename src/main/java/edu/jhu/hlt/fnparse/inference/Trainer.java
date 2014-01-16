@@ -16,8 +16,7 @@ public class Trainer {
 
 	public static void main(String[] args) {
 		
-		int featureDimension = 1000;
-		FrameNetParser parser = new Semaforic(featureDimension);
+		FrameNetParser parser = new Semaforic();
 		List<FrameInstance> train = SemEval07.getTrain();
 		List<FrameInstance> test = SemEval07.getTest();
 		

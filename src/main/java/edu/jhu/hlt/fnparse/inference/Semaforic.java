@@ -18,6 +18,8 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.features.BasicTargetFeatures;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
+import edu.jhu.hlt.fnparse.util.Configuration;
+import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
 import edu.jhu.hlt.fnparse.util.Frame;
 import edu.jhu.hlt.fnparse.util.FrameInstance;
 import edu.jhu.hlt.fnparse.util.Sentence;
@@ -27,6 +29,7 @@ import edu.jhu.hlt.fnparse.util.Span;
 public class Semaforic implements FrameNetParser {
 
 	private Random rand = new Random(9001);
+	private Configuration conf = new DefaultConfiguration();
 	
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
 	private FgModel targetModel;
@@ -62,7 +65,7 @@ public class Semaforic implements FrameNetParser {
 		for(int targetIdx=0; targetIdx<n; targetIdx++) {
 			FrameInstance fi = new FrameInstance(null, targetIdx, null, s);
 			FrameInstanceWithInferenceMaterials fiwim =
-				new FrameInstanceWithInferenceMaterials(fi, frameNames, targetFeatures);
+				new FrameInstanceWithInferenceMaterials(fi, frameNames, targetFeatures, conf);
 			MbrDecoderPrm mbrDecPrm = new MbrDecoderPrm();
 			MbrDecoder decoder = new MbrDecoder(mbrDecPrm);
 			VarConfig goldConf = null;	// ?
@@ -70,8 +73,8 @@ public class Semaforic implements FrameNetParser {
 			decoder.decode(targetModel, fge);
 			VarConfig hyp = decoder.getMbrVarConfig();
 			int frameId = hyp.getConfigIndex();
-			if(frameId != Frame.NULL_FRAME.getId()) {
-				Frame hypFrame = Frame.getFrame(frameId);
+			if(frameId != conf.getFrameIndex().nullFrame.getId()) {
+				Frame hypFrame = conf.getFrameIndex().getFrame(frameId);
 				Span[] arguments = new Span[hypFrame.numRoles()];
 				ts.add(new FrameInstance(hypFrame, targetIdx, arguments, s));
 			}
@@ -104,7 +107,7 @@ public class Semaforic implements FrameNetParser {
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
 		
-		FgExampleFactory exampleFactory = new TravisFgExampleFactory(examples, targetFeatures);
+		FgExampleFactory exampleFactory = new TravisFgExampleFactory(examples, targetFeatures, conf);
 		FgExamplesBuilderPrm prm = new FgExamplesBuilderPrm();
 		prm.cacheType = CacheType.MEMORY_STORE;
 		FgExampleListBuilder dataBuilder = new FgExampleListBuilder(prm);

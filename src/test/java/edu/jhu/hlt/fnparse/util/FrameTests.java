@@ -6,9 +6,12 @@ import java.util.*;
 public class FrameTests {
 
 	public static void main(String[] args) {
+		
 		long start = System.currentTimeMillis();
-		List<Frame> allFrames = Frame.allFrames();
+		FrameIndex frameIndex = new FrameIndex();
+		List<Frame> allFrames = frameIndex.allFrames();
 		long time = System.currentTimeMillis() - start;
+		
 		Set<Integer> ids = new HashSet<Integer>();
 		int max = -1;
 		for(Frame f : allFrames) {

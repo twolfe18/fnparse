@@ -7,6 +7,7 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleFactory;
 import edu.jhu.gm.feat.FactorTemplateList;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
+import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.Frame;
 import edu.jhu.hlt.fnparse.util.FrameInstance;
 
@@ -15,13 +16,13 @@ class TravisFgExampleFactory implements FgExampleFactory {
 	private List<FrameInstanceWithInferenceMaterials> examples;
 	private List<String> frameNames;
 	
-	public TravisFgExampleFactory(List<FrameInstance> examples, TargetFeature targetFeatures) {
+	public TravisFgExampleFactory(List<FrameInstance> examples, TargetFeature targetFeatures, Configuration conf) {
 
 		// domain of each var is the set of all Frames
 		frameNames = new ArrayList<String>();
-		frameNames.add("F0:" + Frame.NULL_FRAME.getName());
+		frameNames.add("F0:" + conf.getFrameIndex().nullFrame.getName());
 		int d = 1;
-		for(Frame f : Frame.allFrames()) {
+		for(Frame f : conf.getFrameIndex().allFrames()) {
 			String n = String.format("F%d:%s", d, f.getName());
 			frameNames.add(n);
 			d += 1;
@@ -29,7 +30,7 @@ class TravisFgExampleFactory implements FgExampleFactory {
 
 		this.examples = new ArrayList<FrameInstanceWithInferenceMaterials>();
 		for(FrameInstance fi : examples)
-			this.examples.add(new FrameInstanceWithInferenceMaterials(fi, frameNames, targetFeatures));
+			this.examples.add(new FrameInstanceWithInferenceMaterials(fi, frameNames, targetFeatures, conf));
 	}
 	
 	@Override

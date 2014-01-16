@@ -15,20 +15,23 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
+import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.Frame;
 import edu.jhu.hlt.fnparse.util.FrameInstance;
 import edu.jhu.util.Alphabet;
 
 class FrameInstanceWithInferenceMaterials implements ObsFeatureExtractor {
 	
+	private Configuration conf;
 	private FrameInstance fi;
 	private FactorGraph fg;
 	private VarConfig goldConf;
 	private List<FeatureVector> features;
 	private TargetFeature targetFeatures;
 	
-	public FrameInstanceWithInferenceMaterials(FrameInstance fi, List<String> frameNames, TargetFeature targetFeatures) {
+	public FrameInstanceWithInferenceMaterials(FrameInstance fi, List<String> frameNames, TargetFeature targetFeatures, Configuration conf) {
 		
+		this.conf = conf;
 		this.fi = fi;
 		this.fg = new FactorGraph();
 		this.goldConf = new VarConfig();
@@ -70,7 +73,7 @@ class FrameInstanceWithInferenceMaterials implements ObsFeatureExtractor {
 		int n = sentenceLength();
 		for(int i=0; i<n; i++) {
 			Vector full = Vector.sparse(true);
-			for(Frame f : Frame.allFrames()) {
+			for(Frame f : conf.getFrameIndex().allFrames()) {
 				Vector ff = targetFeatures.getFeatures(f, i, fi.getSentence());
 				// full += ff with offset
 			}
