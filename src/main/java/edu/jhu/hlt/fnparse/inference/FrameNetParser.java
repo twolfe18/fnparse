@@ -1,10 +1,8 @@
 package edu.jhu.hlt.fnparse.inference;
 
 import java.util.List;
-
 import edu.jhu.hlt.fnparse.util.FrameInstance;
 import edu.jhu.hlt.fnparse.util.Sentence;
-
 
 public interface FrameNetParser {
 

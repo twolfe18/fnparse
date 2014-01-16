@@ -24,6 +24,5 @@ public class Span {
 		return false;
 	}
 	
-	public static final Span NULL_SPAN = new Span(0, 0);
 }
 

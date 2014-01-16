@@ -38,7 +38,7 @@ public class Semaforic implements FrameNetParser {
 	private FgModel argumentModel;
 	
 	// TODO write code to flatten many features into one feature
-	private TargetFeature targetFeatures = new BasicTargetFeatures();
+	private TargetFeature targetFeatures = new BasicTargetFeatures(conf);
 	
 	// corresponds to the variables in the targetModel's factor graph
 	private List<String> frameNames;
@@ -47,7 +47,7 @@ public class Semaforic implements FrameNetParser {
 	public List<FrameInstance> parse(Sentence s) {
 		
 		// predict targets
-		List<FrameInstance> targets = targetIdentification(s);
+		List<FrameInstance> targets = predictTargets(s);
 		
 		// predict argument structure
 		for(FrameInstance t : targets)
@@ -59,7 +59,7 @@ public class Semaforic implements FrameNetParser {
 	/**
 	 * creates FrameInstances with no arguments labeled
 	 */
-	public List<FrameInstance> targetIdentification(Sentence s) {
+	public List<FrameInstance> predictTargets(Sentence s) {
 		List<FrameInstance> ts = new ArrayList<FrameInstance>();
 		int n = s.size();
 		for(int targetIdx=0; targetIdx<n; targetIdx++) {

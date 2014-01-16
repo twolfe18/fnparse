@@ -8,9 +8,9 @@ import edu.jhu.hlt.fnparse.data.UsefulConstants;
 public class Frame {
 
 	private int idx;
-	private String name;
-	private String[] lexicalUnit;
-	private String[] role;
+	private String name;			// e.g. "Commerce_buy"
+	private String[] lexicalUnit;	// e.g. ["purchase.v", "buy.v"]
+	private String[] role;			// e.g. ["Buyer", "Goods"]
 
 	public Frame(int id, String name, String[] lexicalUnit, String[] role) {
 		this.idx = id;
@@ -24,10 +24,13 @@ public class Frame {
 	}
 
 	public int getId() { return idx; }
+	
 	public String getLexicalUnit(int i) { return lexicalUnit[i]; }
 	public int numLexicalUnits() { return lexicalUnit.length; }
+	
 	public String getRow(int i) { return role[i]; }
 	public int numRoles() { return role.length; }
+	
 	public String getName() { return name; }
 
 	/**

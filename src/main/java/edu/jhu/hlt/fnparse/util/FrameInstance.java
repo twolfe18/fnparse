@@ -24,22 +24,28 @@ import javax.xml.parsers.*;
  */
 public class FrameInstance {
 
-	private Frame frame;		// e.g. "MOTION" 
-	private int triggerIdx;		// index of trigger word for this frame
-	private Span[] arguments;
+	private Frame frame; 
+	private int targetIdx;		// index of the target word
 	private Sentence sentence;
+	
+	/**
+	 * indices correspond to frame.getRoles()
+	 * null-instantiated arguments should be null in the array
+	 */
+	private Span[] arguments;
 
-	public FrameInstance(Frame frame, int triggerIdx, Span[] arguments, Sentence sent) {
-		assert frame.numRoles() == arguments.length;
+	public FrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
+		assert (arguments == null && frame == null) || frame.numRoles() == arguments.length;
 		this.frame = frame;
-		this.triggerIdx = triggerIdx; // triggerIdx is the index of trigger token in the sentence.
+
+		this.targetIdx = targetIdx; // targetIdx is the index of trigger token in the sentence.
 		this.arguments = arguments;
 		this.sentence = sent;
 	}
 
-	public int getTriggerIdx() { return triggerIdx; }
+	public int getTriggerIdx() { return targetIdx; }
 
-	public String getTriggerWord() { return sentence.getWord(triggerIdx); }
+	public String getTriggerWord() { return sentence.getWord(targetIdx); }
 
 	public Sentence getSentence() { return sentence; }
 
