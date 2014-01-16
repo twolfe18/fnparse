@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.util;
+package edu.jhu.hlt.fnparse.datatypes;
 
 public class Sentence {
 

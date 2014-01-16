@@ -1,80 +1,47 @@
-package edu.jhu.hlt.fnparse.util;
+package edu.jhu.hlt.fnparse.data;
 
-import java.util.*;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Vector;
 
-import edu.jhu.hlt.fnparse.data.UsefulConstants;
-import edu.jhu.hlt.fnparse.data.DataUtil;
-import edu.jhu.hlt.fnparse.util.Sentence;
-
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathFactory;
 import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
 
-import java.io.*;
-import org.w3c.dom.*;
-import javax.xml.parsers.*;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
-/**
- * This class should represent all details of the data
- * needed for inference and evaluation, but as little else as
- * possible so that we can add things (like priors over frames
- * in a document cluster) without this code noticing.
- * 
- * @author travis
- */
-public class FrameInstance {
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.util.Configuration;
+import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
 
-	private Frame frame; 
-	private int targetIdx;		// index of the target word
-	private Sentence sentence;
-
-	/**
-	 * indices correspond to frame.getRoles()
-	 * null-instantiated arguments should be null in the array
-	 */
-	private Span[] arguments;
-
-	public FrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
-		assert (arguments == null && frame == null) || frame.numRoles() == arguments.length;
-		this.frame = frame;
-
-		this.targetIdx = targetIdx; // targetIdx is the index of trigger token in the sentence.
-		this.arguments = arguments;
-		this.sentence = sent;
-	}
-
-	public int getTriggerIdx() { return targetIdx; }
-
-	public String getTriggerWord() { return sentence.getWord(targetIdx); }
-
-	public Sentence getSentence() { return sentence; }
-
-	public Frame getFrame() { return frame; }
-
-	public Span getArgument(int roleIdx) { return arguments[roleIdx]; }
-
-	public void setArgument(int roleIdx, Span extent) {
-		arguments[roleIdx] = extent;
-	}
-
-	public void printThis(){
-		System.out.println("Frame : tokens : pos : trigger ");
-		System.out.println(this.frame.getName());
-		System.out.println(Arrays.toString(this.sentence.getWord()));
-		System.out.println(Arrays.toString(this.sentence.getPos()));
-		System.out.println(this.sentence.getWord(targetIdx));
-	}
-
-	public static List<FrameInstance> allFrameInstance(){
+public class FNFrameInstanceProvider implements FrameInstanceProvider {
+	
+	@Override
+	public String getName() { return "FrameNet_frame_instance"; }
+	
+	@Override
+	public List<FrameInstance> getFrameInstances() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
 
-		List<Frame> allFrames = Frame.allFrames();
+		Configuration conf = new DefaultConfiguration();
+		List<Frame> allFrames = conf.getFrameIndex().allFrames();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
 		for (Frame ff : allFrames){
 			mapNameToFrame.put(ff.getName(), ff);
 		}
 		// Make a hashmap of frame ids to frames. for easy processing.
-		try{
+		try {
 			File folder = UsefulConstants.fullTextXMLDirPath;
 			File[] listOfFiles = folder.listFiles();
 
@@ -86,7 +53,7 @@ public class FrameInstance {
 					for(int i = 0; i < sentenceNodes.getLength(); i++){
 						Element sentenceNode = (Element)sentenceNodes.item(i);
 						String sentenceId =sentenceNode.getAttribute("corpID") +sentenceNode.getAttribute("docID") +sentenceNode.getAttribute("ID");
-						String sentenceText = getNode("/text",sentenceNode).getNodeValue();
+						String sentenceText = getNode("/text", sentenceNode).getNodeValue();
 
 						List<Integer> start = new ArrayList<Integer>();
 						List<Integer> end  = new ArrayList<Integer>();
@@ -130,7 +97,7 @@ public class FrameInstance {
 		return allFI;
 	}
 
-	static NodeList getNodeList(String path, File file) throws Exception{
+	private NodeList getNodeList(String path, File file) throws Exception{
 		XPath xPath = XPathFactory.newInstance().newXPath();
 		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
 		DocumentBuilder db = dbf.newDocumentBuilder();
@@ -138,18 +105,20 @@ public class FrameInstance {
 		return (NodeList) xPath.compile(path).evaluate(xmlDocument, XPathConstants.NODESET);
 	}
 
-	static NodeList getNodeList(String path, Document xmlDocument) throws Exception{
+	private NodeList getNodeList(String path, Document xmlDocument) throws Exception{
 		XPath xPath = XPathFactory.newInstance().newXPath();
 		return (NodeList) xPath.compile(path).evaluate(xmlDocument, XPathConstants.NODESET);
 	}
 
-	static NodeList getNodeList(String path, Element e) throws Exception{
+	private NodeList getNodeList(String path, Element e) throws Exception{
 		XPath xPath = XPathFactory.newInstance().newXPath();
 		return (NodeList) xPath.compile(path).evaluate(e, XPathConstants.NODESET);
 	}
 
-	static Node getNode(String path, Element e) throws Exception{
+	private Node getNode(String path, Element e) throws Exception{
 		XPath xPath = XPathFactory.newInstance().newXPath();
 		return (Node) xPath.compile(path).evaluate(e, XPathConstants.NODE);
 	}
+
+
 }

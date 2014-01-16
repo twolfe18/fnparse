@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
-import edu.jhu.hlt.fnparse.util.FrameInstance;
-import edu.jhu.hlt.fnparse.util.Span;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 
 public class FrameInstanceEval {

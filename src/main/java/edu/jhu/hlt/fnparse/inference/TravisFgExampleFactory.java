@@ -6,10 +6,10 @@ import java.util.List;
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleFactory;
 import edu.jhu.gm.feat.FactorTemplateList;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
 import edu.jhu.hlt.fnparse.util.Configuration;
-import edu.jhu.hlt.fnparse.util.Frame;
-import edu.jhu.hlt.fnparse.util.FrameInstance;
 
 class TravisFgExampleFactory implements FgExampleFactory {
 

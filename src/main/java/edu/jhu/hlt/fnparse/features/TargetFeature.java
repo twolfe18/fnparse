@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.features;
 
-import edu.jhu.hlt.fnparse.util.Frame;
-import edu.jhu.hlt.fnparse.util.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import travis.Vector;
 
 public interface TargetFeature {

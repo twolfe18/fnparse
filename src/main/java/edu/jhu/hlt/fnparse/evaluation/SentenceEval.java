@@ -2,8 +2,8 @@ package edu.jhu.hlt.fnparse.evaluation;
 
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.util.FrameInstance;
-import edu.jhu.hlt.fnparse.util.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 
 public class SentenceEval {

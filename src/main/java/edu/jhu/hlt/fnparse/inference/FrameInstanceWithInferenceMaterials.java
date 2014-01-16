@@ -14,10 +14,10 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
 import edu.jhu.hlt.fnparse.util.Configuration;
-import edu.jhu.hlt.fnparse.util.Frame;
-import edu.jhu.hlt.fnparse.util.FrameInstance;
 import edu.jhu.util.Alphabet;
 
 class FrameInstanceWithInferenceMaterials implements ObsFeatureExtractor {

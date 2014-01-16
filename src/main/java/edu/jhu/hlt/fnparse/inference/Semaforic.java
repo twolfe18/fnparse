@@ -16,14 +16,14 @@ import edu.jhu.gm.feat.FactorTemplateList;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.train.CrfTrainer;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicTargetFeatures;
 import edu.jhu.hlt.fnparse.features.TargetFeature;
 import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
-import edu.jhu.hlt.fnparse.util.Frame;
-import edu.jhu.hlt.fnparse.util.FrameInstance;
-import edu.jhu.hlt.fnparse.util.Sentence;
-import edu.jhu.hlt.fnparse.util.Span;
 
 
 public class Semaforic implements FrameNetParser {

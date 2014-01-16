@@ -6,9 +6,9 @@ import java.util.List;
 import java.util.Map;
 
 import travis.Vector;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.util.Configuration;
-import edu.jhu.hlt.fnparse.util.Frame;
-import edu.jhu.hlt.fnparse.util.Sentence;
 
 public class BasicTargetFeatures implements TargetFeature {
 
