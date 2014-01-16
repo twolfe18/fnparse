@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import travis.Vector;
+import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.Frame;
 import edu.jhu.hlt.fnparse.util.Sentence;
 
@@ -14,6 +15,11 @@ public class BasicTargetFeatures implements TargetFeature {
 	// TODO replace with Alphabet
 	private Map<String, Integer> featIdx = new HashMap<String, Integer>();
 	private List<String> revFeatIdx = new ArrayList<String>();
+	private Configuration conf;
+	
+	public BasicTargetFeatures(Configuration conf) {
+		this.conf = conf;
+	}
 	
 	@Override
 	public String getDescription() { return "BasicTargetFeatures"; }
@@ -29,7 +35,7 @@ public class BasicTargetFeatures implements TargetFeature {
 	public Vector getFeatures(Frame f, int targetIdx, Sentence s) {
 		Vector v = Vector.sparse();
 		
-		v.add(index("null-bias"), f == Frame.NULL_FRAME ? 1d : 0d);
+		v.add(index("null-bias"), f == conf.getFrameIndex().nullFrame ? 1d : 0d);
 		
 		v.add(index("target-pos=" + s.getPos(targetIdx)), 1d);
 		

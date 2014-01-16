@@ -38,7 +38,7 @@ public class Semaforic implements FrameNetParser {
 	private FgModel argumentModel;
 	
 	// TODO write code to flatten many features into one feature
-	private TargetFeature targetFeatures = new BasicTargetFeatures();
+	private TargetFeature targetFeatures = new BasicTargetFeatures(conf);
 	
 	// corresponds to the variables in the targetModel's factor graph
 	private List<String> frameNames;

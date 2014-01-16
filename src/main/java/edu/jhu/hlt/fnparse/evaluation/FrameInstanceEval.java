@@ -44,7 +44,7 @@ public class FrameInstanceEval {
 		int right = 0;
 		for(int i=0; i<n; i++) {
 			Span h = hyp.getArgument(i);
-			if(h != Span.NULL_SPAN && h.equals(gold.getArgument(i)))
+			if(h != null && h.equals(gold.getArgument(i)))
 				right++;
 		}
 		return right;
@@ -55,7 +55,7 @@ public class FrameInstanceEval {
 		int fp = 0;
 		for(int i=0; i<n; i++) {
 			Span h = hyp.getArgument(i);
-			if(h != Span.NULL_SPAN && !h.equals(gold.getArgument(i)))
+			if(h != null && !h.equals(gold.getArgument(i)))
 				fp++;
 		}
 		return fp;
@@ -66,7 +66,7 @@ public class FrameInstanceEval {
 		int fn = 0;
 		for(int i=0; i<n; i++) {
 			Span h = hyp.getArgument(i);
-			if(h == Span.NULL_SPAN && !h.equals(gold.getArgument(i)))
+			if(h == null && gold.getArgument(i) != null)
 				fn++;
 		}
 		return fn;
