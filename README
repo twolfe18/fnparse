@@ -1,5 +1,12 @@
 
-adding this for a test
+
+
+To compile a bunch of stuff (in particular pacaya) you will need
+a script that sets up a SSH tunnel to the Maven repositories on the CLSP network:
+  ssh -f -N -L 8081:checker:8081 -2 login.clsp.jhu.edu
+
+
+
 
 1. We use Java7
 2. Framenet database contains the following files 
