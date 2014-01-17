@@ -24,6 +24,10 @@ public class Span {
 
 	public int width() { return end - start; }
 	
+	public String toString() {
+		return String.format("<Span %d-%d>", start, end);
+	}
+	
 	public int hashCode() { return (start<<16) | end; }
 	
 	public boolean equals(Object other) {

@@ -36,6 +36,8 @@ public class Frame {
 	}
 	
 	public int numLexicalUnits() {
+		if(this == nullFrame)
+			return 0;
 		return lexicalUnit.length;
 	}
 	

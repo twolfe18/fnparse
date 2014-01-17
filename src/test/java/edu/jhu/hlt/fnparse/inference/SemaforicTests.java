@@ -46,7 +46,7 @@ public class SemaforicTests {
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 4, s1));
 		
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 0, s2));
-		frameInstances.add(FrameInstance.newFrameInstance(communication, 1, new Span[] {new Span(0, 1), null, new Span(2, 4)}, s2));
+		frameInstances.add(FrameInstance.newFrameInstance(communication, 1, new Span[] {new Span(0, 1), Span.nullSpan, new Span(2, 4)}, s2));
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 2, s2));
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 3, s2));
 		

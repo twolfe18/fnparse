@@ -132,7 +132,37 @@ public class Semaforic implements FgExampleFactory {
 	}
 	
 
+	/**
+	 * Factor for each f_i variable (it observes the word at index i,
+	 * as well as all of the other information in the sentence, but
+	 * I don't use observed variables because they're not really needed).
+	 * @author travis
+	 */
+	public static class TargetUnaryFactor extends ExpFamFactor {
+		private static final long serialVersionUID = 8681081343059187337L;
+		public final int targetIdx;
+		public TargetUnaryFactor(Var f_i, int i) {
+			super(new VarSet(f_i), SemaforicSentence.FactorTemplate.TARGET);
+			targetIdx = i;
+		}
+		// TODO getFeatures will go here when Matt updates his code
+	}
 	
+	/**
+	 * Factor that goes between a f_i variable and an r_ij variable
+	 * @author travis
+	 */
+	public static class TargetRoleFactor extends ExpFamFactor {
+		private static final long serialVersionUID = 7822812450436221032L;
+		public final int targetIdx;
+		public final int roleIdx;
+		public TargetRoleFactor(Var f_i, Var r_ij, int i, int j) {
+			super(new VarSet(f_i, r_ij), SemaforicSentence.FactorTemplate.TARGET_ROLE);
+			targetIdx = i;
+			roleIdx = j;
+		}
+		// TODO getFeatures will go here when Matt updates his code
+	}
 	
 	/**
 	 * Represents the factor graph for a sentence, most of the meat is here.
@@ -141,15 +171,21 @@ public class Semaforic implements FgExampleFactory {
 	 * Matt is changing the code so that Factors will be responsible for providing
 	 * features, rather than a FeatureExtractor, so I will have to change this.
 	 */
-	private static class SemaforicSentence implements ObsFeatureExtractor {
+	protected static class SemaforicSentence implements ObsFeatureExtractor {
 		
 		public TargetFeature targetFeatureFunc;
 		public Sentence sentence;
 		public List<FrameInstance> gold;
+		public Frame nullFrame;	// TODO remove this once Matt changes his code
+		
 		public List<Span> spans;
 		public List<String> spanNames;
+		public int[][] spanIds;	// given a span, what is its state id for the categorical variable 
+		
 		public Var[] targetVars;
 		public Var[][] roleVars;
+		public TargetUnaryFactor[] targetFactors;
+		public TargetRoleFactor[][] targetRoleFactors;
 		public FactorGraph fg;
 		public VarConfig goldConf;
 		
@@ -166,28 +202,35 @@ public class Semaforic implements FgExampleFactory {
 			this.sentence = s;
 			this.fg = new FactorGraph();
 			this.gold = gold;
+			this.nullFrame = nullFrame;
 			
 			computeSpans(s);
 			
 			int numFrames = frameNames.size();
 			int n = sentence.size();
-			targetVars = new Var[n];
-			roleVars = new Var[n][maxRoles];
 			
 			// target
+			targetVars = new Var[n];
+			targetFactors = new TargetUnaryFactor[n];
 			for(int i=0; i<n; i++) {
 				Var f_i = new Var(VarType.PREDICTED, numFrames, "f_" + i, frameNames);
+				TargetUnaryFactor ff_i = new TargetUnaryFactor(f_i, i);
 				targetVars[i] = f_i;
-				fg.addFactor(new ExpFamFactor(new VarSet(f_i), FactorTemplate.TARGET));
+				targetFactors[i] = ff_i;
+				fg.addFactor(ff_i);
 			}
 			
 			// arguments
+			roleVars = new Var[n][maxRoles];
+			targetRoleFactors = new TargetRoleFactor[n][maxRoles];
 			for(int i=0; i<n; i++) {
 				for(int j=0; j<maxRoles; j++) {
 					Var r_ij = new Var(VarType.PREDICTED, spans.size(), "r_{"+i+","+j+"}", spanNames);
+					TargetRoleFactor fr_ij = new TargetRoleFactor(targetVars[i], r_ij, i, j);
 					roleVars[i][j] = r_ij;
-					fg.addFactor(new ExpFamFactor(new VarSet(targetVars[i], r_ij), FactorTemplate.TARGET_ROLE));
-					// TODO add a unary factor for whether this span looks good syntactically
+					targetRoleFactors[i][j] = fr_ij;
+					fg.addFactor(fr_ij);
+					// TODO add a unary factor for whether spans look good syntactically
 				}
 			}
 			
@@ -197,43 +240,56 @@ public class Semaforic implements FgExampleFactory {
 				for(int i=0; i<n; i++)
 					goldConf.put(targetVars[i], nullFrame.getId());
 				for(FrameInstance fi : gold) {
-					int i = fi.getTargetIdx();
+					int target = fi.getTargetIdx();
 					Frame evoked = fi.getFrame();
-					goldConf.put(targetVars[i], evoked.getId());
-					for(int j=0; j<evoked.numRoles(); j++)
-						goldConf.put(roleVars[i][j], spanConfigId(fi.getArgument(j)));
+					goldConf.put(targetVars[target], evoked.getId());
+					for(int role=0; role<maxRoles; role++) {
+						// if the frame evoked is nullFrame, #roles=0, and the span is nullSpan
+						Span sp = role < evoked.numRoles() ? fi.getArgument(role) : Span.nullSpan;
+						int state = spanIds[sp.start][sp.end];
+						System.out.printf("[SemaforicSentence init] roleVars[%d][%d].#states=%d state=%d span=%s\n",
+								target, role, roleVars[target][role].getNumStates(), state, sp);
+						goldConf.put(roleVars[target][role], state);
+					}
 				}
 			}
 		}
 	
 		public void computeSpans(Sentence s) {
+			System.out.println("[SemaforicSentence computeSpans] sentence.size=" + s.size());
+			int n = s.size();
+			int id = 0;
 			spans = new ArrayList<Span>();
 			spanNames = new ArrayList<String>();
+			spanIds = new int[n][n+1];	// yes this a waste of O(n^2) space...
 			spans.add(Span.nullSpan);
 			spanNames.add("nullSpan");
-			int n = s.size();
+			spanIds[0][0] = id++;
 			for(int i=0; i<n; i++) {
-				for(int j=i+1; j<n; j++) {
+				for(int j=i+1; j<=n; j++) {
 					spans.add(new Span(i, j));
 					spanNames.add("span[" + i + "," + j + "]");
+					spanIds[i][j] = id++;
+					System.out.println("[SemaforicSentence computeSpans] " + new Span(i,j));
 				}
 			}
+			System.out.println("[SemaforicSentence computeSpans] #spans=" + spans.size());
 		}
 		
-		public int spanConfigId(Span s) {
-			assert Span.nullSpan.start == 0 && Span.nullSpan.end == 0;	// this gives 0
-			assert s == Span.nullSpan ^ s.start < s.end;
-			return s.start * sentence.size() + s.end;
-		}
 
 		@Override
 		public FeatureVector calcObsFeatureVector(int factorId) {
-			// TODO look up Frame and targetIdx by factorId (how?)
-			Frame evoked = null;
-			int targetIdx = 0;
-			FeatureVector fv = targetFeatureFunc.getFeatures(evoked, targetIdx, this.sentence);
-			// TODO target-role features
-			return fv;
+			Factor f = fg.getFactor(factorId);
+			if(f instanceof TargetUnaryFactor) {
+				Frame evoked = nullFrame;	// TODO can't get this yet
+				int targetIdx = ((TargetUnaryFactor) f).targetIdx;
+				FeatureVector fv = targetFeatureFunc.getFeatures(evoked, targetIdx, this.sentence);
+				return fv;
+			}
+			else if(f instanceof TargetRoleFactor) {
+				throw new RuntimeException("implement me");
+			}
+			else throw new RuntimeException("implement me");
 		}
 
 		@Override
@@ -244,8 +300,6 @@ public class Semaforic implements FgExampleFactory {
 			// ==== TELL FactorTemplateList WHAT THE FEATURES ARE ====
 			// target features
 			Alphabet<Feature> alphabet = fts.getTemplateByKey(FactorTemplate.TARGET).getAlphabet();
-			//VarSet vars = null;
-			//fts.add(new FactorTemplate(vars, alphabet, "targetModel"));
 			for(int i=0; i<this.targetFeatureFunc.cardinality(); i++) {
 				String featName = FactorTemplate.TARGET + "_" + i;
 				alphabet.lookupIndex(new Feature(featName));

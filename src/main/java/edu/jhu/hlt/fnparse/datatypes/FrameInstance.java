@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.Arrays;
+
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 /**
@@ -40,7 +42,9 @@ public class FrameInstance {
 	public static FrameInstance frameMention(Frame frame, int targetIdx, Sentence sent) {
 		if(frame == null || sent == null)
 			throw new IllegalArgumentException();
-		return new FrameInstance(frame, targetIdx, null, sent);
+		Span[] arguments = new Span[frame.numRoles()];
+		Arrays.fill(arguments, Span.nullSpan);
+		return new FrameInstance(frame, targetIdx, arguments, sent);
 	}
 
 	public int getTargetIdx() { return targetIdx; }
