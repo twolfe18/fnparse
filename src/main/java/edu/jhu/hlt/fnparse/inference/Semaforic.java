@@ -58,6 +58,21 @@ import edu.jhu.util.Alphabet;
  *    perhaps these should, in the exact case, be unary factors on target-role variables (factor only considers the span)
  * -> can choose to parameterize a span as (headIdx, leftExpand, rightExpand).
  *    this may mean that we can train more robust (target, role-head) factors/features
+ * 
+ * 
+ * We might also want to try to break up the frame variables for the binary factors that connect
+ * f_i and r_ij variables. Right now we need to loop over at least 2,000 frames times the number of spans (e.g. 500),
+ * which will be very slow. We may be able to essentially do dimensionality reduction on the frames.
+ * This would work by replacing the f_i variables with ones that range over "meta frames", with say 30 values.
+ * These "meta frames" would then connect to all frames, but the 2,000*500 loop is broken down into 30*500 + 30*2000.
+ * Choosing the "meta frame" to frame mapping could be done by looking at the frame relations, e.g.
+ * if the frames formed a tree, the "meta frames" could constitute frames high up in the tree.
+ * It would be interesting to look into clustering (dimensionality reduction?) on trees of items to
+ * see if there is a good way to do this.
+ * Note that this doesn't help if we do piecewise training and clamp the f_i variables (it only helps for the
+ * f_i to r_ij factors). Also, the number of "meta frames" must be consistently smaller than then number of
+ * spans in a sentence, otherwise it is cheaper to do it the naive way. In the context of good span pruning,
+ * this may end up not being worth it.
  */
 public class Semaforic implements FgExampleFactory {
 	
