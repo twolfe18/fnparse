@@ -38,6 +38,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 		List<Frame> allFrames = conf.getFrameIndex().allFrames();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
 		for (Frame ff : allFrames){
+			assert mapNameToFrame.get(ff.getName())==null;
 			mapNameToFrame.put(ff.getName(), ff);
 		}
 		// Make a hashmap of frame ids to frames. for easy processing.
@@ -53,13 +54,12 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 					for(int i = 0; i < sentenceNodes.getLength(); i++){
 						Element sentenceNode = (Element)sentenceNodes.item(i);
 						String sentenceId =sentenceNode.getAttribute("corpID") +sentenceNode.getAttribute("docID") +sentenceNode.getAttribute("ID");
-						String sentenceText = getNode("/text", sentenceNode).getNodeValue();
-
+				 		String sentenceText = getNodeList("./text", sentenceNode).item(0).getTextContent();
 						List<Integer> start = new ArrayList<Integer>();
 						List<Integer> end  = new ArrayList<Integer>();
 						List<String> tokens = new ArrayList<String>();
 						List<String> pos = new ArrayList<String>();
-						NodeList postagList = getNodeList("/annotationSet/layer[@name='PENN']/label",sentenceNode);
+						NodeList postagList = getNodeList("./annotationSet/layer[@name='PENN']/label",sentenceNode);
 						for (int l=0; l < postagList.getLength(); l++){
 							Element tokenElement = (Element)postagList.item(l);
 							int startVal = Integer.parseInt(tokenElement.getAttribute("start"));
@@ -71,7 +71,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 						}
 
 						Sentence sentence = new Sentence(sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
-						NodeList targetOccurenceList = getNodeList("/annotationSet[@frameName]", sentenceNode);
+						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
 
 						for(int k = 0; k < targetOccurenceList.getLength(); k++){
 							Element targetOccurence = (Element)targetOccurenceList.item(k);
@@ -79,13 +79,18 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							String luName   = targetOccurence.getAttribute("luName");
 							String frameID  = targetOccurence.getAttribute("frameID");
 							String frameName = targetOccurence.getAttribute("frameName");
-							Element tagetTokenElement = (Element) getNode("/layer[@name='Target']/label", targetOccurence);
+							Element tagetTokenElement = (Element) getNodeList("./layer[@name='Target']/label", targetOccurence).item(0);
 							String startIdx = tagetTokenElement.getAttribute("start");
 							String endIdx = tagetTokenElement.getAttribute("end");
 							Integer triggerIdx = start.indexOf(new Integer(Integer.parseInt(startIdx)));
+							assert triggerIdx != -1;
 							Frame tmpFrame = mapNameToFrame.get(frameName);
-							Span[] tmpSpans = new Span[tmpFrame.numRoles()];
-							allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, tmpSpans, sentence));
+							assert tmpFrame != null || frameName.equals("Test35");
+							if(tmpFrame != null){
+								Span[] tmpSpans = new Span[tmpFrame.numRoles()];
+							
+								allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, tmpSpans, sentence));
+							}
 						}
 					}
 				}
