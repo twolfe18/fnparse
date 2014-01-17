@@ -1,8 +1,8 @@
 package edu.jhu.hlt.fnparse.features;
 
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import travis.Vector;
 
 public interface TargetFeature {
 
@@ -21,7 +21,7 @@ public interface TargetFeature {
 	 * return features that describe whether this frame is likely 
 	 * evoked by this word in the sentence
 	 */
-	public Vector getFeatures(Frame f, int targetIdx, Sentence s);
+	public FeatureVector getFeatures(Frame f, int targetIdx, Sentence s);
 	
 	/**
 	 * maximum number of non-zero indexes returned by vectors from getFeatures

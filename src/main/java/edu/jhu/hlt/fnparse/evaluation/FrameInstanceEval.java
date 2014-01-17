@@ -15,7 +15,7 @@ public class FrameInstanceEval {
 	}
 	
 	public boolean triggerCorrect() {
-		return gold.getTriggerIdx() == hyp.getTriggerIdx();
+		return gold.getTargetIdx() == hyp.getTargetIdx();
 	}
 	
 	public double argPrecision() {

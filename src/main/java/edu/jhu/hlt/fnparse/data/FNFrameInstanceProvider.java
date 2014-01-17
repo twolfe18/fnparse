@@ -85,7 +85,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							Integer triggerIdx = start.indexOf(new Integer(Integer.parseInt(startIdx)));
 							Frame tmpFrame = mapNameToFrame.get(frameName);
 							Span[] tmpSpans = new Span[tmpFrame.numRoles()];
-							allFI.add(new FrameInstance(tmpFrame, triggerIdx, tmpSpans, sentence));
+							allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, tmpSpans, sentence));
 						}
 					}
 				}

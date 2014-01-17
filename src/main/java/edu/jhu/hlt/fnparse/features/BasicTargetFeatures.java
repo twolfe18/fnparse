@@ -1,24 +1,17 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import travis.Vector;
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.util.Configuration;
+import edu.jhu.util.Alphabet;
 
 public class BasicTargetFeatures implements TargetFeature {
 
-	// TODO replace with Alphabet
-	private Map<String, Integer> featIdx = new HashMap<String, Integer>();
-	private List<String> revFeatIdx = new ArrayList<String>();
-	private Configuration conf;
+	private Alphabet<String> featIdx = new Alphabet<String>();
+	private Frame nullFrame;
 	
-	public BasicTargetFeatures(Configuration conf) {
-		this.conf = conf;
+	public BasicTargetFeatures(Frame nullFrame) {
+		this.nullFrame = nullFrame;
 	}
 	
 	@Override
@@ -26,16 +19,15 @@ public class BasicTargetFeatures implements TargetFeature {
 
 	@Override
 	public String getFeatureName(int i) {
-		if(i >= revFeatIdx.size() || i < 0)
-			throw new RuntimeException(String.format("i=%d featDim=%d", i, revFeatIdx.size()));
-		return getDescription() + ":" + revFeatIdx.get(i);
+		String localName = featIdx.lookupObject(i);
+		return getDescription() + ":" + localName;
 	}
 	
 	@Override
-	public Vector getFeatures(Frame f, int targetIdx, Sentence s) {
-		Vector v = Vector.sparse();
+	public FeatureVector getFeatures(Frame f, int targetIdx, Sentence s) {
+		FeatureVector v = new FeatureVector();
 		
-		v.add(index("null-bias"), f == conf.getFrameIndex().nullFrame ? 1d : 0d);
+		v.add(index("null-bias"), f == this.nullFrame ? 1d : 0d);
 		
 		v.add(index("target-pos=" + s.getPos(targetIdx)), 1d);
 		
@@ -52,12 +44,7 @@ public class BasicTargetFeatures implements TargetFeature {
 	}
 	
 	private int index(String featureName) {
-		Integer i = featIdx.get(featureName);
-		if(i == null) {
-			i = featIdx.size();
-			featIdx.put(featureName, i);
-		}
-		return i;
+		return featIdx.lookupIndex(featureName, true);
 	}
 	
 	public int cardinality() { return 3; }

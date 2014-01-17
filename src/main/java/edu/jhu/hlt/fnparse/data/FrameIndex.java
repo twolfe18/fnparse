@@ -16,8 +16,7 @@ public class FrameIndex {
 	/**
 	 * Frame used to indicate that a word does not evoke a frame
 	 */
-	public final Frame nullFrame = new Frame(0, "NOT-A-FRAME", null, null);
-
+	public final Frame nullFrame = Frame.nullFrame;
 	
 	/**
 	 * get a frame by its id (constant time)

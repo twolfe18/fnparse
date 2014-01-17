@@ -1,19 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import java.util.*;
-
-import edu.jhu.hlt.fnparse.data.UsefulConstants;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathFactory;
-import javax.xml.xpath.XPathConstants;
-
-import java.io.*;
-
-import org.w3c.dom.*;
-
-import javax.xml.parsers.*;
 
 /**
  * This class should represent all details of the data
@@ -35,18 +22,30 @@ public class FrameInstance {
 	 */
 	private Span[] arguments;
 
-	public FrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
-		assert (arguments == null && frame == null) || frame.numRoles() == arguments.length;
+	private FrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
 		this.frame = frame;
-
 		this.targetIdx = targetIdx; // targetIdx is the index of trigger token in the sentence.
 		this.arguments = arguments;
 		this.sentence = sent;
 	}
+	
+	public static FrameInstance newFrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
+		if(frame == null || arguments == null || sent == null)
+			throw new IllegalArgumentException();
+		if(frame.numRoles() != arguments.length)
+			throw new IllegalArgumentException("null-instantiated roles should be null entries in the arguments array");
+		return new FrameInstance(frame, targetIdx, arguments, sent);
+	}
+	
+	public static FrameInstance frameMention(Frame frame, int targetIdx, Sentence sent) {
+		if(frame == null || sent == null)
+			throw new IllegalArgumentException();
+		return new FrameInstance(frame, targetIdx, null, sent);
+	}
 
-	public int getTriggerIdx() { return targetIdx; }
+	public int getTargetIdx() { return targetIdx; }
 
-	public String getTriggerWord() { return sentence.getWord(targetIdx); }
+	public String getTargetWord() { return sentence.getWord(targetIdx); }
 
 	public Sentence getSentence() { return sentence; }
 
