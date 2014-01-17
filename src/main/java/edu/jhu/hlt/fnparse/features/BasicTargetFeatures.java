@@ -5,7 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.util.Alphabet;
 
-public class BasicTargetFeatures implements TargetFeature {
+public class BasicTargetFeatures implements TargetFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	private Frame nullFrame;

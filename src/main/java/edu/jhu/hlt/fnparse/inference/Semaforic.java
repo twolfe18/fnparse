@@ -2,23 +2,18 @@ package edu.jhu.hlt.fnparse.inference;
 
 import java.util.*;
 
-import edu.jhu.gm.data.FgExample;
-import edu.jhu.gm.data.FgExampleFactory;
-import edu.jhu.gm.data.FgExampleList;
-import edu.jhu.gm.data.FgExampleListBuilder;
+import edu.jhu.gm.data.*;
 import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
 import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
-import edu.jhu.gm.feat.FactorTemplate;
-import edu.jhu.gm.feat.FactorTemplateList;
-import edu.jhu.gm.feat.Feature;
-import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.feat.ObsFeatureExtractor;
+import edu.jhu.gm.feat.*;
 import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.BasicTargetFeatures;
-import edu.jhu.hlt.fnparse.features.TargetFeature;
+import edu.jhu.hlt.fnparse.features.BasicTargetRoleFeatures;
+import edu.jhu.hlt.fnparse.features.TargetFeatures;
+import edu.jhu.hlt.fnparse.features.TargetRoleFeatures;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -70,7 +65,8 @@ public class Semaforic implements FgExampleFactory {
 	private List<Frame> frames;
 	private List<String> frameNames;
 	private List<SemaforicSentence> trainInstances;
-	private TargetFeature targetFeatures;
+	private TargetFeatures targetFeatures;
+	private TargetRoleFeatures targetRoleFeatures;
 	private FgModel model;
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
 	
@@ -82,6 +78,7 @@ public class Semaforic implements FgExampleFactory {
 		this.nullFrame = nullFrame;
 		this.frames = frames;
 		this.targetFeatures = new BasicTargetFeatures(nullFrame);
+		this.targetRoleFeatures = new BasicTargetRoleFeatures(nullFrame);
 		this.frameNames = new ArrayList<String>();
 		int maxRoles = 0;
 		for(Frame f : frames) {
@@ -95,7 +92,7 @@ public class Semaforic implements FgExampleFactory {
 		for(Map.Entry<Sentence, List<FrameInstance>> x : examples.entrySet()) {
 			Sentence s = x.getKey();
 			List<FrameInstance> fis = x.getValue();
-			trainInstances.add(new SemaforicSentence(s, fis, maxRoles, frameNames, nullFrame, targetFeatures));
+			trainInstances.add(new SemaforicSentence(s, fis, maxRoles, frameNames, nullFrame, targetFeatures, targetRoleFeatures));
 		}
 		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
@@ -173,7 +170,8 @@ public class Semaforic implements FgExampleFactory {
 	 */
 	protected static class SemaforicSentence implements ObsFeatureExtractor {
 		
-		public TargetFeature targetFeatureFunc;
+		public TargetFeatures targetFeatureFunc;
+		public TargetRoleFeatures targetRoleFeatureFunc;
 		public Sentence sentence;
 		public List<FrameInstance> gold;
 		public Frame nullFrame;	// TODO remove this once Matt changes his code
@@ -194,11 +192,12 @@ public class Semaforic implements FgExampleFactory {
 			TARGET_ROLE		// binary factors between f_i and r_{ij} variables
 		}
 		
-		public SemaforicSentence(Sentence s, List<FrameInstance> gold, int maxRoles,
-				List<String> frameNames, Frame nullFrame, TargetFeature targetFeatureFunc) {
+		public SemaforicSentence(Sentence s, List<FrameInstance> gold, int maxRoles, List<String> frameNames,
+				Frame nullFrame, TargetFeatures targetFeatureFunc, TargetRoleFeatures targetRoleFeatureFunc) {
 			
 			assert s != null;
 			this.targetFeatureFunc = targetFeatureFunc;
+			this.targetRoleFeatureFunc = targetRoleFeatureFunc;
 			this.sentence = s;
 			this.fg = new FactorGraph();
 			this.gold = gold;
@@ -287,7 +286,12 @@ public class Semaforic implements FgExampleFactory {
 				return fv;
 			}
 			else if(f instanceof TargetRoleFactor) {
-				throw new RuntimeException("implement me");
+				Frame evoked = nullFrame;	// TODO can't get this yet
+				Span s = Span.nullSpan;		// TODO can't get this yet
+				int targetIdx = ((TargetRoleFactor) f).targetIdx;
+				int roleIdx = ((TargetRoleFactor) f).roleIdx;
+				FeatureVector fv = targetRoleFeatureFunc.getFeatures(evoked, s, targetIdx, roleIdx, this.sentence);
+				return fv;
 			}
 			else throw new RuntimeException("implement me");
 		}

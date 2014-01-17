@@ -18,5 +18,10 @@ public class Sentence {
 	public String[] getWord() { return tokens; }
 	public String[] getPos() { return pos; }
 	
+	public int getHead(Span s) {
+		System.err.println("warning: not actually doing head-finding, update me");
+		return s.end-1;
+	}
+	
 	public int size() { return tokens.length; }
 }

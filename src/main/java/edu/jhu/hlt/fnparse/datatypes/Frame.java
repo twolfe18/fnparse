@@ -10,7 +10,7 @@ public class Frame {
 	public Frame(int id, String name, String[] lexicalUnit, String[] role) {
 		if(role == null || role.length == 0)
 			throw new IllegalArgumentException();
-		if(lexicalUnit == null || lexicalUnit.length == 0)
+		if(lexicalUnit == null)
 			throw new IllegalArgumentException();
 		this.idx = id;
 		this.name = name;
@@ -41,7 +41,7 @@ public class Frame {
 		return lexicalUnit.length;
 	}
 	
-	public String getRow(int i) {
+	public String getRole(int i) {
 		return role[i];
 	}
 	
