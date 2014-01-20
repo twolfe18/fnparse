@@ -8,21 +8,26 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class FrameInstanceProviderTests {
 
-	public static void main(String[] args) {
-		System.out.println("starting...");
-		FrameInstanceProvider fip = new DefaultConfiguration().getFrameInstanceProvider();
-		
+	private static void testFIP(FrameInstanceProvider fip){
+
 		long start = System.currentTimeMillis();
 		List<FrameInstance> fis = fip.getFrameInstances();
 		long time = System.currentTimeMillis() - start;
-		
+
 		Set<Sentence> sents = new HashSet<Sentence>();
 		for(FrameInstance fi : fis) {
-			String line = String.format("instance of %s: %s", fi.getFrame(), fi);
+			String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTargetWord(), Arrays.toString(fi.getSentence().getWord()));
 			System.out.println(line);
 			sents.add(fi.getSentence());
 		}
 		System.out.printf("loading %d FrameInstances in %d sentences took %.2f seconds\n",
 				fis.size(), sents.size(), time/1000d);
+	}
+	public static void main(String[] args) {
+		System.out.println("starting...");
+		System.out.println("testing default config...");
+		testFIP(new DefaultConfiguration().getFrameInstanceProvider());
+		System.out.println("testing Semlink config...");
+		testFIP(new SemlinkConfiguration().getFrameInstanceProvider());
 	}
 }
