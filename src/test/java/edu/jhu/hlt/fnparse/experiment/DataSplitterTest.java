@@ -11,44 +11,45 @@ import java.util.Set;
 
 import org.junit.Test;
 
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.SemaforicTests;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.SemaforicTest;
 
 public class DataSplitterTest {
 
 	@Test
 	public void basic() {
 		// steal the FrameInstances from Semaforic tests
-		SemaforicTests st = new SemaforicTests();
-		List<FrameInstance> fis = st.getFrameInstances();
+		SemaforicTest st = new SemaforicTest();
+		List<Sentence> fis = st.getFrameInstances();
 		DataSplitter ds = new DataSplitter();
 		
-		Set<FrameInstance> in, out;
-		List<FrameInstance> train = new ArrayList<FrameInstance>();
-		List<FrameInstance> test = new ArrayList<FrameInstance>();
+		double propTest = 0.5d;
+		Set<Sentence> in, out;
+		List<Sentence> train = new ArrayList<Sentence>();
+		List<Sentence> test = new ArrayList<Sentence>();
 		boolean saveSplit, newSplit;
 		File splitFile;
 		
-		in = new HashSet<FrameInstance>();
-		out = new HashSet<FrameInstance>();
-		for(FrameInstance fi : fis) in.add(fi);
+		in = new HashSet<Sentence>();
+		out = new HashSet<Sentence>();
+		for(Sentence fi : fis) in.add(fi);
 		
 		// new split file
-		splitFile = ds.getSplitFile(fis);
+		splitFile = ds.getSplitFile(fis, propTest);
 		assertTrue(!splitFile.isDirectory());
 		if(splitFile.isFile()) splitFile.delete();
 		saveSplit = true;
-		newSplit = ds.split(fis, train, test, 0.5d, saveSplit);
+		newSplit = ds.split(fis, train, test, propTest, saveSplit);
 		assertTrue(newSplit);
 		out.addAll(train);
 		out.addAll(test);
 		assertEquals(in, out);
 		
 		// read split file
-		List<FrameInstance> train2 = new ArrayList<FrameInstance>();
-		List<FrameInstance> test2 = new ArrayList<FrameInstance>();
+		List<Sentence> train2 = new ArrayList<Sentence>();
+		List<Sentence> test2 = new ArrayList<Sentence>();
 		saveSplit = true;
-		newSplit = ds.split(fis, train2, test2, 0.5d, saveSplit);
+		newSplit = ds.split(fis, train2, test2, propTest, saveSplit);
 		assertTrue(!newSplit);
 		assertEquals(train, train2);
 		assertEquals(test, test2);
@@ -58,7 +59,7 @@ public class DataSplitterTest {
 		train.clear();
 		test.clear();
 		saveSplit = false;
-		newSplit = ds.split(fis, train, test, 0.5d, saveSplit);
+		newSplit = ds.split(fis, train, test, propTest, saveSplit);
 		assertTrue(newSplit);
 		out.addAll(train);
 		out.addAll(test);

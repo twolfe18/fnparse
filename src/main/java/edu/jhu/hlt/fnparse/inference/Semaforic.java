@@ -91,7 +91,7 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 	/**
 	 * train a model
 	 */
-	public void train(Map<Sentence, List<FrameInstance>> examples, List<Frame> frames, Frame nullFrame) {
+	public void train(List<Sentence> examples, List<Frame> frames, Frame nullFrame) {
 		
 		this.nullFrame = nullFrame;
 		this.frames = frames;
@@ -107,11 +107,8 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 		
 		// construct the SemaforicSentenceFactorGraphs
 		this.trainInstances = new ArrayList<SemaforicSentence>();
-		for(Map.Entry<Sentence, List<FrameInstance>> x : examples.entrySet()) {
-			Sentence s = x.getKey();
-			List<FrameInstance> fis = x.getValue();
-			trainInstances.add(new SemaforicSentence(s, fis, maxRoles, frameNames, nullFrame, targetFeatures, targetRoleFeatures));
-		}
+		for(Sentence s : examples)
+			trainInstances.add(new SemaforicSentence(s, maxRoles, frameNames, nullFrame, targetFeatures, targetRoleFeatures));
 		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
@@ -140,7 +137,7 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 	
 	
 	@Override
-	public Map<Sentence, List<FrameInstance>> parse(List<Sentence> sentences) {
+	public void parse(List<Sentence> sentences) {
 		throw new RuntimeException("implement me");
 	}
 	
@@ -189,7 +186,6 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 		public TargetFeatures targetFeatureFunc;
 		public TargetRoleFeatures targetRoleFeatureFunc;
 		public Sentence sentence;
-		public List<FrameInstance> gold;
 		public Frame nullFrame;	// TODO remove this once Matt changes his code
 		
 		public List<Span> spans;
@@ -208,15 +204,14 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 			TARGET_ROLE		// binary factors between f_i and r_{ij} variables
 		}
 		
-		public SemaforicSentence(Sentence s, List<FrameInstance> gold, int maxRoles, List<String> frameNames,
-				Frame nullFrame, TargetFeatures targetFeatureFunc, TargetRoleFeatures targetRoleFeatureFunc) {
+		public SemaforicSentence(Sentence s, int maxRoles, List<String> frameNames, Frame nullFrame,
+				TargetFeatures targetFeatureFunc, TargetRoleFeatures targetRoleFeatureFunc) {
 			
 			assert s != null;
 			this.targetFeatureFunc = targetFeatureFunc;
 			this.targetRoleFeatureFunc = targetRoleFeatureFunc;
 			this.sentence = s;
 			this.fg = new FactorGraph();
-			this.gold = gold;
 			this.nullFrame = nullFrame;
 			
 			computeSpans(s);
@@ -250,11 +245,11 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 			}
 			
 			// gold labels
-			if(gold != null) {
+			if(sentence.hasGoldFrames()) {
 				goldConf = new VarConfig();
 				for(int i=0; i<n; i++)
 					goldConf.put(targetVars[i], nullFrame.getId());
-				for(FrameInstance fi : gold) {
+				for(FrameInstance fi : sentence.getGoldFrames()) {
 					int target = fi.getTargetIdx();
 					Frame evoked = fi.getFrame();
 					goldConf.put(targetVars[target], evoked.getId());

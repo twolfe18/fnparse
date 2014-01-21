@@ -1,13 +1,28 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class Sentence {
 
-	private String dataset;	// where did this sentence come from?
+	/**
+	 * a __globally__ unique identifier
+	 * should not overlap between datasets
+	 */
 	private String id;
+
+	/**
+	 * where did this sentence come from?
+	 * redundant with id, a convenience
+	 */
+	private String dataset;
+	
 	private String[] tokens;
 	private String[] pos;
+
+	// may be empty
+	private List<FrameInstance> goldFrames, hypFrames;
 	
 	public Sentence(String dataset, String id, String[] tokens, String[] pos) {
 		if(id == null || tokens == null)
@@ -19,6 +34,38 @@ public class Sentence {
 		this.tokens = tokens;
 		this.pos = pos;
 	}
+	
+	public void addGoldFrame(FrameInstance fi) {
+		if(fi.getSentence() != this)
+			throw new IllegalArgumentException();
+		if(goldFrames == null)
+			goldFrames = new ArrayList<FrameInstance>();
+		goldFrames.add(fi);
+	}
+	
+	public List<FrameInstance> getGoldFrames() {
+		if(goldFrames == null)
+			throw new IllegalStateException();
+		return goldFrames;
+	}
+	
+	public boolean hasGoldFrames() { return goldFrames != null; }
+	
+	public void addHypFrame(FrameInstance fi) {
+		if(fi.getSentence() != this)
+			throw new IllegalArgumentException();
+		if(hypFrames == null)
+			hypFrames = new ArrayList<FrameInstance>();
+		hypFrames.add(fi);
+	}
+	
+	public List<FrameInstance> getHypFrames() {
+		if(hypFrames == null)
+			throw new IllegalStateException();
+		return hypFrames;
+	}
+	
+	public boolean hasHypFrames() { return hypFrames != null; }
 	
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }

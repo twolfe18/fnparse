@@ -4,7 +4,6 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.charset.Charset;
 import java.io.IOException;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -17,7 +16,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
-
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.ling.TaggedWord;
 
@@ -27,7 +25,11 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 	public String getName() {return "SemLink_frame_instance";}
 
 	@Override
-	public List<FrameInstance> getFrameInstances() {
+	public List<Sentence> getFrameInstances() {
+		return DataUtil.addFrameInstancesToSentences(getFrameInstancesOld());
+	}
+	
+	public List<FrameInstance> getFrameInstancesOld() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
 
 		Configuration conf = new DefaultConfiguration();

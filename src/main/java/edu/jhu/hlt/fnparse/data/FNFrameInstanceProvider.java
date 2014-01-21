@@ -33,7 +33,11 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 	public String getName() { return "FrameNet_frame_instance"; }
 
 	@Override
-	public List<FrameInstance> getFrameInstances() {
+	public List<Sentence> getFrameInstances() {
+		return DataUtil.addFrameInstancesToSentences(getFrameInstancesOld());
+	}
+	
+	public List<FrameInstance> getFrameInstancesOld() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
 
 		Configuration conf = new DefaultConfiguration();

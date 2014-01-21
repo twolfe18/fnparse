@@ -27,6 +27,20 @@ public class DataUtil {
 		}
 		return m;
 	}
+	
+	public static List<Sentence> addFrameInstancesToSentences(List<FrameInstance> fis) {
+		Map<Sentence, List<FrameInstance>> m = DataUtil.groupBySentence(fis);
+		List<Sentence> out = new ArrayList<Sentence>();
+		for(Map.Entry<Sentence, List<FrameInstance>> x : m.entrySet()) {
+			Sentence s = x.getKey();
+			assert !s.hasGoldFrames();
+			assert !s.hasHypFrames();
+			for(FrameInstance fi : x.getValue())
+				s.addGoldFrame(fi);
+			out.add(s);
+		}
+		return out;
+	}
 
 	public static String[] parseFrameIndexXML(File f, int numFrames) {
 		try {

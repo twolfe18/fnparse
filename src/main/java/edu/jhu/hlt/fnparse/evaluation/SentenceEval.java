@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
-import java.util.List;
-
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -16,8 +14,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 public class SentenceEval {
 
 	private Sentence sentence;
-	private List<FrameInstance> gold;
-	private List<FrameInstance> hyp;
 	
 	/*
 	 * indexed with [gold][hyp]
@@ -25,16 +21,8 @@ public class SentenceEval {
 	 */
 	private int[][] targets;
 	
-	public SentenceEval(Sentence s, List<FrameInstance> gold, List<FrameInstance> hyp) {
-		for(FrameInstance fi : gold)
-			if(fi.getSentence() != s)
-				throw new IllegalArgumentException();
-		for(FrameInstance fi : hyp)
-			if(fi.getSentence() != s)
-				throw new IllegalArgumentException();
+	public SentenceEval(Sentence s) {
 		this.sentence = s;
-		this.gold = gold;
-		this.hyp = hyp;
 		
 		// compute TP, FP, FN
 		// part 1: build index
@@ -42,9 +30,9 @@ public class SentenceEval {
 		int[] g = new int[n];
 		int[] h = new int[n];
 		assert Frame.nullFrame.getId() == 0;
-		for(FrameInstance fi : gold)
+		for(FrameInstance fi : s.getGoldFrames())
 			g[fi.getTargetIdx()] = fi.getFrame().getId();
-		for(FrameInstance fi : hyp)
+		for(FrameInstance fi : s.getHypFrames())
 			h[fi.getTargetIdx()] = fi.getFrame().getId();
 		// part 2: fill out table
 		targets = new int[2][2];
@@ -59,14 +47,6 @@ public class SentenceEval {
 			}
 		}
 	}
-	
-	public Sentence getSentence() { return sentence; }
-	
-	public List<FrameInstance> goldLabels() { return gold; }
-	public List<FrameInstance> hypLabels() { return hyp; }
-	
-	public int numGoldLabels() { return gold.size(); }
-	public int numHypLabels() { return hyp.size(); }
 	
 	public int targetTP() { return targets[1][1]; }
 	public int targetFP() { return targets[0][1]; }

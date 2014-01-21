@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -14,22 +15,26 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * and produce sensical results?
  * @author travis
  */
-public class SemaforicTests {
+public class SemaforicTest implements FrameInstanceProvider {
 
 	private Frame nullFrame;
 	private List<Frame> frames;
 	private List<FrameInstance> frameInstances;
+	private List<Sentence> sentences;
 	
 	public static void main(String[] args) {
-		SemaforicTests st = new SemaforicTests();
+		SemaforicTest st = new SemaforicTest();
 		st.populateFrames();
 		st.train();
 	}
 	
-	public List<FrameInstance> getFrameInstances() {
-		if(frameInstances == null)
+	@Override
+	public List<Sentence> getFrameInstances() {
+		if(sentences == null) {
 			populateFrames();
-		return frameInstances;
+			sentences = DataUtil.addFrameInstancesToSentences(frameInstances);
+		}
+		return sentences;
 	}
 	
 	public void populateFrames() {
@@ -70,6 +75,9 @@ public class SemaforicTests {
 
 	public void train() {
 		Semaforic sem = new Semaforic();
-		sem.train(DataUtil.groupBySentence(frameInstances), frames, nullFrame);
+		sem.train(getFrameInstances(), frames, nullFrame);
 	}
+
+	@Override
+	public String getName() { return "SemaforicTest"; }
 }
