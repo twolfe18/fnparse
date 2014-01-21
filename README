@@ -44,3 +44,20 @@ a script that sets up a SSH tunnel to the Maven repositories on the CLSP network
    Frame names start with capital letter (note that frames are referred to by names and lu by ids)
    Full text ANC__110CYL067
 3. The usage of this requires System.getProperty("toydataPath"). toydatapath is the path to the toydata folder.
+4. The toydata/nw/wsj/00/wsj_0001.prd file was created from the folder /export/corpora/LDC/LDC99T42/treebank_3/parsed/prd/wsj/00/wsj_0001.prd . The semlink.1.2.2c file actually says their extension to be .parse we handle this in code
+5. There is a discrepancy in semlink data. basically the triggerIndex is broken (it says 14 when it should be 12)
+   the problem is in line 8 of semlink which corresponds to line 13 of probank
+   they can be accessed as 
+   $head -n 8 data/semlink/1.2.2c.okay | tail -n  1
+   nw/wsj/00/wsj_0003.parse 2 14 gold make-v 26.1-1 Manufacturing make.01 null ----- 3:2*12:1*13:1-ARG0=Agent;Manufacturer 14:0-rel 15:1-ARG1=Product;Product 3:2*12:1-LINK-SLC 
+   and $head -n 7 data/semlink/1.2.2c.okay | tail -n  1
+   nw/wsj/00/wsj_0003.parse 1 31 gold say-v 37.7-1 IN say.01 null ----- 0:3*33:1-ARG1=Topic 30:1-ARG0=Agent 31:0-rel 
+    wsj/00/wsj_0003.mrg      2 12 
+    nw/wsj/00/wsj_0003.parse 2 14 
+   I could use propbank's trigger index instead though as the default. the following commands can easily help me find out the correspondence between the two files. 
+   cat data/propbank/propbank_1/data/prop.txt > propbank_data
+   cat data/semlink/1.2.2c.okay | cut -c 4- > semlink_data
+   while read line ; do arr=($line) && echo ${arr[0]} ${arr[1]} ${arr[2]}  ; done < semlink_data > semlink_3col
+   while read line ; do arr=($line) && echo ${arr[0]} ${arr[1]} ${arr[2]}  ; done < propbank_data > propbank_3col
+   sed "s#.parse #_#" semlink_3col > semlink_3
+   sed "s#.mrg #_#" propbank_3col > propbank_3

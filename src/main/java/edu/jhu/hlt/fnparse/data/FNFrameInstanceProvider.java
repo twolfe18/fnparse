@@ -2,10 +2,12 @@ package edu.jhu.hlt.fnparse.data;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Vector;
+import java.util.Collections;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -26,10 +28,10 @@ import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
 
 public class FNFrameInstanceProvider implements FrameInstanceProvider {
-	
+
 	@Override
 	public String getName() { return "FrameNet_frame_instance"; }
-	
+
 	@Override
 	public List<FrameInstance> getFrameInstances() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
@@ -54,7 +56,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 					for(int i = 0; i < sentenceNodes.getLength(); i++){
 						Element sentenceNode = (Element)sentenceNodes.item(i);
 						String sentenceId =sentenceNode.getAttribute("corpID") +sentenceNode.getAttribute("docID") +sentenceNode.getAttribute("ID");
-				 		String sentenceText = getNodeList("./text", sentenceNode).item(0).getTextContent();
+						String sentenceText = getNodeList("./text", sentenceNode).item(0).getTextContent();
 						List<Integer> start = new ArrayList<Integer>();
 						List<Integer> end  = new ArrayList<Integer>();
 						List<String> tokens = new ArrayList<String>();
@@ -69,7 +71,8 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							tokens.add(sentenceText.substring(startVal, endVal+1));
 							pos.add(tokenElement.getAttribute("name"));
 						}
-
+						Collections.sort(start);
+						Collections.sort(end);
 						Sentence sentence = new Sentence(getName(), sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
 
@@ -79,17 +82,49 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							String luName   = targetOccurence.getAttribute("luName");
 							String frameID  = targetOccurence.getAttribute("frameID");
 							String frameName = targetOccurence.getAttribute("frameName");
-							Element tagetTokenElement = (Element) getNodeList("./layer[@name='Target']/label", targetOccurence).item(0);
-							String startIdx = tagetTokenElement.getAttribute("start");
-							String endIdx = tagetTokenElement.getAttribute("end");
+							Element targetTokenElement = (Element) getNodeList("./layer[@name='Target']/label", targetOccurence).item(0);
+							String startIdx = targetTokenElement.getAttribute("start");
+							String endIdx = targetTokenElement.getAttribute("end");
 							Integer triggerIdx = start.indexOf(new Integer(Integer.parseInt(startIdx)));
 							assert triggerIdx != -1;
 							Frame tmpFrame = mapNameToFrame.get(frameName);
 							assert tmpFrame != null || frameName.equals("Test35");
 							if(tmpFrame != null){
-								Span[] tmpSpans = new Span[tmpFrame.numRoles()];
-							
-								allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, tmpSpans, sentence));
+								Span[] spansArray = new Span[tmpFrame.numRoles()];
+								NodeList spanNodeList = getNodeList("./layer[@name='FE']/label", targetOccurence);
+								HashMap<String, Span> feNameToSpan = new HashMap<String, Span>();
+								for (int m = 0; m < spanNodeList.getLength(); m++){
+									Element spanFEElement = (Element)spanNodeList.item(m);
+									try{
+										List<String> nullInstantiation = Arrays.asList(new String [] {"INC", "DNI", "INI", "CNI"});
+										if(! nullInstantiation.contains(spanFEElement.getAttribute("itype"))){
+											int si = start.indexOf(Integer.parseInt(spanFEElement.getAttribute("start")));
+											int eichar = Integer.parseInt(spanFEElement.getAttribute("end"));
+											int ei = end.indexOf(eichar)+1;
+											assert si > -1;
+											if( ei == 0){
+												for (int abc = 0; abc < end.size(); abc++){
+													if(end.get(abc) > eichar) {
+														ei=abc+1;
+														break;
+													}
+												}
+												if(ei == 0){ei = end.size();}
+											}
+											assert ei > 0;
+											feNameToSpan.put(spanFEElement.getAttribute("name"),new Span(si, ei));
+										}
+
+									}
+									catch (Exception e){
+										throw new RuntimeException(e);
+									}
+								}
+								for(int spanIdx = 0; spanIdx < tmpFrame.numRoles(); spanIdx++){
+									String feName = tmpFrame.getRole(spanIdx);
+									spansArray[spanIdx] = feNameToSpan.get(feName);
+								}
+								allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, spansArray, sentence));
 							}
 						}
 					}

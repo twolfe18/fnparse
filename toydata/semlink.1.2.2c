@@ -1,0 +1,10 @@
+nw/wsj/00/wsj_0003.parse 2 14 gold make-v 26.1-1 Manufacturing make.01 null ----- 3:2*12:1*13:1-ARG0=Agent;Manufacturer 14:0-rel 15:1-ARG1=Product;Product 3:2*12:1-LINK-SLC 
+nw/wsj/00/wsj_0001.parse 0 8 gold join-v 22.1-2-1 Cause_to_amalgamate join.01 null ----- 0:2-ARG0=Agent;Agent 7:0-ARGM-MOD 8:0-rel 9:1-ARG1=Patient;Part_1 11:1-ARGM-PRD 15:1-ARGM-TMP 
+nw/wsj/00/wsj_0002.parse 0 16 gold name-v 29.3 IN name.01 null ----- 0:2*17:1-ARG1=Theme 16:0-rel 18:2-ARG2=Result 
+nw/wsj/00/wsj_0003.parse 0 9 gold make-v 26.1-1 Manufacturing make.01 null ----- 7:1-ARG0=Agent;Manufacturer 9:0-rel 10:1-ARG1=Product;Product 
+nw/wsj/00/wsj_0003.parse 0 14 gold cause-v 27 Causation cause.01 1 ----- 0:3-ARG0=Cause;Cause 14:0-rel 15:2-ARG1=Theme;Effect 
+nw/wsj/00/wsj_0003.parse 0 37 gold report-v 37.7-1 Statement report.01 null ----- 36:1-ARG0=Agent;Speaker 37:0-rel 38:1-ARG1=Topic;Message 
+nw/wsj/00/wsj_0003.parse 1 21 gold cause-v 27 Causation cause.01 1 ----- 16:2-ARG0=Cause;Cause 21:0-rel 22:2-ARG1=Theme;Effect 
+nw/wsj/00/wsj_0003.parse 1 31 gold say-v 37.7-1 IN say.01 null ----- 0:3*33:1-ARG1=Topic 30:1-ARG0=Agent 31:0-rel 
+nw/wsj/00/wsj_0003.parse 2 18 gold stop-v 55.4-1 Activity_stop stop.01 null ----- 0:2-ARG0=Agent;Agent 18:0-rel 19:1-ARG1=Theme;Activity 
+nw/wsj/00/wsj_0003.parse 2 19 gold use-v 105 IN use.01 null ----- 0:2-ARG0 19:0-rel 20:1-ARG1 21:1-ARGM-LOC 26:1-ARGM-TMP 

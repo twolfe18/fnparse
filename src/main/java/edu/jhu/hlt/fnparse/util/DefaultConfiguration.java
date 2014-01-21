@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.util;
 
-import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 
