@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.data;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.nio.charset.Charset;
 import java.io.IOException;
 
@@ -19,8 +18,8 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Configuration;
 import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
 
-import edu.stanford.nlp.ling.TaggedWord;
 import edu.stanford.nlp.trees.Tree;
+import edu.stanford.nlp.ling.TaggedWord;
 
 public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 
@@ -68,7 +67,7 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 						tokens[i] = taggedWord.get(i).word();
 						pos[i] = taggedWord.get(i).tag();
 					}
-					Sentence sentence = new Sentence(String.format("SL%d", semLinkIndex), tokens, pos);
+					Sentence sentence = new Sentence(getName(), String.format("SL%d", semLinkIndex), tokens, pos);
 					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
 					if( framenetFrame != null){
 						Span[] tmpSpans = new Span[framenetFrame.numRoles()];
