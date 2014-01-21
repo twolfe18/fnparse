@@ -18,6 +18,11 @@ public class FrameInstanceProviderTests {
 		for(FrameInstance fi : fis) {
 			String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTargetWord(), Arrays.toString(fi.getSentence().getWord()));
 			System.out.println(line);
+			for(int i = 0; i < fi.getFrame().numRoles(); i++){
+				if(fi.getArgument(i) != null){
+					System.out.println(String.format("Role: %s, Argument: %s", fi.getFrame().getRole(i), Arrays.toString(fi.getArgumentTokens(i))));
+				}
+			}
 			sents.add(fi.getSentence());
 		}
 		System.out.printf("loading %d FrameInstances in %d sentences took %.2f seconds\n",

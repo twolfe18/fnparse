@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.Arrays;
+
 public class Sentence {
 
 	private String id;
@@ -17,6 +19,8 @@ public class Sentence {
 	public String getPos(int i) { return pos[i]; }
 	public String[] getWord() { return tokens; }
 	public String[] getPos() { return pos; }
+	public String[] getWord(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
+	public String[] getPos(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	
 	public int getHead(Span s) {
 		System.err.println("warning: not actually doing head-finding, update me");

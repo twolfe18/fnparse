@@ -57,6 +57,8 @@ public class FrameInstance {
 
 	public Span getArgument(int roleIdx) { return arguments[roleIdx]; }
 
+	public String[] getArgumentTokens(int roleIdx) { return sentence.getWord(arguments[roleIdx]); }
+	
 	public void setArgument(int roleIdx, Span extent) {
 		arguments[roleIdx] = extent;
 	}

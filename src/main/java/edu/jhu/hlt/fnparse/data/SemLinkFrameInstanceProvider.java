@@ -30,7 +30,7 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 	@Override
 	public List<FrameInstance> getFrameInstances() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
-		
+
 		Configuration conf = new DefaultConfiguration();
 		List<Frame> allFrames = conf.getFrameIndex().allFrames();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
@@ -42,46 +42,46 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 			// Split line by space and assign to individual variables.
 			File semLinkFIFile = UsefulConstants.semLinkFrameInstanceFile;
 			List<String> lines = null;
-			
+
 			try{
-			    lines = Files.readAllLines(semLinkFIFile.toPath(), Charset.defaultCharset());
-			    int semLinkIndex = -1;
-			    for(String line : lines){
-			    	semLinkIndex++;
-			    	String[] row = line.split(" ");
-			    	String parseFileName = row[0]; // I would actually read the mrg file and then just get the output.
-			    	int sentenceIndex = Integer.parseInt(row[1]); // starts with 0
-			    	Tree pennTreePRD = UsefulConstants.getPennTree(parseFileName, sentenceIndex, ".prd");
-			    	Tree pennTreeMRG = UsefulConstants.getPennTree(parseFileName, sentenceIndex, ".mrg");
-			    	int triggerIdx = Integer.parseInt(row[2]); // the index of the token
-//			    	String standard = row[3];  		 
-			    	String verb = row[4]; 	  					 
-//			    	String verbnetClass = row[5]; 				 
-			    	String framenetFrameName = row[6];				 
-//			    	String propbankGrouping = row[7]; 			 
-//			    	String senseinventoryGrouping = row[8];   	 
-//			    	String tamString = row[9]; // Tense/Aspect/Mood
-			    	ArrayList<TaggedWord> taggedWord = pennTreeMRG.taggedYield();
-			    	String [] tokens = new String[taggedWord.size()]; 
-			    	String [] pos = new String[taggedWord.size()];
-			    	for(int i = 0; i < taggedWord.size(); i++){
-			    		tokens[i] = taggedWord.get(i).word();
-			    		pos[i] = taggedWord.get(i).tag();
-			    	}
-			    	Sentence sentence = new Sentence(String.format("SL%d", semLinkIndex), tokens, pos);
-			    	Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
-			    	if( framenetFrame != null){
-			    	Span[] tmpSpans = new Span[framenetFrame.numRoles()];
-			    	allFI.add(FrameInstance.newFrameInstance(framenetFrame, triggerIdx, tmpSpans, sentence));
-			    	}
-			    	else{
-			    		System.err.println(framenetFrameName);
-			    	}
-			    }
+				lines = Files.readAllLines(semLinkFIFile.toPath(), Charset.defaultCharset());
+				int semLinkIndex = -1;
+				for(String line : lines){
+					semLinkIndex++;
+					String[] row = line.split(" ");
+					String parseFileName = row[0]; // I would actually read the mrg file and then just get the output.
+					int sentenceIndex = Integer.parseInt(row[1]); // starts with 0
+					Tree pennTreePRD = UsefulConstants.getPennTree(parseFileName, sentenceIndex, ".prd");
+					Tree pennTreeMRG = UsefulConstants.getPennTree(parseFileName, sentenceIndex, ".mrg");
+					int triggerIdx = Integer.parseInt(row[2]); // the index of the token
+					//			    	String standard = row[3];  		 
+					String verb = row[4]; 	  					 
+					//			    	String verbnetClass = row[5]; 				 
+					String framenetFrameName = row[6];				 
+					//			    	String propbankGrouping = row[7]; 			 
+					//			    	String senseinventoryGrouping = row[8];   	 
+					//			    	String tamString = row[9]; // Tense/Aspect/Mood
+					ArrayList<TaggedWord> taggedWord = pennTreeMRG.taggedYield();
+					String [] tokens = new String[taggedWord.size()]; 
+					String [] pos = new String[taggedWord.size()];
+					for(int i = 0; i < taggedWord.size(); i++){
+						tokens[i] = taggedWord.get(i).word();
+						pos[i] = taggedWord.get(i).tag();
+					}
+					Sentence sentence = new Sentence(String.format("SL%d", semLinkIndex), tokens, pos);
+					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
+					if( framenetFrame != null){
+						Span[] tmpSpans = new Span[framenetFrame.numRoles()];
+						allFI.add(FrameInstance.newFrameInstance(framenetFrame, triggerIdx, tmpSpans, sentence));
+					}
+					else{
+						System.err.println(framenetFrameName);
+					}
+				}
 			}catch(IOException e){
-			    throw new RuntimeException(e);
+				throw new RuntimeException(e);
 			}
-	    	/* 
+			/* 
 			 * FOR MY CURRENT WORK I DONT NEED ARGUMENT SPANS HOWEVER
 			 * Arguments :
 			 * 0:1*3:1-ARG0=Agent;Speaker (just choose the first thing) (this says choose the tokens spanned by the tree at token 0 of height 1, and call that a Speaker
@@ -105,6 +105,6 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 		return allFI;
 	}
 
-	
-	
+
+
 }
