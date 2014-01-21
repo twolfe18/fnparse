@@ -1,34 +1,36 @@
 
-package edu.jhu.hlt.fnparse.util;
+package edu.jhu.hlt.fnparse.data;
+
+import static org.junit.Assert.*;
 
 import java.util.*;
+
+import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 
-public class FrameIndexTests {
+public class FrameIndexTest {
 		
-	public static void main(String[] args) {
+	@Test
+	public void basic() {
 		
 		long start = System.currentTimeMillis();
 		FrameIndex frameIndex = new FrameIndex();
 		List<Frame> allFrames = frameIndex.allFrames();
-		if(allFrames.size() != frameIndex.framesInFrameNet + 1)	// +1 for nullFrame
-			throw new RuntimeException();
+		assertEquals(allFrames.size(), frameIndex.framesInFrameNet + 1);	// +1 for nullFrame
 		long time = System.currentTimeMillis() - start;
 		
 		Set<Integer> ids = new HashSet<Integer>();
 		int max = -1;
 		for(Frame f : allFrames) {
 			System.out.println(f);
-			if(!ids.add(f.getId()))
-				throw new RuntimeException("f=" + f);
+			assertTrue(ids.add(f.getId()));
 			if(f.getId() > max)
 				max = f.getId();
 		}
 		System.out.printf("reading %d frames took %.2f sec\n", allFrames.size(), time/1000d);
-		if(max != allFrames.size()-1)
-			throw new RuntimeException("max=" + max + ", allFrames.size=" + allFrames.size());
+		assertEquals(max, allFrames.size()-1);
 	}
 	
 }
