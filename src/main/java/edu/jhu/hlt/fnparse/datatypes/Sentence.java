@@ -2,16 +2,23 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 public class Sentence {
 
+	private String dataset;	// where did this sentence come from?
 	private String id;
 	private String[] tokens;
 	private String[] pos;
 	
-	public Sentence(String id, String[] tokens, String[] pos) {
+	public Sentence(String dataset, String id, String[] tokens, String[] pos) {
+		if(id == null || tokens == null)
+			throw new IllegalArgumentException();
+		if(pos != null && tokens.length != pos.length)
+			throw new IllegalArgumentException();
+		this.dataset = dataset;
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
 	}
 	
+	public String getDataset() { return dataset; }
 	public String getId() { return id; }
 	public String getWord(int i) { return tokens[i]; }
 	public String getPos(int i) { return pos[i]; }

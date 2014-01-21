@@ -70,7 +70,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							pos.add(tokenElement.getAttribute("name"));
 						}
 
-						Sentence sentence = new Sentence(sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
+						Sentence sentence = new Sentence(getName(), sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
 
 						for(int k = 0; k < targetOccurenceList.getLength(); k++){
