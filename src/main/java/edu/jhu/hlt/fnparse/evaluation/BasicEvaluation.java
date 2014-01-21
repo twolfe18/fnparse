@@ -1,8 +1,11 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class BasicEvaluation {
 
@@ -75,12 +78,16 @@ public class BasicEvaluation {
 	
 	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {targetF1, targetPrecision, targetRecall};
 	
-	public static Map<String, Double> evaluate(List<SentenceEval> instances) {
+	public static Map<String, Double> evaluate(List<Sentence> instances) {
+		
+		List<SentenceEval> se = new ArrayList<SentenceEval>();
+		for(Sentence s : instances) se.add(new SentenceEval(s));
+		
 		Map<String, Double> results = new HashMap<String, Double>();
 		int n = evaluationFunctions.length;
 		for(int i=0; i<n; i++) {
 			EvalFunc ef = evaluationFunctions[i];
-			double v = ef.evaluate(instances);
+			double v = ef.evaluate(se);
 			results.put(ef.getName(), v);
 		}
 		return results;

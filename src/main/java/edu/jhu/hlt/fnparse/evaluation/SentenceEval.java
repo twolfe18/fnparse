@@ -22,6 +22,12 @@ public class SentenceEval {
 	private int[][] targets;
 	
 	public SentenceEval(Sentence s) {
+		
+		if(!s.hasGoldFrames())
+			throw new IllegalArgumentException();
+		if(!s.hasHypFrames())
+			throw new IllegalArgumentException();
+		
 		this.sentence = s;
 		
 		// compute TP, FP, FN

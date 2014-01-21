@@ -2,10 +2,12 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.FrameNetParser;
 import edu.jhu.hlt.fnparse.inference.FrameNetParserTrainer;
 import edu.jhu.hlt.fnparse.inference.SemaforicTrainer;
@@ -16,7 +18,7 @@ import edu.jhu.hlt.fnparse.inference.SemaforicTrainer;
  * evaluate that parser
  * @author travis
  */
-public class BasicFNParseEval {
+public class BasicExperiment {
 
 	public static void main(String[] args) {
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
@@ -33,6 +35,7 @@ public class BasicFNParseEval {
 		FrameNetParser parser = trainer.train(train);
 		parser.parse(test);
 		
-		
+		Map<String, Double> results = BasicEvaluation.evaluate(test);
+		BasicEvaluation.showResults("BasicExperiment", results);
 	}
 }
