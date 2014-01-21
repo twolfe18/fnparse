@@ -47,14 +47,17 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 		try {
 			File folder = UsefulConstants.fullTextXMLDirPath;
 			File[] listOfFiles = folder.listFiles();
-
+			//We are assuming that every file in fullTextXMLDirPath is a data file
 			XPath xPath = XPathFactory.newInstance().newXPath();
 			for (File file : listOfFiles) {
 				if (file.isFile()) {
-					//System.out.println(file.getName());
+					//sentenceNodes is a list of sentences
 					NodeList sentenceNodes = getNodeList("/fullTextAnnotation/sentence", file);
 					for(int i = 0; i < sentenceNodes.getLength(); i++){
 						Element sentenceNode = (Element)sentenceNodes.item(i);
+						// One sentenceNode contains the sentenceText, 
+						// the tokenization information, (character indices of start and end of tokens)
+						// And one annotationSet per target
 						String sentenceId =sentenceNode.getAttribute("corpID") +sentenceNode.getAttribute("docID") +sentenceNode.getAttribute("ID");
 						String sentenceText = getNodeList("./text", sentenceNode).item(0).getTextContent();
 						List<Integer> start = new ArrayList<Integer>();
@@ -62,6 +65,8 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 						List<String> tokens = new ArrayList<String>();
 						List<String> pos = new ArrayList<String>();
 						NodeList postagList = getNodeList("./annotationSet/layer[@name='PENN']/label",sentenceNode);
+						
+						// Extract the pos tags and character level, token start and end info
 						for (int l=0; l < postagList.getLength(); l++){
 							Element tokenElement = (Element)postagList.item(l);
 							int startVal = Integer.parseInt(tokenElement.getAttribute("start"));
@@ -71,11 +76,17 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							tokens.add(sentenceText.substring(startVal, endVal+1));
 							pos.add(tokenElement.getAttribute("name"));
 						}
+						
+						// Sort the character level start and end, 
+						// these would be used later while finding the token spans of arguments
 						Collections.sort(start);
 						Collections.sort(end);
+						
+						// Create Sentence object to be used while creating FrameInstance
 						Sentence sentence = new Sentence(sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
+						
+						// Now loop over every annotationSet that mentions Frame Information
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
-
 						for(int k = 0; k < targetOccurenceList.getLength(); k++){
 							Element targetOccurence = (Element)targetOccurenceList.item(k);
 							String luID     = targetOccurence.getAttribute("luID");
@@ -89,6 +100,11 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							assert triggerIdx != -1;
 							Frame tmpFrame = mapNameToFrame.get(frameName);
 							assert tmpFrame != null || frameName.equals("Test35");
+							
+							// So far we have found the Frame of the annotation set and the trigger token
+							// Now we must find the argument spans.
+							// The method is to use the character level argument spans found in the FE layer
+							// and to find the corresponding token indices.
 							if(tmpFrame != null){
 								Span[] spansArray = new Span[tmpFrame.numRoles()];
 								NodeList spanNodeList = getNodeList("./layer[@name='FE']/label", targetOccurence);
@@ -97,19 +113,20 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 									Element spanFEElement = (Element)spanNodeList.item(m);
 									try{
 										List<String> nullInstantiation = Arrays.asList(new String [] {"INC", "DNI", "INI", "CNI"});
+										// Null Instantiations have no span, so we dont mark those
+										// They should be handled differently from absent FE/roles but right now they are 
+										// treated the same.
 										if(! nullInstantiation.contains(spanFEElement.getAttribute("itype"))){
 											int si = start.indexOf(Integer.parseInt(spanFEElement.getAttribute("start")));
-											int eichar = Integer.parseInt(spanFEElement.getAttribute("end"));
-											int ei = end.indexOf(eichar)+1;
 											assert si > -1;
-											if( ei == 0){
-												for (int abc = 0; abc < end.size(); abc++){
-													if(end.get(abc) > eichar) {
-														ei=abc+1;
-														break;
-													}
-												}
-												if(ei == 0){ei = end.size();}
+											int eichar = Integer.parseInt(spanFEElement.getAttribute("end"));
+											int ei = Collections.binarySearch(end, eichar);
+											// Handle the case that some of the span endings don't coincide with token endings.
+											if( ei < 0){
+												ei = -ei;
+											}
+											else{
+												ei++;
 											}
 											assert ei > 0;
 											feNameToSpan.put(spanFEElement.getAttribute("name"),new Span(si, ei));
