@@ -74,7 +74,7 @@ import edu.jhu.util.Alphabet;
  * spans in a sentence, otherwise it is cheaper to do it the naive way. In the context of good span pruning,
  * this may end up not being worth it.
  */
-public class Semaforic implements FgExampleFactory {
+public class Semaforic implements FrameNetParser, FgExampleFactory {
 	
 	private Frame nullFrame;
 	private List<Frame> frames;
@@ -84,6 +84,9 @@ public class Semaforic implements FgExampleFactory {
 	private TargetRoleFeatures targetRoleFeatures;
 	private FgModel model;
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
+	
+	@Override
+	public String getName() { return "Semaforic"; }
 	
 	/**
 	 * train a model
@@ -136,10 +139,8 @@ public class Semaforic implements FgExampleFactory {
 	public int size() { return trainInstances.size(); }
 	
 	
-	/**
-	 * runs inference after you've trained a model
-	 */
-	public Map<Sentence, List<FrameInstance>> predict(List<Sentence> sentences) {
+	@Override
+	public Map<Sentence, List<FrameInstance>> parse(List<Sentence> sentences) {
 		throw new RuntimeException("implement me");
 	}
 	

@@ -6,10 +6,10 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
-public interface FrameNetParser {
+public interface FrameNetParserTrainer {
 
 	public String getName();
 	
-	public Map<Sentence, List<FrameInstance>> parse(List<Sentence> sentences);
+	public FrameNetParser train(Map<Sentence, List<FrameInstance>> examples);
 	
 }

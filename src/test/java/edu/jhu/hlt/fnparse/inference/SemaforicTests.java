@@ -10,6 +10,11 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
+/**
+ * given some simple fake data, can we run inference end to end
+ * and produce sensical results?
+ * @author travis
+ */
 public class SemaforicTests {
 
 	private Frame nullFrame;
@@ -33,9 +38,10 @@ public class SemaforicTests {
 		frames.add(motion);
 		frames.add(communication);
 		
-		Sentence s1 = new Sentence("s1", new String[] {"the", "fox", "jumped", "over", "there"}, new String[] {"d", "n", "v", "p", "n"});
-		Sentence s2 = new Sentence("s2", new String[] {"john", "said", "java", "smells"}, new String[] {"n", "v", "n", "v"});
-		Sentence s3 = new Sentence("s3", new String[] {"not", "all", "words", "trigger", "frames"}, new String[] {"q", "q", "n", "v", "n"});
+		String ds = "test";
+		Sentence s1 = new Sentence(ds, "s1", new String[] {"the", "fox", "jumped", "over", "there"}, new String[] {"d", "n", "v", "p", "n"});
+		Sentence s2 = new Sentence(ds, "s2", new String[] {"john", "said", "java", "smells"}, new String[] {"n", "v", "n", "v"});
+		Sentence s3 = new Sentence(ds, "s3", new String[] {"not", "all", "words", "trigger", "frames"}, new String[] {"q", "q", "n", "v", "n"});
 		
 		frameInstances = new ArrayList<FrameInstance>();
 		
