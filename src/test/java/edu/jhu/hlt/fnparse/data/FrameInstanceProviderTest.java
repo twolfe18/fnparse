@@ -1,12 +1,16 @@
-package edu.jhu.hlt.fnparse.util;
+package edu.jhu.hlt.fnparse.data;
 
 import java.util.*;
+
+import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
+import edu.jhu.hlt.fnparse.util.SemlinkConfiguration;
 
-public class FrameInstanceProviderTests {
+public class FrameInstanceProviderTest {
 
 	private static void testFIP(FrameInstanceProvider fip){
 
@@ -28,11 +32,16 @@ public class FrameInstanceProviderTests {
 		System.out.printf("loading %d FrameInstances in %d sentences took %.2f seconds\n",
 				fis.size(), sents.size(), time/1000d);
 	}
-	public static void main(String[] args) {
-		System.out.println("starting...");
-		System.out.println("testing default config...");
+	
+	@Test
+	public void defaultConfigTest() {
+		//System.out.println("testing default config...");
 		testFIP(new DefaultConfiguration().getFrameInstanceProvider());
-		System.out.println("testing Semlink config...");
+	}
+	
+	@Test
+	public void semlinkConfigTest() {
+		//System.out.println("testing Semlink config...");
 		testFIP(new SemlinkConfiguration().getFrameInstanceProvider());
 	}
 }

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.data;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -17,8 +18,14 @@ import javax.xml.parsers.*;
 public class DataUtil {
 
 	public static Map<Sentence, List<FrameInstance>> groupBySentence(List<FrameInstance> fis) {
-		throw new RuntimeException("implement me");
-		
+		Map<Sentence, List<FrameInstance>> m = new HashMap<Sentence, List<FrameInstance>>();
+		for(FrameInstance fi : fis) {
+			List<FrameInstance> fiList = m.get(fi.getSentence());
+			if(fiList == null) fiList = new ArrayList<FrameInstance>();
+			fiList.add(fi);
+			m.put(fi.getSentence(), fiList);
+		}
+		return m;
 	}
 
 	public static String[] parseFrameIndexXML(File f, int numFrames) {

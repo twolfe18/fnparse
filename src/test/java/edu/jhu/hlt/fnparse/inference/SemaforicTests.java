@@ -1,10 +1,9 @@
 package edu.jhu.hlt.fnparse.inference;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -25,6 +24,12 @@ public class SemaforicTests {
 		SemaforicTests st = new SemaforicTests();
 		st.populateFrames();
 		st.train();
+	}
+	
+	public List<FrameInstance> getFrameInstances() {
+		if(frameInstances == null)
+			populateFrames();
+		return frameInstances;
 	}
 	
 	public void populateFrames() {
@@ -62,21 +67,9 @@ public class SemaforicTests {
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 3, s3));
 		frameInstances.add(FrameInstance.frameMention(nullFrame, 4, s3));
 	}
-	
-	// group by sentence
-	public Map<Sentence, List<FrameInstance>> getExamples() {
-		Map<Sentence, List<FrameInstance>> m = new HashMap<Sentence, List<FrameInstance>>();
-		for(FrameInstance fi : frameInstances) {
-			List<FrameInstance> fis = m.get(fi.getSentence());
-			if(fis == null) fis = new ArrayList<FrameInstance>();
-			fis.add(fi);
-			m.put(fi.getSentence(), fis);
-		}
-		return m;
-	}
-	
+
 	public void train() {
 		Semaforic sem = new Semaforic();
-		sem.train(getExamples(), frames, nullFrame);
+		sem.train(DataUtil.groupBySentence(frameInstances), frames, nullFrame);
 	}
 }
