@@ -6,5 +6,5 @@ public interface FrameElementHypothesisFactory {
 	
 	public String getName();
 
-	public FrameElementHypothesis make(FrameHypothesis frameHyp, Sentence s);
+	public FrameElementHypothesis make(FrameHypothesis frameHyp, int roleIdx, Sentence s);
 }

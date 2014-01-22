@@ -5,6 +5,7 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -40,8 +41,12 @@ public class SemaforicTest implements FrameInstanceProvider {
 	public void populateFrames() {
 		
 		nullFrame = Frame.nullFrame;
-		Frame motion = new Frame(1, "MOTION", new String[] {"jumped.v", "throw.v"}, new String[] {"mover", "moved", "path"});
-		Frame communication = new Frame(2, "COMMUNICATION", new String[] {"say.v", "speech.n"}, new String[] {"communicator", "communicatee", "message"});
+		Frame motion = new Frame(1, "MOTION", new LexicalUnit[] {
+				new LexicalUnit("jumped", "V"), new LexicalUnit("throw", "V")},
+				new String[] {"mover", "moved", "path"});
+		Frame communication = new Frame(2, "COMMUNICATION", new LexicalUnit[] {
+				new LexicalUnit("say", "V"), new LexicalUnit("speech", "N")},
+				new String[] {"communicator", "communicatee", "message"});
 		
 		frames = new ArrayList<Frame>();
 		frames.add(nullFrame);

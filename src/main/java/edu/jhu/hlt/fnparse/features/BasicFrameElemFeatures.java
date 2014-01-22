@@ -6,7 +6,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class BasicTargetRoleFeatures implements FrameElementFeatures {
+public class BasicFrameElemFeatures implements FrameElementFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	

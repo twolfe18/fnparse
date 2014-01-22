@@ -10,10 +10,11 @@ import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.BasicTargetFeatures;
-import edu.jhu.hlt.fnparse.features.BasicTargetRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameElemFeatures;
 import edu.jhu.hlt.fnparse.features.FrameFeatures;
 import edu.jhu.hlt.fnparse.features.FrameElementFeatures;
+import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
 import edu.jhu.util.Alphabet;
 
@@ -86,11 +87,11 @@ public class FGFNParser implements FgExampleFactory {
 	private List<String> frameNames;
 	private List<FGFNParserSentence> trainInstances;
 	
-	private FrameFeatures frameFeatures;
-	private FrameElementFeatures frameElemFeatures;
-	private SpanExtractor targetIdentifier;
-	private FrameHypothesisFactory frameHypFactory;
-	private FrameElementHypothesisFactory frameElemHypFactory;
+	private FrameFeatures frameFeatures = new BasicFrameFeatures();
+	private FrameElementFeatures frameElemFeatures = new BasicFrameElemFeatures();
+	private SpanExtractor targetIdentifier = new SingleWordSpanExtractor();
+	private FrameHypothesisFactory frameHypFactory = new SemaforicFrameHypothesisFactory();
+	private FrameElementHypothesisFactory frameElemHypFactory = new ExhaustiveFrameElementHypothesisFactory();
 	
 	private FgModel model;
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
@@ -107,8 +108,8 @@ public class FGFNParser implements FgExampleFactory {
 	public void train(List<Sentence> examples, List<Frame> frames) {
 		
 		this.frames = frames;
-		this.frameFeatures = new BasicTargetFeatures();
-		this.frameElemFeatures = new BasicTargetRoleFeatures();
+		this.frameFeatures = new BasicFrameFeatures();
+		this.frameElemFeatures = new BasicFrameElemFeatures();
 		this.frameNames = new ArrayList<String>();
 		int maxRoles = 0;
 		for(Frame f : frames) {
@@ -217,7 +218,7 @@ public class FGFNParser implements FgExampleFactory {
 			for(int i=0; i<numTargets; i++) {
 				FrameHypothesis f_i = frameVars[i];
 				for(int j=0; j<f_i.maxRoles(); j++) {
-					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, sentence);
+					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
 					FrameElemFactor fr_ij = new FrameElemFactor(frameVars[i], r_ij);
 					frameElemVars[i][j] = r_ij;
 					frameElemFactors[i][j] = fr_ij;

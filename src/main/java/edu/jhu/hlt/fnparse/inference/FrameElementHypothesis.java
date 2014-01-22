@@ -15,12 +15,12 @@ public interface FrameElementHypothesis {
 	public Var getVar();
 	
 	/**
-	 * homomorphic to i
+	 * homomorphic to the i in r_ij
 	 */
 	public Span getTargetSpan();
 	
 	/**
-	 * j
+	 * the j in r_ij
 	 */
 	public int getRoleIdx();
 

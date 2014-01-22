@@ -8,7 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class BasicTargetFeatures implements FrameFeatures {
+public class BasicFrameFeatures implements FrameFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	
