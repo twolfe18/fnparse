@@ -1,20 +1,22 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import edu.jhu.hlt.fnparse.data.LexicalUnit;
+
 public class Frame {
 
 	private int idx;
 	private String name;			// e.g. "Commerce_buy"
-	private String[] lexicalUnit;	// e.g. ["purchase.v", "buy.v"]
+	private LexicalUnit[] lexicalUnit;	// e.g. ["purchase.v", "buy.v"]
 	private String[] role;			// e.g. ["Buyer", "Goods"]
 
-	public Frame(int id, String name, String[] lexicalUnit, String[] role) {
+	public Frame(int id, String name, LexicalUnit[] lexicalUnits, String[] role) {
 		if(role == null || role.length == 0)
 			throw new IllegalArgumentException();
 		if(lexicalUnit == null)
 			throw new IllegalArgumentException();
 		this.idx = id;
 		this.name = name;
-		this.lexicalUnit = lexicalUnit;
+		this.lexicalUnit = lexicalUnits;
 		this.role = role;
 	}
 	
@@ -31,7 +33,7 @@ public class Frame {
 
 	public int getId() { return idx; }
 	
-	public String getLexicalUnit(int i) {
+	public LexicalUnit getLexicalUnit(int i) {
 		return lexicalUnit[i];
 	}
 	

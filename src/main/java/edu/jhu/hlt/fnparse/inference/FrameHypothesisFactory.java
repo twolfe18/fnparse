@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
@@ -15,6 +16,6 @@ public interface FrameHypothesisFactory {
 	 * called right after construction.
 	 * @param targetSpan is the extent of the frame being evoked.
 	 */
-	public FrameHypothesis make(Span targetSpan);
+	public FrameHypothesis make(Span targetSpan, Sentence s);
 	
 }

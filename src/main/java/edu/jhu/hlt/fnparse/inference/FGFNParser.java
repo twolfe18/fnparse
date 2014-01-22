@@ -204,7 +204,7 @@ public class FGFNParser implements FgExampleFactory {
 			frameVars = new FrameHypothesis[numTargets];
 			frameFactors = new FrameFactor[numTargets];
 			for(int i=0; i<numTargets; i++) {
-				FrameHypothesis f_i = frameHypFactory.make(targets.get(i));
+				FrameHypothesis f_i = frameHypFactory.make(targets.get(i), sentence);
 				FrameFactor ff_i = new FrameFactor(f_i);
 				frameVars[i] = f_i;
 				frameFactors[i] = ff_i;
