@@ -74,8 +74,8 @@ public class SemaforicTest implements FrameInstanceProvider {
 	}
 
 	public void train() {
-		Semaforic sem = new Semaforic();
-		sem.train(getFrameInstances(), frames, nullFrame);
+		FGFNParser sem = new FGFNParser();
+		sem.train(getFrameInstances(), frames);
 	}
 
 	@Override

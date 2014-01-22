@@ -3,8 +3,9 @@ package edu.jhu.hlt.fnparse.features;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
-public interface TargetFeatures {
+public interface FrameFeatures {
 
 	/**
 	 * Describes what this feature does at a high level
@@ -21,7 +22,7 @@ public interface TargetFeatures {
 	 * return features that describe whether this frame is likely 
 	 * evoked by this word in the sentence
 	 */
-	public FeatureVector getFeatures(Frame f, int targetIdx, Sentence s);
+	public FeatureVector getFeatures(Frame f, Span extent, Sentence s);
 	
 	/**
 	 * maximum number of non-zero indexes returned by vectors from getFeatures

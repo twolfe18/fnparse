@@ -6,14 +6,9 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class BasicTargetRoleFeatures implements TargetRoleFeatures {
+public class BasicTargetRoleFeatures implements FrameElementFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
-	private Frame nullFrame;
-	
-	public BasicTargetRoleFeatures(Frame nullFrame) {
-		this.nullFrame = nullFrame;
-	}
 	
 	@Override
 	public String getDescription() { return "BasicTargetRoleFeatures"; }
@@ -22,26 +17,35 @@ public class BasicTargetRoleFeatures implements TargetRoleFeatures {
 	public String getFeatureName(int featIdx) {
 		return this.featIdx.lookupObject(featIdx);
 	}
+	
+	public int head(Span s) {
+		if(s.width() == 1)
+			return s.start;
+		else {
+			System.err.println("warning! implement a real head finder");
+			return s.end-1;
+		}
+	}
 
 	@Override
-	public FeatureVector getFeatures(Frame f, Span span, int targetIdx, int roleIdx, Sentence sent) {
+	public FeatureVector getFeatures(Frame f, Span argumentSpan, Span targetSpan, int roleIdx, Sentence sent) {
 		
 		// NOTE: don't write any back-off features that only look at roleIdx because it is
 		// meaningless outside without considering the frame.
 		
 		FeatureVector fv = new FeatureVector();
 		
-		fv.add(index("widthBias" + span.width()), 1d);
-		if(span == Span.nullSpan && f == nullFrame)
+		fv.add(index("widthBias" + argumentSpan.width()), 1d);
+		if(argumentSpan == Span.nullSpan && f == Frame.nullFrame)
 			fv.add(index("nullFrame_and_nullSpan"), 1d);
 		
-		String role_width = String.format("frame%d_role%d_width%d", f.getId(), roleIdx, span.width());
+		String role_width = String.format("frame%d_role%d_width%d", f.getId(), roleIdx, argumentSpan.width());
 		fv.add(index(role_width), 1d);
 		
 		String rel = "wut";
-		if(span.start > targetIdx) rel = "right";
-		if(span.end <= targetIdx) rel = "left";
-		if(targetIdx >= span.start && targetIdx < span.end) rel = "cover";
+		if(argumentSpan.after(targetSpan)) rel = "right";
+		if(argumentSpan.before(targetSpan)) rel = "left";
+		if(argumentSpan.overlaps(targetSpan)) rel = "cover";
 		String role_head = String.format("frame%d_role%d_", f.getId(), roleIdx, rel);
 		fv.add(index(role_head), 1d);
 		

@@ -24,6 +24,22 @@ public class Span {
 
 	public int width() { return end - start; }
 	
+	/**
+	 * return true if this span is to the left of
+	 * other with no overlap.
+	 */
+	public boolean before(Span other) {
+		return this.end <= other.start;
+	}
+	
+	/**
+	 * return true if this span is to the right of
+	 * other with no overlap.
+	 */
+	public boolean after(Span other) {
+		return this.start >= other.end;
+	}
+	
 	public boolean overlaps(Span other) {
 		if(end <= other.start) return false;
 		if(start >= other.end) return false;

@@ -5,7 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
-public interface TargetRoleFeatures {
+public interface FrameElementFeatures {
 
 	/**
 	 * Describes what this feature does at a high level
@@ -22,7 +22,7 @@ public interface TargetRoleFeatures {
 	 * return features that describe whether this frame at this targetIdx
 	 * is likely to have its roleIdx^{th} role filled by span.
 	 */
-	public FeatureVector getFeatures(Frame f, Span span, int targetIdx, int roleIdx, Sentence sent);
+	public FeatureVector getFeatures(Frame f, Span argumentSpan, Span targetSpan, int roleIdx, Sentence sent);
 	
 	/**
 	 * maximum number of non-zero indexes returned by vectors from getFeatures
