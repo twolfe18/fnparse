@@ -76,6 +76,20 @@ public class Sentence {
 	public String[] getWord(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPos(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	
+	public List<String> wordsIn(Span s) {
+		List<String> l = new ArrayList<String>();
+		for(int i=s.start; i<s.end; i++)
+			l.add(tokens[i]);
+		return l;
+	}
+	
+	public List<String> posIn(Span s) {
+		List<String> l = new ArrayList<String>();
+		for(int i=s.start; i<s.end; i++)
+			l.add(pos[i]);
+		return l;
+	}
+	
 	public int getHead(Span s) {
 		System.err.println("warning: not actually doing head-finding, update me");
 		return s.end-1;

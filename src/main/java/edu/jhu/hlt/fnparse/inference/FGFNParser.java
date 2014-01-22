@@ -232,9 +232,7 @@ public class FGFNParser implements FgExampleFactory {
 			}
 			
 		}
-	
-
-
+		
 		@Override
 		public FeatureVector calcObsFeatureVector(int factorId) {
 			Factor f = fg.getFactor(factorId);
