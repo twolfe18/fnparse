@@ -55,22 +55,22 @@ public class SemaforicTest implements FrameInstanceProvider {
 		
 		frameInstances = new ArrayList<FrameInstance>();
 		
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 0, s1));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 1, s1));
-		frameInstances.add(FrameInstance.newFrameInstance(motion, 2, new Span[] {new Span(0, 2), new Span(0, 2), new Span(3, 5)}, s1));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 3, s1));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 4, s1));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(0), s1));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(1), s1));
+		frameInstances.add(FrameInstance.newFrameInstance(motion, Span.widthOne(2), new Span[] {new Span(0, 2), new Span(0, 2), new Span(3, 5)}, s1));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(3), s1));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(4), s1));
 		
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 0, s2));
-		frameInstances.add(FrameInstance.newFrameInstance(communication, 1, new Span[] {new Span(0, 1), Span.nullSpan, new Span(2, 4)}, s2));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 2, s2));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 3, s2));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(0), s2));
+		frameInstances.add(FrameInstance.newFrameInstance(communication, Span.widthOne(1), new Span[] {new Span(0, 1), Span.nullSpan, new Span(2, 4)}, s2));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(2), s2));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(3), s2));
 		
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 0, s3));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 1, s3));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 2, s3));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 3, s3));
-		frameInstances.add(FrameInstance.frameMention(nullFrame, 4, s3));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(0), s3));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(1), s3));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(2), s3));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(3), s3));
+		frameInstances.add(FrameInstance.frameMention(nullFrame, Span.widthOne(4), s3));
 	}
 
 	public void train() {

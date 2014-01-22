@@ -73,6 +73,11 @@ import edu.jhu.util.Alphabet;
  * f_i to r_ij factors). Also, the number of "meta frames" must be consistently smaller than then number of
  * spans in a sentence, otherwise it is cheaper to do it the naive way. In the context of good span pruning,
  * this may end up not being worth it.
+ * 
+ * NOTE: I'm an idiot, and apparently you can have multi-word targets (e.g. "ballistic missile.n")
+ *   so right now I'm going to only consider single-word targets and fix this later.
+ *   
+ * TODO: add latent variable for LU, as in SEMAFOR
  */
 public class Semaforic implements FrameNetParser, FgExampleFactory {
 	
@@ -250,16 +255,17 @@ public class Semaforic implements FrameNetParser, FgExampleFactory {
 				for(int i=0; i<n; i++)
 					goldConf.put(targetVars[i], nullFrame.getId());
 				for(FrameInstance fi : sentence.getGoldFrames()) {
-					int target = fi.getTargetIdx();
+					Span target = fi.getTarget();
+					int targetIdx = target.start;	// TODO
 					Frame evoked = fi.getFrame();
-					goldConf.put(targetVars[target], evoked.getId());
+					goldConf.put(targetVars[targetIdx], evoked.getId());
 					for(int role=0; role<maxRoles; role++) {
 						// if the frame evoked is nullFrame, #roles=0, and the span is nullSpan
 						Span sp = role < evoked.numRoles() ? fi.getArgument(role) : Span.nullSpan;
 						int state = spanIds[sp.start][sp.end];
 						System.out.printf("[SemaforicSentence init] roleVars[%d][%d].#states=%d state=%d span=%s\n",
-								target, role, roleVars[target][role].getNumStates(), state, sp);
-						goldConf.put(roleVars[target][role], state);
+								target, role, roleVars[targetIdx][role].getNumStates(), state, sp);
+						goldConf.put(roleVars[targetIdx][role], state);
 					}
 				}
 			}

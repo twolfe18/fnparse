@@ -73,7 +73,7 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
 					if( framenetFrame != null){
 						Span[] tmpSpans = new Span[framenetFrame.numRoles()];
-						allFI.add(FrameInstance.newFrameInstance(framenetFrame, triggerIdx, tmpSpans, sentence));
+						allFI.add(FrameInstance.newFrameInstance(framenetFrame, Span.widthOne(triggerIdx), tmpSpans, sentence));
 					}
 					else{
 						System.err.println(framenetFrameName);

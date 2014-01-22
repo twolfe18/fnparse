@@ -28,7 +28,7 @@ public class FrameInstanceProviderTest {
 		for(Sentence s : sents) {
 			for(FrameInstance fi : s.getGoldFrames()) {
 				numFIs++;
-				String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTargetWord(), Arrays.toString(fi.getSentence().getWord()));
+				String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTarget(), Arrays.toString(fi.getSentence().getWord()));
 				System.out.println(line);
 				for(int i = 0; i < fi.getFrame().numRoles(); i++){
 					if(fi.getArgument(i) != null){

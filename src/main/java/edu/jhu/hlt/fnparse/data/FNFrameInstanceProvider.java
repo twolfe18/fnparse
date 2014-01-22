@@ -145,7 +145,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 									String feName = tmpFrame.getRole(spanIdx);
 									spansArray[spanIdx] = feNameToSpan.get(feName);
 								}
-								allFI.add(FrameInstance.newFrameInstance(tmpFrame, triggerIdx, spansArray, sentence));
+								allFI.add(FrameInstance.newFrameInstance(tmpFrame, Span.widthOne(triggerIdx), spansArray, sentence));
 							}
 						}
 					}

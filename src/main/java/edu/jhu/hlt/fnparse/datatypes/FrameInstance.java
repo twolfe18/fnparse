@@ -15,7 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 public class FrameInstance {
 
 	private Frame frame; 
-	private int targetIdx;		// index of the target word
+	private Span target;		// index of the target word
 	private Sentence sentence;
 
 	/**
@@ -24,32 +24,32 @@ public class FrameInstance {
 	 */
 	private Span[] arguments;
 
-	private FrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
+	private FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
 		this.frame = frame;
-		this.targetIdx = targetIdx; // targetIdx is the index of trigger token in the sentence.
+		this.target = target; // targetIdx is the index of trigger token in the sentence.
 		this.arguments = arguments;
 		this.sentence = sent;
 	}
 	
-	public static FrameInstance newFrameInstance(Frame frame, int targetIdx, Span[] arguments, Sentence sent) {
+	public static FrameInstance newFrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
 		if(frame == null || arguments == null || sent == null)
 			throw new IllegalArgumentException();
 		if(frame.numRoles() != arguments.length)
 			throw new IllegalArgumentException("null-instantiated roles should be null entries in the arguments array");
-		return new FrameInstance(frame, targetIdx, arguments, sent);
+		return new FrameInstance(frame, target, arguments, sent);
 	}
 	
-	public static FrameInstance frameMention(Frame frame, int targetIdx, Sentence sent) {
+	public static FrameInstance frameMention(Frame frame, Span target, Sentence sent) {
 		if(frame == null || sent == null)
 			throw new IllegalArgumentException();
 		Span[] arguments = new Span[frame.numRoles()];
 		Arrays.fill(arguments, Span.nullSpan);
-		return new FrameInstance(frame, targetIdx, arguments, sent);
+		return new FrameInstance(frame, target, arguments, sent);
 	}
 
-	public int getTargetIdx() { return targetIdx; }
+	public Span getTarget() { return target; }
 
-	public String getTargetWord() { return sentence.getWord(targetIdx); }
+//	public String getTargetWord() { return sentence.getWord(target); }
 
 	public Sentence getSentence() { return sentence; }
 
@@ -65,6 +65,6 @@ public class FrameInstance {
 
 	@Override
 	public String toString() {
-		return String.format("<FrameInstance target=%d>", targetIdx);
+		return String.format("<FrameInstance target=%d>", target);
 	}
 }

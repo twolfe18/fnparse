@@ -24,6 +24,12 @@ public class Span {
 
 	public int width() { return end - start; }
 	
+	public boolean overlaps(Span other) {
+		if(end <= other.start) return false;
+		if(start >= other.end) return false;
+		return true;
+	}
+	
 	public String toString() {
 		return String.format("<Span %d-%d>", start, end);
 	}

@@ -51,7 +51,7 @@ public class SentenceEval {
 	public void fillPredictions(List<FrameInstance> fis, Set<Prediction> targetPreds, Set<Prediction> targetRolePreds) {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
-			targetPreds.add(new Prediction(Span.widthOne(fi.getTargetIdx()), f, -1));
+			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
 			int n = fi.getFrame().numRoles();
 			for(int i=0; i<n; i++)
 				targetRolePreds.add(new Prediction(fi.getArgument(i), f, i));
