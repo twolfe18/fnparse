@@ -1,8 +1,11 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
+import java.util.*;
+
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * Holds the data needed to evaluate parses.
@@ -19,7 +22,8 @@ public class SentenceEval {
 	 * indexed with [gold][hyp]
 	 * e.g. targets[1][0] = # false negatives
 	 */
-	private int[][] targets;
+	private int[][] targetConfusion;
+	private int[][] fullConfusion;
 	
 	public SentenceEval(Sentence s) {
 		
@@ -29,32 +33,58 @@ public class SentenceEval {
 			throw new IllegalArgumentException();
 		
 		this.sentence = s;
+		this.targetConfusion = new int[2][2];
+		this.fullConfusion = new int[2][2];
+	
+		Set<Prediction> goldTargets = new HashSet<Prediction>();
+		Set<Prediction> hypTargets = new HashSet<Prediction>();
+		Set<Prediction> goldTargetRoles = new HashSet<Prediction>();
+		Set<Prediction> hypTargetRoles = new HashSet<Prediction>();
 		
-		// compute TP, FP, FN
-		// part 1: build index
-		int n = sentence.size();
-		int[] g = new int[n];
-		int[] h = new int[n];
-		assert Frame.nullFrame.getId() == 0;
-		for(FrameInstance fi : s.getGoldFrames())
-			g[fi.getTargetIdx()] = fi.getFrame().getId();
-		for(FrameInstance fi : s.getHypFrames())
-			h[fi.getTargetIdx()] = fi.getFrame().getId();
-		// part 2: fill out table
-		targets = new int[2][2];
-		for(int i=0; i<n; i++) {
-			if(g[i] != 0) {
-				if(h[i] == g[i]) targets[1][1]++;
-				else targets[1][0]++;
-			}
-			else {
-				if(h[i] == 0) targets[0][0]++;
-				else targets[0][1]++;
-			}
+		fillPredictions(sentence.getGoldFrames(), goldTargets, goldTargetRoles);
+		fillPredictions(sentence.getHypFrames(), hypTargets, hypTargetRoles);
+		
+		fillConfusionTable(goldTargets, hypTargets, targetConfusion);
+		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion);
+	}
+	
+	public void fillPredictions(List<FrameInstance> fis, Set<Prediction> targetPreds, Set<Prediction> targetRolePreds) {
+		for(FrameInstance fi : fis) {
+			Frame f = fi.getFrame();
+			targetPreds.add(new Prediction(Span.widthOne(fi.getTargetIdx()), f, -1));
+			int n = fi.getFrame().numRoles();
+			for(int i=0; i<n; i++)
+				targetRolePreds.add(new Prediction(fi.getArgument(i), f, i));
 		}
 	}
 	
-	public int targetTP() { return targets[1][1]; }
-	public int targetFP() { return targets[0][1]; }
-	public int targetFN() { return targets[1][0]; }
+	public void fillConfusionTable(Set<Prediction> gold, Set<Prediction> hyp, int[][] confusion) {
+		
+		Set<Prediction> s = new HashSet<Prediction>();
+		
+		// TP = G & H
+		s.addAll(gold);
+		s.retainAll(hyp);
+		confusion[1][1] = s.size();
+		
+		// FP = H -- G
+		s.clear();
+		s.addAll(hyp);
+		s.removeAll(gold);
+		confusion[0][1] = s.size();
+		
+		// FN = G -- H
+		s.clear();
+		s.addAll(gold);
+		s.removeAll(hyp);
+		confusion[1][0] = s.size();
+	}
+	
+	public int targetTP() { return targetConfusion[1][1]; }
+	public int targetFP() { return targetConfusion[0][1]; }
+	public int targetFN() { return targetConfusion[1][0]; }
+	
+	public int fullTP() { return fullConfusion[1][1]; }
+	public int fullFP() { return fullConfusion[0][1]; }
+	public int fullFN() { return fullConfusion[1][0]; }
 }

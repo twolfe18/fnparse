@@ -14,69 +14,73 @@ public class BasicEvaluation {
 		public double evaluate(List<SentenceEval> instances);
 	}
 	
-	// TODO implement macro/micro distinction
+	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, true, FPR.Mode.PRECISION);
+	public static final StdEvalFunc targetMacroRecall = new StdEvalFunc(true, true, FPR.Mode.RECALL);
+	public static final StdEvalFunc targetMacroF1 = new StdEvalFunc(true, true, FPR.Mode.F1);
 	
-	public static final TargetPrecision targetPrecision = new TargetPrecision();
-	public static class TargetPrecision implements EvalFunc {
-		public String getName() { return "TargetPrecision"; }
-		public double evaluate(List<SentenceEval> instances) {
-			// micro for now
-			int tp = 0, fp = 0;
-			for(SentenceEval se : instances) {
-				tp += se.targetTP();
-				fp += se.targetFP();
-			}
-			if(tp + fp == 0d) return 1d;
-			return tp / (tp + fp);
+	public static final StdEvalFunc targetMicroPrecision = new StdEvalFunc(false, true, FPR.Mode.PRECISION);
+	public static final StdEvalFunc targetMicroRecall = new StdEvalFunc(false, true, FPR.Mode.RECALL);
+	public static final StdEvalFunc targetMicroF1 = new StdEvalFunc(false, true, FPR.Mode.F1);
+	
+	public static final StdEvalFunc fullMacroPrecision = new StdEvalFunc(true, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc fullMacroRecall = new StdEvalFunc(true, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc fullMacroF1 = new StdEvalFunc(true, false, FPR.Mode.F1);
+	
+	public static final StdEvalFunc fullMicroPrecision = new StdEvalFunc(false, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc fullMicroRecall = new StdEvalFunc(false, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc fullMicroF1 = new StdEvalFunc(false, false, FPR.Mode.F1);
+	
+	public static class StdEvalFunc implements EvalFunc {
+		
+		private boolean macro;
+		private boolean targets;	// else full/targetRoles
+		private FPR.Mode mode;
+		
+		public StdEvalFunc(boolean macro, boolean targets, FPR.Mode mode) {
+			this.macro = macro;
+			this.targets = targets;
+			this.mode = mode;
 		}
+		
+		public String getName() {
+			StringBuilder sb = new StringBuilder();
+			sb.append(targets ? "Target" : "Full");
+			sb.append(macro ? "Macro" : "Micro");
+			sb.append(mode);
+			return sb.toString();
+		}
+
+		public double evaluate(List<SentenceEval> instances) {
+			return evaluateAll(instances).get(mode);
+		}
+		
+		public FPR evaluateAll(List<SentenceEval> instances) {
+			FPR fpr = new FPR(macro);
+			for(SentenceEval se : instances)
+				fpr.accum(evaluateAll(se));
+			return fpr;
+		}
+		
 		public double evaluate(SentenceEval inst) {
-			double tp = inst.targetTP();
-			double fp = inst.targetFP();
-			if(tp + fp == 0d) return 1d;
-			return tp / (tp + fp);
+			return evaluateAll(inst).get(mode);
+		}
+		
+		public FPR evaluateAll(SentenceEval inst) {
+			FPR fpr = new FPR(macro);
+			if(targets)
+				fpr.accum(inst.targetTP(), inst.targetFP(), inst.targetFN());
+			else
+				fpr.accum(inst.fullTP(), inst.fullFP(), inst.fullFN());
+			return fpr;
 		}
 	}
+
 	
-	public static final TargetRecall targetRecall = new TargetRecall();
-	public static class TargetRecall implements EvalFunc {
-		public String getName() { return "TargetRecall"; }
-		public double evaluate(List<SentenceEval> instances) {
-			// micro for now
-			int tp = 0, fn = 0;
-			for(SentenceEval se : instances) {
-				tp += se.targetTP();
-				fn += se.targetFN();
-			}
-			if(tp + fn == 0d) return 1d;
-			return tp / (tp + fn);
-		}
-		public double evaluate(SentenceEval inst) {
-			double tp = inst.targetTP();
-			double fn = inst.targetFN();
-			if(tp + fn == 0d) return 1d;
-			return tp / (tp + fn);
-		}
-	}
-	
-	public static final TargetF1 targetF1 = new TargetF1();
-	public static class TargetF1 implements EvalFunc {
-		public String getName() { return "TargetF1"; }
-		public double evaluate(List<SentenceEval> instances) {
-			// micro for now
-			double p = targetPrecision.evaluate(instances);
-			double r = targetRecall.evaluate(instances);
-			if(p + r == 0d) return 0d;
-			return 2d * p * r / (p + r);
-		}
-		public double evaluate(SentenceEval inst) {
-			double p = targetPrecision.evaluate(inst);
-			double r = targetRecall.evaluate(inst);
-			if(p + r == 0d) return 0d;
-			return 2d * p * r / (p + r);
-		}
-	}
-	
-	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {targetF1, targetPrecision, targetRecall};
+	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {
+			targetMacroF1, targetMacroPrecision, targetMacroRecall,
+			targetMicroF1, targetMicroPrecision, targetMicroRecall,
+			fullMacroF1, fullMacroPrecision, fullMacroRecall,
+			fullMicroF1, fullMicroPrecision, fullMicroRecall};
 	
 	public static Map<String, Double> evaluate(List<Sentence> instances) {
 		
