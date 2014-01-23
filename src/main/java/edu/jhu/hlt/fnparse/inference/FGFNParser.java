@@ -145,7 +145,14 @@ public class FGFNParser implements FgExampleFactory {
 	public int size() { return trainInstances.size(); }
 	
 	public List<Sentence> parse(List<Sentence> sentences) {
-		throw new RuntimeException("implement me");
+		List<Sentence> ret = new ArrayList<Sentence>();
+		for(Sentence inSent : sentences) {
+			Sentence s = inSent.copy(false);
+			FGFNParserSentence ps = new FGFNParserSentence(s, frameFeatures, frameElemFeatures);
+			ps.decode(model);
+			ret.add(s);
+		}
+		return ret;
 	}
 	
 	public static class FrameFactor extends ExpFamFactor {
@@ -280,6 +287,15 @@ public class FGFNParser implements FgExampleFactory {
 
 		@Override
 		public void clear() {}
+		
+		/**
+		 * adds FrameInstances to the Sentence provided in the constructor
+		 */
+		public void decode(FgModel model) {
+			if(sentence.numFrameInstances() > 0)
+				throw new IllegalStateException("did you add an already annotated Sentence?");
+			throw new RuntimeException("implement me");
+		}
 	}
 	
 }

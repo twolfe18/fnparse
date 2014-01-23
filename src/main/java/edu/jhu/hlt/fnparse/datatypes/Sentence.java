@@ -23,6 +23,7 @@ public class Sentence {
 	private String[] tokens;
 	private String[] pos;
 	
+	// TODO (make sure you update constructor and copy method to)
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
@@ -41,6 +42,14 @@ public class Sentence {
 		this.frameInstances = new ArrayList<FrameInstance>();
 	}
 	
+	public Sentence copy(boolean copyFrameInstances) {
+		Sentence s = new Sentence(dataset, id, tokens, pos);
+		if(copyFrameInstances)
+			for(FrameInstance fi : this.frameInstances)
+				s.addFrameInstance(fi);
+		return s;
+	}
+	
 	public void addFrameInstance(FrameInstance fi) {
 		if(fi.getSentence() != this)
 			throw new IllegalArgumentException();
@@ -50,6 +59,8 @@ public class Sentence {
 	public List<FrameInstance> getFrameInstances() {
 		return frameInstances;
 	}
+	
+	public int numFrameInstances() { return frameInstances.size(); }
 	
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }
