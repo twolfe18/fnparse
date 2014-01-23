@@ -22,7 +22,11 @@ public class Sentence {
 	
 	private String[] tokens;
 	private String[] pos;
+	
+	private int[] gov;			// 0-indexed, root is -1
+	private String[] depType;
 
+	
 	// may be empty
 	private List<FrameInstance> goldFrames, hypFrames;
 	
