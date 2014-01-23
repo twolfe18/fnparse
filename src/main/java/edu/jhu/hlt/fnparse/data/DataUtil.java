@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.data;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -34,10 +33,8 @@ public class DataUtil {
 		List<Sentence> out = new ArrayList<Sentence>();
 		for(Map.Entry<Sentence, List<FrameInstance>> x : m.entrySet()) {
 			Sentence s = x.getKey();
-			assert !s.hasGoldFrames();
-			assert !s.hasHypFrames();
 			for(FrameInstance fi : x.getValue())
-				s.addGoldFrame(fi);
+				s.addFrameInstance(fi);
 			out.add(s);
 		}
 		return out;

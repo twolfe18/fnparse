@@ -82,10 +82,14 @@ public class BasicEvaluation {
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
 			fullMicroF1, fullMicroPrecision, fullMicroRecall};
 	
-	public static Map<String, Double> evaluate(List<Sentence> instances) {
+	public static Map<String, Double> evaluate(List<Sentence> gold, List<Sentence> hyp) {
+		
+		if(gold.size() != hyp.size())
+			throw new IllegalArgumentException();
 		
 		List<SentenceEval> se = new ArrayList<SentenceEval>();
-		for(Sentence s : instances) se.add(new SentenceEval(s));
+		for(int i=0; i<gold.size(); i++)
+			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
 		
 		Map<String, Double> results = new HashMap<String, Double>();
 		int n = evaluationFunctions.length;

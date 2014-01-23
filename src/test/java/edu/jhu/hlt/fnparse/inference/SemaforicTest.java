@@ -80,7 +80,7 @@ public class SemaforicTest implements FrameInstanceProvider {
 
 	public void train() {
 		FGFNParser sem = new FGFNParser();
-		sem.train(getFrameInstances(), frames);
+		sem.train(getFrameInstances());
 	}
 
 	@Override

@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.data;
 
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -26,7 +25,7 @@ public class FrameInstanceProviderTest {
 		int numFIs = 0;
 		Set<Sentence> uniqSents = new HashSet<Sentence>();
 		for(Sentence s : sents) {
-			for(FrameInstance fi : s.getGoldFrames()) {
+			for(FrameInstance fi : s.getFrameInstances()) {
 				numFIs++;
 				String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTarget(), Arrays.toString(fi.getSentence().getWord()));
 				System.out.println(line);
@@ -37,7 +36,6 @@ public class FrameInstanceProviderTest {
 				}
 			}
 			assertTrue(uniqSents.add(s));
-			assertFalse(s.hasHypFrames());
 		}
 		System.out.printf("loading %d FrameInstances in %d sentences took %.2f seconds\n",
 				numFIs, sents.size(), time/1000d);

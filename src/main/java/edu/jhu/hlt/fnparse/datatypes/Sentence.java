@@ -27,7 +27,7 @@ public class Sentence {
 	private String[] depType;
 	
 	// may be empty
-	private List<FrameInstance> goldFrames, hypFrames;
+	private List<FrameInstance> frameInstances;
 	
 	public Sentence(String dataset, String id, String[] tokens, String[] pos) {
 		if(id == null || tokens == null)
@@ -40,37 +40,19 @@ public class Sentence {
 		this.pos = pos;
 	}
 	
-	public void addGoldFrame(FrameInstance fi) {
+	public void addFrameInstance(FrameInstance fi) {
 		if(fi.getSentence() != this)
 			throw new IllegalArgumentException();
-		if(goldFrames == null)
-			goldFrames = new ArrayList<FrameInstance>();
-		goldFrames.add(fi);
+		if(frameInstances == null)
+			frameInstances = new ArrayList<FrameInstance>();
+		frameInstances.add(fi);
 	}
 	
-	public List<FrameInstance> getGoldFrames() {
-		if(goldFrames == null)
+	public List<FrameInstance> getFrameInstances() {
+		if(frameInstances == null)
 			throw new IllegalStateException();
-		return goldFrames;
+		return frameInstances;
 	}
-	
-	public boolean hasGoldFrames() { return goldFrames != null; }
-	
-	public void addHypFrame(FrameInstance fi) {
-		if(fi.getSentence() != this)
-			throw new IllegalArgumentException();
-		if(hypFrames == null)
-			hypFrames = new ArrayList<FrameInstance>();
-		hypFrames.add(fi);
-	}
-	
-	public List<FrameInstance> getHypFrames() {
-		if(hypFrames == null)
-			throw new IllegalStateException();
-		return hypFrames;
-	}
-	
-	public boolean hasHypFrames() { return hypFrames != null; }
 	
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }

@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -21,9 +20,9 @@ public class BasicExperiment {
 
 	public static void main(String[] args) {
 		
-		FrameIndex frameIndex = new FrameIndex();
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
 		List<Sentence> all = instancePrv.getFrameInstances();
+		
 		double propTest = 0.2d;
 		boolean saveSplit = true;
 		List<Sentence> train = new ArrayList<Sentence>();
@@ -31,11 +30,11 @@ public class BasicExperiment {
 		DataSplitter ds = new DataSplitter();
 		ds.split(all, train, test, propTest, saveSplit);
 		
-		FGFNParser parser = new FGFNParser(frameIndex.allFrames());
+		FGFNParser parser = new FGFNParser();
 		parser.train(train);
 		List<Sentence> testParsed = parser.parse(test);
 		
-		Map<String, Double> results = BasicEvaluation.evaluate(test);
+		Map<String, Double> results = BasicEvaluation.evaluate(test, testParsed);
 		BasicEvaluation.showResults("BasicExperiment", results);
 	}
 }

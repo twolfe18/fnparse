@@ -7,7 +7,6 @@ import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
 import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
 import edu.jhu.gm.feat.*;
 import edu.jhu.gm.model.*;
-import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
@@ -80,7 +79,6 @@ import edu.jhu.util.Alphabet;
  */
 public class FGFNParser implements FgExampleFactory {
 	
-	private List<Frame> frames;
 	private List<FGFNParserSentence> trainInstances;
 	
 	private FrameFeatures frameFeatures = new BasicFrameFeatures();
@@ -91,10 +89,6 @@ public class FGFNParser implements FgExampleFactory {
 	
 	private FgModel model;
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
-	
-	public FGFNParser(List<Frame> allFrames) {
-		frames = allFrames;
-	}
 	
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
@@ -135,7 +129,7 @@ public class FGFNParser implements FgExampleFactory {
 	@Override	// FgExampleFactory
 	public int size() { return trainInstances.size(); }
 	
-	public void parse(List<Sentence> sentences) {
+	public List<Sentence> parse(List<Sentence> sentences) {
 		throw new RuntimeException("implement me");
 	}
 	
@@ -215,12 +209,8 @@ public class FGFNParser implements FgExampleFactory {
 				}
 			}
 			
-			// gold labels
-			if(sentence.hasGoldFrames()) {
-				goldConf = new VarConfig();
-				// TODO
-			}
-			
+			// TODO gold labels
+			//goldConf = new VarConfig();	
 		}
 		
 		@Override
@@ -250,7 +240,7 @@ public class FGFNParser implements FgExampleFactory {
 			
 			// ==== TELL FactorTemplateList WHAT THE FEATURES ARE ====
 			// target features
-			Alphabet<Feature> alphabet = fts.getTemplateByKey(FactorTemplate.TARGET).getAlphabet();
+//			Alphabet<Feature> alphabet = fts.getTemplateByKey(FactorTemplate.TARGET).getAlphabet();
 //			for(int i=0; i<this.targetFeatureFunc.cardinality(); i++) {
 //				String featName = FactorTemplate.TARGET + "_" + i;
 //				alphabet.lookupIndex(new Feature(featName));

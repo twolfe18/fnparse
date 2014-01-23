@@ -15,7 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
  */
 public class SentenceEval {
 
-	private Sentence sentence;
+	//private Sentence gold, hyp;
 	
 	/*
 	 * indexed with [gold][hyp]
@@ -24,14 +24,10 @@ public class SentenceEval {
 	private int[][] targetConfusion;
 	private int[][] fullConfusion;
 	
-	public SentenceEval(Sentence s) {
+	public SentenceEval(Sentence gold, Sentence hyp) {
 		
-		if(!s.hasGoldFrames())
-			throw new IllegalArgumentException();
-		if(!s.hasHypFrames())
-			throw new IllegalArgumentException();
-		
-		this.sentence = s;
+		//this.gold = gold;
+		//this.hyp = hyp;
 		this.targetConfusion = new int[2][2];
 		this.fullConfusion = new int[2][2];
 	
@@ -40,8 +36,8 @@ public class SentenceEval {
 		Set<Prediction> goldTargetRoles = new HashSet<Prediction>();
 		Set<Prediction> hypTargetRoles = new HashSet<Prediction>();
 		
-		fillPredictions(sentence.getGoldFrames(), goldTargets, goldTargetRoles);
-		fillPredictions(sentence.getHypFrames(), hypTargets, hypTargetRoles);
+		fillPredictions(gold.getFrameInstances(), goldTargets, goldTargetRoles);
+		fillPredictions(hyp.getFrameInstances(), hypTargets, hypTargetRoles);
 		
 		fillConfusionTable(goldTargets, hypTargets, targetConfusion);
 		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion);
