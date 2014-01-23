@@ -1,9 +1,11 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.spans.ExhaustiveSpanExtractor;
@@ -18,18 +20,49 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 
 	@Override
 	public FrameElementHypothesis make(FrameHypothesis frameHyp, int roleIdx, Sentence s) {
-		List<Span> argSpans = spanExtractor.computeSpans(s);
-		return new FEH(argSpans, frameHyp.getTargetSpan(), roleIdx, s);
+		
+		Span goldSpan = null;
+		FrameInstance goldFI = frameHyp.getGoldFrameInstance();
+		if(goldFI != null) {
+			if(roleIdx >= goldFI.numArguments()) {
+				
+				// It is possible that other possible frames in frameHyp
+				// take more arguments than the gold Frame does. If this
+				// is the case, then this argument span variable is meaningless.
+				
+				// There will be a hard factor that rules out all of these
+				// meaningless entries, so it will be as if we're not summing
+				// over them, which should mean that the partial gradient and scores
+				// for these entries don't matter.
+				
+				// So, while it is technically incorrect to say that these variables
+				// have a gold value of nullSpan (the variable isn't well defined for
+				// such cases), I will do it on the condition that they be zeroed out
+				// by a hard factor later:
+				// \phi_{hard}(f_i, r_ij) = if(j >= f_i.numRoles) 0 else 1
+				goldSpan = Span.nullSpan;
+			}
+			else goldSpan = goldFI.getArgument(roleIdx);
+		}
+		
+		List<Span> argSpans = new ArrayList<Span>();
+		Integer goldSpanIdx = spanExtractor.computeSpansAndLookFor(s, goldSpan, argSpans);
+		return new FEH(goldSpanIdx, argSpans, frameHyp.getTargetSpan(), roleIdx, s);
 	}
 
 	public static class FEH implements FrameElementHypothesis {
 
+		private Integer goldSpanIdx;
 		private List<Span> argSpans;
 		private Span targetSpan;
 		private int roleIdx;
 		private Var var;
 		
-		public FEH(List<Span> argSpans, Span targetSpan, int roleIdx, Sentence s) {
+		/**
+		 * gold may be null
+		 */
+		public FEH(Integer goldSpanIdx, List<Span> argSpans, Span targetSpan, int roleIdx, Sentence s) {
+			this.goldSpanIdx = goldSpanIdx;
 			this.argSpans = argSpans;
 			this.targetSpan = targetSpan;
 			this.roleIdx = roleIdx;
@@ -52,5 +85,8 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 
 		@Override
 		public int numSpans() { return argSpans.size(); }
+
+		@Override
+		public Integer getGoldSpanIdx() { return goldSpanIdx; }
 	}
 }

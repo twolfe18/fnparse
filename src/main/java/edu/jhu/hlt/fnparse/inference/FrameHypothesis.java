@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
@@ -35,6 +36,21 @@ public interface FrameHypothesis {
 	 * cardinality of the Frame variable that this wraps.
 	 */
 	public int numPossibleFrames();
+	
+	/**
+	 * return the local index (i.e. less than maxRoles, not frame.getId)
+	 * of the gold frame, or null if it is not known.
+	 */
+	public Integer getGoldFrameIndex();
+	
+	/**
+	 * getPossibleFrame(getGoldFrameIndex()) == getGoldFrame
+	 * is null if gold frame is not known.
+	 */
+	public Frame getGoldFrame();
+	
+	// convenience method for computing the gold labels for FrameElementHypothesis
+	public FrameInstance getGoldFrameInstance();
 	
 	/**
 	 * how many r_ij variables do we need

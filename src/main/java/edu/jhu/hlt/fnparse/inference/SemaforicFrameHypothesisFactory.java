@@ -9,6 +9,7 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
@@ -32,30 +33,44 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 	public String getName() { return "SemaforicFrameHypFactory"; }
 
 	@Override
-	public FrameHypothesis make(Span targetSpan, Sentence sent) {
+	public FrameHypothesis make(Span targetSpan, FrameInstance gold, Sentence sent) {
+		
+		if(gold != null && !gold.getTarget().equals(targetSpan))
+			throw new IllegalArgumentException();
+		
+		Integer goldFrameIdx = null;
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		frameMatches.add(Frame.nullFrame);
 		int headIdx = hf.head(targetSpan, sent);
-		LexicalUnit head = new LexicalUnit(sent.getWord(headIdx), sent.getPos(headIdx));
+		LexicalUnit head = sent.getLU(headIdx);
 		for(Frame f : allFrames) { 
 			for(int i=0; i<f.numLexicalUnits(); i++) {
 				if(head.equals(f.getLexicalUnit(i))) {
 					frameMatches.add(f);
+					if(gold != null && f.getId() == gold.getFrame().getId()) {
+						assert goldFrameIdx == null;
+						goldFrameIdx = i;
+					}
 					break;
 				}
 			}
 		}
-		return new FH(sent, frameMatches, targetSpan);
+		
+		return new FH(sent, frameMatches, goldFrameIdx, gold, targetSpan);
 	}
 	
 	public static class FH implements FrameHypothesis {
 
+		private FrameInstance goldFrameInstance;
+		private Integer goldFrameIdx;
 		private List<Frame> frames;
 		private Span targetSpan;
 		private int maxRoles = 0;
 		private Var var;
 		
-		public FH(Sentence sent, List<Frame> frames, Span targetSpan) {
+		public FH(Sentence sent, List<Frame> frames, Integer goldFrameIdx, FrameInstance goldFrameInstance, Span targetSpan) {
+			this.goldFrameIdx = goldFrameIdx;
+			this.goldFrameInstance = goldFrameInstance;
 			this.frames = frames;
 			this.targetSpan = targetSpan;
 			List<String> stateNames = new ArrayList<String>();
@@ -67,6 +82,8 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 			String name = String.format("f_{%s,%d,%d}", sent.getId(), targetSpan.start, targetSpan.end);
 			this.var = new Var(VarType.PREDICTED, frames.size(), name, stateNames);
 		}
+		
+		public boolean hasGoldLabel() { return goldFrameIdx != null; }
 		
 		@Override
 		public Var getVar() { return var; }
@@ -88,6 +105,19 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 
 		@Override
 		public int maxRoles() { return maxRoles; }
+
+		@Override
+		public Integer getGoldFrameIndex() { return goldFrameIdx; }
+
+		@Override
+		public Frame getGoldFrame() {
+			Integer fi = getGoldFrameIndex();
+			if(fi == null) return null;
+			else return getPossibleFrame(fi);
+		}
+
+		@Override
+		public FrameInstance getGoldFrameInstance() { return goldFrameInstance; }
 	}
 
 }

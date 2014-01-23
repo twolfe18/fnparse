@@ -1,25 +1,33 @@
 package edu.jhu.hlt.fnparse.inference.spans;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
-public class ExhaustiveSpanExtractor implements SpanExtractor {
+public class ExhaustiveSpanExtractor extends SpanExtractor {
 	
 	@Override
 	public String getName() { return "AllSpans"; }
 
+	/**
+	 * includes the null span
+	 */
 	@Override
-	public List<Span> computeSpans(Sentence s) {
+	public Integer computeSpansAndLookFor(Sentence s, Span needle, List<Span> addTo) {
+		addTo.add(Span.nullSpan);
+		Integer idx = null;
 		int n = s.size();
-		List<Span> spans = new ArrayList<Span>();
-		spans.add(Span.nullSpan);
-		for(int i=0; i<n; i++)
-			for(int j=i+1; j<=n; j++)
-				spans.add(new Span(i, j));
-		return spans;
+		for(int i=0; i<n; i++) {
+			for(int j=i+1; j<=n; j++) {
+				Span sp = new Span(i, j);
+				addTo.add(sp);
+				if(sp.equals(needle)) {
+					assert idx == null;
+					idx = addTo.size()-1;
+				}
+			}
+		}
+		return idx;
 	}
-
 }

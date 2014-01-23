@@ -1,21 +1,36 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
-import edu.jhu.gm.data.*;
+import edu.jhu.gm.data.FgExample;
+import edu.jhu.gm.data.FgExampleFactory;
+import edu.jhu.gm.data.FgExampleList;
+import edu.jhu.gm.data.FgExampleListBuilder;
 import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
 import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
-import edu.jhu.gm.feat.*;
-import edu.jhu.gm.model.*;
+import edu.jhu.gm.feat.FactorTemplateList;
+import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.feat.ObsFeatureExtractor;
+import edu.jhu.gm.model.ExpFamFactor;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicFrameElemFeatures;
-import edu.jhu.hlt.fnparse.features.FrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.FrameElementFeatures;
+import edu.jhu.hlt.fnparse.features.FrameFeatures;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
-import edu.jhu.util.Alphabet;
 
 /**
  ******************** Factor graph model that is similar to SEMAFOR ********************
@@ -179,8 +194,14 @@ public class FGFNParser implements FgExampleFactory {
 		
 		public FGFNParserSentence(Sentence s, FrameFeatures targetFeatureFunc, FrameElementFeatures targetRoleFeatureFunc) {
 			
+			this.goldConf = new VarConfig();
 			this.sentence = s;
 			this.fg = new FactorGraph();
+			
+			// TODO
+			Map<Span, FrameInstance> goldFrames = new HashMap<Span, FrameInstance>();
+			for(FrameInstance fi : s.getFrameInstances())
+				goldFrames.put(fi.getTarget(), fi);
 			
 			// targets and frameHyps
 			List<Span> targets = targetIdentifier.computeSpans(s);
@@ -188,12 +209,18 @@ public class FGFNParser implements FgExampleFactory {
 			frameVars = new FrameHypothesis[numTargets];
 			frameFactors = new FrameFactor[numTargets];
 			for(int i=0; i<numTargets; i++) {
-				FrameHypothesis f_i = frameHypFactory.make(targets.get(i), sentence);
+				Span sp = targets.get(i);
+				FrameHypothesis f_i = frameHypFactory.make(sp, goldFrames.get(sp), sentence);
 				FrameFactor ff_i = new FrameFactor(f_i);
 				frameVars[i] = f_i;
 				frameFactors[i] = ff_i;
 				fg.addFactor(ff_i);
+				
+				Integer goldFrameIdx = f_i.getGoldFrameIndex();
+				if(goldFrameIdx != null)
+					goldConf.put(f_i.getVar(), goldFrameIdx);
 			}
+			assert goldConf.size() == s.getFrameInstances().size();
 			
 			// arguments
 			frameElemVars = new FrameElementHypothesis[numTargets][];
@@ -206,11 +233,14 @@ public class FGFNParser implements FgExampleFactory {
 					frameElemVars[i][j] = r_ij;
 					frameElemFactors[i][j] = fr_ij;
 					fg.addFactor(fr_ij);
+					
+					// need to get gold Span for
+					Integer gold_r_ij = r_ij.getGoldSpanIdx();
+					if(gold_r_ij != null)
+						goldConf.put(r_ij.getVar(), gold_r_ij);
 				}
 			}
-			
-			// TODO gold labels
-			//goldConf = new VarConfig();	
+
 		}
 		
 		@Override

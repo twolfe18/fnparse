@@ -38,19 +38,16 @@ public class Sentence {
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
+		this.frameInstances = new ArrayList<FrameInstance>();
 	}
 	
 	public void addFrameInstance(FrameInstance fi) {
 		if(fi.getSentence() != this)
 			throw new IllegalArgumentException();
-		if(frameInstances == null)
-			frameInstances = new ArrayList<FrameInstance>();
 		frameInstances.add(fi);
 	}
 	
 	public List<FrameInstance> getFrameInstances() {
-		if(frameInstances == null)
-			throw new IllegalStateException();
 		return frameInstances;
 	}
 	

@@ -33,4 +33,9 @@ public interface FrameElementHypothesis {
 	 * cardinality of r_ij
 	 */
 	public int numSpans();	
+	
+	/**
+	 * index of gold span or null if one isn't known
+	 */
+	public Integer getGoldSpanIdx();
 }

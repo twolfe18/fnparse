@@ -49,13 +49,13 @@ public class FrameInstance {
 
 	public Span getTarget() { return target; }
 
-//	public String getTargetWord() { return sentence.getWord(target); }
-
 	public Sentence getSentence() { return sentence; }
 
 	public Frame getFrame() { return frame; }
 
 	public Span getArgument(int roleIdx) { return arguments[roleIdx]; }
+	
+	public int numArguments() { return arguments.length; }
 
 	public String[] getArgumentTokens(int roleIdx) { return sentence.getWord(arguments[roleIdx]); }
 	
