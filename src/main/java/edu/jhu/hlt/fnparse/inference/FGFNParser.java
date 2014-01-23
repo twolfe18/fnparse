@@ -81,7 +81,6 @@ import edu.jhu.util.Alphabet;
 public class FGFNParser implements FgExampleFactory {
 	
 	private List<Frame> frames;
-	private List<String> frameNames;
 	private List<FGFNParserSentence> trainInstances;
 	
 	private FrameFeatures frameFeatures = new BasicFrameFeatures();
@@ -93,6 +92,10 @@ public class FGFNParser implements FgExampleFactory {
 	private FgModel model;
 	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
 	
+	public FGFNParser(List<Frame> allFrames) {
+		frames = allFrames;
+	}
+	
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
 //		sb.append("targetId=" + targetIdentifier.getName());
@@ -102,19 +105,8 @@ public class FGFNParser implements FgExampleFactory {
 //		return sb.toString();
 //	}
 	
-	public void train(List<Sentence> examples, List<Frame> frames) {
-		
-		this.frames = frames;
-		this.frameFeatures = new BasicFrameFeatures();
-		this.frameElemFeatures = new BasicFrameElemFeatures();
-		this.frameNames = new ArrayList<String>();
-		int maxRoles = 0;
-		for(Frame f : frames) {
-			this.frameNames.add(f.getName());
-			if(f.numRoles() > maxRoles)
-				maxRoles = f.numRoles();
-		}
-		
+	public void train(List<Sentence> examples) {
+	
 		// construct the SemaforicSentenceFactorGraphs
 		this.trainInstances = new ArrayList<FGFNParserSentence>();
 		for(Sentence s : examples)
