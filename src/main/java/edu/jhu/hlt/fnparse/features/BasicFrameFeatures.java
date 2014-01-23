@@ -1,8 +1,13 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
@@ -45,15 +50,13 @@ public class BasicFrameFeatures implements FrameFeatures {
 		v.add(index("target-width=" + extent.width()), 1d);
 		v.add(index("sentence-length=" + s.size()), 1d);
 		
-		String hypLU = String.format("%s.%s",
-				s.getWord(head),
-				s.getPos(head).charAt(0));
+		LexicalUnit hypLU = s.getLU(head);
 		boolean matchesAnLU = false;
 		int n = f.numLexicalUnits();
-		String whichLU = null;
+		LexicalUnit whichLU = null;
 		for(int i=0; i<n && !matchesAnLU; i++) {
 			whichLU = f.getLexicalUnit(i);
-			matchesAnLU |= hypLU.equalsIgnoreCase(whichLU);
+			matchesAnLU |= hypLU.equals(whichLU);
 		}
 		if(matchesAnLU) {
 			v.add(index("LU-match"), 1d);

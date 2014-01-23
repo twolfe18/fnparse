@@ -75,9 +75,6 @@ import edu.jhu.util.Alphabet;
  * f_i to r_ij factors). Also, the number of "meta frames" must be consistently smaller than then number of
  * spans in a sentence, otherwise it is cheaper to do it the naive way. In the context of good span pruning,
  * this may end up not being worth it.
- * 
- * NOTE: I'm an idiot, and apparently you can have multi-word targets (e.g. "ballistic missile.n")
- *   so right now I'm going to only consider single-word targets and fix this later.
  *   
  * TODO: add latent variable for LU, as in SEMAFOR
  */

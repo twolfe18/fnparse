@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.data.LexicalUnit;
+
 public class Sentence {
 
 	/**
@@ -69,8 +71,11 @@ public class Sentence {
 	
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }
+	
+	public LexicalUnit getLU(int i) { return new LexicalUnit(tokens[i], pos[i]); }
 	public String getWord(int i) { return tokens[i]; }
 	public String getPos(int i) { return pos[i]; }
+	
 	public String[] getWord() { return tokens; }
 	public String[] getPos() { return pos; }
 	public String[] getWord(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }

@@ -34,10 +34,11 @@ public class FrameIndex {
 			allFrames.add(nullFrame);
 			String name[] = DataUtil.parseFrameIndexXML(UsefulConstants.frameIndexXMLPath, framesInFrameNet);
 			for(int i=0; i<name.length; i++) {
-				HashMap<String, String[]> tmp2 = DataUtil.lexicalUnitAndRolesOfFrame(name[i]);
-				String lexicalUnit[] = (String []) tmp2.get("lexicalUnit");
-				String role[] = (String []) tmp2.get("role");	    
-				allFrames.add(new Frame(i+1, name[i], lexicalUnit, role));
+				HashMap<String, Object> tmp2 = DataUtil.lexicalUnitAndRolesOfFrame(name[i]);
+				//System.out.println("frame = " + name[i] + ", tmp2 = " + tmp2);
+				LexicalUnit[] lexicalUnits = (LexicalUnit[]) tmp2.get("lexicalUnits");
+				String[] roles = (String[]) tmp2.get("roles");	    
+				allFrames.add(new Frame(i+1, name[i], lexicalUnits, roles));
 			}
 		}
 		return allFrames;
