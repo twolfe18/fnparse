@@ -4,6 +4,7 @@ import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
@@ -26,6 +27,8 @@ public interface FrameHypothesis {
 	 * The span that evokes the Frame in question.
 	 */
 	public Span getTargetSpan();
+	
+	public Sentence getSentence();
 	
 	/**
 	 * get the Frame that corresponds to the i^th configuration of this variable.

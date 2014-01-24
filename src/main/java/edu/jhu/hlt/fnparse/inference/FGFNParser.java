@@ -11,12 +11,17 @@ import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.FgExampleListBuilder;
 import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
 import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
+import edu.jhu.gm.data.FgExampleMemoryStore;
+import edu.jhu.gm.decode.MbrDecoder;
+import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.feat.FactorTemplateList;
+import edu.jhu.gm.feat.FeatureExtractor;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.feat.ObsFeatureExtractor;
 import edu.jhu.gm.model.ExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
@@ -31,6 +36,7 @@ import edu.jhu.hlt.fnparse.features.FrameElementFeatures;
 import edu.jhu.hlt.fnparse.features.FrameFeatures;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
+import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
  ******************** Factor graph model that is similar to SEMAFOR ********************
@@ -92,18 +98,16 @@ import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
  *   
  * TODO: add latent variable for LU, as in SEMAFOR
  */
-public class FGFNParser implements FgExampleFactory {
+public class FGFNParser {
 	
-	private List<FGFNParserSentence> trainInstances;
+	private FgModel model;
 	
 	private FrameFeatures frameFeatures = new BasicFrameFeatures();
 	private FrameElementFeatures frameElemFeatures = new BasicFrameElemFeatures();
+	
 	private SpanExtractor targetIdentifier = new SingleWordSpanExtractor();
 	private FrameHypothesisFactory frameHypFactory = new SemaforicFrameHypothesisFactory();
 	private FrameElementHypothesisFactory frameElemHypFactory = new ExhaustiveFrameElementHypothesisFactory();
-	
-	private FgModel model;
-	private FactorTemplateList fts = new FactorTemplateList();	// holds factor cliques, just says that there is one factor
 	
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
@@ -114,74 +118,81 @@ public class FGFNParser implements FgExampleFactory {
 //		return sb.toString();
 //	}
 	
+	public FrameFeatures getFrameFeatures() { return frameFeatures; }
+	public FrameElementFeatures getFrameElementFeatures() { return frameElemFeatures; }
+	
+	public SpanExtractor getTargetIdentifier() { return targetIdentifier; }
+	public FrameHypothesisFactory getFrameIdentifier() { return frameHypFactory; }
+	public FrameElementHypothesisFactory getFrameElementIdentifier() { return frameElemHypFactory; }
+	
 	public void train(List<Sentence> examples) {
 	
-		// construct the SemaforicSentenceFactorGraphs
-		this.trainInstances = new ArrayList<FGFNParserSentence>();
-		for(Sentence s : examples)
-			trainInstances.add(new FGFNParserSentence(s, frameFeatures, frameElemFeatures));
-		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
 		
-		FgExampleFactory exampleFactory = this;
-		FgExamplesBuilderPrm prm = new FgExamplesBuilderPrm();
-		prm.cacheType = CacheType.MEMORY_STORE;
-		FgExampleListBuilder dataBuilder = new FgExampleListBuilder(prm);
-		FgExampleList data = dataBuilder.getInstance(fts, exampleFactory);
+		FgExampleMemoryStore exs = new FgExampleMemoryStore();
+		for(Sentence s : examples) {
+			FGFNParserSentence ps = new FGFNParserSentence(s);
+			exs.add(new FgExample(ps.fg, ps.goldConf));
+		}
 		
-		boolean includeUnsupportedFeatures = true;
-		this.model = new FgModel(data, includeUnsupportedFeatures);
-		this.model = trainer.train(this.model, data);
-	}
-	
-	@Override	// FgExampleFactory
-	public FgExample get(int i, FactorTemplateList fts) {
-		FGFNParserSentence fg = trainInstances.get(i);
-		return new FgExample(fg.fg, fg.goldConf, fg, fts);
+		// Feature name tracking is done by me.
+		int numParams = 1;
+		this.model = new FgModel(numParams);
+		this.model = trainer.train(this.model, exs);
 	}
 
-	@Override	// FgExampleFactory
-	public int size() { return trainInstances.size(); }
-	
 	public List<Sentence> parse(List<Sentence> sentences) {
 		List<Sentence> ret = new ArrayList<Sentence>();
 		for(Sentence inSent : sentences) {
 			Sentence s = inSent.copy(false);
-			FGFNParserSentence ps = new FGFNParserSentence(s, frameFeatures, frameElemFeatures);
+			FGFNParserSentence ps = new FGFNParserSentence(s);
 			ps.decode(model);
 			ret.add(s);
 		}
 		return ret;
 	}
-	
-	public static class FrameFactor extends ExpFamFactor {
-		private static final long serialVersionUID = 8681081343059187337L;
-		public final FrameHypothesis f_i;
-		public FrameFactor(FrameHypothesis f_i) {
-			super(new VarSet(f_i.getVar()), FactorTemplate.TARGET);
-			this.f_i = f_i;
-		}
-		// TODO getFeatures will go here when Matt updates his code
-	}
-	
-	public static class FrameElemFactor extends ExpFamFactor {
-		private static final long serialVersionUID = 7822812450436221032L;
-		public final FrameHypothesis f_i;
-		public final FrameElementHypothesis r_ij;
-		public FrameElemFactor(FrameHypothesis f_i, FrameElementHypothesis r_ij) {
-			super(new VarSet(f_i.getVar(), r_ij.getVar()), FactorTemplate.TARGET_ROLE);
-			this.f_i = f_i;
+
+	static class FrameElemFeatureExtractor implements FeatureExtractor {
+		private FrameElementFeatures features;
+		private FrameElementHypothesis r_ij;
+		private FrameHypothesis f_i;
+		public FrameElemFeatureExtractor(FrameElementFeatures feats, FrameElementHypothesis r_ij, FrameHypothesis f_i) {
+			this.features = feats;
 			this.r_ij = r_ij;
+			this.f_i = f_i;
 		}
-		// TODO getFeatures will go here when Matt updates his code
+		@Override
+		public void init(FgExample ex) {}
+		@Override
+		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
+			VarConfig varConf = factor.getVars().getVarConfig(configId);
+			int f_i_value = varConf.getState(f_i.getVar());
+			Frame f = f_i.getPossibleFrame(f_i_value);
+			int r_ij_value = varConf.getState(r_ij.getVar());
+			Span argSpan = r_ij.getSpan(r_ij_value);
+			return features.getFeatures(f, argSpan, f_i.getTargetSpan(), r_ij.getRoleIdx(), f_i.getSentence());
+		}
 	}
 	
-	public static enum FactorTemplate {
-		TARGET,			// unary factors on f_i variables saying whether/what they evoke a frame
-		TARGET_ROLE		// binary factors between f_i and r_{ij} variables
+	static class FrameFeatureExtractor implements FeatureExtractor {
+		private FrameFeatures features;
+		private FrameHypothesis f_i;
+		public FrameFeatureExtractor(FrameFeatures feats, FrameHypothesis f_i) {
+			this.features = feats;
+			this.f_i = f_i;
+		}
+		@Override
+		public void init(FgExample ex) {}
+		@Override
+		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
+			Frame f = f_i.getPossibleFrame(configId);
+			Span extent = f_i.getTargetSpan();
+			Sentence s = f_i.getSentence();
+			return features.getFeatures(f, extent, s);
+		}
 	}
-	
+		
 	/**
 	 * Represents the factor graph for a sentence, most of the meat is here.
 	 * 
@@ -189,23 +200,23 @@ public class FGFNParser implements FgExampleFactory {
 	 * Matt is changing the code so that Factors will be responsible for providing
 	 * features, rather than a FeatureExtractor, so I will have to change this.
 	 */
-	class FGFNParserSentence implements ObsFeatureExtractor {
+	public class FGFNParserSentence {
 		
 		public FrameHypothesis[] frameVars;					// f_i
 		public FrameElementHypothesis[][] frameElemVars;	// r_ij
-		public FrameFactor[] frameFactors;					// phi(f_i)
-		public FrameElemFactor[][] frameElemFactors;		// phi(f_i, r_ij)
+		public FeExpFamFactor[] frameFactors;				// phi(f_i)
+		public FeExpFamFactor[][] frameElemFactors;			// phi(f_i, r_ij)
 		public Sentence sentence;
 		public FactorGraph fg;
 		public VarConfig goldConf;
 		
-		public FGFNParserSentence(Sentence s, FrameFeatures targetFeatureFunc, FrameElementFeatures targetRoleFeatureFunc) {
+		public FGFNParserSentence(Sentence s) {
 			
 			this.goldConf = new VarConfig();
 			this.sentence = s;
 			this.fg = new FactorGraph();
 			
-			// TODO
+			// build an index so you can look up if there is a Frame evoked at a particular Span
 			Map<Span, FrameInstance> goldFrames = new HashMap<Span, FrameInstance>();
 			for(FrameInstance fi : s.getFrameInstances())
 				goldFrames.put(fi.getTarget(), fi);
@@ -214,11 +225,13 @@ public class FGFNParser implements FgExampleFactory {
 			List<Span> targets = targetIdentifier.computeSpans(s);
 			int numTargets = targets.size();
 			frameVars = new FrameHypothesis[numTargets];
-			frameFactors = new FrameFactor[numTargets];
+			frameFactors = new FeExpFamFactor[numTargets];
 			for(int i=0; i<numTargets; i++) {
 				Span sp = targets.get(i);
 				FrameHypothesis f_i = frameHypFactory.make(sp, goldFrames.get(sp), sentence);
-				FrameFactor ff_i = new FrameFactor(f_i);
+				FeExpFamFactor ff_i = new FeExpFamFactor(
+						new VarSet(f_i.getVar()),
+						new FrameFeatureExtractor(frameFeatures, f_i));
 				frameVars[i] = f_i;
 				frameFactors[i] = ff_i;
 				fg.addFactor(ff_i);
@@ -231,12 +244,19 @@ public class FGFNParser implements FgExampleFactory {
 			
 			// arguments
 			frameElemVars = new FrameElementHypothesis[numTargets][];
-			frameElemFactors = new FrameElemFactor[numTargets][];
+			frameElemFactors = new FeExpFamFactor[numTargets][];
 			for(int i=0; i<numTargets; i++) {
+				
 				FrameHypothesis f_i = frameVars[i];
-				for(int j=0; j<f_i.maxRoles(); j++) {
+				int numRoles = f_i.maxRoles();
+				frameElemVars[i] = new FrameElementHypothesis[numRoles];
+				frameElemFactors[i] = new FeExpFamFactor[numRoles];
+				
+				for(int j=0; j<numRoles; j++) {
 					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
-					FrameElemFactor fr_ij = new FrameElemFactor(frameVars[i], r_ij);
+					FeExpFamFactor fr_ij = new FeExpFamFactor(
+							new VarSet(r_ij.getVar(), f_i.getVar()),
+							new FrameElemFeatureExtractor(frameElemFeatures, r_ij, f_i));
 					frameElemVars[i][j] = r_ij;
 					frameElemFactors[i][j] = fr_ij;
 					fg.addFactor(fr_ij);
@@ -249,53 +269,44 @@ public class FGFNParser implements FgExampleFactory {
 			}
 
 		}
-		
-		@Override
-		public FeatureVector calcObsFeatureVector(int factorId) {
-			Factor f = fg.getFactor(factorId);
-			if(f instanceof FrameFactor) {
-				Frame evoked = Frame.nullFrame;	// TODO can't get this yet
-				Span target = ((FrameFactor) f).f_i.getTargetSpan();
-				FeatureVector fv = frameFeatures.getFeatures(evoked, target, this.sentence);
-				return fv;
-			}
-			else if(f instanceof FrameElemFactor) {
-				Frame evoked = Frame.nullFrame;	// TODO can't get this yet
-				Span s = Span.nullSpan;			// TODO can't get this yet
-				Span target = ((FrameElemFactor) f).f_i.getTargetSpan();
-				int roleIdx = ((FrameElemFactor) f).r_ij.getRoleIdx();
-				FeatureVector fv = frameElemFeatures.getFeatures(evoked, s, target, roleIdx, this.sentence);
-				return fv;
-			}
-			else throw new RuntimeException("implement me");
-		}
 
-		@Override
-		public void init(FactorGraph fg, FactorGraph fgLat,
-				FactorGraph fgLatPred, VarConfig goldConfig,
-				FactorTemplateList fts) {
-			
-			// ==== TELL FactorTemplateList WHAT THE FEATURES ARE ====
-			// target features
-//			Alphabet<Feature> alphabet = fts.getTemplateByKey(FactorTemplate.TARGET).getAlphabet();
-//			for(int i=0; i<this.targetFeatureFunc.cardinality(); i++) {
-//				String featName = FactorTemplate.TARGET + "_" + i;
-//				alphabet.lookupIndex(new Feature(featName));
-//			}
-			// TODO target-role features
-		}
-
-		@Override
-		public void clear() {}
-		
 		/**
 		 * adds FrameInstances to the Sentence provided in the constructor
 		 */
 		public void decode(FgModel model) {
+			
 			if(sentence.numFrameInstances() > 0)
 				throw new IllegalStateException("did you add an already annotated Sentence?");
-			throw new RuntimeException("implement me");
+			
+			MbrDecoderPrm decPrm = new MbrDecoderPrm();
+			MbrDecoder dec = new MbrDecoder(decPrm);
+			
+			// for now, pass goldConf. will blow up?
+			dec.decode(model, new FgExample(this.fg, this.goldConf));
+			
+			VarConfig conf = dec.getMbrVarConfig();
+			for(int i=0; i<frameElemVars.length; i++) {
+				
+				// read the frame that is evoked
+				FrameHypothesis f_i = frameVars[i];
+				int f_i_value = conf.getState(f_i.getVar());
+				Frame f_i_hyp = f_i.getPossibleFrame(f_i_value);
+				if(f_i_hyp == Frame.nullFrame)
+					continue;
+				
+				int numRoles = f_i_hyp.numRoles();
+				Span[] roles = new Span[numRoles];
+				for(int j=0; j<numRoles; j++) {
+					FrameElementHypothesis r_ij = frameElemVars[i][j];
+					int r_ij_value = conf.getState(r_ij.getVar());
+					roles[j] = r_ij.getSpan(r_ij_value);
+				}
+				
+				FrameInstance fi = FrameInstance.newFrameInstance(f_i_hyp, f_i.getTargetSpan(), roles, sentence);
+				sentence.addFrameInstance(fi);
+			}
 		}
+
 	}
 	
 }

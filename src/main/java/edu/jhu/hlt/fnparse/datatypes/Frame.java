@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import edu.jhu.hlt.fnparse.data.LexicalUnit;
 
 public class Frame {
 

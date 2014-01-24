@@ -7,9 +7,9 @@ import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
@@ -38,6 +38,9 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 		if(gold != null && !gold.getTarget().equals(targetSpan))
 			throw new IllegalArgumentException();
 		
+		if(targetSpan == Span.nullSpan)
+			throw new IllegalArgumentException("Frames cannot be evoked by the null Span");
+		
 		Integer goldFrameIdx = null;
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		frameMatches.add(Frame.nullFrame);
@@ -61,6 +64,7 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 	
 	public static class FH implements FrameHypothesis {
 
+		private Sentence sentence;
 		private FrameInstance goldFrameInstance;
 		private Integer goldFrameIdx;
 		private List<Frame> frames;
@@ -69,6 +73,7 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 		private Var var;
 		
 		public FH(Sentence sent, List<Frame> frames, Integer goldFrameIdx, FrameInstance goldFrameInstance, Span targetSpan) {
+			this.sentence = sent;
 			this.goldFrameIdx = goldFrameIdx;
 			this.goldFrameInstance = goldFrameInstance;
 			this.frames = frames;
@@ -118,6 +123,9 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 
 		@Override
 		public FrameInstance getGoldFrameInstance() { return goldFrameInstance; }
+
+		@Override
+		public Sentence getSentence() { return sentence; }
 	}
 
 }

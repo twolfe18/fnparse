@@ -7,6 +7,8 @@ public class BraindeadHeadFinder implements HeadFinder {
 
 	@Override
 	public int head(Span s, Sentence sent) {
+		if(s == Span.nullSpan)
+			throw new IllegalArgumentException();
 		return s.end - 1;
 	}
 

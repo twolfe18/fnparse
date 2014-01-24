@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.data;
 import java.util.*;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 
 /**
  * Reads frames from disk and provides access to them

@@ -20,6 +20,7 @@ public class BasicExperiment {
 
 	public static void main(String[] args) {
 		
+		System.out.println("starting basic experiment");
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
 		List<Sentence> all = instancePrv.getFrameInstances();
 		
@@ -30,6 +31,7 @@ public class BasicExperiment {
 		DataSplitter ds = new DataSplitter();
 		ds.split(all, train, test, propTest, saveSplit);
 		
+		System.out.println("data has been read in and split, calling train...");
 		FGFNParser parser = new FGFNParser();
 		parser.train(train);
 		List<Sentence> testParsed = parser.parse(test);

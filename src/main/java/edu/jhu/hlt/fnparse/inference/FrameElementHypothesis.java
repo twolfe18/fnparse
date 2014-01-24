@@ -38,4 +38,6 @@ public interface FrameElementHypothesis {
 	 * index of gold span or null if one isn't known
 	 */
 	public Integer getGoldSpanIdx();
+	
+	public FrameHypothesis parent();
 }

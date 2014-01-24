@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.data;
+package edu.jhu.hlt.fnparse.datatypes;
 
 public class LexicalUnit {
 
@@ -16,6 +16,8 @@ public class LexicalUnit {
 		this.pos = pos.toUpperCase();
 		this.hc = word.hashCode() ^ pos.hashCode();
 	}
+	
+	public String toString() { return String.format("<LU %s.%s>", word, pos); }
 	
 	@Override
 	public int hashCode() { return hc; }

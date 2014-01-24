@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.data.LexicalUnit;
-
 public class Sentence {
 
 	/**
@@ -53,9 +51,14 @@ public class Sentence {
 	public void addFrameInstance(FrameInstance fi) {
 		if(fi.getSentence() != this)
 			throw new IllegalArgumentException();
+		if(fi.getFrame() == Frame.nullFrame)
+			throw new IllegalArgumentException("only add non-null-frame instances");
 		frameInstances.add(fi);
 	}
 	
+	/**
+	 * returns all (non-null-frame) instances of frames in this sentence.
+	 */
 	public List<FrameInstance> getFrameInstances() {
 		return frameInstances;
 	}

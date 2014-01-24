@@ -47,11 +47,12 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 		
 		List<Span> argSpans = new ArrayList<Span>();
 		Integer goldSpanIdx = spanExtractor.computeSpansAndLookFor(s, goldSpan, argSpans);
-		return new FEH(goldSpanIdx, argSpans, frameHyp.getTargetSpan(), roleIdx, s);
+		return new FEH(frameHyp, goldSpanIdx, argSpans, frameHyp.getTargetSpan(), roleIdx, s);
 	}
 
 	public static class FEH implements FrameElementHypothesis {
 
+		private FrameHypothesis parent;
 		private Integer goldSpanIdx;
 		private List<Span> argSpans;
 		private Span targetSpan;
@@ -61,7 +62,8 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 		/**
 		 * gold may be null
 		 */
-		public FEH(Integer goldSpanIdx, List<Span> argSpans, Span targetSpan, int roleIdx, Sentence s) {
+		public FEH(FrameHypothesis parent, Integer goldSpanIdx, List<Span> argSpans, Span targetSpan, int roleIdx, Sentence s) {
+			this.parent = parent;
 			this.goldSpanIdx = goldSpanIdx;
 			this.argSpans = argSpans;
 			this.targetSpan = targetSpan;
@@ -88,5 +90,8 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 
 		@Override
 		public Integer getGoldSpanIdx() { return goldSpanIdx; }
+
+		@Override
+		public FrameHypothesis parent() { return parent; }
 	}
 }

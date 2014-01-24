@@ -7,6 +7,7 @@ import java.util.HashMap;
 
 import edu.jhu.hlt.fnparse.data.UsefulConstants;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 import java.io.*;

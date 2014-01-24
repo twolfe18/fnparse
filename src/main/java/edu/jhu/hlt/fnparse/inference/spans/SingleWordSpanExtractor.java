@@ -11,11 +11,10 @@ public class SingleWordSpanExtractor extends SpanExtractor {
 	public String getName() { return "SingleWordSpans"; }
 
 	/**
-	 * includes null span
+	 * does NOT include the null span
 	 */
 	@Override
 	public Integer computeSpansAndLookFor(Sentence s, Span needle, List<Span> addTo) {
-		addTo.add(Span.nullSpan);
 		Integer idx = null;
 		int n = s.size();
 		for(int i=0; i<n; i++) {

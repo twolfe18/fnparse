@@ -7,8 +7,8 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;

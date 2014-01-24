@@ -5,16 +5,17 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * given some simple fake data, can we run inference end to end
- * and produce sensical results?
+ * and produce sensible results?
  * @author travis
+ * @deprecated
  */
 public class SemaforicTest implements FrameInstanceProvider {
 
