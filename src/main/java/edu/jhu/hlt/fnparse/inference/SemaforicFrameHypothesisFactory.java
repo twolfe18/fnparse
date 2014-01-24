@@ -48,7 +48,7 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 		LexicalUnit head = sent.getLU(headIdx);
 		for(Frame f : allFrames) { 
 			for(int i=0; i<f.numLexicalUnits(); i++) {
-				if(head.equals(f.getLexicalUnit(i))) {
+				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
 					frameMatches.add(f);
 					if(gold != null && f.getId() == gold.getFrame().getId()) {
 						assert goldFrameIdx == null;
