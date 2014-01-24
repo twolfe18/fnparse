@@ -19,6 +19,7 @@ public class ConllStyleOutput {
 	private final static Function<List<? extends HasWord>, Tree> lp;
 	private final static TreebankLangParserParams params;
 	private final static Filter<String> filter;
+	/*
 	static{
 		lp=loadParser("edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz");
 		try {
@@ -28,7 +29,7 @@ public class ConllStyleOutput {
 			throw new RuntimeException(cnfe);
 		}
 		filter = Filters.acceptFilter();
-	}
+	}*/
 	
 	@SuppressWarnings("unchecked")
 	private static Function<List<? extends HasWord>, Tree> loadParser(String parserFile) {    
