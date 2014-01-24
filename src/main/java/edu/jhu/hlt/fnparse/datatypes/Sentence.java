@@ -95,4 +95,13 @@ public class Sentence {
 	}
 	
 	public int size() { return tokens.length; }
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder("<Sentence");
+		for(int i=0; i<size(); i++)
+			sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
+		sb.append(">");
+		return sb.toString();
+	}
 }

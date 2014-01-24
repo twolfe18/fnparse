@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.FGFNParserSentence;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 
 public class FGFNParserTest {
 
@@ -28,6 +29,7 @@ public class FGFNParserTest {
 		FrameInstanceProvider fip = new FNFrameInstanceProvider();
 		examples = fip.getFrameInstances();
 		sentence = examples.get(0);
+		System.out.println("examplar sentence = " + sentence);
 		parser = new FGFNParser();
 		hf = new BraindeadHeadFinder();
 	}
@@ -36,8 +38,9 @@ public class FGFNParserTest {
 	public void checkFrameElemHyp() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
 		FrameElementHypothesisFactory fehf = parser.getFrameElementIdentifier();
-		for(int i=0; i<ps.frameVars.length; i++) {
-			FrameHypothesis f_i = ps.frameVars[i];
+		assertTrue(ps.frameVars.size() > 0);
+		for(int i=0; i<ps.frameVars.size(); i++) {
+			FrameHypothesis f_i = ps.frameVars.get(i);
 			Span target = f_i.getTargetSpan();
 			System.out.printf("f_%d span=%s spanHead=%s #possibleFrames=%d\n",
 					i, target, sentence.getLU(hf.head(target, sentence)), f_i.numPossibleFrames());
@@ -53,12 +56,12 @@ public class FGFNParserTest {
 	@Test
 	public void countVariables() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
-		assertEquals(sentence.size(), ps.frameVars.length);
+		assertTrue(sentence.size() >= ps.frameVars.size() || !(parser.getTargetIdentifier() instanceof SingleWordSpanExtractor));
 		System.out.println("i = " + sentence.size());
 		System.out.println(ps.goldConf.size());
 		int n = 0;
-		for(int i=0; i<sentence.size(); i++)
-			n += ps.frameElemVars[i].length;
+		for(int i=0; i<ps.frameVars.size(); i++)
+			n += ps.frameElemVars.get(i).size();
 		System.out.println("n = " + n);
 		assertEquals(n, ps.goldConf.size());
 		assertTrue(n > 0);

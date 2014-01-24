@@ -6,20 +6,11 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.gm.data.FgExample;
-import edu.jhu.gm.data.FgExampleFactory;
-import edu.jhu.gm.data.FgExampleList;
-import edu.jhu.gm.data.FgExampleListBuilder;
-import edu.jhu.gm.data.FgExampleListBuilder.CacheType;
-import edu.jhu.gm.data.FgExampleListBuilder.FgExamplesBuilderPrm;
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
-import edu.jhu.gm.feat.FactorTemplateList;
 import edu.jhu.gm.feat.FeatureExtractor;
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.feat.ObsFeatureExtractor;
-import edu.jhu.gm.model.ExpFamFactor;
-import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.FgModel;
@@ -36,7 +27,6 @@ import edu.jhu.hlt.fnparse.features.FrameElementFeatures;
 import edu.jhu.hlt.fnparse.features.FrameFeatures;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
-import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
  ******************** Factor graph model that is similar to SEMAFOR ********************
@@ -202,10 +192,10 @@ public class FGFNParser {
 	 */
 	public class FGFNParserSentence {
 		
-		public FrameHypothesis[] frameVars;					// f_i
-		public FrameElementHypothesis[][] frameElemVars;	// r_ij
-		public FeExpFamFactor[] frameFactors;				// phi(f_i)
-		public FeExpFamFactor[][] frameElemFactors;			// phi(f_i, r_ij)
+		public List<FrameHypothesis> frameVars;						// f_i
+		public List<List<FrameElementHypothesis>> frameElemVars;	// r_ij
+		public List<FeExpFamFactor> frameFactors;					// phi(f_i)
+		public List<List<FeExpFamFactor>> frameElemFactors;			// phi(f_i, r_ij)
 		public Sentence sentence;
 		public FactorGraph fg;
 		public VarConfig goldConf;
@@ -222,18 +212,20 @@ public class FGFNParser {
 				goldFrames.put(fi.getTarget(), fi);
 			
 			// targets and frameHyps
-			List<Span> targets = targetIdentifier.computeSpans(s);
-			int numTargets = targets.size();
-			frameVars = new FrameHypothesis[numTargets];
-			frameFactors = new FeExpFamFactor[numTargets];
-			for(int i=0; i<numTargets; i++) {
-				Span sp = targets.get(i);
+			frameVars = new ArrayList<FrameHypothesis>();
+			frameFactors = new ArrayList<FeExpFamFactor>();
+			for(Span sp : targetIdentifier.computeSpans(s)) {
 				FrameHypothesis f_i = frameHypFactory.make(sp, goldFrames.get(sp), sentence);
+				if(f_i.numPossibleFrames() == 1) {
+					assert f_i.getPossibleFrame(0) == Frame.nullFrame;
+					continue;
+				}
+				assert f_i.numPossibleFrames() > 1;
 				FeExpFamFactor ff_i = new FeExpFamFactor(
 						new VarSet(f_i.getVar()),
 						new FrameFeatureExtractor(frameFeatures, f_i));
-				frameVars[i] = f_i;
-				frameFactors[i] = ff_i;
+				frameVars.add(f_i);
+				frameFactors.add(ff_i);
 				fg.addFactor(ff_i);
 				
 				Integer goldFrameIdx = f_i.getGoldFrameIndex();
@@ -243,22 +235,22 @@ public class FGFNParser {
 			assert goldConf.size() == s.getFrameInstances().size();
 			
 			// arguments
-			frameElemVars = new FrameElementHypothesis[numTargets][];
-			frameElemFactors = new FeExpFamFactor[numTargets][];
-			for(int i=0; i<numTargets; i++) {
+			frameElemVars = new ArrayList<List<FrameElementHypothesis>>();
+			frameElemFactors = new ArrayList<List<FeExpFamFactor>>();
+			for(int i=0; i<frameVars.size(); i++) {
 				
-				FrameHypothesis f_i = frameVars[i];
+				FrameHypothesis f_i = frameVars.get(i);
 				int numRoles = f_i.maxRoles();
-				frameElemVars[i] = new FrameElementHypothesis[numRoles];
-				frameElemFactors[i] = new FeExpFamFactor[numRoles];
+				frameElemVars.add(new ArrayList<FrameElementHypothesis>());
+				frameElemFactors.add(new ArrayList<FeExpFamFactor>());
 				
 				for(int j=0; j<numRoles; j++) {
 					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
 					FeExpFamFactor fr_ij = new FeExpFamFactor(
 							new VarSet(r_ij.getVar(), f_i.getVar()),
 							new FrameElemFeatureExtractor(frameElemFeatures, r_ij, f_i));
-					frameElemVars[i][j] = r_ij;
-					frameElemFactors[i][j] = fr_ij;
+					frameElemVars.get(i).add(r_ij);
+					frameElemFactors.get(i).add(fr_ij);
 					fg.addFactor(fr_ij);
 					
 					// need to get gold Span for
@@ -285,10 +277,10 @@ public class FGFNParser {
 			dec.decode(model, new FgExample(this.fg, this.goldConf));
 			
 			VarConfig conf = dec.getMbrVarConfig();
-			for(int i=0; i<frameElemVars.length; i++) {
+			for(int i=0; i<frameElemVars.size(); i++) {
 				
 				// read the frame that is evoked
-				FrameHypothesis f_i = frameVars[i];
+				FrameHypothesis f_i = frameVars.get(i);
 				int f_i_value = conf.getState(f_i.getVar());
 				Frame f_i_hyp = f_i.getPossibleFrame(f_i_value);
 				if(f_i_hyp == Frame.nullFrame)
@@ -297,7 +289,7 @@ public class FGFNParser {
 				int numRoles = f_i_hyp.numRoles();
 				Span[] roles = new Span[numRoles];
 				for(int j=0; j<numRoles; j++) {
-					FrameElementHypothesis r_ij = frameElemVars[i][j];
+					FrameElementHypothesis r_ij = frameElemVars.get(i).get(j);
 					int r_ij_value = conf.getState(r_ij.getVar());
 					roles[j] = r_ij.getSpan(r_ij_value);
 				}
