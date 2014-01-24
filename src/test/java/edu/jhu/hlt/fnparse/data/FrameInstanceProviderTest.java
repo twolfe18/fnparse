@@ -11,8 +11,6 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
-import edu.jhu.hlt.fnparse.util.SemlinkConfiguration;
 
 public class FrameInstanceProviderTest {
 
@@ -44,12 +42,12 @@ public class FrameInstanceProviderTest {
 	@Test
 	public void defaultConfigTest() {
 		//System.out.println("testing default config...");
-		testFIP(new DefaultConfiguration().getFrameInstanceProvider());
+		testFIP(new FNFrameInstanceProvider());
 	}
 
 	@Test
 	public void semlinkConfigTest() {
 		//System.out.println("testing Semlink config...");
-		testFIP(new SemlinkConfiguration().getFrameInstanceProvider());
+		testFIP(new SemLinkFrameInstanceProvider());
 	}
 }

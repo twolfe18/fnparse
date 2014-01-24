@@ -9,7 +9,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.FGFNParserSentence;
@@ -29,9 +31,12 @@ public class FGFNParserTest {
 		FrameInstanceProvider fip = new FNFrameInstanceProvider();
 		examples = fip.getFrameInstances();
 		sentence = examples.get(0);
-		System.out.println("examplar sentence = " + sentence);
+		System.out.println("[setup] examplar sentence = " + sentence);
 		parser = new FGFNParser();
 		hf = new BraindeadHeadFinder();
+		
+		List<Frame> frames = FrameIndex.getInstance().allFrames();
+		System.out.println("[setup] #frames=" + frames.size());
 	}
 	
 	@Test
@@ -56,13 +61,14 @@ public class FGFNParserTest {
 	@Test
 	public void countVariables() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
+		System.out.println("[countVariables] #frameVars=" + ps.frameVars.size());
 		assertTrue(sentence.size() >= ps.frameVars.size() || !(parser.getTargetIdentifier() instanceof SingleWordSpanExtractor));
-		System.out.println("i = " + sentence.size());
-		System.out.println(ps.goldConf.size());
+		System.out.println("[countVariables] i = " + sentence.size());
+		System.out.println("[countVariables] ps.goldConf.size = " + ps.goldConf.size());
 		int n = 0;
 		for(int i=0; i<ps.frameVars.size(); i++)
 			n += ps.frameElemVars.get(i).size();
-		System.out.println("n = " + n);
+		System.out.println("[countVariables] n = " + n);
 		assertEquals(n, ps.goldConf.size());
 		assertTrue(n > 0);
 	}

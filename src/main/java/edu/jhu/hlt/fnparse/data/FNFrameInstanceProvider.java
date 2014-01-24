@@ -24,8 +24,6 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.util.Configuration;
-import edu.jhu.hlt.fnparse.util.DefaultConfiguration;
 
 public class FNFrameInstanceProvider implements FrameInstanceProvider {
 
@@ -40,8 +38,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 	public List<FrameInstance> getFrameInstancesOld() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
 
-		Configuration conf = new DefaultConfiguration();
-		List<Frame> allFrames = conf.getFrameIndex().allFrames();
+		List<Frame> allFrames = FrameIndex.getInstance().allFrames();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
 		for (Frame ff : allFrames){
 			assert mapNameToFrame.get(ff.getName())==null;

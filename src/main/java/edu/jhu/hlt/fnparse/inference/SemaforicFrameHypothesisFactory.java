@@ -27,7 +27,7 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 	
 	private HeadFinder hf = new BraindeadHeadFinder();
-	private List<Frame> allFrames = new FrameIndex().allFrames();
+	private List<Frame> allFrames = FrameIndex.getInstance().allFrames();
 
 	@Override
 	public String getName() { return "SemaforicFrameHypFactory"; }

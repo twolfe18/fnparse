@@ -41,6 +41,10 @@ public class Sentence {
 		this.tokens = tokens;
 		this.pos = pos;
 		this.frameInstances = new ArrayList<FrameInstance>();
+		
+		// upcase the POS tags for consistency (e.g. with LexicalUnit)
+		for(int i=0; i<pos.length; i++)
+			this.pos[i] = this.pos[i].toUpperCase();
 	}
 
 	public Sentence copy(boolean copyFrameInstances) {

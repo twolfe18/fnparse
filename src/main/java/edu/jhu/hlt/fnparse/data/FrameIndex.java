@@ -10,9 +10,17 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
  */
 public class FrameIndex {
 
-	public final int framesInFrameNet = 1019;	// The number of frames in Framenet 1.5
+	public static final int framesInFrameNet = 1019;	// The number of frames in Framenet 1.5
 	
 	private List<Frame> allFrames;
+	
+	private FrameIndex() {}	// singleton
+	private static FrameIndex singleton;
+	public static FrameIndex getInstance() {
+		if(singleton == null)
+			singleton = new FrameIndex();
+		return singleton;
+	}
 	
 	/**
 	 * Frame used to indicate that a word does not evoke a frame
