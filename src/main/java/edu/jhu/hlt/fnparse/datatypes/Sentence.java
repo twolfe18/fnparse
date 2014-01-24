@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.LexicalUnit;
+import edu.stanford.nlp.trees.ConllStyleOutput;
 
 public class Sentence {
 
@@ -27,6 +28,7 @@ public class Sentence {
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
+	
 	// may be empty
 	private List<FrameInstance> frameInstances;
 	
@@ -40,10 +42,23 @@ public class Sentence {
 		this.tokens = tokens;
 		this.pos = pos;
 		this.frameInstances = new ArrayList<FrameInstance>();
+		StringAndIntArrayTuple gd = ConllStyleOutput.getGovAndDepType(tokens);
+		this.gov = gd.getI();
+		this.depType = gd.getS();
 	}
 	
+	private Sentence(String dataset, String id, String[] tokens, String[] pos, int[] gov, String[] depType) {
+		this.dataset = dataset;
+		this.id = id;
+		this.tokens = tokens;
+		this.pos = pos;
+		this.frameInstances = new ArrayList<FrameInstance>();
+		this.gov = gov;
+		this.depType = depType;
+	}
+
 	public Sentence copy(boolean copyFrameInstances) {
-		Sentence s = new Sentence(dataset, id, tokens, pos);
+		Sentence s = new Sentence(dataset, id, tokens, pos, gov, depType);
 		if(copyFrameInstances)
 			for(FrameInstance fi : this.frameInstances)
 				s.addFrameInstance(fi);
