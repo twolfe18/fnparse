@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+
 public class Sentence {
 
 	/**
@@ -25,6 +27,7 @@ public class Sentence {
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
+	
 	// may be empty
 	private List<FrameInstance> frameInstances;
 	
@@ -39,7 +42,7 @@ public class Sentence {
 		this.pos = pos;
 		this.frameInstances = new ArrayList<FrameInstance>();
 	}
-	
+
 	public Sentence copy(boolean copyFrameInstances) {
 		Sentence s = new Sentence(dataset, id, tokens, pos);
 		if(copyFrameInstances)

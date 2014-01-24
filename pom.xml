@@ -15,9 +15,9 @@
       <version>1.0</version>
     </dependency>
     <dependency>
-	  <groupId>edu.stanford.nlp</groupId>
-	  <artifactId>stanford-corenlp</artifactId>
-	  <version>3.3.0</version>
+          <groupId>edu.stanford.nlp</groupId>
+          <artifactId>stanford-corenlp</artifactId>
+          <version>3.3.0</version>
     </dependency>
     <dependency>
       <groupId>edu.jhu.pacaya</groupId>
