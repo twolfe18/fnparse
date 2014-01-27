@@ -161,9 +161,13 @@ public class BasicFrameFeatures implements FrameFeatures {
 	}
 	
 	private int index(String featureName) {
-		return featIdx.lookupIndex(featureName, true);
+		int s = featIdx.size();
+		int i = featIdx.lookupIndex(featureName, true);
+		if(s == i)
+			System.out.println("[BasicFrameElemFeatures] new max = " + s);
+		return i;
 	}
 	
-	public int cardinality() { return -1; }	// TODO
+	public int cardinality() { return 7000; }	// TODO
 
 }

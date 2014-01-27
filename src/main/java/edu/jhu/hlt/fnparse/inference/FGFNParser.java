@@ -131,7 +131,7 @@ public class FGFNParser {
 		}
 		
 		// Feature name tracking is done by me.
-		int numParams = 1;
+		int numParams = frameFeatures.cardinality() + frameElemFeatures.cardinality();
 		this.model = new FgModel(numParams);
 		this.model = trainer.train(this.model, exs);
 	}
@@ -257,23 +257,6 @@ public class FGFNParser {
 				frameElemFactors.add(new ArrayList<FeExpFamFactor>());
 				
 				for(int j=0; j<numRoles; j++) {
-					
-					// f_i.getGoldFrameInstance is null
-					// why?
-					// we make an f_i for every possible target span, some of which won't be represented as positive frames in Sentence
-					// what do when f_i.getGoldFrameInstance is null?
-					// if the goldFrameInstance is null, then the gold is null, so are all of the arguments
-					// what happens if we do clamping @ gold targets/frames?
-					// then these role variables won't exist (when goldFrame==nullFrame)
-					
-					// we want to push down the probability of p(frame != null) at the null positions,
-					// so we need to count these instantiations of variables.
-					// if we clamped at the gold frames, then these variables should have 0 prob due to the hard factors
-					// (which rule out r_ij != nullSpan when f_i = nullFrame by way of
-					//  nullFrame.numRoles = 0 and constraint on r_ij and j < f_i.numRoles)
-					
-					
-					
 					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
 					FeExpFamFactor fr_ij = new FeExpFamFactor(
 							new VarSet(r_ij.getVar(), f_i.getVar()),

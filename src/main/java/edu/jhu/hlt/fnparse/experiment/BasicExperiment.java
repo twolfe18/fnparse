@@ -18,11 +18,14 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser;
  */
 public class BasicExperiment {
 
+	public static final boolean hurryUp = false;
+	
 	public static void main(String[] args) {
 		
-		System.out.println("starting basic experiment");
+		System.out.println("starting basic experiment...");
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
 		List<Sentence> all = instancePrv.getFrameInstances();
+		System.out.println("#all   = " + all.size());
 		
 		double propTest = 0.2d;
 		boolean saveSplit = true;
@@ -31,11 +34,19 @@ public class BasicExperiment {
 		DataSplitter ds = new DataSplitter();
 		ds.split(all, train, test, propTest, saveSplit);
 		
+		System.out.println("#train = " + train.size());
+		System.out.println("#test  = " + test.size());
+		if(hurryUp) {
+			train = train.subList(0, 10);
+			test = test.subList(0, 10);
+		}
+		
 		System.out.println("data has been read in and split, calling train...");
 		FGFNParser parser = new FGFNParser();
 		parser.train(train);
-		List<Sentence> testParsed = parser.parse(test);
 		
+		System.out.println("done training, about to parse test sentences...");
+		List<Sentence> testParsed = parser.parse(test);
 		Map<String, Double> results = BasicEvaluation.evaluate(test, testParsed);
 		BasicEvaluation.showResults("BasicExperiment", results);
 	}
