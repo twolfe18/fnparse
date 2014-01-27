@@ -70,7 +70,7 @@ public class FGFNParserTest {
 		assertTrue(sentence.size() >= ps.frameVars.size() || !(parser.getTargetIdentifier() instanceof SingleWordSpanExtractor));
 		System.out.println("[countVariables] i = " + sentence.size());
 		System.out.println("[countVariables] ps.goldConf.size = " + ps.goldConf.size());
-		int n = 0;
+		int n = ps.frameVars.size();
 		for(int i=0; i<ps.frameVars.size(); i++)
 			n += ps.frameElemVars.get(i).size();
 		System.out.println("[countVariables] n = " + n);

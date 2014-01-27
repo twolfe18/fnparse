@@ -11,6 +11,8 @@ import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.feat.FeatureExtractor;
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.FgModel;
@@ -18,6 +20,7 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.train.CrfTrainer;
+import edu.jhu.gm.util.IntIter;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -254,6 +257,23 @@ public class FGFNParser {
 				frameElemFactors.add(new ArrayList<FeExpFamFactor>());
 				
 				for(int j=0; j<numRoles; j++) {
+					
+					// f_i.getGoldFrameInstance is null
+					// why?
+					// we make an f_i for every possible target span, some of which won't be represented as positive frames in Sentence
+					// what do when f_i.getGoldFrameInstance is null?
+					// if the goldFrameInstance is null, then the gold is null, so are all of the arguments
+					// what happens if we do clamping @ gold targets/frames?
+					// then these role variables won't exist (when goldFrame==nullFrame)
+					
+					// we want to push down the probability of p(frame != null) at the null positions,
+					// so we need to count these instantiations of variables.
+					// if we clamped at the gold frames, then these variables should have 0 prob due to the hard factors
+					// (which rule out r_ij != nullSpan when f_i = nullFrame by way of
+					//  nullFrame.numRoles = 0 and constraint on r_ij and j < f_i.numRoles)
+					
+					
+					
 					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
 					FeExpFamFactor fr_ij = new FeExpFamFactor(
 							new VarSet(r_ij.getVar(), f_i.getVar()),
@@ -271,6 +291,28 @@ public class FGFNParser {
 					}
 					else
 						System.out.println("WTF2");
+				}
+			}
+			
+			// add hard-factors/constraints that say that r_ij = nullSpan \forall i, j \ge f_i.numRoles
+			for(int i=0; i<frameVars.size(); i++) {
+				FrameHypothesis f_i = frameVars.get(i);
+				List<FrameElementHypothesis> r_i = frameElemVars.get(i);
+				for(int j=0; j<r_i.size(); j++) {
+					FrameElementHypothesis r_ij = r_i.get(j);
+					VarSet vs = new VarSet(f_i.getVar(), r_ij.getVar());
+					DenseFactor df = new DenseFactor(vs);
+					IntIter iiter = vs.getConfigIter(vs);
+					while(iiter.hasNext()) {
+						int cfgIdx = iiter.next();
+						VarConfig cfg = vs.getVarConfig(cfgIdx);
+						int spanIdx = cfg.getState(r_ij.getVar());
+						Span span_ij = r_ij.getSpan(spanIdx);
+						int frameIdx = cfg.getState(f_i.getVar());
+						Frame f = f_i.getPossibleFrame(frameIdx);
+						df.setValue(cfgIdx, j >= f.numRoles() && span_ij != Span.nullSpan ? 0d : 1d);
+					}
+					fg.addFactor(new ExplicitFactor(df));
 				}
 			}
 			

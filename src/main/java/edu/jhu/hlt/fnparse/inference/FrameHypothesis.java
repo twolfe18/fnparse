@@ -28,10 +28,13 @@ public interface FrameHypothesis {
 	 */
 	public Span getTargetSpan();
 	
+	/**
+	 * The sentence that this hypothetical frame appears in.
+	 */
 	public Sentence getSentence();
 	
 	/**
-	 * get the Frame that corresponds to the i^th configuration of this variable.
+	 * The Frame that corresponds to the i^th configuration of this variable.
 	 */
 	public Frame getPossibleFrame(int i);
 	

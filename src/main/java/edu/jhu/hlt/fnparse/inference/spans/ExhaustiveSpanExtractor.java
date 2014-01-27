@@ -15,8 +15,9 @@ public class ExhaustiveSpanExtractor extends SpanExtractor {
 	 */
 	@Override
 	public Integer computeSpansAndLookFor(Sentence s, Span needle, List<Span> addTo) {
+		assert addTo.size() == 0;
 		addTo.add(Span.nullSpan);
-		Integer idx = null;
+		Integer idx = needle == Span.nullSpan ? 0 : null;
 		int n = s.size();
 		for(int i=0; i<n; i++) {
 			for(int j=i+1; j<=n; j++) {

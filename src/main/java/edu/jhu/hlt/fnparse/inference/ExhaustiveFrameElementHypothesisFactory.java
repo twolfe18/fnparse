@@ -45,6 +45,22 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 			else goldSpan = goldFI.getArgument(roleIdx);
 			assert goldSpan != null;
 		}
+		else {
+			// If goldFrameInstance is null, then this means that it was not based on a
+			// *positive* frame instance contained in a Sentence.
+			// This means that this frame evokes nullFrame.
+			// the reason for this is that it is wasteful to store all of the targets that
+			// evoke nullFrame explicitly.
+			
+			// If nullFrame is evoked, then it has no arguments, which means that this
+			// r_ij variable will be pruned by the hard factor that enforces
+			//   r_ij = nullSpan \forall i, j \ge f_i.numRoles
+			// We should have a value here though because Matt's library expects a gold value
+			// for every variable, even if it will be excluded from the likelihood by the
+			// hard factor.
+			
+			goldSpan = Span.nullSpan;
+		}
 		
 		List<Span> argSpans = new ArrayList<Span>();
 		Integer goldSpanIdx = spanExtractor.computeSpansAndLookFor(s, goldSpan, argSpans);
