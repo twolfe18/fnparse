@@ -43,10 +43,13 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 				goldSpan = Span.nullSpan;
 			}
 			else goldSpan = goldFI.getArgument(roleIdx);
+			assert goldSpan != null;
 		}
 		
 		List<Span> argSpans = new ArrayList<Span>();
 		Integer goldSpanIdx = spanExtractor.computeSpansAndLookFor(s, goldSpan, argSpans);
+		if(goldSpanIdx == null)
+			System.out.println("foo");
 		return new FEH(frameHyp, goldSpanIdx, argSpans, frameHyp.getTargetSpan(), roleIdx, s);
 	}
 
@@ -69,8 +72,15 @@ public class ExhaustiveFrameElementHypothesisFactory implements FrameElementHypo
 			this.targetSpan = targetSpan;
 			this.roleIdx = roleIdx;
 			String name = String.format("r_{%s,%d,%d,%d}", s.getId(), targetSpan.start, targetSpan.end, roleIdx);
-			List<String> stateNames = null;
+			List<String> stateNames = getStateNames(argSpans);
 			this.var = new Var(VarType.PREDICTED, argSpans.size(), name, stateNames);
+		}
+		
+		public List<String> getStateNames(List<Span> spans) {
+			List<String> names = new ArrayList<String>();
+			for(Span s : spans)
+				names.add(s.toString());
+			return names;
 		}
 		
 		@Override

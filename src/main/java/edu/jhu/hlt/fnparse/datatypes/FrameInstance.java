@@ -32,10 +32,13 @@ public class FrameInstance {
 	}
 	
 	public static FrameInstance newFrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
-		if(frame == null || arguments == null || sent == null)
+		if(frame == null || arguments == null || target == null || sent == null)
 			throw new IllegalArgumentException();
 		if(frame.numRoles() != arguments.length)
 			throw new IllegalArgumentException("null-instantiated roles should be null entries in the arguments array");
+		for(int i=0; i<arguments.length; i++)
+			if(arguments[i] == null)
+				throw new IllegalArgumentException();
 		return new FrameInstance(frame, target, arguments, sent);
 	}
 	
@@ -65,6 +68,6 @@ public class FrameInstance {
 
 	@Override
 	public String toString() {
-		return String.format("<FrameInstance target=%d>", target);
+		return String.format("<FrameInstance %s @ %d with %d roles>", frame, target, numArguments());
 	}
 }

@@ -27,11 +27,11 @@ public class Sentence {
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
-	
-	// may be empty
+	// null means there are no frame instances labeled (but there may be some in the sentence)
+	// empty means there are no frame instances in this sentence
 	private List<FrameInstance> frameInstances;
 	
-	public Sentence(String dataset, String id, String[] tokens, String[] pos) {
+	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
 		if(pos != null && tokens.length != pos.length)
@@ -40,7 +40,9 @@ public class Sentence {
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
-		this.frameInstances = new ArrayList<FrameInstance>();
+		
+		if(hasFrameInstancesLabeled)
+			this.frameInstances = new ArrayList<FrameInstance>();
 		
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
@@ -48,11 +50,15 @@ public class Sentence {
 	}
 
 	public Sentence copy(boolean copyFrameInstances) {
-		Sentence s = new Sentence(dataset, id, tokens, pos);
+		Sentence s = new Sentence(dataset, id, tokens, pos, copyFrameInstances);
 		if(copyFrameInstances)
 			for(FrameInstance fi : this.frameInstances)
 				s.addFrameInstance(fi);
 		return s;
+	}
+	
+	public boolean hasFrameInstanceLabels() {
+		return frameInstances != null;
 	}
 	
 	public void addFrameInstance(FrameInstance fi) {

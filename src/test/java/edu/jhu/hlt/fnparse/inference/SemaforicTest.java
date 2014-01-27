@@ -54,10 +54,11 @@ public class SemaforicTest implements FrameInstanceProvider {
 		frames.add(motion);
 		frames.add(communication);
 		
+		boolean hasFrameInstanceLabels = false;
 		String ds = "test";
-		Sentence s1 = new Sentence(ds, "s1", new String[] {"the", "fox", "jumped", "over", "there"}, new String[] {"d", "n", "v", "p", "n"});
-		Sentence s2 = new Sentence(ds, "s2", new String[] {"john", "said", "java", "smells"}, new String[] {"n", "v", "n", "v"});
-		Sentence s3 = new Sentence(ds, "s3", new String[] {"not", "all", "words", "trigger", "frames"}, new String[] {"q", "q", "n", "v", "n"});
+		Sentence s1 = new Sentence(ds, "s1", new String[] {"the", "fox", "jumped", "over", "there"}, new String[] {"d", "n", "v", "p", "n"}, hasFrameInstanceLabels);
+		Sentence s2 = new Sentence(ds, "s2", new String[] {"john", "said", "java", "smells"}, new String[] {"n", "v", "n", "v"}, hasFrameInstanceLabels);
+		Sentence s3 = new Sentence(ds, "s3", new String[] {"not", "all", "words", "trigger", "frames"}, new String[] {"q", "q", "n", "v", "n"}, hasFrameInstanceLabels);
 		
 		frameInstances = new ArrayList<FrameInstance>();
 		

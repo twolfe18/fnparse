@@ -84,7 +84,10 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 						Collections.sort(end);
 						
 						// Create Sentence object to be used while creating FrameInstance
-						Sentence sentence = new Sentence(getName(), sentenceId, tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]));
+						boolean hasFrameInstanceLabels = true;	// will be added later
+						Sentence sentence = new Sentence(getName(), sentenceId,
+								tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]),
+								hasFrameInstanceLabels);
 						
 						// Now loop over every annotationSet that mentions Frame Information
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);

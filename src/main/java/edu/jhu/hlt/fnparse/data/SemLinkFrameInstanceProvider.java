@@ -66,7 +66,8 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 						tokens[i] = taggedWord.get(i).word();
 						pos[i] = taggedWord.get(i).tag();
 					}
-					Sentence sentence = new Sentence(getName(), String.format("SL%d", semLinkIndex), tokens, pos);
+					boolean hasFrameInstanceLabels = false;
+					Sentence sentence = new Sentence(getName(), String.format("SL%d", semLinkIndex), tokens, pos, hasFrameInstanceLabels);
 					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
 					if( framenetFrame != null){
 						Span[] tmpSpans = new Span[framenetFrame.numRoles()];

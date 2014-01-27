@@ -14,6 +14,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.train.CrfTrainer;
@@ -200,6 +201,8 @@ public class FGFNParser {
 		public FactorGraph fg;
 		public VarConfig goldConf;
 		
+		public static final boolean verbose = false;
+		
 		public FGFNParserSentence(Sentence s) {
 			
 			this.goldConf = new VarConfig();
@@ -229,10 +232,16 @@ public class FGFNParser {
 				fg.addFactor(ff_i);
 				
 				Integer goldFrameIdx = f_i.getGoldFrameIndex();
-				if(goldFrameIdx != null)
+				if(goldFrameIdx != null) {
+					if(verbose)
+						System.out.printf("[goldConfig.put] F: %s -> %s\n", f_i.getVar(), goldFrameIdx);
 					goldConf.put(f_i.getVar(), goldFrameIdx);
+				}
+				else
+					System.out.println("WTF1");
 			}
-			assert goldConf.size() == s.getFrameInstances().size();
+			assert goldConf.size() == frameVars.size() :
+				String.format("goldConf.size=%d frameVars.size=%d", goldConf.size(), frameVars.size());
 			
 			// arguments
 			frameElemVars = new ArrayList<List<FrameElementHypothesis>>();
@@ -255,11 +264,27 @@ public class FGFNParser {
 					
 					// need to get gold Span for
 					Integer gold_r_ij = r_ij.getGoldSpanIdx();
-					if(gold_r_ij != null)
+					if(gold_r_ij != null) {
+						if(verbose)
+							System.out.printf("[goldConfig.put] FE: %s -> %s\n", r_ij.getVar(), gold_r_ij);
 						goldConf.put(r_ij.getVar(), gold_r_ij);
+					}
+					else
+						System.out.println("WTF2");
 				}
 			}
-
+			
+		}
+		
+		public Iterable<Var> getAllVars() {
+			List<Var> all = new ArrayList<Var>();
+			int n = frameVars.size();
+			for(int i=0; i<n; i++) {
+				all.add(frameVars.get(i).getVar());
+				for(FrameElementHypothesis feh : frameElemVars.get(i))
+					all.add(feh.getVar());
+			}
+			return all;
 		}
 
 		/**

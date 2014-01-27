@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
@@ -42,7 +43,7 @@ public class FGFNParserTest {
 	@Test
 	public void checkFrameElemHyp() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
-		FrameElementHypothesisFactory fehf = parser.getFrameElementIdentifier();
+//		FrameElementHypothesisFactory fehf = parser.getFrameElementIdentifier();
 		assertTrue(ps.frameVars.size() > 0);
 		for(int i=0; i<ps.frameVars.size(); i++) {
 			FrameHypothesis f_i = ps.frameVars.get(i);
@@ -51,10 +52,14 @@ public class FGFNParserTest {
 					i, target, sentence.getLU(hf.head(target, sentence)), f_i.numPossibleFrames());
 			assertTrue(f_i.numPossibleFrames() > 0);
 			assertTrue(f_i.numPossibleFrames() > 1);	// if there is 1 or fewer, just set it to that?
-			for(int j=0; j<f_i.maxRoles(); j++) {
-				FrameElementHypothesis feh = fehf.make(f_i, j, sentence);
-				System.out.println(feh);
-			}
+			for(int f=0; f<f_i.numPossibleFrames(); f++)
+				System.out.println("\t"+ f_i.getPossibleFrame(f));
+			System.out.println();
+			
+//			for(int j=0; j<f_i.maxRoles(); j++) {
+//				FrameElementHypothesis feh = fehf.make(f_i, j, sentence);
+//				System.out.println(feh);
+//			}
 		}
 	}
 	
@@ -73,4 +78,13 @@ public class FGFNParserTest {
 		assertTrue(n > 0);
 	}
 	
+	@Test
+	public void checkGoldConf() {
+		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
+		System.out.println("[checkGoldConf] ps.goldConf.size=" + ps.goldConf.size());
+		for(Var v : ps.getAllVars()) {
+			assertTrue(ps.goldConf.getState(v) >= 0);
+			assertTrue(ps.goldConf.getStateName(v) != null);
+		}
+	}
 }
