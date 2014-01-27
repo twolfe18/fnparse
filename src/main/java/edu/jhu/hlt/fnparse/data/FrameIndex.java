@@ -50,6 +50,8 @@ public class FrameIndex {
 	 */
 	public List<Frame> allFrames() {
 		if(allFrames == null) {
+			long start = System.currentTimeMillis();
+			System.out.print("[FrameIndex allFrames] loading...");
 			allFrames = new ArrayList<Frame>();
 			allFrames.add(nullFrame);
 			String name[] = DataUtil.parseFrameIndexXML(UsefulConstants.frameIndexXMLPath, framesInFrameNet);
@@ -60,6 +62,7 @@ public class FrameIndex {
 				String[] roles = (String[]) tmp2.get("roles");	    
 				allFrames.add(new Frame(i+1, name[i], lexicalUnits, roles));
 			}
+			System.out.printf("\tdone. took %.1f seconds.\n", (System.currentTimeMillis()-start)/1000d);
 		}
 		return allFrames;
 	}

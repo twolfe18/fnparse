@@ -19,6 +19,7 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.train.CrfObjective;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.gm.util.IntIter;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -120,7 +121,7 @@ public class FGFNParser {
 	public FrameElementHypothesisFactory getFrameElementIdentifier() { return frameElemHypFactory; }
 	
 	public void train(List<Sentence> examples) {
-	
+		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
 		
@@ -130,10 +131,30 @@ public class FGFNParser {
 			exs.add(new FgExample(ps.fg, ps.goldConf));
 		}
 		
-		// Feature name tracking is done by me.
+		// TODO: Feature name tracking is done by me.
 		int numParams = frameFeatures.cardinality() + frameElemFeatures.cardinality();
 		this.model = new FgModel(numParams);
 		this.model = trainer.train(this.model, exs);
+	}
+	
+	public double getLogLikelihood(List<Sentence> examples, boolean startWithZeroedParams) {
+		
+		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
+		FgExampleMemoryStore exs = new FgExampleMemoryStore();
+		for(Sentence s : examples) {
+			FGFNParserSentence ps = new FGFNParserSentence(s);
+			exs.add(new FgExample(ps.fg, ps.goldConf));
+		}
+		
+		if(startWithZeroedParams) {
+			int numParams = frameFeatures.cardinality() + frameElemFeatures.cardinality();
+			this.model = new FgModel(numParams);
+		}
+		else if(model == null)
+			throw new IllegalStateException("either train or use zeroed params");
+		
+		CrfObjective objective = new CrfObjective(trainerPrm.crfObjPrm, model, exs, trainerPrm.infFactory);
+		return objective.getValue();
 	}
 
 	public List<Sentence> parse(List<Sentence> sentences) {

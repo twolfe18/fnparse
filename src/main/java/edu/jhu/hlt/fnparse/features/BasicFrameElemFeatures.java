@@ -9,6 +9,7 @@ import edu.jhu.util.Alphabet;
 public class BasicFrameElemFeatures implements FrameElementFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
+	public boolean verbose = false;
 	
 	@Override
 	public String getDescription() { return "BasicTargetRoleFeatures"; }
@@ -55,7 +56,7 @@ public class BasicFrameElemFeatures implements FrameElementFeatures {
 	private int index(String featureName) {
 		int s = featIdx.size();
 		int i =  featIdx.lookupIndex(featureName, true);
-		if(s == i)
+		if(verbose && s == i)
 			System.out.println("[BasicFrameElemFeatures] new max = " + s);
 		return i;
 	}

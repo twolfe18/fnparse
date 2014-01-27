@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -18,7 +19,7 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser;
  */
 public class BasicExperiment {
 
-	public static final boolean hurryUp = false;
+	public static final boolean hurryUp = true;
 	
 	public static void main(String[] args) {
 		
@@ -34,12 +35,12 @@ public class BasicExperiment {
 		DataSplitter ds = new DataSplitter();
 		ds.split(all, train, test, propTest, saveSplit);
 		
+		if(hurryUp) {
+			train = DataUtil.reservoirSample(train, 6);
+			test = DataUtil.reservoirSample(test, 3);
+		}
 		System.out.println("#train = " + train.size());
 		System.out.println("#test  = " + test.size());
-		if(hurryUp) {
-			train = train.subList(0, 10);
-			test = test.subList(0, 10);
-		}
 		
 		System.out.println("data has been read in and split, calling train...");
 		FGFNParser parser = new FGFNParser();

@@ -29,7 +29,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 public class FNFrameInstanceProvider implements FrameInstanceProvider {
 
 	@Override
-	public String getName() { return "FrameNet_frame_instance"; }
+	public String getName() { return "FrameNet_frame_instances"; }
 
 	@Override
 	public List<Sentence> getFrameInstances() {
@@ -37,10 +37,12 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 	}
 
 	public List<FrameInstance> getFrameInstancesOld() {
-		List<FrameInstance> allFI = new Vector<FrameInstance>();
-
+		
 		FrameIndex frameIndex = FrameIndex.getInstance();
 		List<Frame> allFrames = frameIndex.allFrames();
+		
+		long startTime = System.currentTimeMillis();
+		List<FrameInstance> allFI = new Vector<FrameInstance>();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
 		for (Frame ff : allFrames){
 			assert mapNameToFrame.get(ff.getName())==null;
@@ -162,6 +164,8 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 		catch (Exception e){
 			throw new RuntimeException(e);
 		}
+		System.out.printf("[FNFrameInstanceProvider] loaded %d FrameInstances in %.1f seconds.\n",
+				allFI.size(), (System.currentTimeMillis()-startTime)/1000d);
 		return allFI;
 	}
 

@@ -9,6 +9,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import edu.jhu.gm.model.Var;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
@@ -38,6 +39,18 @@ public class FGFNParserTest {
 		
 		List<Frame> frames = FrameIndex.getInstance().allFrames();
 		System.out.println("[setup] #frames=" + frames.size());
+	}
+	
+	@Test
+	public void checkLogLikelihood() {
+		boolean startWithZeroedParams = true;
+		int k = 2;
+		while(k < this.examples.size()) {
+			List<Sentence> examples = DataUtil.reservoirSample(this.examples, k);
+			double ll = parser.getLogLikelihood(examples, startWithZeroedParams);
+			assertTrue(ll < 0d);
+			k *= 2;
+		}
 	}
 	
 	@Test

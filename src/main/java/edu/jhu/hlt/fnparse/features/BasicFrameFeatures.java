@@ -16,6 +16,7 @@ import edu.jhu.util.Alphabet;
 public class BasicFrameFeatures implements FrameFeatures {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
+	public boolean verbose = false;
 	
 	@Override
 	public String getDescription() { return "BasicTargetFeatures"; }
@@ -163,11 +164,11 @@ public class BasicFrameFeatures implements FrameFeatures {
 	private int index(String featureName) {
 		int s = featIdx.size();
 		int i = featIdx.lookupIndex(featureName, true);
-		if(s == i)
+		if(verbose && s == i)
 			System.out.println("[BasicFrameElemFeatures] new max = " + s);
 		return i;
 	}
 	
-	public int cardinality() { return 7000; }	// TODO
+	public int cardinality() { return 75000; }	// TODO
 
 }
