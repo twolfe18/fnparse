@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Vector;
 import java.util.Collections;
 
@@ -34,11 +35,12 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 	public List<Sentence> getFrameInstances() {
 		return DataUtil.addFrameInstancesToSentences(getFrameInstancesOld());
 	}
-	
+
 	public List<FrameInstance> getFrameInstancesOld() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
 
-		List<Frame> allFrames = FrameIndex.getInstance().allFrames();
+		FrameIndex frameIndex = FrameIndex.getInstance();
+		List<Frame> allFrames = frameIndex.allFrames();
 		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
 		for (Frame ff : allFrames){
 			assert mapNameToFrame.get(ff.getName())==null;
@@ -66,7 +68,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 						List<String> tokens = new ArrayList<String>();
 						List<String> pos = new ArrayList<String>();
 						NodeList postagList = getNodeList("./annotationSet/layer[@name='PENN']/label",sentenceNode);
-						
+
 						// Extract the pos tags and character level, token start and end info
 						for (int l=0; l < postagList.getLength(); l++){
 							Element tokenElement = (Element)postagList.item(l);
@@ -77,18 +79,18 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							tokens.add(sentenceText.substring(startVal, endVal+1));
 							pos.add(tokenElement.getAttribute("name"));
 						}
-						
+
 						// Sort the character level start and end, 
 						// these would be used later while finding the token spans of arguments
 						Collections.sort(start);
 						Collections.sort(end);
-						
+
 						// Create Sentence object to be used while creating FrameInstance
 						boolean hasFrameInstanceLabels = true;	// will be added later
 						Sentence sentence = new Sentence(getName(), sentenceId,
 								tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]),
 								hasFrameInstanceLabels);
-						
+
 						// Now loop over every annotationSet that mentions Frame Information
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
 						for(int k = 0; k < targetOccurenceList.getLength(); k++){
@@ -104,13 +106,13 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 							assert triggerIdx != -1;
 							Frame tmpFrame = mapNameToFrame.get(frameName);
 							assert tmpFrame != null || frameName.equals("Test35");
-							
+
 							// So far we have found the Frame of the annotation set and the trigger token
 							// Now we must find the argument spans.
 							// The method is to use the character level argument spans found in the FE layer
 							// and to find the corresponding token indices.
 							if(tmpFrame != null){
-								Span[] spansArray = new Span[tmpFrame.numRoles()];
+								
 								NodeList spanNodeList = getNodeList("./layer[@name='FE']/label", targetOccurence);
 								HashMap<String, Span> feNameToSpan = new HashMap<String, Span>();
 								for (int m = 0; m < spanNodeList.getLength(); m++){
@@ -141,10 +143,15 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 										throw new RuntimeException(e);
 									}
 								}
-								for(int spanIdx = 0; spanIdx < tmpFrame.numRoles(); spanIdx++){
-									String feName = tmpFrame.getRole(spanIdx);
-									spansArray[spanIdx] = feNameToSpan.get(feName);
+								
+								// scan over key-values in feNameToSpan to see which roles are available, rest are nullSpan.
+								Span[] spansArray = new Span[tmpFrame.numRoles()];
+								Arrays.fill(spansArray, Span.nullSpan);
+								for(Entry<String, Span> x : feNameToSpan.entrySet()) {
+									int roleIdx = frameIndex.getRoleIdx(tmpFrame, x.getKey());
+									spansArray[roleIdx] = x.getValue();
 								}
+
 								allFI.add(FrameInstance.newFrameInstance(tmpFrame, Span.widthOne(triggerIdx), spansArray, sentence));
 							}
 						}

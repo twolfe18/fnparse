@@ -35,6 +35,17 @@ public class FrameIndex {
 	}
 	
 	/**
+	 * given a role name (e.g. returned by frame.getRole(3)),
+	 * return the index of that role.
+	 */
+	public int getRoleIdx(Frame f, String roleName) {
+		for(int i=0; i<f.numRoles(); i++)
+			if(f.getRole(i).equals(roleName))
+				return i;
+		throw new IllegalStateException("frame=" + f + ", roleName=" + roleName);
+	}
+	
+	/**
 	 * includes NULL_FRAME
 	 */
 	public List<Frame> allFrames() {

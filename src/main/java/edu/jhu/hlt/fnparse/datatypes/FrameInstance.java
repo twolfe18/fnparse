@@ -20,7 +20,7 @@ public class FrameInstance {
 
 	/**
 	 * indices correspond to frame.getRoles()
-	 * null-instantiated arguments should be null in the array
+	 * null-instantiated arguments should be Span.nullSpan, NOT null
 	 */
 	private Span[] arguments;
 

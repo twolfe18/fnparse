@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.charset.Charset;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +72,8 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
 					if( framenetFrame != null){
 						Span[] tmpSpans = new Span[framenetFrame.numRoles()];
+						Arrays.fill(tmpSpans, Span.nullSpan);
+						// TODO argument spans?
 						allFI.add(FrameInstance.newFrameInstance(framenetFrame, Span.widthOne(triggerIdx), tmpSpans, sentence));
 					}
 					else{
