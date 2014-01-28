@@ -16,9 +16,9 @@ public class ConllStyleOutput {
 	/** Do this static hack so that you dont load models again and again
 	 * 
 	 */
-	private final static Function<List<? extends HasWord>, Tree> lp;
-	private final static TreebankLangParserParams params;
-	private final static Filter<String> filter;
+	private final static Function<List<? extends HasWord>, Tree> lp = null;
+	private final static TreebankLangParserParams params = null;
+	private final static Filter<String> filter = null;
 	/*
 	static{
 		lp=loadParser("edu/stanford/nlp/models/lexparser/englishPCFG.ser.gz");
