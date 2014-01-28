@@ -254,6 +254,7 @@ public class FGFNParser {
 				frameVars.add(f_i);
 				frameFactors.add(ff_i);
 				fg.addFactor(ff_i);
+				fg.addVar(f_i.getVar());
 				
 				Integer goldFrameIdx = f_i.getGoldFrameIndex();
 				if(goldFrameIdx != null) {
@@ -285,6 +286,7 @@ public class FGFNParser {
 					frameElemVars.get(i).add(r_ij);
 					frameElemFactors.get(i).add(fr_ij);
 					fg.addFactor(fr_ij);
+					fg.addVar(r_ij.getVar());
 					
 					// need to get gold Span for
 					Integer gold_r_ij = r_ij.getGoldSpanIdx();
