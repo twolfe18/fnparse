@@ -15,6 +15,7 @@ public class UsefulConstants {
 	public static final File frameIndexXMLPath = new File(dataPath, "frameIndex.xml");
 	public static final File frameXMLDirPath = new File(dataPath, "frame/");
 	public static final File fullTextXMLDirPath = new File(dataPath, "fulltext/");
+	public static final File sentId2GDMap = new File("sentId2GDMap.txt");
 	public static final File semLinkFrameInstanceFile = new File(dataPath, "semlink.1.2.2c");
 	public static Tree getPennTree(String parseFileName, int sentenceIndex, String fileSuffix){
 		assert parseFileName.endsWith(".parse");

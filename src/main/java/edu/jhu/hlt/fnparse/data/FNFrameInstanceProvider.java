@@ -25,6 +25,8 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.StringAndIntArrayTuple;
+import edu.stanford.nlp.trees.GetGovAndDepType;
 
 public class FNFrameInstanceProvider implements FrameInstanceProvider {
 
@@ -54,6 +56,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 			File[] listOfFiles = folder.listFiles();
 			//We are assuming that every file in fullTextXMLDirPath is a data file
 			XPath xPath = XPathFactory.newInstance().newXPath();
+			GetGovAndDepType ggdt = new GetGovAndDepType();
 			for (File file : listOfFiles) {
 				if (file.isFile()) {
 					//sentenceNodes is a list of sentences
@@ -89,9 +92,18 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 
 						// Create Sentence object to be used while creating FrameInstance
 						boolean hasFrameInstanceLabels = true;	// will be added later
-						Sentence sentence = new Sentence(getName(), sentenceId,
-								tokens.toArray(new String[tokens.size()]), pos.toArray(new String[pos.size()]),
-								hasFrameInstanceLabels);
+						String sentId = String.format("FN%s", sentenceId);
+						StringAndIntArrayTuple gd = ggdt.getGovAndDepType(sentId, tokens.toArray(new String[tokens.size()]));
+						int[] gov=gd.getI();
+						String[] depType=gd.getS();
+						Sentence sentence = new Sentence(
+								getName(), 
+								sentId,
+								tokens.toArray(new String[tokens.size()]), 
+								pos.toArray(new String[pos.size()]),
+								hasFrameInstanceLabels,
+								gov,
+								depType);
 
 						// Now loop over every annotationSet that mentions Frame Information
 						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);

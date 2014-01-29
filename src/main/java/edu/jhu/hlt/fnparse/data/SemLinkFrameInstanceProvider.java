@@ -15,6 +15,8 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.StringAndIntArrayTuple;
+import edu.stanford.nlp.trees.GetGovAndDepType;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.ling.TaggedWord;
 
@@ -45,6 +47,7 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 			try{
 				lines = Files.readAllLines(semLinkFIFile.toPath(), Charset.defaultCharset());
 				int semLinkIndex = -1;
+				GetGovAndDepType ggdt = new GetGovAndDepType();
 				for(String line : lines){
 					semLinkIndex++;
 					String[] row = line.split(" ");
@@ -67,8 +70,19 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 						tokens[i] = taggedWord.get(i).word();
 						pos[i] = taggedWord.get(i).tag();
 					}
-					boolean hasFrameInstanceLabels = false;
-					Sentence sentence = new Sentence(getName(), String.format("SL%d", semLinkIndex), tokens, pos, hasFrameInstanceLabels);
+					boolean hasFrameInstanceLabels = true;
+					String sentId = String.format("SL%d", semLinkIndex);
+					StringAndIntArrayTuple gd = ggdt.getGovAndDepType(sentId, tokens);
+					int[] gov=gd.getI();
+					String[] depType=gd.getS();
+					Sentence sentence = new Sentence(
+							getName(), 
+							sentId, 
+							tokens, 
+							pos, 
+							hasFrameInstanceLabels,
+							gov,
+							depType);
 					Frame framenetFrame = mapNameToFrame.get(framenetFrameName);
 					if( framenetFrame != null){
 						Span[] tmpSpans = new Span[framenetFrame.numRoles()];
