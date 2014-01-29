@@ -31,7 +31,7 @@ public class Sentence {
 	// empty means there are no frame instances in this sentence
 	private List<FrameInstance> frameInstances;
 	
-	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled) {
+	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
 		if(pos != null && tokens.length != pos.length)
@@ -40,6 +40,8 @@ public class Sentence {
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
+		this.gov=gov;
+		this.depType=depType;
 		
 		if(hasFrameInstancesLabeled)
 			this.frameInstances = new ArrayList<FrameInstance>();
@@ -50,7 +52,7 @@ public class Sentence {
 	}
 
 	public Sentence copy(boolean copyFrameInstances) {
-		Sentence s = new Sentence(dataset, id, tokens, pos, copyFrameInstances);
+		Sentence s = new Sentence(dataset, id, tokens, pos, copyFrameInstances, gov, depType);
 		if(copyFrameInstances)
 			for(FrameInstance fi : this.frameInstances)
 				s.addFrameInstance(fi);
