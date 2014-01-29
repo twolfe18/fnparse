@@ -11,6 +11,8 @@ import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.feat.FeatureExtractor;
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
+import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
@@ -140,6 +142,10 @@ public class FGFNParser {
 	public double getLogLikelihood(List<Sentence> examples, boolean startWithZeroedParams) {
 		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
+		BeliefPropagationPrm bpPrm = new BeliefPropagationPrm();
+		bpPrm.logDomain = false;
+		bpPrm.schedule = BpScheduleType.TREE_LIKE;
+		trainerPrm.infFactory = bpPrm;
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(Sentence s : examples) {
 			FGFNParserSentence ps = new FGFNParserSentence(s);
@@ -317,6 +323,7 @@ public class FGFNParser {
 						int frameIdx = cfg.getState(f_i.getVar());
 						Frame f = f_i.getPossibleFrame(frameIdx);
 						df.setValue(cfgIdx, j >= f.numRoles() && span_ij != Span.nullSpan ? 0d : 1d);
+//						df.setValue(cfgIdx, j >= f.numRoles() && span_ij != Span.nullSpan ? Double.NEGATIVE_INFINITY : 0d);
 					}
 					fg.addFactor(new ExplicitFactor(df));
 				}
