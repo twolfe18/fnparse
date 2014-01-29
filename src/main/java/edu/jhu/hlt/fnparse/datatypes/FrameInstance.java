@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import java.util.Arrays;
-
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 /**
@@ -30,7 +28,11 @@ public class FrameInstance {
 		this.arguments = arguments;
 		this.sentence = sent;
 	}
-	
+
+	/**
+	 * Use this for frame mentions where the argument structure is known.
+	 * Roles that do not appear in the sentence should appear in the arguments array with value Span.nullSpan
+	 */
 	public static FrameInstance newFrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
 		if(frame == null || arguments == null || target == null || sent == null)
 			throw new IllegalArgumentException();
@@ -42,14 +44,18 @@ public class FrameInstance {
 		return new FrameInstance(frame, target, arguments, sent);
 	}
 	
+	/**
+	 * Use this for mentions of a frame where we do not know if the arguments are present or not
+	 * (i.e. we only have information on the frame and it's target span).
+	 */
 	public static FrameInstance frameMention(Frame frame, Span target, Sentence sent) {
 		if(frame == null || sent == null)
 			throw new IllegalArgumentException();
-		Span[] arguments = new Span[frame.numRoles()];
-		Arrays.fill(arguments, Span.nullSpan);
-		return new FrameInstance(frame, target, arguments, sent);
+		return new FrameInstance(frame, target, null, sent);
 	}
 
+	public boolean onlyTargetLabeled() { return this.arguments == null; }
+	
 	public Span getTarget() { return target; }
 
 	public Sentence getSentence() { return sentence; }
