@@ -2,10 +2,12 @@ package edu.jhu.hlt.fnparse.inference;
 
 import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesis;
 
 /**
  * Wrapper around an r_ij (span-valued) variable.
  * @author travis
+ * @deprecated
  */
 public interface FrameElementHypothesis {
 	

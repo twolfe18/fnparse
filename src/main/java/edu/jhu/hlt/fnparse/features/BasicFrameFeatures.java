@@ -13,7 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameFeatures implements FrameFeatures {
+public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors.FrameFactor.Features {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	public boolean verbose = false;

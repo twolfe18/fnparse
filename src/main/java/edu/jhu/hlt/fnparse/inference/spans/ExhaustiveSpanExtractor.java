@@ -21,7 +21,7 @@ public class ExhaustiveSpanExtractor extends SpanExtractor {
 		int n = s.size();
 		for(int i=0; i<n; i++) {
 			for(int j=i+1; j<=n; j++) {
-				Span sp = new Span(i, j);
+				Span sp = Span.getSpan(i, j);
 				addTo.add(sp);
 				if(sp.equals(needle)) {
 					assert idx == null;

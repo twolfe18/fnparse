@@ -72,7 +72,7 @@ public class Sentence {
 	}
 	
 	/**
-	 * returns all (non-null-frame) instances of frames in this sentence.
+	 * returns all (non-nullFrame) instances of frames in this sentence.
 	 */
 	public List<FrameInstance> getFrameInstances() {
 		return frameInstances;

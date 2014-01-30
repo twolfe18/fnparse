@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference;
+package edu.jhu.hlt.fnparse.inference.variables;
 
 import java.util.ArrayList;
 import java.util.List;

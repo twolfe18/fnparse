@@ -149,7 +149,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider {
 												ei++;
 											}
 											assert ei > 0;
-											feNameToSpan.put(spanFEElement.getAttribute("name"),new Span(si, ei));
+											feNameToSpan.put(spanFEElement.getAttribute("name"), Span.getSpan(si, ei));
 										}
 
 									}

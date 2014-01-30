@@ -9,31 +9,32 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
-import edu.jhu.gm.feat.FeatureExtractor;
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
-import edu.jhu.gm.model.DenseFactor;
-import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.gm.model.VarSet;
 import edu.jhu.gm.train.CrfObjective;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.gm.util.IntIter;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.BasicFrameElemFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.FrameElementFeatures;
-import edu.jhu.hlt.fnparse.features.FrameFeatures;
+import edu.jhu.hlt.fnparse.inference.factors.FrameFactor;
+import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
+import edu.jhu.hlt.fnparse.inference.factors.NumRoleHardFactor;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
+import edu.jhu.hlt.fnparse.inference.variables.ExhaustiveRoleHypothesisFactory;
+import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesis;
+import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesisFactory;
+import edu.jhu.hlt.fnparse.inference.variables.RoleHypothesis;
+import edu.jhu.hlt.fnparse.inference.variables.RoleHypothesisFactory;
+import edu.jhu.hlt.fnparse.inference.variables.SemaforicFrameHypothesisFactory;
 
 /**
  ******************** Factor graph model that is similar to SEMAFOR ********************
@@ -99,12 +100,15 @@ public class FGFNParser {
 	
 	private FgModel model;
 	
-	private FrameFeatures frameFeatures = new BasicFrameFeatures();
-	private FrameElementFeatures frameElemFeatures = new BasicFrameElemFeatures();
+	private FrameFactor.Features frameFeats = new BasicFrameFeatures();
+	private FrameFactor.FeatureExtractor frameFeatExtr = new FrameFactor.FeatureExtractor(frameFeats);
+	
+	private FrameRoleFactor.Features frameRoleFeatures = new BasicFrameRoleFeatures();
+	private FrameRoleFactor.FeatureExtractor frameRoleFeatExtr = new FrameRoleFactor.FeatureExtractor(frameRoleFeatures);
 	
 	private SpanExtractor targetIdentifier = new SingleWordSpanExtractor();
 	private FrameHypothesisFactory frameHypFactory = new SemaforicFrameHypothesisFactory();
-	private FrameElementHypothesisFactory frameElemHypFactory = new ExhaustiveFrameElementHypothesisFactory();
+	private RoleHypothesisFactory roleHypFactory = new ExhaustiveRoleHypothesisFactory();
 	
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
@@ -115,12 +119,12 @@ public class FGFNParser {
 //		return sb.toString();
 //	}
 	
-	public FrameFeatures getFrameFeatures() { return frameFeatures; }
-	public FrameElementFeatures getFrameElementFeatures() { return frameElemFeatures; }
+	public FrameFactor.Features getFrameFeatures() { return frameFeats; }
+	public FrameRoleFactor.Features getFrameRoleFeatures() { return frameRoleFeatures; }
 	
 	public SpanExtractor getTargetIdentifier() { return targetIdentifier; }
 	public FrameHypothesisFactory getFrameIdentifier() { return frameHypFactory; }
-	public FrameElementHypothesisFactory getFrameElementIdentifier() { return frameElemHypFactory; }
+	public RoleHypothesisFactory getRoleIdentifier() { return roleHypFactory; }
 	
 	public void train(List<Sentence> examples) {
 		
@@ -134,7 +138,7 @@ public class FGFNParser {
 		}
 		
 		// TODO: Feature name tracking is done by me.
-		int numParams = frameFeatures.cardinality() + frameElemFeatures.cardinality();
+		int numParams = frameFeats.cardinality() + frameRoleFeatures.cardinality();
 		this.model = new FgModel(numParams);
 		this.model = trainer.train(this.model, exs);
 	}
@@ -153,7 +157,7 @@ public class FGFNParser {
 		}
 		
 		if(startWithZeroedParams) {
-			int numParams = frameFeatures.cardinality() + frameElemFeatures.cardinality();
+			int numParams = frameFeats.cardinality() + frameRoleFeatures.cardinality();
 			this.model = new FgModel(numParams);
 		}
 		else if(model == null)
@@ -174,64 +178,52 @@ public class FGFNParser {
 		return ret;
 	}
 
-	static class FrameElemFeatureExtractor implements FeatureExtractor {
-		private FrameElementFeatures features;
-		private FrameElementHypothesis r_ij;
-		private FrameHypothesis f_i;
-		public FrameElemFeatureExtractor(FrameElementFeatures feats, FrameElementHypothesis r_ij, FrameHypothesis f_i) {
-			this.features = feats;
-			this.r_ij = r_ij;
-			this.f_i = f_i;
-		}
-		@Override
-		public void init(FgExample ex) {}
-		@Override
-		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
-			VarConfig varConf = factor.getVars().getVarConfig(configId);
-			int f_i_value = varConf.getState(f_i.getVar());
-			Frame f = f_i.getPossibleFrame(f_i_value);
-			int r_ij_value = varConf.getState(r_ij.getVar());
-			Span argSpan = r_ij.getSpan(r_ij_value);
-			return features.getFeatures(f, argSpan, f_i.getTargetSpan(), r_ij.getRoleIdx(), f_i.getSentence());
-		}
+	// TODO factor out of Matt's code (SrlFactorGraph)
+	public static interface DParseVars {
+		Var getDependencyVar(int gov, int dep);
+		Iterable<Var> getAllVariables();
 	}
 	
-	static class FrameFeatureExtractor implements FeatureExtractor {
-		private FrameFeatures features;
-		private FrameHypothesis f_i;
-		public FrameFeatureExtractor(FrameFeatures feats, FrameHypothesis f_i) {
-			this.features = feats;
-			this.f_i = f_i;
-		}
-		@Override
-		public void init(FgExample ex) {}
-		@Override
-		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
-			Frame f = f_i.getPossibleFrame(configId);
-			Span extent = f_i.getTargetSpan();
-			Sentence s = f_i.getSentence();
-			return features.getFeatures(f, extent, s);
-		}
+	// TODO implement this (Matt's implementation of CkyFactor may help)
+	public static interface CParseVars {
+		Var getConstituentVar(int from, int to);
+		Iterable<Span> getAllConstituents();
+		Iterable<Var> getAllVariables();
 	}
-		
+	
 	/**
 	 * Represents the factor graph for a sentence, most of the meat is here.
-	 * 
-	 * For now, this implements ObsFeatureExtractor.
-	 * Matt is changing the code so that Factors will be responsible for providing
-	 * features, rather than a FeatureExtractor, so I will have to change this.
 	 */
 	public class FGFNParserSentence {
 		
-		public List<FrameHypothesis> frameVars;						// f_i
-		public List<List<FrameElementHypothesis>> frameElemVars;	// r_ij
-		public List<FeExpFamFactor> frameFactors;					// phi(f_i)
-		public List<List<FeExpFamFactor>> frameElemFactors;			// phi(f_i, r_ij)
+		public static final boolean verbose = false;
+		
+		public List<FrameHypothesis> frameVars;
+		public List<List<RoleHypothesis>> roleVars;	// first index corresponds to frameVars, second is (roleIdx x spans)
+		public List<FeExpFamFactor> frameFactors;
+		public List<FeExpFamFactor> frameRoleFactors;
+		
 		public Sentence sentence;
 		public FactorGraph fg;
 		public VarConfig goldConf;
 		
-		public static final boolean verbose = false;
+		// TODO
+		public DParseVars dParseVars;
+		public CParseVars cParseVars;
+		
+		public List<Var> getAllVariables() {
+			List<Var> vars = new ArrayList<Var>();
+			for(FrameHypothesis f : frameVars)
+				vars.add(f.getVar());
+			for(List<RoleHypothesis> lr : roleVars)
+				for(RoleHypothesis r : lr)
+					vars.add(r.getVar());
+			for(Var v : dParseVars.getAllVariables())
+				vars.add(v);
+			for(Var v : cParseVars.getAllVariables())
+				vars.add(v);
+			return vars;
+		}
 		
 		public FGFNParserSentence(Sentence s) {
 			
@@ -254,9 +246,7 @@ public class FGFNParser {
 					continue;
 				}
 				assert f_i.numPossibleFrames() > 1;
-				FeExpFamFactor ff_i = new FeExpFamFactor(
-						new VarSet(f_i.getVar()),
-						new FrameFeatureExtractor(frameFeatures, f_i));
+				FrameFactor ff_i = new FrameFactor(f_i, frameFeatExtr);
 				frameVars.add(f_i);
 				frameFactors.add(ff_i);
 				fg.addFactor(ff_i);
@@ -275,71 +265,35 @@ public class FGFNParser {
 				String.format("goldConf.size=%d frameVars.size=%d", goldConf.size(), frameVars.size());
 			
 			// arguments
-			frameElemVars = new ArrayList<List<FrameElementHypothesis>>();
-			frameElemFactors = new ArrayList<List<FeExpFamFactor>>();
+			roleVars = new ArrayList<List<RoleHypothesis>>();
+			frameRoleFactors = new ArrayList<FeExpFamFactor>();
 			for(int i=0; i<frameVars.size(); i++) {
-				
 				FrameHypothesis f_i = frameVars.get(i);
+			
+				List<RoleHypothesis> roleVars_i = new ArrayList<RoleHypothesis>();
+				roleVars.add(roleVars_i);
+			
 				int numRoles = f_i.maxRoles();
-				frameElemVars.add(new ArrayList<FrameElementHypothesis>());
-				frameElemFactors.add(new ArrayList<FeExpFamFactor>());
+				for(int k=0; k<numRoles; k++) {
+					for(RoleHypothesis r_ijk : roleHypFactory.make(f_i, k, sentence)) {
 				
-				for(int j=0; j<numRoles; j++) {
-					FrameElementHypothesis r_ij = frameElemHypFactory.make(f_i, j, sentence);
-					FeExpFamFactor fr_ij = new FeExpFamFactor(
-							new VarSet(r_ij.getVar(), f_i.getVar()),
-							new FrameElemFeatureExtractor(frameElemFeatures, r_ij, f_i));
-					frameElemVars.get(i).add(r_ij);
-					frameElemFactors.get(i).add(fr_ij);
-					fg.addFactor(fr_ij);
-					fg.addVar(r_ij.getVar());
-					
-					// need to get gold Span for
-					Integer gold_r_ij = r_ij.getGoldSpanIdx();
-					if(gold_r_ij != null) {
-						if(verbose)
-							System.out.printf("[goldConfig.put] FE: %s -> %s\n", r_ij.getVar(), gold_r_ij);
-						goldConf.put(r_ij.getVar(), gold_r_ij);
+						roleVars_i.add(r_ijk);
+						FrameRoleFactor fr = new FrameRoleFactor(f_i, r_ijk, frameRoleFeatExtr);
+						frameRoleFactors.add(fr);
+						fg.addFactor(fr);
+						fg.addVar(r_ijk.getVar());
+						RoleHypothesis.Label gold = r_ijk.getGoldLabel();
+						if(gold != RoleHypothesis.Label.UNK)
+							goldConf.put(r_ijk.getVar(), gold.getInt());
+						
+						// add hard factors for checking #roles compatibility with frame
+						final boolean useLogValues = true;
+						NumRoleHardFactor hf = new NumRoleHardFactor(f_i, r_ijk, useLogValues);
+						fg.addFactor(hf.getFactor());
 					}
-					else
-						System.out.println("WTF2");
 				}
 			}
 			
-			// add hard-factors/constraints that say that r_ij = nullSpan \forall i, j \ge f_i.numRoles
-			for(int i=0; i<frameVars.size(); i++) {
-				FrameHypothesis f_i = frameVars.get(i);
-				List<FrameElementHypothesis> r_i = frameElemVars.get(i);
-				for(int j=0; j<r_i.size(); j++) {
-					FrameElementHypothesis r_ij = r_i.get(j);
-					VarSet vs = new VarSet(f_i.getVar(), r_ij.getVar());
-					DenseFactor df = new DenseFactor(vs);
-					IntIter iiter = vs.getConfigIter(vs);
-					while(iiter.hasNext()) {
-						int cfgIdx = iiter.next();
-						VarConfig cfg = vs.getVarConfig(cfgIdx);
-						int spanIdx = cfg.getState(r_ij.getVar());
-						Span span_ij = r_ij.getSpan(spanIdx);
-						int frameIdx = cfg.getState(f_i.getVar());
-						Frame f = f_i.getPossibleFrame(frameIdx);
-						df.setValue(cfgIdx, j >= f.numRoles() && span_ij != Span.nullSpan ? 0d : 1d);
-//						df.setValue(cfgIdx, j >= f.numRoles() && span_ij != Span.nullSpan ? Double.NEGATIVE_INFINITY : 0d);
-					}
-					fg.addFactor(new ExplicitFactor(df));
-				}
-			}
-			
-		}
-		
-		public Iterable<Var> getAllVars() {
-			List<Var> all = new ArrayList<Var>();
-			int n = frameVars.size();
-			for(int i=0; i<n; i++) {
-				all.add(frameVars.get(i).getVar());
-				for(FrameElementHypothesis feh : frameElemVars.get(i))
-					all.add(feh.getVar());
-			}
-			return all;
 		}
 
 		/**
@@ -357,7 +311,8 @@ public class FGFNParser {
 			dec.decode(model, new FgExample(this.fg, this.goldConf));
 			
 			VarConfig conf = dec.getMbrVarConfig();
-			for(int i=0; i<frameElemVars.size(); i++) {
+			Map<Var, Double> margins = dec.getVarMargMap();
+			for(int i=0; i<frameVars.size(); i++) {
 				
 				// read the frame that is evoked
 				FrameHypothesis f_i = frameVars.get(i);
@@ -368,10 +323,14 @@ public class FGFNParser {
 				
 				int numRoles = f_i_hyp.numRoles();
 				Span[] roles = new Span[numRoles];
-				for(int j=0; j<numRoles; j++) {
-					FrameElementHypothesis r_ij = frameElemVars.get(i).get(j);
-					int r_ij_value = conf.getState(r_ij.getVar());
-					roles[j] = r_ij.getSpan(r_ij_value);
+				double[] confidences = new double[numRoles];	// initalized to 0
+				for(RoleHypothesis r_ijk : roleVars.get(i)) {
+					double r_ijk_prob = margins.get(r_ijk.getVar());
+					int j = r_ijk.getRoleIdx();
+					if(r_ijk_prob > confidences[j]) {
+						roles[j] = r_ijk.getExtent();
+						confidences[j] = r_ijk_prob;
+					}
 				}
 				
 				FrameInstance fi = FrameInstance.newFrameInstance(f_i_hyp, f_i.getTargetSpan(), roles, sentence);

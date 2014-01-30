@@ -4,9 +4,10 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameElemFeatures implements FrameElementFeatures {
+public class BasicFrameRoleFeatures implements FrameRoleFactor.Features {
 
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	public boolean verbose = false;

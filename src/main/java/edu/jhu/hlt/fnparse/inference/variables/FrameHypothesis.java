@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference;
+package edu.jhu.hlt.fnparse.inference.variables;
 
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;

@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser.FGFNParserSentence;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
+import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesis;
 
 public class FGFNParserTest {
 
@@ -56,7 +57,6 @@ public class FGFNParserTest {
 	@Test
 	public void checkFrameElemHyp() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
-//		FrameElementHypothesisFactory fehf = parser.getFrameElementIdentifier();
 		assertTrue(ps.frameVars.size() > 0);
 		for(int i=0; i<ps.frameVars.size(); i++) {
 			FrameHypothesis f_i = ps.frameVars.get(i);
@@ -68,11 +68,6 @@ public class FGFNParserTest {
 			for(int f=0; f<f_i.numPossibleFrames(); f++)
 				System.out.println("\t"+ f_i.getPossibleFrame(f));
 			System.out.println();
-			
-//			for(int j=0; j<f_i.maxRoles(); j++) {
-//				FrameElementHypothesis feh = fehf.make(f_i, j, sentence);
-//				System.out.println(feh);
-//			}
 		}
 	}
 	
@@ -85,7 +80,7 @@ public class FGFNParserTest {
 		System.out.println("[countVariables] ps.goldConf.size = " + ps.goldConf.size());
 		int n = ps.frameVars.size();
 		for(int i=0; i<ps.frameVars.size(); i++)
-			n += ps.frameElemVars.get(i).size();
+			n += ps.roleVars.get(i).size();
 		System.out.println("[countVariables] n = " + n);
 		assertEquals(n, ps.goldConf.size());
 		assertTrue(n > 0);
@@ -95,7 +90,7 @@ public class FGFNParserTest {
 	public void checkGoldConf() {
 		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
 		System.out.println("[checkGoldConf] ps.goldConf.size=" + ps.goldConf.size());
-		for(Var v : ps.getAllVars()) {
+		for(Var v : ps.getAllVariables()) {
 			assertTrue(ps.goldConf.getState(v) >= 0);
 			assertTrue(ps.goldConf.getStateName(v) != null);
 		}
