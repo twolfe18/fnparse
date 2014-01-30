@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +28,7 @@ import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.inference.factors.FrameFactor;
 import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
 import edu.jhu.hlt.fnparse.inference.factors.NumRoleHardFactor;
+import edu.jhu.hlt.fnparse.inference.spans.ExhaustiveSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
 import edu.jhu.hlt.fnparse.inference.variables.ExhaustiveRoleHypothesisFactory;
@@ -108,7 +110,7 @@ public class FGFNParser {
 	
 	private SpanExtractor targetIdentifier = new SingleWordSpanExtractor();
 	private FrameHypothesisFactory frameHypFactory = new SemaforicFrameHypothesisFactory();
-	private RoleHypothesisFactory roleHypFactory = new ExhaustiveRoleHypothesisFactory();
+	private RoleHypothesisFactory<CParseVars> roleHypFactory = new ExhaustiveRoleHypothesisFactory();
 	
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
@@ -124,7 +126,7 @@ public class FGFNParser {
 	
 	public SpanExtractor getTargetIdentifier() { return targetIdentifier; }
 	public FrameHypothesisFactory getFrameIdentifier() { return frameHypFactory; }
-	public RoleHypothesisFactory getRoleIdentifier() { return roleHypFactory; }
+	public RoleHypothesisFactory<?> getRoleIdentifier() { return roleHypFactory; }
 	
 	public void train(List<Sentence> examples) {
 		
@@ -192,6 +194,26 @@ public class FGFNParser {
 	}
 	
 	/**
+	 * Has no variables, just provides the Spans via an ExhaustiveSpanExtractor
+	 * @author travis
+	 */
+	public static class DummyConstitParse implements CParseVars {
+		private Sentence sent;
+		private SpanExtractor spanExtr = new ExhaustiveSpanExtractor();
+		public DummyConstitParse(Sentence s) {
+			this.sent = s;
+		}
+		@Override
+		public Var getConstituentVar(int from, int to) {
+			throw new RuntimeException("do i really have to implement this?");
+		}
+		@Override
+		public Iterable<Span> getAllConstituents() { return spanExtr.computeSpans(sent); }
+		@Override
+		public Iterable<Var> getAllVariables() { return Collections.emptyList(); }
+	}
+	
+	/**
 	 * Represents the factor graph for a sentence, most of the meat is here.
 	 */
 	public class FGFNParserSentence {
@@ -207,29 +229,16 @@ public class FGFNParser {
 		public FactorGraph fg;
 		public VarConfig goldConf;
 		
-		// TODO
 		public DParseVars dParseVars;
 		public CParseVars cParseVars;
-		
-		public List<Var> getAllVariables() {
-			List<Var> vars = new ArrayList<Var>();
-			for(FrameHypothesis f : frameVars)
-				vars.add(f.getVar());
-			for(List<RoleHypothesis> lr : roleVars)
-				for(RoleHypothesis r : lr)
-					vars.add(r.getVar());
-			for(Var v : dParseVars.getAllVariables())
-				vars.add(v);
-			for(Var v : cParseVars.getAllVariables())
-				vars.add(v);
-			return vars;
-		}
 		
 		public FGFNParserSentence(Sentence s) {
 			
 			this.goldConf = new VarConfig();
 			this.sentence = s;
 			this.fg = new FactorGraph();
+			this.cParseVars = new DummyConstitParse(s);
+			this.dParseVars = null;	// TODO
 			
 			// build an index so you can look up if there is a Frame evoked at a particular Span
 			Map<Span, FrameInstance> goldFrames = new HashMap<Span, FrameInstance>();
@@ -275,7 +284,7 @@ public class FGFNParser {
 			
 				int numRoles = f_i.maxRoles();
 				for(int k=0; k<numRoles; k++) {
-					for(RoleHypothesis r_ijk : roleHypFactory.make(f_i, k, sentence)) {
+					for(RoleHypothesis r_ijk : roleHypFactory.make(f_i, k, sentence, cParseVars)) {
 				
 						roleVars_i.add(r_ijk);
 						FrameRoleFactor fr = new FrameRoleFactor(f_i, r_ijk, frameRoleFeatExtr);
@@ -323,7 +332,7 @@ public class FGFNParser {
 				
 				int numRoles = f_i_hyp.numRoles();
 				Span[] roles = new Span[numRoles];
-				double[] confidences = new double[numRoles];	// initalized to 0
+				double[] confidences = new double[numRoles];	// initialized to 0
 				for(RoleHypothesis r_ijk : roleVars.get(i)) {
 					double r_ijk_prob = margins.get(r_ijk.getVar());
 					int j = r_ijk.getRoleIdx();
@@ -336,6 +345,22 @@ public class FGFNParser {
 				FrameInstance fi = FrameInstance.newFrameInstance(f_i_hyp, f_i.getTargetSpan(), roles, sentence);
 				sentence.addFrameInstance(fi);
 			}
+		}
+		
+		public List<Var> getAllVariables() {
+			List<Var> vars = new ArrayList<Var>();
+			for(FrameHypothesis f : frameVars)
+				vars.add(f.getVar());
+			for(List<RoleHypothesis> lr : roleVars)
+				for(RoleHypothesis r : lr)
+					vars.add(r.getVar());
+			if(dParseVars != null)
+				for(Var v : dParseVars.getAllVariables())
+					vars.add(v);
+			if(cParseVars != null)
+				for(Var v : cParseVars.getAllVariables())
+					vars.add(v);
+			return vars;
 		}
 
 	}

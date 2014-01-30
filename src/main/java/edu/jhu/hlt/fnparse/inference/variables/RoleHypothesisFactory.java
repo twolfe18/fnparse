@@ -4,7 +4,7 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
-public interface RoleHypothesisFactory {
+public interface RoleHypothesisFactory<T> {
 
 	/**
 	 * give some description that can be printed to explain what the model is doing.
@@ -17,7 +17,7 @@ public interface RoleHypothesisFactory {
 	 * every span in the sentence, whereas a more aggressive strategy might be to
 	 * only return spans that are constituents in a gold parse.   
 	 */
-	public List<RoleHypothesis> make(FrameHypothesis frameHyp, int roleIdx, Sentence s);
+	public List<RoleHypothesis> make(FrameHypothesis frameHyp, int roleIdx, Sentence s, T ancillaryInformation);
 
 }
 

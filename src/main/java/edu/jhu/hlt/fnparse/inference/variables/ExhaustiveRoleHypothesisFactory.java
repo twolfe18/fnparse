@@ -13,22 +13,13 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser.CParseVars;
  * takes all constituent variables (i.e. all spans) from a CParseVars provided
  * @author travis
  */
-public class ExhaustiveRoleHypothesisFactory implements RoleHypothesisFactory {
-	
-	private CParseVars constituents;
+public class ExhaustiveRoleHypothesisFactory implements RoleHypothesisFactory<CParseVars> {
 	
 	@Override
 	public String getName() { return "ExhaustiveRoleHypothesisFactory"; }
 	
-	public void setConstituents(CParseVars constituents) {
-		this.constituents = constituents;
-	}
-
 	@Override
-	public List<RoleHypothesis> make(FrameHypothesis frameHyp, int roleIdx, Sentence s) {
-		
-		if(constituents == null)
-			throw new IllegalStateException("you need to set constituents for this sentence");
+	public List<RoleHypothesis> make(FrameHypothesis frameHyp, int roleIdx, Sentence s, CParseVars constituents) {
 		
 		Span goldSpan = null;
 		FrameInstance goldFI = frameHyp.getGoldFrameInstance();
