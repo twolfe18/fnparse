@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.data;
 
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -19,6 +19,8 @@ public class FrameInstanceProviderTest {
 		long start = System.currentTimeMillis();
 		List<Sentence> sents = fip.getFrameInstances();
 		long time = System.currentTimeMillis() - start;
+		
+		checkOrder(sents, fip);
 
 		int numFIs = 0;
 		Set<Sentence> uniqSents = new HashSet<Sentence>();
@@ -39,6 +41,11 @@ public class FrameInstanceProviderTest {
 				numFIs, sents.size(), time/1000d);
 	}
 
+	public static void checkOrder(List<Sentence> gotTheFirstTime, FrameInstanceProvider fip) {
+		List<Sentence> gotTheSecondTime = fip.getFrameInstances();
+		assertEquals(gotTheFirstTime, gotTheSecondTime);
+	}
+	
 	@Test
 	public void defaultConfigTest() {
 		//System.out.println("testing default config...");

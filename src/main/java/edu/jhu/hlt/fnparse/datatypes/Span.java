@@ -17,7 +17,7 @@ public class Span {
 		// don't store this in the table, because all other spans will
 		// obey the invariant start > end (i.e. width >= 1).
 		if(start == 0 && end == 0)
-			throw new IllegalArgumentException("end must be >= start");
+			return nullSpan;
 		
 		// make a bigger table if the previous was too small
 		if(end > internedSpans.length) {

@@ -116,4 +116,20 @@ public class Sentence {
 		sb.append(">");
 		return sb.toString();
 	}
+	
+	@Override
+	public int hashCode() {
+		return id.hashCode();
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if(o instanceof Sentence) {
+			Sentence other = (Sentence) o;
+			return id.equals(other.id) && Arrays.equals(tokens, other.tokens)
+					&& Arrays.equals(pos, other.pos) && Arrays.equals(gov, other.gov)
+					&& Arrays.equals(depType, other.depType);
+		}
+		else return false;
+	}
 }
