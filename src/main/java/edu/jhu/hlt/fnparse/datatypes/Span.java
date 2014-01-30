@@ -5,55 +5,48 @@ public class Span {
 	public int start;	// inclusive
 	public int end;		// non-inclusive
 
-	public static final Span nullSpan = new Span();
+	public static final Span nullSpan = new Span(0, 0);
 	
 	// intern instances of Span just like String
 	// also, you can use ==
-	private static int internedMaxSentSize = 30;
+	// this table is indexed as [start][width - 1]
 	private static Span[][] internedSpans = new Span[0][0];
 	
 	public static Span getSpan(int start, int end) {
 		
+		// don't store this in the table, because all other spans will
+		// obey the invariant start > end (i.e. width >= 1).
+		if(start == 0 && end == 0)
+			throw new IllegalArgumentException("end must be >= start");
+		
 		// make a bigger table if the previous was too small
-		if(start >= internedSpans.length) {
-			internedMaxSentSize = end + 10;
+		if(end > internedSpans.length) {
+			int newInternedMaxSentSize = end + 10;
 			
 			// sanity check
-			if(internedMaxSentSize > 100)
+			if(newInternedMaxSentSize > 100)
 				throw new IllegalStateException("what are you doing with these huge sentences?");
 			
-			Span[][] newInternedSpans = new Span[internedMaxSentSize-1][];
-			for(int s=0; s<internedMaxSentSize; s++) {
-				newInternedSpans[s] = new Span[internedMaxSentSize - s - 1];
-				for(int e=s+1; e<internedMaxSentSize; e++) {
-					int ei = e - s - 1;
+			Span[][] newInternedSpans = new Span[newInternedMaxSentSize][];
+			for(int s=0; s<newInternedSpans.length; s++) {
+				newInternedSpans[s] = new Span[newInternedMaxSentSize - s];
+				for(int width=1; width <= newInternedMaxSentSize - s; width++) {
 					// use old value if possible (needed to ensure == works)
-					newInternedSpans[s][ei] =
-							s < internedSpans.length && ei < internedSpans[s].length
-								? internedSpans[s][ei]
-								: new Span(s, e);
+					newInternedSpans[s][width - 1] =
+							s < internedSpans.length && width-1 < internedSpans[s].length
+								? internedSpans[s][width-1]
+								: new Span(s, s+width);
 				}
 			}
 			internedSpans = newInternedSpans;
 		}
-		return internedSpans[start][end - start - 1];
+		int width = end - start;
+		return internedSpans[start][width - 1];
 	}
 	
-	/**
-	 * @param start is inclusive, 0-indexed
-	 * @param end is non-inclusive, 0-indexed
-	 */
 	private Span(int start, int end) {
-		assert end > start;
-		assert start >= 0;
 		this.start = start;
 		this.end = end;
-	}
-	
-	/** creates the null span, private so that it can only be done once here statically */
-	private Span() {
-		this.start = 0;
-		this.end = 0;
 	}
 
 	public int width() { return end - start; }
