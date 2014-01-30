@@ -13,13 +13,14 @@ import edu.jhu.hlt.fnparse.inference.variables.RoleHypothesis;
  * enforces that r_ijk = nullSpan \forall k \ge f_i.numRoles
  * this is a binary factor between a frame variable and a role variable.
  * @author travis
+ * @deprecated
  */
 public class NumRoleHardFactor {
 	
 	private ExplicitFactor f;
 	
 	public NumRoleHardFactor(FrameHypothesis f, RoleHypothesis r, boolean useLogValues) {
-		double validValue = useLogValues ? 0d : 1d;
+		double validValue   = useLogValues ? 0d                       : 1d;
 		double invalidValue = useLogValues ? Double.NEGATIVE_INFINITY : 0d;
 		VarSet vs = new VarSet(f.getVar(), r.getVar());
 		DenseFactor df = new DenseFactor(vs);

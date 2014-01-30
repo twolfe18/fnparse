@@ -1,10 +1,9 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleMemoryStore;
@@ -23,8 +22,8 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.inference.factors.FrameFactor;
 import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
 import edu.jhu.hlt.fnparse.inference.factors.NumRoleHardFactor;
@@ -147,6 +146,14 @@ public class FGFNParser {
 	
 	public double getLogLikelihood(List<Sentence> examples, boolean startWithZeroedParams) {
 		
+		System.out.printf("[getLogLikelihood] getting LL for %d sentences\n", examples.size());
+		for(Sentence s : examples) System.out.print(" " + s.size());
+		System.out.println();
+		
+		Logger l = Logger.getLogger(FgExample.class);
+		l.setLevel(Level.ALL);
+		l.info("a test from travis' code");
+		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
 		BeliefPropagationPrm bpPrm = new BeliefPropagationPrm();
 		bpPrm.logDomain = false;
@@ -155,6 +162,8 @@ public class FGFNParser {
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(Sentence s : examples) {
 			FGFNParserSentence ps = new FGFNParserSentence(s);
+			ps.printStatus();
+			System.out.println();
 			exs.add(new FgExample(ps.fg, ps.goldConf));
 		}
 		
@@ -232,8 +241,34 @@ public class FGFNParser {
 		public DParseVars dParseVars;
 		public CParseVars cParseVars;
 		
+		public void printStatus() {
+			System.out.printf("FGFNParserSentence of size %d\n", sentence.size());
+			double totalFramesPossible = 0d;
+			for(FrameHypothesis fh : frameVars)
+				totalFramesPossible += fh.numPossibleFrames();
+			System.out.printf("there are %d frame vars, with an average of %.1f frames/target and %.1f targets/word\n",
+					frameVars.size(), totalFramesPossible/frameVars.size(), ((double)frameVars.size())/sentence.size());
+			int totalRoleVars = 0;
+			int X = 0;
+			for(int i=0; i<frameVars.size(); i++) {
+				List<RoleHypothesis> lrh = roleVars.get(i);
+				int numRoles = 0;
+				for(RoleHypothesis rh : lrh) {	// spans X roles
+					if(rh.getRoleIdx() > numRoles)
+						numRoles = rh.getRoleIdx();
+				}
+				X += numRoles+1;	// +1 to go from 0-indexing to counts
+				totalRoleVars += lrh.size();
+			}
+			double spansPerRole = totalRoleVars / X;
+			System.out.printf("there are %d role-span vars, with an average of %.1f roles-spans/frame and %.1f spans/frame-role\n",
+					totalRoleVars, ((double)totalRoleVars) / roleVars.size(), spansPerRole);
+			System.out.printf("n*(n-1)/2 = %d\n", sentence.size() * (sentence.size()-1) / 2);
+		}
+		
 		public FGFNParserSentence(Sentence s) {
 			
+			long start = System.currentTimeMillis();
 			this.goldConf = new VarConfig();
 			this.sentence = s;
 			this.fg = new FactorGraph();
@@ -272,6 +307,7 @@ public class FGFNParser {
 			}
 			assert goldConf.size() == frameVars.size() :
 				String.format("goldConf.size=%d frameVars.size=%d", goldConf.size(), frameVars.size());
+			System.out.printf("[FGFNParserSentence] target/frame init took %.2f\n", (System.currentTimeMillis()-start)/1000d);
 			
 			// arguments
 			roleVars = new ArrayList<List<RoleHypothesis>>();
@@ -282,8 +318,8 @@ public class FGFNParser {
 				List<RoleHypothesis> roleVars_i = new ArrayList<RoleHypothesis>();
 				roleVars.add(roleVars_i);
 			
-				int numRoles = f_i.maxRoles();
-				for(int k=0; k<numRoles; k++) {
+				int maxRoles = f_i.maxRoles();	// how many roles are needed for the highest-arity Frame
+				for(int k=0; k<maxRoles; k++) {
 					for(RoleHypothesis r_ijk : roleHypFactory.make(f_i, k, sentence, cParseVars)) {
 				
 						roleVars_i.add(r_ijk);
@@ -300,9 +336,11 @@ public class FGFNParser {
 						NumRoleHardFactor hf = new NumRoleHardFactor(f_i, r_ijk, useLogValues);
 						fg.addFactor(hf.getFactor());
 					}
+					System.out.print("*");
 				}
 			}
-			
+			System.out.println();
+			System.out.printf("[FGFNParserSentence] init took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
 		}
 
 		/**
