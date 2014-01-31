@@ -1,10 +1,12 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 /**
  * Holds the data needed to evaluate parses.
@@ -24,7 +26,7 @@ public class SentenceEval {
 	private int[][] targetConfusion;
 	private int[][] fullConfusion;
 	
-	public SentenceEval(Sentence gold, Sentence hyp) {
+	public SentenceEval(FNParse gold, FNParse hyp) {
 		
 		//this.gold = gold;
 		//this.hyp = hyp;

@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 
 public class BasicEvaluation {
 
@@ -82,7 +82,7 @@ public class BasicEvaluation {
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
 			fullMicroF1, fullMicroPrecision, fullMicroRecall};
 	
-	public static Map<String, Double> evaluate(List<Sentence> gold, List<Sentence> hyp) {
+	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
 		
 		if(gold.size() != hyp.size())
 			throw new IllegalArgumentException();
