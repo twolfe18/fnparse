@@ -8,7 +8,6 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.FGFNParser;
 
@@ -26,7 +25,7 @@ public class BasicExperiment {
 		
 		System.out.println("starting basic experiment...");
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
-		List<FNParse> all = instancePrv.getFrameInstances();
+		List<FNParse> all = instancePrv.getParsedSentences();
 		System.out.println("#all   = " + all.size());
 		
 		double propTest = 0.2d;

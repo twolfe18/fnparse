@@ -58,11 +58,17 @@ public class Sentence implements HasId {
 				s.addFrameInstance(fi);
 		return s;
 	}
-	
+
+	/**
+	 * @deprecated
+	 */
 	public boolean hasFrameInstanceLabels() {
 		return frameInstances != null;
 	}
 	
+	/**
+	 * @deprecated
+	 */
 	public void addFrameInstance(FrameInstance fi) {
 		if(fi.getSentence() != this)
 			throw new IllegalArgumentException();
@@ -73,11 +79,15 @@ public class Sentence implements HasId {
 	
 	/**
 	 * returns all (non-nullFrame) instances of frames in this sentence.
+	 * @deprecated
 	 */
 	public List<FrameInstance> getFrameInstances() {
 		return frameInstances;
 	}
 	
+	/**
+	 * @deprecated
+	 */
 	public int numFrameInstances() { return frameInstances.size(); }
 	
 	public String getDataset() { return dataset; }
