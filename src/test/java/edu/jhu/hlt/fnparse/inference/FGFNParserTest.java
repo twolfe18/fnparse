@@ -13,11 +13,10 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.FGFNParser.FGFNParserSentence;
-import edu.jhu.hlt.fnparse.inference.FGFNParser.InferenceMode;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
@@ -50,8 +49,8 @@ public class FGFNParserTest {
 	
 	@Test
 	public void checkPiecewiseDecode() {
-		FGFNParserSentence frameSent = parser.new FGFNParserSentence(sentence, InferenceMode.FRAMES);
-		frameSent.decode(parser.getModel());
+		List<Sentence> toParse = DataUtil.reservoirSample(examples, 2);
+		List<FNParse> parsed = parser.parse(toParse, false);
 		
 	}
 	

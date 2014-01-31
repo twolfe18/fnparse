@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.regex.Pattern;
 
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.HasId;
 
 public class DataSplitter {
 	
@@ -30,8 +30,8 @@ public class DataSplitter {
 		this.rand = rand;
 	}
 
-	public boolean split(List<Sentence> all, List<Sentence> train, List<Sentence> test, double propTest) throws FileNotFoundException {
-		return split(all, train, test, propTest, true);
+	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, double propTest, String key) throws FileNotFoundException {
+		return split(all, train, test, propTest, true, key);
 	}
 	
 	/**
@@ -40,10 +40,11 @@ public class DataSplitter {
 	 * @param test should be an empty list to add to
 	 * @param propTest says what proportion should go to the test set (between 0 and 1)
 	 * @param saveSplit says whether to respect a split of this data contained in a file on disk
+	 * @param key should be a unique identifier used to describe the instances in all
 	 * @return true if this split was created for the first time (false if loaded from a file).
 	 * 	if saveSplit=false, then it will always return true
 	 */
-	public boolean split(List<Sentence> all, List<Sentence> train, List<Sentence> test, double propTest, boolean saveSplit) {
+	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, double propTest, boolean saveSplit, String key) {
 		assert train.size() == 0;
 		assert test.size() == 0;
 		assert all.size() > 0;
@@ -51,7 +52,7 @@ public class DataSplitter {
 			throw new IllegalArgumentException("propTest must be between 0 and 1: " + propTest);
 		
 		if(saveSplit) {
-			File f = getSplitFile(all, propTest);
+			File f = getSplitFile(all, key, propTest);
 			boolean newSplit;
 			Map<String, Boolean> isTrain;
 			if(f.isFile()) {
@@ -61,14 +62,14 @@ public class DataSplitter {
 				isTrain = writeSplit(f, all, propTest);
 				newSplit = true;
 			}
-			for(Sentence s : all) {
+			for(T s : all) {
 				if(isTrain.get(s.getId())) train.add(s);
 				else test.add(s);
 			}
 			return newSplit;
 		}
 		else {
-			for(Sentence fi : all) {
+			for(T fi : all) {
 				if(rand.nextDouble() < propTest)
 					test.add(fi);
 				else
@@ -78,21 +79,9 @@ public class DataSplitter {
 		}
 	}
 	
-	public File getSplitFile(List<Sentence> all, double propTest) {
-		if(!allInstancesFromSameDataset(all))
-			throw new RuntimeException();
+	public File getSplitFile(List<? extends HasId> all, String key, double propTest) {
 		File p = new File("src/main/resources");	// TODO fix this
-		return new File(p, all.get(0).getDataset() + "_" + all.size() + "_" + propTest + ".split");
-	}
-	
-	public boolean allInstancesFromSameDataset(List<Sentence> all) {
-		String ds = null;
-		for(int i=0; i<all.size(); i++) {
-			String d = all.get(i).getDataset();
-			if(i == 0) ds = d;
-			else if(!ds.equals(d)) return false;
-		}
-		return true;
+		return new File(p, key + "_" + all.size() + "_" + propTest + ".split");
 	}
 	
 	/**
@@ -102,6 +91,7 @@ public class DataSplitter {
 	public Map<String, Boolean> readSplit(File f) {
 		Map<String, Boolean> m = new HashMap<String, Boolean>();
 		try {
+			@SuppressWarnings("resource")
 			BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)));
 			while(r.ready()) {
 				String line = r.readLine();
@@ -124,13 +114,13 @@ public class DataSplitter {
 	 * writes a mapping between Sentence.id and whether that sentence
 	 * is in the train dataset (true) or the test (false) to f.
 	 */
-	public Map<String, Boolean> writeSplit(File f, List<Sentence> all, double propTest) {
+	public Map<String, Boolean> writeSplit(File f, List<? extends HasId> all, double propTest) {
 		if(!delim.matcher(delimStr).matches())
 			throw new RuntimeException("choose a new delimiter for the split file");
 		Map<String, Boolean> m = new HashMap<String, Boolean>();
 		try {
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
-			for(Sentence s : all) {
+			for(HasId s : all) {
 				String key = s.getId();
 				String val;
 				if(rand.nextDouble() < propTest) {

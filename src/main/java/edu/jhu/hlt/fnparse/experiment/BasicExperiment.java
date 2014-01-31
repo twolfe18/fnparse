@@ -7,6 +7,7 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.FGFNParser;
@@ -25,15 +26,16 @@ public class BasicExperiment {
 		
 		System.out.println("starting basic experiment...");
 		FrameInstanceProvider instancePrv = new FNFrameInstanceProvider();
-		List<Sentence> all = instancePrv.getFrameInstances();
+		List<FNParse> all = instancePrv.getFrameInstances();
 		System.out.println("#all   = " + all.size());
 		
 		double propTest = 0.2d;
 		boolean saveSplit = true;
-		List<Sentence> train = new ArrayList<Sentence>();
-		List<Sentence> test = new ArrayList<Sentence>();
+		List<FNParse> train = new ArrayList<FNParse>();
+		List<FNParse> test = new ArrayList<FNParse>();
 		DataSplitter ds = new DataSplitter();
-		ds.split(all, train, test, propTest, saveSplit);
+		String datasetDesc = all.get(0).getSentence().getDataset();
+		ds.split(all, train, test, propTest, saveSplit, datasetDesc);
 		
 		if(hurryUp) {
 			train = DataUtil.reservoirSample(train, 6);
@@ -43,11 +45,12 @@ public class BasicExperiment {
 		System.out.println("#test  = " + test.size());
 		
 		System.out.println("data has been read in and split, calling train...");
+		boolean joint = false;
 		FGFNParser parser = new FGFNParser();
-		parser.train(train);
+		parser.train(train, joint);
 		
 		System.out.println("done training, about to parse test sentences...");
-		List<Sentence> testParsed = parser.parse(test);
+		List<FNParse> testParsed = parser.parse(FGFNParser.stipLabels(test), joint);
 		Map<String, Double> results = BasicEvaluation.evaluate(test, testParsed);
 		BasicEvaluation.showResults("BasicExperiment", results);
 	}

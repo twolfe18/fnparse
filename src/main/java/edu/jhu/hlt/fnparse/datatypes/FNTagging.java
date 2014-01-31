@@ -4,11 +4,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.fnparse.util.HasId;
+
 /**
  * a Sentence with Frame targets tagged, but no arguments labeled
  * @author travis
  */
-public class FNTagging {
+public class FNTagging implements HasId {
 
 	private Sentence sent;
 	private List<FrameInstance> frameInstances;
@@ -32,4 +34,8 @@ public class FNTagging {
 			goldFrames.put(fi.getTarget(), fi);
 		return goldFrames;
 	}
+
+	@Override
+	public String getId() { return sent.getId(); }
+	
 }

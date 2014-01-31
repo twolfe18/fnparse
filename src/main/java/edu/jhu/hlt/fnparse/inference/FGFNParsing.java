@@ -256,7 +256,6 @@ public abstract class FGFNParsing {
 	}
 	
 	
-	
 	public static class JointParsing extends FGFNParsing {
 		
 		public JointParsing(FGFNParsingParams params) {

@@ -162,8 +162,15 @@ public class FGFNParser {
 //		return objective.getValue();
 //	}
 
+	// java really needs map
+	public static List<Sentence> stipLabels(List<FNParse> sentences) {
+		List<Sentence> noLabels = new ArrayList<>();
+		for(FNParse p : sentences) noLabels.add(p.getSentence());
+		return noLabels;
+	}
+	
 	public List<FNParse> parse(List<Sentence> sentences, boolean jointDecoding) {
-		List<FNParse> ret = new ArrayList<FNParse>();
+		List<FNParse> ret = new ArrayList<>();
 		for(Sentence sent : sentences) {
 			if(jointDecoding) {
 				FGFNParsing.JointParsing p = new FGFNParsing.JointParsing(params);

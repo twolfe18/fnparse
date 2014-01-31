@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.util.HasId;
 
-public class Sentence {
+public class Sentence implements HasId {
 
 	/**
 	 * a __globally__ unique identifier
