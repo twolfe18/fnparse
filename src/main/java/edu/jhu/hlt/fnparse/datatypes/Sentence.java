@@ -29,6 +29,9 @@ public class Sentence implements HasId {
 	
 	// null means there are no frame instances labeled (but there may be some in the sentence)
 	// empty means there are no frame instances in this sentence
+	/**
+	 * @deprecated
+	 */
 	private List<FrameInstance> frameInstances;
 	
 	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled, int[] gov, String[] depType) {

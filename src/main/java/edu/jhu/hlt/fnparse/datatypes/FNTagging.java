@@ -7,7 +7,11 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.util.HasId;
 
 /**
- * a Sentence with Frame targets tagged, but no arguments labeled
+ * A Sentence with Frame targets tagged, but no arguments (necessarily) labeled.
+ * If you necessarily have arguments tagged, use FNParse.
+ * This class is mainly used by parsers that take a two step approach to parsing:
+ * predict frame targets and then predict their arguments.
+ * 
  * @author travis
  */
 public class FNTagging implements HasId {
@@ -16,6 +20,8 @@ public class FNTagging implements HasId {
 	private List<FrameInstance> frameInstances;
 	
 	public FNTagging(Sentence s, List<FrameInstance> frameMentions) {
+		if(frameMentions == null || s == null)
+			throw new IllegalArgumentException();
 		this.sent = s;
 		this.frameInstances = frameMentions;
 	}
@@ -30,7 +36,7 @@ public class FNTagging implements HasId {
 	
 	public Map<Span, FrameInstance> getFrameLocations() {
 		Map<Span, FrameInstance> goldFrames = new HashMap<Span, FrameInstance>();
-		for(FrameInstance fi : sent.getFrameInstances())
+		for(FrameInstance fi : frameInstances)
 			goldFrames.put(fi.getTarget(), fi);
 		return goldFrames;
 	}
