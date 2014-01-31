@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
@@ -13,20 +12,18 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.inference.FGFNParsing.FGFNParsingParams;
 import edu.jhu.hlt.fnparse.inference.factors.FrameFactor;
 import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
 import edu.jhu.hlt.fnparse.inference.spans.ExhaustiveSpanExtractor;
-import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
-import edu.jhu.hlt.fnparse.inference.variables.ExhaustiveRoleHypothesisFactory;
 import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesisFactory;
 import edu.jhu.hlt.fnparse.inference.variables.RoleHypothesisFactory;
-import edu.jhu.hlt.fnparse.inference.variables.SemaforicFrameHypothesisFactory;
 
 /**
- ******************** Factor graph model that is similar to SEMAFOR ********************
+ ******************** Factor graph model for Framenet parsing ****************************
+ *
+ * NOTE: the description below is out of date.
  * 
  * For a sentence with length n, having s spans:
  * 
@@ -86,19 +83,9 @@ import edu.jhu.hlt.fnparse.inference.variables.SemaforicFrameHypothesisFactory;
  * TODO: add latent variable for LU, as in SEMAFOR
  */
 public class FGFNParser {
-	
-	private FgModel model;
-	
-	private FrameFactor.Features frameFeats = new BasicFrameFeatures();
-	private FrameFactor.FeatureExtractor frameFeatExtr = new FrameFactor.FeatureExtractor(frameFeats);
-	
-	private FrameRoleFactor.Features frameRoleFeatures = new BasicFrameRoleFeatures();
-	private FrameRoleFactor.FeatureExtractor frameRoleFeatExtr = new FrameRoleFactor.FeatureExtractor(frameRoleFeatures);
-	
-	private SpanExtractor targetIdentifier = new SingleWordSpanExtractor();
-	private FrameHypothesisFactory frameHypFactory = new SemaforicFrameHypothesisFactory();
-	private RoleHypothesisFactory<CParseVars> roleHypFactory = new ExhaustiveRoleHypothesisFactory();
-	
+
+	public FGFNParsingParams params;
+
 //	public String getName() {
 //		StringBuilder sb = new StringBuilder("<FGFNParser_");
 //		sb.append("targetId=" + targetIdentifier.getName());
@@ -108,13 +95,13 @@ public class FGFNParser {
 //		return sb.toString();
 //	}
 	
-	public FgModel getModel() { return model; }
-	public FrameFactor.Features getFrameFeatures() { return frameFeats; }
-	public FrameRoleFactor.Features getFrameRoleFeatures() { return frameRoleFeatures; }
+	public FgModel getModel() { return params.model; }
+	public FrameFactor.Features getFrameFeatures() { return params.frameFeats; }
+	public FrameRoleFactor.Features getFrameRoleFeatures() { return params.frameRoleFeatures; }
 	
-	public SpanExtractor getTargetIdentifier() { return targetIdentifier; }
-	public FrameHypothesisFactory getFrameIdentifier() { return frameHypFactory; }
-	public RoleHypothesisFactory<?> getRoleIdentifier() { return roleHypFactory; }
+	public SpanExtractor getTargetIdentifier() { return params.targetIdentifier; }
+	public FrameHypothesisFactory getFrameIdentifier() { return params.frameHypFactory; }
+	public RoleHypothesisFactory<?> getRoleIdentifier() { return params.roleHypFactory; }
 	
 	public void train(List<FNParse> examples, boolean jointTraining) {
 		
@@ -124,20 +111,20 @@ public class FGFNParser {
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
 			if(jointTraining) {
-				FGFNParsing.JointParsing j = new FGFNParsing.JointParsing();
+				FGFNParsing.JointParsing j = new FGFNParsing.JointParsing(params);
 				exs.add(j.getTrainingInstance(parse));
 			} else {
-				FGFNParsing.FrameTagging f = new FGFNParsing.FrameTagging();
+				FGFNParsing.FrameTagging f = new FGFNParsing.FrameTagging(params);
 				exs.add(f.getTrainingInstance(parse));
-				FGFNParsing.ArgumentTagging a = new FGFNParsing.ArgumentTagging();
+				FGFNParsing.ArgumentTagging a = new FGFNParsing.ArgumentTagging(params);
 				exs.add(a.getTrainingInstance(parse));
 			}
 		}
 		
 		// TODO: Feature name tracking is done by me.
-		int numParams = frameFeats.cardinality() + frameRoleFeatures.cardinality();
-		this.model = new FgModel(numParams);
-		this.model = trainer.train(this.model, exs);
+		int numParams = params.frameFeats.cardinality() + params.frameRoleFeatures.cardinality();
+		params.model = new FgModel(numParams);
+		params.model = trainer.train(params.model, exs);
 	}
 
 	
@@ -179,13 +166,13 @@ public class FGFNParser {
 		List<FNParse> ret = new ArrayList<FNParse>();
 		for(Sentence sent : sentences) {
 			if(jointDecoding) {
-				FGFNParsing.JointParsing p = new FGFNParsing.JointParsing();
+				FGFNParsing.JointParsing p = new FGFNParsing.JointParsing(params);
 				ret.add(p.parse(sent));
 			}
 			else {
-				FGFNParsing.FrameTagging f = new FGFNParsing.FrameTagging();
+				FGFNParsing.FrameTagging f = new FGFNParsing.FrameTagging(params);
 				FNTagging sentWithFrames = f.getFrames(sent);
-				FGFNParsing.ArgumentTagging a = new FGFNParsing.ArgumentTagging();
+				FGFNParsing.ArgumentTagging a = new FGFNParsing.ArgumentTagging(params);
 				ret.add(a.getArguments(sentWithFrames));
 			}
 		}

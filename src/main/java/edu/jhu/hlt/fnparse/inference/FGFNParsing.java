@@ -1,9 +1,6 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
@@ -25,7 +22,6 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser.CParseVars;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.DParseVars;
 import edu.jhu.hlt.fnparse.inference.factors.FrameFactor;
 import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
-import edu.jhu.hlt.fnparse.inference.factors.NumRoleHardFactor;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
 import edu.jhu.hlt.fnparse.inference.spans.SpanExtractor;
 import edu.jhu.hlt.fnparse.inference.variables.DefaultFrameHypothesis;
@@ -50,8 +46,7 @@ import edu.jhu.hlt.fnparse.inference.variables.SemaforicFrameHypothesisFactory;
  * 
  * @author travis
  */
-public class FGFNParsing {
-	
+public abstract class FGFNParsing {
 	
 	public static class FGFNParsingParams {
 		public FgModel model;
@@ -67,7 +62,6 @@ public class FGFNParsing {
 		public RoleHypothesisFactory<CParseVars> roleHypFactory = new ExhaustiveRoleHypothesisFactory();
 	}
 	
-	
 	public FGFNParsingParams params;
 
 	public List<FrameHypothesis> frameVars;
@@ -82,6 +76,9 @@ public class FGFNParsing {
 	public DParseVars dParseVars;
 	public CParseVars cParseVars;
 	
+	public FGFNParsing(FGFNParsingParams params) {
+		this.params = params;
+	}
 	
 	/**
 	 * Extract possible target spans from the given sentence.
@@ -170,11 +167,6 @@ public class FGFNParsing {
 					RoleHypothesis.Label gold = r_ijk.getGoldLabel();
 					if(gold != RoleHypothesis.Label.UNK)
 						goldConf.put(r_ijk.getVar(), gold.getInt());
-
-					// add hard factors for checking #roles compatibility with frame
-					final boolean useLogValues = true;
-					NumRoleHardFactor hf = new NumRoleHardFactor(f_i, r_ijk, useLogValues);
-					fg.addFactor(hf.getFactor());
 				}
 			}
 		}
@@ -267,6 +259,10 @@ public class FGFNParsing {
 	
 	public static class JointParsing extends FGFNParsing {
 		
+		public JointParsing(FGFNParsingParams params) {
+			super(params);
+		}
+		
 		public FNParse parse(Sentence s) {
 			addFrameVars(s);
 			addRoleVars();
@@ -284,6 +280,10 @@ public class FGFNParsing {
 	
 	public static class FrameTagging extends FGFNParsing {
 		
+		public FrameTagging(FGFNParsingParams params) {
+			super(params);
+		}
+		
 		public FNTagging getFrames(Sentence s) {
 			addFrameVars(s);
 			runInference();
@@ -298,6 +298,10 @@ public class FGFNParsing {
 	}
 	
 	public static class ArgumentTagging extends FGFNParsing {
+		
+		public ArgumentTagging(FGFNParsingParams params) {
+			super(params);
+		}
 		
 		public FNParse getArguments(FNTagging s) {
 			addFrameVars(s);

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.factors;
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.FeExpFamFactor;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -88,6 +89,24 @@ public class FrameRoleFactor extends FeExpFamFactor {
 		this.roleHyp = roleHyp;
 	}
 
+	/**
+	 * This code enforces r_ijk = nullSpan \forall i, j >= f_i.numRoles
+	 */
+	@Override
+	public double getDotProd(int config, FgModel model, boolean logDomain) {
+		
+		// check if j >= f_i.numFrames
+		VarConfig varConf = this.getVars().getVarConfig(config);
+		int f_i_value = varConf.getState(frameHyp.getVar());
+		Frame f = frameHyp.getPossibleFrame(f_i_value);
+		if(roleHyp.getRoleIdx() >= f.numRoles())
+			return logDomain ? Double.NEGATIVE_INFINITY : 0d;
+		
+		// otherwise let ExpFamFactor do it's normal job of
+		// calling the feature extractor and doing the dot product
+		return super.getDotProd(config, model, logDomain);
+	}
+	
 	public FrameHypothesis getFrameHyp() { return frameHyp; }
 
 	public RoleHypothesis getRoleHype() { return roleHyp; }
