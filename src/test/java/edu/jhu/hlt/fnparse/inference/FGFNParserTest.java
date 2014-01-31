@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.FGFNParserSentence;
+import edu.jhu.hlt.fnparse.inference.FGFNParser.InferenceMode;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.spans.SingleWordSpanExtractor;
@@ -43,20 +44,32 @@ public class FGFNParserTest {
 	}
 	
 	@Test
-	public void checkLogLikelihood() {
-		boolean startWithZeroedParams = true;
-		int k = 2;
-		while(k < this.examples.size()) {
-			List<Sentence> examples = DataUtil.reservoirSample(this.examples, k);
-			double ll = parser.getLogLikelihood(examples, startWithZeroedParams);
-			assertTrue(ll < 0d);
-			k *= 2;
-		}
+	public void checkPiecewiseTrain() {
+		// TODO
 	}
 	
 	@Test
+	public void checkPiecewiseDecode() {
+		FGFNParserSentence frameSent = parser.new FGFNParserSentence(sentence, InferenceMode.FRAMES);
+		frameSent.decode(parser.getModel());
+		
+	}
+	
+//	@Test
+//	public void checkLogLikelihood() {
+//		boolean startWithZeroedParams = true;
+//		int k = 2;
+//		while(k < this.examples.size()) {
+//			List<Sentence> examples = DataUtil.reservoirSample(this.examples, k);
+//			double ll = parser.getLogLikelihood(examples, startWithZeroedParams);
+//			assertTrue(ll < 0d);
+//			k *= 2;
+//		}
+//	}
+	
+	@Test
 	public void checkFrameElemHyp() {
-		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
+		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence, InferenceMode.JOINT);
 		assertTrue(ps.frameVars.size() > 0);
 		for(int i=0; i<ps.frameVars.size(); i++) {
 			FrameHypothesis f_i = ps.frameVars.get(i);
@@ -73,7 +86,7 @@ public class FGFNParserTest {
 	
 	@Test
 	public void countVariables() {
-		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
+		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence, InferenceMode.JOINT);
 		System.out.println("[countVariables] #frameVars=" + ps.frameVars.size());
 		assertTrue(sentence.size() >= ps.frameVars.size() || !(parser.getTargetIdentifier() instanceof SingleWordSpanExtractor));
 		System.out.println("[countVariables] i = " + sentence.size());
@@ -88,7 +101,7 @@ public class FGFNParserTest {
 	
 	@Test
 	public void checkGoldConf() {
-		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence);
+		FGFNParserSentence ps = parser.new FGFNParserSentence(sentence, InferenceMode.JOINT);
 		System.out.println("[checkGoldConf] ps.goldConf.size=" + ps.goldConf.size());
 		for(Var v : ps.getAllVariables()) {
 			assertTrue(ps.goldConf.getState(v) >= 0);

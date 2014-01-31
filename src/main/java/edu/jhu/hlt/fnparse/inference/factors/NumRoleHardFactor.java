@@ -12,6 +12,15 @@ import edu.jhu.hlt.fnparse.inference.variables.RoleHypothesis;
 /**
  * enforces that r_ijk = nullSpan \forall k \ge f_i.numRoles
  * this is a binary factor between a frame variable and a role variable.
+ * 
+ * REPLACEMENT:
+ * implement a special version of ExpFamFactor that is a product of an
+ * exp fam factor and a hard factor. the idea is that it will know when
+ * to compute features and dot products; for configurations that are not
+ * ruled out by the hard factor.
+ * TODO implement this and make sure that Matt's code is extensible
+ * (include a description of this in Matt's code for future reference)
+ * 
  * @author travis
  * @deprecated
  */

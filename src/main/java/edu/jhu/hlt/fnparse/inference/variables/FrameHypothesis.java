@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.inference.variables;
 
-import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -17,11 +16,6 @@ public interface FrameHypothesis {
 	 * @return variable that says what frame this target might evoke
 	 */
 	public Var getVar();
-	
-	/**
-	 * @return factor responsible for scoring Frames
-	 */
-	public Factor getUnaryFactor();
 	
 	/**
 	 * The span that evokes the Frame in question.
