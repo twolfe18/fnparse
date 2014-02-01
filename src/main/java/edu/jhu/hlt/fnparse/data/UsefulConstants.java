@@ -12,7 +12,8 @@ import edu.stanford.nlp.trees.TreeReader;
 public class UsefulConstants {
 
 	public static final File dataPath =  new File("toydata");
-	public static final File frameIndexXMLPath = new File(dataPath, "frameIndex.xml");
+	public static final File frameIndexPath = new File(dataPath, "fn15-frameindex");
+	public static final File frameIndexLUPath = new File(dataPath, "fn15-frameindexLU");
 	public static final File frameXMLDirPath = new File(dataPath, "frame/");
 	public static final File fullTextXMLDirPath = new File(dataPath, "fulltext/");
 	public static final File sentId2GDMap = new File("sentId2GDMap.txt");

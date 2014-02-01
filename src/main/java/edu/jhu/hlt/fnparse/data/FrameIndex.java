@@ -1,6 +1,13 @@
 package edu.jhu.hlt.fnparse.data;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.*;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.LineIterator;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
@@ -8,13 +15,43 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 /**
  * Reads frames from disk and provides access to them
  */
-public class FrameIndex {
+public class FrameIndex implements Iterator<Frame> {
 
 	public static final int framesInFrameNet = 1019;	// The number of frames in Framenet 1.5
 	
-	private List<Frame> allFrames;
+	private List<Frame> allFrames = null;
 	
-	private FrameIndex() {}	// singleton
+	// The reader that points to the frameindex file
+	private LineIterator litFE; 
+	private LineIterator litLU;
+	
+	private String curLineFE = null;
+	private String curLineLU = null;
+	private String curFrameIDFE;
+	private String curFrameIDLU;
+	private String curFrameNameFE;
+	
+	private String prevFrameID;
+	
+	private String prevFrameName = null;
+	private FrameIndex() { // singleton
+		try {
+			litFE = FileUtils.lineIterator(UsefulConstants.frameIndexPath, "UTF-8");
+			litLU = FileUtils.lineIterator(UsefulConstants.frameIndexLUPath, "UTF-8");
+			// Do not remove this line. It goes past the preamble
+			@SuppressWarnings("unused")
+			String _preambleRow1 = litFE.nextLine();
+			String _preambleRow2 = litLU.nextLine();
+			curLineFE = litFE.nextLine();
+			curLineLU = litLU.nextLine();
+			prevFrameID = curFrameIDFE = (curLineFE.split("\t"))[0];
+			curFrameIDLU = (curLineLU.split("\t"))[0];
+			prevFrameName = curFrameNameFE = (curLineFE.split("\t"))[3];
+			assert curFrameIDFE.equals(curFrameIDLU);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}	
 	private static FrameIndex singleton;
 	public static FrameIndex getInstance() {
 		if(singleton == null)
@@ -49,21 +86,58 @@ public class FrameIndex {
 	 * includes NULL_FRAME
 	 */
 	public List<Frame> allFrames() {
-		if(allFrames == null) {
-			long start = System.currentTimeMillis();
-			System.out.print("[FrameIndex allFrames] loading...");
-			allFrames = new ArrayList<Frame>();
+		if(allFrames == null){
+			allFrames = new ArrayList<Frame>(framesInFrameNet);
 			allFrames.add(nullFrame);
-			String name[] = DataUtil.parseFrameIndexXML(UsefulConstants.frameIndexXMLPath, framesInFrameNet);
-			for(int i=0; i<name.length; i++) {
-				HashMap<String, Object> tmp2 = DataUtil.lexicalUnitAndRolesOfFrame(name[i]);
-				//System.out.println("frame = " + name[i] + ", tmp2 = " + tmp2);
-				LexicalUnit[] lexicalUnits = (LexicalUnit[]) tmp2.get("lexicalUnits");
-				String[] roles = (String[]) tmp2.get("roles");	    
-				allFrames.add(new Frame(i+1, name[i], lexicalUnits, roles));
-			}
-			System.out.printf("\tdone. took %.1f seconds.\n", (System.currentTimeMillis()-start)/1000d);
+			while(hasNext())
+				allFrames.add(next());
 		}
 		return allFrames;
+	}
+
+	@Override
+	public boolean hasNext() {
+		return (litLU.hasNext() && litFE.hasNext());
+	}
+
+	@Override
+	public Frame next() {
+		Frame ret;
+		List<String> fename = new ArrayList<String>();
+		List<LexicalUnit> lu = new ArrayList<LexicalUnit>();
+		while(litFE.hasNext() && curFrameIDFE.equals(prevFrameID)){
+			// read lines till the curFrameID is same as prevFrameId (or prevFrameID is null)
+			// and we can still read lines
+			String[] l = curLineFE.split("\t");
+			fename.add(l[4]);
+			curLineFE = litFE.nextLine();
+			l = curLineFE.split("\t");
+			curFrameIDFE = l[0];
+			curFrameNameFE = l[3];
+			
+		}
+		while(litLU.hasNext() && curFrameIDLU.equals(prevFrameID)){
+			String[] l = curLineLU.split("\t");
+			String luRepr = l[3]; 
+			lu.add(new LexicalUnit((luRepr.split("\\."))[0], (luRepr.split("\\."))[1]));
+			curLineLU = litLU.nextLine();
+			l = curLineLU.split("\t");
+			curFrameIDLU = l[0];
+		}
+		// At this point curFrameIDLU has advanced.
+		// But the prevFrameID's values should be passed on
+		int frameid = Integer.parseInt(prevFrameID)+1;
+		String framename = prevFrameName;
+		ret = new Frame(frameid, framename, lu.toArray(new LexicalUnit[0]), fename.toArray(new String[0]));
+		//assert curFrameIDLU.equals(curFrameIDFE); 
+		prevFrameID = curFrameIDFE;
+		prevFrameName = curFrameNameFE;
+		return ret;
+	}
+
+	@Override
+	public void remove() {
+		// TODO Auto-generated method stub
+		throw new UnsupportedOperationException(); 
 	}
 }
