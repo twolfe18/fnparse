@@ -11,12 +11,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Vector;
 
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.datatypes.StringAndIntArrayTuple;
-import edu.stanford.nlp.trees.GetGovAndDepType;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.ling.TaggedWord;
 
@@ -25,10 +25,7 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 	@Override
 	public String getName() {return "SemLink_frame_instance";}
 
-	@Override
-	public List<Sentence> getFrameInstances() {
-		return DataUtil.addFrameInstancesToSentences(getFrameInstancesOld());
-	}
+
 	
 	public List<FrameInstance> getFrameInstancesOld() {
 		List<FrameInstance> allFI = new Vector<FrameInstance>();
@@ -119,6 +116,14 @@ public class SemLinkFrameInstanceProvider implements FrameInstanceProvider {
 			throw new RuntimeException(e);
 		}
 		return allFI;
+	}
+
+
+
+	@Override
+	public List<FNParse> getParsedSentences() {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 

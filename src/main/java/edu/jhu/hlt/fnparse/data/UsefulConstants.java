@@ -14,9 +14,14 @@ public class UsefulConstants {
 	public static final File dataPath =  new File("toydata");
 	public static final File frameIndexPath = new File(dataPath, "fn15-frameindex");
 	public static final File frameIndexLUPath = new File(dataPath, "fn15-frameindexLU");
-	public static final File frameXMLDirPath = new File(dataPath, "frame/");
-	public static final File fullTextXMLDirPath = new File(dataPath, "fulltext/");
-	public static final File sentId2GDMap = new File("sentId2GDMap.txt");
+	
+	public static final File TestFN15FullTextFramesPath = new File(dataPath, "fn15-fulltext.frames.test");
+	public static final File TestFN15FullTextConllPath = new File(dataPath, "fn15-fulltext.conll.test");
+	
+	public static final File TrainFN15FullTextFramesPath = new File(dataPath, "fn15-fulltext.frames.train");
+	public static final File TrainFN15FullTextConllPath = new File(dataPath, "fn15-fulltext.conll.train");
+	
+	
 	public static final File semLinkFrameInstanceFile = new File(dataPath, "semlink.1.2.2c");
 	public static Tree getPennTree(String parseFileName, int sentenceIndex, String fileSuffix){
 		assert parseFileName.endsWith(".parse");

@@ -1,208 +1,221 @@
 package edu.jhu.hlt.fnparse.data;
 
-import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-import java.util.Vector;
-import java.util.Collections;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.xpath.XPath;
-import javax.xml.xpath.XPathConstants;
-import javax.xml.xpath.XPathFactory;
+import org.apache.commons.io.LineIterator;
+import org.apache.commons.lang.ArrayUtils;
 
-import org.w3c.dom.Document;
-import org.w3c.dom.Element;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.datatypes.StringAndIntArrayTuple;
-import edu.stanford.nlp.trees.GetGovAndDepType;
 
-public class FNFrameInstanceProvider implements FrameInstanceProvider {
+public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<FNParse> {
+
+	private LineIterator litrFrames;
+	private LineIterator litrConll;
+	private List<FNParse> fnpl = new LinkedList<FNParse>();
+	private Map<String, Frame> frameByName;
+
+	String curLineFramesFile;
+	String curSentIdFrames;
+	// The following 2 only occur in frames file so need to add Frames suffix
+	String curAnnoSetId;
+	String prevAnnoSetId;
+
+	String prevFrameName;
+	String prevTargetCharStart;
+	String prevTargetCharEnd;
+
+	String curLineConllFile;
+	String curSentIdConll;	
+
+	String prevSentId;
 
 	@Override
 	public String getName() { return "FrameNet_frame_instances"; }
 
-	@Override
-	public List<Sentence> getFrameInstances() {
-		return DataUtil.addFrameInstancesToSentences(getFrameInstancesOld());
-	}
-
-	public List<FrameInstance> getFrameInstancesOld() {
-		
-		FrameIndex frameIndex = FrameIndex.getInstance();
-		List<Frame> allFrames = frameIndex.allFrames();
-		
-		long startTime = System.currentTimeMillis();
-		List<FrameInstance> allFI = new Vector<FrameInstance>();
-		Map<String, Frame> mapNameToFrame = new HashMap<String, Frame>();
-		for (Frame ff : allFrames){
-			assert mapNameToFrame.get(ff.getName())==null;
-			mapNameToFrame.put(ff.getName(), ff);
-		}
-		// Make a hashmap of frame ids to frames. for easy processing.
+	public FNFrameInstanceProvider(){
+		// Right now hard code to return the train instances. Deal with initialization later.
 		try {
-			File folder = UsefulConstants.fullTextXMLDirPath;
-			File[] listOfFiles = folder.listFiles();
-			//We are assuming that every file in fullTextXMLDirPath is a data file
-			XPath xPath = XPathFactory.newInstance().newXPath();
-			GetGovAndDepType ggdt = new GetGovAndDepType();
-			for (File file : listOfFiles) {
-				if (file.isFile()) {
-					//sentenceNodes is a list of sentences
-					NodeList sentenceNodes = getNodeList("/fullTextAnnotation/sentence", file);
-					for(int i = 0; i < sentenceNodes.getLength(); i++){
-						Element sentenceNode = (Element)sentenceNodes.item(i);
-						// One sentenceNode contains the sentenceText, 
-						// the tokenization information, (character indices of start and end of tokens)
-						// And one annotationSet per target
-						String sentenceId =sentenceNode.getAttribute("corpID") +sentenceNode.getAttribute("docID") +sentenceNode.getAttribute("ID");
-						String sentenceText = getNodeList("./text", sentenceNode).item(0).getTextContent();
-						List<Integer> start = new ArrayList<Integer>();
-						List<Integer> end  = new ArrayList<Integer>();
-						List<String> tokens = new ArrayList<String>();
-						List<String> pos = new ArrayList<String>();
-						NodeList postagList = getNodeList("./annotationSet/layer[@name='PENN']/label",sentenceNode);
+			litrFrames = new LineIterator(new FileReader(UsefulConstants.TrainFN15FullTextFramesPath));
+			litrConll = new LineIterator(new FileReader(UsefulConstants.TrainFN15FullTextConllPath));
+			frameByName = FrameIndex.getInstance().nameToFrameMap();
+			// The frame preamble is the first line
+			// These line have been run for side effect
+			litrFrames.nextLine();
+			litrConll.nextLine();
 
-						// Extract the pos tags and character level, token start and end info
-						for (int l=0; l < postagList.getLength(); l++){
-							Element tokenElement = (Element)postagList.item(l);
-							int startVal = Integer.parseInt(tokenElement.getAttribute("start"));
-							start.add(startVal);
-							int endVal = Integer.parseInt(tokenElement.getAttribute("end"));
-							end.add(endVal);
-							tokens.add(sentenceText.substring(startVal, endVal+1));
-							pos.add(tokenElement.getAttribute("name"));
-						}
+			curLineConllFile=litrConll.nextLine();
+			curLineFramesFile=litrFrames.nextLine();
+			String[] cf = curLineFramesFile.split("\t");
+			curSentIdFrames = cf[2];
+			prevAnnoSetId = curAnnoSetId = cf[3];
 
-						// Sort the character level start and end, 
-						// these would be used later while finding the token spans of arguments
-						Collections.sort(start);
-						Collections.sort(end);
+			prevFrameName = cf[5];
+			prevTargetCharStart = cf[7];
+			prevTargetCharEnd = cf[8];
 
-						// Create Sentence object to be used while creating FrameInstance
-						boolean hasFrameInstanceLabels = true;	// will be added later
-						String sentId = String.format("FN%s", sentenceId);
-						StringAndIntArrayTuple gd = ggdt.getGovAndDepType(sentId, tokens.toArray(new String[tokens.size()]));
-						int[] gov=gd.getI();
-						String[] depType=gd.getS();
-						Sentence sentence = new Sentence(
-								getName(), 
-								sentId,
-								tokens.toArray(new String[tokens.size()]), 
-								pos.toArray(new String[pos.size()]),
-								hasFrameInstanceLabels,
-								gov,
-								depType);
+			String[] ff = curLineConllFile.split("\t");
+			curSentIdConll = ff[2];
 
-						// Now loop over every annotationSet that mentions Frame Information
-						NodeList targetOccurenceList = getNodeList("./annotationSet[@frameName]", sentenceNode);
-						for(int k = 0; k < targetOccurenceList.getLength(); k++){
-							Element targetOccurence = (Element)targetOccurenceList.item(k);
-							String luID     = targetOccurence.getAttribute("luID");
-							String luName   = targetOccurence.getAttribute("luName");
-							String frameID  = targetOccurence.getAttribute("frameID");
-							String frameName = targetOccurence.getAttribute("frameName");
-							Element targetTokenElement = (Element) getNodeList("./layer[@name='Target']/label", targetOccurence).item(0);
-							String startIdx = targetTokenElement.getAttribute("start");
-							String endIdx = targetTokenElement.getAttribute("end");
-							Integer triggerIdx = start.indexOf(new Integer(Integer.parseInt(startIdx)));
-							assert triggerIdx != -1;
-							Frame tmpFrame = mapNameToFrame.get(frameName);
-							assert tmpFrame != null || frameName.equals("Test35");
-
-							// So far we have found the Frame of the annotation set and the trigger token
-							// Now we must find the argument spans.
-							// The method is to use the character level argument spans found in the FE layer
-							// and to find the corresponding token indices.
-							if(tmpFrame != null){
-								
-								NodeList spanNodeList = getNodeList("./layer[@name='FE']/label", targetOccurence);
-								HashMap<String, Span> feNameToSpan = new HashMap<String, Span>();
-								for (int m = 0; m < spanNodeList.getLength(); m++){
-									Element spanFEElement = (Element)spanNodeList.item(m);
-									try{
-										List<String> nullInstantiation = Arrays.asList(new String [] {"INC", "DNI", "INI", "CNI"});
-										// Null Instantiations have no span, so we dont mark those
-										// They should be handled differently from absent FE/roles but right now they are 
-										// treated the same.
-										if(! nullInstantiation.contains(spanFEElement.getAttribute("itype"))){
-											int si = start.indexOf(Integer.parseInt(spanFEElement.getAttribute("start")));
-											assert si > -1;
-											int eichar = Integer.parseInt(spanFEElement.getAttribute("end"));
-											int ei = Collections.binarySearch(end, eichar);
-											// Handle the case that some of the span endings don't coincide with token endings.
-											if( ei < 0){
-												ei = -ei;
-											}
-											else{
-												ei++;
-											}
-											assert ei > 0;
-											feNameToSpan.put(spanFEElement.getAttribute("name"), Span.getSpan(si, ei));
-										}
-
-									}
-									catch (Exception e){
-										throw new RuntimeException(e);
-									}
-								}
-								
-								// scan over key-values in feNameToSpan to see which roles are available, rest are nullSpan.
-								Span[] spansArray = new Span[tmpFrame.numRoles()];
-								Arrays.fill(spansArray, Span.nullSpan);
-								for(Entry<String, Span> x : feNameToSpan.entrySet()) {
-									int roleIdx = frameIndex.getRoleIdx(tmpFrame, x.getKey());
-									spansArray[roleIdx] = x.getValue();
-								}
-
-								allFI.add(FrameInstance.newFrameInstance(tmpFrame, Span.widthOne(triggerIdx), spansArray, sentence));
-							}
-						}
-					}
-				}
-			}
-		}
-		catch (Exception e){
+			assert curSentIdConll.equals(curSentIdFrames);
+			prevSentId = curSentIdFrames;
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-		System.out.printf("[FNFrameInstanceProvider] loaded %d FrameInstances in %.1f seconds.\n",
-				allFI.size(), (System.currentTimeMillis()-startTime)/1000d);
-		return allFI;
+
 	}
 
-	private NodeList getNodeList(String path, File file) throws Exception{
-		XPath xPath = XPathFactory.newInstance().newXPath();
-		DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-		DocumentBuilder db = dbf.newDocumentBuilder();
-		Document xmlDocument = db.parse(file);
-		return (NodeList) xPath.compile(path).evaluate(xmlDocument, XPathConstants.NODESET);
+	@SuppressWarnings("unused")
+	@Override
+	public List<FNParse> getParsedSentences() {
+		for(FNParse f : this){
+			// I just need to run this for its side effect of incrementing fnpl
+		}	
+		return fnpl;
 	}
 
-	private NodeList getNodeList(String path, Document xmlDocument) throws Exception{
-		XPath xPath = XPathFactory.newInstance().newXPath();
-		return (NodeList) xPath.compile(path).evaluate(xmlDocument, XPathConstants.NODESET);
+	private boolean isFullParse(String sentId){
+		// isFullParse should be false for lexical examples 
+		// from Framenet, and true for the fulltext data
+		if(sentId.startsWith("FNFUTXT")) return true;
+		if(sentId.startsWith("FNLEX")) return false;
+		throw new RuntimeException("Strange unhandled annotationsetid: " + sentId);
 	}
 
-	private NodeList getNodeList(String path, Element e) throws Exception{
-		XPath xPath = XPathFactory.newInstance().newXPath();
-		return (NodeList) xPath.compile(path).evaluate(e, XPathConstants.NODESET);
+	private boolean hasFrameInstanceLabeled(){
+		// TODO: What does it mean to have frameInstancesLabeled? 
+		// The logic would be placed later on.
+		return true;
 	}
 
-	private Node getNode(String path, Element e) throws Exception{
-		XPath xPath = XPathFactory.newInstance().newXPath();
-		return (Node) xPath.compile(path).evaluate(e, XPathConstants.NODE);
-	}
+	@Override
+	public Iterator<FNParse> iterator() {
+		Iterator<FNParse> it = new Iterator<FNParse>(){
+			@Override
+			public boolean hasNext() {
+				return (litrConll.hasNext() && litrFrames.hasNext());
+			}
 
+			@Override
+			public FNParse next() {
+				FNParse ret;
+
+				List<String> tokens = new ArrayList<String>();
+				List<String> pos = new ArrayList<String>();
+				List<Integer> gov = new ArrayList<Integer>();
+				List<String> depType = new ArrayList<String>();
+				List<Integer> tokenCharStart = new ArrayList<Integer>();
+				List<Integer> tokenCharEnd = new ArrayList<Integer>();
+				while(litrConll.hasNext() && curSentIdConll.equals(prevSentId)){
+					String[] l = curLineConllFile.split("\t");
+					tokens.add(l[4]);
+					pos.add(l[5]);
+					gov.add(Integer.parseInt(l[8]));
+					depType.add(l[9]);
+					tokenCharStart.add(Integer.parseInt(l[6]));
+					tokenCharEnd.add(Integer.parseInt(l[7]));
+					curLineConllFile=litrConll.nextLine();
+					l=curLineConllFile.split("\t");
+					curSentIdConll = l[2];
+				}				
+				Sentence s = new Sentence("FNFUTXT", 
+						prevSentId, 
+						tokens.toArray(new String[0]), 
+						pos.toArray(new String[0]), 
+						hasFrameInstanceLabeled(), 
+						ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
+						depType.toArray(new String[0]));
+				List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
+				while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentId)){
+					Map<String, Span> triggeredRoles = new HashMap<String, Span>();
+					// This has a mini FSM inside it.
+					// Every time the annotationsetid column changes it makes a new frameinstance
+					while(litrFrames.hasNext() && curAnnoSetId.equals(prevAnnoSetId)){
+						String[] l=curLineFramesFile.split("\t");
+						// Note down all the roles that were triggered.
+						String roleName = l[10];
+						String nullInstantiation = l[11];
+						if(!roleName.equals("NULL") && !roleName.equals("") && nullInstantiation.equals("NULL")){
+							triggeredRoles.put(
+									roleName, 
+									getSpanInTokens(
+											Integer.parseInt(l[12]), 
+											Integer.parseInt(l[13]),
+											tokenCharStart,
+											tokenCharEnd
+									));
+						}
+						curLineFramesFile=litrFrames.nextLine();
+						curAnnoSetId=(curLineFramesFile.split("\t"))[3];
+					}
+					String framename = prevFrameName;
+					Span targetSpan = getSpanInTokens(
+							Integer.parseInt(prevTargetCharStart), 
+							Integer.parseInt(prevTargetCharEnd),
+							tokenCharStart,
+							tokenCharEnd);
+					Frame f = frameByName.get(framename);
+					Span[] roleSpans = new Span[f.numRoles()];
+					int countNonNullSpans = 0;
+					for(int i=0; i<roleSpans.length; i++){
+						Span tmp = triggeredRoles.get(f.getRole(i));
+						if( tmp == null){
+							tmp = Span.nullSpan;
+						}
+						else{
+							countNonNullSpans++;
+						}
+						roleSpans[i]=tmp;
+					}
+					// Prepare fi, basically fi contains one specific trigger and all its roles.
+					FrameInstance fi;
+					if(countNonNullSpans > 0){
+						fi = FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s);
+					}
+					else{
+						fi = FrameInstance.frameMention(f, targetSpan, s);
+					}
+					// Add fi to the FrameInstances list before updating the prev[VAR] with cur[VAR]
+					frameInstances.add(fi);
+					String[] l = curLineFramesFile.split("\t");
+					prevAnnoSetId = l[3];
+					prevFrameName = l[5];
+					prevTargetCharStart = l[7];
+					prevTargetCharEnd = l[8];
+					curSentIdFrames = l[2];
+				}
+				ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
+				fnpl.add(ret);
+				prevSentId = curSentIdFrames;
+				return ret; // fn15-fulltext.conll.test fn15-fulltext.frames.test
+			}
+
+			private Span getSpanInTokens(int spanCharStart, int spanCharEnd,
+					List<Integer> tokenCharStart, List<Integer> tokenCharEnd) {
+				int start = Collections.binarySearch(tokenCharStart, spanCharStart);
+				start = (start < 0) ? (-start-1) : start;
+				int end = Collections.binarySearch(tokenCharEnd, spanCharEnd);
+				end = (end < 0) ? -end : (end+1); // We add 1 because the end is supposed to be excluded in Span
+				end = (end <= tokenCharEnd.size()) ? end : tokenCharEnd.size();
+				return Span.getSpan(start, end);
+			}
+
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException();
+			}
+		};
+		return it;
+	}
 
 }

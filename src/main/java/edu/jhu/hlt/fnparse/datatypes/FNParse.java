@@ -22,7 +22,8 @@ public class FNParse extends FNTagging {
 		super(s, frameInstances);
 		for(FrameInstance fi : frameInstances)
 			if(fi.onlyTargetLabeled())
-				throw new IllegalArgumentException();
+				System.err.println("this frameinstance has only target labeled, but I shouldn't throw error because I already provide a method frameMention to create instances like that.");
+				//throw new IllegalArgumentException();
 	}
 
 	public boolean isFullParse() {

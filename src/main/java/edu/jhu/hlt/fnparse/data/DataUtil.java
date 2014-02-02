@@ -83,47 +83,4 @@ public class DataUtil {
 			throw new RuntimeException(e);
 		}
 	}
-
-
-	/**
-	 * will return a map with two keys:
-	 *   "lexicalUnits" has value of type LexicalUnit[]
-	 *   "roles" has value of type String[]
-	 */
-	public static HashMap<String, Object> lexicalUnitAndRolesOfFrame(String frameName) {
-		try {
-			HashMap<String, Object> h = new HashMap<String, Object>();
-			DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-			DocumentBuilder db = dbf.newDocumentBuilder();
-			File f = new File(UsefulConstants.frameXMLDirPath, frameName + ".xml");
-			Document doc = db.parse(f);
-			//System.out.println("loading LUs and roles from " + f.getPath());
-
-			// TODO : Figure out how to remove this duplication of code. The problem is the types are different
-			NodeList lexicalUnitNodes = doc.getElementsByTagName("lexUnit");
-			LexicalUnit[] lexicalUnits = new LexicalUnit[lexicalUnitNodes.getLength()];
-			for (int i =0; i < lexicalUnitNodes.getLength(); i++){
-				Element e = (Element)lexicalUnitNodes.item(i);
-				String luStr = e.getAttribute("name");
-				String[] luAr = luStr.split("\\.");
-				//System.out.println("luStr=\"" + luStr + "\"");
-				//System.out.println("luAr=" + Arrays.toString(luAr) + "\n");
-				if(luAr.length != 2) throw new RuntimeException();
-				lexicalUnits[i] = new LexicalUnit(luAr[0], luAr[1]);
-			}
-			h.put("lexicalUnits", lexicalUnits);
-
-			NodeList roleNodes = doc.getElementsByTagName("FE");
-			String[] role = new String[roleNodes.getLength()];
-			for (int i =0; i < roleNodes.getLength(); i++){
-				Element e = (Element)roleNodes.item(i);
-				role[i] = e.getAttribute("name");
-			}
-			h.put("roles", role);
-			return h;
-		}
-		catch(Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
 }

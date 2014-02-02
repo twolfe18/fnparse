@@ -18,7 +18,12 @@ public class FrameIndexTest {
 		long start = System.currentTimeMillis();
 		FrameIndex frameIndex = FrameIndex.getInstance();
 		List<Frame> allFrames = frameIndex.allFrames();
-		assertEquals(allFrames.size(), FrameIndex.framesInFrameNet + 1);	// +1 for nullFrame
+		Map<String, Frame> frameMap = frameIndex.nameToFrameMap();
+		List<Frame> allFrames2 = frameIndex.allFrames();
+		assertEquals(allFrames.size(), frameMap.size());
+		assertEquals(allFrames.size(), allFrames2.size());
+		System.out.println(allFrames.size());
+		assertEquals(allFrames.size(), (FrameIndex.framesInFrameNet + 1));	// +1 for nullFrame
 		long time = System.currentTimeMillis() - start;
 		
 		Set<Integer> ids = new HashSet<Integer>();
