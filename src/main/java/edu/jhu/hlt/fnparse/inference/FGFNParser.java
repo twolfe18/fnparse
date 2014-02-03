@@ -164,13 +164,13 @@ public class FGFNParser {
 
 	// java really needs map
 	public static List<Sentence> stipLabels(List<FNParse> sentences) {
-		List<Sentence> noLabels = new ArrayList<>();
+		List<Sentence> noLabels = new ArrayList<Sentence>();
 		for(FNParse p : sentences) noLabels.add(p.getSentence());
 		return noLabels;
 	}
 	
 	public List<FNParse> parse(List<Sentence> sentences, boolean jointDecoding) {
-		List<FNParse> ret = new ArrayList<>();
+		List<FNParse> ret = new ArrayList<FNParse>();
 		for(Sentence sent : sentences) {
 			if(jointDecoding) {
 				FGFNParsing.JointParsing p = new FGFNParsing.JointParsing(params);
