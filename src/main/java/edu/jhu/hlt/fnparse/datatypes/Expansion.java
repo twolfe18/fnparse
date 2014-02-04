@@ -5,7 +5,12 @@ import static edu.jhu.hlt.fnparse.util.ScalaLike.require;
 import java.util.Iterator;
 
 public class Expansion {
-	
+
+	/**
+	 * represents a whole bunch of Expansions implicitly.
+	 * even though it implements iterator, you can call size() and get(i) in O(1)
+	 * @author travis
+	 */
 	public static class Iter implements Iterator<Expansion> {
 		
 		private int expLeft, expRight;
@@ -29,6 +34,9 @@ public class Expansion {
 				this.maxExpRight = maxExpRight;
 		}
 		
+		/**
+		 * resets the iterator functionality.
+		 */
 		public void reset() {
 			this.expLeft = 0;
 			this.expRight = 0;
@@ -36,6 +44,13 @@ public class Expansion {
 	
 		public int size() {
 			return (maxExpLeft+1) * (maxExpRight+1);
+		}
+		
+		public Expansion get(int i) {
+			int m = maxExpRight + 1;	// outer loop, +1 for <=
+			int el = i / m;
+			int er = i % m;
+			return new Expansion(el, er);
 		}
 		
 		@Override
@@ -68,6 +83,8 @@ public class Expansion {
 	public static final Expansion noExpansion = new Expansion(0, 0);
 
 	private int expLeft, expRight;
+	
+	// TODO add memoization like Span
 	
 	public Expansion(int left, int right) {
 		require(left >= 0);

@@ -32,8 +32,7 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 	}
 
 	@Override
-	public FrameHypothesis make(Span targetSpan, FrameInstance gold,
-			Sentence sent) {
+	public FrameHypothesis make(Span targetSpan, FrameInstance gold, Sentence sent) {
 
 		if (gold != null && !gold.getTarget().equals(targetSpan))
 			throw new IllegalArgumentException();

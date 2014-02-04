@@ -39,6 +39,18 @@ public class ExpansionTest {
 	}
 
 	@Test
+	public void getTest() {
+		Expansion.Iter iter = new Expansion.Iter(5, 10);
+		List<Expansion> explicit = new ArrayList<Expansion>();
+		while(iter.hasNext())
+			explicit.add(iter.next());
+		int n = explicit.size();
+		assertTrue(n > 0);
+		for(int i=0; i<n; i++)
+			assertEquals(explicit.get(i), iter.get(i));
+	}
+	
+	@Test
 	public void iterTest() {
 		runIterTest(1, 3);
 		runIterTest(5, 10);

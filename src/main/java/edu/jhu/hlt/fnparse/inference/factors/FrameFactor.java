@@ -4,6 +4,7 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.FeExpFamFactor;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.variables.FrameHypothesis;
@@ -31,7 +32,7 @@ public class FrameFactor extends FeExpFamFactor {
 		 * return features that describe whether this frame is likely 
 		 * evoked by this word in the sentence
 		 */
-		public FeatureVector getFeatures(edu.jhu.hlt.fnparse.datatypes.Frame f, Span extent, Sentence s);
+		public FeatureVector getFeatures(Frame f, Span extent, Sentence s);
 
 		/**
 		 * maximum number of non-zero indexes returned by vectors from getFeatures
@@ -54,7 +55,7 @@ public class FrameFactor extends FeExpFamFactor {
 		@Override
 		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
 			FrameHypothesis f_i = ((FrameFactor) factor).getFrameHyp();
-			edu.jhu.hlt.fnparse.datatypes.Frame f = f_i.getPossibleFrame(configId);
+			Frame f = f_i.getPossibleFrame(configId);
 			Span extent = f_i.getTargetSpan();
 			Sentence s = f_i.getSentence();
 			return features.getFeatures(f, extent, s);
