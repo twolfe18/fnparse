@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -141,6 +142,16 @@ public class NewParsingSentence {
 		return new FrameVar(s, headIdx, luMatches, frameMatches);
 	}
 	
-
+	public FactorGraph getFactorGraph() { return fg; }
 	
+	public VarConfig getGoldLabels() {
+		if(gold.size() == 0)
+			throw new RuntimeException();
+		return gold;
+	}
+	
+	public FgExample getFgExample() {
+		return new FgExample(fg, gold);
+	}
 }
+

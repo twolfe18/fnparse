@@ -11,7 +11,6 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class FrameInstanceProviderTest {
 
