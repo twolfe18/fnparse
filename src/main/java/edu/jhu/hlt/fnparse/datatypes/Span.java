@@ -73,6 +73,10 @@ public class Span {
 		return true;
 	}
 	
+	public boolean includes(int wordIdx) {
+		return start <= wordIdx && wordIdx < end;
+	}
+	
 	public String toString() {
 		return String.format("<Span %d-%d>", start, end);
 	}

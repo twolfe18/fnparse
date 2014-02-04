@@ -34,14 +34,18 @@ public class Expansion {
 			this.expRight = 0;
 		}
 	
+		public int size() {
+			return (maxExpLeft+1) * (maxExpRight+1);
+		}
+		
 		@Override
 		public boolean hasNext() {
 			return expLeft <= maxExpLeft && expRight <= maxExpRight;
 		}
 		
 		// this is what I'm mimicking:
-		//for(int l=0; l<maxExpLeft; l++)
-		//	for(int r=0; r<maxExpRight; r++)
+		//for(int l=0; l<=maxExpLeft; l++)
+		//	for(int r=0; r<=maxExpRight; r++)
 		//		yield new Expansion(l, r)
 	
 		@Override
@@ -60,6 +64,8 @@ public class Expansion {
 			throw new UnsupportedOperationException();
 		}	
 	}
+	
+	public static final Expansion noExpansion = new Expansion(0, 0);
 
 	private int expLeft, expRight;
 	
@@ -102,4 +108,13 @@ public class Expansion {
 		int r = headIdx+1 + expRight;
 		return Span.getSpan(l, r);
 	}
+	
+	public static Expansion headToSpan(int headIdx, Span sp) {
+		if(!sp.includes(headIdx))
+			throw new IllegalArgumentException();
+		int el = headIdx - sp.start;
+		int er = sp.end - (headIdx+1);
+		return new Expansion(el, er);
+	}
 }
+
