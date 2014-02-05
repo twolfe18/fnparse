@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -12,6 +13,14 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 
+/**
+ * It is expected that this class will be instantiated once per sentence,
+ * and initFactorsFor() will be called many times, register() will be called once.
+ * If you don't need all unique combinations of (f,r), then keep track of what
+ * combinations you've seen given from initFactorsFor().
+ * 
+ * @author travis
+ */
 public abstract class Factors implements FactorFactory {
 
 	protected List<Factor> factors = new ArrayList<Factor>();
@@ -29,9 +38,16 @@ public abstract class Factors implements FactorFactory {
 	 */
 	static class SimpleFrameFactors extends Factors {
 
+		private BitSet indicesAddedAlready = new BitSet();
+		
 		@Override
 		public void initFactorsFor(FrameVar f, RoleVars r) {
-			factors.add(new F(f));
+			// only add once per f.headIdx
+			int i = f.getTargetHeadIdx();
+			if(!indicesAddedAlready.get(i)) {
+				indicesAddedAlready.set(i);
+				factors.add(new F(f));
+			}
 		}
 
 		// i am so tired of coming up with new names for shit
@@ -42,7 +58,7 @@ public abstract class Factors implements FactorFactory {
 			private FrameVar frameVar;
 
 			public F(FrameVar fv) {
-				super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar()));
+				super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar()));	// this is how you know the complexity
 				this.frameVar = fv;
 			}
 			
@@ -62,12 +78,14 @@ public abstract class Factors implements FactorFactory {
 		}
 	}
 	
+	/**
+	 * looks at (frame.head, role.head) pairs
+	 */
 	static class SimpleFrameRoleFactors extends Factors {
 		
 		@Override
 		public void initFactorsFor(FrameVar f, RoleVars r) {
-			// TODO Auto-generated method stub
-			
+			factors.add(new F(f, r));
 		}
 		
 		static class F extends ExpFamFactor {
@@ -78,7 +96,7 @@ public abstract class Factors implements FactorFactory {
 			private RoleVars roleVar;
 			
 			public F(FrameVar fv, RoleVars rv) {
-				super(new VarSet(fv.getFrameVar(), rv.getRoleVar()));
+				super(new VarSet(fv.getFrameVar(), rv.getRoleVar()));	// this is how you know the complexity
 				this.frameVar = fv;
 				this.roleVar = rv;
 			}

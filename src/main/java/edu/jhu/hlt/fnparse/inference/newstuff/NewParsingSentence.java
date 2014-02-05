@@ -113,17 +113,6 @@ public class NewParsingSentence {
 			
 			// set role variables that were instantiated
 			int i = head;
-//			for(int j=0; j<n; j++) {
-//				int K = Math.min(roleVars[i][j].length, fi.getFrame().numRoles());
-//				for(int k=0; k<K; k++) {
-//					Span s = fi.getArgument(k);
-//					RoleVars rv = roleVars[i][j][k];
-//					if(s == Span.nullSpan)
-//						rv.setGoldIsNull();
-//					else rv.setGold(s);
-//				}
-//			}
-			
 			int K = fi.getFrame().numRoles();
 			for(int k=0; k<K; k++) {
 				Span argSpan = fi.getArgument(k);
