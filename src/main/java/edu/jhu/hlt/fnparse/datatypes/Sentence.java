@@ -23,14 +23,10 @@ public class Sentence implements HasId {
 	private String[] tokens;
 	private String[] pos;
 	
-	// TODO (make sure you update constructor and copy method to)
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
-	// null means there are no frame instances labeled (but there may be some in the sentence)
-	// empty means there are no frame instances in this sentence
-	
-	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled, int[] gov, String[] depType) {
+	public Sentence(String dataset, String id, String[] tokens, String[] pos, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
 		if(pos != null && tokens.length != pos.length)
@@ -47,9 +43,8 @@ public class Sentence implements HasId {
 			this.pos[i] = this.pos[i].toUpperCase();
 	}
 
-	public Sentence copy(boolean copyFrameInstances) {
-		Sentence s = new Sentence(dataset, id, tokens, pos, copyFrameInstances, gov, depType);
-		return s;
+	public Sentence copy() {
+		return new Sentence(dataset, id, tokens.clone(), pos.clone(), gov.clone(), depType.clone());
 	}
 
 	public String getDataset() { return dataset; }

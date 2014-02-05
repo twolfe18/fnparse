@@ -110,12 +110,6 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 		throw new RuntimeException("Strange unhandled annotationsetid: " + sentId);
 	}
 
-	private boolean hasFrameInstanceLabeled(){
-		// TODO: What does it mean to have frameInstancesLabeled? 
-		// The logic would be placed later on.
-		return true;
-	}
-
 	@Override
 	public Iterator<FNParse> iterator() {
 		Iterator<FNParse> it = new Iterator<FNParse>(){
@@ -149,8 +143,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 					Sentence s = new Sentence("FNFUTXT", 
 							prevSentId, 
 							tokens.toArray(new String[0]), 
-							pos.toArray(new String[0]), 
-							hasFrameInstanceLabeled(), 
+							pos.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 							depType.toArray(new String[0]));
 					List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
