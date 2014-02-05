@@ -5,7 +5,6 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -14,7 +13,7 @@ public class RoleVars implements FgRelated {
 	public static final int maxArgRoleExpandLeft = 999;
 	public static final int maxArgRoleExpandRight = 999;
 		
-	private FrameVar parent;
+	private FrameVar parent;	// TODO this can be removed (good for debugging)
 	private int roleIdx;	// aka "k"
 	private int headIdx;	// aka "j", head of the argument span (target head comes from parent)
 	private Var headVar;	// binary
@@ -37,33 +36,30 @@ public class RoleVars implements FgRelated {
 	private Boolean headVarGold = null;
 	private int expansionVarGold = -1;
 	
-	public void setGold(FrameInstance fi) {
+	/**
+	 * use this to say that this argument was not instantiated.
+	 */
+	public void setGoldIsNull() {
+		headVarGold = false;
+		expansionVarGold = expansions.indexOf(Expansion.noExpansion);
+		if(expansionVarGold < 0) throw new IllegalStateException();
+	}
+	
+	/**
+	 * use this to say that this argument was realized in the sentence.
+	 */
+	public void setGold(Span s) {
+
+		if(s == Span.nullSpan)
+			throw new IllegalArgumentException();
+		
+		headVarGold = true;
 		
 		// compute the gold expansion
-		Span argSpan = fi.getArgument(roleIdx);
-		Expansion goldExpansion;
-		if(argSpan == Span.nullSpan) {
-			headVarGold = false;
-			goldExpansion = Expansion.noExpansion;
-		}
-		else {
-			headVarGold = true;
-			goldExpansion = Expansion.headToSpan(headIdx, argSpan);
-		}
-				
-		// find the index of the gold expansion var
-		int goldExpansionIdx = -1;
-		for(int i=0; expansions.hasNext(); i++) {
-			Expansion ei = expansions.next();
-			if(ei.equals(goldExpansion)) {
-				goldExpansionIdx = i;
-				break;
-			}
-		}
-		if(goldExpansionIdx < 0)
-			throw new RuntimeException();
-		
-		expansionVarGold = goldExpansionIdx;
+		Expansion goldExpansion = Expansion.headToSpan(headIdx, s);
+		expansionVarGold = expansions.indexOf(goldExpansion);
+		if(expansionVarGold < 0)
+			throw new IllegalArgumentException();
 	}
 	
 	@Override

@@ -33,11 +33,17 @@ public class Parser {
 	}
 
 	public static void main(String[] args) {
+		
 		FrameInstanceProvider fip = new FNFrameInstanceProvider();
 		List<FNParse> all = fip.getParsedSentences();
 		println("all.size = " + all.size());
-		List<FNParse> sample = DataUtil.reservoirSample(all, 10);
+		int trainOn = 1;
+		List<FNParse> sample = DataUtil.reservoirSample(all, trainOn);
+		println("training on " + trainOn + " sentences...");
 		Parser p = new Parser();
+		
+		long start = System.currentTimeMillis();
 		p.train(sample);
+		System.out.printf("training took %.1f seconds for %d examples\n", (System.currentTimeMillis()-start)/1000d, trainOn);
 	}
 }

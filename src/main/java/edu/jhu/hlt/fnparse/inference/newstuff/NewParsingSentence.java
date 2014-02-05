@@ -12,6 +12,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.CParseVars;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.DParseVars;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
@@ -33,11 +34,27 @@ public class NewParsingSentence {
 	private FactorGraph fg;
 	private VarConfig gold;
 	private FrameIndex frameIndex;
+	private FrameFilteringStrategy frameFilterStrat;
+	
+	
+	/**
+	 * what do we do when we say that a target may evoke
+	 * a frame in set F, but the true frame g \not\in F?
+	 */
+	static enum FrameFilteringStrategy {
+		ALWAYS_INCLUDE_GOLD_FRAME,				// add g to F, might increase R at the cost of P
+		USE_NULLFRAME_FOR_FILTERING_MISTAKES,	// set g = nullFrame, might increase P at the cost of R
+	}
+	
+	// TODO: the code is not setup for ALWAYS_INCLUDE_GOLD_FRAME because
+	// this requires seeing the gold label while constructing all the variables.
+	
 	
 	public NewParsingSentence(Sentence s) {
 		
 		this.sentence = s;
 		this.frameIndex = FrameIndex.getInstance();
+		this.frameFilterStrat = FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES;
 		
 		int n = s.size();
 		
@@ -64,49 +81,65 @@ public class NewParsingSentence {
 				for(int j=0; j<n; j++)
 					for(int k=0; k<roleVars[i][j].length; k++)
 						ff.initFactorsFor(frameVars[i], roleVars[i][j][k]);
-		
-		// register all the variables and factors
-		this.fg = new FactorGraph();
-		this.gold = new VarConfig();
-		for(int i=0; i<n; i++)
-			frameVars[i].register(fg, gold);
-		for(int i=0; i<n; i++)
-			for(int j=0; j<n; j++)
-				for(int k=0; k<roleVars[i][j].length; k++)
-					roleVars[i][j][k].register(fg, gold);
-		for(FactorFactory ff : factorHolders)
-			ff.register(fg, gold);
 	}
+	
 	
 	public void setGold(FNParse p) {
 		
 		if(p.getSentence() != sentence)
 			throw new IllegalArgumentException();
 		
-		setGoldFrameVars(p);
-		setGoldRoleVars(p);
-		// TODO constituency and dependency parse variables
-	}
-	
-	private void setGoldFrameVars(FNParse p) {
-		// set all the labels to nullFrame, and then overwrite those that aren't nullFrame
-		for(int i=0; i<p.getSentence().size(); i++) {
+		if(frameFilterStrat != FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES)
+			throw new UnsupportedOperationException("implement me");
+		
+		// set all the labels to nullFrame/nullSpan, and then overwrite those that aren't null
+		int n = p.getSentence().size();
+		for(int i=0; i<n; i++) {
 			FrameInstance fiNull = FrameVar.nullFrameInstance(sentence, i);
 			frameVars[i].setGold(fiNull);
+			
+			for(int j=0; j<n; j++) {
+				int K = roleVars[i][j].length; 
+				for(int k=0; k<K; k++)
+					roleVars[i][j][k].setGoldIsNull();
+			}
 		}
 
 		// set the non-nullFrame vars to their correct Frame (and target Span) values
-		HeadFinder hf = new BraindeadHeadFinder();
-		for(int i=0; i<p.numFrameInstances(); i++) {
-			FrameInstance fi = p.getFrameInstance(i);
+		HeadFinder hf = new BraindeadHeadFinder();	// TODO
+		for(FrameInstance fi : p.getFrameInstances()) {
 			int head = hf.head(fi.getTarget(), p.getSentence());
 			frameVars[head].setGold(fi);
+			
+			// set role variables that were instantiated
+			int i = head;
+//			for(int j=0; j<n; j++) {
+//				int K = Math.min(roleVars[i][j].length, fi.getFrame().numRoles());
+//				for(int k=0; k<K; k++) {
+//					Span s = fi.getArgument(k);
+//					RoleVars rv = roleVars[i][j][k];
+//					if(s == Span.nullSpan)
+//						rv.setGoldIsNull();
+//					else rv.setGold(s);
+//				}
+//			}
+			
+			int K = fi.getFrame().numRoles();
+			for(int k=0; k<K; k++) {
+				Span argSpan = fi.getArgument(k);
+				if(argSpan == Span.nullSpan)
+					continue;	// we've already set the relevant vars to nullSpan
+				int j = hf.head(argSpan, sentence);
+				if(k < roleVars[i][j].length)
+					roleVars[i][j][k].setGold(argSpan);
+				else {
+					System.err.printf("we thought there was a max of %d roles for frames evoked by %s, but the true frame %s has %d roles\n",
+							roleVars[i][j].length, sentence.getLU(i), fi.getFrame(), fi.getFrame().numRoles());
+				}
+			}
 		}
 	}
 	
-	private void setGoldRoleVars(FNParse p) {
-		throw new RuntimeException("implement me");
-	}
 	
 	/**
 	 * Given a word in a sentence, extract the set of frames it might evoke.
@@ -151,6 +184,24 @@ public class NewParsingSentence {
 	}
 	
 	public FgExample getFgExample() {
+		
+		int n = this.sentence.size();
+		this.fg = new FactorGraph();
+		this.gold = new VarConfig();
+		
+		// register all the variables and factors
+		for(int i=0; i<n; i++)
+			frameVars[i].register(fg, gold);
+		for(int i=0; i<n; i++)
+			for(int j=0; j<n; j++)
+				for(int k=0; k<roleVars[i][j].length; k++)
+					roleVars[i][j][k].register(fg, gold);
+		for(FactorFactory ff : factorHolders)
+			ff.register(fg, gold);
+		
+		System.out.printf("[NewParsingSentence getFgExample] there are %d variables and %d factors, returning example\n",
+				fg.getNumVars(), fg.getNumFactors());
+		
 		return new FgExample(fg, gold);
 	}
 }

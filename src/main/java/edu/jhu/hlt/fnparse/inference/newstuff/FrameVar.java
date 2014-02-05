@@ -1,11 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -23,6 +24,7 @@ public class FrameVar implements FgRelated {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 	
+	private Sentence sent;	// TODO this can be removed (good for debugging)
 	private int headIdx;
 	
 	private List<LexicalUnit> prototypes;
@@ -35,6 +37,7 @@ public class FrameVar implements FgRelated {
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
 	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames) {
+		this.sent = s;
 		this.headIdx = headIdx;
 		this.prototypes = prototypes;
 		this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, null);
@@ -57,25 +60,24 @@ public class FrameVar implements FgRelated {
 		if(!gold.getTarget().includes(headIdx))
 			throw new IllegalArgumentException();
 		
-		goldFrame = -1;
-		for(int i=0; i<frames.size(); i++) {
-			Frame f = frames.get(i);
-			if(f.equals(gold.getFrame())) {
-				if(goldFrame >= 0) throw new IllegalStateException();
-				goldFrame = i;
-			}
+		goldFrame = frames.indexOf(gold.getFrame());
+		if(goldFrame < 0) {
+			// our filtering heuristic didn't include the correct answer
+			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
+					gold.getFrame(), Arrays.toString(gold.getSentence().getWordFor(gold.getTarget())));
+			goldFrame = frames.indexOf(Frame.nullFrame);
 		}
 		
 		goldExpansion = -1;
-		for(int i=0; expansions.hasNext(); i++) {
-			Expansion e = expansions.next();
-			Span target = e.upon(headIdx);
+		int n = expansions.size();
+		for(int i=0; i<n; i++) {
+			Expansion e = expansions.get(i);
+			Span target = e.upon(headIdx);	// target implied by this expansion
 			if(target.equals(gold.getTarget())) {
 				if(goldExpansion >= 0) throw new IllegalStateException();
 				goldExpansion = i;
 			}
 		}
-		expansions.reset();
 		
 		if(goldFrame < 0 || goldExpansion < 0)
 			throw new IllegalStateException();
