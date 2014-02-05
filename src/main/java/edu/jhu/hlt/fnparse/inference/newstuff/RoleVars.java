@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
@@ -21,6 +22,8 @@ public class RoleVars implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;
 	
+	private ExpansionHardFactor expansionHardFactor;
+	
 	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx) {
 		this.parent = parent;
 		this.roleIdx = roleIdx;
@@ -31,6 +34,9 @@ public class RoleVars implements FgRelated {
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
 		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
 		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
+		
+		this.expansionHardFactor = new ExpansionHardFactor(headVar, expansionVar,
+				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion));
 	}
 	
 	private Boolean headVarGold = null;
@@ -65,7 +71,7 @@ public class RoleVars implements FgRelated {
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		
-		// TODO hard factors
+		fg.addFactor(new ExplicitFactor(expansionHardFactor));
 		
 		if(headVarGold != null)
 			gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));

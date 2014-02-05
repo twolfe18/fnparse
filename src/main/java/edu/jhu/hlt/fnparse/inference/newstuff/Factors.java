@@ -33,6 +33,8 @@ public abstract class Factors implements FactorFactory {
 	@Override
 	public abstract void initFactorsFor(FrameVar f, RoleVars r);
 	
+	
+	
 	/**
 	 * looks at (prototype, frame) pairs
 	 */
@@ -77,6 +79,7 @@ public abstract class Factors implements FactorFactory {
 			
 		}
 	}
+	
 	
 	/**
 	 * looks at (frame.head, role.head) pairs
