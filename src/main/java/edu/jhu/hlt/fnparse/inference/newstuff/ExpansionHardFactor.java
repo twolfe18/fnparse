@@ -1,9 +1,15 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.IFgModel;
+import edu.jhu.gm.model.IndexForVc;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.util.IntIter;
 
 /**
  * This frame enforces constraints of the form: x.head = null  =>  x.expansion = 0
@@ -25,38 +31,72 @@ import edu.jhu.gm.model.VarSet;
  * 
  * @author travis
  */
-public class ExpansionHardFactor extends DenseFactor {
+public class ExpansionHardFactor implements Factor {
 
 	private static final long serialVersionUID = 1L;
-	
+
+	private int id = -1;
+
 	private Var rowVar;
 	private Var expansionVar;	// columns
-	
+	private VarSet vars;
+
 	private int rowNullIdx;
 	private int expansionZeroIdx;
-	
-	
+
+
 	// TODO support/check for prob domain?
-	private static final double ONE = 0d;
-	private static final double ZERO = Double.NEGATIVE_INFINITY;
-	
+	private static final double ONE = 1d; //0d;
+	private static final double ZERO = 0d; //Double.NEGATIVE_INFINITY;
+
 	public ExpansionHardFactor(Var rowVar, Var expansionVar, int rowNullIdx, int expansionZeroIdx) {
-		super(new VarSet(rowVar, expansionVar), ONE);
+		this.vars = new VarSet(rowVar, expansionVar);
 		this.rowVar = rowVar;
 		this.expansionVar = expansionVar;
 		this.rowNullIdx = rowNullIdx;
 		this.expansionZeroIdx = expansionZeroIdx;
-		
-		VarSet vs = this.getVars();
-		int n = vs.calcNumConfigs();
-		for(int i=0; i<n; i++) {
-			VarConfig conf = vs.getVarConfig(i);
-			int rowVarIdx = conf.getState(rowVar);
-			int expVarIdx = conf.getState(expansionVar);
-			if(rowVarIdx == rowNullIdx && expVarIdx != expansionZeroIdx)
-				this.setValue(i, ZERO);
-		}
 	}
-	
+
+	@Override
+	public Factor getClamped(VarConfig clmpVarConfig) {
+		if(clmpVarConfig.size() == 0) return this;
+		switch(clmpVarConfig.size()) {
+		case 0: return this;
+		case 2:
+			double v = getUnormalizedScore(clmpVarConfig.getConfigIndex());
+			return new ConstantFactor(new VarSet(), v);
+		case 1:
+		default:
+			throw new RuntimeException("i don't know how to do this");
+		}
+		
+	}
+
+	@Override
+	public VarSet getVars() { return vars; }
+
+
+	@Override
+	public void updateFromModel(FgModel model, boolean logDomain) {}	// no-op
+
+	@Override
+	public double getUnormalizedScore(int configId) {
+		VarConfig conf = vars.getVarConfig(configId);
+		int rowVarIdx = conf.getState(rowVar);
+		int expVarIdx = conf.getState(expansionVar);
+		if(rowVarIdx == rowNullIdx && expVarIdx != expansionZeroIdx)
+			return ZERO;
+		else return ONE;
+	}
+
+	@Override
+	public void addExpectedFeatureCounts(IFgModel counts, double multiplier, FgInferencer inferencer, int factorId) {}	// no-op
+
+	@Override
+	public int getId() { return id; }
+
+	@Override
+	public void setId(int id) { this.id = id; }
+
 }
 
