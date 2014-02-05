@@ -29,10 +29,6 @@ public class Sentence implements HasId {
 	
 	// null means there are no frame instances labeled (but there may be some in the sentence)
 	// empty means there are no frame instances in this sentence
-	/**
-	 * @deprecated
-	 */
-	private List<FrameInstance> frameInstances;
 	
 	public Sentence(String dataset, String id, String[] tokens, String[] pos, boolean hasFrameInstancesLabeled, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
@@ -46,9 +42,6 @@ public class Sentence implements HasId {
 		this.gov=gov;
 		this.depType=depType;
 		
-		if(hasFrameInstancesLabeled)
-			this.frameInstances = new ArrayList<FrameInstance>();
-		
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
 			this.pos[i] = this.pos[i].toUpperCase();
@@ -56,43 +49,9 @@ public class Sentence implements HasId {
 
 	public Sentence copy(boolean copyFrameInstances) {
 		Sentence s = new Sentence(dataset, id, tokens, pos, copyFrameInstances, gov, depType);
-		if(copyFrameInstances)
-			for(FrameInstance fi : this.frameInstances)
-				s.addFrameInstance(fi);
 		return s;
 	}
 
-	/**
-	 * @deprecated
-	 */
-	public boolean hasFrameInstanceLabels() {
-		return frameInstances != null;
-	}
-	
-	/**
-	 * @deprecated
-	 */
-	public void addFrameInstance(FrameInstance fi) {
-		if(fi.getSentence() != this)
-			throw new IllegalArgumentException();
-		if(fi.getFrame() == Frame.nullFrame)
-			throw new IllegalArgumentException("only add non-null-frame instances");
-		frameInstances.add(fi);
-	}
-	
-	/**
-	 * returns all (non-nullFrame) instances of frames in this sentence.
-	 * @deprecated
-	 */
-	public List<FrameInstance> getFrameInstances() {
-		return frameInstances;
-	}
-	
-	/**
-	 * @deprecated
-	 */
-	public int numFrameInstances() { return frameInstances.size(); }
-	
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }
 	

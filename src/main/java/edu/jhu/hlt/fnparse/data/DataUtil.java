@@ -31,20 +31,6 @@ public class DataUtil {
 		return m;
 	}
 	
-	public static List<Sentence> addFrameInstancesToSentences(List<FrameInstance> fis) {
-		long start = System.currentTimeMillis();
-		Map<Sentence, List<FrameInstance>> m = DataUtil.groupBySentence(fis);
-		List<Sentence> out = new ArrayList<Sentence>();
-		for(Map.Entry<Sentence, List<FrameInstance>> x : m.entrySet()) {
-			Sentence s = x.getKey();
-			for(FrameInstance fi : x.getValue())
-				s.addFrameInstance(fi);
-			out.add(s);
-		}
-		System.out.printf("[DataUtil frameInst -> Sentence] added %d frame instances to %d sentences in %.1f seconds.\n",
-				fis.size(), out.size(), (System.currentTimeMillis()-start)/1000d);
-		return out;
-	}
 	
 	public static <T> List<T> reservoirSample(List<T> all, int howMany) {
 		Random rand = new Random(9001);

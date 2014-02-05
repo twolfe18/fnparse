@@ -14,7 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 
 public abstract class Factors implements FactorFactory {
 
-	protected List<Factor> factors = new ArrayList<>();
+	protected List<Factor> factors = new ArrayList<Factor>();
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {

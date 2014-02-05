@@ -41,7 +41,7 @@ public class SemaforicFrameHypothesisFactory implements FrameHypothesisFactory {
 			throw new IllegalArgumentException(
 					"Frames cannot be evoked by the null Span");
 
-		Integer goldFrameIdx = sent.hasFrameInstanceLabels() ? -1 : null;
+		Integer goldFrameIdx = null;
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		frameMatches.add(Frame.nullFrame);
 		int headIdx = hf.head(targetSpan, sent);

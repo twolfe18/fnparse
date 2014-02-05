@@ -173,9 +173,6 @@ public abstract class FGFNParsing {
 	}
 	
 	protected void runInference() {
-		if(sentence.numFrameInstances() > 0)
-			throw new IllegalStateException("did you add an already annotated Sentence?");
-		
 		MbrDecoderPrm decPrm = new MbrDecoderPrm();
 		MbrDecoder dec = new MbrDecoder(decPrm);
 		
@@ -209,8 +206,6 @@ public abstract class FGFNParsing {
 				fi = FrameInstance.newFrameInstance(f_i_hyp, f_i.getTargetSpan(), roles, sentence);
 			}
 			else fi = FrameInstance.frameMention(f_i_hyp, f_i.getTargetSpan(), sentence);
-			
-			sentence.addFrameInstance(fi);
 		}
 	}
 	
