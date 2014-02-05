@@ -1,14 +1,18 @@
 
 package edu.jhu.hlt.fnparse.data;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.junit.Test;
 
-import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 
 public class FrameIndexTest {
 		
@@ -33,6 +37,14 @@ public class FrameIndexTest {
 			assertTrue(ids.add(f.getId()));
 			if(f.getId() > max)
 				max = f.getId();
+			
+			assertTrue(f.numLexicalUnits() >= 0);
+			assertTrue(f.numRoles() >= 0);
+			for(int i=0; i<f.numLexicalUnits(); i++) {
+				LexicalUnit lu = f.getLexicalUnit(i);
+				String msg = String.format("%s does not have a POS in the Lexical Unit FrameNet conversion tagset", lu.toString());
+				assertTrue(msg, LexicalUnit.getFrameNetPosToPennPrefixesMap().containsKey(lu.pos));
+			}
 		}
 		System.out.printf("reading %d frames took %.2f sec\n", allFrames.size(), time/1000d);
 		assertEquals(max, allFrames.size()-1);
