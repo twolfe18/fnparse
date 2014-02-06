@@ -4,13 +4,27 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.indexing.Bob;
+import edu.jhu.hlt.fnparse.indexing.Joe;
+import edu.jhu.hlt.fnparse.indexing.JoeInfo;
+import edu.jhu.hlt.fnparse.indexing.SuperBob;
 import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameRoleFeatures implements FrameRoleFactor.Features {
+public class BasicFrameRoleFeatures implements FrameRoleFactor.Features,
+		edu.jhu.hlt.fnparse.features.Features.FR, Joe<JoeInfo> {
 
+	public static final FeatureVector emptyFeatures = new FeatureVector();
+	
+	private Bob<JoeInfo> bob;
+//	private HeadFinder hf = new BraindeadHeadFinder();
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	public boolean verbose = false;
+	
+	@SuppressWarnings("unchecked")
+	public BasicFrameRoleFeatures() {
+		bob = (Bob<JoeInfo>) SuperBob.getBob(this);
+	}
 	
 	@Override
 	public String getDescription() { return "BasicTargetRoleFeatures"; }
@@ -19,16 +33,22 @@ public class BasicFrameRoleFeatures implements FrameRoleFactor.Features {
 	public String getFeatureName(int featIdx) {
 		return this.featIdx.lookupObject(featIdx);
 	}
-	
-	public int head(Span s) {
-		if(s.width() == 1)
-			return s.start;
-		else {
-			System.err.println("warning! implement a real head finder");
-			return s.end-1;
-		}
-	}
 
+	// promote
+	public FeatureVector getFeaturesSimple(Frame f, int argumentHead, int targetHead, int roleIdx, Sentence sent) {
+		return getFeatures(f, Span.widthOne(argumentHead), Span.widthOne(targetHead), roleIdx, sent);
+	}
+	
+	@Override
+	public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s) {
+
+		// we'll just say that if the arg is not realized, then we return an empty feature vec
+		FeatureVector fv = argIsRealized
+				? getFeatures(f, Span.widthOne(argHeadIdx), Span.widthOne(targetHeadIdx), roleIdx, s)
+				: emptyFeatures;
+		return bob.doYourThing(fv, this);
+	}
+	
 	@Override
 	public FeatureVector getFeatures(Frame f, Span argumentSpan, Span targetSpan, int roleIdx, Sentence sent) {
 		
@@ -70,4 +90,16 @@ public class BasicFrameRoleFeatures implements FrameRoleFactor.Features {
 		return s;
 	}
 
+	private JoeInfo joeInfo;
+
+	@Override
+	public String getJoeName() {
+		return this.getClass().getName();
+	}
+
+	@Override
+	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
+
+	@Override
+	public JoeInfo getJoeInfo() { return joeInfo; }
 }

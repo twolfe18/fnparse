@@ -74,8 +74,9 @@ public class NewParsingSentence {
 
 		// make all the factors
 		factorHolders = new ArrayList<FactorFactory>();
-		factorHolders.add(new Factors.SimpleFrameFactors());
-		factorHolders.add(new Factors.SimpleFrameRoleFactors());
+		factorHolders.add(new Factors.FramePrototypeFactors(s));
+		factorHolders.add(new Factors.FrameFactors(s));
+		factorHolders.add(new Factors.FrameRoleFactors(s));
 		for(FactorFactory ff : factorHolders)
 			for(int i=0; i<n; i++)
 				for(int j=0; j<n; j++)

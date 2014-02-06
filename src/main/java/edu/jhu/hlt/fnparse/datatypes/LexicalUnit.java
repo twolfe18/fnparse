@@ -54,6 +54,13 @@ public class LexicalUnit {
 		return frameNetPosToPennPrefixes;
 	}
 	
+	private String fullStr;
+	public String getFullString() {
+		if(fullStr == null)
+			fullStr = word + "." + pos;
+		return fullStr;
+	}
+	
 	public String toString() { return String.format("<LU %s.%s>", word, pos); }
 	
 	@Override

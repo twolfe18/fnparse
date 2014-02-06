@@ -11,12 +11,23 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.indexing.Bob;
+import edu.jhu.hlt.fnparse.indexing.Joe;
+import edu.jhu.hlt.fnparse.indexing.JoeInfo;
+import edu.jhu.hlt.fnparse.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors.FrameFactor.Features {
+public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors.FrameFactor.Features,
+		edu.jhu.hlt.fnparse.features.Features.F, Joe<JoeInfo> {
 
+	private Bob<JoeInfo> bob;
 	private Alphabet<String> featIdx = new Alphabet<String>();
 	public boolean verbose = false;
+	
+	@SuppressWarnings("unchecked")
+	public BasicFrameFeatures() {
+		bob = (Bob<JoeInfo>) SuperBob.getBob(this);
+	}
 	
 	@Override
 	public String getDescription() { return "BasicTargetFeatures"; }
@@ -34,6 +45,11 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 			System.err.println("warning! implement a real head finder");
 			return s.end-1;
 		}
+	}
+	
+	@Override
+	public FeatureVector getFeatures(Frame f, int targetHeadIdx, Sentence s) {
+		return bob.doYourThing(getFeatures(f, Span.widthOne(targetHeadIdx), s), this);
 	}
 	
 	@Override
@@ -170,5 +186,22 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 	}
 	
 	public int cardinality() { return 75000; }	// TODO
+
+	
+	
+
+	
+	private JoeInfo joeInfo;
+	
+	@Override
+	public String getJoeName() {
+		return this.getClass().getName();
+	}
+
+	@Override
+	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
+
+	@Override
+	public JoeInfo getJoeInfo() { return joeInfo; }
 
 }

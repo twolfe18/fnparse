@@ -14,6 +14,9 @@ public interface FactorFactory extends FgRelated {
 	 */
 	public void initFactorsFor(FrameVar f, RoleVars r);
 	
+	// inherits from FgRelated:
+	// public void register(FactorGraph fg, VarConfig gold);
+	
 	// TODO add constituency/dependency parse variables to the signature above
 	
 }

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.Arrays;
 import java.util.List;
 
+import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
@@ -36,6 +37,8 @@ public class FrameVar implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
+	private ExpansionHardFactor expansionHardFactor;
+	
 	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames) {
 		this.sent = s;
 		this.headIdx = headIdx;
@@ -45,6 +48,9 @@ public class FrameVar implements FgRelated {
 		this.frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, null);
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
 		this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
+		
+		this.expansionHardFactor = new ExpansionHardFactor(frameVar, expansionVar,
+				frames.indexOf(Frame.nullFrame), expansions.indexOf(Expansion.noExpansion));
 	}
 	
 	// indices into frames and expansions respectively
@@ -95,7 +101,9 @@ public class FrameVar implements FgRelated {
 		if(goldExpansion >= 0)
 			gold.put(expansionVar, goldExpansion);
 		
-		// TODO add a whole bunch of hard factors
+		// hard factors
+		fg.addFactor(new ExplicitFactor(expansionHardFactor));
+		
 	}
 
 	private int maxRoles = -1;

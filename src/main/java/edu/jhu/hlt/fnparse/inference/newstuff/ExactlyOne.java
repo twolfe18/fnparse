@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.factors;
+package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.Iterator;
 

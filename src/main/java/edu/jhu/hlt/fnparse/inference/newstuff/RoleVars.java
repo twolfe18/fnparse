@@ -79,6 +79,7 @@ public class RoleVars implements FgRelated {
 			gold.put(expansionVar, expansionVarGold);
 	}
 	
+	public int getHeadIdx() { return headIdx; }
 	public int getRoleIdx() { return roleIdx; }
 	
 	public Var getRoleVar() { return headVar; }	// binary var
