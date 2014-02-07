@@ -4,6 +4,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * F = frame head
@@ -21,5 +22,6 @@ public interface Features {
 	public static interface FR { public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s); }
 	
 	// FE, FR, R, RE, FRE, FER, FERE
-	
+
+	public static interface C { public FeatureVector getFeatures(Span constituent, Sentence s); }
 }

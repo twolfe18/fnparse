@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.HashSet;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -12,12 +13,15 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFramePrototypeFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.ConstituencyFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
 
 /**
@@ -220,6 +224,108 @@ public abstract class Factors implements FactorFactory {
 				return features.getFeatures(frame, roleActive, frameVar.getTargetHeadIdx(), roleVar.getRoleIdx(), roleVar.getHeadIdx(), sent);
 			}
 			
+		}
+	}
+	
+	
+	static class FrameExpansionFactors extends Factors {
+		
+		private Sentence sent;
+		private Features.C features = new ConstituencyFeatures("Frames");
+		private BitSet added = new BitSet();
+		
+		@Override
+		public void startSentence(Sentence s) {
+			sent = s;
+			added.clear();
+		}
+		
+		@Override
+		public void initFactorsFor(FrameVar f, RoleVars r) {
+			if(!added.get(f.getTargetHeadIdx())) {
+				added.set(f.getTargetHeadIdx());
+				factors.add(new F(f, sent, features));
+			}
+		}
+		
+		@Override
+		public void endSentence() { sent = null; }
+		
+		static class F extends ExpFamFactor {
+
+			private static final long serialVersionUID = 1L;
+			
+			private Sentence sent;
+			private FrameVar frameVar;
+			private Features.C features;
+			
+			public F(FrameVar fv, Sentence sent, Features.C feats) {
+				super(new VarSet(fv.getExpansionVar()));	// this is how you know the complexity
+				this.frameVar = fv;
+				this.sent = sent;
+				this.features = feats;
+			}
+			
+			@Override
+			public FeatureVector getFeatures(int config) {
+				VarConfig conf = this.getVars().getVarConfig(config);
+				int eIdx = conf.getState(frameVar.getExpansionVar());
+				Expansion e = frameVar.getExpansion(eIdx);
+				Span s = e.upon(frameVar.getTargetHeadIdx());
+				return features.getFeatures(s, sent);
+			}
+		}
+	}
+	
+	static class ArgExpansionFactors extends Factors {
+		
+		private Sentence sent;
+		private ConstituencyFeatures features;
+		private HashSet<RoleVars.Location> added;
+		
+		public ArgExpansionFactors() {
+			features = new ConstituencyFeatures("Args");
+			added = new HashSet<RoleVars.Location>();
+		}
+		
+		@Override
+		public void startSentence(Sentence s) {
+			sent = s;
+			added.clear();
+		}
+		
+		@Override
+		public void initFactorsFor(FrameVar f, RoleVars r) {
+			if(added.add(r.getLocation()))
+				factors.add(new F(f, sent, features));
+		}
+		
+		@Override
+		public void endSentence() { sent = null; }
+		
+		static class F extends ExpFamFactor {
+
+			private static final long serialVersionUID = 1L;
+			
+			private Sentence sent;
+			private FrameVar frameVar;
+			private Features.C features;
+			
+			public F(FrameVar fv, Sentence sent, Features.C feats) {
+				super(new VarSet(fv.getExpansionVar()));	// this is how you know the complexity
+				this.frameVar = fv;
+				this.sent = sent;
+				this.features = feats;
+			}
+			
+			@Override
+			public FeatureVector getFeatures(int config) {
+				VarConfig conf = this.getVars().getVarConfig(config);
+				int eIdx = conf.getState(frameVar.getExpansionVar());
+				Expansion e = frameVar.getExpansion(eIdx);
+				Span s = e.upon(frameVar.getTargetHeadIdx());
+				return features.getFeatures(s, sent);
+			}
 		}
 	}
 	

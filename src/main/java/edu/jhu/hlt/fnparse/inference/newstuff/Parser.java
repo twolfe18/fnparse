@@ -36,6 +36,8 @@ public class Parser {
 		params.factors.add(new Factors.FramePrototypeFactors());
 		params.factors.add(new Factors.FrameFactors());
 		params.factors.add(new Factors.FrameRoleFactors());
+		params.factors.add(new Factors.FrameExpansionFactors());
+		params.factors.add(new Factors.ArgExpansionFactors());
 	}
 	
 	public void train(List<FNParse> examples) {

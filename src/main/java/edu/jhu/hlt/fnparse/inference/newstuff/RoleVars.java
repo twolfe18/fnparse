@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
@@ -14,7 +13,7 @@ public class RoleVars implements FgRelated {
 	public static final int maxArgRoleExpandLeft = 999;
 	public static final int maxArgRoleExpandRight = 999;
 		
-	private FrameVar parent;	// TODO this can be removed (good for debugging)
+	private FrameVar parent;
 	private int roleIdx;	// aka "k"
 	private int headIdx;	// aka "j", head of the argument span (target head comes from parent)
 	private Var headVar;	// binary
@@ -41,6 +40,26 @@ public class RoleVars implements FgRelated {
 	
 	private Boolean headVarGold = null;
 	private int expansionVarGold = -1;
+	
+	public static class Location {
+		public int frame, arg, role;
+		public int hashCode() { return (frame << 20) | (arg << 10) | role; }
+		public boolean equals(Object other) {
+			if(other instanceof Location) {
+				Location l = (Location) other;
+				return frame == l.frame && arg == l.arg && role == l.arg;
+			}
+			else return false;
+		}
+	}
+	
+	public Location getLocation() {
+		Location l = new Location();
+		l.frame = parent.getTargetHeadIdx();
+		l.arg = headIdx;
+		l.role = roleIdx;
+		return l;
+	}
 	
 	/**
 	 * use this to say that this argument was not instantiated.
