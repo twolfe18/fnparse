@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.Arrays;
 import java.util.List;
 
-import edu.jhu.gm.model.ExplicitFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
@@ -102,7 +101,7 @@ public class FrameVar implements FgRelated {
 			gold.put(expansionVar, goldExpansion);
 		
 		// hard factors
-		fg.addFactor(new ExplicitFactor(expansionHardFactor));
+		fg.addFactor(expansionHardFactor);
 		
 	}
 
