@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 
@@ -8,6 +9,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -47,11 +49,11 @@ public abstract class Factors implements FactorFactory {
 
 		private BitSet indicesAddedAlready = new BitSet();
 		private Sentence sent;
-		private Features.FP features;
-		
-		public FramePrototypeFactors(Sentence sent) {
-			this.sent = sent;
-			this.features = new BasicFramePrototypeFeatures();
+		private Features.FP features = new BasicFramePrototypeFeatures();
+	
+		@Override
+		public void startSentence(Sentence s) {
+			sent = s;
 		}
 		
 		@Override
@@ -62,6 +64,12 @@ public abstract class Factors implements FactorFactory {
 				indicesAddedAlready.set(i);
 				factors.add(new F(f, features, sent));
 			}
+		}
+		
+		@Override
+		public void endSentence() {
+			sent = null;
+			indicesAddedAlready.clear();
 		}
 
 		static class F extends ExpFamFactor {	// is the actual factor
@@ -99,12 +107,15 @@ public abstract class Factors implements FactorFactory {
 
 		private boolean[] indicesAddedAlready;
 		private Sentence sent;
-		private Features.F features;
+		private Features.F features = new BasicFrameFeatures();
 		
-		public FrameFactors(Sentence sent) {
-			this.sent = sent;
-			this.indicesAddedAlready = new boolean[sent.size()];
-			this.features = new BasicFrameFeatures();
+		@Override
+		public void startSentence(Sentence s) {
+			this.sent = s;
+			if(indicesAddedAlready == null || s.size() > indicesAddedAlready.length)
+				this.indicesAddedAlready = new boolean[s.size()];
+			else
+				Arrays.fill(this.indicesAddedAlready, false);
 		}
 		
 		@Override
@@ -115,6 +126,11 @@ public abstract class Factors implements FactorFactory {
 				indicesAddedAlready[i] = true;
 				factors.add(new F(f, features, sent));
 			}
+		}
+		
+		@Override
+		public void endSentence() {
+			this.sent = null;
 		}
 
 		static class F extends ExpFamFactor {	// is the actual factor
@@ -151,17 +167,18 @@ public abstract class Factors implements FactorFactory {
 	static class FrameRoleFactors extends Factors {
 		
 		private Sentence sent;
-		private Features.FR features;
+		private Features.FR features = new BasicFrameRoleFeatures();;
 		
-		public FrameRoleFactors(Sentence s) {
-			this.sent = s;
-			this.features = new BasicFrameRoleFeatures();
-		}
+		@Override
+		public void startSentence(Sentence s) { sent = s; }
 		
 		@Override
 		public void initFactorsFor(FrameVar f, RoleVars r) {
 			factors.add(new F(f, r, sent, features));
 		}
+		
+		@Override
+		public void endSentence() { sent = null; }
 		
 		static class F extends ExpFamFactor {
 
@@ -178,6 +195,19 @@ public abstract class Factors implements FactorFactory {
 				this.roleVar = rv;
 				this.sent = sent;
 				this.features = feats;
+			}
+			
+			@Override
+			public double getDotProd(int config, FgModel model, boolean logDomain) {
+				VarConfig conf = this.getVars().getVarConfig(config);
+				int frameIdx = conf.getState(frameVar.getFrameVar());
+				int roleConfIdx = conf.getState(roleVar.getRoleVar());
+				Frame frame = frameVar.getFrame(frameIdx);
+				boolean roleActive = BinaryVarUtil.configToBool(roleConfIdx);
+				
+				if(roleActive && roleVar.getRoleIdx() >= frame.numRoles())
+					return logDomain ? Double.NEGATIVE_INFINITY : 0d;
+				else return super.getDotProd(config, model, logDomain);
 			}
 			
 			@Override

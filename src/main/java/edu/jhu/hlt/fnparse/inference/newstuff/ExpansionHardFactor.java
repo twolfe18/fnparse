@@ -35,17 +35,15 @@ public class ExpansionHardFactor extends DenseFactor {
 	private int rowNullIdx;
 	private int expansionZeroIdx;
 	
+	private boolean logDomain;
 	
-	// TODO support/check for prob domain?
-	private static final double ONE = 0d;
-	private static final double ZERO = Double.NEGATIVE_INFINITY;
-	
-	public ExpansionHardFactor(Var rowVar, Var expansionVar, int rowNullIdx, int expansionZeroIdx) {
-		super(new VarSet(rowVar, expansionVar), ONE);
+	public ExpansionHardFactor(Var rowVar, Var expansionVar, int rowNullIdx, int expansionZeroIdx, boolean logDomain) {
+		super(new VarSet(rowVar, expansionVar), 1d);
 		this.rowVar = rowVar;
 		this.expansionVar = expansionVar;
 		this.rowNullIdx = rowNullIdx;
 		this.expansionZeroIdx = expansionZeroIdx;
+		this.logDomain = logDomain;
 		
 		VarSet vs = this.getVars();
 		int n = vs.calcNumConfigs();
@@ -54,9 +52,13 @@ public class ExpansionHardFactor extends DenseFactor {
 			int rowVarIdx = conf.getState(rowVar);
 			int expVarIdx = conf.getState(expansionVar);
 			if(rowVarIdx == rowNullIdx && expVarIdx != expansionZeroIdx)
-				this.setValue(i, ZERO);
+				this.setValue(i, zero());
+			else this.setValue(i, one());
 		}
 	}
+	
+	public double one() { return logDomain ? 0d : 1d; }
+	public double zero() { return logDomain ? Double.NEGATIVE_INFINITY : 0d; }
 	
 }
 

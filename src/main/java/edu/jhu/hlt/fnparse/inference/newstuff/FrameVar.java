@@ -39,7 +39,7 @@ public class FrameVar implements FgRelated {
 	
 	private ExpansionHardFactor expansionHardFactor;
 	
-	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames) {
+	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames, boolean logDomain) {
 		this.sent = s;
 		this.headIdx = headIdx;
 		this.prototypes = prototypes;
@@ -50,7 +50,7 @@ public class FrameVar implements FgRelated {
 		this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
 		
 		this.expansionHardFactor = new ExpansionHardFactor(frameVar, expansionVar,
-				frames.indexOf(Frame.nullFrame), expansions.indexOf(Expansion.noExpansion));
+				frames.indexOf(Frame.nullFrame), expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	// indices into frames and expansions respectively

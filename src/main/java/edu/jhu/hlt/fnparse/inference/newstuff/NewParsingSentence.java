@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.inference.FGFNParser.CParseVars;
 import edu.jhu.hlt.fnparse.inference.FGFNParser.DParseVars;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public class NewParsingSentence {
 
@@ -50,8 +51,9 @@ public class NewParsingSentence {
 	// this requires seeing the gold label while constructing all the variables.
 	
 	
-	public NewParsingSentence(Sentence s) {
+	public NewParsingSentence(Sentence s, ParserParams params) {
 		
+		this.factorHolders = params.factors;
 		this.sentence = s;
 		this.frameIndex = FrameIndex.getInstance();
 		this.frameFilterStrat = FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES;
@@ -60,7 +62,7 @@ public class NewParsingSentence {
 		
 		frameVars = new FrameVar[n];
 		for(int i=0; i<n; i++)
-			frameVars[i] = makeFrameVar(s, i);
+			frameVars[i] = makeFrameVar(s, i, params.logDomain);
 		
 		roleVars = new RoleVars[n][n][];
 		for(int i=0; i<n; i++) {
@@ -68,20 +70,19 @@ public class NewParsingSentence {
 			for(int j=0; j<n; j++) {
 				roleVars[i][j] = new RoleVars[maxRoles];
 				for(int k=0; k<maxRoles; k++)
-					roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k);	
+					roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k, params.logDomain);	
 			}
 		}
 
-		// make all the factors
-		factorHolders = new ArrayList<FactorFactory>();
-		factorHolders.add(new Factors.FramePrototypeFactors(s));
-		factorHolders.add(new Factors.FrameFactors(s));
-		factorHolders.add(new Factors.FrameRoleFactors(s));
-		for(FactorFactory ff : factorHolders)
+		// initialize all the factors
+		for(FactorFactory ff : factorHolders) {
+			ff.startSentence(sentence);
 			for(int i=0; i<n; i++)
 				for(int j=0; j<n; j++)
 					for(int k=0; k<roleVars[i][j].length; k++)
 						ff.initFactorsFor(frameVars[i], roleVars[i][j][k]);
+			ff.endSentence();
+		}
 	}
 	
 	
@@ -136,7 +137,7 @@ public class NewParsingSentence {
 	 * Basic idea: given a target with head word t, include any frame f s.t.
 	 * lemma(t) == lemma(f.target)
 	 */
-	public FrameVar makeFrameVar(Sentence s, int headIdx) {
+	public FrameVar makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
 		LexicalUnit head = s.getLU(headIdx);
 		
 		List<Frame> frameMatches = new ArrayList<Frame>();
@@ -162,7 +163,7 @@ public class NewParsingSentence {
 					luMatches.add(f.getLexicalUnit(i));
 			}
 		}
-		return new FrameVar(s, headIdx, luMatches, frameMatches);
+		return new FrameVar(s, headIdx, luMatches, frameMatches, logDomain);
 	}
 	
 	public FactorGraph getFactorGraph() { return fg; }

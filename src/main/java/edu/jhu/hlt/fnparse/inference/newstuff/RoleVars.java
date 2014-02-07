@@ -24,7 +24,7 @@ public class RoleVars implements FgRelated {
 	
 	private ExpansionHardFactor expansionHardFactor;
 	
-	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx) {
+	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx, boolean logDomain) {
 		this.parent = parent;
 		this.roleIdx = roleIdx;
 		this.headIdx = headIdx;
@@ -36,7 +36,7 @@ public class RoleVars implements FgRelated {
 		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
 		
 		this.expansionHardFactor = new ExpansionHardFactor(headVar, expansionVar,
-				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion));
+				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	private Boolean headVarGold = null;

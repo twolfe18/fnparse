@@ -2,9 +2,11 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import static edu.jhu.hlt.fnparse.util.ScalaLike.println;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
+import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -18,15 +20,37 @@ import edu.jhu.optimize.Maximizer;
 
 public class Parser {
 
+	static class ParserParams {
+		public boolean logDomain;
+		public FgModel model;
+		public List<FactorFactory> factors;
+		// features store alphabets
+	}
+	
+	private ParserParams params;
+	
+	public Parser() {
+		params = new ParserParams();
+		params.logDomain = true;		// doesn't work if this is false :(
+		params.factors = new ArrayList<FactorFactory>();
+		params.factors.add(new Factors.FramePrototypeFactors());
+		params.factors.add(new Factors.FrameFactors());
+		params.factors.add(new Factors.FrameRoleFactors());
+	}
+	
 	public void train(List<FNParse> examples) {
 		
 		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
+		BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
+		bpParams.normalizeMessages = true;	// doesn't work if false :(
+		bpParams.logDomain = params.logDomain;
+		trainerPrm.infFactory = bpParams;
 		//trainerPrm.numThreads = 4;
 		CrfTrainer trainer = new CrfTrainer(trainerPrm);
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
-			NewParsingSentence s = new NewParsingSentence(parse.getSentence());
+			NewParsingSentence s = new NewParsingSentence(parse.getSentence(), params);
 			s.setGold(parse);
 			exs.add(s.getFgExample());
 		}
@@ -46,8 +70,8 @@ public class Parser {
 			numParams = bob.totalFeatures();
 			System.out.println("#features = " + bob.totalFeatures());
 		}
-		FgModel model = new FgModel(numParams);
-		model = trainer.train(model, exs);
+		params.model = new FgModel(numParams);
+		params.model = trainer.train(params.model, exs);
 	}
 
 	public static void main(String[] args) {
