@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.indexing;
+package edu.jhu.hlt.fnparse.features.indexing;
 
 import java.io.*;
 import java.util.*;

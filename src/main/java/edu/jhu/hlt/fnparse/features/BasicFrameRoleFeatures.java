@@ -4,34 +4,23 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.indexing.Joe;
-import edu.jhu.hlt.fnparse.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.indexing.SuperBob;
-import edu.jhu.hlt.fnparse.inference.factors.FrameRoleFactor;
+import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
+import edu.jhu.hlt.fnparse.features.indexing.Joe;
+import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
+import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameRoleFeatures implements FrameRoleFactor.Features,
-		edu.jhu.hlt.fnparse.features.Features.FR, Joe<JoeInfo> {
+public class BasicFrameRoleFeatures implements edu.jhu.hlt.fnparse.features.Features.FR, Joe<JoeInfo> {
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
 	private BasicBob bob;
-//	private HeadFinder hf = new BraindeadHeadFinder();
 	private Alphabet<String> featIdx;
 	public boolean verbose = false;
 	
 	public BasicFrameRoleFeatures() {
 		bob = (BasicBob) SuperBob.getBob(this);
 		featIdx = bob.trackMyAlphabet(this);
-	}
-	
-	@Override
-	public String getDescription() { return "BasicTargetRoleFeatures"; }
-
-	@Override
-	public String getFeatureName(int featIdx) {
-		return this.featIdx.lookupObject(featIdx);
 	}
 
 	// promote
@@ -49,7 +38,6 @@ public class BasicFrameRoleFeatures implements FrameRoleFactor.Features,
 		return bob.doYourThing(fv, this);
 	}
 	
-	@Override
 	public FeatureVector getFeatures(Frame f, Span argumentSpan, Span targetSpan, int roleIdx, Sentence sent) {
 		
 		// NOTE: don't write any back-off features that only look at roleIdx because it is
@@ -82,13 +70,6 @@ public class BasicFrameRoleFeatures implements FrameRoleFactor.Features,
 		return i;
 	}
 
-	@Override
-	public int cardinality() {
-		// TODO do some real counting
-		int s = 5000;
-		assert featIdx.size() < s;
-		return s;
-	}
 
 	private JoeInfo joeInfo;
 

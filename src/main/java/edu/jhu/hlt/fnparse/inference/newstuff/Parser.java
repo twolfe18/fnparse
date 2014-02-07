@@ -13,8 +13,8 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.indexing.SuperBob;
+import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
+import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.optimize.Function;
 import edu.jhu.optimize.Maximizer;
 

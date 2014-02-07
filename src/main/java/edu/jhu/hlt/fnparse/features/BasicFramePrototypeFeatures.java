@@ -4,10 +4,10 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.indexing.Joe;
-import edu.jhu.hlt.fnparse.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.indexing.SuperBob;
+import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
+import edu.jhu.hlt.fnparse.features.indexing.Joe;
+import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
+import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
 public class BasicFramePrototypeFeatures implements Features.FP, Joe<JoeInfo> {

@@ -10,15 +10,13 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.indexing.Joe;
-import edu.jhu.hlt.fnparse.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.indexing.SuperBob;
+import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
+import edu.jhu.hlt.fnparse.features.indexing.Joe;
+import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
+import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors.FrameFactor.Features,
-		edu.jhu.hlt.fnparse.features.Features.F, Joe<JoeInfo> {
+public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features.F, Joe<JoeInfo> {
 
 	private BasicBob bob;
 	private Alphabet<String> featIdx;
@@ -30,32 +28,8 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 	}
 	
 	@Override
-	public String getDescription() { return "BasicTargetFeatures"; }
-
-	@Override
-	public String getFeatureName(int i) {
-		String localName = featIdx.lookupObject(i);
-		return getDescription() + ":" + localName;
-	}
-	
-	public int head(Span s) {
-		if(s.width() == 1)
-			return s.start;
-		else {
-			System.err.println("warning! implement a real head finder");
-			return s.end-1;
-		}
-	}
-	
-	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, Sentence s) {
-		return bob.doYourThing(getFeatures(f, Span.widthOne(targetHeadIdx), s), this);
-	}
-	
-	@Override
-	public FeatureVector getFeatures(Frame f, Span extent, Sentence s) {
+	public FeatureVector getFeatures(Frame f, int head, Sentence s) {
 		
-		int head = head(extent);
 		Set<String> bag = new HashSet<String>();
 		
 		FeatureVector v = new FeatureVector();
@@ -64,7 +38,6 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		v.add(index("numLU=" + f.numLexicalUnits()), 1d);
 		v.add(index("target-head=" + s.getWord(head)), 1d);
 		v.add(index("target-head-pos=" + s.getPos(head)), 1d);
-		v.add(index("target-width=" + extent.width()), 1d);
 		v.add(index("sentence-length=" + s.size()), 1d);
 		
 		LexicalUnit hypLU = s.getLU(head);
@@ -90,21 +63,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		// wordnet
 		
 		
-		// pairs of words in extent
-		bag.clear();
-		for(String w : s.wordsIn(extent)) {
-			bag.add(w);
-			v.add(index("\"" + w + "\"-appears-in-extent"), 1d);
-		}
-		pairFeatures(bag, v, "-in-extent");
-		
-		// pairs of POS in extent
-		bag.clear();
-		for(String p : s.posIn(extent)) {
-			bag.add(p);
-			v.add(index("\"" + p + "\"-appears-in-extent"), 1d);
-		}
-		pairFeatures(bag, v, "-in-extent");
+
 
 		// pairs of words in sentence
 		bag.clear();
@@ -124,7 +83,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		
 		// pairs of words on left
 		bag.clear();
-		for(int i=0; i<extent.start; i++) {
+		for(int i=0; i<head; i++) {
 			String w = s.getWord(i);
 			v.add(index("\"" + w + "\"-appears-to-the-left"), 1d);
 		}
@@ -133,7 +92,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		
 		// pairs of pos on the left
 		bag.clear();
-		for(int i=0; i<extent.start; i++) {
+		for(int i=0; i<head; i++) {
 			String p = s.getPos(i);
 			v.add(index("\"" + p + "\"-appears-to-the-left"), 1d);
 		}
@@ -142,7 +101,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		
 		// pairs of words on right
 		bag.clear();
-		for(int i=extent.end; i<s.size(); i++) {
+		for(int i=head+1; i<s.size(); i++) {
 			String w = s.getWord(i);
 			v.add(index("\"" + w + "\"-appears-to-the-right"), 1d);
 		}
@@ -151,7 +110,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		
 		// pairs of pos on the right
 		bag.clear();
-		for(int i=extent.end; i<s.size(); i++) {
+		for(int i=head+1; i<s.size(); i++) {
 			String p = s.getPos(i);
 			v.add(index("\"" + p + "\"-appears-to-the-right"), 1d);
 		}
@@ -159,12 +118,12 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 		else pairFeatures(bag, v, "-to-the-right");
 		
 		// word/pos to the left/right of the extent
-		v.add(index("word-to-the-left=" + (extent.start==0 ? "<S>" : s.getWord(extent.start-1))), 1d);
-		v.add(index("pos-to-the-left=" + (extent.start==0 ? "<S>" : s.getPos(extent.start-1))), 1d);
-		v.add(index("word-to-the-right=" + (extent.end==s.size() ? "</S>" : s.getWord(extent.end))), 1d);
-		v.add(index("pos-to-the-right=" + (extent.end==s.size() ? "</S>" : s.getPos(extent.end))), 1d);
+		v.add(index("word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1))), 1d);
+		v.add(index("pos-to-the-left=" + (head==0 ? "<S>" : s.getPos(head-1))), 1d);
+		v.add(index("word-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getWord(head+1))), 1d);
+		v.add(index("pos-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getPos(head+1))), 1d);
 		
-		return v;
+		return bob.doYourThing(v, this);
 	}
 	
 	private void pairFeatures(Set<String> items, FeatureVector v, String meta) {
@@ -184,10 +143,6 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors
 			System.out.println("[BasicFrameElemFeatures] new max = " + s);
 		return i;
 	}
-	
-	public int cardinality() { return 75000; }	// TODO
-
-	
 	
 
 	
