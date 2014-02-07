@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.indexing.Bob;
+import edu.jhu.hlt.fnparse.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.indexing.Joe;
 import edu.jhu.hlt.fnparse.indexing.JoeInfo;
 import edu.jhu.hlt.fnparse.indexing.SuperBob;
@@ -20,13 +20,13 @@ import edu.jhu.util.Alphabet;
 public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.inference.factors.FrameFactor.Features,
 		edu.jhu.hlt.fnparse.features.Features.F, Joe<JoeInfo> {
 
-	private Bob<JoeInfo> bob;
-	private Alphabet<String> featIdx = new Alphabet<String>();
+	private BasicBob bob;
+	private Alphabet<String> featIdx;
 	public boolean verbose = false;
 	
-	@SuppressWarnings("unchecked")
 	public BasicFrameFeatures() {
-		bob = (Bob<JoeInfo>) SuperBob.getBob(this);
+		bob = (BasicBob) SuperBob.getBob(this);
+		featIdx = bob.trackMyAlphabet(this);
 	}
 	
 	@Override

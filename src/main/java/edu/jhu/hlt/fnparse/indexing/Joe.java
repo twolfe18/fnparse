@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.indexing;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.util.Alphabet;
 
 /**
  * Joe computes features.
@@ -22,21 +23,22 @@ public interface Joe<T> {
 	
 	
 	
-	static class JoeExample<R> implements Joe<R> {
+	static class JoeExample implements Joe<JoeInfo> {
 
-		private R stuff;
-		private Bob<R> bob;
+		private JoeInfo stuff;
+		private BasicBob bob;
+		private Alphabet<String> featureNames;
 		
-		@SuppressWarnings("unchecked")
 		public JoeExample() {
-			bob = (Bob<R>) SuperBob.getBob(this);	// SuperBob calls bob.register for you
+			bob = (BasicBob) SuperBob.getBob(this);
+			featureNames = bob.trackMyAlphabet(this);
 		}
 		
 		@Override
-		public void storeJoeInfo(R stuff) { this.stuff = stuff; }
+		public void storeJoeInfo(JoeInfo stuff) { this.stuff = stuff; }
 
 		@Override
-		public R getJoeInfo() { return stuff; }
+		public JoeInfo getJoeInfo() { return stuff; }
 	
 		public FeatureVector getFeatures(int something) {
 			FeatureVector fv = new FeatureVector();

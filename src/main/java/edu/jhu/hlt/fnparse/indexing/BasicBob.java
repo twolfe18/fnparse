@@ -5,6 +5,7 @@ import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.prim.map.IntDoubleEntry;
+import edu.jhu.util.Alphabet;
 
 /**
  * His only job is to keep track of how many features each Joe uses.
@@ -21,6 +22,21 @@ public class BasicBob implements Bob<JoeInfo> {
 	private boolean firstPass;
 	private File cacheTo;
 
+	private Map<String, Alphabet<String>> featureNames = new HashMap<String, Alphabet<String>>();
+	
+	public Alphabet<String> trackMyAlphabet(Joe<JoeInfo> owner) {
+		if(firstPass) {
+			Alphabet<String> alph = new Alphabet<String>();
+			featureNames.put(owner.getJoeName(), alph);
+			return alph;
+		}
+		else {
+			Alphabet<String> alph = featureNames.get(owner.getJoeName());
+			if(alph == null) throw new RuntimeException();
+			return alph;
+		}
+	}
+	
 	public boolean isFirstPass() { return firstPass; }
 
 	public int totalFeatures() {
@@ -40,10 +56,33 @@ public class BasicBob implements Bob<JoeInfo> {
 			firstPass = false;
 			try {
 				BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(cacheTo)));
-				while(r.ready()) {
+				
+				// how many JoeInfos?
+				String[] header = r.readLine().split("\\s+");
+				int numJI = Integer.parseInt(header[0]);
+				
+				for(int i=0; i<numJI; i++) {
 					String line = r.readLine().trim();
 					JoeInfo j = JoeInfo.deserialize(line);
 					info.put(j.name, j);
+					featureNames.put(j.name, new Alphabet<String>());
+				}
+				
+				// the rest of the file will be feature names
+				while(r.ready()) {
+					
+					// i was going to compute the localIdx from the offset and globalIdx,
+					// but Alphabet doesn't support set(int, object), so i'll have to rely
+					// on the fact that they'll get the same ids if they're inserted in the same order.
+					
+					String[] ar = r.readLine().split("\t");
+					//int globalIdx = Integer.parseInt(ar[0]);
+					String joeName = ar[1];
+					String localName = ar[2];
+					Alphabet<String> alph = featureNames.get(joeName);
+					//JoeInfo ji = info.get(joeName);
+					//int localIdx = globalIdx - ji.offset;
+					alph.lookupIndex(localName, true);
 				}
 				r.close();
 			}
@@ -75,10 +114,24 @@ public class BasicBob implements Bob<JoeInfo> {
 				running += ji.width;
 			}
 			
+			// write out Joes' details (e.g. feature dimensionalities)
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(cacheTo)));
+			w.write(byIndex.size() + " features\n");
 			for(JoeInfo ji : byIndex)
 				w.write(ji.serialize());
-			w.close();
+			
+			// save feature names if they were provided
+			for(JoeInfo ji : byIndex) {
+				Alphabet<String> alph = featureNames.get(ji.name);
+				if(alph == null) continue;
+				int n = alph.size();
+				for(int i=0; i<n; i++) {
+					int index = ji.offset + i;
+					String fn = alph.lookupObject(i);
+					w.write(String.format("%d\t%s\t%s\n", index, ji.name, fn));
+				}
+			}
+				w.close();
 		}
 		catch(Exception e) {
 			throw new RuntimeException(e);

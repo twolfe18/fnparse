@@ -34,21 +34,13 @@ public class Parser {
 		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
 		int numParams;
 		if(bob.isFirstPass()) {
+			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
 			numParams = 25000;
-			
-			// doesn't work...
 			trainerPrm.maximizer = new Maximizer() {
 				@Override
 				public boolean maximize(Function function, double[] point) { return true; }
 			};
 			trainerPrm.regularizer = null;
-			
-//			MalletLBFGSPrm m = new MalletLBFGSPrm();
-//			m.maxIterations = 1;
-//			m.tolerance = 1d;
-//			trainerPrm.maximizer = new MalletLBFGS(m);
-//			
-//			trainerPrm.maximizer = null;
 		}
 		else {
 			numParams = bob.totalFeatures();

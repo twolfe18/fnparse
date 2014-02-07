@@ -4,7 +4,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.indexing.Bob;
+import edu.jhu.hlt.fnparse.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.indexing.Joe;
 import edu.jhu.hlt.fnparse.indexing.JoeInfo;
 import edu.jhu.hlt.fnparse.indexing.SuperBob;
@@ -16,14 +16,14 @@ public class BasicFrameRoleFeatures implements FrameRoleFactor.Features,
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
-	private Bob<JoeInfo> bob;
+	private BasicBob bob;
 //	private HeadFinder hf = new BraindeadHeadFinder();
-	private Alphabet<String> featIdx = new Alphabet<String>();
+	private Alphabet<String> featIdx;
 	public boolean verbose = false;
 	
-	@SuppressWarnings("unchecked")
 	public BasicFrameRoleFeatures() {
-		bob = (Bob<JoeInfo>) SuperBob.getBob(this);
+		bob = (BasicBob) SuperBob.getBob(this);
+		featIdx = bob.trackMyAlphabet(this);
 	}
 	
 	@Override
