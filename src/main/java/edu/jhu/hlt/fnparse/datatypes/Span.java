@@ -19,8 +19,9 @@ public class Span {
 		if(start == 0 && end == 0)
 			return nullSpan;
 		
-		if(start >= end)
+		if(start >= end) {
 			throw new IllegalArgumentException("start must be less than end: " + start + " >= " + end);
+		}
 		
 		// make a bigger table if the previous was too small
 		if(end > internedSpans.length) {

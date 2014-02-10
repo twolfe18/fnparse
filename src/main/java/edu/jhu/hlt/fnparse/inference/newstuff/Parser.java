@@ -10,7 +10,7 @@ import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.DataUtil;
-import edu.jhu.hlt.fnparse.data.FNFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
@@ -82,7 +82,7 @@ public class Parser {
 		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
 		SuperBob.getBob(null).startup();
 		
-		FrameInstanceProvider fip = new FNFrameInstanceProvider();
+		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
 		List<FNParse> all = fip.getParsedSentences();
 		println("all.size = " + all.size());
 		int trainOn = 1;

@@ -20,6 +20,7 @@ public class FNParse extends FNTagging {
 	 */
 	public FNParse(Sentence s, List<FrameInstance> frameInstances, boolean isFullParse) {
 		super(s, frameInstances);
+		this.isFullParse = isFullParse;
 		for(FrameInstance fi : frameInstances)
 			if(fi.onlyTargetLabeled())
 				throw new IllegalArgumentException();

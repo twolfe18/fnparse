@@ -137,7 +137,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 			@Override
 			public FNParse next() {
 				FNParse ret = null;
-				while(ret==null){
+				while(ret==null) {
 					List<String> tokens = new ArrayList<String>();
 					List<String> pos = new ArrayList<String>();
 					List<Integer> gov = new ArrayList<Integer>();
@@ -221,12 +221,18 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 						prevTargetCharEnd = l[8];
 						curSentIdFrames = l[2];
 					}
-					try{
-						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
-					} catch (IllegalArgumentException e){
-						// This is not a FNParse, let's try FNTagging
-						fntg.add(new FNTagging(s, frameInstances));
+
+					boolean tagging = false;
+					for(FrameInstance fi : frameInstances) {
+						if(fi.onlyTargetLabeled()) {
+							tagging = true;
+							fntg.add(new FNTagging(s, frameInstances));
+							break;
+						}
 					}
+					if(!tagging)
+						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
+					
 					prevSentId = curSentIdFrames;
 				}
 				fnpl.add(ret);
