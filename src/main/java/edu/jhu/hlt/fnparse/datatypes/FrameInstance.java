@@ -22,7 +22,7 @@ public class FrameInstance {
 	 */
 	private Span[] arguments;
 
-	private FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
+	protected FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
 		this.frame = frame;
 		this.target = target; // targetIdx is the index of trigger token in the sentence.
 		this.arguments = arguments;
@@ -66,7 +66,7 @@ public class FrameInstance {
 	
 	public int numArguments() { return arguments.length; }
 
-	public String[] getArgumentTokens(int roleIdx) { return sentence.getWord(arguments[roleIdx]); }
+	public String[] getArgumentTokens(int roleIdx) { return sentence.getWordFor(arguments[roleIdx]); }
 	
 	public void setArgument(int roleIdx, Span extent) {
 		arguments[roleIdx] = extent;

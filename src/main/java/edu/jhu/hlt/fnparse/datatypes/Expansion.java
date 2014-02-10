@@ -9,6 +9,11 @@ public class Expansion {
 	/**
 	 * represents a whole bunch of Expansions implicitly.
 	 * even though it implements iterator, you can call size() and get(i) in O(1)
+	 * 
+	 * now that i've added get and size in O(1),
+	 * there is really no reason for this to be an iterator
+	 * (where you need to worry about the state, reset, etc).
+	 * 
 	 * @author travis
 	 */
 	public static class Iter implements Iterator<Expansion> {
@@ -36,6 +41,7 @@ public class Expansion {
 		
 		/**
 		 * resets the iterator functionality.
+		 * @deprecated
 		 */
 		public void reset() {
 			this.expLeft = 0;
@@ -53,6 +59,19 @@ public class Expansion {
 			return new Expansion(el, er);
 		}
 		
+		public int indexOf(Expansion needle) {
+			int n = size();
+			for(int i=0; i<n; i++) {
+				Expansion e = get(i);
+				if(needle.equals(e))
+					return i;
+			}
+			return -1;
+		}
+		
+		/**
+		 * @deprecated
+		 */
 		@Override
 		public boolean hasNext() {
 			return expLeft <= maxExpLeft && expRight <= maxExpRight;
@@ -63,6 +82,9 @@ public class Expansion {
 		//	for(int r=0; r<=maxExpRight; r++)
 		//		yield new Expansion(l, r)
 	
+		/**
+		 * @deprecated
+		 */
 		@Override
 		public Expansion next() {
 			Expansion e = new Expansion(expLeft, expRight);
@@ -74,6 +96,9 @@ public class Expansion {
 			return e;
 		}
 	
+		/**
+		 * @deprecated
+		 */
 		@Override
 		public void remove() {
 			throw new UnsupportedOperationException();

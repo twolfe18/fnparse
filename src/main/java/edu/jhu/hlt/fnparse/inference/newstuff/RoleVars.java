@@ -5,7 +5,6 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -22,7 +21,9 @@ public class RoleVars implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;
 	
-	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx) {
+	private ExpansionHardFactor expansionHardFactor;
+	
+	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx, boolean logDomain) {
 		this.parent = parent;
 		this.roleIdx = roleIdx;
 		this.headIdx = headIdx;
@@ -32,44 +33,64 @@ public class RoleVars implements FgRelated {
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
 		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
 		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
+		
+		this.expansionHardFactor = new ExpansionHardFactor(headVar, expansionVar,
+				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	private Boolean headVarGold = null;
 	private int expansionVarGold = -1;
 	
-	public void setGold(FrameInstance fi) {
+	public static class Location {
+		public int frame, arg, role;
+		public int hashCode() { return (frame << 20) | (arg << 10) | role; }
+		public boolean equals(Object other) {
+			if(other instanceof Location) {
+				Location l = (Location) other;
+				return frame == l.frame && arg == l.arg && role == l.arg;
+			}
+			else return false;
+		}
+	}
+	
+	public Location getLocation() {
+		Location l = new Location();
+		l.frame = parent.getTargetHeadIdx();
+		l.arg = headIdx;
+		l.role = roleIdx;
+		return l;
+	}
+	
+	/**
+	 * use this to say that this argument was not instantiated.
+	 */
+	public void setGoldIsNull() {
+		headVarGold = false;
+		expansionVarGold = expansions.indexOf(Expansion.noExpansion);
+		if(expansionVarGold < 0) throw new IllegalStateException();
+	}
+	
+	/**
+	 * use this to say that this argument was realized in the sentence.
+	 */
+	public void setGold(Span s) {
+
+		if(s == Span.nullSpan)
+			throw new IllegalArgumentException();
+		
+		headVarGold = true;
 		
 		// compute the gold expansion
-		Span argSpan = fi.getArgument(roleIdx);
-		Expansion goldExpansion;
-		if(argSpan == Span.nullSpan) {
-			headVarGold = false;
-			goldExpansion = Expansion.noExpansion;
-		}
-		else {
-			headVarGold = true;
-			goldExpansion = Expansion.headToSpan(headIdx, argSpan);
-		}
-				
-		// find the index of the gold expansion var
-		int goldExpansionIdx = -1;
-		for(int i=0; expansions.hasNext(); i++) {
-			Expansion ei = expansions.next();
-			if(ei.equals(goldExpansion)) {
-				goldExpansionIdx = i;
-				break;
-			}
-		}
-		if(goldExpansionIdx < 0)
-			throw new RuntimeException();
-		
-		expansionVarGold = goldExpansionIdx;
+		Expansion goldExpansion = Expansion.headToSpan(headIdx, s);
+		expansionVarGold = expansions.indexOf(goldExpansion);
+		if(expansionVarGold < 0)
+			throw new IllegalArgumentException();
 	}
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		
-		// TODO hard factors
+		fg.addFactor(expansionHardFactor);
 		
 		if(headVarGold != null)
 			gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
@@ -77,6 +98,7 @@ public class RoleVars implements FgRelated {
 			gold.put(expansionVar, expansionVarGold);
 	}
 	
+	public int getHeadIdx() { return headIdx; }
 	public int getRoleIdx() { return roleIdx; }
 	
 	public Var getRoleVar() { return headVar; }	// binary var

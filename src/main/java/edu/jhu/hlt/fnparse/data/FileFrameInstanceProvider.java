@@ -20,8 +20,19 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
-public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<FNParse> {
+public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterable<FNParse> {
 
+	public static final FileFrameInstanceProvider fn15trainFIP =
+			new FileFrameInstanceProvider(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
+	
+	public static final FileFrameInstanceProvider fn15testFIP =
+			new FileFrameInstanceProvider(UsefulConstants.TestFN15FullTextFramesPath, UsefulConstants.TestFN15FullTextConllPath);
+	
+	public static final FileFrameInstanceProvider fn15lexFIP =
+			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
+	
+	private File frameFile, conllFile;
+	
 	private LineIterator litrFrames;
 	private LineIterator litrConll;
 	private List<FNParse> fnpl = new LinkedList<FNParse>();
@@ -44,13 +55,18 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 	String prevSentId;
 
 	@Override
-	public String getName() { return "FrameNet_frame_instances"; }
-
-	public FNFrameInstanceProvider(){
-		this(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
-	}
+	public String getName() { return toString(); }
 	
-	public FNFrameInstanceProvider(File frameFile, File conllFile){
+	@Override
+	public String toString() {
+		return String.format("<FrameInstanceProvider from %s %s>",
+				this.frameFile.getName(), this.conllFile.getName());
+	}
+
+	public FileFrameInstanceProvider(File frameFile, File conllFile) {
+		this.frameFile = frameFile;
+		this.conllFile = conllFile;
+		// Right now hard code to return the train instances. Deal with initialization later.
 		try {
 			litrFrames = new LineIterator(new FileReader(frameFile));
 			litrConll = new LineIterator(new FileReader(conllFile));
@@ -110,12 +126,6 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 		throw new RuntimeException("Strange unhandled annotationsetid: " + sentId);
 	}
 
-	private boolean hasFrameInstanceLabeled(){
-		// TODO: What does it mean to have frameInstancesLabeled? 
-		// The logic would be placed later on.
-		return true;
-	}
-
 	@Override
 	public Iterator<FNParse> iterator() {
 		Iterator<FNParse> it = new Iterator<FNParse>(){
@@ -127,7 +137,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 			@Override
 			public FNParse next() {
 				FNParse ret = null;
-				while(ret==null){
+				while(ret==null) {
 					List<String> tokens = new ArrayList<String>();
 					List<String> pos = new ArrayList<String>();
 					List<Integer> gov = new ArrayList<Integer>();
@@ -152,8 +162,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 					Sentence s = new Sentence( datasetOfSentence, 
 							prevSentId, 
 							tokens.toArray(new String[0]), 
-							pos.toArray(new String[0]), 
-							hasFrameInstanceLabeled(), 
+							pos.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 							depType.toArray(new String[0]));
 					List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
@@ -215,12 +224,18 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 						prevTargetCharEnd = l[8];
 						curSentIdFrames = l[2];
 					}
-					try{
-						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
-					} catch (IllegalArgumentException e){
-						// This is not a FNParse, let's try FNTagging
-						fntg.add(new FNTagging(s, frameInstances));
+
+					boolean tagging = false;
+					for(FrameInstance fi : frameInstances) {
+						if(fi.onlyTargetLabeled()) {
+							tagging = true;
+							fntg.add(new FNTagging(s, frameInstances));
+							break;
+						}
 					}
+					if(!tagging)
+						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
+					
 					prevSentId = curSentIdFrames;
 				}
 				fnpl.add(ret);

@@ -1,9 +1,22 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+
 public interface FactorFactory extends FgRelated {
 
+	
+	/**
+	 * Tells you what sentence you're factory is working on now.
+	 * Calls to initFactorsFor() between calls to startSentence()
+	 * and endSentence() will be combinations of variables in the sentence
+	 * provided to startSentence().
+	 */
+	public void startSentence(Sentence s);
+	
+	
 	/**
 	 * Make some factors and hold onto them.
+	 * You add them to the model when FgRelated.register is called.
 	 * 
 	 * You can build up a factor that is as costly as you want it to be
 	 * given these variables.
@@ -12,6 +25,16 @@ public interface FactorFactory extends FgRelated {
 	 * such that r.parent == f.
 	 */
 	public void initFactorsFor(FrameVar f, RoleVars r);
+	
+	
+	/**
+	 * allows you to dump any data you've been keeping on the current sentence.
+	 */
+	public void endSentence();
+	
+	
+	// inherits from FgRelated:
+	// public void register(FactorGraph fg, VarConfig gold);
 	
 	// TODO add constituency/dependency parse variables to the signature above
 	

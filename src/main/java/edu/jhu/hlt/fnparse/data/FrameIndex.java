@@ -137,7 +137,12 @@ public class FrameIndex implements Iterable<Frame> {
 				}
 				while(litLU.hasNext() && curFrameIDLU.equals(prevFrameID)){
 					String[] l = curLineLU.split("\t");
-					String luRepr = l[3]; 
+					String luRepr = l[3];
+					
+					// for multi-word LUs, like "\"domestic violence.N\"",
+					// we should strip off the quotes
+					luRepr = luRepr.replaceAll("(^\")|(\"$)", "");
+					
 					lu.add(new LexicalUnit((luRepr.split("\\."))[0], (luRepr.split("\\."))[1]));
 					curLineLU = litLU.nextLine();
 					l = curLineLU.split("\t");

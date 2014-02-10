@@ -1,11 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -23,9 +24,10 @@ public class FrameVar implements FgRelated {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 	
+	private Sentence sent;	// TODO this can be removed (good for debugging)
 	private int headIdx;
 	
-	private List<LexicalUnit> prototypes;
+	private List<FrameInstance> prototypes;
 	private Var prototypeVar;	// f_i == nullFrame  =>  prototypeVar = 0
 	
 	private List<Frame> frames;
@@ -34,7 +36,10 @@ public class FrameVar implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
-	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames) {
+	private ExpansionHardFactor expansionHardFactor;
+	
+	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
+		this.sent = s;
 		this.headIdx = headIdx;
 		this.prototypes = prototypes;
 		this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, null);
@@ -42,6 +47,9 @@ public class FrameVar implements FgRelated {
 		this.frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, null);
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
 		this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
+		
+		this.expansionHardFactor = new ExpansionHardFactor(frameVar, expansionVar,
+				frames.indexOf(Frame.nullFrame), expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	// indices into frames and expansions respectively
@@ -57,25 +65,24 @@ public class FrameVar implements FgRelated {
 		if(!gold.getTarget().includes(headIdx))
 			throw new IllegalArgumentException();
 		
-		goldFrame = -1;
-		for(int i=0; i<frames.size(); i++) {
-			Frame f = frames.get(i);
-			if(f.equals(gold.getFrame())) {
-				if(goldFrame >= 0) throw new IllegalStateException();
-				goldFrame = i;
-			}
+		goldFrame = frames.indexOf(gold.getFrame());
+		if(goldFrame < 0) {
+			// our filtering heuristic didn't include the correct answer
+			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
+					gold.getFrame(), Arrays.toString(gold.getSentence().getWordFor(gold.getTarget())));
+			goldFrame = frames.indexOf(Frame.nullFrame);
 		}
 		
 		goldExpansion = -1;
-		for(int i=0; expansions.hasNext(); i++) {
-			Expansion e = expansions.next();
-			Span target = e.upon(headIdx);
+		int n = expansions.size();
+		for(int i=0; i<n; i++) {
+			Expansion e = expansions.get(i);
+			Span target = e.upon(headIdx);	// target implied by this expansion
 			if(target.equals(gold.getTarget())) {
 				if(goldExpansion >= 0) throw new IllegalStateException();
 				goldExpansion = i;
 			}
 		}
-		expansions.reset();
 		
 		if(goldFrame < 0 || goldExpansion < 0)
 			throw new IllegalStateException();
@@ -93,7 +100,9 @@ public class FrameVar implements FgRelated {
 		if(goldExpansion >= 0)
 			gold.put(expansionVar, goldExpansion);
 		
-		// TODO add a whole bunch of hard factors
+		// hard factors
+		fg.addFactor(expansionHardFactor);
+		
 	}
 
 	private int maxRoles = -1;
@@ -112,7 +121,7 @@ public class FrameVar implements FgRelated {
 	public Var getFrameVar() { return frameVar; }
 	public Var getExpansionVar() { return expansionVar; }
 	
-	public LexicalUnit getPrototype(int localIdx) { return prototypes.get(localIdx); }
+	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }
 	public Expansion getExpansion(int localIdx) { return expansions.get(localIdx); }
 	

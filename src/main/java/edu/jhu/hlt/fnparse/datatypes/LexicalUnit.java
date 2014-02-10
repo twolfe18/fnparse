@@ -28,20 +28,6 @@ public class LexicalUnit {
 	 */
 	public static boolean approxMatch(LexicalUnit fromSentence, LexicalUnit fromFrameNet) {
 		
-		if(frameNetPosToPennPrefixes == null) {
-			frameNetPosToPennPrefixes = new HashMap<String, String>();
-			frameNetPosToPennPrefixes.put("A", "J");	// A=adjective
-			frameNetPosToPennPrefixes.put("ADV", "R");
-			frameNetPosToPennPrefixes.put("ART", "D");	// D=determiner
-			frameNetPosToPennPrefixes.put("C", "CC");
-			frameNetPosToPennPrefixes.put("INTJ", "UH");
-			frameNetPosToPennPrefixes.put("N", "NN");
-			frameNetPosToPennPrefixes.put("NUM", "CD");
-			frameNetPosToPennPrefixes.put("PREP", "IN");
-			frameNetPosToPennPrefixes.put("SCON", "IN");
-			frameNetPosToPennPrefixes.put("V", "V");
-		}
-		
 		String fnPos = frameNetPosToPennPrefixes.get(fromFrameNet.pos);
 		if(fnPos == null)
 			throw new IllegalArgumentException();
@@ -51,6 +37,29 @@ public class LexicalUnit {
 	}
 	
 	private static Map<String, String> frameNetPosToPennPrefixes;
+	static {
+		frameNetPosToPennPrefixes = new HashMap<String, String>();
+		frameNetPosToPennPrefixes.put("A", "J");	// A=adjective
+		frameNetPosToPennPrefixes.put("ADV", "R");
+		frameNetPosToPennPrefixes.put("ART", "D");	// D=determiner
+		frameNetPosToPennPrefixes.put("C", "CC");
+		frameNetPosToPennPrefixes.put("INTJ", "UH");
+		frameNetPosToPennPrefixes.put("N", "NN");
+		frameNetPosToPennPrefixes.put("NUM", "CD");
+		frameNetPosToPennPrefixes.put("PREP", "IN");
+		frameNetPosToPennPrefixes.put("SCON", "IN");
+		frameNetPosToPennPrefixes.put("V", "V");
+	}
+	public static Map<String, String> getFrameNetPosToPennPrefixesMap() {
+		return frameNetPosToPennPrefixes;
+	}
+	
+	private String fullStr;
+	public String getFullString() {
+		if(fullStr == null)
+			fullStr = word + "." + pos;
+		return fullStr;
+	}
 	
 	public String toString() { return String.format("<LU %s.%s>", word, pos); }
 	

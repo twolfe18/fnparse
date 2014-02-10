@@ -15,12 +15,13 @@ import edu.jhu.hlt.fnparse.data.UsefulConstants;
 
 public class FrameInstanceProviderTest {
 
+
 	private static void testFIP(FrameInstanceProvider fip){
 		testFIP(fip, true);
 	}
 
-	private static void testFIP(FrameInstanceProvider fip, boolean printFNParses){
-
+	private static void testFIP(FrameInstanceProvider fip, boolean verbose) {		
+		System.out.println("testing " + fip.getName());
 		long start = System.currentTimeMillis();
 		List<FNParse> sents = fip.getParsedSentences();
 		long time = System.currentTimeMillis() - start;
@@ -30,21 +31,24 @@ public class FrameInstanceProviderTest {
 		int numFIs = 0;
 		Set<FNParse> uniqSents = new HashSet<FNParse>();
 		for(FNParse s : sents) {
-			if(printFNParses){
-				for(FrameInstance fi : s.getFrameInstances()) {
-					numFIs++;
-					String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTarget(), Arrays.toString(fi.getSentence().getWord()));
-					System.out.println(line);
-					for(int i = 0; i < fi.getFrame().numRoles(); i++){
-						if(fi.getArgument(i) != null){
-							System.out.println(String.format("Role: %s, Argument: %s", fi.getFrame().getRole(i), Arrays.toString(fi.getArgumentTokens(i))));
-						}
+			for(FrameInstance fi : s.getFrameInstances()) {
+				numFIs++;
+				if(verbose) {
+					System.out.println(String.format("frame %s; Trigger_by %s; Sentence %s",
+							fi.getFrame(), fi.getTarget(), fi.getSentence().toString()));
+				}
+				assertEquals(fi.getFrame().numRoles(), fi.numArguments());
+				for(int i = 0; i < fi.getFrame().numRoles(); i++) {
+					assertNotNull(fi.getArgument(i));
+					if(verbose) {
+						System.out.println(String.format("Role: %s, Argument: %s",
+								fi.getFrame().getRole(i), Arrays.toString(fi.getArgumentTokens(i))));
 					}
 				}
 			}
 			assertTrue(uniqSents.add(s));
 		}
-		System.out.printf("loading %d FrameInstances in %d sentences took %.2f seconds\n",
+		System.out.printf("loaded %d FrameInstances in %d sentences took %.2f seconds\n\n",
 				numFIs, sents.size(), time/1000d);
 	}
 
@@ -55,13 +59,9 @@ public class FrameInstanceProviderTest {
 
 	@Test
 	public void defaultConfigTest() {
-		//System.out.println("testing default config...");
-		testFIP(new FNFrameInstanceProvider());
-	}
-
-	//@Test
-	public void fn15LexTest(){
-		testFIP(new FNFrameInstanceProvider(UsefulConstants.FN15LexFramesPath, 
-				UsefulConstants.FN15LexConllPath), false);
+		boolean verbose = false;
+		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
+		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
+		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
 	}
 }
