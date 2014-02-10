@@ -5,6 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
  * 
@@ -21,11 +22,14 @@ public class SyntacticLocality {
 
 	public static void main(String[] args) {
 		
+		boolean verbose = true;
+		
 		long start = System.currentTimeMillis();
 		int numArgs = 0;
 		int numLocalArgs = 0;
 		int numArgsChildren = 0;	// of target
 		int numArgsParent = 0;		// of target
+		int numArgsSelf = 0;		// overlap(target, argument) != emptySet
 		
 		FileFrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
 		for(FNParse parse : fip) {
@@ -55,8 +59,20 @@ public class SyntacticLocality {
 						}
 					}
 					
+					if(a.overlaps(t)) {
+						numArgsSelf++;
+						local = true;
+					}
+					
 					numArgs++;
 					if(local) numLocalArgs++;
+					
+					if(verbose && !local) {
+						System.out.println("NON-LOCAL ARGUMENT:");
+						System.out.println(s);
+						System.out.printf("target[frame=%s] = %s\n", fi.getFrame().getName(), Describe.span(t, s));
+						System.out.printf("argument[role=%s] = %s\n\n", fi.getFrame().getRole(k), Describe.span(a, s));
+					}
 				}
 			}
 		}
@@ -68,6 +84,8 @@ public class SyntacticLocality {
 				numArgsChildren, numArgs, (100d*numArgsChildren)/numArgs);
 		System.out.printf("%d of %d (%.1f%%) arguments are the parent of the target\n",
 				numArgsParent, numArgs, (100d*numArgsParent)/numArgs);
+		System.out.printf("%d of %d (%.1f%%) arguments overlap with the target\n",
+				numArgsSelf, numArgs, (100d*numArgsSelf)/numArgs);
 		System.out.printf("took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
 	}
 }

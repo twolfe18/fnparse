@@ -19,4 +19,24 @@ public class SpanTest {
 			}
 		}
 	}
+	
+	@Test
+	public void overlap() {
+		Span s1 = Span.getSpan(0, 1);
+		Span s2 = Span.getSpan(0, 2);
+		Span s3 = Span.getSpan(1, 2);
+		assertEquals(true, s1.overlaps(s2));
+		assertEquals(false, s1.overlaps(s3));
+		assertEquals(true, s2.overlaps(s3));
+		
+		// reflexivity
+		Span[] spans = new Span[] { s1, s2, s3 };
+		for(int i=0; i<spans.length-1; i++) {
+			for(int j=i+1; j<spans.length; j++) {
+				Span sa = spans[i];
+				Span sb = spans[j];
+				assertEquals(sa.overlaps(sb), sb.overlaps(sa));
+			}
+		}
+	}
 }
