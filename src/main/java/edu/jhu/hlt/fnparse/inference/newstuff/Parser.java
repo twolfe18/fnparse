@@ -4,6 +4,7 @@ import static edu.jhu.hlt.fnparse.util.ScalaLike.println;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -11,8 +12,11 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.optimize.Function;
@@ -24,6 +28,8 @@ public class Parser {
 		public boolean logDomain;
 		public FgModel model;
 		public List<FactorFactory> factors;
+		public FrameIndex frameIndex;
+		public Map<Frame, List<FrameInstance>> prototypes;
 		// features store alphabets
 	}
 	
@@ -32,6 +38,7 @@ public class Parser {
 	public Parser() {
 		params = new ParserParams();
 		params.logDomain = true;		// doesn't work if this is false :(
+		params.frameIndex = FrameIndex.getInstance();
 		params.factors = new ArrayList<FactorFactory>();
 		params.factors.add(new Factors.FramePrototypeFactors());
 		params.factors.add(new Factors.FrameFactors());

@@ -22,7 +22,7 @@ public class FrameInstance {
 	 */
 	private Span[] arguments;
 
-	private FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
+	protected FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
 		this.frame = frame;
 		this.target = target; // targetIdx is the index of trigger token in the sentence.
 		this.arguments = arguments;

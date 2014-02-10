@@ -32,7 +32,7 @@ public class NewParsingSentence {
 	private Sentence sentence;
 	private FactorGraph fg;
 	private VarConfig gold;
-	private FrameIndex frameIndex;
+	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
 	
 	
@@ -51,9 +51,9 @@ public class NewParsingSentence {
 	
 	public NewParsingSentence(Sentence s, ParserParams params) {
 		
+		this.params = params;
 		this.factorHolders = params.factors;
 		this.sentence = s;
-		this.frameIndex = FrameIndex.getInstance();
 		this.frameFilterStrat = FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES;
 		
 		int n = s.size();
@@ -139,29 +139,24 @@ public class NewParsingSentence {
 		LexicalUnit head = s.getLU(headIdx);
 		
 		List<Frame> frameMatches = new ArrayList<Frame>();
-		List<LexicalUnit> luMatches = new ArrayList<LexicalUnit>();
+		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
 		
 		frameMatches.add(Frame.nullFrame);
 		assert Frame.nullFrame.numLexicalUnits() == 0;
 		
-		for(Frame f : frameIndex.allFrames()) {
+		for(Frame f : params.frameIndex.allFrames()) {
 			
 			// check if this matches a lexical unit for this frame
-			boolean fm = false;
 			for(int i = 0; i < f.numLexicalUnits(); i++) {
 				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
 					frameMatches.add(f);
-					fm = true;
+					prototypes.addAll(params.prototypes.get(f));
 					break;
 				}
 			}
-			
-			if(fm) {	// collect lexical units
-				for(int i=0; i<f.numLexicalUnits(); i++)
-					luMatches.add(f.getLexicalUnit(i));
-			}
 		}
-		return new FrameVar(s, headIdx, luMatches, frameMatches, logDomain);
+		
+		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}
 	
 	public FactorGraph getFactorGraph() { return fg; }

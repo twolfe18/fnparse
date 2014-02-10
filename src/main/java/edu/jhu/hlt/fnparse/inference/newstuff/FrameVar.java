@@ -27,7 +27,7 @@ public class FrameVar implements FgRelated {
 	private Sentence sent;	// TODO this can be removed (good for debugging)
 	private int headIdx;
 	
-	private List<LexicalUnit> prototypes;
+	private List<FrameInstance> prototypes;
 	private Var prototypeVar;	// f_i == nullFrame  =>  prototypeVar = 0
 	
 	private List<Frame> frames;
@@ -38,7 +38,7 @@ public class FrameVar implements FgRelated {
 	
 	private ExpansionHardFactor expansionHardFactor;
 	
-	public FrameVar(Sentence s, int headIdx, List<LexicalUnit> prototypes, List<Frame> frames, boolean logDomain) {
+	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
 		this.sent = s;
 		this.headIdx = headIdx;
 		this.prototypes = prototypes;
@@ -121,7 +121,7 @@ public class FrameVar implements FgRelated {
 	public Var getFrameVar() { return frameVar; }
 	public Var getExpansionVar() { return expansionVar; }
 	
-	public LexicalUnit getPrototype(int localIdx) { return prototypes.get(localIdx); }
+	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }
 	public Expansion getExpansion(int localIdx) { return expansions.get(localIdx); }
 	

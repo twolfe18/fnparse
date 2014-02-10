@@ -15,7 +15,7 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
@@ -96,7 +96,7 @@ public abstract class Factors implements FactorFactory {
 				VarConfig conf = this.getVars().getVarConfig(config);
 				int prototypeIdx = conf.getState(frameVar.getPrototypeVar());
 				int frameIdx = conf.getState(frameVar.getFrameVar());
-				LexicalUnit prototype = frameVar.getPrototype(prototypeIdx);
+				FrameInstance prototype = frameVar.getPrototype(prototypeIdx);
 				Frame frame = frameVar.getFrame(frameIdx);
 				return features.getFeatures(frame, frameVar.getTargetHeadIdx(), prototype, sent);
 			}
