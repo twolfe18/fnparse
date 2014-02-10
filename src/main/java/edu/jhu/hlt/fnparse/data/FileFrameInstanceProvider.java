@@ -20,8 +20,19 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
-public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<FNParse> {
+public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterable<FNParse> {
 
+	public static final FileFrameInstanceProvider fn15trainFIP =
+			new FileFrameInstanceProvider(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
+	
+	public static final FileFrameInstanceProvider fn15testFIP =
+			new FileFrameInstanceProvider(UsefulConstants.TestFN15FullTextFramesPath, UsefulConstants.TestFN15FullTextConllPath);
+	
+	public static final FileFrameInstanceProvider fn15lexFIP =
+			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
+	
+	private File frameFile, conllFile;
+	
 	private LineIterator litrFrames;
 	private LineIterator litrConll;
 	private List<FNParse> fnpl = new LinkedList<FNParse>();
@@ -44,12 +55,17 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 	String prevSentId;
 
 	@Override
-	public String getName() { return "FrameNet_frame_instances"; }
-
-	public FNFrameInstanceProvider(){
-		this(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
+	public String getName() { return toString(); }
+	
+	@Override
+	public String toString() {
+		return String.format("<FrameInstanceProvider from %s %s>",
+				this.frameFile.getName(), this.conllFile.getName());
 	}
-	public FNFrameInstanceProvider(File frameFile, File conllFile){
+
+	public FileFrameInstanceProvider(File frameFile, File conllFile) {
+		this.frameFile = frameFile;
+		this.conllFile = conllFile;
 		// Right now hard code to return the train instances. Deal with initialization later.
 		try {
 			litrFrames = new LineIterator(new FileReader(frameFile));
@@ -141,7 +157,7 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 						curSentIdConll = l[2];
 					}				
 					Sentence s = new Sentence("FNFUTXT", 
-							prevSentId, 
+							prevSentId,
 							tokens.toArray(new String[0]), 
 							pos.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 

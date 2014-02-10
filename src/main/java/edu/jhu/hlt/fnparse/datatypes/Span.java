@@ -19,13 +19,18 @@ public class Span {
 		if(start == 0 && end == 0)
 			return nullSpan;
 		
+		if(start >= end)
+			throw new IllegalArgumentException("start must be less than end: " + start + " >= " + end);
+		
 		// make a bigger table if the previous was too small
 		if(end > internedSpans.length) {
 			int newInternedMaxSentSize = end + 10;
 			
 			// sanity check
-			if(newInternedMaxSentSize > 120)
-				throw new IllegalStateException("what are you doing with these huge sentences?");
+			if(newInternedMaxSentSize > 200) {
+				String desc = "(" + start + ", " + end + ")";
+				throw new IllegalStateException("what are you doing with these huge sentences? " + desc);
+			}
 			
 			Span[][] newInternedSpans = new Span[newInternedMaxSentSize][];
 			for(int s=0; s<newInternedSpans.length; s++) {
