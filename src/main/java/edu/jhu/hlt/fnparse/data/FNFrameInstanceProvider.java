@@ -49,8 +49,8 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 	public FNFrameInstanceProvider(){
 		this(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
 	}
+	
 	public FNFrameInstanceProvider(File frameFile, File conllFile){
-		// Right now hard code to return the train instances. Deal with initialization later.
 		try {
 			litrFrames = new LineIterator(new FileReader(frameFile));
 			litrConll = new LineIterator(new FileReader(conllFile));
@@ -145,8 +145,11 @@ public class FNFrameInstanceProvider implements FrameInstanceProvider, Iterable<
 						curLineConllFile=litrConll.nextLine();
 						l=curLineConllFile.split("\t");
 						curSentIdConll = l[2];
-					}				
-					Sentence s = new Sentence("FNFUTXT", 
+					}
+					String datasetOfSentence = (curSentIdConll.startsWith("FNFUTXT"))? "FNFUTXT" : null;
+					datasetOfSentence = (curSentIdConll.startsWith("FNLEX"))? "FNLEX" : datasetOfSentence;
+					assert datasetOfSentence != null;
+					Sentence s = new Sentence( datasetOfSentence, 
 							prevSentId, 
 							tokens.toArray(new String[0]), 
 							pos.toArray(new String[0]), 

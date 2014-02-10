@@ -21,6 +21,8 @@ public class UsefulConstants {
 	public static final File TrainFN15FullTextFramesPath = new File(dataPath, "fn15-fulltext.frames.train");
 	public static final File TrainFN15FullTextConllPath = new File(dataPath, "fn15-fulltext.conll.train");
 	
+	public static final File FN15LexFramesPath = new File(dataPath, "fn15-lex.frames");
+	public static final File FN15LexConllPath = new File(dataPath, "fn15-lex.conll");
 	
 	public static final File semLinkFrameInstanceFile = new File(dataPath, "semlink.1.2.2c");
 	public static Tree getPennTree(String parseFileName, int sentenceIndex, String fileSuffix){

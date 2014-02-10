@@ -24,7 +24,7 @@ public class Span {
 			int newInternedMaxSentSize = end + 10;
 			
 			// sanity check
-			if(newInternedMaxSentSize > 120)
+			if(newInternedMaxSentSize > 200)
 				throw new IllegalStateException("what are you doing with these huge sentences?");
 			
 			Span[][] newInternedSpans = new Span[newInternedMaxSentSize][];

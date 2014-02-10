@@ -11,27 +11,34 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.data.UsefulConstants;
 
 public class FrameInstanceProviderTest {
 
 	private static void testFIP(FrameInstanceProvider fip){
+		testFIP(fip, true);
+	}
+
+	private static void testFIP(FrameInstanceProvider fip, boolean printFNParses){
 
 		long start = System.currentTimeMillis();
 		List<FNParse> sents = fip.getParsedSentences();
 		long time = System.currentTimeMillis() - start;
-		
+
 		checkOrder(sents, fip);
 
 		int numFIs = 0;
 		Set<FNParse> uniqSents = new HashSet<FNParse>();
 		for(FNParse s : sents) {
-			for(FrameInstance fi : s.getFrameInstances()) {
-				numFIs++;
-				String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTarget(), Arrays.toString(fi.getSentence().getWord()));
-				System.out.println(line);
-				for(int i = 0; i < fi.getFrame().numRoles(); i++){
-					if(fi.getArgument(i) != null){
-						System.out.println(String.format("Role: %s, Argument: %s", fi.getFrame().getRole(i), Arrays.toString(fi.getArgumentTokens(i))));
+			if(printFNParses){
+				for(FrameInstance fi : s.getFrameInstances()) {
+					numFIs++;
+					String line = String.format("frame %s; Trigger_by %s; Sentence %s", fi.getFrame(), fi.getTarget(), Arrays.toString(fi.getSentence().getWord()));
+					System.out.println(line);
+					for(int i = 0; i < fi.getFrame().numRoles(); i++){
+						if(fi.getArgument(i) != null){
+							System.out.println(String.format("Role: %s, Argument: %s", fi.getFrame().getRole(i), Arrays.toString(fi.getArgumentTokens(i))));
+						}
 					}
 				}
 			}
@@ -45,16 +52,16 @@ public class FrameInstanceProviderTest {
 		List<FNParse> gotTheSecondTime = fip.getParsedSentences();
 		assertEquals(sents, gotTheSecondTime);
 	}
-	
+
 	@Test
 	public void defaultConfigTest() {
 		//System.out.println("testing default config...");
 		testFIP(new FNFrameInstanceProvider());
 	}
 
-	/*@Test
-	public void semlinkConfigTest() {
-		//System.out.println("testing Semlink config...");
-		testFIP(new SemLinkFrameInstanceProvider());
-	}*/
+	//@Test
+	public void fn15LexTest(){
+		testFIP(new FNFrameInstanceProvider(UsefulConstants.FN15LexFramesPath, 
+				UsefulConstants.FN15LexConllPath), false);
+	}
 }
