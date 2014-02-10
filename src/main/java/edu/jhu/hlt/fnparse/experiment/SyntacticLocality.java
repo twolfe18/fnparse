@@ -21,8 +21,11 @@ public class SyntacticLocality {
 
 	public static void main(String[] args) {
 		
+		long start = System.currentTimeMillis();
 		int numArgs = 0;
 		int numLocalArgs = 0;
+		int numArgsChildren = 0;	// of target
+		int numArgsParent = 0;		// of target
 		
 		FileFrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
 		for(FNParse parse : fip) {
@@ -34,9 +37,23 @@ public class SyntacticLocality {
 					if(a == Span.nullSpan) continue;
 					
 					// is there a link in indices(t) -x-> indices(a)?
+					
+					// is target the parent of this argument?
 					boolean local = false;
-					for(int ai=a.start; ai<a.end && !local; ai++)
-						local |= t.includes(s.governor(ai));
+					for(int ai=a.start; ai<a.end && !local; ai++) {
+						if(t.includes(s.governor(ai))) {
+							numArgsChildren++;
+							local = true;
+						}
+					}
+					
+					// is argument the parent of the target
+					for(int ti=t.start; ti<t.end && !local; ti++) {
+						if(a.includes(s.governor(ti))) {
+							numArgsParent++;
+							local = true;
+						}
+					}
 					
 					numArgs++;
 					if(local) numLocalArgs++;
@@ -44,7 +61,13 @@ public class SyntacticLocality {
 			}
 		}
 		
-		System.out.printf("%d of %d (%.1f%%) arguments are local in %s\n",
-				numLocalArgs, numArgs, (100d*numLocalArgs)/numArgs, fip.getName());
+		System.out.println("in " + fip.getName());
+		System.out.printf("%d of %d (%.1f%%) arguments are local\n",
+				numLocalArgs, numArgs, (100d*numLocalArgs)/numArgs);
+		System.out.printf("%d of %d (%.1f%%) arguments are a child of the target\n",
+				numArgsChildren, numArgs, (100d*numArgsChildren)/numArgs);
+		System.out.printf("%d of %d (%.1f%%) arguments are the parent of the target\n",
+				numArgsParent, numArgs, (100d*numArgsParent)/numArgs);
+		System.out.printf("took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
 	}
 }
