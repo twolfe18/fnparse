@@ -56,6 +56,14 @@ public class Sentence implements HasId {
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	
+	public int governor(int i) {
+		return gov[i];
+	}
+	
+	public String dependencyType(int childIdx) {
+		return depType[childIdx];
+	}
+	
 	public List<String> wordsIn(Span s) {
 		List<String> l = new ArrayList<String>();
 		for(int i=s.start; i<s.end; i++)
@@ -82,9 +90,7 @@ public class Sentence implements HasId {
 	}
 	
 	@Override
-	public int hashCode() {
-		return id.hashCode();
-	}
+	public int hashCode() { return id.hashCode(); }
 	
 	@Override
 	public boolean equals(Object o) {
