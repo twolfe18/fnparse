@@ -10,11 +10,11 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -36,6 +36,7 @@ public class ParsingSentence {
 	
 	// ==== FACTORS ====
 	private List<FactorFactory> factorHolders;
+	private List<Factor> factors;
 	
 	// ==== MISC ====
 	private Sentence sentence;
@@ -83,14 +84,9 @@ public class ParsingSentence {
 		}
 
 		// initialize all the factors
-		for(FactorFactory ff : factorHolders) {
-			ff.startSentence(sentence);
-			for(int i=0; i<n; i++)
-				for(int j=0; j<n; j++)
-					for(int k=0; k<roleVars[i][j].length; k++)
-						ff.initFactorsFor(frameVars[i], roleVars[i][j][k]);
-			ff.endSentence();
-		}
+		factors = new ArrayList<Factor>();
+		for(FactorFactory ff : factorHolders)
+			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars));
 	}
 	
 	/**
@@ -249,13 +245,16 @@ public class ParsingSentence {
 			for(int j=0; j<n; j++)
 				for(int k=0; k<roleVars[i][j].length; k++)
 					roleVars[i][j][k].register(fg, gold);
-		for(FactorFactory ff : factorHolders)
-			ff.register(fg, gold);
+		
+		for(Factor f : factors)
+			fg.addFactor(f);
 		
 		System.out.printf("[NewParsingSentence getFgExample] there are %d variables and %d factors, returning example\n",
 				fg.getNumVars(), fg.getNumFactors());
 		
 		return new FgExample(fg, gold);
 	}
+	
+	public List<Factor> getFactorsFromFactories() { return factors; }
 }
 

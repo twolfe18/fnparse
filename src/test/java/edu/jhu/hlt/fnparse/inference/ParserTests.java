@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,6 +11,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -19,17 +22,21 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
+import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {
 
 	private FNParse dummyParse;
+	private Parser parser;
 	
 	@Before
 	public void setupBob() {
 		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
 		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
 		SuperBob.getBob(null).startup();
+		
+		parser = new Parser();
 	}
 	
 	@After
@@ -73,18 +80,35 @@ public class ParserTests {
 	}
 	
 	@Test
+	public void justSentence() {
+		ParsingSentence ps = new ParsingSentence(dummyParse.getSentence(), parser.getParams());
+		for(Factor f : ps.getFactorsFromFactories()) {
+			assertTrue(f.getVars().size() > 0);
+			for(Var v : f.getVars()) {
+				if(v.getNumStates() == 0)
+					System.out.println("wut");
+				assertTrue(v.getNumStates() > 0);
+			}
+		}
+	}
+	
+	@Test
 	public void basic() {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
-		Parser parser = new Parser();
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<Sentence> test = new ArrayList<Sentence>();
+		
+		System.out.println("====== Training ======");
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 		parser.train(train);
-		//List<FNParse> predicted = parser.parse(test);
-		//assertEquals(test.size(), predicted.size());
-		//assertEquals(test, predicted);	// TODO implement equals
+		
+		
+		System.out.println("====== Running Prediction ======");
+		List<FNParse> predicted = parser.parse(test);
+		assertEquals(test.size(), predicted.size());
+		assertEquals(test, predicted);	// TODO implement equals
 	}
 	
 }

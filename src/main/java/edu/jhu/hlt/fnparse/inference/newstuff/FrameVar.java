@@ -13,6 +13,12 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
+/**
+ * TODO have a version of this class that can efficiently handle
+ * variables with one fixed value (make them observed?).
+ * 
+ * @author travis
+ */
 public class FrameVar implements FgRelated {
 	
 	// target Spans aren't very big
@@ -38,6 +44,10 @@ public class FrameVar implements FgRelated {
 	private ExpansionHardFactor expansionHardFactor;
 	
 	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
+		
+		if(frames.size() == 0 || prototypes.size() == 0)
+			throw new IllegalArgumentException("#frames=" + frames.size() + ", #prototypes=" + prototypes.size());
+		
 		this.sent = s;
 		this.headIdx = headIdx;
 		this.prototypes = prototypes;

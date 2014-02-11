@@ -114,6 +114,8 @@ public class Parser {
 		}
 		return pred;
 	}
+	
+	public ParserParams getParams() { return params; }
 
 	public static void main(String[] args) {
 		
