@@ -39,13 +39,21 @@ public abstract class Factors implements FactorFactory {
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
-		for(Factor f : factors) fg.addFactor(f);
+		if(factors.size() == 0) {
+			System.err.print("no factors for " + this);
+		}
+		//assert factors.size() > 0;
+		for(Factor f : factors)
+			fg.addFactor(f);
 	}
 	
 	@Override
 	public abstract void initFactorsFor(FrameVar f, RoleVars r);
 	
-	
+	@Override
+	public void endSentence() {
+		factors.clear();
+	}
 
 	/**
 	 * looks at (prototype, frame) pairs
@@ -80,6 +88,7 @@ public abstract class Factors implements FactorFactory {
 		
 		@Override
 		public void endSentence() {
+			super.endSentence();
 			sent = null;
 			indicesAddedAlready.clear();
 		}
@@ -152,6 +161,7 @@ public abstract class Factors implements FactorFactory {
 		
 		@Override
 		public void endSentence() {
+			super.endSentence();
 			this.sent = null;
 		}
 
@@ -200,7 +210,10 @@ public abstract class Factors implements FactorFactory {
 		}
 		
 		@Override
-		public void endSentence() { sent = null; }
+		public void endSentence() {
+			super.endSentence();
+			sent = null;
+		}
 		
 		static class F extends ExpFamFactor {
 
@@ -264,7 +277,10 @@ public abstract class Factors implements FactorFactory {
 		}
 		
 		@Override
-		public void endSentence() { sent = null; }
+		public void endSentence() {
+			super.endSentence();
+			sent = null;
+		}
 		
 		static class F extends ExpFamFactor {
 
@@ -315,7 +331,10 @@ public abstract class Factors implements FactorFactory {
 		}
 		
 		@Override
-		public void endSentence() { sent = null; }
+		public void endSentence() {
+			super.endSentence();
+			sent = null;
+		}
 		
 		static class F extends ExpFamFactor {
 

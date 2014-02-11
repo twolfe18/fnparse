@@ -107,6 +107,10 @@ public class RoleVars implements FgRelated {
 	public Expansion getExpansion(VarConfig conf) {
 		return expansions.get(conf.getState(expansionVar));
 	}
+	public Span getSpan(VarConfig conf) {
+		Expansion e = getExpansion(conf);
+		return e.upon(headIdx);
+	}
 	
 	public Var getRoleVar() { return headVar; }	// binary var
 	public Var getExpansionVar() { return expansionVar; }

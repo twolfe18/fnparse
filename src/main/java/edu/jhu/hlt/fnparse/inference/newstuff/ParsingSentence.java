@@ -1,14 +1,20 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
+import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -104,16 +110,45 @@ public class ParsingSentence {
 		MbrDecoder decoder = new MbrDecoder(prm);
 		decoder.decode(model, this.getFgExample());
 		VarConfig conf = decoder.getMbrVarConfig();
+		
+		// TODO push this code into MbrDecoder
+		Map<Var, DenseFactor> margins = new HashMap<Var, DenseFactor>();
+		for(DenseFactor df : decoder.getVarMarginals()) {
+			assert df.getVars().size() == 1;
+			Var v = df.getVars().get(0);
+			margins.put(v, df);
+		}
+		
 		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
-		for(int i=0; i<frameVars.length; i++) {
+		int n = frameVars.length;
+		for(int i=0; i<n; i++) {
 			Frame f_i = frameVars[i].getFrame(conf);
 			if(f_i == Frame.nullFrame) {
 				assert frameVars[i].getExpansion(conf).equals(Expansion.noExpansion);
 				continue;
 			}
 			
-			
-			throw new RuntimeException("implement me");
+			int K = f_i.numRoles();
+			Span[] args = new Span[K];
+			Arrays.fill(args, Span.nullSpan);
+			for(int k=0; k<K; k++) {	// find the best span for every role
+				Span bestSpan = null;
+				double bestSpanScore = 0d;
+				for(int j=0; j<n; j++) {
+					RoleVars rv = roleVars[i][j][k];
+					Span s = rv.getSpan(conf);
+					DenseFactor mR = margins.get(rv.getRoleVar());
+					DenseFactor mE = margins.get(rv.getExpansionVar());
+					double mRv = mR.getValue(conf.getState(rv.getRoleVar()));
+					double mEv = mE.getValue(conf.getState(rv.getExpansionVar()));
+					double score = params.logDomain ? mRv + mEv : mRv * mEv;
+					if(score > bestSpanScore || j == 0) {
+						bestSpan = s;
+						bestSpanScore = score;
+					}
+				}
+				args[k] = bestSpan;
+			}
 		}
 		return new FNParse(sentence, frameInstances, true);
 	}

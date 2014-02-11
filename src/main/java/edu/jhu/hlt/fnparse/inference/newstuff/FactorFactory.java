@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public interface FactorFactory extends FgRelated {
@@ -25,17 +27,21 @@ public interface FactorFactory extends FgRelated {
 	 * such that r.parent == f.
 	 */
 	public void initFactorsFor(FrameVar f, RoleVars r);
+
+	
+	/**
+	 * register each of the factors that have been created with initFactorsFor()
+	 */
+	@Override
+	public void register(FactorGraph fg, VarConfig gold);
 	
 	
 	/**
-	 * allows you to dump any data you've been keeping on the current sentence.
+	 * clear any collection of factors you've been holding onto between calls to
+	 * initFactorsFor() and register().
 	 */
 	public void endSentence();
 	
 	
-	// inherits from FgRelated:
-	// public void register(FactorGraph fg, VarConfig gold);
-	
 	// TODO add constituency/dependency parse variables to the signature above
-	
 }
