@@ -15,6 +15,7 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.hlt.fnparse.data.FrameInstanceProviderTest;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -73,14 +74,15 @@ public class ParsingSentence {
 		for(int i=0; i<n; i++)
 			frameVars[i] = makeFrameVar(s, i, params.logDomain);
 		
-		roleVars = new RoleVars[n][n][];
+		roleVars = new RoleVars[n][][];
 		for(int i=0; i<n; i++) {
+			if(frameVars[i] == null)
+				continue;
 			int maxRoles = frameVars[i].getMaxRoles();
-			for(int j=0; j<n; j++) {
-				roleVars[i][j] = new RoleVars[maxRoles];
+			roleVars[i] = new RoleVars[n][maxRoles];
+			for(int j=0; j<n; j++)
 				for(int k=0; k<maxRoles; k++)
 					roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k, params.logDomain);	
-			}
 		}
 
 		// initialize all the factors
@@ -95,12 +97,20 @@ public class ParsingSentence {
 	 * here is how we should do it:
 	 * 1. frames = \arg\max p(frames | x) = \sum_{args} p(frame, args | x)
 	 * 2. args = \arg\max p(args | frames, x)
-	 * 
-	 * implementation options:
-	 * 1. do a two-pass decode. first is MBR to find frames. second pass, only add the bits related to the args.
-	 * 2. write a annealing decoder (max-product BP sucks, just multiply factors or weights by a constant and run sum-product).
 	 */
 	public FNParse decode(FgModel model) {
+		
+		// Matt's code doesn't like it when you give it an FgExample
+		// with an empty VarConfig for gold (even if it is a test example).
+		// This just adds some label, which is the default and wrong.
+		int n = frameVars.length;
+//		for(int i=0; i<n; i++) {
+//			if(frameVars[i] == null)
+//				continue;
+//			for(int j=0; j<n; j++)
+//				for(int k=0; k<roleVars[i][j].length; k++)
+//					roleVars[i][j][k].register(fg, gold);
+//		}
 		
 		MbrDecoderPrm prm = new MbrDecoderPrm();
 		MbrDecoder decoder = new MbrDecoder(prm);
@@ -116,14 +126,16 @@ public class ParsingSentence {
 		}
 		
 		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
-		int n = frameVars.length;
 		for(int i=0; i<n; i++) {
+			if(frameVars[i] == null) continue;
 			Frame f_i = frameVars[i].getFrame(conf);
 			if(f_i == Frame.nullFrame) {
 				assert frameVars[i].getExpansion(conf).equals(Expansion.noExpansion);
 				continue;
 			}
+			Span target = frameVars[i].getTarget(conf);
 			
+			// TODO before choose args, I should really clamp the frames and re-run BP
 			int K = f_i.numRoles();
 			Span[] args = new Span[K];
 			Arrays.fill(args, Span.nullSpan);
@@ -145,6 +157,7 @@ public class ParsingSentence {
 				}
 				args[k] = bestSpan;
 			}
+			frameInstances.add(FrameInstance.newFrameInstance(f_i, target, args, sentence));
 		}
 		return new FNParse(sentence, frameInstances, true);
 	}
@@ -160,6 +173,8 @@ public class ParsingSentence {
 		// set all the labels to nullFrame/nullSpan, and then overwrite those that aren't null
 		int n = p.getSentence().size();
 		for(int i=0; i<n; i++) {
+			if(frameVars[i] == null)
+				continue;
 			FrameInstance fiNull = FrameVar.nullFrameInstance(sentence, i);
 			frameVars[i].setGold(fiNull);
 			
@@ -173,7 +188,12 @@ public class ParsingSentence {
 		// set the non-nullFrame vars to their correct Frame (and target Span) values
 		HeadFinder hf = new BraindeadHeadFinder();	// TODO
 		for(FrameInstance fi : p.getFrameInstances()) {
+			
 			int head = hf.head(fi.getTarget(), p.getSentence());
+			if(frameVars[head] == null) {
+				System.err.println("[setGold] now you really screwed up: " + sentence.getLU(head) + " has a non-nullFrame label");
+				continue;
+			}
 			frameVars[head].setGold(fi);
 			
 			// set role variables that were instantiated
@@ -207,7 +227,7 @@ public class ParsingSentence {
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
 		
 		frameMatches.add(Frame.nullFrame);
-		assert Frame.nullFrame.numLexicalUnits() == 0;
+		prototypes.add(FrameInstance.nullPrototype);
 		
 		for(Frame f : params.frameIndex.allFrames()) {
 			
@@ -221,7 +241,11 @@ public class ParsingSentence {
 			}
 		}
 		
-		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
+		if(frameMatches.size() == 1) {
+			//System.err.println("[makeFrameVars] WARNING: no frames available for " + s.getLU(headIdx));
+			return null;
+		}
+		else return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}
 	
 	public FactorGraph getFactorGraph() { return fg; }
@@ -239,12 +263,18 @@ public class ParsingSentence {
 		this.gold = new VarConfig();
 		
 		// register all the variables and factors
-		for(int i=0; i<n; i++)
+		for(int i=0; i<n; i++) {
+			if(frameVars[i] ==  null)
+				continue;
 			frameVars[i].register(fg, gold);
-		for(int i=0; i<n; i++)
+		}
+		for(int i=0; i<n; i++) {
+			if(frameVars[i] == null)
+				continue;
 			for(int j=0; j<n; j++)
 				for(int k=0; k<roleVars[i][j].length; k++)
 					roleVars[i][j][k].register(fg, gold);
+		}
 		
 		for(Factor f : factors)
 			fg.addFactor(f);

@@ -62,8 +62,8 @@ public class FrameVar implements FgRelated {
 	}
 	
 	// indices into frames and expansions respectively
-	private int goldFrame = -1;
-	private int goldExpansion = -1;
+	private int goldFrame;
+	private int goldExpansion;
 	
 	/**
 	 * instances of FrameVar who's label is nullFrame should use the
@@ -104,10 +104,8 @@ public class FrameVar implements FgRelated {
 		fg.addVar(expansionVar);
 		
 		// prototypeVar is latent, no gold label
-		if(goldFrame >= 0)
-			gold.put(frameVar, goldFrame);
-		if(goldExpansion >= 0)
-			gold.put(expansionVar, goldExpansion);
+		gold.put(frameVar, goldFrame);
+		gold.put(expansionVar, goldExpansion);
 		
 		// hard factors
 		fg.addFactor(expansionHardFactor);
@@ -138,6 +136,9 @@ public class FrameVar implements FgRelated {
 	}
 	public Expansion getExpansion(VarConfig conf) {
 		return getExpansion(conf.getState(expansionVar));
+	}
+	public Span getTarget(VarConfig conf) {
+		return getExpansion(conf).upon(headIdx);
 	}
 	
 	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }

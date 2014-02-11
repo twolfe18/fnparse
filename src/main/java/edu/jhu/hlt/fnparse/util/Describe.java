@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.util.Arrays;
+
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -28,7 +30,8 @@ public class Describe {
 	
 	public static String frameInstance(FrameInstance fi) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("FrameInstance of " + fi.getFrame().getName() + ":");
+		sb.append("FrameInstance of " + fi.getFrame().getName());
+		sb.append(" triggered by " + Arrays.toString(fi.getSentence().getWordFor(fi.getTarget())) + ":");
 		for(int i=0; i<fi.numArguments(); i++) {
 			Span extent = fi.getArgument(i);
 			if(extent == Span.nullSpan) continue;

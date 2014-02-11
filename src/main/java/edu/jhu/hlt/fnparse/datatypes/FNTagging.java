@@ -16,8 +16,8 @@ import edu.jhu.hlt.fnparse.util.HasId;
  */
 public class FNTagging implements HasId {
 
-	private Sentence sent;
-	private List<FrameInstance> frameInstances;
+	protected Sentence sent;
+	protected List<FrameInstance> frameInstances;
 	
 	public FNTagging(Sentence s, List<FrameInstance> frameMentions) {
 		if(frameMentions == null || s == null)
@@ -43,5 +43,4 @@ public class FNTagging implements HasId {
 
 	@Override
 	public String getId() { return sent.getId(); }
-	
 }

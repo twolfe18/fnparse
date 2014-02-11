@@ -8,8 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 public interface FactorFactory {
 	
 	/**
-	 * Make some factors and hold onto them.
-	 * You add them to the model when FgRelated.register is called.
+	 * Make some factors.
 	 * 
 	 * You can build up a factor that is as costly as you want it to be
 	 * given these variables.

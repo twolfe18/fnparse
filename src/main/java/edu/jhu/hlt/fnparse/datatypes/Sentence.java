@@ -7,6 +7,9 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.util.HasId;
 
 public class Sentence implements HasId {
+	
+	public static final Sentence nullSentence =
+			new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new int[0], new String[0]);
 
 	/**
 	 * a __globally__ unique identifier

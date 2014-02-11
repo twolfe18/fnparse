@@ -108,7 +108,14 @@ public class ParserTests {
 		System.out.println("====== Running Prediction ======");
 		List<FNParse> predicted = parser.parse(test);
 		assertEquals(test.size(), predicted.size());
-		assertEquals(test, predicted);	// TODO implement equals
+		System.out.println("gold: " + Describe.fnParse(train.get(0)));
+		System.out.println("hyp:  " + Describe.fnParse(predicted.get(0)));
+		assertSameParse(train.get(0), predicted.get(0));
+	}
+	
+	public void assertSameParse(FNParse a, FNParse b) {
+		assertEquals(a.getSentence(), b.getSentence());
+		assertEquals(a.getFrameInstances(), b.getFrameInstances());
 	}
 	
 }

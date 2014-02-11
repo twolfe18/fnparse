@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.Arrays;
+
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 /**
@@ -12,6 +14,9 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
  */
 public class FrameInstance {
 
+	public static final FrameInstance nullPrototype =
+			new FrameInstance(Frame.nullFrame, Span.nullSpan, new Span[0], Sentence.nullSentence);
+	
 	private Frame frame; 
 	private Span target;		// index of the target word
 	private Sentence sentence;
@@ -74,6 +79,21 @@ public class FrameInstance {
 
 	@Override
 	public String toString() {
-		return String.format("<FrameInstance %s @ %d with %d roles>", frame, target, numArguments());
+		return String.format("<FrameInstance %s @ %s with %d roles>", frame, target, numArguments());
+	}
+	
+	@Override
+	public int hashCode() {
+		return (frame.hashCode() << 20) | (target.hashCode() << 10) | sentence.hashCode();
+	}
+	
+	@Override
+	public boolean equals(Object other) {
+		if(other instanceof FrameInstance) {
+			FrameInstance fi = (FrameInstance) other;
+			return target == fi.target && frame.equals(fi.frame)
+					&& sentence.equals(fi.sentence) && Arrays.equals(arguments, fi.arguments);
+		}
+		else return false;
 	}
 }

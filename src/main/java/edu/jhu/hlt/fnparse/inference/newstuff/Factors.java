@@ -48,8 +48,10 @@ public abstract class Factors implements FactorFactory {
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
-			for(int i=0; i<n; i++)
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
 				factors.add(new F(f[i], features, s));
+			}
 			return factors;
 		}
 
@@ -102,8 +104,10 @@ public abstract class Factors implements FactorFactory {
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
-			for(int i=0; i<n; i++)
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
 				factors.add(new F(f[i], features, s));
+			}
 			return factors;
 		}
 
@@ -146,10 +150,12 @@ public abstract class Factors implements FactorFactory {
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
-			for(int i=0; i<n; i++)
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
 				for(int j=0; j<n; j++)
 					for(int k=0; k<r[i][j].length; k++)
 						factors.add(new F(f[i], r[i][j][k], s, features));
+			}
 			return factors;
 		}
 		
@@ -202,8 +208,10 @@ public abstract class Factors implements FactorFactory {
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
-			for(int i=0; i<n; i++)
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
 				factors.add(new F(f[i], s, features));
+			}
 			return factors;
 		}
 		
@@ -240,10 +248,12 @@ public abstract class Factors implements FactorFactory {
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
-			for(int i=0; i<n; i++)
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
 				for(int j=0; j<n; j++)
 					for(int k=0; k<r[i][j].length; k++)
 						factors.add(new F(r[i][j][k], s, features));
+			}
 			return factors;
 		}
 		

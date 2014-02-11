@@ -38,8 +38,8 @@ public class RoleVars implements FgRelated {
 				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
-	private Boolean headVarGold = null;
-	private int expansionVarGold = -1;
+	private boolean headVarGold = false;
+	private int expansionVarGold = 0;
 	
 	public static class Location {
 		public int frame, arg, role;
@@ -92,10 +92,8 @@ public class RoleVars implements FgRelated {
 		
 		fg.addFactor(expansionHardFactor);
 		
-		if(headVarGold != null)
-			gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
-		if(expansionVarGold >= 0)
-			gold.put(expansionVar, expansionVarGold);
+		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
+		gold.put(expansionVar, expansionVarGold);
 	}
 	
 	public int getHeadIdx() { return headIdx; }
