@@ -40,6 +40,9 @@ public class BasicFrameRoleFeatures implements edu.jhu.hlt.fnparse.features.Feat
 	
 	public FeatureVector getFeatures(Frame f, Span argumentSpan, Span targetSpan, int roleIdx, Sentence sent) {
 		
+		if(roleIdx >= f.numRoles())
+			throw new IllegalArgumentException();
+		
 		// NOTE: don't write any back-off features that only look at roleIdx because it is
 		// meaningless outside without considering the frame.
 		

@@ -4,9 +4,9 @@ package edu.jhu.hlt.fnparse.datatypes;
 public class Frame {
 
 	private int idx;
-	private String name;			// e.g. "Commerce_buy"
+	private String name;				// e.g. "Commerce_buy"
 	private LexicalUnit[] lexicalUnits;	// e.g. ["purchase.v", "buy.v"]
-	private String[] roles;			// e.g. ["Buyer", "Goods"]
+	private String[] roles;				// e.g. ["Buyer", "Goods"]
 
 	public Frame(int id, String name, LexicalUnit[] lexicalUnits, String[] roles) {
 		if(roles == null || roles.length == 0)
@@ -52,7 +52,21 @@ public class Frame {
 		return roles.length;
 	}
 	
+	public String[] getRoles() { return roles; }
+	
 	public String getName() { return name; }
+	
+	@Override
+	public int hashCode() { return name.hashCode(); }
+	
+	@Override
+	public boolean equals(Object other) {
+		if(other instanceof Frame) {
+			Frame f = (Frame) other;
+			return idx == f.idx;
+		}
+		else return false;
+	}
 	
 	/**
 	 * Frame used to indicate that a word does not evoke a frame

@@ -29,4 +29,5 @@ public class FNParse extends FNTagging {
 	public boolean isFullParse() {
 		return isFullParse;
 	}
+	
 }

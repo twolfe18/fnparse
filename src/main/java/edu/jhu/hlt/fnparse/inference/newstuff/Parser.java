@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import static edu.jhu.hlt.fnparse.util.ScalaLike.println;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,8 +16,10 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.optimize.Function;
@@ -39,12 +42,29 @@ public class Parser {
 		params = new ParserParams();
 		params.logDomain = true;		// doesn't work if this is false :(
 		params.frameIndex = FrameIndex.getInstance();
+		
 		params.factors = new ArrayList<FactorFactory>();
 		params.factors.add(new Factors.FramePrototypeFactors());
 		params.factors.add(new Factors.FrameFactors());
 		params.factors.add(new Factors.FrameRoleFactors());
 		params.factors.add(new Factors.FrameExpansionFactors());
 		params.factors.add(new Factors.ArgExpansionFactors());
+		
+		System.out.print("[Parser init] building Frame => Prototype mapping... ");
+		long start = System.currentTimeMillis();
+		params.prototypes = new HashMap<Frame, List<FrameInstance>>();
+		for(FNTagging lexTagging : FileFrameInstanceProvider.fn15lexFIP.getTaggedSentences()) {
+//			assert lexTagging.numFrameInstances() == 1 : "#fi = " + lexTagging.numFrameInstances() + ", " + Describe.fnTagging(lexTagging);
+			FrameInstance lexFI = lexTagging.getFrameInstance(0);
+			List<FrameInstance> protos = params.prototypes.get(lexFI.getFrame());
+			if(protos == null) {
+				protos = new ArrayList<FrameInstance>();
+				protos.add(lexFI);
+				params.prototypes.put(lexFI.getFrame(), protos);
+			}
+			else protos.add(lexFI);
+		}
+		System.out.printf("done, took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
 	}
 	
 	public void train(List<FNParse> examples) {
@@ -59,7 +79,7 @@ public class Parser {
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
-			NewParsingSentence s = new NewParsingSentence(parse.getSentence(), params);
+			ParsingSentence s = new ParsingSentence(parse.getSentence(), params);
 			s.setGold(parse);
 			exs.add(s.getFgExample());
 		}
@@ -80,7 +100,19 @@ public class Parser {
 			System.out.println("#features = " + bob.totalFeatures());
 		}
 		params.model = new FgModel(numParams);
-		params.model = trainer.train(params.model, exs);
+		try { params.model = trainer.train(params.model, exs); }
+		catch(cc.mallet.optimize.OptimizationException oe) {
+			oe.printStackTrace();
+		}
+	}
+	
+	public List<FNParse> parse(List<Sentence> raw) {
+		List<FNParse> pred = new ArrayList<FNParse>();
+		for(Sentence s : raw) {
+			ParsingSentence ps = new ParsingSentence(s, params);
+			pred.add(ps.decode(params.model));
+		}
+		return pred;
 	}
 
 	public static void main(String[] args) {

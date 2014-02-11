@@ -4,9 +4,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.gm.data.FgExample;
+import edu.jhu.gm.decode.MbrDecoder;
+import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -17,7 +20,7 @@ import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
-public class NewParsingSentence {
+public class ParsingSentence {
 
 	// ==== VARIABLES ====
 	private FrameVar[] frameVars;
@@ -37,6 +40,7 @@ public class NewParsingSentence {
 	
 	
 	/**
+	 * In training data:
 	 * what do we do when we say that a target may evoke
 	 * a frame in set F, but the true frame g \not\in F?
 	 */
@@ -49,7 +53,7 @@ public class NewParsingSentence {
 	// this requires seeing the gold label while constructing all the variables.
 	
 	
-	public NewParsingSentence(Sentence s, ParserParams params) {
+	public ParsingSentence(Sentence s, ParserParams params) {
 		
 		this.params = params;
 		this.factorHolders = params.factors;
@@ -83,6 +87,36 @@ public class NewParsingSentence {
 		}
 	}
 	
+	/**
+	 * MBR decode may not be self-consistent...
+	 * 
+	 * here is how we should do it:
+	 * 1. frames = \arg\max p(frames | x) = \sum_{args} p(frame, args | x)
+	 * 2. args = \arg\max p(args | frames, x)
+	 * 
+	 * implementation options:
+	 * 1. do a two-pass decode. first is MBR to find frames. second pass, only add the bits related to the args.
+	 * 2. write a annealing decoder (max-product BP sucks, just multiply factors or weights by a constant and run sum-product).
+	 */
+	public FNParse decode(FgModel model) {
+		
+		MbrDecoderPrm prm = new MbrDecoderPrm();
+		MbrDecoder decoder = new MbrDecoder(prm);
+		decoder.decode(model, this.getFgExample());
+		VarConfig conf = decoder.getMbrVarConfig();
+		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
+		for(int i=0; i<frameVars.length; i++) {
+			Frame f_i = frameVars[i].getFrame(conf);
+			if(f_i == Frame.nullFrame) {
+				assert frameVars[i].getExpansion(conf).equals(Expansion.noExpansion);
+				continue;
+			}
+			
+			
+			throw new RuntimeException("implement me");
+		}
+		return new FNParse(sentence, frameInstances, true);
+	}
 	
 	public void setGold(FNParse p) {
 		

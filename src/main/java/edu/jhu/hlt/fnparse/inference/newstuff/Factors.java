@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.features.BasicFramePrototypeFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.ConstituencyFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.util.FeatureUtils;
 
 /**
  * It is expected that this class will be instantiated once per sentence,
@@ -48,6 +49,13 @@ public abstract class Factors implements FactorFactory {
 
 	/**
 	 * looks at (prototype, frame) pairs
+	 * 
+	 * this loops over (frame, prototype) for all prototypes
+	 * that were added from the hypothesis set of frames.
+	 * Each prototype belongs to one one Frame in this hypothesis,
+	 * and the factor should return semiring-0 for combinations
+	 * where the prototype does not belong to the Frame.
+	 * @see {@code F.getDotProd}
 	 */
 	static class FramePrototypeFactors extends Factors {	// makes the factors
 
@@ -92,12 +100,22 @@ public abstract class Factors implements FactorFactory {
 			}
 			
 			@Override
+			public double getDotProd(int config, FgModel model, boolean logDomain) {
+				VarConfig conf = this.getVars().getVarConfig(config);
+				Frame f = frameVar.getFrame(conf);
+				FrameInstance p = frameVar.getPrototype(conf);
+				if(!p.getFrame().equals(f))
+					return logDomain ? Double.NEGATIVE_INFINITY : 0d;
+				else return super.getDotProd(config, model, logDomain);
+			}
+			
+			@Override
 			public FeatureVector getFeatures(int config) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int prototypeIdx = conf.getState(frameVar.getPrototypeVar());
-				int frameIdx = conf.getState(frameVar.getFrameVar());
-				FrameInstance prototype = frameVar.getPrototype(prototypeIdx);
-				Frame frame = frameVar.getFrame(frameIdx);
+				FrameInstance prototype = frameVar.getPrototype(conf);
+				Frame frame = frameVar.getFrame(conf);
+				if(!prototype.getFrame().equals(frame))
+					return FeatureUtils.emptyFeatures;
 				return features.getFeatures(frame, frameVar.getTargetHeadIdx(), prototype, sent);
 			}
 			
@@ -155,8 +173,7 @@ public abstract class Factors implements FactorFactory {
 			@Override
 			public FeatureVector getFeatures(int config) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int frameIdx = conf.getState(frameVar.getFrameVar());
-				Frame frame = frameVar.getFrame(frameIdx);
+				Frame frame = frameVar.getFrame(conf);
 				return features.getFeatures(frame, frameVar.getTargetHeadIdx(), sent);
 			}
 		}
@@ -166,7 +183,8 @@ public abstract class Factors implements FactorFactory {
 	/**
 	 * Looks at (frame.head, role.head) pairs.
 	 * NOTE, this factor needs to enforece the hard factor
-	 * of k \ge f_i.numRoles => r_ijk = nullSpan. 
+	 * of k \ge f_i.numRoles => r_ijk = nullSpan.
+	 * @see {@code F.getDotProd}
 	 */
 	static class FrameRoleFactors extends Factors {
 		
@@ -204,11 +222,8 @@ public abstract class Factors implements FactorFactory {
 			@Override
 			public double getDotProd(int config, FgModel model, boolean logDomain) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int frameIdx = conf.getState(frameVar.getFrameVar());
-				int roleConfIdx = conf.getState(roleVar.getRoleVar());
-				Frame frame = frameVar.getFrame(frameIdx);
-				boolean roleActive = BinaryVarUtil.configToBool(roleConfIdx);
-				
+				Frame frame = frameVar.getFrame(conf);
+				boolean roleActive = roleVar.getRoleActive(conf);
 				if(roleActive && roleVar.getRoleIdx() >= frame.numRoles())
 					return logDomain ? Double.NEGATIVE_INFINITY : 0d;
 				else return super.getDotProd(config, model, logDomain);
@@ -217,10 +232,10 @@ public abstract class Factors implements FactorFactory {
 			@Override
 			public FeatureVector getFeatures(int config) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int frameIdx = conf.getState(frameVar.getFrameVar());
-				int roleConfIdx = conf.getState(roleVar.getRoleVar());
-				Frame frame = frameVar.getFrame(frameIdx);
-				boolean roleActive = BinaryVarUtil.configToBool(roleConfIdx);
+				Frame frame = frameVar.getFrame(conf);
+				boolean roleActive = roleVar.getRoleActive(conf);
+				if(roleActive && roleVar.getRoleIdx() >= frame.numRoles())
+					return FeatureUtils.emptyFeatures;
 				return features.getFeatures(frame, roleActive, frameVar.getTargetHeadIdx(), roleVar.getRoleIdx(), roleVar.getHeadIdx(), sent);
 			}
 			
@@ -269,8 +284,7 @@ public abstract class Factors implements FactorFactory {
 			@Override
 			public FeatureVector getFeatures(int config) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int eIdx = conf.getState(frameVar.getExpansionVar());
-				Expansion e = frameVar.getExpansion(eIdx);
+				Expansion e = frameVar.getExpansion(conf);
 				Span s = e.upon(frameVar.getTargetHeadIdx());
 				return features.getFeatures(s, sent);
 			}
@@ -321,8 +335,7 @@ public abstract class Factors implements FactorFactory {
 			@Override
 			public FeatureVector getFeatures(int config) {
 				VarConfig conf = this.getVars().getVarConfig(config);
-				int eIdx = conf.getState(frameVar.getExpansionVar());
-				Expansion e = frameVar.getExpansion(eIdx);
+				Expansion e = frameVar.getExpansion(conf);
 				Span s = e.upon(frameVar.getTargetHeadIdx());
 				return features.getFeatures(s, sent);
 			}

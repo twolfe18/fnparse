@@ -70,6 +70,19 @@ public class FrameIndex implements Iterable<Frame> {
 	public Frame getFrame(int id) {
 		throw new RuntimeException("implement me");
 	}
+	
+	private Map<String, Frame> byName;
+	public Frame getFrameByName(String name) {
+		if(byName == null) {
+			byName = new HashMap<String, Frame>();
+			for(Frame f : this.allFrames()) {
+				Frame old = byName.put(f.getName(), f);
+				assert old == null;
+			}
+		}
+		return byName.get(name);
+	}
+	
 
 	/**
 	 * given a role name (e.g. returned by frame.getRole(3)),

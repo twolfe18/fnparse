@@ -10,7 +10,6 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -120,6 +119,16 @@ public class FrameVar implements FgRelated {
 	public Var getPrototypeVar() { return prototypeVar; }
 	public Var getFrameVar() { return frameVar; }
 	public Var getExpansionVar() { return expansionVar; }
+	
+	public FrameInstance getPrototype(VarConfig conf) {
+		return getPrototype(conf.getState(prototypeVar));
+	}
+	public Frame getFrame(VarConfig conf) {
+		return getFrame(conf.getState(frameVar));
+	}
+	public Expansion getExpansion(VarConfig conf) {
+		return getExpansion(conf.getState(expansionVar));
+	}
 	
 	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }

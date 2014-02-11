@@ -1,8 +1,9 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import static edu.jhu.hlt.fnparse.util.ScalaLike.*;
+import static edu.jhu.hlt.fnparse.util.ScalaLike.require;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BinaryVarUtil {
 
@@ -17,4 +18,5 @@ public class BinaryVarUtil {
 	public static int boolToConfig(boolean b) {
 		return b ? 1 : 0;
 	}
+	
 }

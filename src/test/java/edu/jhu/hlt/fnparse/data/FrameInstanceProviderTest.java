@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.data;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -11,16 +13,11 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.data.UsefulConstants;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class FrameInstanceProviderTest {
 
-
-	private static void testFIP(FrameInstanceProvider fip){
-		testFIP(fip, true);
-	}
-
-	private static void testFIP(FrameInstanceProvider fip, boolean verbose) {		
+	private static void testFIP(FileFrameInstanceProvider fip, boolean verbose) {		
 		System.out.println("testing " + fip.getName());
 		long start = System.currentTimeMillis();
 		List<FNParse> sents = fip.getParsedSentences();
@@ -28,10 +25,14 @@ public class FrameInstanceProviderTest {
 
 		checkOrder(sents, fip);
 
+		int parsesWithMoreThanOneFI = 0;
 		int numFIs = 0;
-		Set<FNParse> uniqSents = new HashSet<FNParse>();
+		Set<Sentence> uniqSents = new HashSet<Sentence>();
 		for(FNParse s : sents) {
+			if(s.numFrameInstances() > 1)
+				parsesWithMoreThanOneFI++;
 			for(FrameInstance fi : s.getFrameInstances()) {
+				assertTrue(!fi.onlyTargetLabeled());
 				numFIs++;
 				if(verbose) {
 					System.out.println(String.format("frame %s; Trigger_by %s; Sentence %s",
@@ -46,8 +47,10 @@ public class FrameInstanceProviderTest {
 					}
 				}
 			}
-			assertTrue(uniqSents.add(s));
+			assertTrue(uniqSents.add(s.getSentence()));
 		}
+		
+		System.out.println("there are " + parsesWithMoreThanOneFI + " parses with more than one FrameInstance in them.");
 		System.out.printf("loaded %d FrameInstances in %d sentences took %.2f seconds\n\n",
 				numFIs, sents.size(), time/1000d);
 	}

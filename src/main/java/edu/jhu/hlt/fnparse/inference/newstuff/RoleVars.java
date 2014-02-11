@@ -101,6 +101,13 @@ public class RoleVars implements FgRelated {
 	public int getHeadIdx() { return headIdx; }
 	public int getRoleIdx() { return roleIdx; }
 	
+	public boolean getRoleActive(VarConfig conf) {
+		return BinaryVarUtil.configToBool(conf.getState(headVar));
+	}
+	public Expansion getExpansion(VarConfig conf) {
+		return expansions.get(conf.getState(expansionVar));
+	}
+	
 	public Var getRoleVar() { return headVar; }	// binary var
 	public Var getExpansionVar() { return expansionVar; }
 

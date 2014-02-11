@@ -16,7 +16,7 @@ public class SuperBob {
 				basicBob.register((Joe<JoeInfo>) whosAskin);
 			return basicBob;
 		}
-		else throw new RuntimeException("I don't know who " + whichBob + " is.");
+		else throw new RuntimeException("I don't know who " + whichBob + " is. Did you set -D" + WHICH_BOB + "?");
 	}
 	
 }

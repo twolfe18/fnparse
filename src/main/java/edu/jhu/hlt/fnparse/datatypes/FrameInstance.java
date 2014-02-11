@@ -37,7 +37,7 @@ public class FrameInstance {
 		if(frame == null || arguments == null || target == null || sent == null)
 			throw new IllegalArgumentException();
 		if(frame.numRoles() != arguments.length)
-			throw new IllegalArgumentException("null-instantiated roles should be null entries in the arguments array");
+			throw new IllegalArgumentException("you haven't provided the correct number of arguments");
 		for(int i=0; i<arguments.length; i++)
 			if(arguments[i] == null)
 				throw new IllegalArgumentException();
