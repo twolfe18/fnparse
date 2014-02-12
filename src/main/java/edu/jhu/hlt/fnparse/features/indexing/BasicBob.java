@@ -32,6 +32,8 @@ public class BasicBob implements Bob<JoeInfo> {
 		for(JoeInfo ji : info.values()) {
 			Alphabet<String> fn = featureNames.get(ji.name);
 			for(int i=0; i<fn.size(); i++) {
+				if(all[ji.offset + i] != null)
+					System.out.println("breakpoint");
 				assert all[ji.offset + i] == null;
 				all[ji.offset + i] = fn.lookupObject(i);
 			}

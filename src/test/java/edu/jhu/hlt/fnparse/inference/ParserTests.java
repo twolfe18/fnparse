@@ -68,6 +68,7 @@ public class ParserTests {
 		speedArgs[0] = Span.widthOne(1);	// Entity
 		FrameInstance speedInst = FrameInstance.newFrameInstance(speed, Span.widthOne(1), speedArgs, s);
 		instances.add(speedInst);
+		System.out.println("[setupDummyParse] adding instance of " + speed);
 		
 		Frame jump = frameIdx.getFrameByName("Self_motion");
 		//System.out.println("speedArgs: " + Arrays.toString(jump.getRoles()));
@@ -77,6 +78,7 @@ public class ParserTests {
 		jumpArgs[2] = Span.getSpan(4, 7);	// Path
 		FrameInstance jumpInst = FrameInstance.newFrameInstance(jump, Span.widthOne(3), jumpArgs, s);
 		instances.add(jumpInst);
+		System.out.println("[setupDummyParse] adding instance of " + jump);
 		
 		dummyParse = new FNParse(s, instances, true);
 		System.out.println("[ParserTests] dummy parse:");

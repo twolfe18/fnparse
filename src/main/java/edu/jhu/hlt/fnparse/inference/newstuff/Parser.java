@@ -14,14 +14,15 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
 import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
+import edu.jhu.optimize.AdaGrad;
 import edu.jhu.optimize.Function;
 import edu.jhu.optimize.Maximizer;
+import edu.jhu.optimize.SGD;
 
 public class Parser {
 
@@ -31,7 +32,9 @@ public class Parser {
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
 		public Map<Frame, List<FrameInstance>> prototypes;
-		// features store alphabets
+
+		public CrfTrainer trainer;
+		public CrfTrainer.CrfTrainerPrm trainerParams;
 	}
 	
 	private ParserParams params;
@@ -48,32 +51,52 @@ public class Parser {
 		params.factors.add(new Factors.FrameExpansionFactors());
 		params.factors.add(new Factors.ArgExpansionFactors());
 		
-		System.out.print("[Parser init] building Frame => Prototype mapping... ");
-		long start = System.currentTimeMillis();
-		params.prototypes = new HashMap<Frame, List<FrameInstance>>();
-		for(FNTagging lexTagging : FileFrameInstanceProvider.fn15lexFIP.getTaggedSentences()) {
-//			assert lexTagging.numFrameInstances() == 1 : "#fi = " + lexTagging.numFrameInstances() + ", " + Describe.fnTagging(lexTagging);
-			FrameInstance lexFI = lexTagging.getFrameInstance(0);
-			List<FrameInstance> protos = params.prototypes.get(lexFI.getFrame());
-			if(protos == null) {
-				protos = new ArrayList<FrameInstance>();
-				protos.add(lexFI);
-				params.prototypes.put(lexFI.getFrame(), protos);
-			}
-			else protos.add(lexFI);
-		}
-		System.out.printf("done, took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
+		params.prototypes = params.frameIndex.getPrototypeMap();
 	}
 	
+
 	public void train(List<FNParse> examples) {
 		
-		CrfTrainer.CrfTrainerPrm trainerPrm = new CrfTrainer.CrfTrainerPrm();
+		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
+		
+		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
+		
+		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
+		sgdParams.batchSize = 1;
+		//sgdParams.initialLr = 0.1d;	// adagrad ignores this
+		sgdParams.numPasses = 10;
+		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
+		adagParams.sgdPrm = sgdParams;
+		adagParams.eta = 0.1d;
+		trainerParams.batchMaximizer = new AdaGrad(adagParams);
+		
 		BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = true;	// doesn't work if false :(
 		bpParams.logDomain = params.logDomain;
-		trainerPrm.infFactory = bpParams;
+		trainerParams.infFactory = bpParams;
 		//trainerPrm.numThreads = 4;
-		CrfTrainer trainer = new CrfTrainer(trainerPrm);
+		
+		int numParams;
+		if(bob.isFirstPass()) {
+			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
+			numParams = 125000;	// hope this is enough
+			trainerParams.maximizer = new Maximizer() {
+				@Override
+				public boolean maximize(Function function, double[] point) { return true; }
+			};
+			trainerParams.batchMaximizer = null;
+			trainerParams.regularizer = null;
+		}
+		else {
+			trainerParams.maximizer = null;
+			numParams = bob.totalFeatures();
+			System.out.println("[train] #features = " + bob.totalFeatures() + ", optimizing with " + trainerParams.batchMaximizer);
+			assert trainerParams.batchMaximizer != null;
+		}
+
+		params.trainerParams = trainerParams;
+		params.trainer = new CrfTrainer(trainerParams);
+		params.model = new FgModel(numParams);
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
@@ -82,27 +105,12 @@ public class Parser {
 			exs.add(s.getFgExample());
 		}
 		
-		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
-		int numParams;
-		if(bob.isFirstPass()) {
-			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
-			numParams = 25000;
-			trainerPrm.maximizer = new Maximizer() {
-				@Override
-				public boolean maximize(Function function, double[] point) { return true; }
-			};
-			trainerPrm.regularizer = null;
-		}
-		else {
-			numParams = bob.totalFeatures();
-			System.out.println("#features = " + bob.totalFeatures());
-		}
-		params.model = new FgModel(numParams);
-		try { params.model = trainer.train(params.model, exs); }
+		try { params.model = params.trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
 	}
+	
 	
 	public List<FNParse> parse(List<Sentence> raw) {
 		List<FNParse> pred = new ArrayList<FNParse>();
@@ -113,8 +121,10 @@ public class Parser {
 		return pred;
 	}
 	
+	
 	public ParserParams getParams() { return params; }
 
+	
 	public void writeoutWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
 		try {
