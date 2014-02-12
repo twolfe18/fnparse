@@ -39,8 +39,8 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		v.add(index("frame=" + f.getName()), 1d);
 		v.add(index("numLU=" + f.numLexicalUnits()), 1d);
 		v.add(index(fs + "-target-head=" + s.getWord(head)), 1d);
-		v.add(index(fs + "target-head-pos=" + s.getPos(head)), 1d);
-		v.add(index(fs + "sentence-length=" + s.size()), 1d);
+		v.add(index(fs + "-target-head-pos=" + s.getPos(head)), 1d);
+		v.add(index(fs + "-sentence-length=" + s.size()), 1d);
 		
 		LexicalUnit hypLU = s.getLU(head);
 		boolean matchesAnLU = false;
@@ -79,7 +79,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String p = s.getPos(i);
-			v.add(index("\"" + p + "\"-appears-in-sentence"), 1d);
+			v.add(index(fs + "-\"" + p + "\"-appears-in-sentence"), 1d);
 		}
 		pairFeatures(f, bag, v, "-in-sentence");
 		
@@ -87,43 +87,43 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<head; i++) {
 			String w = s.getWord(i);
-			v.add(index("\"" + w + "\"-appears-to-the-left"), 1d);
+			v.add(index(fs + "-\"" + w + "\"-appears-to-the-left"), 1d);
 		}
-		if(bag.size() == 0) v.add(index("nothing-to-the-left"), 1d);
+		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-left"), 1d);
 		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of pos on the left
 		bag.clear();
 		for(int i=0; i<head; i++) {
 			String p = s.getPos(i);
-			v.add(index("\"" + p + "\"-appears-to-the-left"), 1d);
+			v.add(index(fs + "-\"" + p + "\"-appears-to-the-left"), 1d);
 		}
-		if(bag.size() == 0) v.add(index("nothing-to-the-left"), 1d);
+		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-left"), 1d);
 		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of words on right
 		bag.clear();
 		for(int i=head+1; i<s.size(); i++) {
 			String w = s.getWord(i);
-			v.add(index("\"" + w + "\"-appears-to-the-right"), 1d);
+			v.add(index(fs + "-\"" + w + "\"-appears-to-the-right"), 1d);
 		}
-		if(bag.size() == 0) v.add(index("nothing-to-the-right"), 1d);
+		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-right"), 1d);
 		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// pairs of pos on the right
 		bag.clear();
 		for(int i=head+1; i<s.size(); i++) {
 			String p = s.getPos(i);
-			v.add(index("\"" + p + "\"-appears-to-the-right"), 1d);
+			v.add(index(fs + "-\"" + p + "\"-appears-to-the-right"), 1d);
 		}
-		if(bag.size() == 0) v.add(index("nothing-to-the-right"), 1d);
+		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-right"), 1d);
 		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// word/pos to the left/right of the extent
-		v.add(index("word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1))), 1d);
-		v.add(index("pos-to-the-left=" + (head==0 ? "<S>" : s.getPos(head-1))), 1d);
-		v.add(index("word-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getWord(head+1))), 1d);
-		v.add(index("pos-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getPos(head+1))), 1d);
+		v.add(index(fs + "-word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1))), 1d);
+		v.add(index(fs + "-pos-to-the-left=" + (head==0 ? "<S>" : s.getPos(head-1))), 1d);
+		v.add(index(fs + "-word-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getWord(head+1))), 1d);
+		v.add(index(fs + "-pos-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getPos(head+1))), 1d);
 		
 		return bob.doYourThing(v, this);
 	}

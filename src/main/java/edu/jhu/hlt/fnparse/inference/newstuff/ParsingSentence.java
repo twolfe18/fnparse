@@ -104,54 +104,76 @@ public class ParsingSentence {
 	 */
 	public FNParse decode(FgModel model) {
 		
+		// first decode to find the best frames (marginalizing out role vars)
 		MbrDecoderPrm prm = new MbrDecoderPrm();
 		MbrDecoder decoder = new MbrDecoder(prm);
-		decoder.decode(model, this.getFgExample());
-		VarConfig conf = decoder.getMbrVarConfig();
+		FgExample fge1 = this.getFgExample();
+		decoder.decode(model, fge1);
+		VarConfig mbr1Conf = decoder.getMbrVarConfig();
+		Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
 		
-		// TODO push this code into MbrDecoder
-		Map<Var, DenseFactor> margins = new HashMap<Var, DenseFactor>();
-		for(DenseFactor df : decoder.getVarMarginals()) {
-			assert df.getVars().size() == 1;
-			Var v = df.getVars().get(0);
-			margins.put(v, df);
-		}
+		List<Integer> dFrameIdx = new ArrayList<Integer>();
+		List<Frame> dFrame = new ArrayList<Frame>();
+		List<Span> dFrameTarget = new ArrayList<Span>();
 		
+		VarConfig clampedFrames = new VarConfig();
 		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
 		int n = frameVars.length;
 		for(int i=0; i<n; i++) {
-			if(frameVars[i] == null) continue;
-			Frame f_i = frameVars[i].getFrame(conf);
+			FrameVar fv = frameVars[i];
+			if(fv == null) continue;
+			Frame f_i = fv.getFrame(mbr1Conf);
 			if(f_i == Frame.nullFrame) {
-				assert frameVars[i].getExpansion(conf).equals(Expansion.noExpansion);
+				assert frameVars[i].getExpansion(mbr1Conf).equals(Expansion.noExpansion);
 				continue;
 			}
-			Span target = frameVars[i].getTarget(conf);
+			Span target = fv.getTarget(mbr1Conf);
 			
-			// TODO before choose args, I should really clamp the frames and re-run BP
+			clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
+			clampedFrames.put(fv.getExpansionVar(), mbr1Conf.getState(fv.getExpansionVar()));
+			clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));
+			
+			dFrameIdx.add(i);
+			dFrame.add(f_i);
+			dFrameTarget.add(target);
+		}
+		
+		// decode with frames clamped
+		FactorGraph fgWithClampedFrames = fge1.getOriginalFactorGraph().getClamped(clampedFrames);
+		FgExample fge2 = new FgExample(fgWithClampedFrames, fge1.getGoldConfig());
+		decoder.decode(model, fge2);
+		VarConfig mbr2Conf = decoder.getMbrVarConfig();
+		Map<Var, DenseFactor> margins2 = decoder.getVarMarginalsIndexed();
+		for(int ii=0; ii<dFrameIdx.size(); ii++) {
+			int i = dFrameIdx.get(ii);
+			Frame f_i = dFrame.get(ii);
+			Span target = dFrameTarget.get(ii);
 			int K = f_i.numRoles();
 			Span[] args = new Span[K];
 			Arrays.fill(args, Span.nullSpan);
 			for(int k=0; k<K; k++) {	// find the best span for every role
 				Span bestSpan = null;
-				double bestSpanScore = 0d;
+				double bestSpanScore = -9999d;
 				for(int j=0; j<n; j++) {
 					RoleVars rv = roleVars[i][j][k];
-					Span s = rv.getSpan(conf);
-					DenseFactor mR = margins.get(rv.getRoleVar());
-					DenseFactor mE = margins.get(rv.getExpansionVar());
-					double mRv = mR.getValue(conf.getState(rv.getRoleVar()));
-					double mEv = mE.getValue(conf.getState(rv.getExpansionVar()));
+					boolean active = rv.getRoleActive(mbr2Conf);
+					Span s = rv.getSpan(mbr2Conf);
+					DenseFactor mR = margins2.get(rv.getRoleVar());
+					DenseFactor mE = margins2.get(rv.getExpansionVar());
+					double mRv = mR.getValue(mbr2Conf.getState(rv.getRoleVar()));
+					double mEv = mE.getValue(mbr2Conf.getState(rv.getExpansionVar()));
 					double score = params.logDomain ? mRv + mEv : mRv * mEv;
-					if(score > bestSpanScore || j == 0) {
+					if(active && (score > bestSpanScore || bestSpan == null)) {
 						bestSpan = s;
 						bestSpanScore = score;
 					}
 				}
-				args[k] = bestSpan;
+				if(bestSpan != null)
+					args[k] = bestSpan;
 			}
 			frameInstances.add(FrameInstance.newFrameInstance(f_i, target, args, sentence));
 		}
+		
 		return new FNParse(sentence, frameInstances, true);
 	}
 	

@@ -64,7 +64,7 @@ public class Parser {
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
 		sgdParams.batchSize = 1;
 		//sgdParams.initialLr = 0.1d;	// adagrad ignores this
-		sgdParams.numPasses = 10;
+		sgdParams.numPasses = 15;
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
 		adagParams.sgdPrm = sgdParams;
 		adagParams.eta = 0.1d;

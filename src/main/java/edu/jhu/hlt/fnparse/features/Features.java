@@ -21,6 +21,8 @@ public interface Features {
 	
 	public static interface FR { public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s); }
 	
+	public static interface FRE { public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argument, Sentence s); }
+	
 	// FE, FR, R, RE, FRE, FER, FERE
 
 	public static interface C { public FeatureVector getFeatures(Span constituent, Sentence s); }

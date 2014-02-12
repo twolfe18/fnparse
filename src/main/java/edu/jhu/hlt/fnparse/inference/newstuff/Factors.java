@@ -144,7 +144,7 @@ public abstract class Factors implements FactorFactory {
 	 */
 	static class FrameRoleFactors extends Factors {
 		
-		private Features.FR features = new BasicFrameRoleFeatures();;
+		private Features.FRE features = new BasicFrameRoleFeatures();;
 		
 		@Override
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
@@ -164,12 +164,12 @@ public abstract class Factors implements FactorFactory {
 			private static final long serialVersionUID = 1L;
 			
 			private Sentence sent;
-			private Features.FR features;
+			private Features.FRE features;
 			private FrameVar frameVar;
 			private RoleVars roleVar;
 			
-			public F(FrameVar fv, RoleVars rv, Sentence sent, Features.FR feats) {
-				super(new VarSet(fv.getFrameVar(), rv.getRoleVar()));	// this is how you know the complexity
+			public F(FrameVar fv, RoleVars rv, Sentence sent, Features.FRE feats) {
+				super(new VarSet(fv.getFrameVar(), rv.getRoleVar(), rv.getExpansionVar()));	// this is how you know the complexity
 				this.frameVar = fv;
 				this.roleVar = rv;
 				this.sent = sent;
@@ -193,7 +193,8 @@ public abstract class Factors implements FactorFactory {
 				boolean roleActive = roleVar.getRoleActive(conf);
 				if(roleActive && roleVar.getRoleIdx() >= frame.numRoles())
 					return FeatureUtils.emptyFeatures;
-				return features.getFeatures(frame, roleActive, frameVar.getTargetHeadIdx(), roleVar.getRoleIdx(), roleVar.getHeadIdx(), sent);
+				Span argument = roleVar.getSpan(conf);
+				return features.getFeatures(frame, roleActive, frameVar.getTargetHeadIdx(), roleVar.getRoleIdx(), argument, sent);
 			}
 			
 		}
