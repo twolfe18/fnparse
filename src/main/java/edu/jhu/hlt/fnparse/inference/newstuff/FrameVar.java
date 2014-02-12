@@ -13,12 +13,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
-/**
- * TODO have a version of this class that can efficiently handle
- * variables with one fixed value (make them observed?).
- * 
- * @author travis
- */
 public class FrameVar implements FgRelated {
 	
 	// target Spans aren't very big

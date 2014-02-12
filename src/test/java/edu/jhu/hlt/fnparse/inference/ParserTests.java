@@ -3,10 +3,13 @@ package edu.jhu.hlt.fnparse.inference;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -37,6 +40,7 @@ public class ParserTests {
 		SuperBob.getBob(null).startup();
 		
 		parser = new Parser();
+		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
 	
 	@After
@@ -80,7 +84,7 @@ public class ParserTests {
 	}
 	
 	@Test
-	public void justSentence() {
+	public void basic() {
 		ParsingSentence ps = new ParsingSentence(dummyParse.getSentence(), parser.getParams());
 		for(Factor f : ps.getFactorsFromFactories()) {
 			assertTrue(f.getVars().size() > 0);
@@ -93,7 +97,7 @@ public class ParserTests {
 	}
 	
 	@Test
-	public void basic() {
+	public void overfitting() {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
 		List<FNParse> train = new ArrayList<FNParse>();
@@ -103,7 +107,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 		parser.train(train);
-		
+		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");
 		List<FNParse> predicted = parser.parse(test);

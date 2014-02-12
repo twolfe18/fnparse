@@ -24,6 +24,21 @@ public class BasicBob implements Bob<JoeInfo> {
 
 	private Map<String, Alphabet<String>> featureNames = new HashMap<String, Alphabet<String>>();
 	
+	public String[] getFeatureNames() {
+		int n = 0;
+		for(JoeInfo ji : info.values())
+			n += ji.width;
+		String[] all = new String[n];
+		for(JoeInfo ji : info.values()) {
+			Alphabet<String> fn = featureNames.get(ji.name);
+			for(int i=0; i<fn.size(); i++) {
+				assert all[ji.offset + i] == null;
+				all[ji.offset + i] = fn.lookupObject(i);
+			}
+		}
+		return all;
+	}
+	
 	public Alphabet<String> trackMyAlphabet(Joe<JoeInfo> owner) {
 		if(firstPass) {
 			Alphabet<String> alph = new Alphabet<String>();

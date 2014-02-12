@@ -2,10 +2,8 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import static edu.jhu.hlt.fnparse.util.ScalaLike.println;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -117,6 +115,25 @@ public class Parser {
 	
 	public ParserParams getParams() { return params; }
 
+	public void writeoutWeights(File f) {
+		System.out.println("[writeoutWeights] to " + f.getPath());
+		try {
+			//File f = new File("weights.txt");
+			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
+			BasicBob b = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
+			String[] fnNames = b.getFeatureNames();
+			double[] outParams = new double[params.model.getNumParams()];
+			if(fnNames.length != outParams.length) {
+				System.out.println("wtuf");
+			}
+			params.model.updateDoublesFromModel(outParams);
+			for(int i=0; i<outParams.length; i++)
+				w.write(outParams[i] + "\t" + fnNames[i] + "\n");
+			w.close();
+		}
+		catch(Exception e) { throw new RuntimeException(e); }
+	}
+	
 	public static void main(String[] args) {
 		
 		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");

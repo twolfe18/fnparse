@@ -6,16 +6,18 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
+import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.hlt.fnparse.data.FrameInstanceProviderTest;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -28,6 +30,8 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public class ParsingSentence {
+	
+	private static final Logger log = Logger.getLogger(ParsingSentence.class);
 
 	// ==== VARIABLES ====
 	private FrameVar[] frameVars;
@@ -100,18 +104,6 @@ public class ParsingSentence {
 	 */
 	public FNParse decode(FgModel model) {
 		
-		// Matt's code doesn't like it when you give it an FgExample
-		// with an empty VarConfig for gold (even if it is a test example).
-		// This just adds some label, which is the default and wrong.
-		int n = frameVars.length;
-//		for(int i=0; i<n; i++) {
-//			if(frameVars[i] == null)
-//				continue;
-//			for(int j=0; j<n; j++)
-//				for(int k=0; k<roleVars[i][j].length; k++)
-//					roleVars[i][j][k].register(fg, gold);
-//		}
-		
 		MbrDecoderPrm prm = new MbrDecoderPrm();
 		MbrDecoder decoder = new MbrDecoder(prm);
 		decoder.decode(model, this.getFgExample());
@@ -126,6 +118,7 @@ public class ParsingSentence {
 		}
 		
 		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
+		int n = frameVars.length;
 		for(int i=0; i<n; i++) {
 			if(frameVars[i] == null) continue;
 			Frame f_i = frameVars[i].getFrame(conf);
@@ -240,6 +233,10 @@ public class ParsingSentence {
 				}
 			}
 		}
+		
+		log.trace("[makeFrameVar] head=" + s.getLU(headIdx));
+		for(Frame f : frameMatches)
+			log.trace("[makeFrameVar] frame=" + f + ", prototypes=" + params.prototypes.get(f));
 		
 		if(frameMatches.size() == 1) {
 			//System.err.println("[makeFrameVars] WARNING: no frames available for " + s.getLU(headIdx));

@@ -56,7 +56,7 @@ public class FrameInstance {
 	public static FrameInstance frameMention(Frame frame, Span target, Sentence sent) {
 		if(frame == null || sent == null)
 			throw new IllegalArgumentException();
-		return new FrameInstance(frame, target, null, sent);
+		return new FrameInstance(frame, target, new Span[0], sent);
 	}
 
 	public boolean onlyTargetLabeled() { return this.arguments == null; }

@@ -26,7 +26,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bob = (BasicBob) SuperBob.getBob(this);
 		featIdx = bob.trackMyAlphabet(this);
 	}
-	
+
 	@Override
 	public FeatureVector getFeatures(Frame f, int head, Sentence s) {
 		
@@ -34,11 +34,13 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		
 		FeatureVector v = new FeatureVector();
 		
+		String fs = "f" + f.getId();
+		
 		v.add(index("frame=" + f.getName()), 1d);
 		v.add(index("numLU=" + f.numLexicalUnits()), 1d);
-		v.add(index("target-head=" + s.getWord(head)), 1d);
-		v.add(index("target-head-pos=" + s.getPos(head)), 1d);
-		v.add(index("sentence-length=" + s.size()), 1d);
+		v.add(index(fs + "-target-head=" + s.getWord(head)), 1d);
+		v.add(index(fs + "target-head-pos=" + s.getPos(head)), 1d);
+		v.add(index(fs + "sentence-length=" + s.size()), 1d);
 		
 		LexicalUnit hypLU = s.getLU(head);
 		boolean matchesAnLU = false;
@@ -69,9 +71,9 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String w = s.getWord(i);
-			v.add(index("\"" + w + "\"-appears-in-sentence"), 1d);
+			v.add(index(fs + "-\"" + w + "\"-appears-in-sentence"), 1d);
 		}
-		pairFeatures(bag, v, "-in-sentence");
+		pairFeatures(f, bag, v, "-in-sentence");
 		
 		// pairs of POS in sentence
 		bag.clear();
@@ -79,7 +81,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			String p = s.getPos(i);
 			v.add(index("\"" + p + "\"-appears-in-sentence"), 1d);
 		}
-		pairFeatures(bag, v, "-in-sentence");
+		pairFeatures(f, bag, v, "-in-sentence");
 		
 		// pairs of words on left
 		bag.clear();
@@ -88,7 +90,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			v.add(index("\"" + w + "\"-appears-to-the-left"), 1d);
 		}
 		if(bag.size() == 0) v.add(index("nothing-to-the-left"), 1d);
-		else pairFeatures(bag, v, "-to-the-left");
+		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of pos on the left
 		bag.clear();
@@ -97,7 +99,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			v.add(index("\"" + p + "\"-appears-to-the-left"), 1d);
 		}
 		if(bag.size() == 0) v.add(index("nothing-to-the-left"), 1d);
-		else pairFeatures(bag, v, "-to-the-left");
+		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of words on right
 		bag.clear();
@@ -106,7 +108,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			v.add(index("\"" + w + "\"-appears-to-the-right"), 1d);
 		}
 		if(bag.size() == 0) v.add(index("nothing-to-the-right"), 1d);
-		else pairFeatures(bag, v, "-to-the-right");
+		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// pairs of pos on the right
 		bag.clear();
@@ -115,7 +117,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			v.add(index("\"" + p + "\"-appears-to-the-right"), 1d);
 		}
 		if(bag.size() == 0) v.add(index("nothing-to-the-right"), 1d);
-		else pairFeatures(bag, v, "-to-the-right");
+		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// word/pos to the left/right of the extent
 		v.add(index("word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1))), 1d);
@@ -126,14 +128,14 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		return bob.doYourThing(v, this);
 	}
 	
-	private void pairFeatures(Set<String> items, FeatureVector v, String meta) {
+	private void pairFeatures(Frame f, Set<String> items, FeatureVector v, String meta) {
 		List<String> l = new ArrayList<String>();
 		l.addAll(items);
 		Collections.sort(l);
 		int n = l.size();
 		for(int i=0; i<n-1; i++)
 			for(int j=i+1; j<n; j++)
-				v.add(index("\""+l.get(i)+"\"-\""+l.get(j)+"\"-appears" + meta), 1d);
+				v.add(index("f" + f.getId() + "-\""+l.get(i)+"\"-\""+l.get(j)+"\"-appears" + meta), 1d);
 	}
 	
 	private int index(String featureName) {
