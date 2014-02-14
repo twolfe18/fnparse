@@ -16,8 +16,10 @@ import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -36,8 +38,8 @@ public class ParsingSentence {
 	// ==== VARIABLES ====
 	private FrameVar[] frameVars;
 	private RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
-	private CParseVars cParseVars;
 	private DParseVars dParseVars;
+	private ProjDepTreeFactor depTree;	// holds variables too
 	
 	// ==== FACTORS ====
 	private List<FactorFactory> factorHolders;
@@ -64,6 +66,8 @@ public class ParsingSentence {
 	// TODO: the code is not setup for ALWAYS_INCLUDE_GOLD_FRAME because
 	// this requires seeing the gold label while constructing all the variables.
 	
+	// we want a factor that will connect frame heads with arg heads
+	
 	
 	public ParsingSentence(Sentence s, ParserParams params) {
 		
@@ -89,10 +93,13 @@ public class ParsingSentence {
 					roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k, params.logDomain);	
 		}
 
+		depTree = new ProjDepTreeFactor(n, VarType.LATENT);
+		
 		// initialize all the factors
 		factors = new ArrayList<Factor>();
+		factors.add(depTree);
 		for(FactorFactory ff : factorHolders)
-			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars));
+			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars, depTree));
 	}
 	
 	/**

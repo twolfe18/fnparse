@@ -6,6 +6,8 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
@@ -16,6 +18,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFramePrototypeFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleLinkFeatures;
 import edu.jhu.hlt.fnparse.features.ConstituencyFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
@@ -40,12 +43,12 @@ public abstract class Factors implements FactorFactory {
 	 * where the prototype does not belong to the Frame.
 	 * @see {@code F.getDotProd}
 	 */
-	static class FramePrototypeFactors extends Factors {	// makes the factors
+	public static class FramePrototypeFactors extends Factors {	// makes the factors
 
 		private Features.FP features = new BasicFramePrototypeFeatures();
 	
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
 			for(int i=0; i<n; i++) {
@@ -96,12 +99,12 @@ public abstract class Factors implements FactorFactory {
 	/**
 	 * looks at just frame pairs
 	 */
-	static class FrameFactors extends Factors {	// makes the factors
+	public static class FrameFactors extends Factors {	// makes the factors
 		
 		private Features.F features = new BasicFrameFeatures();
 		
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
 			for(int i=0; i<n; i++) {
@@ -142,12 +145,12 @@ public abstract class Factors implements FactorFactory {
 	 * of k \ge f_i.numRoles => r_ijk = nullSpan.
 	 * @see {@code F.getDotProd}
 	 */
-	static class FrameRoleFactors extends Factors {
+	public static class FrameRoleFactors extends Factors {
 		
 		private Features.FRE features = new BasicFrameRoleFeatures();;
 		
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
 			for(int i=0; i<n; i++) {
@@ -201,12 +204,12 @@ public abstract class Factors implements FactorFactory {
 	}
 	
 	
-	static class FrameExpansionFactors extends Factors {
+	public static class FrameExpansionFactors extends Factors {
 		
 		private Features.C features = new ConstituencyFeatures("Frames");
 		
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
 			for(int i=0; i<n; i++) {
@@ -241,12 +244,12 @@ public abstract class Factors implements FactorFactory {
 		}
 	}
 	
-	static class ArgExpansionFactors extends Factors {
+	public static class ArgExpansionFactors extends Factors {
 		
 		private ConstituencyFeatures features = new ConstituencyFeatures("Args");
 		
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r) {
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 			List<Factor> factors = new ArrayList<Factor>();
 			int n = s.size();
 			for(int i=0; i<n; i++) {
@@ -282,4 +285,60 @@ public abstract class Factors implements FactorFactory {
 		}
 	}
 	
+	/**
+	 * connects dependency parse link variables to f_i and r_ijk
+	 */
+	public static class FrameArgDepFactors extends Factors {
+
+		private Features.FRL features = new BasicFrameRoleLinkFeatures();
+		
+		@Override
+		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
+			List<Factor> factors = new ArrayList<Factor>();
+			int n = f.length; 
+			for(int i=0; i<n; i++) {
+				if(f[i] == null) continue;
+				for(int j=0; j<n; j++) {
+					if(i == j) continue;	// no link var
+					RoleVars[] r_ij = r[i][j];
+					for(int k=0; k<r_ij.length; k++) {
+						assert r_ij[k] != null : "i=" + i + ", j=" + j;
+						assert l.getLinkVar(i, j) != null : "i=" + i + ", j=" + j;
+						factors.add(new F(f[i], r_ij[k], l.getLinkVar(i, j), s, features));
+					}
+				}
+			}
+			return factors;
+		}
+
+		static class F extends ExpFamFactor {
+	
+			private static final long serialVersionUID = 1L;
+			
+			private FrameVar f_i;
+			private RoleVars r_ijk;
+			private LinkVar l_ij;
+			private Sentence sent;
+			private Features.FRL features;
+			
+			public F(FrameVar f_i, RoleVars r_ijk, LinkVar l_ij, Sentence s, Features.FRL features) {
+				super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar(), l_ij));
+				this.f_i = f_i;
+				this.r_ijk = r_ijk;
+				this.l_ij = l_ij;
+				this.sent = s;
+				this.features = features;
+			}
+
+			@Override
+			public FeatureVector getFeatures(int config) {
+				VarConfig conf = this.getVars().getVarConfig(config);
+				Frame f = f_i.getFrame(conf);
+				boolean active = r_ijk.getRoleActive(conf);
+				boolean link = LinkVar.TRUE == conf.getState(l_ij);
+				return features.getFeatures(f, active, link, f_i.getTargetHeadIdx(), r_ijk.getRoleIdx(), r_ijk.getHeadIdx(), sent);
+			}
+		}
+		
+	}
 }

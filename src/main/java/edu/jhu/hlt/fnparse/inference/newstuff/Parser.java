@@ -50,6 +50,7 @@ public class Parser {
 		params.factors.add(new Factors.FrameRoleFactors());
 		params.factors.add(new Factors.FrameExpansionFactors());
 		params.factors.add(new Factors.ArgExpansionFactors());
+		params.factors.add(new Factors.FrameArgDepFactors());
 		
 		params.prototypes = params.frameIndex.getPrototypeMap();
 	}

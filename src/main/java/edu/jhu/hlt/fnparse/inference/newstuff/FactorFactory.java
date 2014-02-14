@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.List;
 
 import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public interface FactorFactory {
@@ -16,7 +17,7 @@ public interface FactorFactory {
 	 * The variables given should correspond to a frame target head word,
 	 * such that r.parent == f.
 	 */
-	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r);
+	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l);
 	
-	// TODO add constituency/dependency parse variables to the signature above
+	// TODO add constituency parse variables to the signature above
 }

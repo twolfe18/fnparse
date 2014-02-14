@@ -58,79 +58,75 @@ public class BasicFrameRoleFeatures implements edu.jhu.hlt.fnparse.features.Feat
 		
 		String fs = "f" + f.getId();
 		String rs = "r" + roleIdx;
+		String fsrs = fs + "-" + rs;
 		LexicalUnit tHead = sent.getLU(targetSpan.end-1);
 		LexicalUnit rHead = sent.getLU(hf.head(argumentSpan, sent));
 		assert targetSpan.width() == 1 : "update this code";
 		
-		fv.add(index("intercept-" + fs + "-" + rs), 1d);
+		fv.add(index("intercept-" + fsrs), 1d);
 		
-		fv.add(index(fs + "-" + rs + "-width=" + argumentSpan.width()), 1d);
+		fv.add(index(fsrs + "-width=" + argumentSpan.width()), 1d);
 
 		if(argumentSpan.after(targetSpan))
-			fv.add(index(fs + "-" + rs + "-arg_after_target"), 1d);
+			fv.add(index(fsrs + "-arg_after_target"), 1d);
 		if(argumentSpan.before(targetSpan))
-			fv.add(index(fs + "-" + rs + "-arg_before_target"), 1d);
+			fv.add(index(fsrs + "-arg_before_target"), 1d);
 		if(argumentSpan.overlaps(targetSpan))
-			fv.add(index(fs + "-" + rs + "-arg_overlaps_target"), 1d);
+			fv.add(index(fsrs + "-arg_overlaps_target"), 1d);
 		if(argumentSpan.equals(targetSpan))
-			fv.add(index(fs + "-" + rs + "-arg_equals_target"), 1d);
+			fv.add(index(fsrs + "-arg_equals_target"), 1d);
 		
 		
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.word), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.pos), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.pos), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.word), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.pos), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.word), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.pos), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead + "-targetHead=" + tHead.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead + "-targetHead=" + tHead.word), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead + "-targetHead=" + tHead.pos), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.getFullString()), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.word), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.pos), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.getFullString()), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.pos), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.getFullString()), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.word), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.pos), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.word), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.pos), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead + "-targetHead=" + tHead.getFullString()), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead + "-targetHead=" + tHead.word), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead + "-targetHead=" + tHead.pos), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.word + "-targetHead=" + tHead.getFullString()), 1d);
+		fv.add(index(fsrs + "-roleHead=" + rHead.pos + "-targetHead=" + tHead.getFullString()), 1d);
 		
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTok1=" + sent.getLU(argumentSpan.start).word), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTokN=" + sent.getLU(argumentSpan.end-1).word), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTok1=" + sent.getLU(argumentSpan.start).word), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTokN=" + sent.getLU(argumentSpan.end-1).word), 1d);
 		if(argumentSpan.width() > 1) {
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTok2=" + sent.getLU(argumentSpan.start+1).word), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTokN-1=" + sent.getLU(argumentSpan.end-2).word), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTok2=" + sent.getLU(argumentSpan.start+1).word), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTokN-1=" + sent.getLU(argumentSpan.end-2).word), 1d);
 			if(argumentSpan.width() > 2) {
-				fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTok3=" + sent.getLU(argumentSpan.start+2).word), 1d);
-				fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTokN-2=" + sent.getLU(argumentSpan.end-3).word), 1d);
+				fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTok3=" + sent.getLU(argumentSpan.start+2).word), 1d);
+				fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTokN-2=" + sent.getLU(argumentSpan.end-3).word), 1d);
 				if(argumentSpan.width() > 3) {
-					fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTok4=" + sent.getLU(argumentSpan.start+3).word), 1d);
-					fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argTokN-3=" + sent.getLU(argumentSpan.end-4).word), 1d);
+					fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTok4=" + sent.getLU(argumentSpan.start+3).word), 1d);
+					fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argTokN-3=" + sent.getLU(argumentSpan.end-4).word), 1d);
 				}
 			}
 		}
 		
 		for(int i=argumentSpan.start; i<argumentSpan.end; i++) {
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).getFullString()), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).word), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).pos), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).getFullString()), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).word), 1d);
-			fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).pos), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).getFullString()), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).word), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.getFullString() + "-argContains=" + sent.getLU(i).pos), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).getFullString()), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).word), 1d);
+			fv.add(index(fsrs + "-targetHead=" + tHead.word + "-argContains=" + sent.getLU(i).pos), 1d);
 		}
 		
 		x = argumentSpan.start == 0 ? luStart : sent.getLU(argumentSpan.start-1);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.word), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.pos), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.getFullString()), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.word), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-leftOfArg=" + x.pos), 1d);
 
 		x = argumentSpan.end == sent.size() ? luEnd : sent.getLU(argumentSpan.end);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.getFullString()), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.word), 1d);
-		fv.add(index(fs + "-" + rs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.pos), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.getFullString()), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.word), 1d);
+		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.pos), 1d);
 
-		
-		// FOR DEBUGGING (REMOVE LATER)
-		// this should be a feature that makes for easy over-fitting
-		fv.add(index("DEBUG-" + fs + "-" + rs + "-argHeadIdx=" + argumentSpan + "-targetHeadIdx=" + targetSpan), 50d);
-		
 		return fv;
 	}
 	

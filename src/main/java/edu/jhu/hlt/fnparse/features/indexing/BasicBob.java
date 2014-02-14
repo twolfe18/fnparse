@@ -33,8 +33,7 @@ public class BasicBob implements Bob<JoeInfo> {
 			Alphabet<String> fn = featureNames.get(ji.name);
 			for(int i=0; i<fn.size(); i++) {
 				if(all[ji.offset + i] != null)
-					System.out.println("breakpoint");
-				assert all[ji.offset + i] == null;
+					throw new RuntimeException("did you change the features? rerun first pass.");
 				all[ji.offset + i] = fn.lookupObject(i);
 			}
 		}
@@ -49,7 +48,8 @@ public class BasicBob implements Bob<JoeInfo> {
 		}
 		else {
 			Alphabet<String> alph = featureNames.get(owner.getJoeName());
-			if(alph == null) throw new RuntimeException();
+			if(alph == null)
+				throw new RuntimeException("I don't know this Joe. Did you run a first pass with a different feature set?");
 			return alph;
 		}
 	}
