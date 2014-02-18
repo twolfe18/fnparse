@@ -6,7 +6,10 @@ import java.io.*;
 import java.util.*;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
+import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
+import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -41,7 +44,7 @@ public class Parser {
 	
 	public Parser() {
 		params = new ParserParams();
-		params.logDomain = true;		// doesn't work if this is false :(
+		params.logDomain = false;		// doesn't work if this is false :(
 		params.frameIndex = FrameIndex.getInstance();
 		
 		params.factors = new ArrayList<FactorFactory>();
@@ -50,9 +53,24 @@ public class Parser {
 		params.factors.add(new Factors.FrameRoleFactors());
 		params.factors.add(new Factors.FrameExpansionFactors());
 		params.factors.add(new Factors.ArgExpansionFactors());
-		params.factors.add(new Factors.FrameArgDepFactors());
+		//params.factors.add(new Factors.FrameArgDepFactors());
 		
 		params.prototypes = params.frameIndex.getPrototypeMap();
+	}
+	
+	public FgInferencerFactory infFactory() {
+		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
+		bpParams.normalizeMessages = true;	// doesn't work if false :(
+		bpParams.logDomain = params.logDomain;
+		bpParams.cacheFactorBeliefs = true;
+		return new FgInferencerFactory() {
+			@Override
+			public boolean isLogDomain() { return bpParams.isLogDomain(); }
+			@Override
+			public FgInferencer getInferencer(FactorGraph fg) {
+				return new BenchmarkingBP(fg, bpParams);
+			}
+		};
 	}
 	
 
@@ -70,12 +88,7 @@ public class Parser {
 		adagParams.sgdPrm = sgdParams;
 		adagParams.eta = 0.1d;
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
-		
-		BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
-		bpParams.normalizeMessages = true;	// doesn't work if false :(
-		bpParams.logDomain = params.logDomain;
-		trainerParams.infFactory = bpParams;
-		//trainerPrm.numThreads = 4;
+		trainerParams.infFactory = infFactory();
 		
 		int numParams;
 		if(bob.isFirstPass()) {
@@ -117,7 +130,7 @@ public class Parser {
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
 			ParsingSentence ps = new ParsingSentence(s, params);
-			pred.add(ps.decode(params.model));
+			pred.add(ps.decode(params.model, this.infFactory()));
 		}
 		return pred;
 	}
@@ -145,24 +158,24 @@ public class Parser {
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
 	
-	public static void main(String[] args) {
-		
-		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
-		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
-		SuperBob.getBob(null).startup();
-		
-		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
-		List<FNParse> all = fip.getParsedSentences();
-		println("all.size = " + all.size());
-		int trainOn = 1;
-		List<FNParse> sample = DataUtil.reservoirSample(all, trainOn);
-		println("training on " + trainOn + " sentences...");
-		Parser p = new Parser();
-		
-		long start = System.currentTimeMillis();
-		p.train(sample);
-		System.out.printf("training took %.1f seconds for %d examples\n", (System.currentTimeMillis()-start)/1000d, trainOn);
-		
-		SuperBob.getBob(null).shutdown();
-	}
+//	public static void main(String[] args) {
+//		
+//		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
+//		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
+//		SuperBob.getBob(null).startup();
+//		
+//		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
+//		List<FNParse> all = fip.getParsedSentences();
+//		println("all.size = " + all.size());
+//		int trainOn = 1;
+//		List<FNParse> sample = DataUtil.reservoirSample(all, trainOn);
+//		println("training on " + trainOn + " sentences...");
+//		Parser p = new Parser();
+//		
+//		long start = System.currentTimeMillis();
+//		p.train(sample);
+//		System.out.printf("training took %.1f seconds for %d examples\n", (System.currentTimeMillis()-start)/1000d, trainOn);
+//		
+//		SuperBob.getBob(null).shutdown();
+//	}
 }

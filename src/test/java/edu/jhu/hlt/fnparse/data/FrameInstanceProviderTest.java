@@ -38,7 +38,7 @@ public class FrameInstanceProviderTest {
 					System.out.println(String.format("frame %s; Trigger_by %s; Sentence %s",
 							fi.getFrame(), fi.getTarget(), fi.getSentence().toString()));
 				}
-				assertEquals(fi.getFrame().numRoles(), fi.numArguments());
+				assertEquals("sent=" + s.getId(), fi.getFrame().numRoles(), fi.numArguments());
 				for(int i = 0; i < fi.getFrame().numRoles(); i++) {
 					assertNotNull(fi.getArgument(i));
 					if(verbose) {

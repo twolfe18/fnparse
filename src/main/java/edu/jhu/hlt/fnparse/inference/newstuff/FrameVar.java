@@ -16,8 +16,8 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 public class FrameVar implements FgRelated {
 	
 	// target Spans aren't very big
-	public static final int maxTargetExpandLeft = 5;
-	public static final int maxTargetExpandRight = 5;
+	public static final int maxTargetExpandLeft = 3;
+	public static final int maxTargetExpandRight = 2;
 	
 	public static FrameInstance nullFrameInstance(Sentence s, int head) {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);

@@ -127,6 +127,9 @@ public class BasicFrameRoleFeatures implements edu.jhu.hlt.fnparse.features.Feat
 		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.word), 1d);
 		fv.add(index(fsrs + "-targetHead=" + tHead.word + "-rightOfArg=" + x.pos), 1d);
 
+		// DEBUGGING
+		fv.add(index(fsrs + "-t" + targetSpan + "-a" + argumentSpan), 10d);
+		
 		return fv;
 	}
 	

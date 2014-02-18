@@ -1,17 +1,13 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
-import edu.jhu.gm.inf.BeliefPropagation;
+import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
@@ -38,7 +34,6 @@ public class ParsingSentence {
 	// ==== VARIABLES ====
 	private FrameVar[] frameVars;
 	private RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
-	private DParseVars dParseVars;
 	private ProjDepTreeFactor depTree;	// holds variables too
 	
 	// ==== FACTORS ====
@@ -109,15 +104,16 @@ public class ParsingSentence {
 	 * 1. frames = \arg\max p(frames | x) = \sum_{args} p(frame, args | x)
 	 * 2. args = \arg\max p(args | frames, x)
 	 */
-	public FNParse decode(FgModel model) {
+	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
 		
 		// first decode to find the best frames (marginalizing out role vars)
 		MbrDecoderPrm prm = new MbrDecoderPrm();
+		prm.infFactory = infFactory;
 		MbrDecoder decoder = new MbrDecoder(prm);
 		FgExample fge1 = this.getFgExample();
 		decoder.decode(model, fge1);
 		VarConfig mbr1Conf = decoder.getMbrVarConfig();
-		Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
+		//Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
 		
 		List<Integer> dFrameIdx = new ArrayList<Integer>();
 		List<Frame> dFrame = new ArrayList<Frame>();
@@ -167,6 +163,8 @@ public class ParsingSentence {
 					Span s = rv.getSpan(mbr2Conf);
 					DenseFactor mR = margins2.get(rv.getRoleVar());
 					DenseFactor mE = margins2.get(rv.getExpansionVar());
+					assert mR.getValues().length == 2;
+					assert mE.getValues().length == rv.getNumExpansions();
 					double mRv = mR.getValue(mbr2Conf.getState(rv.getRoleVar()));
 					double mEv = mE.getValue(mbr2Conf.getState(rv.getExpansionVar()));
 					double score = params.logDomain ? mRv + mEv : mRv * mEv;

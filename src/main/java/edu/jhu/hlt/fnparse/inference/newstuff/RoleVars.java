@@ -10,8 +10,8 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class RoleVars implements FgRelated {
 	
-	public static final int maxArgRoleExpandLeft = 999;
-	public static final int maxArgRoleExpandRight = 999;
+	public static final int maxArgRoleExpandLeft = 3;
+	public static final int maxArgRoleExpandRight = 2;
 		
 	private FrameVar parent;
 	private int roleIdx;	// aka "k"
@@ -113,5 +113,6 @@ public class RoleVars implements FgRelated {
 	public Var getRoleVar() { return headVar; }	// binary var
 	public Var getExpansionVar() { return expansionVar; }
 
+	public int getNumExpansions() { return expansions.size(); }
 }
 
