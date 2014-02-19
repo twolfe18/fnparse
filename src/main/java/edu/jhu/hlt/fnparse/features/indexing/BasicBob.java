@@ -133,7 +133,7 @@ public class BasicBob implements Bob<JoeInfo> {
 			
 			// write out Joes' details (e.g. feature dimensionalities)
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(cacheTo)));
-			w.write(byIndex.size() + " features\n");
+			w.write(byIndex.size() + " feature templates\n");
 			for(JoeInfo ji : byIndex)
 				w.write(ji.serialize());
 			
@@ -158,9 +158,12 @@ public class BasicBob implements Bob<JoeInfo> {
 	@Override
 	public void register(Joe<JoeInfo> featureComputer) {
 		JoeInfo prevInfo = info.get(featureComputer.getJoeName());
-		if(prevInfo != null)
+		if(prevInfo != null) {
+			assert !firstPass;
 			featureComputer.storeJoeInfo(prevInfo);
+		}
 		else {
+			assert firstPass;
 			int index = info.size();
 			JoeInfo newInfo = new JoeInfo(featureComputer.getJoeName(), index, 0, 0);
 			featureComputer.storeJoeInfo(newInfo);

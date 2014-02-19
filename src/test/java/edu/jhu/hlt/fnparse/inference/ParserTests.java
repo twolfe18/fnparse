@@ -10,9 +10,7 @@ import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.Var;
@@ -22,8 +20,6 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -35,18 +31,18 @@ public class ParserTests {
 	
 	@Before
 	public void setupBob() {
-		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
-		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
-		SuperBob.getBob(null).startup();
+//		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
+//		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
+//		SuperBob.getBob(null).startup();
 		
 		parser = new Parser();
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
 	
-	@After
-	public void shutdownBob() {
-		SuperBob.getBob(null).shutdown();
-	}
+//	@After
+//	public void shutdownBob() {
+//		SuperBob.getBob(null).shutdown();
+//	}
 	
 	@Before
 	public void setupDummyParse() {
@@ -108,6 +104,7 @@ public class ParserTests {
 		System.out.println("====== Training ======");
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
+
 		parser.train(train);
 		parser.writeoutWeights(new File("weights.txt"));
 		

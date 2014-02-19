@@ -10,22 +10,15 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.features.indexing.Joe;
-import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features.F, Joe<JoeInfo> {
-
-	private BasicBob bob;
-	private Alphabet<String> featIdx;
-	public boolean verbose = false;
+public class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements edu.jhu.hlt.fnparse.features.Features.F {
 	
-	public BasicFrameFeatures() {
-		bob = (BasicBob) SuperBob.getBob(this);
-		featIdx = bob.trackMyAlphabet(this);
+	public BasicFrameFeatures(Alphabet<String> featIdx) {
+		super(featIdx);
 	}
+
+	public boolean verbose = false;
 
 	@Override
 	public FeatureVector getFeatures(Frame f, int head, Sentence s) {
@@ -36,11 +29,11 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		
 		String fs = "f" + f.getId();
 		
-		v.add(index("frame=" + f.getName()), 1d);
-		v.add(index("numLU=" + f.numLexicalUnits()), 1d);
-		v.add(index(fs + "-target-head=" + s.getWord(head)), 1d);
-		v.add(index(fs + "-target-head-pos=" + s.getPos(head)), 1d);
-		v.add(index(fs + "-sentence-length=" + s.size()), 1d);
+		b(v, "frame=" + f.getName());
+		b(v, "numLU=" + f.numLexicalUnits());
+		b(v, fs + "-target-head=" + s.getWord(head));
+		b(v, fs + "-target-head-pos=" + s.getPos(head));
+		b(v, fs + "-sentence-length=" + s.size());
 		
 		LexicalUnit hypLU = s.getLU(head);
 		boolean matchesAnLU = false;
@@ -51,10 +44,10 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 			matchesAnLU |= hypLU.equals(whichLU);
 		}
 		if(matchesAnLU) {
-			v.add(index("LU-match"), 1d);
-			v.add(index("LU-match-"+whichLU), 1d);
-			v.add(index("LU-match"+f.getName()), 1d);
-			v.add(index("LU-match"+f.getName()+"-"+whichLU), 1d);
+			b(v, "LU-match");
+			b(v, "LU-match-"+whichLU);
+			b(v, "LU-match"+f.getName());
+			b(v, "LU-match"+f.getName()+"-"+whichLU);
 		}
 		
 		
@@ -71,7 +64,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String w = s.getWord(i);
-			v.add(index(fs + "-\"" + w + "\"-appears-in-sentence"), 1d);
+			b(v, fs + "-\"" + w + "\"-appears-in-sentence");
 		}
 		pairFeatures(f, bag, v, "-in-sentence");
 		
@@ -79,7 +72,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String p = s.getPos(i);
-			v.add(index(fs + "-\"" + p + "\"-appears-in-sentence"), 1d);
+			b(v, fs + "-\"" + p + "\"-appears-in-sentence");
 		}
 		pairFeatures(f, bag, v, "-in-sentence");
 		
@@ -87,45 +80,45 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		bag.clear();
 		for(int i=0; i<head; i++) {
 			String w = s.getWord(i);
-			v.add(index(fs + "-\"" + w + "\"-appears-to-the-left"), 1d);
+			b(v, fs + "-\"" + w + "\"-appears-to-the-left");
 		}
-		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-left"), 1d);
+		if(bag.size() == 0) b(v, fs + "-nothing-to-the-left");
 		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of pos on the left
 		bag.clear();
 		for(int i=0; i<head; i++) {
 			String p = s.getPos(i);
-			v.add(index(fs + "-\"" + p + "\"-appears-to-the-left"), 1d);
+			b(v, fs + "-\"" + p + "\"-appears-to-the-left");
 		}
-		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-left"), 1d);
+		if(bag.size() == 0) b(v, fs + "-nothing-to-the-left");
 		else pairFeatures(f, bag, v, "-to-the-left");
 		
 		// pairs of words on right
 		bag.clear();
 		for(int i=head+1; i<s.size(); i++) {
 			String w = s.getWord(i);
-			v.add(index(fs + "-\"" + w + "\"-appears-to-the-right"), 1d);
+			b(v, fs + "-\"" + w + "\"-appears-to-the-right");
 		}
-		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-right"), 1d);
+		if(bag.size() == 0) b(v, fs + "-nothing-to-the-right");
 		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// pairs of pos on the right
 		bag.clear();
 		for(int i=head+1; i<s.size(); i++) {
 			String p = s.getPos(i);
-			v.add(index(fs + "-\"" + p + "\"-appears-to-the-right"), 1d);
+			b(v, fs + "-\"" + p + "\"-appears-to-the-right");
 		}
-		if(bag.size() == 0) v.add(index(fs + "-nothing-to-the-right"), 1d);
+		if(bag.size() == 0) b(v, fs + "-nothing-to-the-right");
 		else pairFeatures(f, bag, v, "-to-the-right");
 		
 		// word/pos to the left/right of the extent
-		v.add(index(fs + "-word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1))), 1d);
-		v.add(index(fs + "-pos-to-the-left=" + (head==0 ? "<S>" : s.getPos(head-1))), 1d);
-		v.add(index(fs + "-word-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getWord(head+1))), 1d);
-		v.add(index(fs + "-pos-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getPos(head+1))), 1d);
+		b(v, fs + "-word-to-the-left=" + (head==0 ? "<S>" : s.getWord(head-1)));
+		b(v, fs + "-pos-to-the-left=" + (head==0 ? "<S>" : s.getPos(head-1)));
+		b(v, fs + "-word-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getWord(head+1)));
+		b(v, fs + "-pos-to-the-right=" + (head==s.size()-1 ? "</S>" : s.getPos(head+1)));
 		
-		return bob.doYourThing(v, this);
+		return v;
 	}
 	
 	private void pairFeatures(Frame f, Set<String> items, FeatureVector v, String meta) {
@@ -135,30 +128,7 @@ public class BasicFrameFeatures implements edu.jhu.hlt.fnparse.features.Features
 		int n = l.size();
 		for(int i=0; i<n-1; i++)
 			for(int j=i+1; j<n; j++)
-				v.add(index("f" + f.getId() + "-\""+l.get(i)+"\"-\""+l.get(j)+"\"-appears" + meta), 1d);
+				b(v, "f" + f.getId() + "-\""+l.get(i)+"\"-\""+l.get(j)+"\"-appears" + meta);
 	}
-	
-	private int index(String featureName) {
-		int s = featIdx.size();
-		int i = featIdx.lookupIndex(featureName, true);
-		if(verbose && s == i)
-			System.out.println("[BasicFrameElemFeatures] new max = " + s);
-		return i;
-	}
-	
-
-	
-	private JoeInfo joeInfo;
-	
-	@Override
-	public String getJoeName() {
-		return this.getClass().getName();
-	}
-
-	@Override
-	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
-
-	@Override
-	public JoeInfo getJoeInfo() { return joeInfo; }
 
 }

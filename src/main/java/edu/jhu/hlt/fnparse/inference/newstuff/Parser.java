@@ -1,36 +1,41 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import static edu.jhu.hlt.fnparse.util.ScalaLike.println;
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
+import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.hlt.fnparse.data.DataUtil;
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
+import edu.jhu.hlt.fnparse.features.DebuggingConstituencyFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
+import edu.jhu.hlt.fnparse.features.FrameTargetFeatures;
 import edu.jhu.optimize.AdaGrad;
-import edu.jhu.optimize.Function;
-import edu.jhu.optimize.Maximizer;
+import edu.jhu.optimize.L2;
 import edu.jhu.optimize.SGD;
+import edu.jhu.util.Alphabet;
 
 public class Parser {
 
 	static class ParserParams {
 		public boolean logDomain;
+		public boolean useLatentDepenencies;
+		
+		public Alphabet<String> featIdx;
 		public FgModel model;
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
@@ -44,15 +49,17 @@ public class Parser {
 	
 	public Parser() {
 		params = new ParserParams();
-		params.logDomain = false;		// doesn't work if this is false :(
+		params.featIdx = new Alphabet<String>();
+		params.logDomain = true;
 		params.frameIndex = FrameIndex.getInstance();
+		params.useLatentDepenencies = false;
 		
 		params.factors = new ArrayList<FactorFactory>();
-		params.factors.add(new Factors.FramePrototypeFactors());
-		params.factors.add(new Factors.FrameFactors());
-		params.factors.add(new Factors.FrameRoleFactors());
-		params.factors.add(new Factors.FrameExpansionFactors());
-		params.factors.add(new Factors.ArgExpansionFactors());
+		//params.factors.add(new Factors.FramePrototypeFactors());
+		//params.factors.add(new Factors.FrameFactors(new DebuggingFrameFeatures(params.featIdx)));
+		//params.factors.add(new Factors.FrameRoleFactors(new DebuggingFrameRoleFeatures()));
+		params.factors.add(new Factors.FrameExpansionFactors(new FrameTargetFeatures(params.featIdx)));
+		//params.factors.add(new Factors.ArgExpansionFactors(new DebuggingConstituencyFeatures(params.featIdx)));
 		//params.factors.add(new Factors.FrameArgDepFactors());
 		
 		params.prototypes = params.frameIndex.getPrototypeMap();
@@ -62,7 +69,7 @@ public class Parser {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = true;	// doesn't work if false :(
 		bpParams.logDomain = params.logDomain;
-		bpParams.cacheFactorBeliefs = true;
+		bpParams.cacheFactorBeliefs = false;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
@@ -76,38 +83,46 @@ public class Parser {
 
 	public void train(List<FNParse> examples) {
 		
-		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
+//		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
 		
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
 		sgdParams.batchSize = 1;
 		//sgdParams.initialLr = 0.1d;	// adagrad ignores this
-		sgdParams.numPasses = 15;
+		sgdParams.numPasses = 10;
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
 		adagParams.sgdPrm = sgdParams;
 		adagParams.eta = 0.1d;
+		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
+		trainerParams.regularizer = new L2(10d);
 		
-		int numParams;
-		if(bob.isFirstPass()) {
-			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
-			numParams = 125000;	// hope this is enough
-			trainerParams.maximizer = new Maximizer() {
-				@Override
-				public boolean maximize(Function function, double[] point) { return true; }
-			};
-			trainerParams.batchMaximizer = null;
-			trainerParams.regularizer = null;
-		}
-		else {
-			trainerParams.maximizer = null;
-			numParams = bob.totalFeatures();
-			System.out.println("[train] #features = " + bob.totalFeatures() + ", optimizing with " + trainerParams.batchMaximizer);
-			assert trainerParams.batchMaximizer != null;
-		}
+//		int numParams;
+//		if(bob.isFirstPass()) {
+//			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
+//			numParams = 125000;	// hope this is enough
+//			trainerParams.maximizer = new Maximizer() {
+//				boolean onceThrough = false;
+//				@Override
+//				public boolean maximize(Function function, double[] point) {
+//					if(onceThrough) return true;
+//					onceThrough = true;
+//					return false;
+//				}
+//			};
+//			trainerParams.batchMaximizer = null;
+//			trainerParams.regularizer = null;
+//		}
+//		else {
+//			trainerParams.maximizer = null;
+//			numParams = bob.totalFeatures();
+//			System.out.println("[train] #features = " + bob.totalFeatures() + ", optimizing with " + trainerParams.batchMaximizer);
+//			assert trainerParams.batchMaximizer != null;
+//		}
 
+		int numParams = 250000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
@@ -144,15 +159,16 @@ public class Parser {
 		try {
 			//File f = new File("weights.txt");
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
-			BasicBob b = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
-			String[] fnNames = b.getFeatureNames();
-			double[] outParams = new double[params.model.getNumParams()];
-			if(fnNames.length != outParams.length) {
-				System.out.println("wtuf");
-			}
+//			BasicBob b = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
+//			String[] fnNames = b.getFeatureNames();
+			int n = params.model.getNumParams();	// overestimate
+			assert n >= params.featIdx.size();
+			double[] outParams = new double[n];
 			params.model.updateDoublesFromModel(outParams);
-			for(int i=0; i<outParams.length; i++)
-				w.write(outParams[i] + "\t" + fnNames[i] + "\n");
+			for(int i=0; i<params.featIdx.size(); i++) {
+//				w.write(outParams[i] + "\t" + fnNames[i] + "\n");
+				w.write(outParams[i] + "\t" + params.featIdx.lookupObject(i) + "\n");
+			}
 			w.close();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }

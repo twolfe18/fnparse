@@ -1,21 +1,27 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
+import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FactorGraph.FgEdge;
+import edu.jhu.gm.model.FactorGraph.FgNode;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -24,6 +30,8 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
@@ -88,11 +96,13 @@ public class ParsingSentence {
 					roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k, params.logDomain);	
 		}
 
-		depTree = new ProjDepTreeFactor(n, VarType.LATENT);
+		if(params.useLatentDepenencies)
+			depTree = new ProjDepTreeFactor(n, VarType.LATENT);
 		
 		// initialize all the factors
 		factors = new ArrayList<Factor>();
-		factors.add(depTree);
+		if(params.useLatentDepenencies)
+			factors.add(depTree);
 		for(FactorFactory ff : factorHolders)
 			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars, depTree));
 	}
@@ -111,30 +121,44 @@ public class ParsingSentence {
 		prm.infFactory = infFactory;
 		MbrDecoder decoder = new MbrDecoder(prm);
 		FgExample fge1 = this.getFgExample();
-		decoder.decode(model, fge1);
+		BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
 		VarConfig mbr1Conf = decoder.getMbrVarConfig();
-		//Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
+		Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
 		
 		List<Integer> dFrameIdx = new ArrayList<Integer>();
 		List<Frame> dFrame = new ArrayList<Frame>();
 		List<Span> dFrameTarget = new ArrayList<Span>();
 		
 		VarConfig clampedFrames = new VarConfig();
-		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
 		int n = frameVars.length;
 		for(int i=0; i<n; i++) {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
-			Frame f_i = fv.getFrame(mbr1Conf);
-			if(f_i == Frame.nullFrame) {
-				assert frameVars[i].getExpansion(mbr1Conf).equals(Expansion.noExpansion);
-				continue;
+			
+			
+			
+			DenseFactor localMargins = margins1.get(fv.getFrameVar());
+			System.out.println(sentence.getLU(i) + "\t" + localMargins);
+			
+			FgNode fvNode = fg.getNode(fv.getFrameVar());
+			for(FgEdge e : fvNode.getInEdges()) {
+				System.out.println("edge    = " + e);
+				System.out.println("factor  = " + e.getFactor());
+				System.out.println("message = " + bp.getMessages()[e.getId()].message);
+				//System.out.println(margins1.get(e.getChild().getVar()));
 			}
+			System.out.println();
+			
+			
+			
+			Frame f_i = fv.getFrame(mbr1Conf);
+			if(f_i == Frame.nullFrame)
+				assert frameVars[i].getExpansion(mbr1Conf).equals(Expansion.noExpansion);
 			Span target = fv.getTarget(mbr1Conf);
 			
 			clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
 			clampedFrames.put(fv.getExpansionVar(), mbr1Conf.getState(fv.getExpansionVar()));
-			clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));
+			clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));	// shouldn't matter
 			
 			dFrameIdx.add(i);
 			dFrame.add(f_i);
@@ -147,10 +171,15 @@ public class ParsingSentence {
 		decoder.decode(model, fge2);
 		VarConfig mbr2Conf = decoder.getMbrVarConfig();
 		Map<Var, DenseFactor> margins2 = decoder.getVarMarginalsIndexed();
+		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
 		for(int ii=0; ii<dFrameIdx.size(); ii++) {
 			int i = dFrameIdx.get(ii);
 			Frame f_i = dFrame.get(ii);
 			Span target = dFrameTarget.get(ii);
+			
+			if(f_i == Frame.nullFrame)
+				continue;
+			
 			int K = f_i.numRoles();
 			Span[] args = new Span[K];
 			Arrays.fill(args, Span.nullSpan);
