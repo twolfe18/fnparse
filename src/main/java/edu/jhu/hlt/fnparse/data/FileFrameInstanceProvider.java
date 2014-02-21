@@ -31,6 +31,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
 	
+	public static final FileFrameInstanceProvider semlinkFIP =
+		new FileFrameInstanceProvider(UsefulConstants.semlinkFramesPath, UsefulConstants.semlinkConllPath);
+
 	private File frameFile, conllFile;
 	
 	private LineIterator litrFrames;
@@ -123,6 +126,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 		// from Framenet, and true for the fulltext data
 		if(sentId.startsWith("FNFUTXT")) return true;
 		if(sentId.startsWith("FNLEX")) return false;
+		if(sentId.startsWith("SL")) return true;
 		throw new RuntimeException("Strange unhandled annotationsetid: " + sentId);
 	}
 
@@ -147,7 +151,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 					while(litrConll.hasNext() && curSentIdConll.equals(prevSentId)){
 						String[] l = curLineConllFile.split("\t");
 						tokens.add(l[4]);
-						pos.add(l[5]);
+						pos.add(l[10]);
 						gov.add(Integer.parseInt(l[8]));
 						depType.add(l[9]);
 						tokenCharStart.add(Integer.parseInt(l[6]));
@@ -158,6 +162,8 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 					}
 					String datasetOfSentence = (curSentIdConll.startsWith("FNFUTXT"))? "FNFUTXT" : null;
 					datasetOfSentence = (curSentIdConll.startsWith("FNLEX"))? "FNLEX" : datasetOfSentence;
+					datasetOfSentence = (curSentIdConll.startsWith("SL"))? "SL" : datasetOfSentence;
+					
 					assert datasetOfSentence != null;
 					Sentence s = new Sentence( datasetOfSentence, 
 							prevSentId, 
@@ -227,7 +233,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 
 					boolean tagging = false;
 					for(FrameInstance fi : frameInstances) {
-						if(fi.onlyTargetLabeled()) {
+						if(fi.onlyTargetLabeled() || fi.getFrame().numRoles() != fi.numArguments()) {
 							tagging = true;
 							fntg.add(new FNTagging(s, frameInstances));
 							break;
@@ -250,6 +256,8 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 				int end = Collections.binarySearch(tokenCharEnd, spanCharEnd);
 				end = (end < 0) ? -end : (end+1); // We add 1 because the end is supposed to be excluded in Span
 				end = (end <= tokenCharEnd.size()) ? end : tokenCharEnd.size();
+				if(start==end && start == 0) end++;
+				if(start==end && start != 0) start--;
 				return Span.getSpan(start, end);
 			}
 

@@ -54,6 +54,7 @@ public class Sentence implements HasId {
 	public String getId() { return id; }
 	
 	public LexicalUnit getLU(int i) { return new LexicalUnit(tokens[i], pos[i]); }
+	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
 	public String getPos(int i) { return pos[i]; }
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }

@@ -49,7 +49,7 @@ public class FrameInstanceProviderTest {
 			}
 			assertTrue(uniqSents.add(s.getSentence()));
 		}
-		
+
 		System.out.println("there are " + parsesWithMoreThanOneFI + " parses with more than one FrameInstance in them.");
 		System.out.printf("loaded %d FrameInstances in %d sentences took %.2f seconds\n\n",
 				numFIs, sents.size(), time/1000d);
@@ -65,6 +65,7 @@ public class FrameInstanceProviderTest {
 		boolean verbose = false;
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
 		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
+		testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
 	}
 }
