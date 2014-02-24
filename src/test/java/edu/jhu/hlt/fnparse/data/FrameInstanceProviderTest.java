@@ -4,11 +4,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -16,6 +14,22 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class FrameInstanceProviderTest {
+	
+	/**
+	 * i checked by hand and i think some of these instances are being skipped.
+	 * if there is some reason they should be skipped, then remove them from the file
+	 * or change the values in this hash map (i want to ensure this has been looked at).
+	 */
+	public Map<String, String> firstWordOfFirstSentence;
+	
+	@Before
+	public void populateFirstWord() {
+		firstWordOfFirstSentence = new HashMap<String, String>();
+		firstWordOfFirstSentence.put("semlink", "Pierre");
+		firstWordOfFirstSentence.put("fn15.train", "The");
+		firstWordOfFirstSentence.put("fn15.test", "On");
+		firstWordOfFirstSentence.put("fn15.lex", "Major");
+	}
 
 	private static void testFIP(FileFrameInstanceProvider fip, boolean verbose) {		
 		System.out.println("testing " + fip.getName());
@@ -63,9 +77,21 @@ public class FrameInstanceProviderTest {
 	@Test
 	public void defaultConfigTest() {
 		boolean verbose = false;
+		
 		testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
+		assertEquals(firstWordOfFirstSentence.get("semlink"),
+				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+		
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
+		assertEquals(firstWordOfFirstSentence.get("fn15.train"),
+				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+		
 		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
+		assertEquals(firstWordOfFirstSentence.get("fn15.test"),
+				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+		
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
+		assertEquals(firstWordOfFirstSentence.get("fn15.lex"),
+				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
 	}
 }
