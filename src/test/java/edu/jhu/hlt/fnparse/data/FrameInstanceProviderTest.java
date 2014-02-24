@@ -61,12 +61,17 @@ public class FrameInstanceProviderTest {
 					}
 				}
 			}
+			checkSentence(s.getSentence());
 			assertTrue(uniqSents.add(s.getSentence()));
 		}
 
 		System.out.println("there are " + parsesWithMoreThanOneFI + " parses with more than one FrameInstance in them.");
 		System.out.printf("loaded %d FrameInstances in %d sentences took %.2f seconds\n\n",
 				numFIs, sents.size(), time/1000d);
+	}
+	
+	public static void checkSentence(Sentence s) {
+		assertTrue(s.getId() + " should be at least length 1", s.size() > 0);
 	}
 
 	public static void checkOrder(List<FNParse> sents, FrameInstanceProvider fip) {
@@ -91,10 +96,10 @@ public class FrameInstanceProviderTest {
 				FileFrameInstanceProvider.fn15lexFIP.getParsedSentences().get(0).getSentence().getWord(0));
 		
 		// TODO: Fix semlink datafiles and uncomment these tests
-		// testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
+		testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
 		//assertEquals(firstWordOfFirstSentence.get("semlink"),
 		//		FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
-		// assertTrue(FileFrameInstanceProvider.semlinkFIP.getTaggedSentences().size() > 0);
+		assertTrue(FileFrameInstanceProvider.semlinkFIP.getTaggedSentences().size() > 0);
 		
 	}
 }

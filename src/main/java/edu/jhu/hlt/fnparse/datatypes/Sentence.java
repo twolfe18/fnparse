@@ -43,7 +43,7 @@ public class Sentence implements HasId {
 		
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
-			this.pos[i] = this.pos[i].toUpperCase();
+			this.pos[i] = this.pos[i].toUpperCase().intern();
 	}
 
 	public Sentence copy() {
