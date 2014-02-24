@@ -84,14 +84,14 @@ public class FrameInstanceProviderTest {
 		
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.train"),
-				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+				FileFrameInstanceProvider.fn15trainFIP.getParsedSentences().get(0).getSentence().getWord(0));
 		
 		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.test"),
-				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+				FileFrameInstanceProvider.fn15testFIP.getParsedSentences().get(0).getSentence().getWord(0));
 		
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.lex"),
-				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+				FileFrameInstanceProvider.fn15lexFIP.getParsedSentences().get(0).getSentence().getWord(0));
 	}
 }
