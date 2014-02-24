@@ -4,7 +4,7 @@ import java.io.File;
 
 public class UsefulConstants {
 
-	public static final File dataPath =  new File("//Users//pushpendrerastogi//framenetparser//fnparse//toydata");
+	public static final File dataPath =  new File("toydata");
 	
 	public static final File frameIndexPath = new File(dataPath, "fn15-frameindex");
 	public static final File frameIndexLUPath = new File(dataPath, "fn15-frameindexLU");
