@@ -160,11 +160,16 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 						l=curLineConllFile.split("\t");
 						curSentIdConll = l[2];
 					}
-					String datasetOfSentence = (curSentIdConll.startsWith("FNFUTXT"))? "FNFUTXT" : null;
-					datasetOfSentence = (curSentIdConll.startsWith("FNLEX"))? "FNLEX" : datasetOfSentence;
-					datasetOfSentence = (curSentIdConll.startsWith("SL"))? "SL" : datasetOfSentence;
 					
-					assert datasetOfSentence != null;
+					String datasetOfSentence;
+					if(curSentIdConll.startsWith("FNFUTXT"))
+						datasetOfSentence = "FNFUTXT";
+					else if(curSentIdConll.startsWith("FNLEX"))
+						datasetOfSentence = "FNLEX";
+					else if(curSentIdConll.startsWith("SL"))
+						datasetOfSentence = "SemLink";
+					else throw new RuntimeException("where did " + curSentIdConll + " come from?");
+					
 					Sentence s = new Sentence( datasetOfSentence, 
 							prevSentId, 
 							tokens.toArray(new String[0]), 
