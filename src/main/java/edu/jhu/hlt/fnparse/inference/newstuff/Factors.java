@@ -27,6 +27,7 @@ import edu.jhu.hlt.fnparse.util.FeatureUtils;
  * combinations you've seen given from initFactorsFor().
  * 
  * @author travis
+ * @deprecated
  */
 public abstract class Factors implements FactorFactory {
 
@@ -42,7 +43,11 @@ public abstract class Factors implements FactorFactory {
 	 */
 	public static class FramePrototypeFactors extends Factors {	// makes the factors
 
-		private Features.FP features = new BasicFramePrototypeFeatures();
+		private Features.FP features;
+		
+		public FramePrototypeFactors(Features.FP features) {
+			this.features = features;
+		}
 	
 		@Override
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
@@ -248,7 +253,10 @@ public abstract class Factors implements FactorFactory {
 				VarConfig conf = this.getVars().getVarConfig(config);
 				Frame f = frameVar.getFrame(conf);
 				Span s = frameVar.getTarget(conf);
-				return features.getFeatures(f, s, sent);
+				FeatureVector fv = features.getFeatures(f, s, sent);
+				if(f == Frame.nullFrame)
+					assert fv.size() == 1 : "nullFrame should be exactly one feature";
+				return fv;
 			}
 		}
 	}
@@ -256,10 +264,6 @@ public abstract class Factors implements FactorFactory {
 	public static class ArgExpansionFactors extends Factors {
 		
 		private Features.C features;
-		
-		public ArgExpansionFactors() {
-			this.features = new ConstituencyFeatures("Args");
-		}
 		
 		public ArgExpansionFactors(Features.C features) {
 			this.features = features;
@@ -308,7 +312,11 @@ public abstract class Factors implements FactorFactory {
 	 */
 	public static class FrameArgDepFactors extends Factors {
 
-		private Features.FRL features = new BasicFrameRoleLinkFeatures();
+		private Features.FRL features;
+		
+		public FrameArgDepFactors(Features.FRL features) {
+			this.features = features;
+		}
 		
 		@Override
 		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {

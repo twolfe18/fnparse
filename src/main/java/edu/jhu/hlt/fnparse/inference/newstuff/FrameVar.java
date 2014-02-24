@@ -38,8 +38,6 @@ public class FrameVar implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
-	private ExpansionHardFactor expansionHardFactor;
-	
 	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
 		
 		if(frames.size() == 0 || prototypes.size() == 0)
@@ -64,9 +62,6 @@ public class FrameVar implements FgRelated {
 		this.frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, frameVarNames);
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
 		this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
-		
-		this.expansionHardFactor = new ExpansionHardFactor(frameVar, expansionVar,
-				frames.indexOf(Frame.nullFrame), expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	// indices into frames and expansions respectively
@@ -122,10 +117,6 @@ public class FrameVar implements FgRelated {
 		// prototypeVar is latent, no gold label
 		gold.put(frameVar, goldFrame);
 		gold.put(expansionVar, goldExpansion);
-		
-		// hard factors
-		//fg.addFactor(expansionHardFactor);
-		
 	}
 
 	private int maxRoles = -1;

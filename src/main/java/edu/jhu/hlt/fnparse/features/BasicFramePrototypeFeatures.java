@@ -5,24 +5,12 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.features.indexing.Joe;
-import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class BasicFramePrototypeFeatures implements Features.FP, Joe<JoeInfo> {
+public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFramePrototypeFeatures> implements Features.FP {
 	
-	private Alphabet<String> alph;
-	private BasicBob bob;
-	
-	public BasicFramePrototypeFeatures() {
-		this.bob = (BasicBob) SuperBob.getBob(this);
-		this.alph = bob.trackMyAlphabet(this);
-	}
-	
-	private int index(String featureName) {
-		return alph.lookupIndex(featureName, true);
+	public BasicFramePrototypeFeatures(Alphabet<String> featIdx) {
+		super(featIdx);
 	}
 	
 	@Override
@@ -40,9 +28,9 @@ public class BasicFramePrototypeFeatures implements Features.FP, Joe<JoeInfo> {
 		String protoId = f.getId() + "@" + p.getSentence().getId();
 		for(int i=protoTarget.start; i<protoTarget.end; i++) {
 			if(p.getSentence().getWord(i).equals(targetHead)) {
-				fv.add(index("head-in-prototype"), 1d);
-				fv.add(index("head-in-prototype_prototype=" + protoId), 1d);
-				fv.add(index("head-in-prototype_frame=" + f.getId()), 1d);
+				b(fv, "head-in-prototype");
+				b(fv, "head-in-prototype_prototype=" + protoId);
+				b(fv, "head-in-prototype_frame=" + f.getId());
 			}
 		}
 		
@@ -54,39 +42,24 @@ public class BasicFramePrototypeFeatures implements Features.FP, Joe<JoeInfo> {
 				double ij = ((double) j) / nj;
 				double dist = Math.abs(ip - ij);
 				if(s.getWord(i).equals(p.getSentence().getWord(j))) {
-					fv.add(index("word-match"), 1d - dist);
+					b(fv, "word-match", 1d - dist);
 					int tdist = Math.abs(i - targetHeadIdx);
 					boolean l = i < targetHeadIdx;
-					fv.add(index("word-match-in" + tdist), 1d - dist);
-					fv.add(index("word-match-to" + (l ? "L" : "R")), 1d - dist);
-					fv.add(index("word-match-like" + tdist + (l ? "L" : "R")), 1d - dist);
+					b(fv, "word-match-in" + tdist, 1d - dist);
+					b(fv, "word-match-to" + (l ? "L" : "R"), 1d - dist);
+					b(fv, "word-match-like" + tdist + (l ? "L" : "R"), 1d - dist);
 				}
 				if(s.getLU(i).equals(p.getSentence().getLU(j))) {
-					fv.add(index("word-match-fine"), 1d - dist);
+					b(fv, "word-match-fine", 1d - dist);
 					int tdist = Math.abs(i - targetHeadIdx);
 					boolean l = i < targetHeadIdx;
-					fv.add(index("word-match-fine-in" + tdist), 1d - dist);
-					fv.add(index("word-match-fine-to" + (l ? "L" : "R")), 1d - dist);
-					fv.add(index("word-match-fine-like" + tdist + (l ? "L" : "R")), 1d - dist);
+					b(fv, "word-match-fine-in" + tdist, 1d - dist);
+					b(fv, "word-match-fine-to" + (l ? "L" : "R"), 1d - dist);
+					b(fv, "word-match-fine-like" + tdist + (l ? "L" : "R"), 1d - dist);
 				}
 			}
 		}
 		
-		return bob.doYourThing(fv, this);
+		return fv;
 	}
-
-	private JoeInfo joeInfo;
-
-	@Override
-	public String getJoeName() {
-		return this.getClass().getName();
-	}
-
-	@Override
-	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
-
-	@Override
-	public JoeInfo getJoeInfo() { return joeInfo; }
-
-
 }

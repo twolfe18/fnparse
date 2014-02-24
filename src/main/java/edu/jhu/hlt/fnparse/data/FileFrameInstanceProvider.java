@@ -30,10 +30,10 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 	
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
-	
+	/*
 	public static final FileFrameInstanceProvider semlinkFIP =
-		new FileFrameInstanceProvider(UsefulConstants.semlinkFramesPath, UsefulConstants.semlinkConllPath);
-
+			new FileFrameInstanceProvider(UsefulConstants.SemLinkFrameFramesPath, UsefulConstants.SemLinkFrameConllPath);
+	*/
 	private File frameFile, conllFile;
 	
 	private LineIterator litrFrames;
@@ -235,13 +235,14 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 					for(FrameInstance fi : frameInstances) {
 						if(fi.onlyTargetLabeled() || fi.getFrame().numRoles() != fi.numArguments()) {
 							tagging = true;
-							fntg.add(new FNTagging(s, frameInstances));
-							break;
 						}
 					}
-					if(!tagging)
-						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
 					
+					if(!tagging){
+						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
+					} else {
+						fntg.add(new FNTagging(s, frameInstances));
+					}
 					prevSentId = curSentIdFrames;
 				}
 				fnpl.add(ret);

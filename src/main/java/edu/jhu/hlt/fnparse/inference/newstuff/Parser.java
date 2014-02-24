@@ -17,21 +17,14 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.DebuggingConstituencyFeatures;
-import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
-import edu.jhu.hlt.fnparse.features.FrameTargetFeatures;
-import edu.jhu.optimize.AdaGrad;
-import edu.jhu.optimize.L2;
-import edu.jhu.optimize.SGD;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.optimize.*;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
-
-	static class ParserParams {
+	
+	public static class ParserParams {
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
 		
@@ -50,18 +43,17 @@ public class Parser {
 	public Parser() {
 		params = new ParserParams();
 		params.featIdx = new Alphabet<String>();
-		params.logDomain = true;
+		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
-		
 		params.factors = new ArrayList<FactorFactory>();
-		//params.factors.add(new Factors.FramePrototypeFactors());
-		//params.factors.add(new Factors.FrameFactors(new DebuggingFrameFeatures(params.featIdx)));
-		//params.factors.add(new Factors.FrameRoleFactors(new DebuggingFrameRoleFeatures()));
-		params.factors.add(new Factors.FrameExpansionFactors(new FrameTargetFeatures(params.featIdx)));
-		//params.factors.add(new Factors.ArgExpansionFactors(new DebuggingConstituencyFeatures(params.featIdx)));
-		//params.factors.add(new Factors.FrameArgDepFactors());
-		
+		FrameFactorFactory fff = new FrameFactorFactory();
+		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
+		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		params.factors.add(fff);
+		RoleFactorFactory rff = new RoleFactorFactory(params);
+		rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+		params.factors.add(rff);
 		params.prototypes = params.frameIndex.getPrototypeMap();
 	}
 	
@@ -97,7 +89,10 @@ public class Parser {
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
-		trainerParams.regularizer = new L2(10d);
+		
+		// L2's parameter is variance => bigger means less regularization
+		// L1's parameter is multiplier => bigger means more regularization
+		trainerParams.regularizer = new L1(1d);	//new L2(1d);
 		
 //		int numParams;
 //		if(bob.isFirstPass()) {

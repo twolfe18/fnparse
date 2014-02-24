@@ -3,41 +3,32 @@ package edu.jhu.hlt.fnparse.features;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
-import edu.jhu.hlt.fnparse.features.indexing.Joe;
-import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
 import edu.jhu.util.Alphabet;
 
-public class ConstituencyFeatures implements Features.C, Joe<JoeInfo> {
+public class ConstituencyFeatures extends AbstractFeatures<ConstituencyFeatures> implements Features.C {
 	
-	private JoeInfo joeInfo;
-	private BasicBob bob;
-	private String prefix;
-	private Alphabet<String> featIdx;
-
-	private String refinement;
-	private double refinementW;
+//	private String prefix;
+//	private String refinement;
+//	private double refinementW;
 	
-	public ConstituencyFeatures(String prefix) {
-		this.prefix = prefix;
-		bob = (BasicBob) SuperBob.getBob(this, BasicBob.NAME);
-		featIdx = bob.trackMyAlphabet(this);
+	public ConstituencyFeatures(Alphabet<String> featIdx) {
+		super(featIdx);
 	}
 	
-	public void setRefinement(String s, double w) {
-		if(w >= 1d)
-			throw new IllegalArgumentException();
-		refinement = s;
-		refinementW = w;
-	}
+//	public void setRefinement(String s, double w) {
+//		if(w >= 1d)
+//			throw new IllegalArgumentException();
+//		refinement = s;
+//		refinementW = w;
+//	}
 	
 	@Override
 	public FeatureVector getFeatures(Span cons, Sentence sent) {
-		FeatureVector v = new FeatureVector();
 
 		if(cons == Span.nullSpan)
-			return bob.doYourThing(v, this);
+			return emptyFeatures;
+		
+		FeatureVector v = new FeatureVector();
 		
 		b(v, "intercept");
 		b(v, "width=" + cons.width());
@@ -73,34 +64,6 @@ public class ConstituencyFeatures implements Features.C, Joe<JoeInfo> {
 			b(v, "contains_" + sent.getPos(i));
 		}
 		
-		return bob.doYourThing(v, this);
+		return v;
 	}
-	
-	private void b(FeatureVector fv, String featureName) {
-		fv.add(i(featureName), 1d);
-		if(refinement != null)
-			fv.add(i(featureName + "@" + refinement), refinementW);
-	}
-	
-	private int i(String featureName) {
-		return featIdx.lookupIndex(featureName, true);
-	}
-
-	@Override
-	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
-
-	@Override
-	public JoeInfo getJoeInfo() { return joeInfo; }
-
-	/**
-	 * by adding this prefix, Bob thinks that each prefix is its own feature
-	 * set and keeps their indices apart, allowing for different weights for,
-	 * say frame expansions vs argument expansions.
-	 */
-	@Override
-	public String getJoeName() {
-		return this.getClass().getName() + "@" + prefix;
-	}
-
-
 }

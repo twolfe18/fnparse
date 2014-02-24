@@ -23,6 +23,9 @@ import edu.jhu.gm.model.VarSet;
  * for cells that the hard factor would rule out. This factor takes the naive approach and
  * just multiplies in a 0 in places where you could possibly avoid doing computation.
  * 
+ * @deprecated This is incredibly slow and introduces a weird bias due to normalization.
+ * See commit 6e2b683831 for details, but try not to use this if at all possible.
+ * 
  * @author travis
  */
 public class ExpansionHardFactor implements Factor {
