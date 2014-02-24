@@ -31,9 +31,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
 	
-	public static final FileFrameInstanceProvider semlinkFIP =
-			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);
-	
+//	public static final FileFrameInstanceProvider semlinkFIP =
+//			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);
+//	
 	private File frameFile, conllFile;
 	
 	private LineIterator litrFrames;
@@ -160,7 +160,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 						l=curLineConllFile.split("\t");
 						curSentIdConll = l[2];
 					}
-					
+					assert tokens.size() > 0;
 					String datasetOfSentence;
 					if(curSentIdConll.startsWith("FNFUTXT"))
 						datasetOfSentence = "FNFUTXT";
@@ -176,6 +176,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 							pos.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 							depType.toArray(new String[0]));
+					
 					List<FrameInstance> frameInstancesForFNTagging = new ArrayList<FrameInstance>();
 					while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentId)){
 						Map<String, Span> triggeredRoles = new HashMap<String, Span>();
