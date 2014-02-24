@@ -63,6 +63,7 @@ public class FrameInstanceProviderTest {
 	@Test
 	public void defaultConfigTest() {
 		boolean verbose = false;
+		testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
 		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);

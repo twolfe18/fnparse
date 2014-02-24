@@ -31,6 +31,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
 	
+	public static final FileFrameInstanceProvider semlinkFIP =
+			new FileFrameInstanceProvider(UsefulConstants.SemLinkFrameFramesPath, UsefulConstants.SemLinkFrameConllPath);
+	
 	private File frameFile, conllFile;
 	
 	private LineIterator litrFrames;

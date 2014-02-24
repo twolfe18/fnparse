@@ -16,7 +16,10 @@ public class UsefulConstants {
 	public static final File TrainFN15FullTextConllPath = new File(dataPath, "fn15-fulltext.conll.train");
 	
 	public static final File FN15LexicographicFramesPath = new File(dataPath, "fn15-lex.frames");
-	public static final File FN15LexicographicConllPath = new File(dataPath, "fn15-lex-no_manually_added.conll");
+	public static final File FN15LexicographicConllPath = new File(dataPath, "fn15-lex.conll");
+	
+	public static final File SemLinkFrameFramesPath = new File(dataPath, "semlink-fulltext.frames");
+	public static final File SemLinkFrameConllPath = new File(dataPath, "semlink-fulltext.conll");
 	
 	public static final File semLinkFrameInstanceFile = new File(dataPath, "semlink.1.2.2c");
 	
