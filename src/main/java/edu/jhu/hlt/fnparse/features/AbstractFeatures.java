@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.features;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -24,6 +25,14 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 	
 	public AbstractFeatures(Alphabet<String> featIdx) {
 		this.featIdx = featIdx;
+	}
+	
+	/**
+	 * by default, nothing is excluded from regularization,
+	 * but you are free to override this.
+	 */
+	public List<Integer> dontRegularize() {
+		return Collections.<Integer>emptyList();
 	}
 	
 	/**
@@ -51,16 +60,20 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 	}
 	
 	protected void b(FeatureVector fv, String featureName) {
+		b(fv, featureName, 1d);
+	}
+	
+	protected void b(FeatureVector fv, String featureName, double weight) {
 		
 		String n = getName() + "_";
 		String s = n + featureName;
-		fv.add(featIdx.lookupIndex(s, true), 1d);
+		fv.add(featIdx.lookupIndex(s, true), weight);
 		
 		if(refinements != null) {
 			int c = refinements.size();
 			for(int i=0; i<c; i++) {
 				s = n + refinements.get(i) + "_" + featureName;
-				fv.add(featIdx.lookupIndex(s, true), weights.get(i));
+				fv.add(featIdx.lookupIndex(s, true), weight * weights.get(i));
 			}
 		}
 	}

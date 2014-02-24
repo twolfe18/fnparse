@@ -9,7 +9,7 @@ import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameRoleFeatures extends AbstractFeatures implements edu.jhu.hlt.fnparse.features.Features.FRE {
+public class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements edu.jhu.hlt.fnparse.features.Features.FRE {
 
 	private HeadFinder hf = new BraindeadHeadFinder();
 	public boolean verbose = false;
@@ -20,6 +20,9 @@ public class BasicFrameRoleFeatures extends AbstractFeatures implements edu.jhu.
 	
 	@Override
 	public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argumentSpan, Sentence sent) {
+		
+		if(argIsRealized && f == Frame.nullFrame)
+			throw new IllegalArgumentException();
 		
 		if(argIsRealized && roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();

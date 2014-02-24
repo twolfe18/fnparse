@@ -1,43 +1,48 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.Arrays;
+import java.util.List;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features.FRL;
-import edu.jhu.hlt.fnparse.features.indexing.Joe;
-import edu.jhu.hlt.fnparse.features.indexing.JoeInfo;
-import edu.jhu.hlt.fnparse.features.indexing.SuperBob;
-import edu.jhu.hlt.fnparse.features.indexing.BasicBob;
 import edu.jhu.util.Alphabet;
 
-//this factor represents the cube (f, r, l)
+// this factor represents the cube (f_i, r_ijk, l_ij)
 // to prevent over-parameterization, we need to fix one of these entries
-// lets have features(f=nullFrame, r=false, l=false) = emptyVector
-// everything else will get features
+// lets have features(f_i=nullFrame, r_ijk=false, l_ij=false) = emptyVector
+// everything else will get features.
 
-// in the grand scheme of things, over-parameterization isn't that bad,
-// so i might just accidentally include all combinations
+// i'll go one step further: i don't really care about values of this factor
+// once i know f_i == nullFrame. have one feature for that, don't regualarize it,
+// and then go all out on features for the other combinations.
 
-public class BasicFrameRoleLinkFeatures implements FRL, Joe<JoeInfo> {
+public class BasicFrameRoleLinkFeatures extends AbstractFeatures<BasicFrameRoleLinkFeatures> implements FRL {
 
-	private BasicBob bob;
-	private JoeInfo joeInfo;
-	private Alphabet<String> featIdx;
+	private FeatureVector nullFrameFeatures;
+	private int nullFrameFeatureIdx;
 	
-	public BasicFrameRoleLinkFeatures() {
-		bob = (BasicBob) SuperBob.getBob(this);
-		featIdx = bob.trackMyAlphabet(this);
+	public BasicFrameRoleLinkFeatures(Alphabet<String> featIdx) {
+		super(featIdx);
+		nullFrameFeatureIdx = featIdx.lookupIndex(getName() + "_nullFeature", true);
+		nullFrameFeatures = new FeatureVector();
+		nullFrameFeatures.add(nullFrameFeatureIdx, 1d);
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, boolean argIsRealized,
-			boolean linkFromTargetHeadToArgHead, int targetHeadIdx,
-			int roleIdx, int argHeadIdx, Sentence s) {
+	public List<Integer> dontRegularize() {
+		return Arrays.asList(nullFrameFeatureIdx);
+	}
+	
+	@Override
+	public FeatureVector getFeatures(Frame f, boolean argIsRealized, boolean linkFromTargetHeadToArgHead,
+			int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s) {
 		
+		if(f == Frame.nullFrame)
+			return nullFrameFeatures;
+
 		FeatureVector fv = new FeatureVector();
-		
-		if(f == Frame.nullFrame && !argIsRealized && !linkFromTargetHeadToArgHead)
-			return bob.doYourThing(fv, this);
 		
 		String fs = "f" + f.getId();
 		String fsb = f == Frame.nullFrame ? "fNull" : "fX";
@@ -50,45 +55,29 @@ public class BasicFrameRoleLinkFeatures implements FRL, Joe<JoeInfo> {
 		String mag3 = "-m3=" + (Math.abs(targetHeadIdx - argHeadIdx)/4);
 		
 		// full
-		a(fs + as + ak + ls + dir + mag1, fv);
-		a(fs + as + ak + ls + dir + mag2, fv);
-		a(fs + as + ak + ls + dir + mag3, fv);
-		a(fs + as + ak + ls + dir, fv);
-		a(fs + as + ak + ls, fv);
+		b(fv, fs + as + ak + ls + dir + mag1);
+		b(fv, fs + as + ak + ls + dir + mag2);
+		b(fv, fs + as + ak + ls + dir + mag3);
+		b(fv, fs + as + ak + ls + dir);
+		b(fv, fs + as + ak + ls);
 		
 		// frame backoff
-		a(fsb + as + ls + dir + mag1, fv);
-		a(fsb + as + ls + dir + mag2, fv);
-		a(fsb + as + ls + dir + mag3, fv);
-		a(fsb + as + ls + dir, fv);
-		a(fsb + as + ls, fv);
+		b(fv, fsb + as + ls + dir + mag1);
+		b(fv, fsb + as + ls + dir + mag2);
+		b(fv, fsb + as + ls + dir + mag3);
+		b(fv, fsb + as + ls + dir);
+		b(fv, fsb + as + ls);
 		
 		// role backoff
-		a(fs + as + ls + dir + mag1, fv);
-		a(fs + as + ls + dir + mag2, fv);
-		a(fs + as + ls + dir + mag3, fv);
-		a(fs + as + ls + dir, fv);
-		a(fs + as + ls, fv);
+		b(fv, fs + as + ls + dir + mag1);
+		b(fv, fs + as + ls + dir + mag2);
+		b(fv, fs + as + ls + dir + mag3);
+		b(fv, fs + as + ls + dir);
+		b(fv, fs + as + ls);
 		
 		// TODO add more specific features (e.g. distance, lexicalizations, etc)
 		
-		return bob.doYourThing(fv, this);
+		return fv;
 	}
-	
-	private void a(String featureName, FeatureVector fv) {
-		int i = featIdx.lookupIndex(featureName, true);
-		fv.add(i, 1d);
-	}
-	
-	@Override
-	public String getJoeName() {
-		return this.getClass().getName();
-	}
-
-	@Override
-	public void storeJoeInfo(JoeInfo info) { joeInfo = info; }
-
-	@Override
-	public JoeInfo getJoeInfo() { return joeInfo; }
 
 }
