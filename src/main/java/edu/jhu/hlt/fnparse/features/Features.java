@@ -69,11 +69,11 @@ public interface Features {
 	 * if given f == Frame.nullFrame, this feature should return a FeatureVector with exactly one
 	 * feature one (nullFrame feature), which never fires for f != Frame.nullFrame.
 	 */
-	public static interface FC extends Features {
+	public static interface FE extends Features {
 		public FeatureVector getFeatures(Frame f, Span trigger, Sentence s);
 	}
 	
-	public static interface C extends Features {
+	public static interface E extends Features {
 		public FeatureVector getFeatures(Span constituent, Sentence s);
 	}
 	

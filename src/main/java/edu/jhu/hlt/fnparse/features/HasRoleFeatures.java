@@ -19,7 +19,7 @@ public abstract class HasRoleFeatures {
 
 	protected Features.FRE freFeatures;
 	protected Features.FR frFeatures;
-	protected Features.C cFeatures;
+	protected Features.E cFeatures;
 	
 	private FeatureVector fv_nullFrame;
 	private int fv_nullFrame_idx;
@@ -48,7 +48,7 @@ public abstract class HasRoleFeatures {
 		this.frFeatures = features;
 	}
 	
-	public void setFeatures(Features.C features) {
+	public void setFeatures(Features.E features) {
 		this.cFeatures = features;
 	}
 

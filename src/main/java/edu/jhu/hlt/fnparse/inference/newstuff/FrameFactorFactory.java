@@ -38,29 +38,40 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		List<Factor> factors = new ArrayList<Factor>();
 		int n = s.size();
 		for(int i=0; i<n; i++) {
-			if(f[i] == null) continue;
-			factors.add(new F(f[i], this, s));
+			FrameVar fv = f[i];
+			if(fv == null) continue;
+			
+			// constraints: F and E must appear in at least one factor, P cannot appear on its own
+			// FPE
+			// FP, FE
+			// FP, E
+			// FE
+			// F, E
+			// => there will be either 1 or 2 factors
+			
+			VarSet containsF = new VarSet();
+			containsF.add(fv.getFrameVar());
+			if(fpeFeatures != null) {
+				containsF.add(fv.getPrototypeVar());
+				containsF.add(fv.getExpansionVar());
+				factors.add(new F(fv, this, s, containsF));
+			}
+			else {	// there will be 2 factors
+				
+				VarSet containsE = new VarSet();
+				containsE.add(fv.getExpansionVar());
+				
+				if(fpFeatures != null)
+					containsF.add(fv.getPrototypeVar());
+				if(feFeatures != null)
+					containsE.add(fv.getFrameVar());
+				
+				factors.add(new F(fv, this, s, containsF));
+				factors.add(new F(fv, this, s, containsE));
+			}
 		}
 		return factors;
 	}
-	
-//	/**
-//	 * looks at the features that are non-null and chooses the smallest
-//	 * set of variables needed to cover those features (affects the
-//	 * complexity/runtime of the factor).
-//	 */
-//	protected VarSet getVarSet(FrameVar fv) {
-//		VarSet vs = new VarSet();
-//		if(fpeFeatures != null || fpFeatures != null)
-//			vs.add(fv.getPrototypeVar());
-//		
-//		// if these factor, we still need to add these vars, just not
-//		// in one factor, but many
-//		
-//		
-//		
-//		return vs;
-//	}
 
 	static class F extends ExpFamFactor {	// is the actual factor
 		
@@ -69,12 +80,17 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		private HasFrameFeatures features;
 		private FrameVar frameVar;
 		private Sentence sent;
+		private boolean readP, readF, readE;
 
-		public F(FrameVar fv, HasFrameFeatures features, Sentence sent) {
-			super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar(), fv.getExpansionVar()));
+		public F(FrameVar fv, HasFrameFeatures features, Sentence sent, VarSet varsNeeded) {
+			//super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar(), fv.getExpansionVar()));
+			super(varsNeeded);
 			this.frameVar = fv;
 			this.sent = sent;
 			this.features = features;
+			readP = varsNeeded.contains(fv.getPrototypeVar());
+			readF = varsNeeded.contains(fv.getFrameVar());
+			readE = varsNeeded.contains(fv.getExpansionVar());
 		}
 		
 		public void setFeatures(HasFrameFeatures features) {
@@ -85,10 +101,10 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		public double getDotProd(int config, FgModel model, boolean logDomain) {
 			
 			VarConfig conf = this.getVars().getVarConfig(config);
-			Frame f = frameVar.getFrame(conf);
-			FrameInstance p = frameVar.getPrototype(conf);
+			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
+			Frame frame = readF ? frameVar.getFrame(conf) : null;
 			
-			if(!p.getFrame().equals(f))
+			if(readP && readF && !prototype.getFrame().equals(frame))
 				return logDomain ? Double.NEGATIVE_INFINITY : 0d;
 			
 			else return super.getDotProd(config, model, logDomain);
@@ -98,16 +114,16 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		public FeatureVector getFeatures(int config) {
 			
 			VarConfig conf = this.getVars().getVarConfig(config);
-			FrameInstance prototype = frameVar.getPrototype(conf);
-			Frame frame = frameVar.getFrame(conf);
+			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
+			Frame frame = readF ? frameVar.getFrame(conf) : null;
 			
 			// fix all entries in factor where prototype doesn't match
 			// frame to 0 (no parameters needed there, shouldn't even sum over it).
-			if(!prototype.getFrame().equals(frame))
+			if(readP && readF && !prototype.getFrame().equals(frame))
 				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
 				//throw new RuntimeException("getDotProd should have returned before calling this!");
 			
-			Span target = frameVar.getTarget(conf);
+			Span target = readE ? frameVar.getTarget(conf) : null;
 			return features.getFeatures(frame, prototype, frameVar.getTargetHeadIdx(), target, sent);
 		}
 		

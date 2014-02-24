@@ -9,7 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class FrameTargetFeatures extends AbstractFeatures<FrameTargetFeatures> implements Features.FC {
+public class FrameTargetFeatures extends AbstractFeatures<FrameTargetFeatures> implements Features.FE {
 
 	private final FeatureVector nullFrameFeatures;
 	private final int nullFrameFeatureIdx;

@@ -5,7 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class DebuggingConstituencyFeatures extends AbstractFeatures<DebuggingConstituencyFeatures> implements Features.C {
+public class DebuggingConstituencyFeatures extends AbstractFeatures<DebuggingConstituencyFeatures> implements Features.E {
 	
 	public DebuggingConstituencyFeatures(Alphabet<String> featIdx) {
 		super(featIdx);

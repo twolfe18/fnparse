@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.Random;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -8,6 +10,8 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
 public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFramePrototypeFeatures> implements Features.FP {
+	
+	private Random rand = new Random(9001);
 	
 	public BasicFramePrototypeFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
@@ -26,12 +30,20 @@ public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFrameProt
 		String targetHead = s.getWord(targetHeadIdx);
 		Span protoTarget = p.getTarget();
 		String protoId = f.getId() + "@" + p.getSentence().getId();
-		for(int i=protoTarget.start; i<protoTarget.end; i++) {
-			if(p.getSentence().getWord(i).equals(targetHead)) {
-				b(fv, "head-in-prototype");
-				b(fv, "head-in-prototype_prototype=" + protoId);
-				b(fv, "head-in-prototype_frame=" + f.getId());
+		
+		try {
+			for(int i=protoTarget.start; i<protoTarget.end; i++) {
+				if(p.getSentence().getWord(i).equals(targetHead)) {
+					b(fv, "head-in-prototype");
+					b(fv, "head-in-prototype_prototype=" + protoId);
+					b(fv, "head-in-prototype_frame=" + f.getId());
+				}
 			}
+		}
+		catch(ArrayIndexOutOfBoundsException e) {
+			//e.printStackTrace();
+			if(rand.nextInt(2500) == 0)
+				System.err.println("[BasicFramePrototypeFeatures] bug pushpendre about a bug in the readers!");
 		}
 		
 		int ni = s.size();

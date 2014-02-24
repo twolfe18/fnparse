@@ -40,6 +40,11 @@ public class Parser {
 	
 	private ParserParams params;
 	
+	// TODO
+	// the reason why what i'm doing is wrong (MLE training + marginal frame decode + clamping)
+	// is that you are maximizing likelihood of the correct arguments for the incorrect frame assignments.
+	// ideally you would train just like you decode, which would mean training to predict r_ijk=nullSpan when you get the frames wrong.
+	
 	public Parser() {
 		params = new ParserParams();
 		params.featIdx = new Alphabet<String>();
@@ -49,10 +54,12 @@ public class Parser {
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
 		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
-		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		fff.setFeatures(new DebuggingConstituencyFeatures(params.featIdx));
+		fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		params.factors.add(fff);
 		RoleFactorFactory rff = new RoleFactorFactory(params);
 		rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+//		rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 		params.factors.add(rff);
 		params.prototypes = params.frameIndex.getPrototypeMap();
 	}
@@ -62,6 +69,7 @@ public class Parser {
 		bpParams.normalizeMessages = true;	// doesn't work if false :(
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
+		bpParams.maxIterations = 2;	// similar to piecewise training
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
@@ -76,7 +84,7 @@ public class Parser {
 	public void train(List<FNParse> examples) {
 		
 //		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
-		
+		long start = System.currentTimeMillis();
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
@@ -133,6 +141,7 @@ public class Parser {
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
+		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
 	}
 	
 	
@@ -162,7 +171,7 @@ public class Parser {
 			params.model.updateDoublesFromModel(outParams);
 			for(int i=0; i<params.featIdx.size(); i++) {
 //				w.write(outParams[i] + "\t" + fnNames[i] + "\n");
-				w.write(outParams[i] + "\t" + params.featIdx.lookupObject(i) + "\n");
+				w.write(String.format("%f\t%s\n", outParams[i], params.featIdx.lookupObject(i)));
 			}
 			w.close();
 		}

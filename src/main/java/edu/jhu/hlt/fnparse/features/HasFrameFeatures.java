@@ -8,9 +8,11 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public abstract class HasFrameFeatures {
 
-	protected Features.FPE fpeFeatures;
-	protected Features.FP fpFeatures;
-	protected Features.F fFeatures;
+	public Features.FPE fpeFeatures;
+	public Features.FP fpFeatures;
+	public Features.FE feFeatures;
+	public Features.F fFeatures;
+	public Features.E eFeatures;
 	
 	public HasFrameFeatures() {}
 	
@@ -18,15 +20,15 @@ public abstract class HasFrameFeatures {
 	 * copy constructor (shallow)
 	 */
 	public HasFrameFeatures(HasFrameFeatures copy) {
-		fpeFeatures = copy.fpeFeatures;
-		fpFeatures = copy.fpFeatures;
-		fFeatures = copy.fFeatures;
+		setFeatures(copy);
 	}
 	
 	public void setFeatures(HasFrameFeatures from) {
 		this.fpeFeatures = from.fpeFeatures;
 		this.fpFeatures = from.fpFeatures;
+		this.feFeatures = from.feFeatures;
 		this.fFeatures = from.fFeatures;
+		this.eFeatures = from.eFeatures;
 	}
 
 	public void setFeatures(Features.FPE features) {
@@ -36,19 +38,31 @@ public abstract class HasFrameFeatures {
 	public void setFeatures(Features.FP features) {
 		this.fpFeatures = features;
 	}
+	
+	public void setFeatures(Features.FE features) {
+		this.feFeatures = features;
+	}
 
 	public void setFeatures(Features.F features) {
 		this.fFeatures = features;
 	}
 	
-	public FeatureVector getFeatures(Frame f, FrameInstance p, int targetHead, Span target, Sentence sent) {
+	public void setFeatures(Features.E features) {
+		this.eFeatures = features;
+	}
+	
+	public FeatureVector getFeatures(Frame f, FrameInstance p, int targetHead, Span t, Sentence sent) {
 		FeatureVector fv = new FeatureVector();
-		if(fpeFeatures != null)
-			fv.add(fpeFeatures.getFeatures(f, target, p, sent));
-		if(fpFeatures != null)
+		if(fpeFeatures != null && f != null && p != null && t != null)
+			fv.add(fpeFeatures.getFeatures(f, t, p, sent));
+		if(fpFeatures != null && f != null && p != null)
 			fv.add(fpFeatures.getFeatures(f, targetHead, p, sent));
-		if(fFeatures != null)
+		if(feFeatures != null && f != null && t != null)
+			fv.add(feFeatures.getFeatures(f, t, sent));
+		if(fFeatures != null && f != null)
 			fv.add(fFeatures.getFeatures(f, targetHead, sent));
+		if(eFeatures != null && t != null)
+			fv.add(eFeatures.getFeatures(t, sent));
 		return fv;
 	}
 

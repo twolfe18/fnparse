@@ -26,6 +26,7 @@ public class FrameVar implements FgRelated {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 	
+	@SuppressWarnings("unused")
 	private Sentence sent;	// TODO this can be removed (good for debugging)
 	private int headIdx;
 	

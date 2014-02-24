@@ -10,15 +10,9 @@ import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.BasicFramePrototypeFeatures;
-import edu.jhu.hlt.fnparse.features.BasicFrameRoleLinkFeatures;
-import edu.jhu.hlt.fnparse.features.ConstituencyFeatures;
-import edu.jhu.hlt.fnparse.features.Features;
-import edu.jhu.hlt.fnparse.util.FeatureUtils;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.util.*;
 
 /**
  * It is expected that this class will be instantiated once per sentence,
@@ -216,9 +210,9 @@ public abstract class Factors implements FactorFactory {
 	
 	public static class FrameExpansionFactors extends Factors {
 		
-		private Features.FC features;
+		private Features.FE features;
 		
-		public FrameExpansionFactors(Features.FC features) {
+		public FrameExpansionFactors(Features.FE features) {
 			this.features = features;
 		}
 		
@@ -239,9 +233,9 @@ public abstract class Factors implements FactorFactory {
 			
 			private Sentence sent;
 			private FrameVar frameVar;
-			private Features.FC features;
+			private Features.FE features;
 			
-			public F(FrameVar fv, Sentence sent, Features.FC feats) {
+			public F(FrameVar fv, Sentence sent, Features.FE feats) {
 				super(new VarSet(fv.getFrameVar(), fv.getExpansionVar()));	// this is how you know the complexity
 				this.frameVar = fv;
 				this.sent = sent;
@@ -263,9 +257,9 @@ public abstract class Factors implements FactorFactory {
 	
 	public static class ArgExpansionFactors extends Factors {
 		
-		private Features.C features;
+		private Features.E features;
 		
-		public ArgExpansionFactors(Features.C features) {
+		public ArgExpansionFactors(Features.E features) {
 			this.features = features;
 		}
 		
@@ -288,9 +282,9 @@ public abstract class Factors implements FactorFactory {
 			
 			private Sentence sent;
 			private RoleVars roleVar;
-			private Features.C features;
+			private Features.E features;
 			
-			public F(RoleVars rv, Sentence sent, Features.C feats) {
+			public F(RoleVars rv, Sentence sent, Features.E feats) {
 				super(new VarSet(rv.getExpansionVar()));	// this is how you know the complexity
 				this.roleVar = rv;
 				this.sent = sent;

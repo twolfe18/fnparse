@@ -5,7 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class ConstituencyFeatures extends AbstractFeatures<ConstituencyFeatures> implements Features.C {
+public class ConstituencyFeatures extends AbstractFeatures<ConstituencyFeatures> implements Features.E {
 	
 //	private String prefix;
 //	private String refinement;

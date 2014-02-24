@@ -6,7 +6,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
-public class DebuggingFrameRoleFeatures extends AbstractFeatures implements Features.FRE {
+public class DebuggingFrameRoleFeatures extends AbstractFeatures<DebuggingFrameRoleFeatures> implements Features.FRE {
 
 	public DebuggingFrameRoleFeatures(Alphabet<String> featIdx) {
 		super(featIdx);

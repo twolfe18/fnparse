@@ -21,8 +21,6 @@ public class RoleVars implements FgRelated {
 	private Expansion.Iter expansions;
 	private Var expansionVar;
 	
-	private ExpansionHardFactor expansionHardFactor;
-	
 	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx, boolean logDomain) {
 		this.parent = parent;
 		this.roleIdx = roleIdx;
@@ -34,8 +32,6 @@ public class RoleVars implements FgRelated {
 		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
 		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
 		
-		this.expansionHardFactor = new ExpansionHardFactor(headVar, expansionVar,
-				BinaryVarUtil.boolToConfig(false), this.expansions.indexOf(Expansion.noExpansion), logDomain);
 	}
 	
 	private boolean headVarGold = false;
@@ -89,9 +85,6 @@ public class RoleVars implements FgRelated {
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
-		
-		fg.addFactor(expansionHardFactor);
-		
 		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
 		gold.put(expansionVar, expansionVarGold);
 	}
