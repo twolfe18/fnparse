@@ -27,8 +27,7 @@ public class FrameInstanceProviderTest {
 		firstWordOfFirstSentence = new HashMap<String, String>();
 		firstWordOfFirstSentence.put("semlink", "Pierre");
 		firstWordOfFirstSentence.put("fn15.train", "The");
-		// TODO: The first frame instance is being skipped because it contains a DNI. 
-		firstWordOfFirstSentence.put("fn15.test", "If"); 
+		firstWordOfFirstSentence.put("fn15.test", "On"); 
 		firstWordOfFirstSentence.put("fn15.lex", "Major");
 	}
 
@@ -53,7 +52,7 @@ public class FrameInstanceProviderTest {
 					System.out.println(String.format("frame %s; Trigger_by %s; Sentence %s",
 							fi.getFrame(), fi.getTarget(), fi.getSentence().toString()));
 				}
-				assertEquals("sent=" + s.getId(), fi.getFrame().numRoles(), fi.numArguments());
+				assertEquals("sent=" + s.getId() + ", fi: " + fi.toString(), fi.getFrame().numRoles(), fi.numArguments());
 				for(int i = 0; i < fi.getFrame().numRoles(); i++) {
 					assertNotNull(fi.getArgument(i));
 					if(verbose) {
@@ -83,14 +82,15 @@ public class FrameInstanceProviderTest {
 		assertEquals(firstWordOfFirstSentence.get("semlink"),
 				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
 		*/
+		
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.train"),
 				FileFrameInstanceProvider.fn15trainFIP.getParsedSentences().get(0).getSentence().getWord(0));
-		
+
 		testFIP(FileFrameInstanceProvider.fn15testFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.test"),
 				FileFrameInstanceProvider.fn15testFIP.getParsedSentences().get(0).getSentence().getWord(0));
-
+		
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.lex"),
 				FileFrameInstanceProvider.fn15lexFIP.getParsedSentences().get(0).getSentence().getWord(0));

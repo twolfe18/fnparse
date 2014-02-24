@@ -30,10 +30,10 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 	
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
-	/*
+	
 	public static final FileFrameInstanceProvider semlinkFIP =
-			new FileFrameInstanceProvider(UsefulConstants.SemLinkFrameFramesPath, UsefulConstants.SemLinkFrameConllPath);
-	*/
+			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);
+	
 	private File frameFile, conllFile;
 	
 	private LineIterator litrFrames;
@@ -176,7 +176,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 							pos.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 							depType.toArray(new String[0]));
-					List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
+					List<FrameInstance> frameInstancesForFNTagging = new ArrayList<FrameInstance>();
 					while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentId)){
 						Map<String, Span> triggeredRoles = new HashMap<String, Span>();
 						// This has a mini FSM inside it.
@@ -185,7 +185,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 							String[] l=curLineFramesFile.split("\t");
 							// Note down all the roles that were triggered.
 							String roleName = l[10];
-							String nullInstantiation = l[11];
+							String nullInstantiation = l[11]; // the itype column
 							if(!roleName.equals("NULL") && !roleName.equals("") && nullInstantiation.equals("NULL")){
 								triggeredRoles.put(
 										roleName, 
@@ -227,7 +227,8 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 							fi = FrameInstance.frameMention(f, targetSpan, s);
 						}
 						// Add fi to the FrameInstances list before updating the prev[VAR] with cur[VAR]
-						frameInstances.add(fi);
+						// but add fi only if 
+						frameInstancesForFNTagging.add(fi);
 						String[] l = curLineFramesFile.split("\t");
 						prevAnnoSetId = l[3];
 						prevFrameName = l[5];
@@ -235,18 +236,21 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 						prevTargetCharEnd = l[8];
 						curSentIdFrames = l[2];
 					}
-
-					boolean tagging = false;
-					for(FrameInstance fi : frameInstances) {
-						if(fi.onlyTargetLabeled() || fi.getFrame().numRoles() != fi.numArguments()) {
-							tagging = true;
+					
+					// filter the frameInstances out to a new list
+					List<FrameInstance> frameInstancesForFNParse = new ArrayList<FrameInstance>();
+					for(FrameInstance fi : frameInstancesForFNTagging) {
+						if(!fi.onlyTargetLabeled() && fi.getFrame().numRoles() == fi.numArguments()){
+							frameInstancesForFNParse.add(fi);
 						}
 					}
+
+					if(frameInstancesForFNTagging.size() > 0){
+						fntg.add(new FNTagging(s, frameInstancesForFNTagging));
+					}
 					
-					if(!tagging){
-						ret = new FNParse(s, frameInstances, isFullParse(prevSentId));
-					} else {
-						fntg.add(new FNTagging(s, frameInstances));
+					if(frameInstancesForFNParse.size() > 0){
+						ret = new FNParse(s, frameInstancesForFNParse, isFullParse(prevSentId));
 					}
 					prevSentId = curSentIdFrames;
 				}
