@@ -78,11 +78,6 @@ public class FrameInstanceProviderTest {
 	public void defaultConfigTest() {
 		boolean verbose = false;
 		
-		/*testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
-		assertEquals(firstWordOfFirstSentence.get("semlink"),
-				FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
-		*/
-		
 		testFIP(FileFrameInstanceProvider.fn15trainFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.train"),
 				FileFrameInstanceProvider.fn15trainFIP.getParsedSentences().get(0).getSentence().getWord(0));
@@ -94,5 +89,12 @@ public class FrameInstanceProviderTest {
 		testFIP(FileFrameInstanceProvider.fn15lexFIP, verbose);
 		assertEquals(firstWordOfFirstSentence.get("fn15.lex"),
 				FileFrameInstanceProvider.fn15lexFIP.getParsedSentences().get(0).getSentence().getWord(0));
+		
+		// TODO: Fix semlink datafiles and uncomment these tests
+		// testFIP(FileFrameInstanceProvider.semlinkFIP, verbose);
+		//assertEquals(firstWordOfFirstSentence.get("semlink"),
+		//		FileFrameInstanceProvider.semlinkFIP.getParsedSentences().get(0).getSentence().getWord(0));
+		// assertTrue(FileFrameInstanceProvider.semlinkFIP.getTaggedSentences().size() > 0);
+		
 	}
 }
