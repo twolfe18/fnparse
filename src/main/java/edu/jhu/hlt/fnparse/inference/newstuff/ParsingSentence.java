@@ -120,8 +120,6 @@ public class ParsingSentence {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
 			
-			
-			
 			DenseFactor localMargins = margins1.get(fv.getFrameVar());
 			System.out.println(sentence.getLU(i) + "\t" + localMargins);
 			
@@ -225,7 +223,8 @@ public class ParsingSentence {
 			
 			int head = hf.head(fi.getTarget(), p.getSentence());
 			if(frameVars[head] == null) {
-				System.err.println("[setGold] now you really screwed up: " + sentence.getLU(head) + " has a non-nullFrame label");
+				System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
+						" because the candidiate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
 				continue;
 			}
 			frameVars[head].setGold(fi);
@@ -269,7 +268,8 @@ public class ParsingSentence {
 			for(int i = 0; i < f.numLexicalUnits(); i++) {
 				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
 					frameMatches.add(f);
-					prototypes.addAll(params.prototypes.get(f));
+					List<FrameInstance> ps = params.prototypes.get(f); 
+					if(ps != null) prototypes.addAll(ps);
 					break;
 				}
 			}
@@ -317,8 +317,9 @@ public class ParsingSentence {
 		for(Factor f : factors)
 			fg.addFactor(f);
 		
-		System.out.printf("[NewParsingSentence getFgExample] there are %d variables and %d factors, returning example\n",
-				fg.getNumVars(), fg.getNumFactors());
+		System.out.printf("[NewParsingSentence getFgExample] there are %d variables and %d factors "
+				+ "for a length %d sentence, returning example\n",
+				fg.getNumVars(), fg.getNumFactors(), this.sentence.size());
 		
 		return new FgExample(fg, gold);
 	}

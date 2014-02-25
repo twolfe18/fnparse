@@ -57,7 +57,7 @@ public class Frame {
 	public String getName() { return name; }
 	
 	@Override
-	public int hashCode() { return name.hashCode(); }
+	public int hashCode() { return idx; }
 	
 	@Override
 	public boolean equals(Object other) {

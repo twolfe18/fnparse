@@ -14,12 +14,19 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class DataUtil {
 
+	public static <T extends FNTagging> List<Sentence> stripAnnotations(List<T> tagged) {
+		List<Sentence> raw = new ArrayList<Sentence>();
+		for(FNTagging t : tagged)
+			raw.add(t.getSentence());
+		return raw;
+	}
+	
 	public static Map<Sentence, List<FrameInstance>> groupBySentence(List<FrameInstance> fis) {
 		Map<Sentence, List<FrameInstance>> m = new HashMap<Sentence, List<FrameInstance>>();
 		for(FrameInstance fi : fis) {

@@ -10,8 +10,8 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class RoleVars implements FgRelated {
 	
-	public static final int maxArgRoleExpandLeft = 3;
-	public static final int maxArgRoleExpandRight = 2;
+	public static final int maxArgRoleExpandLeft = 10;
+	public static final int maxArgRoleExpandRight = 3;
 		
 	private FrameVar parent;
 	private int roleIdx;	// aka "k"
@@ -80,7 +80,7 @@ public class RoleVars implements FgRelated {
 		Expansion goldExpansion = Expansion.headToSpan(headIdx, s);
 		expansionVarGold = expansions.indexOf(goldExpansion);
 		if(expansionVarGold < 0)
-			throw new IllegalArgumentException();
+			throw new IllegalStateException("gold expansion for " + s + " @ " + headIdx + " was not found. did you prune too hard?");
 	}
 	
 	@Override

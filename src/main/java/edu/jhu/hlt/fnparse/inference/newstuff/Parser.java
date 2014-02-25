@@ -10,12 +10,14 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
+import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
@@ -39,6 +41,7 @@ public class Parser {
 	}
 	
 	private ParserParams params;
+	private final boolean benchmarkBP = false;
 	
 	// TODO
 	// the reason why what i'm doing is wrong (MLE training + marginal frame decode + clamping)
@@ -75,25 +78,29 @@ public class Parser {
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
 			@Override
 			public FgInferencer getInferencer(FactorGraph fg) {
-				return new BenchmarkingBP(fg, bpParams);
+				if(benchmarkBP)
+					return new BenchmarkingBP(fg, bpParams);
+				else
+					return new BeliefPropagation(fg, bpParams);
 			}
 		};
 	}
 	
 
-	public void train(List<FNParse> examples) {
+	public void train(List<FNParse> examples) { train(examples, 10, 2, 1d); }
+	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier) {
 		
 //		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
 		long start = System.currentTimeMillis();
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
-		sgdParams.batchSize = 1;
+		sgdParams.batchSize = batchSize;
 		//sgdParams.initialLr = 0.1d;	// adagrad ignores this
-		sgdParams.numPasses = 10;
+		sgdParams.numPasses = passes;
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
 		adagParams.sgdPrm = sgdParams;
-		adagParams.eta = 0.1d;
+		adagParams.eta = 0.1d * learningRateMultiplier;
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
@@ -144,7 +151,9 @@ public class Parser {
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
 	}
 	
-	
+	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
+		return parse(DataUtil.stripAnnotations(raw));
+	}
 	public List<FNParse> parse(List<Sentence> raw) {
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {

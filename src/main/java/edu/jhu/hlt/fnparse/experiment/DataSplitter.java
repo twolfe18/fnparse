@@ -30,7 +30,7 @@ public class DataSplitter {
 		this.rand = rand;
 	}
 
-	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, double propTest, String key) throws FileNotFoundException {
+	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, double propTest, String key) {
 		return split(all, train, test, propTest, true, key);
 	}
 	
