@@ -9,6 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.log4j.Logger;
+import org.apache.log4j.Level;
+
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -40,8 +43,8 @@ public class Parser {
 		public CrfTrainer.CrfTrainerPrm trainerParams;
 	}
 	
-	private ParserParams params;
-	private final boolean benchmarkBP = false;
+	public ParserParams params;
+	public final boolean benchmarkBP = false;
 	
 	// TODO
 	// the reason why what i'm doing is wrong (MLE training + marginal frame decode + clamping)
@@ -58,11 +61,11 @@ public class Parser {
 		FrameFactorFactory fff = new FrameFactorFactory();
 		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
 		fff.setFeatures(new DebuggingConstituencyFeatures(params.featIdx));
-		fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		params.factors.add(fff);
 		RoleFactorFactory rff = new RoleFactorFactory(params);
-		rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
-//		rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
+		//rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+		rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 		params.factors.add(rff);
 		params.prototypes = params.frameIndex.getPrototypeMap();
 	}
@@ -90,7 +93,8 @@ public class Parser {
 	public void train(List<FNParse> examples) { train(examples, 10, 2, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier) {
 		
-//		BasicBob bob = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
+		params.featIdx.startGrowth();
+		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 		
@@ -107,32 +111,9 @@ public class Parser {
 		
 		// L2's parameter is variance => bigger means less regularization
 		// L1's parameter is multiplier => bigger means more regularization
-		trainerParams.regularizer = new L1(1d);	//new L2(1d);
-		
-//		int numParams;
-//		if(bob.isFirstPass()) {
-//			System.out.println("[train] this is the first pass, need to compute feature widths, not doing learning...");
-//			numParams = 125000;	// hope this is enough
-//			trainerParams.maximizer = new Maximizer() {
-//				boolean onceThrough = false;
-//				@Override
-//				public boolean maximize(Function function, double[] point) {
-//					if(onceThrough) return true;
-//					onceThrough = true;
-//					return false;
-//				}
-//			};
-//			trainerParams.batchMaximizer = null;
-//			trainerParams.regularizer = null;
-//		}
-//		else {
-//			trainerParams.maximizer = null;
-//			numParams = bob.totalFeatures();
-//			System.out.println("[train] #features = " + bob.totalFeatures() + ", optimizing with " + trainerParams.batchMaximizer);
-//			assert trainerParams.batchMaximizer != null;
-//		}
+		trainerParams.regularizer = new L2(1d);
 
-		int numParams = 250000;	// TODO
+		int numParams = 25 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
@@ -148,6 +129,7 @@ public class Parser {
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
+		params.featIdx.stopGrowth();
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
 	}
 	

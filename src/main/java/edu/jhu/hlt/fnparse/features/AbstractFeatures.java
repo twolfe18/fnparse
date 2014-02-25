@@ -67,7 +67,13 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		
 		String n = getName() + "_";
 		String s = n + featureName;
-		fv.add(featIdx.lookupIndex(s, true), weight);
+		if(featIdx.isGrowing())
+			fv.add(featIdx.lookupIndex(s, true), weight);
+		else {
+			int idx = featIdx.lookupIndex(s, false);
+			if(idx >= 0) fv.add(idx, weight);
+			//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
+		}
 		
 		if(refinements != null) {
 			int c = refinements.size();

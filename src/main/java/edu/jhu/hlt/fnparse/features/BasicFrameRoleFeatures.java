@@ -1,15 +1,12 @@
 package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.util.Alphabet;
 
-public class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements edu.jhu.hlt.fnparse.features.Features.FRE {
+public class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FRE {
 
 	private HeadFinder hf = new BraindeadHeadFinder();
 	public boolean verbose = false;

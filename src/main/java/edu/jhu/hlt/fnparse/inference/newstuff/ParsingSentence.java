@@ -40,6 +40,7 @@ public class ParsingSentence {
 	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
 	
+	private static final boolean debugDecode = false;
 	
 	/**
 	 * In training data:
@@ -120,19 +121,19 @@ public class ParsingSentence {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
 			
-			DenseFactor localMargins = margins1.get(fv.getFrameVar());
-			System.out.println(sentence.getLU(i) + "\t" + localMargins);
-			
-			FgNode fvNode = fg.getNode(fv.getFrameVar());
-			for(FgEdge e : fvNode.getInEdges()) {
-				System.out.println("edge    = " + e);
-				System.out.println("factor  = " + e.getFactor());
-				System.out.println("message = " + bp.getMessages()[e.getId()].message);
-				//System.out.println(margins1.get(e.getChild().getVar()));
+			if(debugDecode) {
+				DenseFactor localMargins = margins1.get(fv.getFrameVar());
+				System.out.println(sentence.getLU(i) + "\t" + localMargins);
+				
+				FgNode fvNode = fg.getNode(fv.getFrameVar());
+				for(FgEdge e : fvNode.getInEdges()) {
+					System.out.println("edge    = " + e);
+					System.out.println("factor  = " + e.getFactor());
+					System.out.println("message = " + bp.getMessages()[e.getId()].message);
+					//System.out.println(margins1.get(e.getChild().getVar()));
+				}
+				System.out.println();
 			}
-			System.out.println();
-			
-			
 			
 			Frame f_i = fv.getFrame(mbr1Conf);
 			if(f_i == Frame.nullFrame)

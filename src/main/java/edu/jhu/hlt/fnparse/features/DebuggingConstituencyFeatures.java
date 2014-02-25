@@ -18,7 +18,8 @@ public class DebuggingConstituencyFeatures extends AbstractFeatures<DebuggingCon
 			return emptyFeatures;
 		
 		FeatureVector fv = new FeatureVector();
-		b(fv, "width=" + constituent.width() + "_sent=" + s.getId());
+		//b(fv, "width=" + constituent.width() + "_sent=" + s.getId());
+		b(fv, "width=" + constituent.width());
 		return fv;
 	}
 	

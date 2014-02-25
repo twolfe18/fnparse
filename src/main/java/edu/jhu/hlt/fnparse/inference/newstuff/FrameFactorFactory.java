@@ -1,21 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.model.ExpFamFactor;
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.VarConfig;
-import edu.jhu.gm.model.VarSet;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.HasFrameFeatures;
+import edu.jhu.gm.feat.*;
+import edu.jhu.gm.model.*;
+import edu.jhu.gm.data.*;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
 
 /**
  * all features that DON'T look at a role variable should be housed here.
@@ -73,6 +64,53 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		return factors;
 	}
 
+	/*
+	public static class CachingExpFamFactor extends ExpFamFactor implements FeatureExtractor {
+
+		// pass in an ExpFamFactor, get back an instance that caches
+		private ExpFamFactor uncached;
+		private FeatureVector[] cache;
+
+		public CachingExpFamFactor(ExpFamFactor uncached) {
+			super(uncached.getVars());
+			this.uncached = uncached;
+		}
+		
+		@Override	// FeatureExtractor
+		public void init(FgExample ex) {
+			System.out.println("[CachingExpFamFactor init] uncached=" + uncached);
+			int n = ex.getOriginalFactorGraph().getNumFactors();
+			if(cache == null || cache.length < n)
+				cache = new FeatureVector[n];
+			else
+				Arrays.fill(cache, null);
+		}
+
+		@Override	// FeatureExtractor
+		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
+			// i'm assuming uncached has the actual code which computes the features
+			System.out.println("[CachingExpFamFactor calcFeatureVector] for " + factor + " @ " + configId);
+			if(cache[configId] == null) {
+				//assert uncached == factor;
+				assert factor == null;
+				cache[configId] = uncached.getFeatures(configId);
+			}
+			return cache[configId];
+		}
+
+		@Override	// ExpFamFactor
+		public FeatureVector getFeatures(int config) {
+			return calcFeatureVector(null, config);
+		}
+	}
+	*/
+
+	/**
+	 * with regards to feature extraction/caching, I know that the data that
+	 * this factor points to never changes (i.e. frameVar, sent), so caching
+	 * features should be safe (there is no cache invalidation aside from this
+	 * object being garbage collected).
+	 */
 	static class F extends ExpFamFactor {	// is the actual factor
 		
 		private static final long serialVersionUID = 1L;
@@ -81,6 +119,8 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		private FrameVar frameVar;
 		private Sentence sent;
 		private boolean readP, readF, readE;
+
+		private FeatureVector[] cache;
 
 		public F(FrameVar fv, HasFrameFeatures features, Sentence sent, VarSet varsNeeded) {
 			//super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar(), fv.getExpansionVar()));
@@ -91,6 +131,9 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 			readP = varsNeeded.contains(fv.getPrototypeVar());
 			readF = varsNeeded.contains(fv.getFrameVar());
 			readE = varsNeeded.contains(fv.getExpansionVar());
+
+			int n = getVars().calcNumConfigs();
+			cache = new FeatureVector[n];
 		}
 		
 		public void setFeatures(HasFrameFeatures features) {
@@ -112,6 +155,10 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		
 		@Override
 		public FeatureVector getFeatures(int config) {
+
+			assert config < cache.length;
+			FeatureVector fv = cache[config];
+			if(fv != null) return fv;
 			
 			VarConfig conf = this.getVars().getVarConfig(config);
 			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
@@ -129,3 +176,4 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		
 	}
 }
+
