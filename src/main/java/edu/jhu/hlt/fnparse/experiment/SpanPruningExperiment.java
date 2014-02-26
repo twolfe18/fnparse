@@ -75,5 +75,83 @@ public class SpanPruningExperiment {
 		generateSpans(extractTargetsFrom, allSpans);
 		System.out.println("#spans=" + allSpans.size());
 		
+		checkLthFilteringRules(train);
 	}
+	
+	public static List<String> lthSpecialWords;
+	static {
+		lthSpecialWords = new ArrayList<String>();
+		lthSpecialWords.addAll(Arrays.asList("have", "be", "will"));
+		lthSpecialWords.addAll(Arrays.asList("above", "against", "at", "below", "beside", "in", "on", "over", "under"));
+		lthSpecialWords.addAll(Arrays.asList("course", "particular"));
+		lthSpecialWords.addAll(Arrays.asList("after", "before"));
+		lthSpecialWords.addAll(Arrays.asList("into", "to", "through"));
+		lthSpecialWords.addAll(Arrays.asList("as", "so", "for", "with"));
+		lthSpecialWords.add("of");
+	}
+	public static List<String> alsoOfIterest = Arrays.asList(
+			"make", "give", "was", "got", "kept", "is", "will",
+			"ought", "has", "had", "do", "can", "may", "must", "not");
+	
+	public static void checkLthFilteringRules(List<FNParse> examples) {
+		
+		System.out.println("[checkLthFilteringRules] LTH words   = " + lthSpecialWords);
+		System.out.println("[checkLthFilteringRules] other words = " + alsoOfIterest);
+		
+		final Map<String, Integer> countInTarget = new HashMap<String, Integer>();
+		final Map<String, Integer> countTotal = new HashMap<String, Integer>();
+		int totalWords = 0;
+		int totalTargets = 0;
+		int widthOneTargets = 0;
+		for(FNParse p : examples) {
+			Sentence s = p.getSentence();
+			for(FrameInstance fi : p.getFrameInstances()) {
+				totalTargets++;
+				Span target = fi.getTarget();
+				for(int i=target.start; i<target.end; i++) {
+					String w = s.getWord(i).toLowerCase();
+					if(lthSpecialWords.contains(w) || alsoOfIterest.contains(w)) {
+						Integer c = countInTarget.get(w);
+						if(c == null) c = 0;
+						c++;
+						countInTarget.put(w, c+1);
+					}
+				}
+				if(target.width() == 1) widthOneTargets++;
+			}
+			for(int i=0; i<s.size(); i++) {
+				String w = s.getWord(i).toLowerCase();
+				Integer c = countTotal.get(w);
+				if(c == null) c = 0;
+				countTotal.put(w, c+1);
+				totalWords++;
+			}
+		}
+		List<String> words = new ArrayList<String>(countInTarget.keySet());
+		Collections.sort(words, new Comparator<String>() {
+			@Override
+			public int compare(String o1, String o2) {
+				Integer c1 = countInTarget.get(o1);
+				Integer c2 = countInTarget.get(o2);
+				if(c1 == null) c1 = 0;
+				if(c2 == null) c2 = 0;
+				return c1 - c2;
+			}
+		});
+		double cumulativeMissed = 0d;
+		System.out.println("count\tprop\tcumulative\tprevalence\tword");
+		for(String word : words) {
+			Integer c = countInTarget.get(word);
+			if(c == null) c = 0;
+			double p = (100d*c)/totalTargets;
+			cumulativeMissed += p;
+			Integer cAll = countTotal.get(word);
+			if(cAll == null) cAll = 0;
+			double prevalence = Math.log((100d*(cAll+1)) / totalWords);
+			System.out.printf("%d\t%.2f %%\t%.2f %%\t\t%.2f\t\t%s\n", c, p, cumulativeMissed, prevalence, word);
+		}
+		System.out.println(widthOneTargets + " of " + totalTargets + " targets were width one (" +
+			((100d*widthOneTargets)/totalTargets) + "%)");
+	}
+	
 }
