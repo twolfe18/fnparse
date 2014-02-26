@@ -4,7 +4,6 @@ package edu.jhu.hlt.fnparse.inference.pruning;
 import java.io.File;
 import java.util.*;
 
-import cc.mallet.optimize.GradientAscent;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
@@ -13,7 +12,6 @@ import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.newstuff.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.optimize.L2;
-import edu.jhu.optimize.MalletLBFGS;
 import edu.jhu.util.*;
 import edu.jhu.gm.data.*;
 import edu.jhu.gm.decode.MbrDecoder;
@@ -50,6 +48,7 @@ public class TriggerPruning {
 			long start = System.currentTimeMillis();
 			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
 			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
+			int numF = 0;
 			for(Frame f : FrameIndex.getInstance().allFrames()) {
 				for(int i=0; i<f.numLexicalUnits(); i++) {
 					LexicalUnit lu = f.getLexicalUnit(i);
@@ -60,11 +59,15 @@ public class TriggerPruning {
 						lu2frames.put(lu, lf);
 					}
 					else lf.add(f);
+					numF += 1;
 				}
 			}
+			System.out.printf("[TriggerPruningParams] lu2frames contains %d keys and %.1f Frames/key\n",
+					lu2frames.size(), ((double)numF) / lu2frames.size());
 			
 			System.out.println("[TriggerPruningParams] building word => lex List<FI> inverted index...");
 			lexFIsRevIndex = new HashMap<String, List<FrameInstance>>();
+			int numFI = 0;
 			FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
 			for(FNParse p : fip.getParsedSentences()) {
 				Sentence s = p.getSentence();
@@ -79,9 +82,12 @@ public class TriggerPruning {
 							lexFIsRevIndex.put(word, lfi);
 						}
 						else lfi.add(fi);
+						numFI++;
 					}
 				}
 			}
+			System.out.printf("[TriggerPruningParams] word => lex List<FI> contains %d keys and %.1f FI/word\n",
+					lexFIsRevIndex.size(), ((double)numFI) / lexFIsRevIndex.size());
 			System.out.printf("[TriggerPruningParams] done, took %.1f seconds\n",
 					(System.currentTimeMillis()-start)/1000d);
 		}
@@ -105,7 +111,7 @@ public class TriggerPruning {
 		private Sentence sent;
 		
 		public static final int maxNgram = 5;
-		public static final boolean simple = false;
+		public static final boolean simple = true;	// fewer features if true
 		
 		public TriggerPruningFactor(Var shouldPrune, TriggerPruningParams params, int idx, Sentence s) {
 			super(new VarSet(shouldPrune));

@@ -25,8 +25,8 @@ public class ParsingSentence {
 	private static final Logger log = Logger.getLogger(ParsingSentence.class);
 
 	// ==== VARIABLES ====
-	private FrameVar[] frameVars;
-	private RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
+	public FrameVar[] frameVars;
+	public RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
 	private ProjDepTreeFactor depTree;	// holds variables too
 	
 	// ==== FACTORS ====

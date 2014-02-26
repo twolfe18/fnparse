@@ -151,6 +151,8 @@ public class FrameVar implements FgRelated {
 	
 	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }
+	public List<Frame> getFrames() { return frames; }
 	public Expansion getExpansion(int localIdx) { return expansions.get(localIdx); }
+	public Expansion.Iter getExpansions() { return expansions; }
 	
 }
