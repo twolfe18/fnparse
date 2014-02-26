@@ -4,13 +4,17 @@ package edu.jhu.hlt.fnparse.evaluation;
  * Computes precision, recall, and F1
  * @author travis
  */
-class FPR {
+public class FPR {
 	
 	static enum Mode { PRECISION, RECALL, F1 }
 	
 	private double pSum = 0d, pZ = 0d;
 	private double rSum = 0d, rZ = 0d;
 	private boolean macro;
+	
+	public FPR() {
+		this(false);
+	}
 	
 	public FPR(boolean macro) {
 		this.macro = macro;
@@ -32,6 +36,10 @@ class FPR {
 			rZ += tp + fn;
 		}
 	}
+	
+	public void accumTP() { accum(1d, 0d, 0d); }
+	public void accumFP() { accum(0d, 1d, 0d); }
+	public void accumFN() { accum(0d, 0d, 1d); }
 	
 	public void accum(FPR fpr) {
 		if(macro != fpr.macro)
@@ -70,5 +78,11 @@ class FPR {
 		double p = precision();
 		double r = recall();
 		return (1d + beta * beta) * p * r / (beta * beta * p + r);
+	}
+	
+	@Override
+	public String toString() {
+		return String.format("<%s F1=%.1f P=%.1f R=%.1f>",
+				macro ? "Macro" : "Micro", 100*f1(), 100*precision(), 100*recall());
 	}
 }

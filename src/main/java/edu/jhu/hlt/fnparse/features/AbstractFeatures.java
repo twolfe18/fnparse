@@ -6,6 +6,7 @@ import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -16,6 +17,12 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
+	
+	public static LexicalUnit getLUSafe(int i, Sentence s) {
+		if(i < 0) return luStart;
+		if(i >= s.size()) return luEnd;
+		return s.getLU(i);
+	}
 	
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
@@ -59,14 +66,17 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		return this.getClass().getName();
 	}
 	
-	protected void b(FeatureVector fv, String featureName) {
+	protected final void b(FeatureVector fv, String featureName) {
 		b(fv, featureName, 1d);
 	}
 	
-	protected void b(FeatureVector fv, String featureName, double weight) {
+	protected final void b(FeatureVector fv, String featureName, double weight) {
 		
-		String n = getName() + "_";
-		String s = n + featureName;
+		StringBuilder sn = new StringBuilder();
+		sn.append(getName());
+		sn.append("_");
+		sn.append(featureName);
+		String s = sn.toString();
 		if(featIdx.isGrowing())
 			fv.add(featIdx.lookupIndex(s, true), weight);
 		else {
@@ -77,10 +87,9 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		
 		if(refinements != null) {
 			int c = refinements.size();
-			for(int i=0; i<c; i++) {
-				s = n + refinements.get(i) + "_" + featureName;
-				fv.add(featIdx.lookupIndex(s, true), weight * weights.get(i));
-			}
+			for(int i=0; i<c; i++)
+				fv.add(featIdx.lookupIndex(s + "_" + refinements.get(i), true),
+						weight * weights.get(i));
 		}
 	}
 }
