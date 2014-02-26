@@ -48,10 +48,10 @@ public class PruningExperiment {
 			}
 		}
 		double pruneRatio = ((double)nPrune) / nTotal;
-		double pruneAccuracy = 1d - Math.pow(fpr.precision(), 1.5d);
+		double pruneAccuracy = Math.pow(fpr.precision(), 1.5d);
 		double score = pruningStrength * pruneRatio + (1d - pruningStrength) * pruneAccuracy;
 		System.out.printf("[score] pruneRatio=%.1f%% pruneAccuracy=%.1f%% pruneStrength=%.2f => score=%.2f\n",
-				pruneRatio*100, pruneAccuracy*100, pruningStrength, score);
+				pruneRatio*100, fpr.precision()*100, pruningStrength, 100*score);
 		return score;
 	}
 	
@@ -108,9 +108,10 @@ public class PruningExperiment {
 		double bestPV = 1d;
 		double bestThresh = 0.5d;
 		double bestScore = 0d;
-		for(double priorVariance=0.01d; priorVariance < 100d; priorVariance *= 3d) {
+		for(double priorVariance=1d; priorVariance < 1500d; priorVariance *= 2d) {
+			System.out.printf("[simpleSweep] starting priorVariance=%.2f\n", priorVariance);
 			pruner.train(train, priorVariance);
-			for(double thresh=0.5d; thresh<1d; thresh += 0.05) {
+			for(double thresh=0.4d; thresh<1d; thresh += 0.05) {
 				pruner.params.pruneThresh = thresh;
 				double score = score(pruner, dev);
 				System.out.printf("[simpleSweep] priorVariance=%.2f thresh=%.2f score=%.2f\n",
@@ -131,6 +132,12 @@ public class PruningExperiment {
 		return bestPV;
 	}
 
+	
+	// in training data: 5961 / 24534 pruned = 24.3%
+	// i'm getting prune ratio's around 19.8%, with precision^1.5 = 73.4
+	// ...this is about as good as we could hope to do :(
+	
+	
 	public static void main(String[] args) {
 		
 		System.out.println("[PruningExperiment] reading in the data...");
@@ -138,15 +145,15 @@ public class PruningExperiment {
 		DataSplitter ds = new DataSplitter();
 		List<FNParse> trainDev = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
-		ds.split(fip.getParsedSentences(), trainDev, test, 0.15d, "pruning-data-trainDev");
+		ds.split(fip.getParsedSentences(), trainDev, test, 0.1d, "pruning-data-trainDev");
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> dev = new ArrayList<FNParse>();
-		ds.split(trainDev, train, dev, 0.15d, "pruning-data-train");
+		ds.split(trainDev, train, dev, 0.2d, "pruning-data-train");
 		
 		System.out.printf("#train=%d #dev=%d #test=%d\n", train.size(), dev.size(), test.size());
-		train = DataUtil.reservoirSample(train, 200);
-		dev = DataUtil.reservoirSample(dev, 60);
-		test = DataUtil.reservoirSample(test, 60);
+//		train = DataUtil.reservoirSample(train, 1000);
+//		dev = DataUtil.reservoirSample(dev, 250);
+//		test = DataUtil.reservoirSample(test, 250);
 		
 		TriggerPruning pruner = new TriggerPruning();
 		
@@ -154,8 +161,8 @@ public class PruningExperiment {
 		double bestPV = simpleSweep(pruner, train, dev);
 		
 		// test the final model we found
-		System.out.println("training with best prior variance: " + bestPV + ", and best thresh: " + pruner.params.pruneThresh);
-		pruner.train(train, bestPV);
+		System.out.println("training with best priorVariance: " + bestPV + ", and best thresh: " + pruner.params.pruneThresh);
+		pruner.train(trainDev, bestPV);
 		score(pruner, test);
 	}
 }

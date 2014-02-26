@@ -104,7 +104,8 @@ public class TriggerPruning {
 		private int index;
 		private Sentence sent;
 		
-		final int maxNgram = 5;
+		public static final int maxNgram = 5;
+		public static final boolean simple = false;
 		
 		public TriggerPruningFactor(Var shouldPrune, TriggerPruningParams params, int idx, Sentence s) {
 			super(new VarSet(shouldPrune));
@@ -132,9 +133,11 @@ public class TriggerPruning {
 				b(fv, "doesnt-match-LU-for-any-frame", 2d);
 			else {
 				b(fv, "#LU-match=" + frameMatchesByLU.size());
-				for(Frame f : frameMatchesByLU) {
-					b(fv, "LU-matches-" + f.getName());
-					b(fv, "LU-matches-" + f.getName() + "-using-" + x.word);
+				if(!simple) {
+					for(Frame f : frameMatchesByLU) {
+						b(fv, "LU-matches-" + f.getName());
+						b(fv, "LU-matches-" + f.getName() + "-using-" + x.word);
+					}
 				}
 			}
 			
@@ -152,36 +155,38 @@ public class TriggerPruning {
 				if(n >= 10) b(fv, "#lexFI-matches>=10");
 				if(n >= 20) b(fv, "#lexFI-matches>=20");
 				if(n >= 40) b(fv, "#lexFI-matches>=40");
-				for(FrameInstance fi : lexFIs) {
-					b(fv, "#lexFI-match-for-" + fi.getFrame().getName());
-					// try to expand l/r
-					// TODO i want LCS, but that seems too slow
-					// how about intersection of ngrams from the target?
-					boolean takeWord = true;
-					boolean takePos = false;
-					Set<String> fiW = allNgrams(fi.getTarget(), fi.getSentence(), maxNgram, takeWord, takePos);
-					int left = index, right = index+1;
-					while(true) {
-						if(left >= 0 &&
-								fiW.contains(getNgramStr(left-1, right, sent, takeWord, takePos))) {
-							left--;
-							continue;
+				if(!simple) {
+					for(FrameInstance fi : lexFIs) {
+						b(fv, "#lexFI-match-for-" + fi.getFrame().getName());
+						// try to expand l/r
+						// TODO i want LCS, but that seems too slow
+						// how about intersection of ngrams from the target?
+						boolean takeWord = true;
+						boolean takePos = false;
+						Set<String> fiW = allNgrams(fi.getTarget(), fi.getSentence(), maxNgram, takeWord, takePos);
+						int left = index, right = index+1;
+						while(true) {
+							if(left >= 0 &&
+									fiW.contains(getNgramStr(left-1, right, sent, takeWord, takePos))) {
+								left--;
+								continue;
+							}
+							if(right <= sent.size() &&
+									fiW.contains(getNgramStr(left, right+1, sent, takeWord, takePos))) {
+								right++;
+								continue;
+							}
+							break;
 						}
-						if(right <= sent.size() &&
-								fiW.contains(getNgramStr(left, right+1, sent, takeWord, takePos))) {
-							right++;
-							continue;
-						}
-						break;
+						Set<String> fiWintersected = allNgrams(Span.getSpan(left, right), sent, maxNgram, takeWord, takePos);
+						if(fiWintersected.size() >= 2) b(fv, "#lexFI-matchin-ngrams>=2");
+						if(fiWintersected.size() >= 4) b(fv, "#lexFI-matchin-ngrams>=4");
+						if(fiWintersected.size() >= 6) b(fv, "#lexFI-matchin-ngrams>=6");
+						if(fiWintersected.size() >= 8) b(fv, "#lexFI-matchin-ngrams>=8");
+						if(fiWintersected.size() >= 12) b(fv, "#lexFI-matchin-ngrams>=12");
+						for(String ngram : fiWintersected)
+							b(fv, "lexFI-matchin-ngram=" + ngram);
 					}
-					Set<String> fiWintersected = allNgrams(Span.getSpan(left, right), sent, maxNgram, takeWord, takePos);
-					if(fiWintersected.size() >= 2) b(fv, "#lexFI-matchin-ngrams>=2");
-					if(fiWintersected.size() >= 4) b(fv, "#lexFI-matchin-ngrams>=4");
-					if(fiWintersected.size() >= 6) b(fv, "#lexFI-matchin-ngrams>=6");
-					if(fiWintersected.size() >= 8) b(fv, "#lexFI-matchin-ngrams>=8");
-					if(fiWintersected.size() >= 12) b(fv, "#lexFI-matchin-ngrams>=12");
-					for(String ngram : fiWintersected)
-						b(fv, "lexFI-matchin-ngram=" + ngram);
 				}
 			}
 			
@@ -202,14 +207,16 @@ public class TriggerPruning {
 			b(fv, "parent=" + parent.pos + "_word=" + me.getFullString());
 			b(fv, "parent=" + parent.pos + "_word=" + me.word);
 			b(fv, "parent=" + parent.pos + "_word=" + me.pos);
-			b(fv, "parent=" + parent.getFullString() + "_word=" + me.word + "_gparent=" + gparent.pos);
-			b(fv, "parent=" + parent.word + "_word=" + me.word + "_gparent=" + gparent.word);
-			b(fv, "parent=" + parent.word + "_word=" + me.word + "_gparent=" + gparent.pos);
-			b(fv, "parent=" + parent.word + "_word=" + me.pos + "_gparent=" + gparent.word);
-			b(fv, "parent=" + parent.word + "_word=" + me.pos + "_gparent=" + gparent.pos);
-			b(fv, "parent=" + parent.pos + "_word=" + me.getFullString() + "_gparent=" + gparent.pos);
-			b(fv, "parent=" + parent.pos + "_word=" + me.word + "_gparent=" + gparent.pos);
-			b(fv, "parent=" + parent.pos + "_word=" + me.pos + "_gparent=" + gparent.pos);
+			if(!simple) {
+				b(fv, "parent=" + parent.getFullString() + "_word=" + me.word + "_gparent=" + gparent.pos);
+				b(fv, "parent=" + parent.word + "_word=" + me.word + "_gparent=" + gparent.word);
+				b(fv, "parent=" + parent.word + "_word=" + me.word + "_gparent=" + gparent.pos);
+				b(fv, "parent=" + parent.word + "_word=" + me.pos + "_gparent=" + gparent.word);
+				b(fv, "parent=" + parent.word + "_word=" + me.pos + "_gparent=" + gparent.pos);
+				b(fv, "parent=" + parent.pos + "_word=" + me.getFullString() + "_gparent=" + gparent.pos);
+				b(fv, "parent=" + parent.pos + "_word=" + me.word + "_gparent=" + gparent.pos);
+				b(fv, "parent=" + parent.pos + "_word=" + me.pos + "_gparent=" + gparent.pos);
+			}
 			
 			// children in the dependency tree
 			int n = sent.size();
@@ -229,7 +236,7 @@ public class TriggerPruning {
 			}
 			
 			// ngrams
-			int k = 4;
+			int k = simple ? 2 : 4;
 			for(int width=1; width<k; width++) {
 				for(int offset=-k; offset<=k; offset++) {
 					StringBuilder wordFeatName = new StringBuilder();
