@@ -76,6 +76,28 @@ public class SpanPruningExperiment {
 		System.out.println("#spans=" + allSpans.size());
 		
 		checkLthFilteringRules(train);
+		checkDeterminerPruning(train);
+	}
+	
+	// determiners should be a huge pruning speedup (they're common)
+	public static void checkDeterminerPruning(List<FNParse> examples) {
+		int totalTargets = 0;
+		int widthOneTargets = 0;
+		int detTargets = 0;
+		for(FNParse p : examples) {
+			Sentence s = p.getSentence();
+			for(FrameInstance fi : p.getFrameInstances()) {
+				totalTargets++;
+				Span target = fi.getTarget();
+				if(target.width() > 1) continue;
+				widthOneTargets++;
+				if(s.getLU(target.start).pos.endsWith("DT"))	// includes "PDT"
+					detTargets++;
+			}
+		}
+		System.out.printf("#width>1-targets=%d %.1f%%\n",
+				totalTargets-widthOneTargets, (100d*(totalTargets-widthOneTargets))/totalTargets);
+		System.out.printf("#determiner-targets=%d %.1f%%\n", detTargets, (100d*detTargets)/totalTargets);
 	}
 	
 	public static List<String> lthSpecialWords;

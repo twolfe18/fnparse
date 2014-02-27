@@ -8,6 +8,28 @@ import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
+/**
+ * reasons to keep r_ijk distinct from r_ijk^e:
+ * - l_ij variables will want to talk to on j variable, rather than many r_ijk vars (where j indexes spans instead of heads)
+ * 
+ * 
+ * Proposal:
+ * let domain(r_ijk) = {null} union {expansions}
+ * psi(f_i, r_ijk, l_ij) fires 1 if(f_i != nullFrame && r_ijk != null && l_ij == 1)
+ *   => this is now a bigger loop because it must go over all expansions rather than just binary for r_ijk
+ *   
+ * The reason I wanted to do this is so that I could get marginal probs for (r_ijk,r_ijk^e) during decoding
+ * (this term is needed to determine the predictions/loss)
+ * 
+ * Exactly1 only works in a collection of one-hot binary variables...
+ * actually i'm pretty sure this could be generalized to k-ary variables where one of k is "null"
+ * 
+ * where did i want to use Exactly1?
+ * a given role can only show up once...
+ * Exactly1(r_i*k) \forall i,k
+ * 
+ * @author travis
+ */
 public class RoleVars implements FgRelated {
 	
 	public static final int maxArgRoleExpandLeft = 10;

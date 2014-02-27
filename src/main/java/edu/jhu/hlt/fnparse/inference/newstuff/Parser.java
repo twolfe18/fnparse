@@ -1,13 +1,8 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.io.*;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
@@ -24,6 +19,7 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.optimize.*;
 import edu.jhu.util.Alphabet;
 
@@ -37,11 +33,13 @@ public class Parser {
 		public FgModel model;
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
+		public TargetPruningData targetPruningData;
 		public Map<Frame, List<FrameInstance>> prototypes;
 
 		public CrfTrainer trainer;
 		public CrfTrainer.CrfTrainerPrm trainerParams;
 	}
+
 	
 	public ParserParams params;
 	public final boolean benchmarkBP = false;
@@ -60,7 +58,6 @@ public class Parser {
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
 		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
-		fff.setFeatures(new DebuggingConstituencyFeatures(params.featIdx));
 		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		params.factors.add(fff);
 		RoleFactorFactory rff = new RoleFactorFactory(params);
@@ -68,6 +65,7 @@ public class Parser {
 		rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 		params.factors.add(rff);
 		params.prototypes = params.frameIndex.getPrototypeMap();
+		params.targetPruningData = TargetPruningData.getInstance();
 	}
 	
 	public FgInferencerFactory infFactory() {

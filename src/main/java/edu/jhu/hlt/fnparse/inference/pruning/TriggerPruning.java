@@ -4,9 +4,6 @@ package edu.jhu.hlt.fnparse.inference.pruning;
 import java.io.File;
 import java.util.*;
 
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.newstuff.BinaryVarUtil;
@@ -23,6 +20,17 @@ import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.train.CrfTrainer;
 
+/**
+ * @deprecated as is this class is deprecated because its trying to
+ * prune target spans. it no longer appears that attempting targets
+ * that are wider than one word is worth it. we could revamp this to 
+ * try to do filtering on single words, but for now I'm going to just
+ * follow semafor/LTH and only take 1) targets that appear in the
+ * lex/training examples, 2) are only one word, and 3) do not appear
+ * on a short stop list (see SpanPruningExperiment).
+ * 
+ * @author travis
+ */
 public class TriggerPruning {
 
 	// the goal here is to force certain f_i to be nullFrame
@@ -33,63 +41,13 @@ public class TriggerPruning {
 		public FgModel model;
 		public Alphabet<String> featIdx;
 		public double pruneThresh;
-		
-		// LUs listed in the frame index
-		public Map<LexicalUnit, List<Frame>> lu2frames;
-		
-		// keys are words, values are FrameInstances from the lexical examples of FrameNet
-		public Map<String, List<FrameInstance>> lexFIsRevIndex;
+		public TargetPruningData data;
 		
 		public TriggerPruningParams(int numParams) {
 			model = new FgModel(numParams);
 			featIdx = new Alphabet<String>();
 			pruneThresh = 0.6d;
-
-			long start = System.currentTimeMillis();
-			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
-			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
-			int numF = 0;
-			for(Frame f : FrameIndex.getInstance().allFrames()) {
-				for(int i=0; i<f.numLexicalUnits(); i++) {
-					LexicalUnit lu = f.getLexicalUnit(i);
-					List<Frame> lf = lu2frames.get(lu);
-					if(lf == null) {
-						lf = new ArrayList<Frame>();
-						lf.add(f);
-						lu2frames.put(lu, lf);
-					}
-					else lf.add(f);
-					numF += 1;
-				}
-			}
-			System.out.printf("[TriggerPruningParams] lu2frames contains %d keys and %.1f Frames/key\n",
-					lu2frames.size(), ((double)numF) / lu2frames.size());
-			
-			System.out.println("[TriggerPruningParams] building word => lex List<FI> inverted index...");
-			lexFIsRevIndex = new HashMap<String, List<FrameInstance>>();
-			int numFI = 0;
-			FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
-			for(FNParse p : fip.getParsedSentences()) {
-				Sentence s = p.getSentence();
-				for(FrameInstance fi : p.getFrameInstances()) {
-					Span target = fi.getTarget();
-					for(int i=target.start; i<target.end; i++) {
-						String word = s.getWord(i);
-						List<FrameInstance> lfi = lexFIsRevIndex.get(word);
-						if(lfi == null) {
-							lfi = new ArrayList<FrameInstance>();
-							lfi.add(fi);
-							lexFIsRevIndex.put(word, lfi);
-						}
-						else lfi.add(fi);
-						numFI++;
-					}
-				}
-			}
-			System.out.printf("[TriggerPruningParams] word => lex List<FI> contains %d keys and %.1f FI/word\n",
-					lexFIsRevIndex.size(), ((double)numFI) / lexFIsRevIndex.size());
-			System.out.printf("[TriggerPruningParams] done, took %.1f seconds\n",
-					(System.currentTimeMillis()-start)/1000d);
+			data = TargetPruningData.getInstance();
 		}
 		
 		public void writeout(File f) {
@@ -134,7 +92,7 @@ public class TriggerPruning {
 			b(fv, "lu=" + x.getFullString(), 2d);
 			
 			// check for match to known LU
-			List<Frame> frameMatchesByLU = params.lu2frames.get(sent.getLU(index));
+			List<Frame> frameMatchesByLU = params.data.getLU2Frames().get(sent.getLU(index));
 			if(frameMatchesByLU == null)
 				b(fv, "doesnt-match-LU-for-any-frame", 2d);
 			else {
@@ -148,7 +106,7 @@ public class TriggerPruning {
 			}
 			
 			// check for similarity to an existing lex FI example
-			List<FrameInstance> lexFIs = params.lexFIsRevIndex.get(sent.getWord(index));
+			List<FrameInstance> lexFIs = params.data.getWord2FrameInstances().get(sent.getWord(index));
 			if(lexFIs == null)
 				b(fv, "doesnt-match-any-lexFI", 2d);
 			else {

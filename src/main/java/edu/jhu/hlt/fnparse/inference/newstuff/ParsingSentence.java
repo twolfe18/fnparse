@@ -1,9 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import org.apache.log4j.Logger;
 
@@ -40,7 +37,8 @@ public class ParsingSentence {
 	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
 	
-	private static final boolean debugDecode = false;
+	private static final boolean debugDecodePart1 = false;	// frame decode
+	private static final boolean debugDecodePart2 = true;	// arg decode
 	
 	/**
 	 * In training data:
@@ -113,7 +111,6 @@ public class ParsingSentence {
 		
 		List<Integer> dFrameIdx = new ArrayList<Integer>();
 		List<Frame> dFrame = new ArrayList<Frame>();
-		List<Span> dFrameTarget = new ArrayList<Span>();
 		
 		VarConfig clampedFrames = new VarConfig();
 		int n = frameVars.length;
@@ -121,7 +118,7 @@ public class ParsingSentence {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
 			
-			if(debugDecode) {
+			if(debugDecodePart1) {
 				DenseFactor localMargins = margins1.get(fv.getFrameVar());
 				System.out.println(sentence.getLU(i) + "\t" + localMargins);
 				
@@ -138,15 +135,12 @@ public class ParsingSentence {
 			Frame f_i = fv.getFrame(mbr1Conf);
 			if(f_i == Frame.nullFrame)
 				assert frameVars[i].getExpansion(mbr1Conf).equals(Expansion.noExpansion);
-			Span target = fv.getTarget(mbr1Conf);
 			
 			clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
-			clampedFrames.put(fv.getExpansionVar(), mbr1Conf.getState(fv.getExpansionVar()));
 			clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));	// shouldn't matter
 			
 			dFrameIdx.add(i);
 			dFrame.add(f_i);
-			dFrameTarget.add(target);
 		}
 		
 		// decode with frames clamped
@@ -159,7 +153,6 @@ public class ParsingSentence {
 		for(int ii=0; ii<dFrameIdx.size(); ii++) {
 			int i = dFrameIdx.get(ii);
 			Frame f_i = dFrame.get(ii);
-			Span target = dFrameTarget.get(ii);
 			
 			if(f_i == Frame.nullFrame)
 				continue;
@@ -172,24 +165,26 @@ public class ParsingSentence {
 				double bestSpanScore = -9999d;
 				for(int j=0; j<n; j++) {
 					RoleVars rv = roleVars[i][j][k];
-					boolean active = rv.getRoleActive(mbr2Conf);
-					Span s = rv.getSpan(mbr2Conf);
 					DenseFactor mR = margins2.get(rv.getRoleVar());
 					DenseFactor mE = margins2.get(rv.getExpansionVar());
 					assert mR.getValues().length == 2;
 					assert mE.getValues().length == rv.getNumExpansions();
-					double mRv = mR.getValue(mbr2Conf.getState(rv.getRoleVar()));
-					double mEv = mE.getValue(mbr2Conf.getState(rv.getExpansionVar()));
+					double mRv = mR.getValue(BinaryVarUtil.boolToConfig(true));
+					double mEv = mE.getValue(mE.getArgmaxConfigId());	// TODO this is wrong: should really clamp r_ijk before doing this.
 					double score = params.logDomain ? mRv + mEv : mRv * mEv;
-					if(active && (score > bestSpanScore || bestSpan == null)) {
-						bestSpan = s;
+					if(score > bestSpanScore || bestSpan == null) {
+						bestSpan = rv.getSpan(mbr2Conf);
 						bestSpanScore = score;
 					}
+					
+					if(debugDecodePart2)
+						System.out.printf("[decode] f_i=%s  j=%s  k=%s  p(r_ijk)=%.3f\n",
+								f_i.getName(), sentence.getWord(j), f_i.getRole(k), mRv);
 				}
 				if(bestSpan != null)
 					args[k] = bestSpan;
 			}
-			frameInstances.add(FrameInstance.newFrameInstance(f_i, target, args, sentence));
+			frameInstances.add(FrameInstance.newFrameInstance(f_i, Span.widthOne(i), args, sentence));
 		}
 		
 		return new FNParse(sentence, frameInstances, true);
@@ -255,7 +250,10 @@ public class ParsingSentence {
 	 * lemma(t) == lemma(f.target)
 	 */
 	public FrameVar makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
+		
 		LexicalUnit head = s.getLU(headIdx);
+		if(params.targetPruningData.prune(headIdx, s))
+			return null;
 		
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
@@ -263,28 +261,44 @@ public class ParsingSentence {
 		frameMatches.add(Frame.nullFrame);
 		prototypes.add(FrameInstance.nullPrototype);
 		
-		for(Frame f : params.frameIndex.allFrames()) {
-			
-			// check if this matches a lexical unit for this frame
-			for(int i = 0; i < f.numLexicalUnits(); i++) {
-				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
-					frameMatches.add(f);
-					List<FrameInstance> ps = params.prototypes.get(f); 
-					if(ps != null) prototypes.addAll(ps);
-					break;
-				}
-			}
+		// the lookup by LU is failing because the tagset for this data is different than framnet
+		
+		List<Frame> matchesByLU = params.targetPruningData.getFramesFromLU(head);
+		List<FrameInstance> matchesByWord = params.targetPruningData.getFrameInstanceForWord(head.word);
+		Set<Frame> uniqFrames = new HashSet<Frame>();
+		for(Frame f : matchesByLU) {
+			if(uniqFrames.add(f))
+				frameMatches.add(f);
+		}
+		for(FrameInstance fi : matchesByWord) {
+			Frame f = fi.getFrame();
+			if(uniqFrames.add(f))
+				frameMatches.add(f);
+			prototypes.add(fi);
 		}
 		
-		log.trace("[makeFrameVar] head=" + s.getLU(headIdx));
-		for(Frame f : frameMatches)
-			log.trace("[makeFrameVar] frame=" + f + ", prototypes=" + params.prototypes.get(f));
+//		for(Frame f : params.frameIndex.allFrames()) {
+//			// check if this matches a lexical unit for this frame
+//			for(int i = 0; i < f.numLexicalUnits(); i++) {
+//				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
+//					frameMatches.add(f);
+//					List<FrameInstance> ps = params.prototypes.get(f); 
+//					if(ps != null) prototypes.addAll(ps);
+//					break;
+//				}
+//			}
+//		}
 		
 		if(frameMatches.size() == 1) {
 			//System.err.println("[makeFrameVars] WARNING: no frames available for " + s.getLU(headIdx));
 			return null;
 		}
-		else return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
+		
+		log.trace("[makeFrameVar] head=" + head);
+		for(Frame f : frameMatches)
+			log.trace("[makeFrameVar] frame=" + f + ", prototypes=" + params.prototypes.get(f));
+		
+		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}
 	
 	public FactorGraph getFactorGraph() { return fg; }

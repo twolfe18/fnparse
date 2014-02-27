@@ -4,7 +4,6 @@ import java.util.*;
 
 import edu.jhu.gm.feat.*;
 import edu.jhu.gm.model.*;
-import edu.jhu.gm.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
 
@@ -42,29 +41,43 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 			
 			VarSet containsF = new VarSet();
 			containsF.add(fv.getFrameVar());
-			if(fpeFeatures != null) {
-				containsF.add(fv.getPrototypeVar());
-				containsF.add(fv.getExpansionVar());
-				factors.add(new F(fv, this, s, containsF));
-			}
-			else {	// there will be 2 factors
-				
-				VarSet containsE = new VarSet();
-				containsE.add(fv.getExpansionVar());
-				
+			
+			// TODO new code path (expansion features are going away)
+			if(fpeFeatures == null && feFeatures == null && eFeatures == null) {
+				// now the only question is whether p is in the mix
 				if(fpFeatures != null)
 					containsF.add(fv.getPrototypeVar());
-				if(feFeatures != null)
-					containsE.add(fv.getFrameVar());
-				
 				factors.add(new F(fv, this, s, containsF));
-				factors.add(new F(fv, this, s, containsE));
 			}
+			
+			else {
+				System.err.println("WARNING: FrameVar is no longer using an Expansion var! Turn these features off.");
+				assert false;
+				if(fpeFeatures != null) {
+					containsF.add(fv.getPrototypeVar());
+					containsF.add(fv.getExpansionVar());
+					factors.add(new F(fv, this, s, containsF));
+				}
+				else {	// there will be 2 factors
+
+					VarSet containsE = new VarSet();
+					containsE.add(fv.getExpansionVar());
+
+					if(fpFeatures != null)
+						containsF.add(fv.getPrototypeVar());
+					if(feFeatures != null)
+						containsE.add(fv.getFrameVar());
+
+					factors.add(new F(fv, this, s, containsF));
+					factors.add(new F(fv, this, s, containsE));
+				}
+			}
+			
 		}
 		return factors;
 	}
 
-	/*
+	/* ???
 	public static class CachingExpFamFactor extends ExpFamFactor implements FeatureExtractor {
 
 		// pass in an ExpFamFactor, get back an instance that caches
@@ -130,7 +143,7 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 			this.features = features;
 			readP = varsNeeded.contains(fv.getPrototypeVar());
 			readF = varsNeeded.contains(fv.getFrameVar());
-			readE = varsNeeded.contains(fv.getExpansionVar());
+			readE = false; //varsNeeded.contains(fv.getExpansionVar());
 
 			int n = getVars().calcNumConfigs();
 			cache = new FeatureVector[n];

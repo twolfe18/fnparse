@@ -9,7 +9,11 @@ import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.newstuff.*;
 import edu.jhu.hlt.fnparse.inference.pruning.*;
 
-public class PruningExperiment {
+/**
+ * @deprecated see discussion of pruning in TriggerPruning
+ * @author travis
+ */
+public class PruningEfficiencyExperiment {
 	
 	/**
 	 * between 0 and 1

@@ -53,6 +53,7 @@ public interface Features {
 		public FeatureVector getFeatures(Frame f, int targetHeadIdx, FrameInstance prototype, Sentence s);
 	}
 	
+	/** @deprecated */
 	public static interface FPE extends Features {
 		public FeatureVector getFeatures(Frame f, Span target, FrameInstance prototype, Sentence s);
 	}
@@ -66,6 +67,7 @@ public interface Features {
 	}
 
 	/**
+	 * @deprecated
 	 * if given f == Frame.nullFrame, this feature should return a FeatureVector with exactly one
 	 * feature one (nullFrame feature), which never fires for f != Frame.nullFrame.
 	 */

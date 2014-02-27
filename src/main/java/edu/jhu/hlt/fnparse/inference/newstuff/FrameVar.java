@@ -36,7 +36,9 @@ public class FrameVar implements FgRelated {
 	private List<Frame> frames;
 	private Var frameVar;
 	
+	/** @deprecated */
 	private Expansion.Iter expansions;
+	/** @deprecated */
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
 	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
@@ -61,12 +63,14 @@ public class FrameVar implements FgRelated {
 		this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, protoVarNames);
 		this.frames = frames;
 		this.frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, frameVarNames);
-		this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
-		this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
+		
+		//this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
+		//this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
 	}
 	
 	// indices into frames and expansions respectively
 	private int goldFrame;
+	/** @deprecated */
 	private int goldExpansion;
 	
 	/**
@@ -85,20 +89,24 @@ public class FrameVar implements FgRelated {
 					gold.getFrame(), Arrays.toString(gold.getSentence().getWordFor(gold.getTarget())));
 			goldFrame = frames.indexOf(Frame.nullFrame);
 		}
-		
-		goldExpansion = -1;
-		int n = expansions.size();
-		for(int i=0; i<n; i++) {
-			Expansion e = expansions.get(i);
-			Span target = e.upon(headIdx);	// target implied by this expansion
-			if(target.equals(gold.getTarget())) {
-				if(goldExpansion >= 0) throw new IllegalStateException();
-				goldExpansion = i;
-			}
-		}
-		
-		if(goldFrame < 0 || goldExpansion < 0)
+		if(goldFrame < 0)
 			throw new IllegalStateException();
+		
+		if(expansions != null) {
+			assert false;
+			goldExpansion = -1;
+			int n = expansions.size();
+			for(int i=0; i<n; i++) {
+				Expansion e = expansions.get(i);
+				Span target = e.upon(headIdx);	// target implied by this expansion
+				if(target.equals(gold.getTarget())) {
+					if(goldExpansion >= 0) throw new IllegalStateException();
+					goldExpansion = i;
+				}
+			}
+			if(goldExpansion < 0)
+				throw new IllegalStateException();
+		}
 	}
 	
 	@Override
@@ -113,11 +121,11 @@ public class FrameVar implements FgRelated {
 		fg.addVar(prototypeVar);
 		
 		fg.addVar(frameVar);
-		fg.addVar(expansionVar);
+		//fg.addVar(expansionVar);
 		
 		// prototypeVar is latent, no gold label
 		gold.put(frameVar, goldFrame);
-		gold.put(expansionVar, goldExpansion);
+		//gold.put(expansionVar, goldExpansion);
 	}
 
 	private int maxRoles = -1;
@@ -134,25 +142,47 @@ public class FrameVar implements FgRelated {
 	
 	public Var getPrototypeVar() { return prototypeVar; }
 	public Var getFrameVar() { return frameVar; }
-	public Var getExpansionVar() { return expansionVar; }
+	
+	/** @deprecated */
+	public Var getExpansionVar() {
+		assert false;	// smoke out the callers of this function
+		return expansionVar;
+	}
 	
 	public FrameInstance getPrototype(VarConfig conf) {
 		return getPrototype(conf.getState(prototypeVar));
 	}
+	
 	public Frame getFrame(VarConfig conf) {
 		return getFrame(conf.getState(frameVar));
 	}
+	
+	/** @deprecated */
 	public Expansion getExpansion(VarConfig conf) {
+		assert false;	// smoke out the callers of this function
 		return getExpansion(conf.getState(expansionVar));
 	}
+	
+	/** @deprecated */
 	public Span getTarget(VarConfig conf) {
+		assert false;	// smoke out the callers of this function
 		return getExpansion(conf).upon(headIdx);
 	}
 	
 	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }
 	public List<Frame> getFrames() { return frames; }
-	public Expansion getExpansion(int localIdx) { return expansions.get(localIdx); }
-	public Expansion.Iter getExpansions() { return expansions; }
+	
+	/** @deprecated */
+	public Expansion getExpansion(int localIdx) {
+		assert false;	// smoke out the callers of this function
+		return expansions.get(localIdx);
+	}
+	
+	/** @deprecated */
+	public Expansion.Iter getExpansions() {
+		assert false;	// smoke out the callers of this function
+		return expansions;
+	}
 	
 }

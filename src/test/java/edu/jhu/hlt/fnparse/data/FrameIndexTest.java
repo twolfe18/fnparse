@@ -50,4 +50,25 @@ public class FrameIndexTest {
 		assertEquals(max, allFrames.size()-1);
 	}
 	
+	@Test
+	public void listFNposTags() {
+		Set<String> all = new HashSet<String>();
+		for(Frame f : FrameIndex.getInstance().allFrames())
+			for(int i=0; i<f.numLexicalUnits(); i++)
+				all.add(f.getLexicalUnit(i).pos);
+		System.out.println("\nAll POS tags used in lexical units for frames:");
+		for(String s : all)
+			System.out.println(s);
+		
+		// lets get all words listed as ART = article
+		all.clear();
+		for(Frame f : FrameIndex.getInstance().allFrames())
+			for(int i=0; i<f.numLexicalUnits(); i++)
+				if(f.getLexicalUnit(i).pos.equalsIgnoreCase("ART"))
+					all.add(f.getLexicalUnit(i).word);
+		System.out.println("\nAll words associated with ART:");
+		for(String s : all)
+			System.out.println(s);	// some of these are listed as PDT ("predeterminer") in Penn
+
+	}
 }
