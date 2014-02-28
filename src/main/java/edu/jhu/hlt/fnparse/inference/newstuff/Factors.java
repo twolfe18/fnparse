@@ -176,7 +176,7 @@ public abstract class Factors implements FactorFactory {
 			private RoleVars roleVar;
 			
 			public F(FrameVar fv, RoleVars rv, Sentence sent, Features.FRE feats) {
-				super(new VarSet(fv.getFrameVar(), rv.getRoleVar(), rv.getExpansionVar()));	// this is how you know the complexity
+				super(new VarSet(fv.getFrameVar(), rv.getRoleVar()));
 				this.frameVar = fv;
 				this.roleVar = rv;
 				this.sent = sent;
@@ -255,50 +255,50 @@ public abstract class Factors implements FactorFactory {
 		}
 	}
 	
-	public static class ArgExpansionFactors extends Factors {
-		
-		private Features.E features;
-		
-		public ArgExpansionFactors(Features.E features) {
-			this.features = features;
-		}
-		
-		@Override
-		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
-			List<Factor> factors = new ArrayList<Factor>();
-			int n = s.size();
-			for(int i=0; i<n; i++) {
-				if(f[i] == null) continue;
-				for(int j=0; j<n; j++)
-					for(int k=0; k<r[i][j].length; k++)
-						factors.add(new F(r[i][j][k], s, features));
-			}
-			return factors;
-		}
-		
-		static class F extends ExpFamFactor {
-
-			private static final long serialVersionUID = 1L;
-			
-			private Sentence sent;
-			private RoleVars roleVar;
-			private Features.E features;
-			
-			public F(RoleVars rv, Sentence sent, Features.E feats) {
-				super(new VarSet(rv.getExpansionVar()));	// this is how you know the complexity
-				this.roleVar = rv;
-				this.sent = sent;
-				this.features = feats;
-			}
-			
-			@Override
-			public FeatureVector getFeatures(int config) {
-				VarConfig conf = this.getVars().getVarConfig(config);
-				Span s = roleVar.getSpan(conf);
-				return features.getFeatures(s, sent);
-			}
-		}
-	}
+//	public static class ArgExpansionFactors extends Factors {
+//		
+//		private Features.E features;
+//		
+//		public ArgExpansionFactors(Features.E features) {
+//			this.features = features;
+//		}
+//		
+//		@Override
+//		public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
+//			List<Factor> factors = new ArrayList<Factor>();
+//			int n = s.size();
+//			for(int i=0; i<n; i++) {
+//				if(f[i] == null) continue;
+//				for(int j=0; j<n; j++)
+//					for(int k=0; k<r[i][j].length; k++)
+//						factors.add(new F(r[i][j][k], s, features));
+//			}
+//			return factors;
+//		}
+//		
+//		static class F extends ExpFamFactor {
+//
+//			private static final long serialVersionUID = 1L;
+//			
+//			private Sentence sent;
+//			private RoleVars roleVar;
+//			private Features.E features;
+//			
+//			public F(RoleVars rv, Sentence sent, Features.E feats) {
+//				super(new VarSet(rv.getExpansionVar()));	// this is how you know the complexity
+//				this.roleVar = rv;
+//				this.sent = sent;
+//				this.features = feats;
+//			}
+//			
+//			@Override
+//			public FeatureVector getFeatures(int config) {
+//				VarConfig conf = this.getVars().getVarConfig(config);
+//				Span s = roleVar.getSpan(conf);
+//				return features.getFeatures(s, sent);
+//			}
+//		}
+//	}
 
 	
 	/**

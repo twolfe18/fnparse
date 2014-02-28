@@ -58,6 +58,10 @@ public abstract class HasRoleFeatures {
 		this.cFeatures = from.cFeatures;
 	}
 
+	public boolean hasNoFeatures() {
+		return freFeatures == null && frFeatures == null && cFeatures == null;
+	}
+	
 	public FeatureVector getFeatures(Frame f, int targetHeadIdx, boolean argIsRealized, int roleIdx, Span arg, int argHead, Sentence s) {
 		
 		if(f == Frame.nullFrame) {

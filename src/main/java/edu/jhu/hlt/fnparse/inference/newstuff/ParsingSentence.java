@@ -130,6 +130,9 @@ public class ParsingSentence {
 					//System.out.println(margins1.get(e.getChild().getVar()));
 				}
 				System.out.println();
+				for(Frame f : fv.getFrames())
+					System.out.printf("%s has %d args\n", f.getName(), f.numRoles());
+				System.out.println();
 			}
 			
 			Frame f_i = fv.getFrame(mbr1Conf);
@@ -161,17 +164,21 @@ public class ParsingSentence {
 			Span[] args = new Span[K];
 			Arrays.fill(args, Span.nullSpan);
 			for(int k=0; k<K; k++) {	// find the best span for every role
-				Span bestSpan = null;
+				Span bestSpan = Span.nullSpan;
 				double bestSpanScore = -9999d;
 				for(int j=0; j<n; j++) {
 					RoleVars rv = roleVars[i][j][k];
 					DenseFactor mR = margins2.get(rv.getRoleVar());
-					DenseFactor mE = margins2.get(rv.getExpansionVar());
-					assert mR.getValues().length == 2;
-					assert mE.getValues().length == rv.getNumExpansions();
-					double mRv = mR.getValue(BinaryVarUtil.boolToConfig(true));
-					double mEv = mE.getValue(mE.getArgmaxConfigId());	// TODO this is wrong: should really clamp r_ijk before doing this.
-					double score = params.logDomain ? mRv + mEv : mRv * mEv;
+					if(mR == null) continue;	// we might be skipping arg inference
+					double score = mR.getValue(mR.getArgmaxConfigId());
+					
+//					DenseFactor mE = margins2.get(rv.getExpansionVar());
+//					assert mR.getValues().length == 2;
+//					assert mE.getValues().length == rv.getNumExpansions();
+//					double mRv = mR.getValue(BinaryVarUtil.boolToConfig(true));
+//					double mEv = mE.getValue(mE.getArgmaxConfigId());	// TODO this is wrong: should really clamp r_ijk before doing this.
+//					double score = params.logDomain ? mRv + mEv : mRv * mEv;
+					
 					if(score > bestSpanScore || bestSpan == null) {
 						bestSpan = rv.getSpan(mbr2Conf);
 						bestSpanScore = score;
@@ -179,7 +186,7 @@ public class ParsingSentence {
 					
 					if(debugDecodePart2)
 						System.out.printf("[decode] f_i=%s  j=%s  k=%s  p(r_ijk)=%.3f\n",
-								f_i.getName(), sentence.getWord(j), f_i.getRole(k), mRv);
+								f_i.getName(), sentence.getWord(j), f_i.getRole(k), score);
 				}
 				if(bestSpan != null)
 					args[k] = bestSpan;

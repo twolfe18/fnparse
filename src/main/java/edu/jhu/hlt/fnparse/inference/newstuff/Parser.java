@@ -57,13 +57,14 @@ public class Parser {
 		params.useLatentDepenencies = false;
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
-		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
-		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		//fff.setFeatures(new BasicFrameFeatures(params.featIdx));
+		fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		//fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		params.factors.add(fff);
-		RoleFactorFactory rff = new RoleFactorFactory(params);
+		//RoleFactorFactory rff = new RoleFactorFactory(params);
 		//rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
-		rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
-		params.factors.add(rff);
+		//rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
+		//params.factors.add(rff);
 		params.prototypes = params.frameIndex.getPrototypeMap();
 		params.targetPruningData = TargetPruningData.getInstance();
 	}

@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -33,6 +34,8 @@ public class RoleFactorFactory extends HasRoleFeatures implements FactorFactory 
 	
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
+		if(this.hasNoFeatures())
+			return Collections.emptyList();
 		List<Factor> factors = new ArrayList<Factor>();
 		int n = s.size();
 		for(int i=0; i<n; i++) {
@@ -54,7 +57,7 @@ public class RoleFactorFactory extends HasRoleFeatures implements FactorFactory 
 		private RoleVars roleVar;
 		
 		public F(FrameVar f_i, RoleVars r_ijk, Sentence sent, HasRoleFeatures features) {
-			super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar(), r_ijk.getExpansionVar()));
+			super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar()));
 			this.sent = sent;
 			this.features = features;
 			this.frameVar = f_i;

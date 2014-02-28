@@ -28,6 +28,12 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * a given role can only show up once...
  * Exactly1(r_i*k) \forall i,k
  * 
+ * 
+ * Siblings:
+ * Its common to see that an arg is a sibling to its frame.
+ * How to encode:
+ * phi(f_i, r_ijk, l_pi, l_pj) \forall p
+ * 
  * @author travis
  */
 public class RoleVars implements FgRelated {
@@ -38,26 +44,31 @@ public class RoleVars implements FgRelated {
 	private FrameVar parent;
 	private int roleIdx;	// aka "k"
 	private int headIdx;	// aka "j", head of the argument span (target head comes from parent)
-	private Var headVar;	// binary
-	
+	private Var headVar;
+	private int headVarGold = -1;
 	private Expansion.Iter expansions;
-	private Var expansionVar;
+//	private Var expansionVar;
 	
 	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx, boolean logDomain) {
 		this.parent = parent;
 		this.roleIdx = roleIdx;
 		this.headIdx = headIdx;
-		String headVarName = String.format("r_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
-		this.headVar = new Var(VarType.PREDICTED, 2, headVarName, BinaryVarUtil.stateNames);
 		
 		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
-		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
-		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
+//		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
+//		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
 		
+		String headVarName = String.format("r_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
+//		this.headVar = new Var(VarType.PREDICTED, 2, headVarName, BinaryVarUtil.stateNames);
+		
+		// new deal: if there are K possible expansions, headVar \in 0 .. K
+		// where 0..K-1 are the expansions and K means "null" -- or that this
+		// frame-role is not active at this head word j.
+		this.headVar = new Var(VarType.PREDICTED, expansions.size()+1, headVarName, null);
 	}
 	
-	private boolean headVarGold = false;
-	private int expansionVarGold = 0;
+//	private boolean headVarGold = false;
+//	private int expansionVarGold = 0;
 	
 	public static class Location {
 		public int frame, arg, role;
@@ -83,50 +94,61 @@ public class RoleVars implements FgRelated {
 	 * use this to say that this argument was not instantiated.
 	 */
 	public void setGoldIsNull() {
-		headVarGold = false;
-		expansionVarGold = expansions.indexOf(Expansion.noExpansion);
-		if(expansionVarGold < 0) throw new IllegalStateException();
+		headVarGold = expansions.size();
+//		expansionVarGold = expansions.indexOf(Expansion.noExpansion);
+//		if(expansionVarGold < 0) throw new IllegalStateException();
 	}
 	
 	/**
 	 * use this to say that this argument was realized in the sentence.
 	 */
 	public void setGold(Span s) {
-
 		if(s == Span.nullSpan)
 			throw new IllegalArgumentException();
 		
-		headVarGold = true;
-		
 		// compute the gold expansion
 		Expansion goldExpansion = Expansion.headToSpan(headIdx, s);
-		expansionVarGold = expansions.indexOf(goldExpansion);
-		if(expansionVarGold < 0)
+		headVarGold = expansions.indexOf(goldExpansion);;
+//		expansionVarGold = expansions.indexOf(goldExpansion);
+//		if(expansionVarGold < 0)
+		if(headVarGold < 0 || headVarGold >= expansions.size())
 			throw new IllegalStateException("gold expansion for " + s + " @ " + headIdx + " was not found. did you prune too hard?");
 	}
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
-		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
-		gold.put(expansionVar, expansionVarGold);
+//		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
+//		gold.put(expansionVar, expansionVarGold);
+		fg.addVar(headVar);
+		if(headVarGold < 0) {
+			//assert false;
+			gold.put(headVar, 0);	// what value?
+		}
+		else gold.put(headVar, headVarGold);
 	}
 	
 	public int getHeadIdx() { return headIdx; }
 	public int getRoleIdx() { return roleIdx; }
 	
 	public boolean getRoleActive(VarConfig conf) {
-		return BinaryVarUtil.configToBool(conf.getState(headVar));
+//		return BinaryVarUtil.configToBool(conf.getState(headVar));
+		int config = conf.getState(headVar);
+		return config < expansions.size();
 	}
-	public Expansion getExpansion(VarConfig conf) {
-		return expansions.get(conf.getState(expansionVar));
-	}
+//	public Expansion getExpansion(VarConfig conf) {
+//		return expansions.get(conf.getState(expansionVar));
+//	}
+	
 	public Span getSpan(VarConfig conf) {
-		Expansion e = getExpansion(conf);
+		int config = conf.getState(headVar);
+		if(config == expansions.size())
+			return Span.nullSpan;
+		Expansion e = expansions.get(config);
 		return e.upon(headIdx);
 	}
 	
-	public Var getRoleVar() { return headVar; }	// binary var
-	public Var getExpansionVar() { return expansionVar; }
+	public Var getRoleVar() { return headVar; }
+//	public Var getExpansionVar() { return expansionVar; }
 
 	public int getNumExpansions() { return expansions.size(); }
 }
