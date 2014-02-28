@@ -23,7 +23,7 @@ public class PruningEfficiencyExperiment {
 	private static final double pruningStrength = 0.6d;
 	private static final Random rand = new Random(9001);
 	private static final Parser.ParserParams parserParams = new Parser().params;
-	private static final File dumpModelsTo = new File("pruning");
+	private static final File dumpModelsTo = new File("experiments/pruning");
 	
 	/**
 	 * recall = targetsReachable / targets

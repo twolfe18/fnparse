@@ -28,6 +28,7 @@ public class Parser {
 	public static class ParserParams {
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
+		public boolean onlyFrameIdent;
 		
 		public Alphabet<String> featIdx;
 		public FgModel model;
@@ -39,7 +40,6 @@ public class Parser {
 		public CrfTrainer trainer;
 		public CrfTrainer.CrfTrainerPrm trainerParams;
 	}
-
 	
 	public ParserParams params;
 	public final boolean benchmarkBP = false;
@@ -55,18 +55,23 @@ public class Parser {
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
+		params.onlyFrameIdent = true;
+		params.prototypes = params.frameIndex.getPrototypeMap();
+		params.targetPruningData = TargetPruningData.getInstance();
+
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
-		//fff.setFeatures(new BasicFrameFeatures(params.featIdx));
+		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
 		fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		//fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		params.factors.add(fff);
-		//RoleFactorFactory rff = new RoleFactorFactory(params);
-		//rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
-		//rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
-		//params.factors.add(rff);
-		params.prototypes = params.frameIndex.getPrototypeMap();
-		params.targetPruningData = TargetPruningData.getInstance();
+		
+		if(!params.onlyFrameIdent) {
+			RoleFactorFactory rff = new RoleFactorFactory(params);
+			rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+			//rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
+			params.factors.add(rff);
+		}
 	}
 	
 	public FgInferencerFactory infFactory() {
@@ -112,7 +117,7 @@ public class Parser {
 		// L1's parameter is multiplier => bigger means more regularization
 		trainerParams.regularizer = new L2(1d);
 
-		int numParams = 25 * 1000 * 1000;	// TODO
+		int numParams = 500 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);

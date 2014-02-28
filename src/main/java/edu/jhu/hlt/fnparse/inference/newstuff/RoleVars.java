@@ -117,6 +117,7 @@ public class RoleVars implements FgRelated {
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
+		
 //		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
 //		gold.put(expansionVar, expansionVarGold);
 		fg.addVar(headVar);

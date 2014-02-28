@@ -13,6 +13,14 @@ public class ParserExperiment {
 
 	public static final boolean hurryUp = true;
 	
+	public static void printMemUsage() {
+		double used = Runtime.getRuntime().totalMemory();
+		used /= 1024d * 1024d * 1024d;
+		double free = Runtime.getRuntime().maxMemory();
+		free /= 1024d * 1024d * 1024d;
+		System.out.printf("[ParserExperiment] using %.2f GB, %.2f GB free\n", used, free);
+	}
+	
 	public static void main(String[] args) {
 		
 		// get the data
@@ -24,35 +32,41 @@ public class ParserExperiment {
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 150;
-		int nTest = 30;
+		int nTrain = 500;
+		int nTest = 60;
 		//if(hurryUp) {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		//}
+		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
+		printMemUsage();
 		
 		// train and evaluate along the way
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
-		for(int epoch=0; epoch<20; epoch++) {
+		for(int epoch=0; epoch<4; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 2;
-			int batchSize = 2;
+			int passes = 3;
+			int batchSize = 1;
 			double k = 3d;
 			double lrMult = k / (k + epoch);
 			parser.train(train, passes, batchSize, lrMult);
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
+			printMemUsage();
 
+			System.out.println("[ParserExperiment] predicting on test set...");
 			predicted = parser.parseWithoutPeeking(test);
 			results = BasicEvaluation.evaluate(test, predicted);
 			BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
-
-			List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
+			printMemUsage();
+			
+			System.out.println("[ParserExperiment] predicting on train set...");
 			predicted = parser.parseWithoutPeeking(trainSubset);
 			results = BasicEvaluation.evaluate(trainSubset, predicted);
 			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
+			printMemUsage();
 		}
 	}
 	

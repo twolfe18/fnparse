@@ -109,6 +109,14 @@ public class FrameVar implements FgRelated {
 		}
 	}
 	
+	public int numberOfConfigs() {
+		int nc = prototypes.size() * frames.size();
+//		if(nc > 500) {
+//			System.err.println("poop3");
+//		}
+		return nc;
+	}
+	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		
