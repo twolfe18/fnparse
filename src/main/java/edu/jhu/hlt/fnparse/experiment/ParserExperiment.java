@@ -32,8 +32,8 @@ public class ParserExperiment {
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 500;
-		int nTest = 60;
+		int nTrain = 1200;
+		int nTest = 100;
 		//if(hurryUp) {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
@@ -45,10 +45,10 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
-		for(int epoch=0; epoch<4; epoch++) {
+		for(int epoch=0; epoch<5; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 3;
-			int batchSize = 1;
+			int batchSize = 1 + epoch * 25;
 			double k = 3d;
 			double lrMult = k / (k + epoch);
 			parser.train(train, passes, batchSize, lrMult);

@@ -60,6 +60,25 @@ public class Sentence implements HasId {
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	
+	private int[][] children;	// opposite of gov
+	public int[] childrenOf(int wordIdx) {
+		if(children == null) {
+			int n = gov.length;
+			children = new int[n][];
+			List<Integer> kids = new ArrayList<Integer>();
+			for(int i=0; i<n; i++) {
+				kids.clear();
+				for(int j=0; j<n; j++)
+					if(gov[j] == i) kids.add(j);
+				children[i] = new int[kids.size()];
+				for(int j=0; j<kids.size(); j++)
+					children[i][j] = kids.get(j);
+			}
+		}
+		return children[wordIdx];
+	}
+	
+	
 	public int governor(int i) {
 		return gov[i];
 	}

@@ -72,19 +72,12 @@ public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFrameProt
 //			b(fv, fs + "_samepos-as-prototype");
 //		}
 		
-//		try {
-			for(int i=protoTarget.start; i<protoTarget.end; i++) {
-				if(p.getSentence().getWord(i).equals(targetHead)) {
-					b(fv, "head-in-prototype");
-					b(fv, "head-in-prototype_" + fs);
-				}
+		for(int i=protoTarget.start; i<protoTarget.end; i++) {
+			if(p.getSentence().getWord(i).equals(targetHead)) {
+				b(fv, "head-in-prototype");
+				b(fv, "head-in-prototype_" + fs);
 			}
-//		}
-//		catch(ArrayIndexOutOfBoundsException e) {
-//			//e.printStackTrace();
-//			if(rand.nextInt(2500) == 0)
-//				System.err.println("[BasicFramePrototypeFeatures] bug pushpendre about a bug in the readers!");
-//		}
+		}
 		
 		int ni = s.size();
 		int nj = p.getSentence().size();

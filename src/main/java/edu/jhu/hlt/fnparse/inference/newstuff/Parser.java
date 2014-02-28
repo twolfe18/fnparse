@@ -115,7 +115,7 @@ public class Parser {
 		
 		// L2's parameter is variance => bigger means less regularization
 		// L1's parameter is multiplier => bigger means more regularization
-		trainerParams.regularizer = new L2(1d);
+		trainerParams.regularizer = new L2(10d);
 
 		int numParams = 500 * 1000;	// TODO
 		params.trainerParams = trainerParams;
