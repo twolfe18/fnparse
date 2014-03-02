@@ -160,7 +160,9 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
 			Frame frame = readF ? frameVar.getFrame(conf) : null;
 			
-			if(readP && readF && !prototype.getFrame().equals(frame))
+			// if it is one of the special prototypes, let it pass through
+			boolean hasNoRealFrame = prototype instanceof FrameInstance.Prototype;
+			if(readP && readF && !hasNoRealFrame && !prototype.getFrame().equals(frame))
 				return logDomain ? Double.NEGATIVE_INFINITY : 0d;
 			
 			else return super.getDotProd(config, model, logDomain);
@@ -177,11 +179,10 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
 			Frame frame = readF ? frameVar.getFrame(conf) : null;
 			
-			// fix all entries in factor where prototype doesn't match
-			// frame to 0 (no parameters needed there, shouldn't even sum over it).
-			if(readP && readF && !prototype.getFrame().equals(frame))
+			// if it is one of the special prototypes, let it pass through
+			boolean hasNoRealFrame = prototype instanceof FrameInstance.Prototype;
+			if(readP && readF && !hasNoRealFrame && !prototype.getFrame().equals(frame))
 				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-				//throw new RuntimeException("getDotProd should have returned before calling this!");
 			
 			Span target = readE ? frameVar.getTarget(conf) : null;
 			return features.getFeatures(frame, prototype, frameVar.getTargetHeadIdx(), target, sent);

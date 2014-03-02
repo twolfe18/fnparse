@@ -23,7 +23,7 @@ public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFrameProt
 	@Override
 	public FeatureVector getFeatures(Frame f, int targetHeadIdx, FrameInstance p, Sentence s) {
 		
-		if(!f.equals(p.getFrame()))
+		if(!(p instanceof FrameInstance.Prototype) && !f.equals(p.getFrame()))
 			throw new IllegalArgumentException("wut");
 		
 		FeatureVector fv = new FeatureVector();

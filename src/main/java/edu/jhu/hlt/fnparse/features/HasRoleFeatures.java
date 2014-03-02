@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.*;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -38,6 +40,14 @@ public abstract class HasRoleFeatures {
 		params = copy.params;
 		fv_nullFrame = copy.fv_nullFrame;
 		fv_nullFrame_idx = copy.fv_nullFrame_idx;
+	}
+	
+	public List<Features> getFeatures() {
+		List<Features> features = new ArrayList<Features>();
+		if(freFeatures != null) features.add(freFeatures);
+		if(frFeatures != null) features.add(frFeatures);
+		if(cFeatures != null) features.add(cFeatures);
+		return features;
 	}
 	
 	public void setFeatures(Features.FRE features) {

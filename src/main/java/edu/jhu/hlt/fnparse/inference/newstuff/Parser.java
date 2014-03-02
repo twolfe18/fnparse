@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.jhu.hlt.fnparse.util.HeterogeneousL2;
 import edu.jhu.optimize.*;
 import edu.jhu.util.Alphabet;
 
@@ -62,7 +63,7 @@ public class Parser {
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
 		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
-		fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		//fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		params.factors.add(fff);
 		
@@ -93,6 +94,19 @@ public class Parser {
 		};
 	}
 	
+	public Regularizer getRegularizer(int numParams) {
+		
+		List<Integer> dontRegularize = new ArrayList<Integer>();
+		for(FactorFactory ff : this.params.factors)
+			for(Features f : ff.getFeatures())
+				dontRegularize.addAll(f.dontRegularize());
+		System.out.printf("[getRegularizer] not regularizing %d parameters\n", dontRegularize.size());
+
+		// L2's parameter is variance => bigger means less regularization
+		// L1's parameter is multiplier => bigger means more regularization
+		//return new L2(10d);
+		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, 10d, numParams);
+	}
 
 	public void train(List<FNParse> examples) { train(examples, 10, 2, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier) {
@@ -113,14 +127,11 @@ public class Parser {
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
 		
-		// L2's parameter is variance => bigger means less regularization
-		// L1's parameter is multiplier => bigger means more regularization
-		trainerParams.regularizer = new L2(10d);
-
-		int numParams = 500 * 1000;	// TODO
+		int numParams = 1500 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
+		trainerParams.regularizer = getRegularizer(numParams);
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {

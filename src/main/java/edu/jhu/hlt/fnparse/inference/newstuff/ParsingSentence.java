@@ -232,7 +232,7 @@ public class ParsingSentence {
 			int head = hf.head(fi.getTarget(), p.getSentence());
 			if(frameVars[head] == null) {
 				System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
-						" because the candidiate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
+						" because the candidate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
 				continue;
 			}
 			frameVars[head].setGold(fi);
@@ -274,8 +274,6 @@ public class ParsingSentence {
 		
 		prototypes.addAll(FrameInstance.Prototype.miscPrototypes());
 		frameMatches.add(Frame.nullFrame);
-		
-		int[] pCounts = new int[FrameIndex.framesInFrameNet+1];
 		
 		// the lookup by LU is failing because the tagset for this data is different than framnet
 		

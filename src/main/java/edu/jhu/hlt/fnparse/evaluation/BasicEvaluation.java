@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +103,10 @@ public class BasicEvaluation {
 	}
 	
 	public static void showResults(String meta, Map<String, Double> results) {
-		for(Map.Entry<String, Double> x : results.entrySet())
-			System.out.printf("%s: %s = %.3f\n", meta, x.getKey(), x.getValue());
+		List<String> keys = new ArrayList<String>();
+		keys.addAll(results.keySet());
+		Collections.sort(keys);
+		for(String key : keys)
+			System.out.printf("%s: %s = %.3f\n", meta, key, results.get(key));
 	}
 }
