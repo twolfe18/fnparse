@@ -36,7 +36,7 @@ public class BenchmarkingBP extends BeliefPropagation {
 
 	public BenchmarkingBP(FactorGraph fg, BeliefPropagationPrm prm) {
 		super(fg, prm);
-		createMessageStats = new HashMap<>();
+		createMessageStats = new HashMap<String, Stats>();
 		allCreateMessage = new Stats("all-create-msg");
 		allRun = new Stats("all-run");
 		allGetProductOfMessagesNormalized = new Stats("all-prod-messages");
@@ -64,7 +64,7 @@ public class BenchmarkingBP extends BeliefPropagation {
 		(edge.isVarToFactor() ? v2f : f2v).took(t);
 		
 		if(allCreateMessage.count % 250000 == 0) {
-			List<Stats> byRuntime = new ArrayList<>();
+			List<Stats> byRuntime = new ArrayList<Stats>();
 			byRuntime.addAll(createMessageStats.values());
 			Collections.sort(byRuntime, new Comparator<Stats>() {
 				@Override

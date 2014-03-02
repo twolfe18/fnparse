@@ -144,6 +144,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 				while(ret==null) {
 					List<String> tokens = new ArrayList<String>();
 					List<String> pos = new ArrayList<String>();
+					List<String> lemmas = new ArrayList<String>();
 					List<Integer> gov = new ArrayList<Integer>();
 					List<String> depType = new ArrayList<String>();
 					List<Integer> tokenCharStart = new ArrayList<Integer>();
@@ -152,6 +153,11 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 						String[] l = curLineConllFile.split("\t");
 						tokens.add(l[4]);
 						pos.add(l[10]);
+						if(l.length == 11) {
+							lemmas.add(l[4]);
+						}else{
+							lemmas.add(l[11]);
+						}
 						gov.add(Integer.parseInt(l[8]));
 						depType.add(l[9]);
 						tokenCharStart.add(Integer.parseInt(l[6]));
@@ -174,6 +180,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider, Iterabl
 							prevSentId, 
 							tokens.toArray(new String[0]), 
 							pos.toArray(new String[0]),
+							lemmas.toArray(new String[0]),
 							ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 							depType.toArray(new String[0]));
 					
