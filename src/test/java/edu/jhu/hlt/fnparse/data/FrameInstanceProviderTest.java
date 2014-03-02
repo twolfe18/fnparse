@@ -64,10 +64,35 @@ public class FrameInstanceProviderTest {
 			checkSentence(s.getSentence());
 			assertTrue(uniqSents.add(s.getSentence()));
 		}
-
+		// lsc[0] counts lemmas that are same as the word
+		// lsc[1] counts lemmas that are different from word
+		int[] lsc = {0,0};
+		for(Sentence s : uniqSents){
+			// Basically I want to check that that the lemmas really are lemmas
+			// and get a stat of how many lemmas are the same as the actual word
+			// and how many are not
+			updateLemmatizedVsSameCounter(s, lsc);
+		}
+		System.out.printf("there are %d lemmas that are same and %d lemmas that are different\n", lsc[0], lsc[1]);
 		System.out.println("there are " + parsesWithMoreThanOneFI + " parses with more than one FrameInstance in them.");
 		System.out.printf("loaded %d FrameInstances in %d sentences took %.2f seconds\n\n",
 				numFIs, sents.size(), time/1000d);
+	}
+	
+	public static void updateLemmatizedVsSameCounter(Sentence s, int[] lsc){
+		int lemmadifferentFromWord = 0;
+		int lemmaSameasWord = 0;
+		for(int i = 0; i < s.size(); i++){
+			String lemma = s.getLemma(i);
+			String word = s.getWord(i);
+			if(lemma.equals(word)){
+				lemmaSameasWord+=1;
+			} else {
+				lemmadifferentFromWord+=1;
+			}
+		}
+		lsc[0]+=lemmaSameasWord;
+		lsc[1]+=lemmadifferentFromWord;
 	}
 	
 	public static void checkSentence(Sentence s) {

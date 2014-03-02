@@ -49,10 +49,11 @@ public class ParserTests {
 		
 		// NOTE: I'm using "jump" instead of "jumped" because "jumped.V" is not an LU for Self_motion
 		String[] tokens  = new String[] {"The", "quick", "fox", "jump", "over", "the", "fence"};
+		String[] lemmas = new String[] {"The", "quick", "fox", "jump", "over", "the", "fence"};
 		String[] pos     = new String[] {"DT",  "JJ",    "NN",  "VBD",    "IN",   "DT",  "NN"};
 		int[] gov        = new int[]    {2,     2,       3,     -1,       3,      6,     4};
 		String[] depType = new String[] {"G",   "G",     "G",   "G",      "G",    "G",   "G"};
-		Sentence s = new Sentence("test", "sent1", tokens, pos, gov, depType);
+		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas, gov, depType);
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();

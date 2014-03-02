@@ -7,7 +7,7 @@ import edu.jhu.hlt.fnparse.util.HasId;
 public final class Sentence implements HasId {
 	
 	public static final Sentence nullSentence =
-			new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new int[0], new String[0]);
+			new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
 
 	/**
 	 * a __globally__ unique identifier
@@ -23,11 +23,12 @@ public final class Sentence implements HasId {
 	
 	private String[] tokens;
 	private String[] pos;
+	private String[] lemmas;
 	
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 	
-	public Sentence(String dataset, String id, String[] tokens, String[] pos, int[] gov, String[] depType) {
+	public Sentence(String dataset, String id, String[] tokens, String[] pos, String[] lemmas, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
 		if(pos != null && tokens.length != pos.length)
@@ -36,16 +37,16 @@ public final class Sentence implements HasId {
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
+		this.lemmas=lemmas;
 		this.gov=gov;
 		this.depType=depType;
-		
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
 			this.pos[i] = this.pos[i].toUpperCase().intern();
 	}
 
 	public Sentence copy() {
-		return new Sentence(dataset, id, tokens.clone(), pos.clone(), gov.clone(), depType.clone());
+		return new Sentence(dataset, id, tokens.clone(), pos.clone(), lemmas.clone(), gov.clone(), depType.clone());
 	}
 
 	public String getDataset() { return dataset; }
@@ -55,8 +56,11 @@ public final class Sentence implements HasId {
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
 	public String getPos(int i) { return pos[i]; }
+	public String getLemma(int i){return lemmas[i];}
+	
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
+	public String[] getLemmasFor(Span s) { return Arrays.copyOfRange(lemmas, s.start, s.end); }
 	
 	private transient int[][] children;	// opposite of gov
 	public int[] childrenOf(int wordIdx) {
