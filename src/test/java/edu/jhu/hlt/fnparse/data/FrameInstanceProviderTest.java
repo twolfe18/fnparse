@@ -72,6 +72,10 @@ public class FrameInstanceProviderTest {
 	
 	public static void checkSentence(Sentence s) {
 		assertTrue(s.getId() + " should be at least length 1", s.size() > 0);
+		for(int i=0; i<s.size(); i++) {
+			assertTrue("lenth 0 word in :" + s.toString(), s.getWord(i).length() > 0);
+			assertTrue("lenth 0 POS in :" + s.toString(), s.getPos(i).length() > 0);
+		}
 	}
 
 	public static void checkOrder(List<FNParse> sents, FrameInstanceProvider fip) {

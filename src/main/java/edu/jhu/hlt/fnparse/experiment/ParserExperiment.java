@@ -106,18 +106,28 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 	
 	public static void main(String[] args) {
 		
-		if(false) {
-			mainDebugging(args);
-			return;
-		}
+//		if(false) {
+//			mainDebugging(args);
+//			return;
+//		}
 		
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 3, 10, 30, 100, 300, 1000));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100, 1000));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.3d, 1d, 3d, 10d, 30d, 100d));
 		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 0.3d, 1d, 3d, 10d));
 		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.9d, 0.8d, 0.7d, 0.6d, 0.5d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
+		
+		
+		// TODO remove this later
+		if(nTrainLimit.get() < 200) {
+			System.out.println("we already did this, returning");
+			return;
+		}
+		
+		
 		
 		File workingDir = new File(modelDir, getDescription(ajh));
 		if(!workingDir.isDirectory())
@@ -142,7 +152,7 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		Parser parser = new Parser();
 		for(int epoch=0; epoch<10; epoch++) {
 			System.out.printf("[ParserExperiment] starting epoch %d, lrMult=%.3f\n", epoch, lrMultRunning);
-			parser.train(train, passesPerEpoch, batchSize.get(), lrMultRunning);
+			parser.train(train, passesPerEpoch, batchSize.get(), lrMultRunning, regularizer.get());
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
 			printMemUsage();
@@ -197,7 +207,8 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 			int passes = 2;
 			int batchSize = 1;
 			double lrMult = 10d / (2d + epoch);
-			parser.train(train, passes, batchSize, lrMult);
+			double regularizerMult = 1d;
+			parser.train(train, passes, batchSize, lrMult, regularizerMult);
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
 			printMemUsage();

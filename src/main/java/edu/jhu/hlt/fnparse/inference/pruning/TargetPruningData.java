@@ -1,29 +1,93 @@
 package edu.jhu.hlt.fnparse.inference.pruning;
 
+import java.io.*;
 import java.util.*;
 
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
+import edu.mit.jwi.*;
+import edu.mit.jwi.data.ILoadPolicy;
+import edu.mit.jwi.item.POS;
+import edu.mit.jwi.morph.WordnetStemmer;
 
+// TODO make an init() method that observes a single pass over lex examples
+// so that we only ever have to make one pass (rather than one per data-structure)
 public class TargetPruningData {
 
 	// LUs listed in the frame index
+	/** @deprecated */
 	private Map<LexicalUnit, List<Frame>> lu2frames;
 
 	// keys are words, values are FrameInstances from the lexical examples of FrameNet
-	private Map<String, List<FrameInstance>> lexFIsRevIndex;
-	
-	private Set<String> stopwordsForTargets;
+	/** @deprecated */
+	private Map<String, List<FrameInstance>> lexFIsRevIndex;	// taken from LEX examples
 	
 	private TargetPruningData() {}	// singleton
 	private static final TargetPruningData singleton = new TargetPruningData();
 	public static TargetPruningData getInstance() { return singleton; }
+	
+	
+	private void init() {
+		IRAMDictionary dict = getWordnetDict();
+		WordnetStemmer stemmer = new WordnetStemmer(dict);
+		prototypesByStem = new HashMap<String, List<FrameInstance>>();
+		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
+		for(FNParse p : fip.getParsedSentences()) {
+			Sentence s = p.getSentence();
+			for(FrameInstance fi : p.getFrameInstances()) {
+				Span target = fi.getTarget();
+				if(target.width() != 1) continue;
+				assert target.width() == 1;
+				String word = s.getWord(target.start);
+				
+				// TODO talk to pushpendre about why this is happening
+				if(word.length() == 0) {
+					System.err.println("length 0 word in: " + s.toString());
+					continue;
+				}
+				
+				POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
+				for(String stem : stemmer.findStems(word, pos)) {
+					List<FrameInstance> lfi = prototypesByStem.get(stem);
+					if(lfi == null) {
+						lfi = new ArrayList<FrameInstance>();
+						lfi.add(fi);
+						prototypesByStem.put(word, lfi);
+					}
+					else lfi.add(fi);
+				}
+			}
+		}
+	}
+	
+	
+	private IRAMDictionary dict;
+	public IRAMDictionary getWordnetDict() {
+		if(dict == null) {
+			long start = System.currentTimeMillis();
+			File f = new File("toydata/wordnet/dict");
+			dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);
+			try { dict.open(); }
+			catch(Exception e) {
+				throw new RuntimeException(e);
+			}
+			long time = System.currentTimeMillis() - start;
+			System.out.printf("loaded wordnet in %.1f seconds\n", time/1000d);
+		}
+		return dict;
+	}
 
+	private Map<String, List<FrameInstance>> prototypesByStem;
+	public Map<String, List<FrameInstance>> getPrototypesByStem() {
+		if(prototypesByStem == null)
+			init();
+		return prototypesByStem;
+	}
+	
 	/**
 	 * keys use Penn treebank POS tags (not Framenet POS tags)
+	 * @deprecated
 	 */
 	public List<Frame> getFramesFromLU(LexicalUnit lu) {
 		List<Frame> fs = getLU2Frames().get(lu);
@@ -33,9 +97,11 @@ public class TargetPruningData {
 	
 	/**
 	 * keys use Penn treebank POS tags (not Framenet POS tags)
+	 * @deprecated
 	 */
 	public Map<LexicalUnit, List<Frame>> getLU2Frames() {
 		if(lu2frames == null) {
+			assert false;
 			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
 			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
 			int numF = 0;
@@ -45,7 +111,7 @@ public class TargetPruningData {
 					// but... i could just add all Penn tags that
 					// agree with the FN tag to this hashmap.
 					LexicalUnit lu = f.getLexicalUnit(i);
-					List<String> possiblePennTags = LexicalUnit.getFrameNetPosToAllPennTags().get(lu.pos);
+					List<String> possiblePennTags = PosUtil.getFrameNetPosToAllPennTags().get(lu.pos);
 					for(String pos : possiblePennTags) {
 						LexicalUnit newLU = new LexicalUnit(lu.word, pos);
 						List<Frame> lf = lu2frames.get(newLU);
@@ -65,13 +131,17 @@ public class TargetPruningData {
 		return lu2frames;
 	}
 	
+	/** @deprecated */
 	public List<FrameInstance> getFrameInstanceForWord(String word) {
 		List<FrameInstance> fis = getWord2FrameInstances().get(word);
 		if(fis == null) fis = Collections.emptyList();
 		return fis;
 	}
+	
+	/** @deprecated */
 	public Map<String, List<FrameInstance>> getWord2FrameInstances() {
 		if(lexFIsRevIndex == null) {
+			assert false;
 			System.out.println("[TriggerPruningParams] building word => lex List<FI> inverted index...");
 			lexFIsRevIndex = new HashMap<String, List<FrameInstance>>();
 			int numFI = 0;
@@ -99,6 +169,7 @@ public class TargetPruningData {
 		return lexFIsRevIndex;
 	}
 	
+	private Set<String> stopwordsForTargets;
 	public boolean isTargetStopword(String word) {
 		if(stopwordsForTargets == null) {
 			stopwordsForTargets = new HashSet<String>();

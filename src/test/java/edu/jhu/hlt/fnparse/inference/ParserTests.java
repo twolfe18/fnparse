@@ -105,7 +105,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d);
+		parser.train(train, 12, 1, 1d, 1d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

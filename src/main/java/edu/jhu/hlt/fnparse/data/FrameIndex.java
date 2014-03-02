@@ -117,28 +117,28 @@ public class FrameIndex implements Iterable<Frame> {
 		return nameToFrameMap;
 	}
 	
-	private Map<Frame, List<FrameInstance>> prototypes;
-	public Map<Frame, List<FrameInstance>> getPrototypeMap() {
-		if(prototypes == null) {
-			System.out.print("[FrameIndex] building Frame => Prototype mapping... ");
-			long start = System.currentTimeMillis();
-			prototypes = new HashMap<Frame, List<FrameInstance>>();
-			for(FNTagging lexTagging : FileFrameInstanceProvider.fn15lexFIP.getTaggedSentences()) {
-				//		assert lexTagging.numFrameInstances() == 1 : "#fi = " + lexTagging.numFrameInstances() + ", " + Describe.fnTagging(lexTagging);
-				FrameInstance lexFI = lexTagging.getFrameInstance(0);
-				List<FrameInstance> protos = prototypes.get(lexFI.getFrame());
-				if(protos == null) {
-					protos = new ArrayList<FrameInstance>();
-					protos.add(lexFI);
-					prototypes.put(lexFI.getFrame(), protos);
-				}
-				else protos.add(lexFI);
-			}
-			System.out.printf("done, took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
-		}
-		return prototypes;
-	}
-	
+//	private Map<Frame, List<FrameInstance>> prototypes;
+//	public Map<Frame, List<FrameInstance>> getPrototypeMap() {
+//		if(prototypes == null) {
+//			System.out.print("[FrameIndex] building Frame => Prototype mapping... ");
+//			long start = System.currentTimeMillis();
+//			prototypes = new HashMap<Frame, List<FrameInstance>>();
+//			for(FNTagging lexTagging : FileFrameInstanceProvider.fn15lexFIP.getTaggedSentences()) {
+//				//		assert lexTagging.numFrameInstances() == 1 : "#fi = " + lexTagging.numFrameInstances() + ", " + Describe.fnTagging(lexTagging);
+//				FrameInstance lexFI = lexTagging.getFrameInstance(0);
+//				List<FrameInstance> protos = prototypes.get(lexFI.getFrame());
+//				if(protos == null) {
+//					protos = new ArrayList<FrameInstance>();
+//					protos.add(lexFI);
+//					prototypes.put(lexFI.getFrame(), protos);
+//				}
+//				else protos.add(lexFI);
+//			}
+//			System.out.printf("done, took %.2f seconds\n", (System.currentTimeMillis()-start)/1000d);
+//		}
+//		return prototypes;
+//	}
+
 	
 	@Override
 	public Iterator<Frame> iterator() {

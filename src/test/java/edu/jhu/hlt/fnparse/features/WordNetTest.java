@@ -1,15 +1,13 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import edu.mit.jwi.IRAMDictionary;
-import edu.mit.jwi.RAMDictionary;
-import edu.mit.jwi.data.ILoadPolicy;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.mit.jwi.*;
 import edu.mit.jwi.item.*;
 
 public class WordNetTest {
@@ -18,12 +16,7 @@ public class WordNetTest {
 	
 	@Before
 	public void setup() throws IOException {
-		long start = System.currentTimeMillis();
-		File f = new File("src/main/resources/dict");
-		dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);
-		dict.open();
-		long time = System.currentTimeMillis() - start;
-		System.out.printf("loaded wordnet in %.1f seconds\n", time/1000d);
+		dict = TargetPruningData.getInstance().getWordnetDict();
 	}
 	
 	@After

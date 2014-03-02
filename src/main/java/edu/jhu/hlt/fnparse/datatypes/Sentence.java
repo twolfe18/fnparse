@@ -1,12 +1,10 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 import edu.jhu.hlt.fnparse.util.HasId;
 
-public class Sentence implements HasId {
+public final class Sentence implements HasId {
 	
 	public static final Sentence nullSentence =
 			new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new int[0], new String[0]);
@@ -60,7 +58,7 @@ public class Sentence implements HasId {
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	
-	private int[][] children;	// opposite of gov
+	private transient int[][] children;	// opposite of gov
 	public int[] childrenOf(int wordIdx) {
 		if(children == null) {
 			int n = gov.length;
@@ -106,6 +104,9 @@ public class Sentence implements HasId {
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder("<Sentence");
+		sb.append(" ");
+		sb.append(id);
+		sb.append(" ");
 		for(int i=0; i<size(); i++)
 			sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
 		sb.append(">");

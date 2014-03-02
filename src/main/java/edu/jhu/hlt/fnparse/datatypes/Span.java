@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-public class Span {
+public final class Span {
 
 	public int start;	// inclusive
 	public int end;		// non-inclusive

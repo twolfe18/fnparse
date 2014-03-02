@@ -13,10 +13,13 @@ import edu.jhu.gm.model.FactorGraph.FgEdge;
 import edu.jhu.gm.model.FactorGraph.FgNode;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.*;
-import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.util.Counts;
+import edu.mit.jwi.IRAMDictionary;
+import edu.mit.jwi.item.POS;
+import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ParsingSentence {
 	
@@ -269,42 +272,65 @@ public class ParsingSentence {
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
 		
+		Set<Frame> uniqFrames = new HashSet<Frame>();
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
 		
 		prototypes.addAll(FrameInstance.Prototype.miscPrototypes());
 		frameMatches.add(Frame.nullFrame);
 		
-		// the lookup by LU is failing because the tagset for this data is different than framnet
+		// we need to limit the number of prototypes per frame
+		final int maxPrototypesPerFrame = 30;
+		Counts<Frame> numPrototypes = new Counts<Frame>();
 		
-		List<Frame> matchesByLU = params.targetPruningData.getFramesFromLU(head);
-		List<FrameInstance> matchesByWord = params.targetPruningData.getFrameInstanceForWord(head.word);
-		Set<Frame> uniqFrames = new HashSet<Frame>();
-		for(Frame f : matchesByLU) {
-			if(uniqFrames.add(f)) {
-				List<FrameInstance> ps = params.prototypes.get(f);	// THIS ALSO COMES FROM LEX!
-				if(ps != null) {
-					if(ps.size() > maxLexPrototypesPerFrame)
-						ps = DataUtil.reservoirSample(ps, maxLexPrototypesPerFrame);
-					prototypes.addAll(ps);
+		Map<String, List<FrameInstance>> stem2prototypes = params.targetPruningData.getPrototypesByStem();
+		IRAMDictionary wnDict = params.targetPruningData.getWordnetDict();
+		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
+		String word = s.getWord(headIdx);
+		POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
+		for(String stem : stemmer.findStems(word, pos)) {
+			List<FrameInstance> protos = stem2prototypes.get(stem);
+			if(protos == null) continue;
+			for(FrameInstance fi : protos) {
+				Frame f = fi.getFrame();
+				int c = numPrototypes.increment(f);
+				if(c > maxPrototypesPerFrame) continue;	// TODO reservoir sample
+				if(uniqFrames.add(f)) {
+					frameMatches.add(f);
+					prototypes.add(fi);
 				}
-				if(prototypes.size() > 500) {
-					System.err.println("poop1");
-				}
-				frameMatches.add(f);
 			}
 		}
-		for(FrameInstance fi : matchesByWord) {	// from lex examples
-			Frame f = fi.getFrame();
-			if(uniqFrames.add(f))
-				frameMatches.add(f);
-			//prototypes.add(fi);
-		}
-		if(prototypes.size() > 500) {
-			System.err.println("poop2");
-		}
+		
+		// OLDER
+//		List<Frame> matchesByLU = params.targetPruningData.getFramesFromLU(head);
+//		List<FrameInstance> matchesByWord = params.targetPruningData.getFrameInstanceForWord(head.word);
+//		for(Frame f : matchesByLU) {
+//			if(uniqFrames.add(f)) {
+//				List<FrameInstance> ps = params.prototypes.get(f);	// THIS ALSO COMES FROM LEX!
+//				if(ps != null) {
+//					if(ps.size() > maxLexPrototypesPerFrame)
+//						ps = DataUtil.reservoirSample(ps, maxLexPrototypesPerFrame);
+//					prototypes.addAll(ps);
+//				}
+//				if(prototypes.size() > 500) {
+//					System.err.println("poop1");
+//				}
+//				frameMatches.add(f);
+//			}
+//		}
+//		for(FrameInstance fi : matchesByWord) {	// from lex examples
+//			Frame f = fi.getFrame();
+//			if(uniqFrames.add(f))
+//				frameMatches.add(f);
+//			//prototypes.add(fi);
+//		}
+//		if(prototypes.size() > 500) {
+//			System.err.println("poop2");
+//		}
 		
 		
+		// OLDEST
 //		for(Frame f : params.frameIndex.allFrames()) {
 //			// check if this matches a lexical unit for this frame
 //			for(int i = 0; i < f.numLexicalUnits(); i++) {
@@ -321,10 +347,6 @@ public class ParsingSentence {
 			//System.err.println("[makeFrameVars] WARNING: no frames available for " + s.getLU(headIdx));
 			return null;
 		}
-		
-		log.trace("[makeFrameVar] head=" + head);
-		for(Frame f : frameMatches)
-			log.trace("[makeFrameVar] frame=" + f + ", prototypes=" + params.prototypes.get(f));
 		
 		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}

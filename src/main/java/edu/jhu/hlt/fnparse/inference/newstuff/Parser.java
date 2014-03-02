@@ -36,7 +36,7 @@ public class Parser {
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
 		public TargetPruningData targetPruningData;
-		public Map<Frame, List<FrameInstance>> prototypes;
+		//public Map<Frame, List<FrameInstance>> prototypes;
 
 		public CrfTrainer trainer;
 		public CrfTrainer.CrfTrainerPrm trainerParams;
@@ -57,7 +57,7 @@ public class Parser {
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
 		params.onlyFrameIdent = true;
-		params.prototypes = params.frameIndex.getPrototypeMap();
+		//params.prototypes = params.frameIndex.getPrototypeMap();
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.factors = new ArrayList<FactorFactory>();
@@ -94,7 +94,7 @@ public class Parser {
 		};
 	}
 	
-	public Regularizer getRegularizer(int numParams) {
+	public Regularizer getRegularizer(int numParams, double regularizerMult) {
 		
 		List<Integer> dontRegularize = new ArrayList<Integer>();
 		for(FactorFactory ff : this.params.factors)
@@ -105,11 +105,11 @@ public class Parser {
 		// L2's parameter is variance => bigger means less regularization
 		// L1's parameter is multiplier => bigger means more regularization
 		//return new L2(10d);
-		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, 10d, numParams);
+		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, regularizerMult, numParams);
 	}
 
-	public void train(List<FNParse> examples) { train(examples, 10, 2, 1d); }
-	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier) {
+	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
+	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
 		
 		params.featIdx.startGrowth();
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
@@ -127,11 +127,11 @@ public class Parser {
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
 		
-		int numParams = 1500 * 1000;	// TODO
+		int numParams = 50 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
-		trainerParams.regularizer = getRegularizer(numParams);
+		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
