@@ -1,0 +1,15 @@
+#$ -cwd                         # run from current working directory
+#$ -j y                         # join stderr to stdout
+#$ -V                           # job has the same environment variables as the submission shell
+#$ -l h_rt=48:00:00             # runtime limit
+#$ -l mem_free=10G              # expected amount of mem
+#$ -l num_proc=1				# how many processors to use
+#$ -m as 		                # a=aborted b=begining e=end s=suspended
+#$ -M twolfe18@gmail.com
+#$ -o experiments/targetId/logging   # where to do logging
+
+cp="target/fnparse-1.0.0.jar:fnparse-1.0.0-jar-with-dependencies.jar:lib/*"
+jvmOpts="-ea -Xmx9G -XX:+UseConcMarkSweepGC"
+
+java -cp $cp $jvmOpts edu.jhu.hlt.fnparse.experiment.ParserExperiment $SGE_TASK_ID
+
