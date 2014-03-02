@@ -200,7 +200,7 @@ public class ParsingSentence {
 			frameInstances.add(FrameInstance.newFrameInstance(f_i, Span.widthOne(i), args, sentence));
 		}
 		
-		return new FNParse(sentence, frameInstances, true);
+		return new FNParse(sentence, frameInstances);
 	}
 	
 	public void setGold(FNParse p) {

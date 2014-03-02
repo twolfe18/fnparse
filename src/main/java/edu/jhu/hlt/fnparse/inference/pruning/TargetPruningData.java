@@ -29,11 +29,14 @@ public class TargetPruningData {
 	
 	
 	private void init() {
+		long start = System.currentTimeMillis();
+		System.out.println("[TargetPruningData] init starting...");
 		IRAMDictionary dict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		prototypesByStem = new HashMap<String, List<FrameInstance>>();
-		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
-		for(FNParse p : fip.getParsedSentences()) {
+		Iterator<FNParse> iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+		while(iter.hasNext()) {
+			FNParse p = iter.next();
 			Sentence s = p.getSentence();
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
@@ -59,6 +62,7 @@ public class TargetPruningData {
 				}
 			}
 		}
+		System.out.printf("[TargetPruningData] done in %.1f seconds.\n", (System.currentTimeMillis()-start)/1000d);
 	}
 	
 	
@@ -102,31 +106,31 @@ public class TargetPruningData {
 	public Map<LexicalUnit, List<Frame>> getLU2Frames() {
 		if(lu2frames == null) {
 			assert false;
-			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
-			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
-			int numF = 0;
-			for(Frame f : FrameIndex.getInstance().allFrames()) {
-				for(int i=0; i<f.numLexicalUnits(); i++) {
-					// the FN => Penn tagset mapping is lossy
-					// but... i could just add all Penn tags that
-					// agree with the FN tag to this hashmap.
-					LexicalUnit lu = f.getLexicalUnit(i);
-					List<String> possiblePennTags = PosUtil.getFrameNetPosToAllPennTags().get(lu.pos);
-					for(String pos : possiblePennTags) {
-						LexicalUnit newLU = new LexicalUnit(lu.word, pos);
-						List<Frame> lf = lu2frames.get(newLU);
-						if(lf == null) {
-							lf = new ArrayList<Frame>();
-							lf.add(f);
-							lu2frames.put(newLU, lf);
-						}
-						else lf.add(f);
-						numF += 1;
-					}
-				}
-			}
-			System.out.printf("[TargetPruningData] lu2frames contains %d keys and %.1f Frames/key\n",
-					lu2frames.size(), ((double)numF) / lu2frames.size());
+//			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
+//			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
+//			int numF = 0;
+//			for(Frame f : FrameIndex.getInstance().allFrames()) {
+//				for(int i=0; i<f.numLexicalUnits(); i++) {
+//					// the FN => Penn tagset mapping is lossy
+//					// but... i could just add all Penn tags that
+//					// agree with the FN tag to this hashmap.
+//					LexicalUnit lu = f.getLexicalUnit(i);
+//					List<String> possiblePennTags = PosUtil.getFrameNetPosToAllPennTags().get(lu.pos);
+//					for(String pos : possiblePennTags) {
+//						LexicalUnit newLU = new LexicalUnit(lu.word, pos);
+//						List<Frame> lf = lu2frames.get(newLU);
+//						if(lf == null) {
+//							lf = new ArrayList<Frame>();
+//							lf.add(f);
+//							lu2frames.put(newLU, lf);
+//						}
+//						else lf.add(f);
+//						numF += 1;
+//					}
+//				}
+//			}
+//			System.out.printf("[TargetPruningData] lu2frames contains %d keys and %.1f Frames/key\n",
+//					lu2frames.size(), ((double)numF) / lu2frames.size());
 		}
 		return lu2frames;
 	}
@@ -142,29 +146,29 @@ public class TargetPruningData {
 	public Map<String, List<FrameInstance>> getWord2FrameInstances() {
 		if(lexFIsRevIndex == null) {
 			assert false;
-			System.out.println("[TriggerPruningParams] building word => lex List<FI> inverted index...");
-			lexFIsRevIndex = new HashMap<String, List<FrameInstance>>();
-			int numFI = 0;
-			FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
-			for(FNParse p : fip.getParsedSentences()) {
-				Sentence s = p.getSentence();
-				for(FrameInstance fi : p.getFrameInstances()) {
-					Span target = fi.getTarget();
-					for(int i=target.start; i<target.end; i++) {
-						String word = s.getWord(i);
-						List<FrameInstance> lfi = lexFIsRevIndex.get(word);
-						if(lfi == null) {
-							lfi = new ArrayList<FrameInstance>();
-							lfi.add(fi);
-							lexFIsRevIndex.put(word, lfi);
-						}
-						else lfi.add(fi);
-						numFI++;
-					}
-				}
-			}
-			System.out.printf("[TriggerPruningParams] word => lex List<FI> contains %d keys and %.1f FI/word\n",
-					lexFIsRevIndex.size(), ((double)numFI) / lexFIsRevIndex.size());
+//			System.out.println("[TriggerPruningParams] building word => lex List<FI> inverted index...");
+//			lexFIsRevIndex = new HashMap<String, List<FrameInstance>>();
+//			int numFI = 0;
+//			FrameInstanceProvider fip = FileFrameInstanceProvider.fn15lexFIP;
+//			for(FNParse p : fip.getParsedSentences()) {
+//				Sentence s = p.getSentence();
+//				for(FrameInstance fi : p.getFrameInstances()) {
+//					Span target = fi.getTarget();
+//					for(int i=target.start; i<target.end; i++) {
+//						String word = s.getWord(i);
+//						List<FrameInstance> lfi = lexFIsRevIndex.get(word);
+//						if(lfi == null) {
+//							lfi = new ArrayList<FrameInstance>();
+//							lfi.add(fi);
+//							lexFIsRevIndex.put(word, lfi);
+//						}
+//						else lfi.add(fi);
+//						numFI++;
+//					}
+//				}
+//			}
+//			System.out.printf("[TriggerPruningParams] word => lex List<FI> contains %d keys and %.1f FI/word\n",
+//					lexFIsRevIndex.size(), ((double)numFI) / lexFIsRevIndex.size());
 		}
 		return lexFIsRevIndex;
 	}

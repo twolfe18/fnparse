@@ -43,4 +43,18 @@ public class FNTagging implements HasId {
 
 	@Override
 	public String getId() { return sent.getId(); }
+	
+	@Override
+	public int hashCode() {
+		return sent.hashCode() ^ (1 << frameInstances.size());
+	}
+	
+	@Override
+	public boolean equals(Object other) {
+		if(other instanceof FNTagging) {
+			FNTagging t = (FNTagging) other;
+			return sent.equals(t.sent) && frameInstances.equals(t.frameInstances);
+		}
+		else return false;
+	}
 }

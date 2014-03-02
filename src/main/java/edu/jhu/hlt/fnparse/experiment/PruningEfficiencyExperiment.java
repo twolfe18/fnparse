@@ -346,9 +346,10 @@ public class PruningEfficiencyExperiment {
 		System.out.println("[PruningExperiment] reading in the data...");
 		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
 		DataSplitter ds = new DataSplitter();
+		List<FNParse> all = DataUtil.iter2list(fip.getParsedSentences());
 		List<FNParse> trainDev = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
-		ds.split(fip.getParsedSentences(), trainDev, test, 0.1d, "pruning-data-trainDev");
+		ds.split(all, trainDev, test, 0.1d, "pruning-data-trainDev");
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> dev = new ArrayList<FNParse>();
 		ds.split(trainDev, train, dev, 0.2d, "pruning-data-train");

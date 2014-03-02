@@ -77,7 +77,7 @@ public class ParserTests {
 		instances.add(jumpInst);
 		System.out.println("[setupDummyParse] adding instance of " + jump);
 		
-		dummyParse = new FNParse(s, instances, true);
+		dummyParse = new FNParse(s, instances);
 		System.out.println("[ParserTests] dummy parse:");
 		System.out.println(Describe.fnParse(dummyParse));
 	}

@@ -1,6 +1,9 @@
 package edu.jhu.hlt.fnparse.experiment;
 
+import java.util.*;
+
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -31,8 +34,10 @@ public class SyntacticLocality {
 		int numArgsParent = 0;		// of target
 		int numArgsSelf = 0;		// overlap(target, argument) != emptySet
 		
-		FileFrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
-		for(FNParse parse : fip) {
+		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
+		Iterator<FNParse> iter = fip.getParsedSentences();
+		while(iter.hasNext()) {
+			FNParse parse = iter.next();
 			Sentence s = parse.getSentence();
 			for(FrameInstance fi : parse.getFrameInstances()) {
 				Span t = fi.getTarget();

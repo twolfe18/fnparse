@@ -15,9 +15,10 @@ public class ParserExperiment {
 	public static final boolean hurryUp = true;
 	public static final File modelDir = new File("experiments/targetId");
 	
-	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
+	public static Set<LexicalUnit> observedTriggers(Iterator<? extends FNTagging> instances, Frame f) {
 		Set<LexicalUnit> lexInstance = new HashSet<LexicalUnit>();
-		for(FNTagging p : instances) {
+		while(instances.hasNext()) {
+			FNTagging p = instances.next();
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
 				if(fi.getFrame().equals(f) && target.width() == 1)
@@ -135,7 +136,7 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		
 		// get the data
 		DataSplitter ds = new DataSplitter();
-		List<FNParse> all = FileFrameInstanceProvider.fn15trainFIP.getParsedSentences();
+		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
@@ -182,7 +183,7 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		
 		// get the data
 		DataSplitter ds = new DataSplitter();
-		List<FNParse> all = FileFrameInstanceProvider.fn15trainFIP.getParsedSentences();
+		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");

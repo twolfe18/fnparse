@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.data;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -75,5 +76,11 @@ public class DataUtil {
 		catch(Exception e) {
 			throw new RuntimeException(e);
 		}
+	}
+	
+	public static <T> List<T> iter2list(Iterator<T> iter) {
+		List<T> list = new ArrayList<T>();
+		while(iter.hasNext()) list.add(iter.next());
+		return list;
 	}
 }

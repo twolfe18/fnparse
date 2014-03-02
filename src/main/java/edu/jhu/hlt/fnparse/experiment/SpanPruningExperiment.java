@@ -60,15 +60,16 @@ public class SpanPruningExperiment {
 		
 		// split up the train data
 		System.out.println("[" + SpanPruningExperiment.class.getName() + "] getting the data...");
+		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> dev = new ArrayList<FNParse>();
 		DataSplitter ds = new DataSplitter();
-		ds.split(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences(), train, dev, 0.25d, "span-pruning-exp");
+		ds.split(all, train, dev, 0.25d, "span-pruning-exp");
 		
 		// use some train data and all the lex data for extracting target spans
 		List<FNParse> extractTargetsFrom = new ArrayList<FNParse>();
 		extractTargetsFrom.addAll(train);
-		extractTargetsFrom.addAll(FileFrameInstanceProvider.fn15lexFIP.getParsedSentences());
+		extractTargetsFrom.addAll(DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedSentences()));
 		
 		System.out.println("[" + SpanPruningExperiment.class.getName() + "] extracting spans...");
 		Set<List<String>> allSpans = new HashSet<List<String>>();

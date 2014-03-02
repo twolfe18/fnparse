@@ -8,8 +8,6 @@ import java.util.List;
  * @author travis
  */
 public class FNParse extends FNTagging {
-
-	private boolean isFullParse;
 	
 	/**
 	 * @param s is the Sentence that has been parsed
@@ -18,16 +16,11 @@ public class FNParse extends FNTagging {
 	 *        appear in this sentence. A case where this will be false is for lexical examples
 	 *        from Framenet (where only one Frame is annotated).
 	 */
-	public FNParse(Sentence s, List<FrameInstance> frameInstances, boolean isFullParse) {
+	public FNParse(Sentence s, List<FrameInstance> frameInstances) {
 		super(s, frameInstances);
-		this.isFullParse = isFullParse;
 		for(FrameInstance fi : frameInstances)
 			if(fi.onlyTargetLabeled())
 				throw new IllegalArgumentException();
-	}
-
-	public boolean isFullParse() {
-		return isFullParse;
 	}
 	
 }
