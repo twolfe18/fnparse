@@ -55,5 +55,21 @@ public class PosUtil {
 		}
 		return frameNetPosToAllPennTags;
 	}
+	
+	private static Map<String, String> penn2frameNetPos;
+	public static Map<String, String> getPennToFrameNetTags() {
+		if(penn2frameNetPos == null) {
+			penn2frameNetPos = new HashMap<String, String>();
+			for(Map.Entry<String, List<String>> x : getFrameNetPosToAllPennTags().entrySet()) {
+				String fnTag = x.getKey();
+				for(String pennTag : x.getValue())
+					penn2frameNetPos.put(pennTag, fnTag);
+			}
+			
+			// there is only one non-bijective case:
+			penn2frameNetPos.put("IN", "PREP");
+		}
+		return penn2frameNetPos;
+	}
 
 }

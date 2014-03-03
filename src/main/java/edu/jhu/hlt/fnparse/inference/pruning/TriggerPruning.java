@@ -106,53 +106,53 @@ public class TriggerPruning {
 			}
 			
 			// check for similarity to an existing lex FI example
-			List<FrameInstance> lexFIs = params.data.getWord2FrameInstances().get(sent.getWord(index));
-			if(lexFIs == null)
-				b(fv, "doesnt-match-any-lexFI", 2d);
-			else {
-				int n = lexFIs.size();
-				b(fv, "#lexFI-matches=" + n);
-				if(n >= 2) b(fv, "#lexFI-matches>=2");
-				if(n >= 3) b(fv, "#lexFI-matches>=3");
-				if(n >= 4) b(fv, "#lexFI-matches>=4");
-				if(n >= 5) b(fv, "#lexFI-matches>=5");
-				if(n >= 10) b(fv, "#lexFI-matches>=10");
-				if(n >= 20) b(fv, "#lexFI-matches>=20");
-				if(n >= 40) b(fv, "#lexFI-matches>=40");
-				if(!simple) {
-					for(FrameInstance fi : lexFIs) {
-						b(fv, "#lexFI-match-for-" + fi.getFrame().getName());
-						// try to expand l/r
-						// TODO i want LCS, but that seems too slow
-						// how about intersection of ngrams from the target?
-						boolean takeWord = true;
-						boolean takePos = false;
-						Set<String> fiW = allNgrams(fi.getTarget(), fi.getSentence(), maxNgram, takeWord, takePos);
-						int left = index, right = index+1;
-						while(true) {
-							if(left >= 0 &&
-									fiW.contains(getNgramStr(left-1, right, sent, takeWord, takePos))) {
-								left--;
-								continue;
-							}
-							if(right <= sent.size() &&
-									fiW.contains(getNgramStr(left, right+1, sent, takeWord, takePos))) {
-								right++;
-								continue;
-							}
-							break;
-						}
-						Set<String> fiWintersected = allNgrams(Span.getSpan(left, right), sent, maxNgram, takeWord, takePos);
-						if(fiWintersected.size() >= 2) b(fv, "#lexFI-matchin-ngrams>=2");
-						if(fiWintersected.size() >= 4) b(fv, "#lexFI-matchin-ngrams>=4");
-						if(fiWintersected.size() >= 6) b(fv, "#lexFI-matchin-ngrams>=6");
-						if(fiWintersected.size() >= 8) b(fv, "#lexFI-matchin-ngrams>=8");
-						if(fiWintersected.size() >= 12) b(fv, "#lexFI-matchin-ngrams>=12");
-						for(String ngram : fiWintersected)
-							b(fv, "lexFI-matchin-ngram=" + ngram);
-					}
-				}
-			}
+//			List<FrameInstance> lexFIs = params.data.getWord2FrameInstances().get(sent.getWord(index));
+//			if(lexFIs == null)
+//				b(fv, "doesnt-match-any-lexFI", 2d);
+//			else {
+//				int n = lexFIs.size();
+//				b(fv, "#lexFI-matches=" + n);
+//				if(n >= 2) b(fv, "#lexFI-matches>=2");
+//				if(n >= 3) b(fv, "#lexFI-matches>=3");
+//				if(n >= 4) b(fv, "#lexFI-matches>=4");
+//				if(n >= 5) b(fv, "#lexFI-matches>=5");
+//				if(n >= 10) b(fv, "#lexFI-matches>=10");
+//				if(n >= 20) b(fv, "#lexFI-matches>=20");
+//				if(n >= 40) b(fv, "#lexFI-matches>=40");
+//				if(!simple) {
+//					for(FrameInstance fi : lexFIs) {
+//						b(fv, "#lexFI-match-for-" + fi.getFrame().getName());
+//						// try to expand l/r
+//						// TODO i want LCS, but that seems too slow
+//						// how about intersection of ngrams from the target?
+//						boolean takeWord = true;
+//						boolean takePos = false;
+//						Set<String> fiW = allNgrams(fi.getTarget(), fi.getSentence(), maxNgram, takeWord, takePos);
+//						int left = index, right = index+1;
+//						while(true) {
+//							if(left >= 0 &&
+//									fiW.contains(getNgramStr(left-1, right, sent, takeWord, takePos))) {
+//								left--;
+//								continue;
+//							}
+//							if(right <= sent.size() &&
+//									fiW.contains(getNgramStr(left, right+1, sent, takeWord, takePos))) {
+//								right++;
+//								continue;
+//							}
+//							break;
+//						}
+//						Set<String> fiWintersected = allNgrams(Span.getSpan(left, right), sent, maxNgram, takeWord, takePos);
+//						if(fiWintersected.size() >= 2) b(fv, "#lexFI-matchin-ngrams>=2");
+//						if(fiWintersected.size() >= 4) b(fv, "#lexFI-matchin-ngrams>=4");
+//						if(fiWintersected.size() >= 6) b(fv, "#lexFI-matchin-ngrams>=6");
+//						if(fiWintersected.size() >= 8) b(fv, "#lexFI-matchin-ngrams>=8");
+//						if(fiWintersected.size() >= 12) b(fv, "#lexFI-matchin-ngrams>=12");
+//						for(String ngram : fiWintersected)
+//							b(fv, "lexFI-matchin-ngram=" + ngram);
+//					}
+//				}
+//			}
 			
 			
 			// parents and grandparents in the dep tree

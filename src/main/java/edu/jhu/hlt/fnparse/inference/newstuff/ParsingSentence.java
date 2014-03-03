@@ -15,7 +15,6 @@ import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
-import edu.jhu.prim.util.math.FastMath;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -113,7 +112,7 @@ public class ParsingSentence {
 		MbrDecoder decoder = new MbrDecoder(prm);
 		FgExample fge1 = this.getFgExample();
 		BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
-		VarConfig mbr1Conf = decoder.getMbrVarConfig();
+		//VarConfig mbr1Conf = decoder.getMbrVarConfig();
 		Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
 		
 		List<Integer> dFrameIdx = new ArrayList<Integer>();
@@ -281,6 +280,31 @@ public class ParsingSentence {
 		}
 	}
 	
+	/**
+	 * based on our target extraction and possible frame triage,
+	 * what is the best recall we could hope to get?
+	 */
+	public double computeMaxTargetRecall(FNParse p) {
+		final boolean debug = true;
+		int reachable = 0, total = 0;
+		for(FrameInstance fi : p.getFrameInstances()) {
+			if(couldRecallTarget(fi)) reachable++;
+			else if(debug) {
+				System.err.printf("[ParsingSentence computeMaxTargetRecall] could not "
+						+ "recover the frame %s listed in %s\n", fi.getFrame(), p.getSentence());
+			}
+			total++;
+		}
+		return ((double)reachable) / total;
+	}
+	private boolean couldRecallTarget(FrameInstance fi) {
+		Span target = fi.getTarget();
+		if(target.width() > 1) return false;
+		FrameVar fv = frameVars[target.start];
+		if(fv == null) return false;
+		return fv.getFrames().contains(fi.getFrame());
+	}
+	
 	
 	/**
 	 * Given a word in a sentence, extract the set of frames it might evoke.
@@ -291,6 +315,10 @@ public class ParsingSentence {
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
+		
+		if(s.getWord(headIdx).equals("later")) {
+			System.out.println("debugging");
+		}
 		
 		Set<Frame> uniqFrames = new HashSet<Frame>();
 		List<Frame> frameMatches = new ArrayList<Frame>();
@@ -303,6 +331,7 @@ public class ParsingSentence {
 		final int maxPrototypesPerFrame = 30;
 		Counts<Frame> numPrototypes = new Counts<Frame>();
 		
+		// get prototypes/frames from the LEX examples
 		Map<String, List<FrameInstance>> stem2prototypes = params.targetPruningData.getPrototypesByStem();
 		IRAMDictionary wnDict = params.targetPruningData.getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
@@ -322,54 +351,22 @@ public class ParsingSentence {
 			}
 		}
 		
-		// OLDER
-//		List<Frame> matchesByLU = params.targetPruningData.getFramesFromLU(head);
-//		List<FrameInstance> matchesByWord = params.targetPruningData.getFrameInstanceForWord(head.word);
-//		for(Frame f : matchesByLU) {
-//			if(uniqFrames.add(f)) {
-//				List<FrameInstance> ps = params.prototypes.get(f);	// THIS ALSO COMES FROM LEX!
-//				if(ps != null) {
-//					if(ps.size() > maxLexPrototypesPerFrame)
-//						ps = DataUtil.reservoirSample(ps, maxLexPrototypesPerFrame);
-//					prototypes.addAll(ps);
-//				}
-//				if(prototypes.size() > 500) {
-//					System.err.println("poop1");
-//				}
-//				frameMatches.add(f);
-//			}
-//		}
-//		for(FrameInstance fi : matchesByWord) {	// from lex examples
-//			Frame f = fi.getFrame();
-//			if(uniqFrames.add(f))
-//				frameMatches.add(f);
-//			//prototypes.add(fi);
-//		}
-//		if(prototypes.size() > 500) {
-//			System.err.println("poop2");
-//		}
-		
-		
-		// OLDEST
-//		for(Frame f : params.frameIndex.allFrames()) {
-//			// check if this matches a lexical unit for this frame
-//			for(int i = 0; i < f.numLexicalUnits(); i++) {
-//				if(LexicalUnit.approxMatch(head, f.getLexicalUnit(i))) {
-//					frameMatches.add(f);
-//					List<FrameInstance> ps = params.prototypes.get(f); 
-//					if(ps != null) prototypes.addAll(ps);
-//					break;
-//				}
-//			}
-//		}
-		
-		if(frameMatches.size() == 1) {
-			//System.err.println("[makeFrameVars] WARNING: no frames available for " + s.getLU(headIdx));
-			return null;
+		// get frames that list this as an LU
+		//LexicalUnit fnLU = s.getFNStyleLU(headIdx, params.targetPruningData.getWordnetDict());
+		List<Frame> listedAsLUs = params.targetPruningData.getFramesFromLU(s.getLU(headIdx));
+		for(Frame f : listedAsLUs) {
+			if(uniqFrames.add(f)) {
+				frameMatches.add(f);
+				//prototypes.add(???);
+			}
 		}
 		
-		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
-		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		
+		if(frameMatches.size() == 1)	// nullFrame
+			return null;
+		
+//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
+//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
 		
 		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}

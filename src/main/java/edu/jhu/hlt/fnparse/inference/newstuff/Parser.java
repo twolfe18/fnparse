@@ -1,11 +1,15 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.util.ArrayList;
+import java.util.List;
 
-import org.apache.log4j.Logger;
 import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.inf.BeliefPropagation;
@@ -17,11 +21,17 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HeterogeneousL2;
-import edu.jhu.optimize.*;
+import edu.jhu.hlt.fnparse.util.Avg;
+import edu.jhu.optimize.AdaGrad;
+import edu.jhu.optimize.Regularizer;
+import edu.jhu.optimize.SGD;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
@@ -134,12 +144,24 @@ public class Parser {
 		params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		
+		Avg macroTargetRecall = new Avg();
+		Avg microTargetRecall = new Avg();
+		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
+			
 			ParsingSentence s = new ParsingSentence(parse.getSentence(), params);
 			s.setGold(parse);
 			exs.add(s.getFgExample());
+
+			// compute upper bound on target recall
+			double recall = s.computeMaxTargetRecall(parse);
+			macroTargetRecall.accum(recall);
+			microTargetRecall.accum(recall, parse.numFrameInstances());
 		}
+		
+		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
+				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
 		
 		try { params.model = params.trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {

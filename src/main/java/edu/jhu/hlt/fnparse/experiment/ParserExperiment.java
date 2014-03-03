@@ -18,11 +18,11 @@ public class ParserExperiment {
 	
 	public static void main(String[] args) {
 		
-		fnTrain = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
-		fnLex = DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences());
-		mainDebugging(args);
-		fnTrain = null;
-		fnLex = null;
+//		fnTrain = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
+//		fnLex = DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences());
+//		mainDebugging(args);
+//		fnTrain = null;
+//		fnLex = null;
 		
 		mainOld(args);
 	}
@@ -188,8 +188,8 @@ public class ParserExperiment {
 //		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 //		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 1000;
-		int nTest = 125;
+		int nTrain = 200;
+		int nTest = 50;
 		//if(hurryUp)  {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);

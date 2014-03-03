@@ -3,6 +3,8 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.*;
 
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.mit.jwi.IDictionary;
+import edu.mit.jwi.morph.WordnetStemmer;
 
 public final class Sentence implements HasId {
 	
@@ -52,7 +54,30 @@ public final class Sentence implements HasId {
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }
 	
+	
+	/**
+	 * uses the lemma instead of the word, and converts POS to
+	 * a FrameNet style POS.
+	 */
+	public LexicalUnit getFNStyleLU(int i, IDictionary dict) {
+		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
+		if(fnTag == null) fnTag = "couldn't convert Penn tag of " + pos[i];
+		// wow, the lemmas i have right now are goofy
+		// "later" -> "lat"
+		// lets try wordnet's stemmer instead
+		WordnetStemmer stemmer = new WordnetStemmer(dict);
+		List<String> allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
+		String word = allStems.isEmpty() ? tokens[i] : allStems.get(0);
+		System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s)\n", tokens[i], word, lemmas[i], allStems);
+		return new LexicalUnit(word, fnTag);
+	}
+	
+	/**
+	 * gives you the original word (no case change or anything),
+	 * along with the POS tag (your only guarantee is that this is upper case).
+	 */
 	public LexicalUnit getLU(int i) { return new LexicalUnit(tokens[i], pos[i]); }
+	
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
 	public String getPos(int i) { return pos[i]; }
