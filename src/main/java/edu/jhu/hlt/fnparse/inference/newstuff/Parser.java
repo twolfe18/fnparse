@@ -141,11 +141,14 @@ public class Parser {
 		int numParams = 5 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
-		params.model = new FgModel(numParams);
+		if(params.model == null)
+			params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		
 		Avg macroTargetRecall = new Avg();
 		Avg microTargetRecall = new Avg();
+		Avg framesPerTarget = new Avg();
+		Avg targetsPerSent = new Avg();
 		
 		FgExampleMemoryStore exs = new FgExampleMemoryStore();
 		for(FNParse parse : examples) {
@@ -158,10 +161,20 @@ public class Parser {
 			double recall = s.computeMaxTargetRecall(parse);
 			macroTargetRecall.accum(recall);
 			microTargetRecall.accum(recall, parse.numFrameInstances());
+			
+			int numVars = 0;
+			for(FrameVar fv : s.frameVars) {
+				if(fv == null) continue;
+				framesPerTarget.accum(fv.getFrames().size());
+				numVars++;
+			}
+			targetsPerSent.accum(numVars);
 		}
 		
 		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
 				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
+		System.out.printf("[train] frames/target=%.2f targets/sent=%.2f total-#targets=%d\n",
+				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.sum());
 		
 		try { params.model = params.trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {

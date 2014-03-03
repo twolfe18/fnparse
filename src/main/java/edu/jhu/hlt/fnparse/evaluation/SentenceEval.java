@@ -17,8 +17,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
  */
 public class SentenceEval {
 
-	//private Sentence gold, hyp;
-	
 	/*
 	 * indexed with [gold][hyp]
 	 * e.g. targets[1][0] = # false negatives

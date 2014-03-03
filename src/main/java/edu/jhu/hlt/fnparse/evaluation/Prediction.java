@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  */
 class Prediction {
 	
-	public final Span span;
+	public final Span span;		// could represent a target or a arg/role
 	public final Frame frame;
 	public final int roleIdx;
 	

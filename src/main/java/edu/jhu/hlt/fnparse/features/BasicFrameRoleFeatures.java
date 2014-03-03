@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.util.Alphabet;
 

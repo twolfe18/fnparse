@@ -45,6 +45,12 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		return dontRegularize;
 	}
 	
+	private boolean softMatch(String headWord, String luWord) {
+		headWord = headWord.toLowerCase();
+		luWord = luWord.substring(0, Math.min(4, luWord.length())).toLowerCase();
+		return headWord.startsWith(luWord);
+	}
+	
 	@Override
 	public FeatureVector getFeatures(final Frame f, final int head, final Sentence s) {
 		
@@ -72,11 +78,13 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, fs, "-sentence-length/8=", String.valueOf(n/8));
 		
 		boolean matchesAnLU = false;
+		boolean softMatch = false;
 		final int nLU = f.numLexicalUnits();
 		LexicalUnit whichLU = null;
 		for(int i=0; i<nLU && !matchesAnLU; i++) {
 			whichLU = f.getLexicalUnit(i);
-			matchesAnLU |= headLU.equals(whichLU);	// TODO lemmatized variants
+			softMatch |= softMatch(headLU.word, whichLU.word);
+			matchesAnLU |= LexicalUnit.approxMatch(headLU, whichLU);
 		}
 		if(matchesAnLU) {
 			b(v, luMatch);
@@ -88,6 +96,17 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			b(v, luMatch, fs, whichLU.pos);
 			b(v, luMatch, fsc, whichLU.word);
 			b(v, luMatch, fsc, whichLU.pos);
+		}
+		if(softMatch) {
+			b(v, "softMatch");
+			b(v, "softMatch", whichLU.word);
+			b(v, "softMatch", whichLU.pos);
+			b(v, "softMatch", fs);
+			b(v, "softMatch", fsc);
+			b(v, "softMatch", fs, whichLU.word);
+			b(v, "softMatch", fs, whichLU.pos);
+			b(v, "softMatch", fsc, whichLU.word);
+			b(v, "softMatch", fsc, whichLU.pos);
 		}
 		
 		// parent words
@@ -140,59 +159,87 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		
 		
 		// TODO wordnet
-		
+		// synsetId * frame
+		// LU in synset of target
+		// 
 		
 		// pairs of words in sentence
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String w = s.getWord(i);
-			b(v, fs, w, "appears-in-sentence");
-			b(v, fsc, w, "appears-in-sentence");
+			b(v, 0.75d, fs, w, "appears-in-sentence");
+			b(v, 0.75d, fsc, w, "appears-in-sentence");
 		}
-		pairFeatures(fs, bag, v, "-in-sentence");
-		pairFeatures(fsc, bag, v, "-in-sentence");
+		pairFeatures(fs, 0.75d, bag, v, "-in-sentence");
+		pairFeatures(fsc, 0.75d, bag, v, "-in-sentence");
 		
 		// pairs of words on left
 		bag.clear();
 		for(int i=0; i<head; i++) {
 			String w = s.getWord(i);
-			b(v, fs, w, "appears-to-the-left");
-			b(v, fsc, w, "appears-to-the-left");
+			b(v, 0.5d, fs, w, "appears-to-the-left");
+			b(v, 0.5d, fsc, w, "appears-to-the-left");
 		}
 		if(bag.size() == 0) {
-			b(v, fs, "nothing-to-the-left");
-			b(v, fsc, "nothing-to-the-left");
+			b(v, 0.5d, fs, "nothing-to-the-left");
+			b(v, 0.5d, fsc, "nothing-to-the-left");
 		}
-		else pairFeatures(fs, bag, v, "-to-the-left");
+		else pairFeatures(fs, 0.5d, bag, v, "-to-the-left");
 		
 		// pairs of words on right
 		bag.clear();
 		for(int i=head+1; i<s.size(); i++) {
 			String w = s.getWord(i);
-			b(v, fs, w, "appears-to-the-right");
-			b(v, fsc, w, "appears-to-the-right");
+			b(v, 0.5d, fs, w, "appears-to-the-right");
+			b(v, 0.5d, fsc, w, "appears-to-the-right");
 		}
 		if(bag.size() == 0) {
-			b(v, fs, "nothing-to-the-right");
-			b(v, fsc, "nothing-to-the-right");
+			b(v, 0.5d, fs, "nothing-to-the-right");
+			b(v, 0.5d, fsc, "nothing-to-the-right");
 		}
-		else pairFeatures(fs, bag, v, "-to-the-right");
+		else pairFeatures(fs, 0.5d, bag, v, "-to-the-right");
 		
 		// word/pos to the left/right of the extent
 		LexicalUnit l = AbstractFeatures.getLUSafe(head-1, s);
+		LexicalUnit ll = AbstractFeatures.getLUSafe(head-2, s);
 		b(v, fs, "to-the-left=", l.getFullString());
 		b(v, fs, "to-the-left=", l.word);
 		b(v, fs, "to-the-left=", l.pos);
+		b(v, fs, "to-the-left=", ll.word, l.getFullString());
+		b(v, fs, "to-the-left=", ll.pos, l.getFullString());
+		b(v, fs, "to-the-left=", ll.word, l.word);
+		b(v, fs, "to-the-left=", ll.pos, l.word);
+		b(v, fs, "to-the-left=", ll.pos, l.pos);
+		b(v, fs, "to-the-left=", ll.word, l.pos);
 		b(v, fsc, "to-the-left=", l.getFullString());
 		b(v, fsc, "to-the-left=", l.word);
 		b(v, fsc, "to-the-left=", l.pos);
-		LexicalUnit r = AbstractFeatures.getLUSafe(head-1, s);
+		b(v, fsc, "to-the-left=", ll.word, l.getFullString());
+		b(v, fsc, "to-the-left=", ll.pos, l.getFullString());
+		b(v, fsc, "to-the-left=", ll.word, l.word);
+		b(v, fsc, "to-the-left=", ll.pos, l.word);
+		b(v, fsc, "to-the-left=", ll.pos, l.pos);
+		b(v, fsc, "to-the-left=", ll.word, l.pos);
+		LexicalUnit r = AbstractFeatures.getLUSafe(head+1, s);
+		LexicalUnit rr = AbstractFeatures.getLUSafe(head+2, s);
 		b(v, fs, "to-the-right=", r.getFullString());
 		b(v, fs, "to-the-right=", r.word);
 		b(v, fs, "to-the-right=", r.pos);
+		b(v, fs, "to-the-right=", rr.word, r.getFullString());
+		b(v, fs, "to-the-right=", rr.pos, r.getFullString());
+		b(v, fs, "to-the-right=", rr.word, r.word);
+		b(v, fs, "to-the-right=", rr.pos, r.word);
+		b(v, fs, "to-the-right=", rr.pos, r.pos);
+		b(v, fs, "to-the-right=", rr.word, r.pos);
 		b(v, fsc, "to-the-right=", r.getFullString());
 		b(v, fsc, "to-the-right=", r.word);
 		b(v, fsc, "to-the-right=", r.pos);
+		b(v, fsc, "to-the-right=", rr.word, r.getFullString());
+		b(v, fsc, "to-the-right=", rr.pos, r.getFullString());
+		b(v, fsc, "to-the-right=", rr.word, r.word);
+		b(v, fsc, "to-the-right=", rr.pos, r.word);
+		b(v, fsc, "to-the-right=", rr.pos, r.pos);
+		b(v, fsc, "to-the-right=", rr.word, r.pos);
 		
 		//System.out.println("fv.size=" + v.size());
 		full.stop();
@@ -212,7 +259,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		}
 	}
 	
-	private void pairFeatures(String fs, Set<String> items, FeatureVector v, String meta) {
+	private void pairFeatures(String fs, double weight, Set<String> items, FeatureVector v, String meta) {
 		List<String> l = new ArrayList<String>();
 		l.addAll(items);
 		Collections.sort(l);
@@ -221,7 +268,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			String li = l.get(i);
 			for(int j=i+1; j<n; j++) {
 				String lj = l.get(j);
-				b(v, fs, li, lj, "appears", meta);
+				b(v, weight, fs, li, lj, "appears", meta);
 			}
 		}
 	}

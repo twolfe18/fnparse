@@ -188,8 +188,8 @@ public class ParserExperiment {
 //		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 //		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 200;
-		int nTest = 50;
+		int nTrain = 1000;
+		int nTest = 100;
 		//if(hurryUp)  {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
@@ -201,12 +201,12 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
-		for(int epoch=0; epoch<10; epoch++) {
+		for(int epoch=0; epoch<8; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 1;
 			int batchSize = 1;
-			double lrMult = 4d / (2d + epoch);
-			double regularizerMult = 5d;
+			double lrMult = 4d / (5d + epoch);
+			double regularizerMult = 2d;
 			parser.train(train, passes, batchSize, lrMult, regularizerMult);
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
