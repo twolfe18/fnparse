@@ -66,21 +66,30 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		return this.getClass().getName();
 	}
 	
-	protected final void b(FeatureVector fv, String featureName) {
-		b(fv, featureName, 1d);
+	protected final int b(FeatureVector fv, String... featureNamePieces) {
+		return b(fv, 1d, featureNamePieces);
 	}
 	
-	protected final void b(FeatureVector fv, String featureName, double weight) {
+	/**
+	 * returns the index of the feature being added.
+	 * if there are refinements, those indices will not be returned.
+	 */
+	protected final int b(FeatureVector fv, double weight, String... featureNamePieces) {
 		
+		int idx = -1;
 		StringBuilder sn = new StringBuilder();
 		sn.append(getName());
-		sn.append("_");
-		sn.append(featureName);
+		for(String fns : featureNamePieces) {
+			sn.append("_");
+			sn.append(fns);
+		}
 		String s = sn.toString();
-		if(featIdx.isGrowing())
-			fv.add(featIdx.lookupIndex(s, true), weight);
+		if(featIdx.isGrowing()) {
+			idx = featIdx.lookupIndex(s, true);
+			fv.add(idx, weight);
+		}
 		else {
-			int idx = featIdx.lookupIndex(s, false);
+			idx = featIdx.lookupIndex(s, false);
 			if(idx >= 0) fv.add(idx, weight);
 			//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 		}
@@ -91,5 +100,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 				fv.add(featIdx.lookupIndex(s + "_" + refinements.get(i), true),
 						weight * weights.get(i));
 		}
+		
+		return idx;
 	}
 }

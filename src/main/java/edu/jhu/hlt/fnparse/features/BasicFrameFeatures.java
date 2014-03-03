@@ -8,62 +8,41 @@ import java.util.List;
 import java.util.Set;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.Features.*;
+import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
 
 public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
 	
-	public BasicFrameFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
-	}
-
 	public final boolean verbose = false;
 	public final boolean debug = true;
 	
-	public static class Timer {
-		private String id;
-		private int count;
-		private long time;
-		private long lastStart = -1;
-		private int printIterval;
-		
-		public Timer(String id) {
-			this.id = id;
-			printIterval = -1;
-		}
-		public Timer(String id, int printInterval) {
-			this.id = id;
-			this.printIterval = printInterval;
-		}
-		
-		public void start() {
-			lastStart = System.currentTimeMillis();
-		}
-		
-		public long stop() {
-			long t = System.currentTimeMillis() - lastStart;
-			time += t;
-			count++;
-			if(printIterval > 0 && count % printIterval == 0)
-				System.out.printf("<Timer %s %.2f sec total, %.1f k call/sec\n", id, time/1000d, ((double)count)/time);
-			return t;
-		}
-		
-		public double totalTimeInSec() { return time / 1000d; }
-		
-		public static final class NoOp extends Timer {
-			public NoOp(String id) { super(id); }
-			public NoOp(String id, int printInterval)  { super(id, printInterval); }
-			public void start() {}
-			public long stop() { return -1; }
-		}
-		public static final Timer noOp = new NoOp("noOp");
-	}
-
 	public Timer full = Timer.noOp; //new Timer("all", 75000);
 	public Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public Timer childTimer = Timer.noOp; //new Timer("children", 75000);
+	
+	private static final String intercept = "intercept";
+	private static final String frameFeatPrefix = "frame=";
+	private List<Integer> dontRegularize;
+	
+	public BasicFrameFeatures(Alphabet<String> featIdx) {
+		super(featIdx);
+		
+		// compute the features that we don't want regularized
+		FeatureVector noop = new FeatureVector();
+		dontRegularize = new ArrayList<Integer>();
+		dontRegularize.add(b(noop, intercept));
+		for(Frame f : FrameIndex.getInstance().allFrames())
+			dontRegularize.add(b(noop, frameFeatPrefix, f.getName()));
+	}
+	
+	@Override
+	public List<Integer> dontRegularize() {
+		assert dontRegularize.size() > 1;
+		return dontRegularize;
+	}
 	
 	@Override
 	public FeatureVector getFeatures(final Frame f, final int head, final Sentence s) {
@@ -78,18 +57,18 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		String fs = "f=" + (debug ? f.getName() : f.getId());
 		String fsc = f == Frame.nullFrame ? "nullFrame" : "nonNullFrame";
 		
-		b(v, "intercept");
-		b(v, "frame=" + f.getName());
-		b(v, fs + "-target-head=" + headLU.getFullString());
-		b(v, fs + "-target-head=" + headLU.word);
-		b(v, fs + "-target-head=" + headLU.pos);
-		b(v, fs + "-sentence-length/2=" + (n/2));
-		b(v, fs + "-sentence-length/3=" + (n/3));
-		b(v, fs + "-sentence-length/4=" + (n/4));
-		b(v, fs + "-sentence-length/5=" + (n/5));
-		b(v, fs + "-sentence-length/6=" + (n/6));
-		b(v, fs + "-sentence-length/7=" + (n/7));
-		b(v, fs + "-sentence-length/8=" + (n/8));
+		b(v, intercept);
+		b(v, frameFeatPrefix, f.getName());
+		b(v, fs, "-target-head=", headLU.getFullString());
+		b(v, fs, "-target-head=", headLU.word);
+		b(v, fs, "-target-head=", headLU.pos);
+		b(v, fs, "-sentence-length/2=", String.valueOf(n/2));
+		b(v, fs, "-sentence-length/3=", String.valueOf(n/3));
+		b(v, fs, "-sentence-length/4=", String.valueOf(n/4));
+		b(v, fs, "-sentence-length/5=", String.valueOf(n/5));
+		b(v, fs, "-sentence-length/6=", String.valueOf(n/6));
+		b(v, fs, "-sentence-length/7=", String.valueOf(n/7));
+		b(v, fs, "-sentence-length/8=", String.valueOf(n/8));
 		
 		boolean matchesAnLU = false;
 		final int nLU = f.numLexicalUnits();

@@ -1,20 +1,13 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.Random;
-
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.heads.*;
+import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.util.Alphabet;
 
 public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFramePrototypeFeatures> implements Features.FP {
 	
-	private Random rand = new Random(9001);
-	private HeadFinder hf = new BraindeadHeadFinder();
+//	private Random rand = new Random(9001);
+//	private HeadFinder hf = new BraindeadHeadFinder();
 	
 	public BasicFramePrototypeFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
@@ -87,28 +80,28 @@ public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFrameProt
 				double ij = ((double) j) / nj;
 				double dist = Math.abs(ip - ij);
 				if(s.getWord(i).equals(p.getSentence().getWord(j))) {
-					b(fv, "word-match", 1d - dist);
-					b(fv, fs + "word-match", 1d - dist);
+					b(fv, 1d - dist, "word-match");
+					b(fv, 1d - dist, "word-match", fs);
 					int tdist = Math.abs(i - targetHeadIdx);
 					boolean l = i < targetHeadIdx;
-					b(fv, "word-match-in" + tdist, 1d - dist);
-					b(fv, fs + "word-match-in" + tdist, 1d - dist);
-					b(fv, "word-match-to" + (l ? "L" : "R"), 1d - dist);
-					b(fv, fs + "word-match-to" + (l ? "L" : "R"), 1d - dist);
-					b(fv, "word-match-like" + tdist + (l ? "L" : "R"), 1d - dist);
-					b(fv, fs + "word-match-like" + tdist + (l ? "L" : "R"), 1d - dist);
+					b(fv, 1d - dist, "word-match-in", String.valueOf(tdist));
+					b(fv, 1d - dist, "word-match-in", String.valueOf(tdist), fs);
+					b(fv, 1d - dist, "word-match-to", (l ? "L" : "R"));
+					b(fv, 1d - dist, "word-match-to", (l ? "L" : "R"), fs);
+					b(fv, 1d - dist, "word-match-like", String.valueOf(tdist), (l ? "L" : "R"));
+					b(fv, 1d - dist, "word-match-like", String.valueOf(tdist), (l ? "L" : "R"), fs);
 				}
 				if(s.getLU(i).equals(p.getSentence().getLU(j))) {
-					b(fv, "word-match-fine", 1d - dist);
-					b(fv, fs + "word-match-fine", 1d - dist);
+					b(fv, 1d - dist, "word-match-fine");
+					b(fv, 1d - dist, "word-match-fine", fs);
 					int tdist = Math.abs(i - targetHeadIdx);
 					boolean l = i < targetHeadIdx;
-					b(fv, "word-match-fine-in" + tdist, 1d - dist);
-					b(fv, fs + "word-match-fine-in" + tdist, 1d - dist);
-					b(fv, "word-match-fine-to" + (l ? "L" : "R"), 1d - dist);
-					b(fv, fs + "word-match-fine-to" + (l ? "L" : "R"), 1d - dist);
-					b(fv, "word-match-fine-like" + tdist + (l ? "L" : "R"), 1d - dist);
-					b(fv, fs + "word-match-fine-like" + tdist + (l ? "L" : "R"), 1d - dist);
+					b(fv, 1d - dist, "word-match-fine-in", String.valueOf(tdist));
+					b(fv, 1d - dist, "word-match-fine-in", String.valueOf(tdist), fs);
+					b(fv, 1d - dist, "word-match-fine-to", (l ? "L" : "R"));
+					b(fv, 1d - dist, "word-match-fine-to", (l ? "L" : "R"), fs);
+					b(fv, 1d - dist, "word-match-fine-like", String.valueOf(tdist), (l ? "L" : "R"));
+					b(fv, 1d - dist, "word-match-fine-like", String.valueOf(tdist), (l ? "L" : "R"), fs);
 				}
 			}
 		}
@@ -116,13 +109,13 @@ public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFrameProt
 		// multi purpose latent prototypes
 		if(p instanceof FrameInstance.Prototype) {
 			FrameInstance.Prototype pp = (FrameInstance.Prototype) p;
-			b(fv, "proto=" + pp.id);
-			b(fv, "proto=" + pp.id + "_word=" + head.word);
-			b(fv, "proto=" + pp.id + "_word=" + head.pos);
-			b(fv, fs + "_proto=" + pp.id);
-			b(fv, fs + "_proto=" + pp.id + "_word=" + head.word);
-			b(fv, fs + "_proto=" + pp.id + "_word=" + head.pos);
-		}	
+			b(fv, "proto=", pp.id);
+			b(fv, "proto=", pp.id, fs);
+			b(fv, "proto=", pp.id, "word=", head.word);
+			b(fv, "proto=", pp.id, "word=", head.word, fs);
+			b(fv, "proto=", pp.id, "word=", head.pos);
+			b(fv, "proto=", pp.id, "word=", head.pos, fs);
+		}
 		
 		return fv;
 	}
