@@ -34,6 +34,15 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 		private Map<String, Frame> frameByName;
 		
 		public FIIterator(File frameFile, File conllFile) {
+			
+			// I need to print who is calling this iterator function so I can figure out why I'm using so much memory
+			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+			System.err.println("[FIIterator] iterating over " +
+					frameFile.getPath() + " and " + conllFile.getPath());
+			int n = Math.min(stack.length, 15);
+			for(int i=0; i<n; i++)
+				System.err.println("\t" + stack[i]);
+			
 			try {
 				litrFrames = new LineIterator(new FileReader(frameFile));
 				litrConll = new LineIterator(new FileReader(conllFile));
@@ -145,19 +154,10 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				Frame f = frameByName.get(framename);
 				Span[] roleSpans = new Span[f.numRoles()];
 				Arrays.fill(roleSpans, Span.nullSpan);
-//				int countNonNullSpans = 0;
 				for(int i=0; i<roleSpans.length; i++){
 					Span tmp = triggeredRoles.get(f.getRole(i));
-					if(tmp == null)
-						tmp = Span.nullSpan;
-//					else
-//						countNonNullSpans++;
-					roleSpans[i] = tmp;
+					if(tmp != null) roleSpans[i] = tmp;					
 				}
-				// Prepare fi, basically fi contains one specific trigger and all its roles.
-//				FrameInstance fi = countNonNullSpans > 0
-//					? FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s)
-//					: FrameInstance.frameMention(f, targetSpan, s);
 				FrameInstance fi = FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s);
 				
 				// Add fi to the FrameInstances list before updating the prev[VAR] with cur[VAR]
@@ -234,14 +234,6 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 	@Override
 	public Iterator<FNParse> getParsedSentences() {
-		
-//		// I need to print who is calling this iterator function so I can figure out why I'm using so much memory
-//		StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-//		System.err.println("[FileFrameInstanceProvider] this=" + this);
-//		int n = Math.min(stack.length, 12);
-//		for(int i=0; i<n; i++)
-//			System.err.println("\t" + stack[i]);
-
 		return new FNIterFilters.OnlyParses(new FIIterator(frameFile, conllFile));
 	}
 
@@ -251,7 +243,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 	}
 
 	@Override
-	public Iterator<FNTagging> getParsedAndTaggedSentences() {
+	public Iterator<FNTagging> getParsedOrTaggedSentences() {
 		return new FIIterator(frameFile, conllFile);
 	}
 }

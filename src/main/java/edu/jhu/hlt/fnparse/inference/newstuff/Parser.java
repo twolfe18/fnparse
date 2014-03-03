@@ -36,7 +36,6 @@ public class Parser {
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
 		public TargetPruningData targetPruningData;
-		//public Map<Frame, List<FrameInstance>> prototypes;
 
 		public CrfTrainer trainer;
 		public CrfTrainer.CrfTrainerPrm trainerParams;
@@ -57,7 +56,6 @@ public class Parser {
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
 		params.onlyFrameIdent = true;
-		//params.prototypes = params.frameIndex.getPrototypeMap();
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.factors = new ArrayList<FactorFactory>();
@@ -127,7 +125,7 @@ public class Parser {
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
 		
-		int numParams = 50 * 1000 * 1000;	// TODO
+		int numParams = 5 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);

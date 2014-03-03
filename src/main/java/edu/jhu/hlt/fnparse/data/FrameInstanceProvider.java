@@ -24,5 +24,5 @@ public interface FrameInstanceProvider {
 	/**
 	 * union of getParsedSentences() and getTaggedSentences()
 	 */
-	public Iterator<FNTagging> getParsedAndTaggedSentences();
+	public Iterator<FNTagging> getParsedOrTaggedSentences();
 }

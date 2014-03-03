@@ -47,13 +47,13 @@ public class ParserTests {
 	@Before
 	public void setupDummyParse() {
 		
-		// NOTE: I'm using "jump" instead of "jumped" because "jumped.V" is not an LU for Self_motion
-		String[] tokens  = new String[] {"The", "quick", "fox", "jump", "over", "the", "fence"};
-		String[] lemmas = new String[] {"The", "quick", "fox", "jump", "over", "the", "fence"};
-		String[] pos     = new String[] {"DT",  "JJ",    "NN",  "VBD",    "IN",   "DT",  "NN"};
-		int[] gov        = new int[]    {2,     2,       3,     -1,       3,      6,     4};
+		String[] tokens  = new String[] {"The", "fox", "quickly", "jumped", "over", "the", "fence"};
+		String[] lemmas = new String[] {"The", "fox", "quickly", "jump", "over", "the", "fence"};
+		String[] pos     = new String[] {"DT",  "NN",    "RB",  "VBD",    "IN",   "DT",  "NN"};
+		int[] gov        = new int[]    {1,     3,       3,     -1,       3,      6,     4};
 		String[] depType = new String[] {"G",   "G",     "G",   "G",      "G",    "G",   "G"};
 		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas, gov, depType);
+
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
@@ -62,8 +62,8 @@ public class ParserTests {
 		//System.out.println("speedArgs: " + Arrays.toString(speed.getRoles()));
 		Span[] speedArgs = new Span[speed.numRoles()];
 		Arrays.fill(speedArgs, Span.nullSpan);
-		speedArgs[0] = Span.widthOne(1);	// Entity
-		FrameInstance speedInst = FrameInstance.newFrameInstance(speed, Span.widthOne(1), speedArgs, s);
+		speedArgs[0] = Span.getSpan(0, 2);	// Entity
+		FrameInstance speedInst = FrameInstance.newFrameInstance(speed, Span.widthOne(2), speedArgs, s);
 		instances.add(speedInst);
 		System.out.println("[setupDummyParse] adding instance of " + speed);
 		
@@ -71,7 +71,7 @@ public class ParserTests {
 		//System.out.println("speedArgs: " + Arrays.toString(jump.getRoles()));
 		Span[] jumpArgs = new Span[jump.numRoles()];
 		Arrays.fill(jumpArgs, Span.nullSpan);
-		jumpArgs[0] = Span.widthOne(2);		// Self_mover
+		jumpArgs[0] = Span.getSpan(0, 2);	// Self_mover
 		jumpArgs[2] = Span.getSpan(4, 7);	// Path
 		FrameInstance jumpInst = FrameInstance.newFrameInstance(jump, Span.widthOne(3), jumpArgs, s);
 		instances.add(jumpInst);
@@ -106,7 +106,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d, 1d);
+		parser.train(train, 12, 1, 1d, 50d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

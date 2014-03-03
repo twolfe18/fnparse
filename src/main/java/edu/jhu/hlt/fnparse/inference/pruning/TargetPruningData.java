@@ -15,6 +15,8 @@ import edu.mit.jwi.morph.WordnetStemmer;
 // so that we only ever have to make one pass (rather than one per data-structure)
 public class TargetPruningData {
 
+	public static final boolean debug = false;
+	
 	// LUs listed in the frame index
 	/** @deprecated */
 	private Map<LexicalUnit, List<Frame>> lu2frames;
@@ -34,9 +36,9 @@ public class TargetPruningData {
 		IRAMDictionary dict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		prototypesByStem = new HashMap<String, List<FrameInstance>>();
-		Iterator<FNParse> iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+		Iterator<FNTagging> iter = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
 		while(iter.hasNext()) {
-			FNParse p = iter.next();
+			FNTagging p = iter.next();
 			Sentence s = p.getSentence();
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
@@ -51,7 +53,9 @@ public class TargetPruningData {
 				}
 				
 				POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
+				if(debug) System.out.printf("[TargetPruningData inint] frame=%s word=%s pos=%s\n", fi.getFrame().getName(), word, pos);
 				for(String stem : stemmer.findStems(word, pos)) {
+					if(debug) System.out.printf("[TargetPruningData inint] frame=%s word=%s pos=%s stem=%s\n", fi.getFrame().getName(), word, pos, stem);
 					List<FrameInstance> lfi = prototypesByStem.get(stem);
 					if(lfi == null) {
 						lfi = new ArrayList<FrameInstance>();

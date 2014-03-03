@@ -2,8 +2,6 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.*;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
@@ -23,7 +21,7 @@ import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ParsingSentence {
 	
-	private static final Logger log = Logger.getLogger(ParsingSentence.class);
+	//private static final Logger log = Logger.getLogger(ParsingSentence.class);
 
 	// ==== VARIABLES ====
 	public FrameVar[] frameVars;
@@ -268,7 +266,6 @@ public class ParsingSentence {
 	 */
 	public FrameVar makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
 		
-		LexicalUnit head = s.getLU(headIdx);
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
 		
@@ -348,6 +345,9 @@ public class ParsingSentence {
 			return null;
 		}
 		
+		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
+		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		
 		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}
 	
@@ -366,12 +366,12 @@ public class ParsingSentence {
 		this.gold = new VarConfig();
 		
 		// register all the variables and factors
-		int fvConfigs = 0;
+//		int fvConfigs = 0;
 		for(int i=0; i<n; i++) {
 			if(frameVars[i] ==  null)
 				continue;
 			frameVars[i].register(fg, gold);
-			fvConfigs += frameVars[i].numberOfConfigs();
+//			fvConfigs += frameVars[i].numberOfConfigs();
 		}
 		if(roleVars != null) {
 			for(int i=0; i<n; i++) {

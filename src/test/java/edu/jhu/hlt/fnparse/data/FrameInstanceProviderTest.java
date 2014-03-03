@@ -36,7 +36,7 @@ public class FrameInstanceProviderTest {
 		int numFPs = 0;
 		Set<Sentence> uniqSents = new HashSet<Sentence>();
 		Set<String> uniqSentIds = new HashSet<String>();
-		for(Iterator<FNTagging> iter = fip.getParsedAndTaggedSentences(); iter.hasNext(); ) {
+		for(Iterator<FNTagging> iter = fip.getParsedOrTaggedSentences(); iter.hasNext(); ) {
 			FNTagging s = iter.next();
 			numFPs++;
 			if(s.numFrameInstances() > 1)
@@ -153,8 +153,8 @@ public class FrameInstanceProviderTest {
 				FileFrameInstanceProvider.fn15trainFIP)) {
 			
 			List<FNTagging> list1 = new ArrayList<FNTagging>();
-			Iterator<FNTagging> iter1 = fip.getParsedAndTaggedSentences();
-			Iterator<FNTagging> iter2 = fip.getParsedAndTaggedSentences();
+			Iterator<FNTagging> iter1 = fip.getParsedOrTaggedSentences();
+			Iterator<FNTagging> iter2 = fip.getParsedOrTaggedSentences();
 			int i = 0;
 			while(iter1.hasNext() && iter2.hasNext() && i++ < 100) {
 				assertEquals(iter1.hasNext(), iter2.hasNext());
@@ -162,7 +162,7 @@ public class FrameInstanceProviderTest {
 			}
 
 			// reset and check same as first run
-			iter1 = FileFrameInstanceProvider.fn15testFIP.getParsedAndTaggedSentences();
+			iter1 = FileFrameInstanceProvider.fn15testFIP.getParsedOrTaggedSentences();
 			for(i=0; i<list1.size(); i++) {
 				assertTrue(iter1.hasNext());
 				assertEquals(list1.get(i), iter1.next());
