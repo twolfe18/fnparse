@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.prim.util.math.FastMath;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -141,11 +142,33 @@ public class ParsingSentence {
 				System.out.println();
 			}
 			
-			clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
-			clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));	// shouldn't matter
+			// TODO logspace?
+			double[] localMargins = margins1.get(fv.getFrameVar()).getValues();
+			double bestScore = 0d;
+			int bestFrame = -1;
+			assert params.nullFrameOffset >= 0d;
+			for(int fiConfig=0; fiConfig<localMargins.length; fiConfig++) {
+				Frame f = fv.getFrame(fiConfig);
+				double s = localMargins[fiConfig];
+				if(f == Frame.nullFrame) {
+					if(params.logDomain)
+						//s = FastMath.logAdd(s, FastMath.log(params.nullFrameOffset));
+						throw new RuntimeException("implement me");
+					else
+						s -= params.nullFrameOffset;
+				}
+				if(bestFrame < 0 || s > bestScore) {
+					bestScore = s;
+					bestFrame = fiConfig;
+				}
+			}
+			
+			clampedFrames.put(fv.getFrameVar(), bestFrame);
+			//clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
+			//clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));	// shouldn't matter
 			
 			dFrameIdx.add(i);
-			dFrame.add(fv.getFrame(mbr1Conf));
+			dFrame.add(fv.getFrame(bestFrame));
 		}
 		
 		// decode with frames clamped

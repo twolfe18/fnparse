@@ -31,6 +31,9 @@ public class Parser {
 		public boolean useLatentDepenencies;
 		public boolean onlyFrameIdent;
 		
+		// subtract this much prob from p(f_i=nullFrame) when doing decoding in order to balance precision/recall
+		public double nullFrameOffset = 0.15d;
+		
 		public Alphabet<String> featIdx;
 		public FgModel model;
 		public List<FactorFactory> factors;

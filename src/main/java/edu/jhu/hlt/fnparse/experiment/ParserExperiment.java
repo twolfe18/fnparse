@@ -14,11 +14,24 @@ public class ParserExperiment {
 
 	public static final boolean hurryUp = true;
 	public static final File modelDir = new File("experiments/targetId");
+	public static List<? extends FNTagging> fnTrain, fnLex;
 	
-	public static Set<LexicalUnit> observedTriggers(Iterator<? extends FNTagging> instances, Frame f) {
+	public static void main(String[] args) {
+		
+		fnTrain = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
+		fnLex = DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences());
+		mainDebugging(args);
+		fnTrain = null;
+		fnLex = null;
+		
+		mainOld(args);
+	}
+	
+	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
 		Set<LexicalUnit> lexInstance = new HashSet<LexicalUnit>();
-		while(instances.hasNext()) {
-			FNTagging p = instances.next();
+//		while(instances.hasNext()) {
+//			FNTagging p = instances.next();
+		for(FNTagging p : instances) {
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
 				if(fi.getFrame().equals(f) && target.width() == 1)
@@ -39,19 +52,19 @@ public class ParserExperiment {
 			System.out.printf("[pruningDebug] %s.LU[%d]=%s\n", missed.getName(), i, missed.getLexicalUnit(i));
 		
 		// all examples lex for this frame
-		lexInstances = observedTriggers(FileFrameInstanceProvider.fn15lexFIP.getParsedSentences(), missed);
+		lexInstances = observedTriggers(fnLex, missed);
 		System.out.printf("[pruningDebug] triggers for %s in lex/p examples (%d):", missed.getName(), lexInstances.size());
 		for(LexicalUnit lu : lexInstances)
 			System.out.print(" " + lu.getFullString());
 		System.out.println();
 		
-		lexInstances = observedTriggers(FileFrameInstanceProvider.fn15lexFIP.getTaggedSentences(), missed);
+		lexInstances = observedTriggers(fnLex, missed);
 		System.out.printf("[pruningDebug] triggers for %s in lex/t examples (%d):", missed.getName(), lexInstances.size());
 		for(LexicalUnit lu : lexInstances)
 			System.out.print(" " + lu.getFullString());
 		System.out.println();
 		
-		lexInstances = observedTriggers(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences(), missed);
+		lexInstances = observedTriggers(fnTrain, missed);
 		System.out.printf("[pruningDebug] triggers for %s in train examples (%d):", missed.getName(), lexInstances.size());
 		for(LexicalUnit lu : lexInstances)
 			System.out.print(" " + lu.getFullString());
@@ -62,25 +75,24 @@ public class ParserExperiment {
 	
 	public static void mainDebugging(String[] args) {
 		FrameIndex fi = FrameIndex.getInstance();
-		pruningDebug(new LexicalUnit("toxins", "NNS"), fi.getFrameByName("Toxic_substance"));
-		pruningDebug(new LexicalUnit("Potential", "JJ"), fi.getFrameByName("Capability"));
-		pruningDebug(new LexicalUnit("of", "IN"), fi.getFrameByName("Partitive"));
-		pruningDebug(new LexicalUnit("representatives", "NNS"), fi.getFrameByName("Leadership"));
+		
+		// old
+//		pruningDebug(new LexicalUnit("toxins", "NNS"), fi.getFrameByName("Toxic_substance"));
+//		pruningDebug(new LexicalUnit("Potential", "JJ"), fi.getFrameByName("Capability"));
+//		pruningDebug(new LexicalUnit("of", "IN"), fi.getFrameByName("Partitive"));
+//		pruningDebug(new LexicalUnit("representatives", "NNS"), fi.getFrameByName("Leadership"));
+		
+		pruningDebug(new LexicalUnit("idea", "NN"), fi.getFrameByName("Desirable_event"));
+		pruningDebug(new LexicalUnit("do", "VB"), fi.getFrameByName("Intentionally_act"));
+		pruningDebug(new LexicalUnit("sooner", "RBR"), fi.getFrameByName("Time_vector"));
+		pruningDebug(new LexicalUnit("several", "JJ"), fi.getFrameByName("Quantity"));
+		pruningDebug(new LexicalUnit("factories", "NNS"), fi.getFrameByName("Locale_by_use"));
+		
+		
 		/*
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU Potential.JJ> did not include the gold frame: <Frame 149 Capability>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU of.IN> did not include the gold frame: <Frame 665 Partitive>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU representatives.NNS> did not include the gold frame: <Frame 552 Leadership>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU of.IN> did not include the gold frame: <Frame 155 Causation>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU Biological.NNP> did not include the gold frame: <Frame 1010 Weapon>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU applications.NNS> did not include the gold frame: <Frame 984 Using>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU procurement.NN> did not include the gold frame: <Frame 442 Getting>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU toxins.NNS> did not include the gold frame: <Frame 959 Toxic_substance>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU nineteenth.NN> did not include the gold frame: <Frame 651 Ordinal_numbers>
-WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> for [dissatisfied]
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU signatory.JJ> did not include the gold frame: <Frame 871 Sign_agreement>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU at.IN> did not include the gold frame: <Frame 566 Locative_relation>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU rode.VBD> did not include the gold frame: <Frame 929 Surviving>
-[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidiate set of frames for <LU on.IN> did not include the gold frame: <Frame 566 Locative_relation>
+[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU idea.NN> did not include the gold frame: <Frame 306 Desirable_event>
+[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU do.VB> did not include the gold frame: <Frame 525 Intentionally_act>
+[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU sooner.RBR> did not include the gold frame: <Frame 954 Time_vector>
 		 */
 	}
 	
@@ -105,12 +117,7 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		return sb.toString();
 	}
 	
-	public static void main(String[] args) {
-		
-//		if(false) {
-//			mainDebugging(args);
-//			return;
-//		}
+	public static void mainNew(String[] args) {
 		
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
@@ -120,15 +127,6 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.9d, 0.8d, 0.7d, 0.6d, 0.5d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
-		
-		
-		// TODO remove this later
-		if(nTrainLimit.get() < 200) {
-			System.out.println("we already did this, returning");
-			return;
-		}
-		
-		
 		
 		File workingDir = new File(modelDir, getDescription(ajh));
 		if(!workingDir.isDirectory())
@@ -187,12 +185,12 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
-		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
-		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
+//		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
+//		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 750;
-		int nTest = 100;
-		//if(hurryUp) {
+		int nTrain = 1000;
+		int nTest = 125;
+		//if(hurryUp)  {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		//}
@@ -203,12 +201,12 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
-		for(int epoch=0; epoch<15; epoch++) {
+		for(int epoch=0; epoch<10; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 2;
+			int passes = 1;
 			int batchSize = 1;
-			double lrMult = 10d / (2d + epoch);
-			double regularizerMult = 1d;
+			double lrMult = 4d / (2d + epoch);
+			double regularizerMult = 5d;
 			parser.train(train, passes, batchSize, lrMult, regularizerMult);
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
@@ -229,6 +227,7 @@ WARNING: frame filtering heuristic didn't extract <Frame 397 Experiencer_focus> 
 		}
 	}
 	
+	/** @deprecated */
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
 		final int maxArgWidth = 10;
 		final int maxTargetWidth = 3;
