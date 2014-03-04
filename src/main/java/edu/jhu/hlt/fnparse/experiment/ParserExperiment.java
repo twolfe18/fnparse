@@ -24,7 +24,9 @@ public class ParserExperiment {
 //		fnTrain = null;
 //		fnLex = null;
 		
-		mainOld(args);
+//		mainOld(args);
+		
+		mainNew(args);
 	}
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
@@ -121,10 +123,10 @@ public class ParserExperiment {
 		
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100, 1000));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.3d, 1d, 3d, 10d, 30d, 100d));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1d, 3d, 10d, 30d, 100d));
 		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 0.3d, 1d, 3d, 10d));
-		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.9d, 0.8d, 0.7d, 0.6d, 0.5d));
+		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.85d, 0.7d, 0.55d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
 		
