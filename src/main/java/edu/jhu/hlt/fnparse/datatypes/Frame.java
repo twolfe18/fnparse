@@ -27,7 +27,7 @@ public class Frame {
 	}
 	
 	public String toString() {
-		return String.format("<Frame %d %s>", idx, name);
+		return String.format("<Frame %d %s has %d roles>", idx, name, numRoles());
 	}
 
 	public int getId() { return idx; }

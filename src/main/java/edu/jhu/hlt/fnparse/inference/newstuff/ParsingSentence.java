@@ -1,25 +1,45 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
+import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
-import edu.jhu.gm.model.*;
+import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FactorGraph.FgEdge;
+import edu.jhu.gm.model.FactorGraph.FgNode;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.inference.heads.*;
+import edu.jhu.gm.model.VarConfig;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.PosUtil;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.util.*;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ParsingSentence {
 
-//	private static final boolean debugDecodePart1 = false;	// frame decode
-//	private static final boolean debugDecodePart2 = true;	// arg decode
+	private static final boolean debugDecodePart1 = true;	// frame decode
+	private static final boolean debugDecodePart2 = false;	// arg decode
 	
 	public static final int maxLexPrototypesPerFrame = 30;
 	
@@ -128,7 +148,6 @@ public class ParsingSentence {
 	 * all r_ijk are instantiated as latent with arity of \max_f f.numRoles
 	 */
 	public void setupRoleVarsForFrameDecode() {
-		assert frameVars != null;
 		final int n = sentence.size();
 		roleVars = new RoleVars[n][][];
 		for(int i=0; i<n; i++) {
@@ -148,7 +167,6 @@ public class ParsingSentence {
  	 * the other r_ijk will be predicted and binary
 	 */
 	public void setupRoleVarsForRoleDecode(Frame[] decodedFrames) {
-		assert frameVars != null;
 		final int n = sentence.size();
 		roleVars = new RoleVars[n][][];
 		for(int i=0; i<n; i++) {
@@ -157,7 +175,7 @@ public class ParsingSentence {
 			if(fv == null || f == Frame.nullFrame)
 				continue;
 			List<Frame> possibleFrames = Arrays.asList(Frame.nullFrame, f);
-			int K = f.numRoles();
+			final int K = f.numRoles();
 			roleVars[i] = new RoleVars[n][K];
 			for(int j=0; j<n; j++) {
 				for(int k=0; k<K; k++) {
@@ -192,13 +210,29 @@ public class ParsingSentence {
 		prm.infFactory = infFactory;
 		MbrDecoder decoder = new MbrDecoder(prm);
 		FgExample fge1 = this.getFgExample();
-		decoder.decode(model, fge1);
+		BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
 		VarConfig f_i_decode = decoder.getMbrVarConfig();
+		VarConfig clampedFrames = new VarConfig();
 		Frame[] decodedFrames = new Frame[n];
 		for(int i=0; i<n; i++) {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
+			
+			if(debugDecodePart1) {
+				FactorGraph fg = fge1.getOriginalFactorGraph();
+				FgNode f_i = fg.getNode(fv.getFrameVar());
+				System.out.println(f_i);
+				for(FgEdge edge : f_i.getInEdges()) {
+					DenseFactor df = bp.getMessages()[edge.getId()].message;
+					System.out.println("edge    = " + edge);
+					System.out.println("factor  = " + edge.getParent());
+					System.out.println("message = " + df);
+				}
+				System.out.println();
+			}
+			
 			decodedFrames[i] = fv.getFrame(f_i_decode);
+			clampedFrames.put(fv.getFrameVar(), f_i_decode.getState(fv.getFrameVar()));
 		}
 
 		// decode args
@@ -206,19 +240,20 @@ public class ParsingSentence {
 		if(params.onlyFrameIdent) {
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
-				if(f != null)
+				if(f != null && f != Frame.nullFrame)
 					decodedFIs[i] = FrameInstance.frameMention(f, Span.widthOne(i), sentence);
 			}
 		}
 		else {
 			setupRoleVarsForRoleDecode(decodedFrames);
 
-			// here we don't necessarily have the gaurantee that we won't
-			// see and argument realized twice (TODO check on the Exactly1 factor),
-			// so we'll get the margins for r_ijk and take the max over k for each i.
-			FgExample fge2 = this.getFgExample();
+			// clamp f_i
+			FgExample needToModify = this.getFgExample();
+			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
+			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
 			decoder.decode(model, fge2);
 			Map<Var, DenseFactor> margins2 = decoder.getVarMarginalsIndexed();
+			Map<Var, Double> maxMargins2 = decoder.getVarMargMap();
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
 				if(f == null || f == Frame.nullFrame)
@@ -227,16 +262,27 @@ public class ParsingSentence {
 				Arrays.fill(args, Span.nullSpan);
 				for(int k=0; k<f.numRoles(); k++) {
 					// max over j
-					ArgMax<Integer> bestHead = new ArgMax<Integer>();
+					int bestHead = -1;
+					double bestScore = 0d;
+					boolean bestIsRealized = false;
+					//ArgMax<Integer> bestHead = new ArgMax<Integer>();
 					for(int j=0; j<n; j++) {
 						RoleVars r_ijk = roleVars[i][j][k];
-						int indexOfRealizedArg = r_ijk.getPossibleFrames().indexOf(f);
-						double headScore = margins2.get(r_ijk.getRoleVar()).getValue(indexOfRealizedArg);
-						bestHead.accum(j, headScore);
+						double score = maxMargins2.get(r_ijk.getRoleVar());
+						if(bestHead < 0 || score > bestScore) {
+							bestHead = j;
+							bestScore = score;
+							
+							DenseFactor p_r_ijk = margins2.get(r_ijk.getRoleVar());
+							double p_not_realized = p_r_ijk.getValue(r_ijk.getPossibleFrames().indexOf(Frame.nullFrame));
+							
+							bestIsRealized = score > p_not_realized;
+						}
 					}
-					int j = bestHead.getBest();
-					RoleVars r_ijk = roleVars[i][j][k];
-					args[k] = r_ijk.getSpanDummy();
+					if(bestIsRealized) {
+						RoleVars r_ijk = roleVars[i][bestHead][k];
+						args[k] = r_ijk.getSpanDummy();
+					}
 				}
 				decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
 			}

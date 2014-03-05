@@ -1,25 +1,16 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.*;
 
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -93,7 +84,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d, 100d);
+		parser.train(train, 12, 1, 1d, 1000d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

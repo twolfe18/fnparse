@@ -14,21 +14,36 @@ public class DebuggingFrameRoleFeatures extends AbstractFeatures<DebuggingFrameR
 	
 	@Override
 	public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argument, Sentence sent) {
+		if(argIsRealized)
+			return getFeatures(f, targetHeadIdx, roleIdx, argument, sent);
+		else
+			return AbstractFeatures.emptyFeatures;
+	}
+	
+	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, Span argument, Sentence sent) {
 		
-		if(argIsRealized && roleIdx >= f.numRoles())
-			throw new IllegalArgumentException();
-
 		// only include enough features to overfit the one training data
+		
 		FeatureVector fv = new FeatureVector();
-		String arg = "null";
-		if(argIsRealized) {
-			StringBuilder sb = new StringBuilder();
-			for(int i=argument.start; i<argument.end; i++)
-				sb.append("-" + sent.getWord(i));
-			arg = sb.toString();
+		
+		StringBuilder sb = new StringBuilder();
+		for(int i=argument.start; i<argument.end; i++)
+			sb.append("-" + sent.getWord(i));
+		String arg = sb.toString();
+		
+		if(f == Frame.nullFrame) {
+			b(fv, "nullFrame_arg=", arg);
 		}
-		b(fv, "frame=" + f.getName() + "_roleIdx=" + f.getRoles()[roleIdx] +
-				"_targetHead=" + sent.getLU(targetHeadIdx) + "_argument=" + arg);
+		else {
+			b(fv, "frame=" + f.getName() + "roleIdx=" + f.getRoles()[roleIdx] +
+					"targetHead=" + sent.getLU(targetHeadIdx) + "argument=" + arg);
+		}
+		
+		// pseudo-equivalent to unary factor on r_ijk (we are actually taking
+		// the Frame info from f_i, but if i refactor we could take it from r_ijk)
+		b(fv, "frame=", f.getName(), "role=", String.valueOf(roleIdx));
+		b(fv, "frame=", f.getName());
+		
 		return fv;
 	}
 }

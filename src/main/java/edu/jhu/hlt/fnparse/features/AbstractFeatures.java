@@ -34,6 +34,8 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		this.featIdx = featIdx;
 	}
 	
+	public Alphabet<String> getFeatureAlph() { return featIdx; }
+	
 	/**
 	 * by default, nothing is excluded from regularization,
 	 * but you are free to override this.

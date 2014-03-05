@@ -7,6 +7,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.util.Alphabet;
 
 /**
  * (f_i=nullFrame, r_ijk^e=*) => r_ijk=true
@@ -72,28 +73,30 @@ public abstract class HasRoleFeatures {
 		return freFeatures == null && frFeatures == null && cFeatures == null;
 	}
 	
+	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
+	
 	public FeatureVector getFeatures(Frame f, int targetHeadIdx, boolean argIsRealized, int roleIdx, Span arg, int argHead, Sentence s) {
 		
-		if(f == Frame.nullFrame) {
-			if(argIsRealized)
-				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-				//throw new RuntimeException("should be ruled out by an overridden getDotProd");
-			else {
-				// uniform cost for (nullFrame, r_ijk=false, expansion) assignment
-				// lower cost biases towards nullFrame
-				// should be uniform because nullFrame doesn't care about which expansion,
-				// just that we are summing out the same number of expansions when comparing
-				// margins of r_ijk for nullFrame vs non-nullFrame.
-				return fv_nullFrame;
-			}
-		}
-		// non-nullFrame r_ijk=false assignments will get their own features
-		// (rather than a constant) because there may be features that indicate
-		// that certain spans are particularly *bad* for certain frames.
-		
-		if(roleIdx >= f.numRoles())
-			return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-			//throw new RuntimeException("should be ruled out by an overridden getDotProd");
+//		if(f == Frame.nullFrame) {
+//			if(argIsRealized)
+//				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
+//				//throw new RuntimeException("should be ruled out by an overridden getDotProd");
+//			else {
+//				// uniform cost for (nullFrame, r_ijk=false, expansion) assignment
+//				// lower cost biases towards nullFrame
+//				// should be uniform because nullFrame doesn't care about which expansion,
+//				// just that we are summing out the same number of expansions when comparing
+//				// margins of r_ijk for nullFrame vs non-nullFrame.
+//				return fv_nullFrame;
+//			}
+//		}
+//		// non-nullFrame r_ijk=false assignments will get their own features
+//		// (rather than a constant) because there may be features that indicate
+//		// that certain spans are particularly *bad* for certain frames.
+//		
+//		if(roleIdx >= f.numRoles())
+//			return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
+//			//throw new RuntimeException("should be ruled out by an overridden getDotProd");
 		
 		FeatureVector fv = new FeatureVector();
 		if(freFeatures != null)

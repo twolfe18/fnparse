@@ -57,7 +57,7 @@ public class Parser {
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
-		params.onlyFrameIdent = true;
+		params.onlyFrameIdent = false;
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.factors = new ArrayList<FactorFactory>();
@@ -84,7 +84,7 @@ public class Parser {
 		bpParams.normalizeMessages = true;	// doesn't work if false :(
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = 2;	// similar to piecewise training
+		bpParams.maxIterations = 10;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }

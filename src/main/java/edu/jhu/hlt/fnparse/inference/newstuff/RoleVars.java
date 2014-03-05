@@ -103,10 +103,9 @@ public class RoleVars implements FgRelated {
 		this.roleIdx = roleIdx;
 		
 		this.varType = latentOrPredicted;
-		this.possibleFrames = possibleFrames;
 		
 		String headVarName = String.format("r_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
-		this.headVar = new Var(latentOrPredicted, possibleFrames.size(), headVarName, null);
+		this.headVar = new Var(latentOrPredicted, this.possibleFrames.size(), headVarName, null);
 		
 //		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
 //		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
