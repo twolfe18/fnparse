@@ -151,7 +151,8 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		}
 		public boolean messedUpSituation(Frame f_i) {
 			int k = roleVar.getRoleIdx();
-			return f_i != Frame.nullFrame && k >= f_i.numRoles();
+			//return f_i != Frame.nullFrame && k >= f_i.numRoles();
+			return roleVar.getPossibleFrames().size() < frameVar.getFrames().size() &&  k >= f_i.numRoles();
 		}
 		
 		// screw it, i'm going to abuse features and try to make them overcome the bias
@@ -166,9 +167,12 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 			FeatureVector v = new FeatureVector();
 			Alphabet<String> a = features.getFeatureAlph();
 			v.add(a.lookupIndex("non-existent-role", true), 1d);
-			// * f_i
-			// * domain(f_i).size * domain(r_ijk).size
-			// * (domain(f_i).size - domain(r_ijk).size)
+			v.add(a.lookupIndex("non-existent-role-" + f_i.getName(), true), 1d);
+			v.add(a.lookupIndex("non-existent-role-k=" + roleVar.getRoleIdx(), true), 1d);
+			v.add(a.lookupIndex(String.format("non-existent-role-|f_i|=%d-|r_ijk|=%d",
+					frameVar.getFrames().size(), roleVar.getPossibleFrames().size()), true), 1d);
+			v.add(a.lookupIndex(String.format("non-existent-role-|f_i|-|r_ijk|=%d",
+					frameVar.getFrames().size() - roleVar.getPossibleFrames().size()), true), 1d);
 			return v;
 		}
 		

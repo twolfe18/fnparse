@@ -39,7 +39,7 @@ import edu.mit.jwi.morph.WordnetStemmer;
 public class ParsingSentence {
 
 	private static final boolean debugDecodePart1 = true;	// frame decode
-	private static final boolean debugDecodePart2 = false;	// arg decode
+	private static final boolean debugDecodePart2 = true;	// arg decode
 	
 	public static final int maxLexPrototypesPerFrame = 30;
 	
@@ -59,7 +59,7 @@ public class ParsingSentence {
 	private VarConfig gold;
 	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
-
+	private HeadFinder hf = new BraindeadHeadFinder();	// TODO
 	
 	/**
 	 * In training data:
@@ -116,27 +116,31 @@ public class ParsingSentence {
 			
 			FrameInstance goldFIat_i = goldFiTargets[i];
 			assert (goldFIat_i == null) == (fi.getGoldFrame() == Frame.nullFrame);
-			
+		
 			int K = fi.getMaxRoles();
 			roleVars[i] = new RoleVars[n][K];
-			for(int j=0; j<n; j++) {
-				for(int k=0; k<K; k++) {
-			
-					// mark's point: make stuff that doesn't matter latent
-					VarType r_ijkType = k >= fi.getGoldFrame().numRoles() || fi.getGoldFrame() == Frame.nullFrame
-							? VarType.LATENT
-							: VarType.PREDICTED;
-					
+			for(int k=0; k<K; k++) {
+
+				// mark's point: make stuff that doesn't matter latent
+				VarType r_ijkType = k >= fi.getGoldFrame().numRoles() || fi.getGoldFrame() == Frame.nullFrame
+						? VarType.LATENT
+						: VarType.PREDICTED;
+
+				// set the correct head for this role
+				Span roleKspan = k >= goldFIat_i.getFrame().numRoles()
+						? Span.nullSpan
+						: goldFIat_i.getArgument(k);
+				int roleKhead = roleKspan == Span.nullSpan
+						? -1
+						: hf.head(roleKspan, sentence);
+				for(int j=0; j<n; j++) {
 					RoleVars rv = new RoleVars(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
 					roleVars[i][j][k] = rv;
-					
 					if(r_ijkType == VarType.PREDICTED) {	// set gold
-						Frame f = goldFIat_i.getFrame();
-						Span arg = goldFIat_i.getArgument(k);
-						if(arg == Span.nullSpan)
-							rv.setGoldIsNull();
+						if(roleKhead == j)
+							rv.setGold(goldFIat_i.getFrame(), roleKspan);
 						else
-							rv.setGold(f, arg);
+							rv.setGoldIsNull();
 					}
 				}
 			}
@@ -261,6 +265,10 @@ public class ParsingSentence {
 				Span[] args = new Span[f.numRoles()];
 				Arrays.fill(args, Span.nullSpan);
 				for(int k=0; k<f.numRoles(); k++) {
+					
+//					if(debugDecodePart2)
+//						System.out.printf("decoding role %s for %s:", f.getRole(k), f.getName());
+					
 					// max over j
 					int bestHead = -1;
 					double bestScore = 0d;
@@ -269,12 +277,18 @@ public class ParsingSentence {
 					for(int j=0; j<n; j++) {
 						RoleVars r_ijk = roleVars[i][j][k];
 						double score = maxMargins2.get(r_ijk.getRoleVar());
+						
+						DenseFactor p_r_ijk = margins2.get(r_ijk.getRoleVar());
+						double p_not_realized = p_r_ijk.getValue(r_ijk.getPossibleFrames().indexOf(Frame.nullFrame));
+						
+						if(debugDecodePart2) {
+							System.out.printf("%-20s for %s.%s has max-marginal of %.2f, p(notRealized)=%.2f\n",
+									sentence.getLU(j).getFullString(), f.getName(), f.getRole(k), score, p_not_realized);
+						}
+						
 						if(bestHead < 0 || score > bestScore) {
 							bestHead = j;
 							bestScore = score;
-							
-							DenseFactor p_r_ijk = margins2.get(r_ijk.getRoleVar());
-							double p_not_realized = p_r_ijk.getValue(r_ijk.getPossibleFrames().indexOf(Frame.nullFrame));
 							
 							bestIsRealized = score > p_not_realized;
 						}
