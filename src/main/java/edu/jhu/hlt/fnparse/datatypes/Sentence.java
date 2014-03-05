@@ -33,15 +33,25 @@ public final class Sentence implements HasId {
 	public Sentence(String dataset, String id, String[] tokens, String[] pos, String[] lemmas, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
-		if(pos != null && tokens.length != pos.length)
+		
+		final int n = tokens.length;
+		if(pos != null && pos.length != n)
 			throw new IllegalArgumentException();
+		if(lemmas != null && lemmas.length != n)
+			throw new IllegalArgumentException();
+		if(gov != null && gov.length != n)
+			throw new IllegalArgumentException();
+		if(depType != null && depType.length != n)
+			throw new IllegalArgumentException();
+		
 		this.dataset = dataset;
 		this.id = id;
 		this.tokens = tokens;
 		this.pos = pos;
-		this.lemmas=lemmas;
-		this.gov=gov;
-		this.depType=depType;
+		this.lemmas = lemmas;
+		this.gov = gov;
+		this.depType = depType;
+		
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
 			this.pos[i] = this.pos[i].toUpperCase().intern();

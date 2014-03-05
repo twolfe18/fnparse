@@ -7,6 +7,7 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * Holds the data needed to evaluate parses.
@@ -48,8 +49,11 @@ public class SentenceEval {
 			Frame f = fi.getFrame();
 			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
 			int n = fi.getFrame().numRoles();
-			for(int i=0; i<n; i++)
-				targetRolePreds.add(new Prediction(fi.getArgument(i), f, i));
+			for(int i=0; i<n; i++) {
+				Span arg = fi.getArgument(i);
+				if(arg != Span.nullSpan)
+					targetRolePreds.add(new Prediction(arg, f, i));
+			}
 		}
 	}
 	

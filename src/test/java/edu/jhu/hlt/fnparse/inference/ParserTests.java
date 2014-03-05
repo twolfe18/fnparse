@@ -83,19 +83,6 @@ public class ParserTests {
 	}
 	
 	@Test
-	public void basic() {
-		ParsingSentence ps = new ParsingSentence(dummyParse.getSentence(), parser.getParams());
-		for(Factor f : ps.getFactorsFromFactories()) {
-			assertTrue(f.getVars().size() > 0);
-			for(Var v : f.getVars()) {
-				if(v.getNumStates() == 0)
-					System.out.println("wut");
-				assertTrue(v.getNumStates() > 0);
-			}
-		}
-	}
-	
-	@Test
 	public void overfitting() {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
@@ -106,7 +93,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d, 1d);
+		parser.train(train, 12, 1, 1d, 100d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

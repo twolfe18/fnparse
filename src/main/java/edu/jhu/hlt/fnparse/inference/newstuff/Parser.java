@@ -1,12 +1,8 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
-import java.util.ArrayList;
-import java.util.List;
+import java.io.*;
+import java.util.*;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -19,24 +15,18 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.hlt.fnparse.data.DataUtil;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
-import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.data.*;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.util.HeterogeneousL2;
-import edu.jhu.hlt.fnparse.util.Avg;
-import edu.jhu.optimize.AdaGrad;
-import edu.jhu.optimize.Regularizer;
-import edu.jhu.optimize.SGD;
+import edu.jhu.hlt.fnparse.util.*;
+import edu.jhu.optimize.*;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
 	
 	public static class ParserParams {
+		public boolean debug;
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
 		public boolean onlyFrameIdent;
@@ -54,16 +44,15 @@ public class Parser {
 		public CrfTrainer.CrfTrainerPrm trainerParams;
 	}
 	
+	
 	public ParserParams params;
 	public final boolean benchmarkBP = false;
 	
-	// TODO
-	// the reason why what i'm doing is wrong (MLE training + marginal frame decode + clamping)
-	// is that you are maximizing likelihood of the correct arguments for the incorrect frame assignments.
-	// ideally you would train just like you decode, which would mean training to predict r_ijk=nullSpan when you get the frames wrong.
 	
 	public Parser() {
+
 		params = new ParserParams();
+		params.debug = true;
 		params.featIdx = new Alphabet<String>();
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
@@ -73,15 +62,19 @@ public class Parser {
 
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
-		fff.setFeatures(new BasicFrameFeatures(params.featIdx));
-		//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
-		//fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
+		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
+		else {
+			fff.setFeatures(new BasicFrameFeatures(params.featIdx));
+			//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
+		}
 		params.factors.add(fff);
 		
 		if(!params.onlyFrameIdent) {
 			RoleFactorFactory rff = new RoleFactorFactory(params);
-			rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
-			//rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
+			if(params.debug)
+				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
+			else
+				rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
 			params.factors.add(rff);
 		}
 	}
@@ -154,7 +147,7 @@ public class Parser {
 		for(FNParse parse : examples) {
 			
 			ParsingSentence s = new ParsingSentence(parse.getSentence(), params);
-			s.setGold(parse);
+			s.setupRoleVarsForTrain(parse);
 			exs.add(s.getFgExample());
 
 			// compute upper bound on target recall
@@ -203,41 +196,16 @@ public class Parser {
 	public void writeoutWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
 		try {
-			//File f = new File("weights.txt");
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
-//			BasicBob b = (BasicBob) SuperBob.getBob(null, BasicBob.NAME);
-//			String[] fnNames = b.getFeatureNames();
 			int n = params.model.getNumParams();	// overestimate
 			assert n >= params.featIdx.size();
 			double[] outParams = new double[n];
 			params.model.updateDoublesFromModel(outParams);
-			for(int i=0; i<params.featIdx.size(); i++) {
-//				w.write(outParams[i] + "\t" + fnNames[i] + "\n");
+			for(int i=0; i<params.featIdx.size(); i++)
 				w.write(String.format("%f\t%s\n", outParams[i], params.featIdx.lookupObject(i)));
-			}
 			w.close();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
 	
-//	public static void main(String[] args) {
-//		
-//		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
-//		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
-//		SuperBob.getBob(null).startup();
-//		
-//		FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
-//		List<FNParse> all = fip.getParsedSentences();
-//		println("all.size = " + all.size());
-//		int trainOn = 1;
-//		List<FNParse> sample = DataUtil.reservoirSample(all, trainOn);
-//		println("training on " + trainOn + " sentences...");
-//		Parser p = new Parser();
-//		
-//		long start = System.currentTimeMillis();
-//		p.train(sample);
-//		System.out.printf("training took %.1f seconds for %d examples\n", (System.currentTimeMillis()-start)/1000d, trainOn);
-//		
-//		SuperBob.getBob(null).shutdown();
-//	}
 }

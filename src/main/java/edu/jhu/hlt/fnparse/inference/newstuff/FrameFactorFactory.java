@@ -21,7 +21,7 @@ import edu.jhu.hlt.fnparse.features.*;
  * 
  * @author travis
  */
-public class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
+public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
 
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
@@ -124,7 +124,7 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 	 * features should be safe (there is no cache invalidation aside from this
 	 * object being garbage collected).
 	 */
-	static class F extends ExpFamFactor {	// is the actual factor
+	static final class F extends ExpFamFactor {	// is the actual factor
 		
 		private static final long serialVersionUID = 1L;
 		

@@ -41,6 +41,12 @@ public class FrameVar implements FgRelated {
 	/** @deprecated */
 	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
 	
+	@Override
+	public String toString() {
+		return String.format("<f/p_%d #frames=%d #protos=%d maxRoles=%d>",
+				headIdx, frames.size(), prototypes.size(), maxRoles);
+	}
+	
 	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
 		
 		if(frames.size() == 0 || prototypes.size() == 0)
@@ -107,6 +113,10 @@ public class FrameVar implements FgRelated {
 			if(goldExpansion < 0)
 				throw new IllegalStateException();
 		}
+	}
+	
+	public Frame getGoldFrame() {
+		return frames.get(goldFrame);
 	}
 	
 	public int numberOfConfigs() {
