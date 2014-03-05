@@ -24,9 +24,9 @@ public class ParserExperiment {
 //		fnTrain = null;
 //		fnLex = null;
 		
-//		mainOld(args);
+		mainOld(args);
 		
-		mainNew(args);
+//		mainNew(args);
 	}
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
@@ -190,8 +190,8 @@ public class ParserExperiment {
 //		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 //		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 1000;
-		int nTest = 100;
+		int nTrain = 40;
+		int nTest = 10;
 		//if(hurryUp)  {
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
@@ -208,7 +208,7 @@ public class ParserExperiment {
 			int passes = 1;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
-			double regularizerMult = 2d;
+			double regularizerMult = 1d;
 			parser.train(train, passes, batchSize, lrMult, regularizerMult);
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());

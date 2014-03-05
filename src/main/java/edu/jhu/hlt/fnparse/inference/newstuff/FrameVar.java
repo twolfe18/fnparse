@@ -1,18 +1,10 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
-import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
-import edu.jhu.gm.model.VarConfig;
-import edu.jhu.hlt.fnparse.datatypes.Expansion;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.*;
 
 public class FrameVar implements FgRelated {
 	

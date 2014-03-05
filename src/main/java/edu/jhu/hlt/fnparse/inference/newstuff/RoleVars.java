@@ -164,13 +164,19 @@ public class RoleVars implements FgRelated {
 	 * (may be nullFrame, indicating that this argument is
 	 *  not realized for any frame).
 	 */
-	public Frame getFrame(VarConfig conf) {
-		int idx = conf.getState(headVar);
-		return possibleFrames.get(idx);
+	public Frame getFrame(int localIdx) {
+		return possibleFrames.get(localIdx);
 	}
+//	public Frame getFrame(VarConfig conf) {
+//		int idx = conf.getState(headVar);
+//		return possibleFrames.get(idx);
+//	}
 	
-	public boolean argIsRealized(VarConfig conf) {
-		return getFrame(conf) != Frame.nullFrame;
+//	public boolean argIsRealized(VarConfig conf) {
+//		return getFrame(conf) != Frame.nullFrame;
+//	}
+	public boolean argIsRealize(int localConfig) {
+		return possibleFrames.get(localConfig) != Frame.nullFrame;
 	}
 	
 	public Span getSpanDummy() {
@@ -178,8 +184,8 @@ public class RoleVars implements FgRelated {
 		return Span.widthOne(argHeadIdx);
 	}
 	
-	public Span getSpanDummy(VarConfig conf) {
-		return getSpanDummy();
-	}
+//	public Span getSpanDummy(VarConfig conf) {
+//		return getSpanDummy();
+//	}
 }
 

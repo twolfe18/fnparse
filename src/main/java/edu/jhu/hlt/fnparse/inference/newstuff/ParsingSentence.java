@@ -115,7 +115,7 @@ public class ParsingSentence {
 			if(fi == null) continue;	// no frame => no args
 			
 			FrameInstance goldFIat_i = goldFiTargets[i];
-			assert (goldFIat_i == null) == (fi.getGoldFrame() == Frame.nullFrame);
+			if(goldFIat_i == null) assert fi.getGoldFrame() == Frame.nullFrame;
 		
 			int K = fi.getMaxRoles();
 			roleVars[i] = new RoleVars[n][K];
@@ -127,12 +127,13 @@ public class ParsingSentence {
 						: VarType.PREDICTED;
 
 				// set the correct head for this role
-				Span roleKspan = k >= goldFIat_i.getFrame().numRoles()
+				Span roleKspan = k >= fi.getGoldFrame().numRoles()
 						? Span.nullSpan
 						: goldFIat_i.getArgument(k);
 				int roleKhead = roleKspan == Span.nullSpan
 						? -1
 						: hf.head(roleKspan, sentence);
+				
 				for(int j=0; j<n; j++) {
 					RoleVars rv = new RoleVars(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
 					roleVars[i][j][k] = rv;
@@ -143,6 +144,7 @@ public class ParsingSentence {
 							rv.setGoldIsNull();
 					}
 				}
+				
 			}
 		}
 	}
@@ -335,7 +337,6 @@ public class ParsingSentence {
 
 		// set the non-nullFrame vars to their correct Frame (and target Span) values
 		FrameInstance[] locationsOfGoldFIs = new FrameInstance[n];	// return this information
-		HeadFinder hf = new BraindeadHeadFinder();	// TODO
 		for(FrameInstance fi : p.getFrameInstances()) {
 			int head = hf.head(fi.getTarget(), p.getSentence());
 			locationsOfGoldFIs[head] = fi;

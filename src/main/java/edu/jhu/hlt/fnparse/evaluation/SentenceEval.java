@@ -48,6 +48,7 @@ public class SentenceEval {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
 			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
+			targetRolePreds.add(new Prediction(fi.getTarget(), f, -1));
 			int n = fi.getFrame().numRoles();
 			for(int i=0; i<n; i++) {
 				Span arg = fi.getArgument(i);

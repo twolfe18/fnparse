@@ -31,9 +31,6 @@ public class Parser {
 		public boolean useLatentDepenencies;
 		public boolean onlyFrameIdent;
 		
-		// subtract this much prob from p(f_i=nullFrame) when doing decoding in order to balance precision/recall
-		public double nullFrameOffset = 0.15d;
-		
 		public Alphabet<String> featIdx;
 		public FgModel model;
 		public List<FactorFactory> factors;
@@ -52,7 +49,7 @@ public class Parser {
 	public Parser() {
 
 		params = new ParserParams();
-		params.debug = true;
+		params.debug = false;
 		params.featIdx = new Alphabet<String>();
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
@@ -84,7 +81,7 @@ public class Parser {
 		bpParams.normalizeMessages = true;	// doesn't work if false :(
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = 10;
+		bpParams.maxIterations = 2;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
@@ -131,7 +128,7 @@ public class Parser {
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
 		
-		int numParams = 5 * 1000 * 1000;	// TODO
+		int numParams = 50 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)

@@ -1,21 +1,11 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.model.ExpFamFactor;
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.VarConfig;
-import edu.jhu.gm.model.VarSet;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.HasRoleFeatures;
+import edu.jhu.gm.model.*;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.util.Alphabet;
 
@@ -60,6 +50,10 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		
 		private FeatureVector[] cache;
 		
+		// indices in the VarSet/int[] config corresponding to the variables
+		int f_i_idx, r_ijk_idx;
+		int[] config = {-1, -1};
+		
 		public F(FrameVar f_i, RoleVars r_ijk, Sentence sent, HasRoleFeatures features) {
 			super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar()));
 			this.sent = sent;
@@ -68,6 +62,10 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 			this.roleVar = r_ijk;
 			
 			cache = new FeatureVector[getVars().calcNumConfigs()];
+			
+			VarSet vs = getVars();
+			f_i_idx = vs.indexOf(frameVar.getFrameVar());
+			r_ijk_idx = vs.indexOf(roleVar.getRoleVar());
 		}
 		
 		@Override
@@ -77,10 +75,11 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 				: super.getDotProd(config, model, logDomain);
 		}
 		
-		private boolean ruledOutByHardFactor(int config) {
-			final VarConfig conf = this.getVars().getVarConfig(config);
-			final Frame f_i = frameVar.getFrame(conf);
-			final Frame r_ijk = roleVar.getFrame(conf);
+		private boolean ruledOutByHardFactor(int configIdx) {
+
+			getVars().getVarConfigAsArray(configIdx, config);
+			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
+			final Frame r_ijk = roleVar.getPossibleFrames().get(config[r_ijk_idx]);
 			final int k = roleVar.getRoleIdx();
 
 			// r_ijk can only weight in on f_i values for two kinds of frames:
@@ -146,10 +145,8 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		}
 
 		public boolean messedUpSituation(int configIdx) {
-			VarConfig conf = this.getVars().getVarConfig(configIdx);
-			return messedUpSituation(frameVar.getFrame(conf));
-		}
-		public boolean messedUpSituation(Frame f_i) {
+			getVars().getVarConfigAsArray(configIdx, config);
+			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
 			int k = roleVar.getRoleIdx();
 			//return f_i != Frame.nullFrame && k >= f_i.numRoles();
 			return roleVar.getPossibleFrames().size() < frameVar.getFrames().size() &&  k >= f_i.numRoles();
@@ -177,26 +174,26 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		}
 		
 		@Override
-		public FeatureVector getFeatures(int config) {
-			if(cache[config] == null) {
-				VarConfig conf = this.getVars().getVarConfig(config);
-				Frame frame = frameVar.getFrame(conf);
-				boolean roleActive = roleVar.argIsRealized(conf);
-				Span argument = roleVar.getSpanDummy(conf);
-				if(messedUpSituation(frame)) {
-					cache[config] = getFeaturesForMessedUpSituation(frame, roleVar.getFrame(conf));
+		public FeatureVector getFeatures(int configIdx) {
+			if(cache[configIdx] == null) {
+				getVars().getVarConfigAsArray(configIdx, config);
+				final Frame frame = frameVar.getFrame(config[f_i_idx]);
+				final boolean roleActive = roleVar.argIsRealize(config[r_ijk_idx]);
+				Span argument = roleVar.getSpanDummy();
+				if(messedUpSituation(configIdx)) {
+					cache[configIdx] = getFeaturesForMessedUpSituation(frame, roleVar.getFrame(config[r_ijk_idx]));
 				}
 				else {
-					if(ruledOutByHardFactor(config)) {
-						cache[config] = AbstractFeatures.emptyFeatures;
+					if(ruledOutByHardFactor(configIdx)) {
+						cache[configIdx] = AbstractFeatures.emptyFeatures;
 					}
 					else {
-						cache[config] = features.getFeatures(frame, frameVar.getTargetHeadIdx(), roleActive,
+						cache[configIdx] = features.getFeatures(frame, frameVar.getTargetHeadIdx(), roleActive,
 								roleVar.getRoleIdx(), argument, roleVar.getArgHeadIdx(), sent);
 					}
 				}
 			}
-			return cache[config];
+			return cache[configIdx];
 		}
 	}
 	
