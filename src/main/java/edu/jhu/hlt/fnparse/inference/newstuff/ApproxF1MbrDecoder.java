@@ -15,11 +15,13 @@ public class ApproxF1MbrDecoder {
 	
 	/**
 	 * @param recallBias higher values will penalize false negatives
-	 * more than false positives, and thus increase recall.
+	 * more than false positives, and thus increase recall. If you give
+	 * 1, then false positives and false negatives will have the same
+	 * loss.
 	 */
 	public ApproxF1MbrDecoder(double recallBias) {
-		this.falseNegPenalty = falsePosPenalty;
-		this.falsePosPenalty = 1d / falsePosPenalty;
+		this.falseNegPenalty = recallBias;
+		this.falsePosPenalty = 1d / recallBias;
 	}
 	
 	public Map<Var, Integer> decode(Map<Var, DenseFactor> margins, int nullIndex) {

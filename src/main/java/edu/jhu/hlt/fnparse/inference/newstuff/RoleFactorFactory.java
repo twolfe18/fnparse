@@ -75,6 +75,31 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 				: super.getDotProd(config, model, logDomain);
 		}
 		
+		public Frame getFrame(int configIdx) {
+			getVars().getVarConfigAsArray(configIdx, config);
+			return frameVar.getFrame(config[f_i_idx]);
+		}
+		
+		public boolean argIsRealized(int configIdx) {
+			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
+			final Frame r_ijk = roleVar.getPossibleFrames().get(config[r_ijk_idx]);
+			if(r_ijk == Frame.nullFrame)
+				return false;
+			else {
+				// TODO maybe f_i == nullFrame and r_ijk doesn't matter, not realized?
+				assert f_i == r_ijk;
+				return true;
+			}
+		}
+		
+		public int getRoleIdx() { return roleVar.getRoleIdx(); }
+		
+		public int getTargetHead() { return frameVar.getTargetHeadIdx(); }
+		
+		public Span getArgumentSpan() {
+			return roleVar.getSpanDummy();
+		}
+		
 		private boolean ruledOutByHardFactor(int configIdx) {
 
 			getVars().getVarConfigAsArray(configIdx, config);

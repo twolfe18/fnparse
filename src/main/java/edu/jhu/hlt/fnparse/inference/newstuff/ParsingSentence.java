@@ -12,6 +12,7 @@ import edu.jhu.gm.decode.MbrDecoder;
 import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
@@ -153,7 +154,7 @@ public class ParsingSentence {
 	/**
 	 * all r_ijk are instantiated as latent with arity of \max_f f.numRoles
 	 */
-	public void setupRoleVarsForFrameDecode() {
+	public void setupRoleVarsForDecode(VarType roleVarsLatentOrPredicted) {
 		final int n = sentence.size();
 		roleVars = new RoleVars[n][][];
 		for(int i=0; i<n; i++) {
@@ -163,7 +164,7 @@ public class ParsingSentence {
 			roleVars[i] = new RoleVars[n][K];
 			for(int j=0; j<n; j++)
 				for(int k=0; k<K; k++)
-					roleVars[i][j][k] = new RoleVars(VarType.LATENT, fv.getFrames(), sentence, i, j, k, params.logDomain);
+					roleVars[i][j][k] = new RoleVars(roleVarsLatentOrPredicted, fv.getFrames(), sentence, i, j, k, params.logDomain);
 		}
 	}
 
@@ -199,6 +200,33 @@ public class ParsingSentence {
 	
 	
 	/**
+	 * @deprecated wont work :(
+	 */
+	public FNParse jointDecode(FgModel model, FgInferencerFactory infFactory) {
+		final int n = sentence.size();
+		setupRoleVarsForDecode(VarType.PREDICTED); 
+		FgExample fge = this.getFgExample();
+		FactorGraph fg = fge.getOriginalFactorGraph();
+		FgInferencer inf = infFactory.getInferencer(fg);
+
+		FrameInstance[] decoded = new FrameInstance[n];
+		for(Factor f : this.factors) {
+			if(f instanceof RoleFactorFactory.F) {
+				RoleFactorFactory.F phi = (RoleFactorFactory.F) f;
+				DenseFactor fr = inf.getMarginalsForFactorId(f.getId());
+				int config = fr.getArgmaxConfigId();
+				Frame f_i = phi.getFrame(config);
+				int k = phi.getRoleIdx();
+				// AGHGHGHGHGHAHHHHHH
+				// this wont work, you could get opposing values of f_i for various factors on (f_i, r_ijk)
+				// ... need to marginal decode on f_i and then r_ijk like before :(
+			}
+		}
+		
+		return null;
+	}
+	
+	/**
 	 * This is a two step process:
 	 * 1. decode f_i with r_ijk latent
 	 * 2. clamp f_i and set r_ijk to predicted, decode r_ijk
@@ -208,37 +236,62 @@ public class ParsingSentence {
 		final int n = sentence.size();
 		
 		// decode frames
-		setupRoleVarsForFrameDecode();
 		
-		// TODO need to modify the MBR decoder so that I can penalize
-		// false negatives and fall positives differently so that I can maximize F1
+		setupRoleVarsForDecode(VarType.LATENT);
+		
+		boolean newWay = true;
+		Frame[] decodedFrames = new Frame[n];
+		VarConfig clampedFrames = new VarConfig();
 		MbrDecoderPrm prm = new MbrDecoderPrm();
 		prm.infFactory = infFactory;
 		MbrDecoder decoder = new MbrDecoder(prm);
-		FgExample fge1 = this.getFgExample();
-		BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
-		VarConfig f_i_decode = decoder.getMbrVarConfig();
-		VarConfig clampedFrames = new VarConfig();
-		Frame[] decodedFrames = new Frame[n];
-		for(int i=0; i<n; i++) {
-			FrameVar fv = frameVars[i];
-			if(fv == null) continue;
-			
-			if(debugDecodePart1) {
-				FactorGraph fg = fge1.getOriginalFactorGraph();
-				FgNode f_i = fg.getNode(fv.getFrameVar());
-				System.out.println(f_i);
-				for(FgEdge edge : f_i.getInEdges()) {
-					DenseFactor df = bp.getMessages()[edge.getId()].message;
-					System.out.println("edge    = " + edge);
-					System.out.println("factor  = " + edge.getParent());
-					System.out.println("message = " + df);
-				}
-				System.out.println();
+		if(newWay) {
+			FgExample fge1 = this.getFgExample();
+			FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
+			FgInferencer inf = infFactory.getInferencer(fg1);
+			inf.run();
+			for(int i=0; i<n; i++) {
+				FrameVar fv = frameVars[i];
+				if(fv == null) continue;
+
+				DenseFactor df = inf.getMarginals(fv.getFrameVar());
+				int nullFrameIdx = 0;
+				assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
+				int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
+
+				System.out.println("margins at " + i + " = " + df);
+				
+				decodedFrames[i] = fv.getFrame(f_dec_idx);
+				clampedFrames.put(fv.getFrameVar(), f_dec_idx);
 			}
+		}
+		else {
+			// TODO need to modify the MBR decoder so that I can penalize
+			// false negatives and fall positives differently so that I can maximize F1
+			FgExample fge1 = this.getFgExample();
+			BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
+			VarConfig f_i_decode = decoder.getMbrVarConfig();
 			
-			decodedFrames[i] = fv.getFrame(f_i_decode);
-			clampedFrames.put(fv.getFrameVar(), f_i_decode.getState(fv.getFrameVar()));
+			for(int i=0; i<n; i++) {
+				FrameVar fv = frameVars[i];
+				if(fv == null) continue;
+
+				if(debugDecodePart1) {
+					FactorGraph fg = fge1.getOriginalFactorGraph();
+					FgNode f_i = fg.getNode(fv.getFrameVar());
+					System.out.println(f_i);
+					for(FgEdge edge : f_i.getInEdges()) {
+						DenseFactor df = bp.getMessages()[edge.getId()].message;
+						System.out.println("edge    = " + edge);
+						System.out.println("factor  = " + edge.getParent());
+						System.out.println("message = " + df);
+					}
+					System.out.println();
+				}
+
+				decodedFrames[i] = fv.getFrame(f_i_decode);
+				clampedFrames.put(fv.getFrameVar(), f_i_decode.getState(fv.getFrameVar()));
+			}
 		}
 
 		// decode args

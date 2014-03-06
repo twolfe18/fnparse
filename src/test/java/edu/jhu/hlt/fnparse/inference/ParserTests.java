@@ -27,6 +27,7 @@ public class ParserTests {
 //		SuperBob.getBob(null).startup();
 		
 		parser = new Parser();
+		parser.params.debug = true;
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
 	
@@ -84,7 +85,7 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d, 10d);
+		parser.train(train, 12, 1, 1d, 1d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

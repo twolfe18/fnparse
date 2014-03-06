@@ -33,6 +33,8 @@ public class Parser {
 		
 		public Alphabet<String> featIdx;
 		public FgModel model;
+		public ApproxF1MbrDecoder frameDecoder;
+		public ApproxF1MbrDecoder argDecoder;
 		public List<FactorFactory> factors;
 		public FrameIndex frameIndex;
 		public TargetPruningData targetPruningData;
@@ -57,6 +59,9 @@ public class Parser {
 		params.onlyFrameIdent = false;
 		params.targetPruningData = TargetPruningData.getInstance();
 
+		params.frameDecoder = new ApproxF1MbrDecoder(1d);
+		params.argDecoder = new ApproxF1MbrDecoder(2d);
+		
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
@@ -128,7 +133,9 @@ public class Parser {
 		trainerParams.batchMaximizer = new AdaGrad(adagParams);
 		trainerParams.infFactory = infFactory();
 		
-		int numParams = 50 * 1000 * 1000;	// TODO
+		int numParams = params.debug
+				? 750 * 1000
+				: 50 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)
