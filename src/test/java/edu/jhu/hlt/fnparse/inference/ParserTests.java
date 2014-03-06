@@ -26,7 +26,7 @@ public class ParserTests {
 //		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
 //		SuperBob.getBob(null).startup();
 		
-		boolean debug = true;
+		boolean debug = false;
 		parser = new Parser(debug);
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
@@ -84,7 +84,10 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 10, 1, 0.5d, 1d);
+		if(parser.params.debug)
+			parser.train(train, 4, 1, 0.5d, 1d);
+		else	// for full feature set, need less regularization and more iterations to converge
+			parser.train(train, 15, 1, 0.5d, 10d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");

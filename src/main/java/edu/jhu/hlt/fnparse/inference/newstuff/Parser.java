@@ -81,7 +81,7 @@ public class Parser {
 				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 			}
 			else {
-				rff.setFeatures(new ConstituencyFeatures(params.featIdx));
+				rff.setFeatures(new RoleConstituencyFeatures(params.featIdx));
 				rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
 			}
 			params.factors.add(rff);
