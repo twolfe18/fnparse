@@ -24,8 +24,13 @@ public class Timer {
 		long t = System.currentTimeMillis() - lastStart;
 		time += t;
 		count++;
-		if(printIterval > 0 && count % printIterval == 0)
-			System.out.printf("<Timer %s %.2f sec total, %.1f k call/sec\n", id, time/1000d, ((double)count)/time);
+		if(printIterval > 0 && count % printIterval == 0) {
+			double rate = ((double)count)/time;
+			if(rate >= 0.5d)
+				System.out.printf("<Timer %s %.2f sec total, %.1f k call/sec\n", id, time/1000d, rate);
+			else
+				System.out.printf("<Timer %s %.2f sec total, %.1f sec/call\n", id, time/1000d, (time/1000d)/count);
+		}
 		return t;
 	}
 	

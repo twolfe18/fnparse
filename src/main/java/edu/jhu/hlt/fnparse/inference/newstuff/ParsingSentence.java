@@ -198,18 +198,18 @@ public class ParsingSentence {
 		FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
 		FgInferencer inf1 = infFactory.getInferencer(fg1);
 		inf1.run();
-		int numFramesTriggered = 0, numFrameHyps = 0;
+		int numFramesTriggered = 0;
 		for(int i=0; i<n; i++) {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
-			numFrameHyps++;
 			
 			DenseFactor df = inf1.getMarginals(fv.getFrameVar());
 			int nullFrameIdx = 0;
 			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
 			int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
 
-			System.out.println("margins at " + i + " = " + df);
+			if(debugDecodePart1 && params.debug)
+				System.out.println("margins at " + i + " = " + df);
 
 			decodedFrames[i] = fv.getFrame(f_dec_idx);
 			clampedFrames.put(fv.getFrameVar(), f_dec_idx);
@@ -236,25 +236,12 @@ public class ParsingSentence {
 		else if(numFramesTriggered > 0) {
 			setupRoleVarsForRoleDecode(decodedFrames);
 
-			// clamp f_i and run inference
-//			this.getFgExample();
-//			int unclampedSize = fg.getVars().size();
-//			assert unclampedSize > 0;
-//			assert unclampedSize > numFrameHyps : "there should be some r_ijk vars in here";
-//			assert fg.getFactors().size() > numFrameHyps;
-//			FactorGraph oldFg = fg;
-//			fg = fg.getClamped(clampedFrames);
-//			assert fg.getVars().size() <= unclampedSize - clampedFrames.size();
-//			assert fg.getVars().size() > 0;
-//			FgExample fge2 = new FgExample(fg, gold);
-//			fge2.updateFgLatPred(model, params.logDomain);
-//			FgInferencer inf2 = infFactory.getInferencer(fg);
-//			inf2.run();
-			
 			FgExample needToModify = this.getFgExample();
 			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
 			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
+			fge2.updateFgLatPred(model, params.logDomain);
 			FgInferencer inf2 = infFactory.getInferencer(fge2.getOriginalFactorGraph());
+			inf2.run();
 			
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
@@ -285,7 +272,7 @@ public class ParsingSentence {
 							active.add(j);
 							risks.add(riskBuf[r_ijk_dec]);
 						}
-						if(debugDecodePart2) {
+						if(debugDecodePart2 && params.debug) {
 							System.out.printf("[decode part2] %s.%s = %s risks:%s\n",
 									f.getName(), f.getRole(k), sentence.getLU(j), Arrays.toString(riskBuf));
 						}
@@ -297,12 +284,12 @@ public class ParsingSentence {
 						int j = -1;
 						if(active.size() == 1) {
 							j = active.get(0);
-							if(debugDecodePart2)
+							if(debugDecodePart2 && params.debug)
 								System.out.println("[decode part2] unabiguous min risk: " + sentence.getLU(j).getFullString());
 						}
 						else {
 							// have to choose which index has the lowest (marginal) risk
-							if(debugDecodePart2) {
+							if(debugDecodePart2 && params.debug) {
 								System.out.printf("[decode part2] more than one token has min risk @ arg realized. indices=%s risks=%s\n",
 									active, risks);
 							}
@@ -318,7 +305,7 @@ public class ParsingSentence {
 						// choose the most likely expansion/span conditioned on the arg head index
 						RoleVars r_ijk = roleVars[i][j][k];
 						DenseFactor df = inf2.getMarginals(r_ijk.getExpansionVar());
-						if(debugDecodePart2) {
+						if(debugDecodePart2 && params.debug) {
 							System.out.println("[decode part2] expansion marginals: " + Arrays.toString(df.getValues()));
 						}
 						int expansionConfig = df.getArgmaxConfigId();
@@ -366,8 +353,10 @@ public class ParsingSentence {
 			int head = hf.head(fi.getTarget(), p.getSentence());
 			locationsOfGoldFIs[head] = fi;
 			if(frameVars[head] == null) {
-				System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
-						" because the candidate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
+				if(params.debug) {
+					System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
+							" because the candidate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
+				}
 				continue;
 			}
 			frameVars[head].setGold(fi);

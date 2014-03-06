@@ -89,7 +89,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		if(featIdx.isGrowing()) {
 			int sz = featIdx.size();
 			idx = featIdx.lookupIndex(s, true);
-			if(sz > 2 * 1000 * 1000 && idx == sz && sz % 500 == 0)
+			if(sz > 2 * 1000 * 1000 && idx == sz && sz % 100000 == 0)
 				System.out.println("[AbstractFeatures b] alph just grew to " + sz);
 			fv.add(idx, weight);
 		}

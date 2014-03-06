@@ -60,12 +60,12 @@ public class Parser {
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
-		params.onlyFrameIdent = true;
+		params.onlyFrameIdent = false;
 		params.usePrototypes = false;
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);
-		params.argDecoder = new ApproxF1MbrDecoder(1d);
+		params.argDecoder = new ApproxF1MbrDecoder(1.5d);
 		
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
@@ -92,7 +92,7 @@ public class Parser {
 	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
-		bpParams.normalizeMessages = false;
+		bpParams.normalizeMessages = true;
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
 		bpParams.maxIterations = 2;

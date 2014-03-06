@@ -7,8 +7,9 @@ import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
+import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 public class ParserExperiment {
 
@@ -190,41 +191,55 @@ public class ParserExperiment {
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 20;
-		int nTest = 5;
+		int nTrain = 60;
+		int nTest = 20;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
 		printMemUsage();
 		
+		Timer trainTimer = new Timer("trainTimer", 1);
+		Timer decodeTimer = new Timer("decodeTimer", 1);
+		
 		// train and evaluate along the way
+		int trainSentencesProcessed = 0;
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
 		parser.params.onlyFrameIdent = false;
-		for(int epoch=0; epoch<8; epoch++) {
+		for(int epoch=0; epoch<2; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 1;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
 			double regularizerMult = 1d;
+			trainTimer.start();
 			parser.train(train, passes, batchSize, lrMult, regularizerMult);
+			trainTimer.stop();
+			trainSentencesProcessed += train.size() * passes;
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
 			printMemUsage();
 
 			System.out.println("[ParserExperiment] predicting on test set...");
+			decodeTimer.start();
 			predicted = parser.parseWithoutPeeking(test);
+			decodeTimer.stop();
 			results = BasicEvaluation.evaluate(test, predicted);
 			BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
 			printMemUsage();
 			
 			System.out.println("[ParserExperiment] predicting on train set...");
+			decodeTimer.start();
 			predicted = parser.parseWithoutPeeking(trainSubset);
+			decodeTimer.stop();
 			results = BasicEvaluation.evaluate(trainSubset, predicted);
 			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
 			printMemUsage();
 			parser.writeoutWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
+			
+			double secPerInst = trainTimer.totalTimeInSec() / trainSentencesProcessed;
+			System.out.println("time to train on 1000 sentences: " + (1000d * secPerInst));
 		}
 	}
 	
@@ -232,7 +247,7 @@ public class ParserExperiment {
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
 		final int maxArgWidth = 10;
 		final int maxTargetWidth = 3;
-		final int maxSentLen = 15;
+		final int maxSentLen = 20;
 		List<FNParse> buf = new ArrayList<FNParse>();
 		outer: for(FNParse t : train) {
 			for(FrameInstance fi : t.getFrameInstances()) {

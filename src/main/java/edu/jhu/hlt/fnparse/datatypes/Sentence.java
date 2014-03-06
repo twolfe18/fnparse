@@ -65,20 +65,21 @@ public final class Sentence implements HasId {
 	public String getId() { return id; }
 	
 	
+	public static final String fnStyleBadPOSstrPrefix = "couldn't convert Penn tag of ".toUpperCase();	// once in LU, this will be upcased anyway
 	/**
 	 * uses the lemma instead of the word, and converts POS to
 	 * a FrameNet style POS.
 	 */
 	public LexicalUnit getFNStyleLU(int i, IDictionary dict) {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
-		if(fnTag == null) fnTag = "couldn't convert Penn tag of " + pos[i];
+		if(fnTag == null) fnTag = fnStyleBadPOSstrPrefix + pos[i];
 		// wow, the lemmas i have right now are goofy
 		// "later" -> "lat"
 		// lets try wordnet's stemmer instead
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		List<String> allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
 		String word = allStems.isEmpty() ? tokens[i] : allStems.get(0);
-		System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s)\n", tokens[i], word, lemmas[i], allStems);
+		//System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s) (fnTag %s)\n", tokens[i], word, lemmas[i], allStems, fnTag);
 		return new LexicalUnit(word, fnTag);
 	}
 	
