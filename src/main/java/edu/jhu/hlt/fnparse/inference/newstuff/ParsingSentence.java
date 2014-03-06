@@ -198,10 +198,12 @@ public class ParsingSentence {
 		FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
 		FgInferencer inf1 = infFactory.getInferencer(fg1);
 		inf1.run();
+		int numFramesTriggered = 0, numFrameHyps = 0;
 		for(int i=0; i<n; i++) {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
-
+			numFrameHyps++;
+			
 			DenseFactor df = inf1.getMarginals(fv.getFrameVar());
 			int nullFrameIdx = 0;
 			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
@@ -211,6 +213,9 @@ public class ParsingSentence {
 
 			decodedFrames[i] = fv.getFrame(f_dec_idx);
 			clampedFrames.put(fv.getFrameVar(), f_dec_idx);
+			
+			if(decodedFrames[i] != Frame.nullFrame)
+				numFramesTriggered++;
 		}
 
 
@@ -219,20 +224,37 @@ public class ParsingSentence {
 		if(params.onlyFrameIdent) {
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
+				if(f == null || f == Frame.nullFrame)
+					continue;
+				Span[] args = new Span[f.numRoles()];
+				Arrays.fill(args, Span.nullSpan);
 				if(f != null && f != Frame.nullFrame)
-					decodedFIs[i] = FrameInstance.frameMention(f, Span.widthOne(i), sentence);
+					decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
+					//decodedFIs[i] = FrameInstance.frameMention(f, Span.widthOne(i), sentence);
 			}
 		}
-		else {
+		else if(numFramesTriggered > 0) {
 			setupRoleVarsForRoleDecode(decodedFrames);
 
 			// clamp f_i and run inference
+//			this.getFgExample();
+//			int unclampedSize = fg.getVars().size();
+//			assert unclampedSize > 0;
+//			assert unclampedSize > numFrameHyps : "there should be some r_ijk vars in here";
+//			assert fg.getFactors().size() > numFrameHyps;
+//			FactorGraph oldFg = fg;
+//			fg = fg.getClamped(clampedFrames);
+//			assert fg.getVars().size() <= unclampedSize - clampedFrames.size();
+//			assert fg.getVars().size() > 0;
+//			FgExample fge2 = new FgExample(fg, gold);
+//			fge2.updateFgLatPred(model, params.logDomain);
+//			FgInferencer inf2 = infFactory.getInferencer(fg);
+//			inf2.run();
+			
 			FgExample needToModify = this.getFgExample();
 			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
 			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
-			fge2.updateFgLatPred(model, params.logDomain);
 			FgInferencer inf2 = infFactory.getInferencer(fge2.getOriginalFactorGraph());
-			inf2.run();
 			
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
@@ -439,7 +461,7 @@ public class ParsingSentence {
 			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
 		}
 		
-		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
+		return new FrameVar(s, headIdx, prototypes, frameMatches, params);
 	}
 	
 	

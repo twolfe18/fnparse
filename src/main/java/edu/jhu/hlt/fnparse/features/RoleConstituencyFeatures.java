@@ -81,21 +81,21 @@ public class RoleConstituencyFeatures extends AbstractFeatures<RoleConstituencyF
 		for(int i=argSpan.start; i<argSpan.end; i++) {
 			
 			LexicalUnit x = sent.getLU(i);
-			int si = i - argSpan.start;
-			int ei = argSpan.end - i - 1;
+			String si = String.valueOf(i - argSpan.start) + "->";
+			String ei = "<-" + String.valueOf(argSpan.end - i - 1);
 			
-			b(v, "->" + si, x.word);
-			b(v, "->" + si, x.pos);
-			b(v, "<-" + ei, x.word);
-			b(v, "<-" + ei, x.pos);
-			b(v, r, "->" + si, x.word);
-			b(v, r, "->" + si, x.pos);
-			b(v, r, "<-" + ei, x.word);
-			b(v, r, "<-" + ei, x.pos);
-			b(v, 2d, rr, "->" + si, x.word);
-			b(v, 2d, rr, "->" + si, x.pos);
-			b(v, 2d, rr, "<-" + ei, x.word);
-			b(v, 2d, rr, "<-" + ei, x.pos);
+			b(v, si, x.word);
+			b(v, si, x.pos);
+			b(v, ei, x.word);
+			b(v, ei, x.pos);
+			b(v, r, si, x.word);
+			b(v, r, si, x.pos);
+			b(v, r, ei, x.word);
+			b(v, r, ei, x.pos);
+			b(v, 2d, rr, si, x.word);
+			b(v, 2d, rr, si, x.pos);
+			b(v, 2d, rr, ei, x.word);
+			b(v, 2d, rr, ei, x.pos);
 			
 			b(v, "contains", x.word);
 			b(v, "contains", x.pos);

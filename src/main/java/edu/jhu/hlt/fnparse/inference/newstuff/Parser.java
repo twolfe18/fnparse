@@ -30,6 +30,7 @@ public class Parser {
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
 		public boolean onlyFrameIdent;
+		public boolean usePrototypes;
 		
 		public Alphabet<String> featIdx;
 		public FgModel model;
@@ -59,7 +60,8 @@ public class Parser {
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
-		params.onlyFrameIdent = false;
+		params.onlyFrameIdent = true;
+		params.usePrototypes = false;
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);

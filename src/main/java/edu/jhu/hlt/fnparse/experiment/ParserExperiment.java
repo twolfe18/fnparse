@@ -187,15 +187,13 @@ public class ParserExperiment {
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
-//		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
-//		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
+		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
+		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 40;
-		int nTest = 10;
-		//if(hurryUp)  {
+		int nTrain = 20;
+		int nTest = 5;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
-		//}
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
 		printMemUsage();
 		
@@ -203,6 +201,7 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
+		parser.params.onlyFrameIdent = false;
 		for(int epoch=0; epoch<8; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 1;
@@ -233,7 +232,7 @@ public class ParserExperiment {
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
 		final int maxArgWidth = 10;
 		final int maxTargetWidth = 3;
-		final int maxSentLen = 20;
+		final int maxSentLen = 15;
 		List<FNParse> buf = new ArrayList<FNParse>();
 		outer: for(FNParse t : train) {
 			for(FrameInstance fi : t.getFrameInstances()) {

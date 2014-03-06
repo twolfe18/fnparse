@@ -22,19 +22,10 @@ public class ParserTests {
 	
 	@Before
 	public void setupBob() {
-//		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
-//		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
-//		SuperBob.getBob(null).startup();
-		
-		boolean debug = false;
+		boolean debug = true;
 		parser = new Parser(debug);
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
-	
-//	@After
-//	public void shutdownBob() {
-//		SuperBob.getBob(null).shutdown();
-//	}
 	
 	@Before
 	public void setupDummyParse() {

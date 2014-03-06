@@ -5,6 +5,7 @@ import java.util.*;
 import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public class FrameVar implements FgRelated {
 	
@@ -39,7 +40,7 @@ public class FrameVar implements FgRelated {
 				headIdx, frames.size(), prototypes.size(), maxRoles);
 	}
 	
-	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, boolean logDomain) {
+	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
 		
 		if(frames.size() == 0 || prototypes.size() == 0)
 			throw new IllegalArgumentException("#frames=" + frames.size() + ", #prototypes=" + prototypes.size());
@@ -57,10 +58,14 @@ public class FrameVar implements FgRelated {
 		
 		this.sent = s;
 		this.headIdx = headIdx;
-		this.prototypes = prototypes;
-		this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, protoVarNames);
+		
 		this.frames = frames;
 		this.frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, frameVarNames);
+		
+		if(params.usePrototypes) {
+			this.prototypes = prototypes;
+			this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, protoVarNames);
+		}
 		
 		//this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
 		//this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
@@ -122,13 +127,8 @@ public class FrameVar implements FgRelated {
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		
-		// so the issue is that i'd like to be able to disable prototype vars.
-		// what if i just add it, and if no factors touch it, then there will
-		// be no edges for BP to send messages across.
-		// this might screw up some math that assumes all factors have an associated
-		// edge, but it should be a safe screw up: #factors > #factors-with-an-edge.
-		// solution: do indeed add this here, don't add factors if its too costly.
-		fg.addVar(prototypeVar);
+		if(prototypeVar != null)
+			fg.addVar(prototypeVar);
 		
 		fg.addVar(frameVar);
 		//fg.addVar(expansionVar);

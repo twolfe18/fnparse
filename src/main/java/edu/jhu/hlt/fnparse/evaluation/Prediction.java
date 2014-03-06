@@ -36,4 +36,9 @@ class Prediction {
 		}
 		else return false;
 	}
+	
+	@Override
+	public String toString() {
+		return String.format("<Prediction %s @ %s for role %d>", frame.getName(), span, roleIdx);
+	}
 }
