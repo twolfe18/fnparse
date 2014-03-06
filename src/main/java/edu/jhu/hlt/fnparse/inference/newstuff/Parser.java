@@ -90,7 +90,7 @@ public class Parser {
 	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
-		bpParams.normalizeMessages = true;	// doesn't work if false :(
+		bpParams.normalizeMessages = false;
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
 		bpParams.maxIterations = 2;
