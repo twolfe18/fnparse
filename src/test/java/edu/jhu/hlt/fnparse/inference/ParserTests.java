@@ -26,8 +26,8 @@ public class ParserTests {
 //		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
 //		SuperBob.getBob(null).startup();
 		
-		parser = new Parser();
-		parser.params.debug = true;
+		boolean debug = true;
+		parser = new Parser(debug);
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
 	
@@ -45,7 +45,6 @@ public class ParserTests {
 		int[] gov        = new int[]    {1,     3,       3,     -1,       3,      6,     4};
 		String[] depType = new String[] {"G",   "G",     "G",   "G",      "G",    "G",   "G"};
 		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas, gov, depType);
-
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();

@@ -73,11 +73,19 @@ public class RoleVars implements FgRelated {
 	private Var headVar;			// same domain as f_i, but the index for nullFrame means "off" -- or arg not realized
 	private int headVarGold = -1;
 
-	// TODO add the expansion stuff back
 	// expansion related
-//	private Expansion.Iter expansions;
-//	private Var expansionVar;
-//	private int expansionVarGold = -1;
+	private Expansion.Iter expansions;
+	private Var expansionVar;
+	private int expansionVarGold = -1;
+	
+	
+	
+	// NOTE: i think that we need a special vale for "arg not realized"/"nullSpan"/"nullExpansion"
+	// i think right now we're biased towards whatever we set as the gold label for non-realized arguments.
+	
+	// lets test this by setting the default to something else and see if we see that bias pop up.
+	
+	
 	
 	@Override
 	public String toString() {
@@ -107,9 +115,9 @@ public class RoleVars implements FgRelated {
 		String headVarName = String.format("r_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
 		this.headVar = new Var(latentOrPredicted, this.possibleFrames.size(), headVarName, null);
 		
-//		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
-//		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
-//		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
+		this.expansions = new Expansion.Iter(argHeadIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
+		String expVarName = String.format("r^e_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
+		this.expansionVar = new Var(latentOrPredicted, this.expansions.size(), expVarName, null);
 	}
 	
 	/**
@@ -119,7 +127,7 @@ public class RoleVars implements FgRelated {
 		headVarGold = possibleFrames.indexOf(Frame.nullFrame);
 		if(headVarGold < 0) throw new IllegalStateException();
 		
-		// TODO expansions
+		expansionVarGold = 0;	// arbitrary
 	}
 	
 	/**
@@ -134,14 +142,22 @@ public class RoleVars implements FgRelated {
 		headVarGold = possibleFrames.indexOf(f);
 		if(headVarGold < 0) throw new IllegalStateException();
 		
-		// TODO expansions
+		Expansion goldE = Expansion.headToSpan(argHeadIdx, s);
+		expansionVarGold = expansions.indexOf(goldE);
+		if(expansionVarGold < 0) {
+			System.err.println("[RoleVars setGold] couldn't set gold expansion to " + s + " because it was pruned");
+			expansionVarGold = 0;
+		}
 	}
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		fg.addVar(headVar);
-		if(varType == VarType.PREDICTED)
+		fg.addVar(expansionVar);
+		if(varType == VarType.PREDICTED) {
 			gold.put(headVar, headVarGold);
+			gold.put(expansionVar, expansionVarGold);
+		}
 	}
 	
 	/** i */
@@ -158,6 +174,10 @@ public class RoleVars implements FgRelated {
 	public List<Frame> getPossibleFrames() {
 		return possibleFrames;
 	}
+
+	public int numExpansions() { return expansions.size(); }
+	
+	public Var getExpansionVar() { return expansionVar; }
 	
 	/**
 	 * returns the Frame this argument is realized for
@@ -167,10 +187,11 @@ public class RoleVars implements FgRelated {
 	public Frame getFrame(int localIdx) {
 		return possibleFrames.get(localIdx);
 	}
-//	public Frame getFrame(VarConfig conf) {
-//		int idx = conf.getState(headVar);
-//		return possibleFrames.get(idx);
-//	}
+
+	public Frame getFrame(VarConfig conf) {
+		int idx = conf.getState(headVar);
+		return possibleFrames.get(idx);
+	}
 	
 //	public boolean argIsRealized(VarConfig conf) {
 //		return getFrame(conf) != Frame.nullFrame;
@@ -179,13 +200,19 @@ public class RoleVars implements FgRelated {
 		return possibleFrames.get(localConfig) != Frame.nullFrame;
 	}
 	
-	public Span getSpanDummy() {
-		//System.err.println("FIX ME!!");
-		return Span.widthOne(argHeadIdx);
+//	public Span getSpanDummy() {
+//		//System.err.println("FIX ME!!");
+//		return Span.widthOne(argHeadIdx);
+//	}
+	
+	public Span getSpan(int localIdx) {
+		return expansions.get(localIdx).upon(argHeadIdx);
 	}
 	
-//	public Span getSpanDummy(VarConfig conf) {
-//		return getSpanDummy();
-//	}
+	public Span getSpan(VarConfig conf) {
+		int cfg = conf.getState(expansionVar);
+		return expansions.get(cfg).upon(argHeadIdx);
+	}
+	
 }
 

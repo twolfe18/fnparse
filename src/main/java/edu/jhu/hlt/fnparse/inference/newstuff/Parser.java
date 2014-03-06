@@ -47,11 +47,14 @@ public class Parser {
 	public ParserParams params;
 	public final boolean benchmarkBP = false;
 	
-	
 	public Parser() {
+		this(false);
+	}
+	
+	public Parser(boolean debug) {
 
 		params = new ParserParams();
-		params.debug = false;
+		params.debug = debug;
 		params.featIdx = new Alphabet<String>();
 		params.logDomain = false;
 		params.frameIndex = FrameIndex.getInstance();
@@ -60,7 +63,7 @@ public class Parser {
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);
-		params.argDecoder = new ApproxF1MbrDecoder(2d);
+		params.argDecoder = new ApproxF1MbrDecoder(1d);
 		
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
@@ -73,10 +76,14 @@ public class Parser {
 		
 		if(!params.onlyFrameIdent) {
 			RoleFactorFactory rff = new RoleFactorFactory(params);
-			if(params.debug)
+			if(params.debug) {
+				rff.setFeatures(new DebuggingRoleSpanFeatures(params.featIdx));
 				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
-			else
+			}
+			else {
+				rff.setFeatures(new ConstituencyFeatures(params.featIdx));
 				rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+			}
 			params.factors.add(rff);
 		}
 	}
@@ -135,7 +142,7 @@ public class Parser {
 		
 		int numParams = params.debug
 				? 750 * 1000
-				: 50 * 1000 * 1000;	// TODO
+				: 30 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)

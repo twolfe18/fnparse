@@ -9,20 +9,15 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.util.Alphabet;
 
-/**
- * (f_i=nullFrame, r_ijk^e=*) => r_ijk=true
- * 
- * 
- * @author travis
- *
- */
-public abstract class HasRoleFeatures {
+public class HasRoleFeatures {
 	
 	protected ParserParams params;
 
+	/** @deprecated */
 	protected Features.FRE freFeatures;
 	protected Features.FR frFeatures;
-	protected Features.E cFeatures;
+	protected Features.RE reFeatures;
+	protected Features.E eFeatures;
 	
 	private FeatureVector fv_nullFrame;
 	private int fv_nullFrame_idx;
@@ -37,7 +32,8 @@ public abstract class HasRoleFeatures {
 	public HasRoleFeatures(HasRoleFeatures copy) {
 		freFeatures = copy.freFeatures;
 		frFeatures = copy.frFeatures;
-		cFeatures = copy.cFeatures;
+		reFeatures = copy.reFeatures;
+		eFeatures = copy.eFeatures;
 		params = copy.params;
 		fv_nullFrame = copy.fv_nullFrame;
 		fv_nullFrame_idx = copy.fv_nullFrame_idx;
@@ -47,7 +43,8 @@ public abstract class HasRoleFeatures {
 		List<Features> features = new ArrayList<Features>();
 		if(freFeatures != null) features.add(freFeatures);
 		if(frFeatures != null) features.add(frFeatures);
-		if(cFeatures != null) features.add(cFeatures);
+		if(reFeatures != null) features.add(reFeatures);
+		if(eFeatures != null) features.add(eFeatures);
 		return features;
 	}
 	
@@ -59,52 +56,41 @@ public abstract class HasRoleFeatures {
 		this.frFeatures = features;
 	}
 	
+	public void setFeatures(Features.RE features) {
+		this.reFeatures = features;
+	}
+	
 	public void setFeatures(Features.E features) {
-		this.cFeatures = features;
+		this.eFeatures = features;
 	}
 
 	public void setFeatures(HasRoleFeatures from) {
 		this.freFeatures = from.freFeatures;
 		this.frFeatures = from.frFeatures;
-		this.cFeatures = from.cFeatures;
+		this.eFeatures = from.eFeatures;
 	}
 
 	public boolean hasNoFeatures() {
-		return freFeatures == null && frFeatures == null && cFeatures == null;
+		return freFeatures == null && frFeatures == null && eFeatures == null;
 	}
 	
 	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
 	
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, boolean argIsRealized, int roleIdx, Span arg, int argHead, Sentence s) {
-		
-//		if(f == Frame.nullFrame) {
-//			if(argIsRealized)
-//				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-//				//throw new RuntimeException("should be ruled out by an overridden getDotProd");
-//			else {
-//				// uniform cost for (nullFrame, r_ijk=false, expansion) assignment
-//				// lower cost biases towards nullFrame
-//				// should be uniform because nullFrame doesn't care about which expansion,
-//				// just that we are summing out the same number of expansions when comparing
-//				// margins of r_ijk for nullFrame vs non-nullFrame.
-//				return fv_nullFrame;
-//			}
-//		}
-//		// non-nullFrame r_ijk=false assignments will get their own features
-//		// (rather than a constant) because there may be features that indicate
-//		// that certain spans are particularly *bad* for certain frames.
-//		
-//		if(roleIdx >= f.numRoles())
-//			return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-//			//throw new RuntimeException("should be ruled out by an overridden getDotProd");
-		
+	/**
+	 * the catch-all method that dispatches to the appropriate non-null features
+	 * and concatenates them all together.
+	 */
+	public FeatureVector getFeatures(Frame f_i, Frame r_ijk, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {		
 		FeatureVector fv = new FeatureVector();
+		final boolean argIsRealized = r_ijk != Frame.nullFrame;
 		if(freFeatures != null)
-			fv.add(freFeatures.getFeatures(f, argIsRealized, targetHeadIdx, roleIdx, arg, s));
+			fv.add(freFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, arg, s));
 		if(frFeatures != null)
-			fv.add(frFeatures.getFeatures(f, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
-		if(cFeatures != null)
-			fv.add(cFeatures.getFeatures(arg, s));
+			fv.add(frFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
+		if(reFeatures != null)
+			fv.add(reFeatures.getFeatures(r_ijk, targetHeadIdx, roleIdx, arg, s));
+		if(eFeatures != null)
+			fv.add(eFeatures.getFeatures(arg, s));
 		return fv;
 	}
 }

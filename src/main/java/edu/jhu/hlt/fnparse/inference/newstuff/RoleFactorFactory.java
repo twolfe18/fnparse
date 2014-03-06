@@ -16,6 +16,10 @@ import edu.jhu.util.Alphabet;
  * 
  * this should enforce all hard constraints on variables related to r_ijk.
  * 
+ * TODO i need to do the same thing i did with {@link FrameFactorFactory},
+ * that is allow it to instantiate two different factor types:
+ *   FR and RE (FRE will almost certainly be too expensive and isn't really needed)
+ * 
  * @author travis
  */
 public final class RoleFactorFactory extends HasRoleFeatures implements FactorFactory {
@@ -31,10 +35,43 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		List<Factor> factors = new ArrayList<Factor>();
 		int n = s.size();
 		for(int i=0; i<n; i++) {
+			FrameVar f_i = f[i];
 			if(r[i] == null) continue;
-			for(int j=0; j<n; j++)
-				for(int k=0; k<r[i][j].length; k++)
-					factors.add(new F(f[i], r[i][j][k], s, this));
+			assert f_i != null;
+			for(int j=0; j<n; j++) {
+				for(int k=0; k<r[i][j].length; k++) {
+					
+					RoleVars r_ijk = r[i][j][k];
+					
+					// containsR and containsE could in principle be the same set
+					if(this.freFeatures != null)
+						throw new UnsupportedOperationException("update this code to merge containsR and containsE");
+					
+					HasRoleFeatures rFeats = new HasRoleFeatures(this);
+					rFeats.setFeatures((Features.RE) null);
+					rFeats.setFeatures((Features.E) null);
+					VarSet containsR = new VarSet();
+					containsR.add(r_ijk.getRoleVar());
+					if(this.frFeatures != null) {
+						containsR.add(f_i.getFrameVar());
+						rFeats.setFeatures(frFeatures);
+					}
+					else
+						assert false : "no role features?";
+					
+					HasRoleFeatures eFeats = new HasRoleFeatures(this);
+					eFeats.setFeatures((Features.FR) null); 
+					VarSet containsE = new VarSet();
+					containsE.add(r_ijk.getExpansionVar());
+					if(this.reFeatures != null)
+						containsE.add(r_ijk.getRoleVar());
+					else
+						assert this.eFeatures != null : "no expansion features?";
+					
+					factors.add(new F(f_i, r_ijk, containsR, s, rFeats));
+					factors.add(new F(f_i, r_ijk, containsE, s, eFeats));
+				}
+			}
 		}
 		return factors;
 	}
@@ -48,65 +85,60 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		private FrameVar frameVar;
 		private RoleVars roleVar;
 		
+		private boolean readF, readR, readE;
+		
 		private FeatureVector[] cache;
 		
+		// TODO reintroduce this optimization later
+		// note that i don't think it will make a huge difference because we're only computing features once
 		// indices in the VarSet/int[] config corresponding to the variables
-		int f_i_idx, r_ijk_idx;
-		int[] config = {-1, -1};
+//		int f_i_idx, r_ijk_idx;
+//		int[] config = {-1, -1};
 		
-		public F(FrameVar f_i, RoleVars r_ijk, Sentence sent, HasRoleFeatures features) {
-			super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar()));
+		public F(FrameVar f_i, RoleVars r_ijk, VarSet varsNeeded, Sentence sent, HasRoleFeatures features) {
+			//super(new VarSet(f_i.getFrameVar(), r_ijk.getRoleVar()));
+			super(varsNeeded);
 			this.sent = sent;
 			this.features = features;
 			this.frameVar = f_i;
 			this.roleVar = r_ijk;
 			
+			readF = varsNeeded.contains(f_i.getFrameVar());
+			readR = varsNeeded.contains(r_ijk.getRoleVar());
+			readE = varsNeeded.contains(r_ijk.getExpansionVar());
+			
 			cache = new FeatureVector[getVars().calcNumConfigs()];
 			
-			VarSet vs = getVars();
-			f_i_idx = vs.indexOf(frameVar.getFrameVar());
-			r_ijk_idx = vs.indexOf(roleVar.getRoleVar());
-		}
-		
-		@Override
-		public double getDotProd(int config, FgModel model, boolean logDomain) {
-			return ruledOutByHardFactor(config) && !messedUpSituation(config)
-				? (logDomain ? Double.NEGATIVE_INFINITY : 0d)
-				: super.getDotProd(config, model, logDomain);
-		}
-		
-		public Frame getFrame(int configIdx) {
-			getVars().getVarConfigAsArray(configIdx, config);
-			return frameVar.getFrame(config[f_i_idx]);
-		}
-		
-		public boolean argIsRealized(int configIdx) {
-			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
-			final Frame r_ijk = roleVar.getPossibleFrames().get(config[r_ijk_idx]);
-			if(r_ijk == Frame.nullFrame)
-				return false;
-			else {
-				// TODO maybe f_i == nullFrame and r_ijk doesn't matter, not realized?
-				assert f_i == r_ijk;
-				return true;
-			}
+//			VarSet vs = getVars();
+//			f_i_idx = vs.indexOf(frameVar.getFrameVar());
+//			r_ijk_idx = vs.indexOf(roleVar.getRoleVar());
 		}
 		
 		public int getRoleIdx() { return roleVar.getRoleIdx(); }
 		
 		public int getTargetHead() { return frameVar.getTargetHeadIdx(); }
-		
-		public Span getArgumentSpan() {
-			return roleVar.getSpanDummy();
+
+				
+		@Override
+		public double getDotProd(int config, FgModel model, boolean logDomain) {
+			return readF && ruledOutByHardFactor(config) && !messedUpSituation(config)
+				? (logDomain ? Double.NEGATIVE_INFINITY : 0d)
+				: super.getDotProd(config, model, logDomain);
 		}
 		
+
 		private boolean ruledOutByHardFactor(int configIdx) {
 
-			getVars().getVarConfigAsArray(configIdx, config);
-			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
-			final Frame r_ijk = roleVar.getPossibleFrames().get(config[r_ijk_idx]);
-			final int k = roleVar.getRoleIdx();
+			// if you get here, just make sure that you're not calling this code path
+			// the readE only version of this factor doesn't need to check for this
+			if(!readF) 
+				throw new IllegalStateException("this code breaks if we're not reading F");
 
+			VarConfig conf = this.getVars().getVarConfig(configIdx);
+			final Frame f_i = readF ? frameVar.getFrame(conf) : null;
+			final Frame r_ijk = roleVar.getFrame(conf);
+			final int k = roleVar.getRoleIdx();
+			
 			// r_ijk can only weight in on f_i values for two kinds of frames:
 			// 1. f_i = nullFrame (i.e. no argument is realized for the other frames)
 			// 2. f_i = a frame that has at least k roles
@@ -114,65 +146,24 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 			// the semantics of r_ijk are:
 			// 1. r_ijk = nullFrame means all frames that r_ijk can speak about do not have an arg realized
 			// 2. r_ijk = a frame with at least k roles, meaning that this arg is realized (f_i must match r_ijk)
-			
-			
-			// we are making a big mistake here.
-			// we are saying that for values of f_i that a particular r_ijk cannot weigh in on
-			// (due to frame.numRoles < k)
-			// that the factor takes probability 0 (for the entire column of the (f_i, r_ijk) factor!!!)
-			
-			// this is the hackiest thing ever...
-			
-			// i have to send *some* message in this case k >= frame.numRoles
-			// so what should it be?
-			
-			// what i'd really like to do is send a message that would get added to the log-scores
-			// rather than multiplied in. the multiplying in of 0 is what's screwing me up.
-			// if we could add in to the log-score we could essentially say how much "evidence"
-			// we want to contribute.
-			
-			// there is also the possibility that we could set these to observed variables and make
-			// them predict r_ijk=nullFrame in cases where k >= frame.numRoles
-			// ^^^ this is weird because we're presuming a role that doesn't exist (k for frame),
-			//     exists and isn't realized.
-			
-			
-			// ...
-			
-			// wait, i'm looking at the factor:
-//			edge    = FgEdge [id=1094, Factor[r_{3,6,31},f_3] --> Var[f_3]]
-//					factor  = FgNode [isVar=false, var=null, factor=Factor [
-//					r_{3,6,31}  f_3  |  value
-//					    0    0  |  1.000000
-//					    1    0  |  0.000000
-//					    0    1  |  0.000000
-//					    1    1  |  0.000000
-//					    0    2  |  1.000000
-//					    1    2  |  0.250813
-//					    0    3  |  0.000000
-//					    1    3  |  0.000000
-//					]]
-//					message = Factor [
-//					  f_3  |  value
-//					    0  |  0.444284
-//					    1  |  0.000000
-//					    2  |  0.555716
-//					    3  |  0.000000
-//					]
-			// why don't we allow (f_i=1, r_ijk=0),
-			// meaning that a non-existent role for f_i=1 is not realized?
-			// ...thats why, it presumes that there are non-existent roles
-			
-			
+
 			boolean allowToWeighIn = k < f_i.numRoles() || f_i == Frame.nullFrame;
 			boolean legalConfig = allowToWeighIn && (r_ijk == Frame.nullFrame || r_ijk == f_i);
 			return !legalConfig;
 		}
+		
 
 		public boolean messedUpSituation(int configIdx) {
-			getVars().getVarConfigAsArray(configIdx, config);
-			final Frame f_i = frameVar.getFrame(config[f_i_idx]);
-			int k = roleVar.getRoleIdx();
+
+			// if you get here, just make sure that you're not calling this code path
+			// the readE only version of this factor doesn't need to check for this
+			if(!readF) 
+				throw new IllegalStateException("this code breaks if we're not reading F");
+			
+			VarConfig conf = this.getVars().getVarConfig(configIdx);
+			final Frame f_i = readF ? frameVar.getFrame(conf) : null;
+			final int k = roleVar.getRoleIdx();
+			
 			//return f_i != Frame.nullFrame && k >= f_i.numRoles();
 			return roleVar.getPossibleFrames().size() < frameVar.getFrames().size() &&  k >= f_i.numRoles();
 		}
@@ -185,6 +176,7 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		// i want this feature to have and intercept an a feature that knows how many f_i
 		// r_ijk can weight in on vs how many f_i there are total.
 		public FeatureVector getFeaturesForMessedUpSituation(Frame f_i, Frame r_ijk) {
+			assert readF;
 			assert roleVar.getPossibleFrames().size() < frameVar.getFrames().size();
 			FeatureVector v = new FeatureVector();
 			Alphabet<String> a = features.getFeatureAlph();
@@ -198,22 +190,25 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 			return v;
 		}
 		
+		
 		@Override
 		public FeatureVector getFeatures(int configIdx) {
 			if(cache[configIdx] == null) {
-				getVars().getVarConfigAsArray(configIdx, config);
-				final Frame frame = frameVar.getFrame(config[f_i_idx]);
-				final boolean roleActive = roleVar.argIsRealize(config[r_ijk_idx]);
-				Span argument = roleVar.getSpanDummy();
-				if(messedUpSituation(configIdx)) {
-					cache[configIdx] = getFeaturesForMessedUpSituation(frame, roleVar.getFrame(config[r_ijk_idx]));
-				}
+				
+				VarConfig conf = this.getVars().getVarConfig(configIdx);
+				final Frame f_i = readF ? frameVar.getFrame(conf) : null;
+				final Frame r_ijk = readR ? roleVar.getFrame(conf) : null;
+				
+				if(readF && messedUpSituation(configIdx))
+					cache[configIdx] = getFeaturesForMessedUpSituation(f_i, r_ijk);
 				else {
-					if(ruledOutByHardFactor(configIdx)) {
+					if(readF && ruledOutByHardFactor(configIdx)) {
 						cache[configIdx] = AbstractFeatures.emptyFeatures;
 					}
 					else {
-						cache[configIdx] = features.getFeatures(frame, frameVar.getTargetHeadIdx(), roleActive,
+						//assert readE;
+						Span argument = readE ? roleVar.getSpan(conf) : null;
+						cache[configIdx] = features.getFeatures(f_i, r_ijk, frameVar.getTargetHeadIdx(),
 								roleVar.getRoleIdx(), argument, roleVar.getArgHeadIdx(), sent);
 					}
 				}

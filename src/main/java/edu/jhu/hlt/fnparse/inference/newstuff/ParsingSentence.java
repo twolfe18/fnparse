@@ -1,44 +1,23 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import edu.jhu.gm.data.FgExample;
-import edu.jhu.gm.decode.MbrDecoder;
-import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
-import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.DenseFactor;
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.FactorGraph.FgEdge;
-import edu.jhu.gm.model.FactorGraph.FgNode;
-import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
-import edu.jhu.gm.model.VarConfig;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.*;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ParsingSentence {
 
+	private static final boolean debugTargetRecall = false;
 	private static final boolean debugDecodePart1 = true;	// frame decode
 	private static final boolean debugDecodePart2 = true;	// arg decode
 	
@@ -197,34 +176,7 @@ public class ParsingSentence {
 			}
 		}
 	}
-	
-	
-	/**
-	 * @deprecated wont work :(
-	 */
-	public FNParse jointDecode(FgModel model, FgInferencerFactory infFactory) {
-		final int n = sentence.size();
-		setupRoleVarsForDecode(VarType.PREDICTED); 
-		FgExample fge = this.getFgExample();
-		FactorGraph fg = fge.getOriginalFactorGraph();
-		FgInferencer inf = infFactory.getInferencer(fg);
 
-		FrameInstance[] decoded = new FrameInstance[n];
-		for(Factor f : this.factors) {
-			if(f instanceof RoleFactorFactory.F) {
-				RoleFactorFactory.F phi = (RoleFactorFactory.F) f;
-				DenseFactor fr = inf.getMarginalsForFactorId(f.getId());
-				int config = fr.getArgmaxConfigId();
-				Frame f_i = phi.getFrame(config);
-				int k = phi.getRoleIdx();
-				// AGHGHGHGHGHAHHHHHH
-				// this wont work, you could get opposing values of f_i for various factors on (f_i, r_ijk)
-				// ... need to marginal decode on f_i and then r_ijk like before :(
-			}
-		}
-		
-		return null;
-	}
 	
 	/**
 	 * This is a two step process:
@@ -274,19 +226,23 @@ public class ParsingSentence {
 		else {
 			setupRoleVarsForRoleDecode(decodedFrames);
 
-			// clamp f_i
+			// clamp f_i and run inference
 			FgExample needToModify = this.getFgExample();
 			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
 			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
 			fge2.updateFgLatPred(model, params.logDomain);
 			FgInferencer inf2 = infFactory.getInferencer(fge2.getOriginalFactorGraph());
 			inf2.run();
+			
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
 				if(f == null || f == Frame.nullFrame)
 					continue;
+			
 				Span[] args = new Span[f.numRoles()];
 				Arrays.fill(args, Span.nullSpan);
+				
+				// for each role, choose the most sensible realization of this role
 				for(int k=0; k<f.numRoles(); k++) {
 					
 					// we are going to decode every r_ijk separately (they're all binary variables for arg realized or not)
@@ -307,24 +263,44 @@ public class ParsingSentence {
 							active.add(j);
 							risks.add(riskBuf[r_ijk_dec]);
 						}
+						if(debugDecodePart2) {
+							System.out.printf("[decode part2] %s.%s = %s risks:%s\n",
+									f.getName(), f.getRole(k), sentence.getLU(j), Arrays.toString(riskBuf));
+						}
 					}
 					
 					if(active.size() == 0)
 						args[k] = Span.nullSpan;
-					else if(active.size() == 1)
-						args[k] = Span.widthOne(active.get(0));
-					else {
-						// have to choose which index has the lowest risk
-						double minR = 0d;
-						int minRI = -1;
-						for(int ji=0; ji<active.size(); ji++) {
-							double r = risks.get(ji);
-							if(r < minR || minRI < 0) {
-								minR = r;
-								minRI = active.get(ji);
+					else  {
+						int j = -1;
+						if(active.size() == 1) {
+							j = active.get(0);
+							if(debugDecodePart2)
+								System.out.println("[decode part2] unabiguous min risk: " + sentence.getLU(j).getFullString());
+						}
+						else {
+							// have to choose which index has the lowest (marginal) risk
+							if(debugDecodePart2) {
+								System.out.printf("[decode part2] more than one token has min risk @ arg realized. indices=%s risks=%s\n",
+									active, risks);
+							}
+							double minR = 0d;
+							for(int ji=0; ji<active.size(); ji++) {
+								double r = risks.get(ji);
+								if(r < minR || j < 0) {
+									minR = r;
+									j = active.get(ji);
+								}
 							}
 						}
-						args[k] = Span.widthOne(minRI);
+						// choose the most likely expansion/span conditioned on the arg head index
+						RoleVars r_ijk = roleVars[i][j][k];
+						DenseFactor df = inf2.getMarginals(r_ijk.getExpansionVar());
+						if(debugDecodePart2) {
+							System.out.println("[decode part2] expansion marginals: " + Arrays.toString(df.getValues()));
+						}
+						int expansionConfig = df.getArgmaxConfigId();
+						args[k] = r_ijk.getSpan(expansionConfig);
 					}
 				}
 				decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
@@ -413,11 +389,7 @@ public class ParsingSentence {
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
-		
-		if(s.getWord(headIdx).equals("later")) {
-			System.out.println("debugging");
-		}
-		
+
 		Set<Frame> uniqFrames = new HashSet<Frame>();
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
@@ -459,12 +431,13 @@ public class ParsingSentence {
 			}
 		}
 		
-		
 		if(frameMatches.size() == 1)	// nullFrame
 			return null;
 		
-//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
-//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		if(debugTargetRecall) {
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		}
 		
 		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
 	}
