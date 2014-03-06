@@ -49,8 +49,11 @@ public class ApproxF1MbrDecoder {
 	 * 
 	 * @param posterior should be probabilities (not log-probs)!
 	 * @param nullIndex is, e.g., the index of nullFrame
+	 * @param risks can be null, but otherwise will be filled with the risk estimates.
 	 */
-    public int decode(double[] posterior, int nullIndex) {
+    public int decode(double[] posterior, int nullIndex, double[] risks) {
+    	if(risks != null && risks.length != posterior.length)
+    		throw new IllegalArgumentException();
     	final int n = posterior.length;
     	int minI = -1;
     	double minR = 0d;
@@ -70,10 +73,15 @@ public class ApproxF1MbrDecoder {
     			minR = risk;
     			minI = i;
     		}
+    		if(risks != null)
+    			risks[i] = risk;
     	}
     	if(Math.abs(Z - 1d) > 1e-5)
     		throw new IllegalArgumentException("that posterior ain't a distribution! " + Arrays.toString(posterior));
     	return minI;
+    }
+    public int decode(double[] posterior, int nullIndex) {
+    	return decode(posterior, nullIndex, null);
     }
     
 }

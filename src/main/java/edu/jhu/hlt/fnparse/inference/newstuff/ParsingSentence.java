@@ -235,66 +235,34 @@ public class ParsingSentence {
 		
 		final int n = sentence.size();
 		
-		// decode frames
-		
+
+		// =============== DECODE FRAMES ===============================================================
 		setupRoleVarsForDecode(VarType.LATENT);
 		
-		boolean newWay = true;
 		Frame[] decodedFrames = new Frame[n];
 		VarConfig clampedFrames = new VarConfig();
-		MbrDecoderPrm prm = new MbrDecoderPrm();
-		prm.infFactory = infFactory;
-		MbrDecoder decoder = new MbrDecoder(prm);
-		if(newWay) {
-			FgExample fge1 = this.getFgExample();
-			FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
-			FgInferencer inf = infFactory.getInferencer(fg1);
-			inf.run();
-			for(int i=0; i<n; i++) {
-				FrameVar fv = frameVars[i];
-				if(fv == null) continue;
+		
+		FgExample fge1 = this.getFgExample();
+		FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
+		FgInferencer inf1 = infFactory.getInferencer(fg1);
+		inf1.run();
+		for(int i=0; i<n; i++) {
+			FrameVar fv = frameVars[i];
+			if(fv == null) continue;
 
-				DenseFactor df = inf.getMarginals(fv.getFrameVar());
-				int nullFrameIdx = 0;
-				assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
-				int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
+			DenseFactor df = inf1.getMarginals(fv.getFrameVar());
+			int nullFrameIdx = 0;
+			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
+			int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
 
-				System.out.println("margins at " + i + " = " + df);
-				
-				decodedFrames[i] = fv.getFrame(f_dec_idx);
-				clampedFrames.put(fv.getFrameVar(), f_dec_idx);
-			}
-		}
-		else {
-			// TODO need to modify the MBR decoder so that I can penalize
-			// false negatives and fall positives differently so that I can maximize F1
-			FgExample fge1 = this.getFgExample();
-			BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
-			VarConfig f_i_decode = decoder.getMbrVarConfig();
-			
-			for(int i=0; i<n; i++) {
-				FrameVar fv = frameVars[i];
-				if(fv == null) continue;
+			System.out.println("margins at " + i + " = " + df);
 
-				if(debugDecodePart1) {
-					FactorGraph fg = fge1.getOriginalFactorGraph();
-					FgNode f_i = fg.getNode(fv.getFrameVar());
-					System.out.println(f_i);
-					for(FgEdge edge : f_i.getInEdges()) {
-						DenseFactor df = bp.getMessages()[edge.getId()].message;
-						System.out.println("edge    = " + edge);
-						System.out.println("factor  = " + edge.getParent());
-						System.out.println("message = " + df);
-					}
-					System.out.println();
-				}
-
-				decodedFrames[i] = fv.getFrame(f_i_decode);
-				clampedFrames.put(fv.getFrameVar(), f_i_decode.getState(fv.getFrameVar()));
-			}
+			decodedFrames[i] = fv.getFrame(f_dec_idx);
+			clampedFrames.put(fv.getFrameVar(), f_dec_idx);
 		}
 
-		// decode args
+
+		// =============== DECODE ARGS =================================================================
 		FrameInstance[] decodedFIs = new FrameInstance[n];
 		if(params.onlyFrameIdent) {
 			for(int i=0; i<n; i++) {
@@ -310,9 +278,9 @@ public class ParsingSentence {
 			FgExample needToModify = this.getFgExample();
 			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
 			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
-			decoder.decode(model, fge2);
-			Map<Var, DenseFactor> margins2 = decoder.getVarMarginalsIndexed();
-			Map<Var, Double> maxMargins2 = decoder.getVarMargMap();
+			fge2.updateFgLatPred(model, params.logDomain);
+			FgInferencer inf2 = infFactory.getInferencer(fge2.getOriginalFactorGraph());
+			inf2.run();
 			for(int i=0; i<n; i++) {
 				Frame f = decodedFrames[i];
 				if(f == null || f == Frame.nullFrame)
@@ -321,36 +289,42 @@ public class ParsingSentence {
 				Arrays.fill(args, Span.nullSpan);
 				for(int k=0; k<f.numRoles(); k++) {
 					
-//					if(debugDecodePart2)
-//						System.out.printf("decoding role %s for %s:", f.getRole(k), f.getName());
-					
-					// max over j
-					int bestHead = -1;
-					double bestScore = 0d;
-					boolean bestIsRealized = false;
-					//ArgMax<Integer> bestHead = new ArgMax<Integer>();
+					// we are going to decode every r_ijk separately (they're all binary variables for arg realized or not)
+					// the only time you have a problem is when more than one r_ijk is decoded (given i,k ranging over j)
+					// among these cases, choose the positive r_ijk with the smallest risk
+					List<Integer> active = new ArrayList<Integer>();
+					List<Double> risks = new ArrayList<Double>();
+					double[] riskBuf = new double[2];
 					for(int j=0; j<n; j++) {
 						RoleVars r_ijk = roleVars[i][j][k];
-						double score = maxMargins2.get(r_ijk.getRoleVar());
-						
-						DenseFactor p_r_ijk = margins2.get(r_ijk.getRoleVar());
-						double p_not_realized = p_r_ijk.getValue(r_ijk.getPossibleFrames().indexOf(Frame.nullFrame));
-						
-						if(debugDecodePart2) {
-							System.out.printf("%-20s for %s.%s has max-marginal of %.2f, p(notRealized)=%.2f\n",
-									sentence.getLU(j).getFullString(), f.getName(), f.getRole(k), score, p_not_realized);
-						}
-						
-						if(bestHead < 0 || score > bestScore) {
-							bestHead = j;
-							bestScore = score;
-							
-							bestIsRealized = score > p_not_realized;
+						DenseFactor df = inf2.getMarginals(r_ijk.getRoleVar());
+						int nullIndex = 0;
+						assert r_ijk.getFrame(nullIndex) == Frame.nullFrame;
+						int r_ijk_dec = params.argDecoder.decode(df.getValues(), nullIndex, riskBuf);
+						assert r_ijk.getPossibleFrames().size() == 2;
+						boolean argIsRealized = r_ijk_dec != nullIndex;
+						if(argIsRealized) {
+							active.add(j);
+							risks.add(riskBuf[r_ijk_dec]);
 						}
 					}
-					if(bestIsRealized) {
-						RoleVars r_ijk = roleVars[i][bestHead][k];
-						args[k] = r_ijk.getSpanDummy();
+					
+					if(active.size() == 0)
+						args[k] = Span.nullSpan;
+					else if(active.size() == 1)
+						args[k] = Span.widthOne(active.get(0));
+					else {
+						// have to choose which index has the lowest risk
+						double minR = 0d;
+						int minRI = -1;
+						for(int ji=0; ji<active.size(); ji++) {
+							double r = risks.get(ji);
+							if(r < minR || minRI < 0) {
+								minR = r;
+								minRI = active.get(ji);
+							}
+						}
+						args[k] = Span.widthOne(minRI);
 					}
 				}
 				decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
