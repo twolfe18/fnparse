@@ -1,12 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.util.*;
+
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.hlt.fnparse.datatypes.Expansion;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.*;
 
 /**
  * reasons to keep r_ijk distinct from r_ijk^e:
@@ -34,6 +34,20 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * How to encode:
  * phi(f_i, r_ijk, l_pi, l_pj) \forall p
  * 
+ * =============================================================================================
+ * march 4
+ * ok, we're going to go another direction with these variables.
+ * r_ijk and r_ijk^e are no longer fused, and r_ijk is changing.
+ * instead of r_ijk \in {0, 1} for off/on, r_ijk will take on the
+ * same values as f_i, except we'll call nullFrame "off".
+ * 
+ * there will be a hard factor enforcing:
+ *   f_i=X, r_ijk=Y, X!=Y, X!=nullFrame => 0 probability
+ * 
+ * also, r_ijk s.t. f_i=nullFrame will be considered latent.
+ * 
+ * the expansion variable is back.
+ * 
  * @author travis
  */
 public class RoleVars implements FgRelated {
@@ -41,116 +55,164 @@ public class RoleVars implements FgRelated {
 	public static final int maxArgRoleExpandLeft = 10;
 	public static final int maxArgRoleExpandRight = 3;
 		
-	private FrameVar parent;
-	private int roleIdx;	// aka "k"
-	private int headIdx;	// aka "j", head of the argument span (target head comes from parent)
-	private Var headVar;
+	// meta information
+	private int targetHeadIdx;	// aka "i"
+	private int argHeadIdx;		// aka "j", head of the argument span (target head comes from parent)
+	private int roleIdx;		// aka "k"
+	
+	// if(training) 
+	//   boolean latent = f_i == Frame.nullFrame;
+	// else if(doingFrameDecode)
+	//   boolean latent = true;
+	// else
+	//   boolean prune = f_i == Frame.nullFrame;	// not latent or predicted!
+	private VarType varType;
+	
+	// primary var
+	private List<Frame> possibleFrames;
+	private Var headVar;			// same domain as f_i, but the index for nullFrame means "off" -- or arg not realized
 	private int headVarGold = -1;
+
+	// expansion related
 	private Expansion.Iter expansions;
-//	private Var expansionVar;
+	private Var expansionVar;
+	private int expansionVarGold = -1;
 	
-	public RoleVars(FrameVar parent, Sentence s, int headIdx, int roleIdx, boolean logDomain) {
-		this.parent = parent;
+	
+	
+	// NOTE: i think that we need a special vale for "arg not realized"/"nullSpan"/"nullExpansion"
+	// i think right now we're biased towards whatever we set as the gold label for non-realized arguments.
+	
+	// lets test this by setting the default to something else and see if we see that bias pop up.
+	
+	
+	
+	@Override
+	public String toString() {
+		return String.format("<r_{i=%d, j=%d, k=%d} domain={%d frames} varType=%s>",
+				targetHeadIdx, argHeadIdx, roleIdx, possibleFrames.size(), varType);
+	}
+	
+	public RoleVars(VarType latentOrPredicted, List<Frame> possibleFrames, Sentence s,
+			int targetHeadIdx, int argHeadIdx, int roleIdx, boolean logDomain) {
+		
+		// we need to prune down the number of frames based on roleIdx
+		this.possibleFrames = new ArrayList<Frame>();
+		this.possibleFrames.add(Frame.nullFrame);	// represents "arg is not realized"
+		for(Frame f : possibleFrames)
+			if(roleIdx < f.numRoles() && f != Frame.nullFrame)
+				this.possibleFrames.add(f);
+
+		if(this.possibleFrames.size() < 2)
+			throw new IllegalArgumentException();
+		
+		this.targetHeadIdx = targetHeadIdx;
+		this.argHeadIdx = argHeadIdx;
 		this.roleIdx = roleIdx;
-		this.headIdx = headIdx;
 		
-		this.expansions = new Expansion.Iter(headIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
-//		String expVarName = String.format("r^e_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
-//		this.expansionVar = new Var(VarType.PREDICTED, this.expansions.size(), expVarName, null);
+		this.varType = latentOrPredicted;
 		
-		String headVarName = String.format("r_{%d,%d,%d}", parent.getTargetHeadIdx(), headIdx, roleIdx);
-//		this.headVar = new Var(VarType.PREDICTED, 2, headVarName, BinaryVarUtil.stateNames);
+		String headVarName = String.format("r_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
+		this.headVar = new Var(latentOrPredicted, this.possibleFrames.size(), headVarName, null);
 		
-		// new deal: if there are K possible expansions, headVar \in 0 .. K
-		// where 0..K-1 are the expansions and K means "null" -- or that this
-		// frame-role is not active at this head word j.
-		this.headVar = new Var(VarType.PREDICTED, expansions.size()+1, headVarName, null);
-	}
-	
-//	private boolean headVarGold = false;
-//	private int expansionVarGold = 0;
-	
-	public static class Location {
-		public int frame, arg, role;
-		public int hashCode() { return (frame << 20) | (arg << 10) | role; }
-		public boolean equals(Object other) {
-			if(other instanceof Location) {
-				Location l = (Location) other;
-				return frame == l.frame && arg == l.arg && role == l.arg;
-			}
-			else return false;
-		}
-	}
-	
-	public Location getLocation() {
-		Location l = new Location();
-		l.frame = parent.getTargetHeadIdx();
-		l.arg = headIdx;
-		l.role = roleIdx;
-		return l;
+		this.expansions = new Expansion.Iter(argHeadIdx, s.size(), maxArgRoleExpandLeft, maxArgRoleExpandRight);
+		String expVarName = String.format("r^e_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
+		this.expansionVar = new Var(latentOrPredicted, this.expansions.size(), expVarName, null);
 	}
 	
 	/**
 	 * use this to say that this argument was not instantiated.
 	 */
 	public void setGoldIsNull() {
-		headVarGold = expansions.size();
-//		expansionVarGold = expansions.indexOf(Expansion.noExpansion);
-//		if(expansionVarGold < 0) throw new IllegalStateException();
+		headVarGold = possibleFrames.indexOf(Frame.nullFrame);
+		if(headVarGold < 0) throw new IllegalStateException();
+		
+		expansionVarGold = 0;	// arbitrary
 	}
 	
 	/**
 	 * use this to say that this argument was realized in the sentence.
 	 */
-	public void setGold(Span s) {
+	public void setGold(Frame f, Span s) {
 		if(s == Span.nullSpan)
+			throw new IllegalArgumentException("use setGoldIsNull()");
+		if(f == Frame.nullFrame)
 			throw new IllegalArgumentException();
 		
-		// compute the gold expansion
-		Expansion goldExpansion = Expansion.headToSpan(headIdx, s);
-		headVarGold = expansions.indexOf(goldExpansion);;
-//		expansionVarGold = expansions.indexOf(goldExpansion);
-//		if(expansionVarGold < 0)
-		if(headVarGold < 0 || headVarGold >= expansions.size())
-			throw new IllegalStateException("gold expansion for " + s + " @ " + headIdx + " was not found. did you prune too hard?");
+		headVarGold = possibleFrames.indexOf(f);
+		if(headVarGold < 0) throw new IllegalStateException();
+		
+		Expansion goldE = Expansion.headToSpan(argHeadIdx, s);
+		expansionVarGold = expansions.indexOf(goldE);
+		if(expansionVarGold < 0) {
+			System.err.println("[RoleVars setGold] couldn't set gold expansion to " + s + " because it was pruned");
+			expansionVarGold = 0;
+		}
 	}
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
-		
-//		gold.put(headVar, BinaryVarUtil.boolToConfig(headVarGold));
-//		gold.put(expansionVar, expansionVarGold);
 		fg.addVar(headVar);
-		if(headVarGold < 0) {
-			//assert false;
-			gold.put(headVar, 0);	// what value?
+		fg.addVar(expansionVar);
+		if(varType == VarType.PREDICTED) {
+			gold.put(headVar, headVarGold);
+			gold.put(expansionVar, expansionVarGold);
 		}
-		else gold.put(headVar, headVarGold);
 	}
 	
-	public int getHeadIdx() { return headIdx; }
+	/** i */
+	public int getTargetHeadIdx() { return targetHeadIdx; }
+	
+	/** j */
+	public int getArgHeadIdx() { return argHeadIdx; }
+	
+	/** k */
 	public int getRoleIdx() { return roleIdx; }
 	
-	public boolean getRoleActive(VarConfig conf) {
-//		return BinaryVarUtil.configToBool(conf.getState(headVar));
-		int config = conf.getState(headVar);
-		return config < expansions.size();
+	public Var getRoleVar() { return headVar; }
+	
+	public List<Frame> getPossibleFrames() {
+		return possibleFrames;
 	}
-//	public Expansion getExpansion(VarConfig conf) {
-//		return expansions.get(conf.getState(expansionVar));
+
+	public int numExpansions() { return expansions.size(); }
+	
+	public Var getExpansionVar() { return expansionVar; }
+	
+	/**
+	 * returns the Frame this argument is realized for
+	 * (may be nullFrame, indicating that this argument is
+	 *  not realized for any frame).
+	 */
+	public Frame getFrame(int localIdx) {
+		return possibleFrames.get(localIdx);
+	}
+
+	public Frame getFrame(VarConfig conf) {
+		int idx = conf.getState(headVar);
+		return possibleFrames.get(idx);
+	}
+	
+//	public boolean argIsRealized(VarConfig conf) {
+//		return getFrame(conf) != Frame.nullFrame;
+//	}
+	public boolean argIsRealize(int localConfig) {
+		return possibleFrames.get(localConfig) != Frame.nullFrame;
+	}
+	
+//	public Span getSpanDummy() {
+//		//System.err.println("FIX ME!!");
+//		return Span.widthOne(argHeadIdx);
 //	}
 	
-	public Span getSpan(VarConfig conf) {
-		int config = conf.getState(headVar);
-		if(config == expansions.size())
-			return Span.nullSpan;
-		Expansion e = expansions.get(config);
-		return e.upon(headIdx);
+	public Span getSpan(int localIdx) {
+		return expansions.get(localIdx).upon(argHeadIdx);
 	}
 	
-	public Var getRoleVar() { return headVar; }
-//	public Var getExpansionVar() { return expansionVar; }
-
-	public int getNumExpansions() { return expansions.size(); }
+	public Span getSpan(VarConfig conf) {
+		int cfg = conf.getState(expansionVar);
+		return expansions.get(cfg).upon(argHeadIdx);
+	}
+	
 }
 

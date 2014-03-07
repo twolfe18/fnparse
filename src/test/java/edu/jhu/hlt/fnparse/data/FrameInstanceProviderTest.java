@@ -24,6 +24,9 @@ public class FrameInstanceProviderTest {
 		firstWordOfFirstSentence.put("fn15.train", "The");
 		firstWordOfFirstSentence.put("fn15.test", "On"); 
 		firstWordOfFirstSentence.put("fn15.lex", "Major");
+		firstWordOfFirstSentence.put("dipanjan.train", "BW");
+		firstWordOfFirstSentence.put("dipanjan.test", "December");
+		
 	}
 
 	private static void testFIP(FileFrameInstanceProvider fip, boolean verbose) {		
@@ -133,6 +136,21 @@ public class FrameInstanceProviderTest {
 		assertNotNull(s);
 		assertTrue(s.size() > 0);
 		assertEquals(firstWordOfFirstSentence.get("fn15.lex"), s.getWord(0));
+	}
+	
+	
+	@Test
+	public void checkDipanjanTrain(){
+		testFIP(FileFrameInstanceProvider.dipanjantrainFIP, false);
+		assertEquals(firstWordOfFirstSentence.get("dipanjan.train"),
+				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences().next().getSentence().getWord(0));
+	}
+	
+	@Test
+	public void checkDipanjanTest(){
+		testFIP(FileFrameInstanceProvider.dipanjantestFIP, false);
+		assertEquals(firstWordOfFirstSentence.get("dipanjan.test"),
+				FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences().next().getSentence().getWord(0));
 	}
 	
 	@Test

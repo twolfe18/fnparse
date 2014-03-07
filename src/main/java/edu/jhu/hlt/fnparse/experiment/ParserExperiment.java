@@ -7,8 +7,9 @@ import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
+import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 public class ParserExperiment {
 
@@ -25,6 +26,8 @@ public class ParserExperiment {
 //		fnLex = null;
 		
 		mainOld(args);
+		
+//		mainNew(args);
 	}
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
@@ -121,10 +124,10 @@ public class ParserExperiment {
 		
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100, 1000));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.3d, 1d, 3d, 10d, 30d, 100d));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1d, 3d, 10d, 30d, 100d));
 		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 0.3d, 1d, 3d, 10d));
-		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.9d, 0.8d, 0.7d, 0.6d, 0.5d));
+		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.85d, 0.7d, 0.55d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
 		
@@ -185,45 +188,58 @@ public class ParserExperiment {
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
-//		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
-//		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
+		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
+		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 1000;
-		int nTest = 100;
-		//if(hurryUp)  {
+		int nTrain = 100;
+		int nTest = 30;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
-		//}
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
 		printMemUsage();
 		
+		Timer trainTimer = new Timer("trainTimer", 1);
+		Timer decodeTimer = new Timer("decodeTimer", 1);
+		
 		// train and evaluate along the way
+		int trainSentencesProcessed = 0;
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser();
-		for(int epoch=0; epoch<8; epoch++) {
+		parser.params.onlyFrameIdent = false;
+		for(int epoch=0; epoch<2; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 1;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
-			double regularizerMult = 2d;
+			double regularizerMult = 1d;
+			trainTimer.start();
 			parser.train(train, passes, batchSize, lrMult, regularizerMult);
+			trainTimer.stop();
+			trainSentencesProcessed += train.size() * passes;
 			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
 				epoch, parser.params.featIdx.size());
 			printMemUsage();
 
 			System.out.println("[ParserExperiment] predicting on test set...");
+			decodeTimer.start();
 			predicted = parser.parseWithoutPeeking(test);
+			decodeTimer.stop();
 			results = BasicEvaluation.evaluate(test, predicted);
 			BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
 			printMemUsage();
 			
 			System.out.println("[ParserExperiment] predicting on train set...");
+			decodeTimer.start();
 			predicted = parser.parseWithoutPeeking(trainSubset);
+			decodeTimer.stop();
 			results = BasicEvaluation.evaluate(trainSubset, predicted);
 			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
 			printMemUsage();
 			parser.writeoutWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
+			
+			double secPerInst = trainTimer.totalTimeInSec() / trainSentencesProcessed;
+			System.out.println("time to train on 1000 sentences: " + (1000d * secPerInst));
 		}
 	}
 	

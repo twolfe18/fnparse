@@ -62,6 +62,11 @@ public interface Features {
 		public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
 	}
 	
+	public static interface RE extends Features {
+		public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int roleIdx, Span argSpan, Sentence s);
+	}
+	
+	/** @deprecated this will be too slow, and not really needed given that R now contains Frame information, please don't use */
 	public static interface FRE extends Features {
 		public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argument, Sentence s);
 	}

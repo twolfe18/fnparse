@@ -34,6 +34,8 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		this.featIdx = featIdx;
 	}
 	
+	public Alphabet<String> getFeatureAlph() { return featIdx; }
+	
 	/**
 	 * by default, nothing is excluded from regularization,
 	 * but you are free to override this.
@@ -85,7 +87,10 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 		}
 		String s = sn.toString();
 		if(featIdx.isGrowing()) {
+			int sz = featIdx.size();
 			idx = featIdx.lookupIndex(s, true);
+			if(sz > 2 * 1000 * 1000 && idx == sz && sz % 100000 == 0)
+				System.out.println("[AbstractFeatures b] alph just grew to " + sz);
 			fv.add(idx, weight);
 		}
 		else {

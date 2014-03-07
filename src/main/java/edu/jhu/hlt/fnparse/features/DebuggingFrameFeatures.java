@@ -18,7 +18,8 @@ public class DebuggingFrameFeatures extends AbstractFeatures<DebuggingFrameFeatu
 //			return emptyFeatures;
 		
 		FeatureVector fv = new FeatureVector();
-		b(fv, "frame=" + f.getName() + "_targetHead=" + targetHeadIdx + "_sent=" + sent.getId());
+		b(fv, "frame=", f.getName(), "targetHead=", String.valueOf(targetHeadIdx), "sent=", sent.getId());
+		b(fv, "frame=", f.getName());
 		return fv;
 	}
 

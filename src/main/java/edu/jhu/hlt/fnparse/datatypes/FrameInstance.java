@@ -82,7 +82,9 @@ public class FrameInstance {
 	/**
 	 * Use this for mentions of a frame where we do not know if the arguments are present or not
 	 * (i.e. we only have information on the frame and it's target span).
-	 * @deprecated I don't believe this is used in the data we have -- tell me if I'm wrong.
+	 * 
+	 * NOTE: this should only be used for decoders, not data providers. This is useful for the
+	 * frameId stage of decoding where you haven't yet predicted the arguments.
 	 */
 	public static FrameInstance frameMention(Frame frame, Span target, Sentence sent) {
 		if(frame == null || sent == null)

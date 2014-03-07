@@ -21,7 +21,7 @@ import edu.jhu.hlt.fnparse.features.*;
  * 
  * @author travis
  */
-public class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
+public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
 
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
@@ -77,54 +77,13 @@ public class FrameFactorFactory extends HasFrameFeatures implements FactorFactor
 		return factors;
 	}
 
-	/* ???
-	public static class CachingExpFamFactor extends ExpFamFactor implements FeatureExtractor {
-
-		// pass in an ExpFamFactor, get back an instance that caches
-		private ExpFamFactor uncached;
-		private FeatureVector[] cache;
-
-		public CachingExpFamFactor(ExpFamFactor uncached) {
-			super(uncached.getVars());
-			this.uncached = uncached;
-		}
-		
-		@Override	// FeatureExtractor
-		public void init(FgExample ex) {
-			System.out.println("[CachingExpFamFactor init] uncached=" + uncached);
-			int n = ex.getOriginalFactorGraph().getNumFactors();
-			if(cache == null || cache.length < n)
-				cache = new FeatureVector[n];
-			else
-				Arrays.fill(cache, null);
-		}
-
-		@Override	// FeatureExtractor
-		public FeatureVector calcFeatureVector(FeExpFamFactor factor, int configId) {
-			// i'm assuming uncached has the actual code which computes the features
-			System.out.println("[CachingExpFamFactor calcFeatureVector] for " + factor + " @ " + configId);
-			if(cache[configId] == null) {
-				//assert uncached == factor;
-				assert factor == null;
-				cache[configId] = uncached.getFeatures(configId);
-			}
-			return cache[configId];
-		}
-
-		@Override	// ExpFamFactor
-		public FeatureVector getFeatures(int config) {
-			return calcFeatureVector(null, config);
-		}
-	}
-	*/
-
 	/**
 	 * with regards to feature extraction/caching, I know that the data that
 	 * this factor points to never changes (i.e. frameVar, sent), so caching
 	 * features should be safe (there is no cache invalidation aside from this
 	 * object being garbage collected).
 	 */
-	static class F extends ExpFamFactor {	// is the actual factor
+	static final class F extends ExpFamFactor {	// is the actual factor
 		
 		private static final long serialVersionUID = 1L;
 		

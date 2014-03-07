@@ -3,25 +3,26 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 import java.util.*;
 
 import edu.jhu.gm.data.FgExample;
-import edu.jhu.gm.decode.MbrDecoder;
-import edu.jhu.gm.decode.MbrDecoder.MbrDecoderPrm;
-import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
-import edu.jhu.gm.model.FactorGraph.FgEdge;
-import edu.jhu.gm.model.FactorGraph.FgNode;
-import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.*;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.*;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ParsingSentence {
+
+	private static final boolean debugTargetRecall = false;
+	private static final boolean debugDecodePart1 = true;	// frame decode
+	private static final boolean debugDecodePart2 = true;	// arg decode
 	
-	//private static final Logger log = Logger.getLogger(ParsingSentence.class);
+	public static final int maxLexPrototypesPerFrame = 30;
+	
 
 	// ==== VARIABLES ====
 	public FrameVar[] frameVars;
@@ -38,11 +39,7 @@ public class ParsingSentence {
 	private VarConfig gold;
 	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
-	
-	private static final boolean debugDecodePart1 = false;	// frame decode
-	private static final boolean debugDecodePart2 = true;	// arg decode
-	
-	public static final int maxLexPrototypesPerFrame = 30;
+	private HeadFinder hf = new BraindeadHeadFinder();	// TODO
 	
 	/**
 	 * In training data:
@@ -57,39 +54,22 @@ public class ParsingSentence {
 	// TODO: the code is not setup for ALWAYS_INCLUDE_GOLD_FRAME because
 	// this requires seeing the gold label while constructing all the variables.
 	
-	// we want a factor that will connect frame heads with arg heads
-	
 	
 	public ParsingSentence(Sentence s, ParserParams params) {
-		
 		this.params = params;
 		this.factorHolders = params.factors;
 		this.sentence = s;
 		this.frameFilterStrat = FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES;
 		
-		int n = s.size();
-		
+		// we can setup frame vars now, role vars must wait
+		final int n = s.size();
 		frameVars = new FrameVar[n];
 		for(int i=0; i<n; i++)
 			frameVars[i] = makeFrameVar(s, i, params.logDomain);
-		
-		if(!params.onlyFrameIdent) {
-			roleVars = new RoleVars[n][][];
-			for(int i=0; i<n; i++) {
-				if(frameVars[i] == null)
-					continue;
-				int maxRoles = frameVars[i].getMaxRoles();
-				roleVars[i] = new RoleVars[n][maxRoles];
-				for(int j=0; j<n; j++)
-					for(int k=0; k<maxRoles; k++)
-						roleVars[i][j][k] = new RoleVars(frameVars[i], s, j, k, params.logDomain);	
-			}
-
-			if(params.useLatentDepenencies)
-				depTree = new ProjDepTreeFactor(n, VarType.LATENT);
-		}
-		
-		// initialize all the factors
+	}
+	
+	
+	public void initFactors() {
 		factors = new ArrayList<Factor>();
 		if(params.useLatentDepenencies)
 			factors.add(depTree);
@@ -97,133 +77,260 @@ public class ParsingSentence {
 			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars, depTree));
 	}
 	
+	
 	/**
-	 * MBR decode may not be self-consistent...
-	 * 
-	 * here is how we should do it:
-	 * 1. frames = \arg\max p(frames | x) = \sum_{args} p(frame, args | x)
-	 * 2. args = \arg\max p(args | frames, x)
+	 * all r_ijk are instantiated with arity of \max_f f.numRoles,
+	 * and r_ijk corresponding to f_i == nullFrame are considered latent.
+	 */
+	public void setupRoleVarsForTrain(FNParse p) {
+		
+		// set the gold labels for all the f_i
+		FrameInstance[] goldFiTargets = setGoldForFrameVars(p);
+		
+		// set the gold labels for all the r_ijk
+		int n = sentence.size();
+		roleVars = new RoleVars[n][][];
+		for(int i=0; i<n; i++) {
+			FrameVar fi = frameVars[i];
+			if(fi == null) continue;	// no frame => no args
+			
+			FrameInstance goldFIat_i = goldFiTargets[i];
+			if(goldFIat_i == null) assert fi.getGoldFrame() == Frame.nullFrame;
+		
+			int K = fi.getMaxRoles();
+			roleVars[i] = new RoleVars[n][K];
+			for(int k=0; k<K; k++) {
+
+				// mark's point: make stuff that doesn't matter latent
+				VarType r_ijkType = k >= fi.getGoldFrame().numRoles() || fi.getGoldFrame() == Frame.nullFrame
+						? VarType.LATENT
+						: VarType.PREDICTED;
+
+				// set the correct head for this role
+				Span roleKspan = k >= fi.getGoldFrame().numRoles()
+						? Span.nullSpan
+						: goldFIat_i.getArgument(k);
+				int roleKhead = roleKspan == Span.nullSpan
+						? -1
+						: hf.head(roleKspan, sentence);
+				
+				for(int j=0; j<n; j++) {
+					RoleVars rv = new RoleVars(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
+					roleVars[i][j][k] = rv;
+					if(r_ijkType == VarType.PREDICTED) {	// set gold
+						if(roleKhead == j)
+							rv.setGold(goldFIat_i.getFrame(), roleKspan);
+						else
+							rv.setGoldIsNull();
+					}
+				}
+				
+			}
+		}
+	}
+	
+	
+	/**
+	 * all r_ijk are instantiated as latent with arity of \max_f f.numRoles
+	 */
+	public void setupRoleVarsForDecode(VarType roleVarsLatentOrPredicted) {
+		final int n = sentence.size();
+		roleVars = new RoleVars[n][][];
+		for(int i=0; i<n; i++) {
+			FrameVar fv = frameVars[i];
+			if(fv == null) continue;
+			final int K = fv.getMaxRoles();
+			roleVars[i] = new RoleVars[n][K];
+			for(int j=0; j<n; j++)
+				for(int k=0; k<K; k++)
+					roleVars[i][j][k] = new RoleVars(roleVarsLatentOrPredicted, fv.getFrames(), sentence, i, j, k, params.logDomain);
+		}
+	}
+
+	
+	/**
+	 * prune r_ijk corresponding to f_i == nullFrame,
+ 	 * the other r_ijk will be predicted and binary
+	 */
+	public void setupRoleVarsForRoleDecode(Frame[] decodedFrames) {
+		final int n = sentence.size();
+		roleVars = new RoleVars[n][][];
+		for(int i=0; i<n; i++) {
+			FrameVar fv = frameVars[i];
+			Frame f = decodedFrames[i];
+			if(fv == null || f == Frame.nullFrame)
+				continue;
+			List<Frame> possibleFrames = Arrays.asList(Frame.nullFrame, f);
+			final int K = f.numRoles();
+			roleVars[i] = new RoleVars[n][K];
+			for(int j=0; j<n; j++) {
+				for(int k=0; k<K; k++) {
+					RoleVars rv = new RoleVars(VarType.PREDICTED, possibleFrames, sentence, i, j, k, params.logDomain);
+					roleVars[i][j][k] = rv;
+					
+					// This is dumb: matt's code wants a label for all predicted variables,
+					// irrespective if we're doing training or testing.
+					// For now, just give it a dummy value; as far as I can tell this doesn't affect inference.
+					rv.setGoldIsNull();
+				}
+			}
+		}
+	}
+
+	
+	/**
+	 * This is a two step process:
+	 * 1. decode f_i with r_ijk latent
+	 * 2. clamp f_i and set r_ijk to predicted, decode r_ijk
 	 */
 	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
 		
-		// first decode to find the best frames (marginalizing out role vars)
-		MbrDecoderPrm prm = new MbrDecoderPrm();
-		prm.infFactory = infFactory;
-		MbrDecoder decoder = new MbrDecoder(prm);
-		FgExample fge1 = this.getFgExample();
-		BeliefPropagation bp = (BeliefPropagation) decoder.decode(model, fge1);
-		//VarConfig mbr1Conf = decoder.getMbrVarConfig();
-		Map<Var, DenseFactor> margins1 = decoder.getVarMarginalsIndexed();
+		final int n = sentence.size();
 		
-		List<Integer> dFrameIdx = new ArrayList<Integer>();
-		List<Frame> dFrame = new ArrayList<Frame>();
+
+		// =============== DECODE FRAMES ===============================================================
+		setupRoleVarsForDecode(VarType.LATENT);
 		
+		Frame[] decodedFrames = new Frame[n];
 		VarConfig clampedFrames = new VarConfig();
-		int n = frameVars.length;
+		
+		FgExample fge1 = this.getFgExample();
+		FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
+		FgInferencer inf1 = infFactory.getInferencer(fg1);
+		inf1.run();
+		int numFramesTriggered = 0;
 		for(int i=0; i<n; i++) {
 			FrameVar fv = frameVars[i];
 			if(fv == null) continue;
 			
-			if(debugDecodePart1) {
-				DenseFactor localMargins = margins1.get(fv.getFrameVar());
-				System.out.println(sentence.getLU(i) + "\t" + localMargins);
+			DenseFactor df = inf1.getMarginals(fv.getFrameVar());
+			int nullFrameIdx = 0;
+			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
+			int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
+
+			if(debugDecodePart1 && params.debug)
+				System.out.println("margins at " + i + " = " + df);
+
+			decodedFrames[i] = fv.getFrame(f_dec_idx);
+			clampedFrames.put(fv.getFrameVar(), f_dec_idx);
+			
+			if(decodedFrames[i] != Frame.nullFrame)
+				numFramesTriggered++;
+		}
+
+
+		// =============== DECODE ARGS =================================================================
+		FrameInstance[] decodedFIs = new FrameInstance[n];
+		if(params.onlyFrameIdent) {
+			for(int i=0; i<n; i++) {
+				Frame f = decodedFrames[i];
+				if(f == null || f == Frame.nullFrame)
+					continue;
+				Span[] args = new Span[f.numRoles()];
+				Arrays.fill(args, Span.nullSpan);
+				if(f != null && f != Frame.nullFrame)
+					decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
+					//decodedFIs[i] = FrameInstance.frameMention(f, Span.widthOne(i), sentence);
+			}
+		}
+		else if(numFramesTriggered > 0) {
+			setupRoleVarsForRoleDecode(decodedFrames);
+
+			FgExample needToModify = this.getFgExample();
+			FactorGraph fg = needToModify.getOriginalFactorGraph().getClamped(clampedFrames);
+			FgExample fge2 = new FgExample(fg, needToModify.getGoldConfig());
+			fge2.updateFgLatPred(model, params.logDomain);
+			FgInferencer inf2 = infFactory.getInferencer(fge2.getOriginalFactorGraph());
+			inf2.run();
+			
+			for(int i=0; i<n; i++) {
+				Frame f = decodedFrames[i];
+				if(f == null || f == Frame.nullFrame)
+					continue;
+			
+				Span[] args = new Span[f.numRoles()];
+				Arrays.fill(args, Span.nullSpan);
 				
-				FgNode fvNode = fg.getNode(fv.getFrameVar());
-				for(FgEdge e : fvNode.getInEdges()) {
-					System.out.println("edge    = " + e);
-					System.out.println("factor  = " + e.getFactor());
-					System.out.println("message = " + bp.getMessages()[e.getId()].message);
-					//System.out.println(margins1.get(e.getChild().getVar()));
-				}
-				System.out.println();
-				for(Frame f : fv.getFrames())
-					System.out.printf("%s has %d args\n", f.getName(), f.numRoles());
-				System.out.println();
-			}
-			
-			// TODO logspace?
-			double[] localMargins = margins1.get(fv.getFrameVar()).getValues();
-			double bestScore = 0d;
-			int bestFrame = -1;
-			assert params.nullFrameOffset >= 0d;
-			for(int fiConfig=0; fiConfig<localMargins.length; fiConfig++) {
-				Frame f = fv.getFrame(fiConfig);
-				double s = localMargins[fiConfig];
-				if(f == Frame.nullFrame) {
-					if(params.logDomain)
-						//s = FastMath.logAdd(s, FastMath.log(params.nullFrameOffset));
-						throw new RuntimeException("implement me");
-					else
-						s -= params.nullFrameOffset;
-				}
-				if(bestFrame < 0 || s > bestScore) {
-					bestScore = s;
-					bestFrame = fiConfig;
-				}
-			}
-			
-			clampedFrames.put(fv.getFrameVar(), bestFrame);
-			//clampedFrames.put(fv.getFrameVar(), mbr1Conf.getState(fv.getFrameVar()));
-			//clampedFrames.put(fv.getPrototypeVar(), mbr1Conf.getState(fv.getPrototypeVar()));	// shouldn't matter
-			
-			dFrameIdx.add(i);
-			dFrame.add(fv.getFrame(bestFrame));
-		}
-		
-		// decode with frames clamped
-		FactorGraph fgWithClampedFrames = fge1.getOriginalFactorGraph().getClamped(clampedFrames);
-		FgExample fge2 = new FgExample(fgWithClampedFrames, fge1.getGoldConfig());
-		decoder.decode(model, fge2);
-		VarConfig mbr2Conf = decoder.getMbrVarConfig();
-		Map<Var, DenseFactor> margins2 = decoder.getVarMarginalsIndexed();
-		List<FrameInstance> frameInstances = new ArrayList<FrameInstance>();
-		for(int ii=0; ii<dFrameIdx.size(); ii++) {
-			int i = dFrameIdx.get(ii);
-			Frame f_i = dFrame.get(ii);
-			
-			if(f_i == Frame.nullFrame)
-				continue;
-			
-			int K = f_i.numRoles();
-			Span[] args = new Span[K];
-			Arrays.fill(args, Span.nullSpan);
-			if(!params.onlyFrameIdent) {
-				for(int k=0; k<K; k++) {	// find the best span for every role
-					Span bestSpan = Span.nullSpan;
-					double bestSpanScore = -9999d;
+				// for each role, choose the most sensible realization of this role
+				for(int k=0; k<f.numRoles(); k++) {
+					
+					// we are going to decode every r_ijk separately (they're all binary variables for arg realized or not)
+					// the only time you have a problem is when more than one r_ijk is decoded (given i,k ranging over j)
+					// among these cases, choose the positive r_ijk with the smallest risk
+					List<Integer> active = new ArrayList<Integer>();
+					List<Double> risks = new ArrayList<Double>();
+					double[] riskBuf = new double[2];
 					for(int j=0; j<n; j++) {
-						RoleVars rv = roleVars[i][j][k];
-						DenseFactor mR = margins2.get(rv.getRoleVar());
-						if(mR == null) continue;	// we might be skipping arg inference
-						double score = mR.getValue(mR.getArgmaxConfigId());
-
-						//					DenseFactor mE = margins2.get(rv.getExpansionVar());
-						//					assert mR.getValues().length == 2;
-						//					assert mE.getValues().length == rv.getNumExpansions();
-						//					double mRv = mR.getValue(BinaryVarUtil.boolToConfig(true));
-						//					double mEv = mE.getValue(mE.getArgmaxConfigId());	// TODO this is wrong: should really clamp r_ijk before doing this.
-						//					double score = params.logDomain ? mRv + mEv : mRv * mEv;
-
-						if(score > bestSpanScore || bestSpan == null) {
-							bestSpan = rv.getSpan(mbr2Conf);
-							bestSpanScore = score;
+						RoleVars r_ijk = roleVars[i][j][k];
+						DenseFactor df = inf2.getMarginals(r_ijk.getRoleVar());
+						int nullIndex = 0;
+						assert r_ijk.getFrame(nullIndex) == Frame.nullFrame;
+						int r_ijk_dec = params.argDecoder.decode(df.getValues(), nullIndex, riskBuf);
+						assert r_ijk.getPossibleFrames().size() == 2;
+						boolean argIsRealized = r_ijk_dec != nullIndex;
+						if(argIsRealized) {
+							active.add(j);
+							risks.add(riskBuf[r_ijk_dec]);
 						}
-
-						if(debugDecodePart2)
-							System.out.printf("[decode] f_i=%s  j=%s  k=%s  p(r_ijk)=%.3f\n",
-									f_i.getName(), sentence.getWord(j), f_i.getRole(k), score);
+						if(debugDecodePart2 && params.debug) {
+							System.out.printf("[decode part2] %s.%s = %s risks:%s\n",
+									f.getName(), f.getRole(k), sentence.getLU(j), Arrays.toString(riskBuf));
+						}
 					}
-					if(bestSpan != null)
-						args[k] = bestSpan;
+					
+					if(active.size() == 0)
+						args[k] = Span.nullSpan;
+					else  {
+						int j = -1;
+						if(active.size() == 1) {
+							j = active.get(0);
+							if(debugDecodePart2 && params.debug)
+								System.out.println("[decode part2] unabiguous min risk: " + sentence.getLU(j).getFullString());
+						}
+						else {
+							// have to choose which index has the lowest (marginal) risk
+							if(debugDecodePart2 && params.debug) {
+								System.out.printf("[decode part2] more than one token has min risk @ arg realized. indices=%s risks=%s\n",
+									active, risks);
+							}
+							double minR = 0d;
+							for(int ji=0; ji<active.size(); ji++) {
+								double r = risks.get(ji);
+								if(r < minR || j < 0) {
+									minR = r;
+									j = active.get(ji);
+								}
+							}
+						}
+						// choose the most likely expansion/span conditioned on the arg head index
+						RoleVars r_ijk = roleVars[i][j][k];
+						DenseFactor df = inf2.getMarginals(r_ijk.getExpansionVar());
+						if(debugDecodePart2 && params.debug) {
+							System.out.println("[decode part2] expansion marginals: " + Arrays.toString(df.getValues()));
+						}
+						int expansionConfig = df.getArgmaxConfigId();
+						args[k] = r_ijk.getSpan(expansionConfig);
+					}
 				}
+				decodedFIs[i] = FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence);
 			}
-			frameInstances.add(FrameInstance.newFrameInstance(f_i, Span.widthOne(i), args, sentence));
 		}
 		
-		return new FNParse(sentence, frameInstances);
+		List<FrameInstance> fis = new ArrayList<FrameInstance>();
+		for(int i=0; i<n; i++)
+			if(decodedFIs[i] != null)
+				fis.add(decodedFIs[i]);
+		return new FNParse(sentence, fis);
 	}
 	
-	public void setGold(FNParse p) {
+	
+	/**
+	 * Returns an array with the indices corresponding to tokens in the sentence,
+	 * and values are what FrameInstance has a target headed at the corresponding
+	 * index. While in general FrameInstance's targets are Spans, we choose a head
+	 * token to represent it for things like indexing i in f_i and r_ijk. 
+	 */
+	private FrameInstance[] setGoldForFrameVars(FNParse p) {
 		
 		if(p.getSentence() != sentence)
 			throw new IllegalArgumentException();
@@ -238,47 +345,25 @@ public class ParsingSentence {
 				continue;
 			FrameInstance fiNull = FrameVar.nullFrameInstance(sentence, i);
 			frameVars[i].setGold(fiNull);
-			
-			if(roleVars != null) {
-				for(int j=0; j<n; j++) {
-					int K = roleVars[i][j].length; 
-					for(int k=0; k<K; k++)
-						roleVars[i][j][k].setGoldIsNull();
-				}
-			}
 		}
 
 		// set the non-nullFrame vars to their correct Frame (and target Span) values
-		HeadFinder hf = new BraindeadHeadFinder();	// TODO
+		FrameInstance[] locationsOfGoldFIs = new FrameInstance[n];	// return this information
 		for(FrameInstance fi : p.getFrameInstances()) {
-			
 			int head = hf.head(fi.getTarget(), p.getSentence());
+			locationsOfGoldFIs[head] = fi;
 			if(frameVars[head] == null) {
-				System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
-						" because the candidate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
+				if(params.debug) {
+					System.err.println("[setGold] invoking " + FrameFilteringStrategy.USE_NULLFRAME_FOR_FILTERING_MISTAKES +
+							" because the candidate set of frames for " + sentence.getLU(head) + " did not include the gold frame: " + fi.getFrame());
+				}
 				continue;
 			}
 			frameVars[head].setGold(fi);
-			
-			// set role variables that were instantiated
-			if(roleVars != null) {
-				int i = head;
-				int K = fi.getFrame().numRoles();
-				for(int k=0; k<K; k++) {
-					Span argSpan = fi.getArgument(k);
-					if(argSpan == Span.nullSpan)
-						continue;	// we've already set the relevant vars to nullSpan
-					int j = hf.head(argSpan, sentence);
-					if(k < roleVars[i][j].length)
-						roleVars[i][j][k].setGold(argSpan);
-					else {
-						System.err.printf("we thought there was a max of %d roles for frames evoked by %s, but the true frame %s has %d roles\n",
-								roleVars[i][j].length, sentence.getLU(i), fi.getFrame(), fi.getFrame().numRoles());
-					}
-				}
-			}
 		}
+		return locationsOfGoldFIs;
 	}
+	
 	
 	/**
 	 * based on our target extraction and possible frame triage,
@@ -315,11 +400,7 @@ public class ParsingSentence {
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
-		
-		if(s.getWord(headIdx).equals("later")) {
-			System.out.println("debugging");
-		}
-		
+
 		Set<Frame> uniqFrames = new HashSet<Frame>();
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
@@ -361,23 +442,27 @@ public class ParsingSentence {
 			}
 		}
 		
-		
 		if(frameMatches.size() == 1)	// nullFrame
 			return null;
 		
-//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
-//		System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		if(debugTargetRecall) {
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		}
 		
-		return new FrameVar(s, headIdx, prototypes, frameMatches, logDomain);
+		return new FrameVar(s, headIdx, prototypes, frameMatches, params);
 	}
+	
 	
 	public FactorGraph getFactorGraph() { return fg; }
 	
+	
 	public VarConfig getGoldLabels() {
 		if(gold.size() == 0)
-			throw new RuntimeException();
+			throw new IllegalStateException();
 		return gold;
 	}
+	
 	
 	public FgExample getFgExample() {
 		
@@ -385,17 +470,17 @@ public class ParsingSentence {
 		this.fg = new FactorGraph();
 		this.gold = new VarConfig();
 		
+		initFactors();
+		
 		// register all the variables and factors
-//		int fvConfigs = 0;
 		for(int i=0; i<n; i++) {
 			if(frameVars[i] ==  null)
 				continue;
 			frameVars[i].register(fg, gold);
-//			fvConfigs += frameVars[i].numberOfConfigs();
 		}
 		if(roleVars != null) {
 			for(int i=0; i<n; i++) {
-				if(frameVars[i] == null)
+				if(roleVars[i] == null)
 					continue;
 				for(int j=0; j<n; j++)
 					for(int k=0; k<roleVars[i][j].length; k++)
@@ -405,15 +490,9 @@ public class ParsingSentence {
 
 		for(Factor f : factors)
 			fg.addFactor(f);
-		
-//		System.out.printf("[ParsingSentence getFgExample] there are %d variables and %d factors "
-//				+ "for a length %d sentence, returning example\n",
-//				fg.getNumVars(), fg.getNumFactors(), this.sentence.size());
-//		System.out.printf("[ParsingSentence getFgExample] sum(fv.numConfigs)=%d\n", fvConfigs);
-		
+
 		return new FgExample(fg, gold);
 	}
 	
-	public List<Factor> getFactorsFromFactories() { return factors; }
 }
 

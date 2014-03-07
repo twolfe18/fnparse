@@ -1,25 +1,16 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.junit.*;
 
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -31,18 +22,10 @@ public class ParserTests {
 	
 	@Before
 	public void setupBob() {
-//		System.setProperty(SuperBob.WHICH_BOB, "BasicBob");
-//		System.setProperty(BasicBob.BASIC_BOBS_FILE, "feature-widths.txt");
-//		SuperBob.getBob(null).startup();
-		
-		parser = new Parser();
+		boolean debug = true;
+		parser = new Parser(debug);
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
 	}
-	
-//	@After
-//	public void shutdownBob() {
-//		SuperBob.getBob(null).shutdown();
-//	}
 	
 	@Before
 	public void setupDummyParse() {
@@ -53,7 +36,6 @@ public class ParserTests {
 		int[] gov        = new int[]    {1,     3,       3,     -1,       3,      6,     4};
 		String[] depType = new String[] {"G",   "G",     "G",   "G",      "G",    "G",   "G"};
 		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas, gov, depType);
-
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
@@ -83,19 +65,6 @@ public class ParserTests {
 	}
 	
 	@Test
-	public void basic() {
-		ParsingSentence ps = new ParsingSentence(dummyParse.getSentence(), parser.getParams());
-		for(Factor f : ps.getFactorsFromFactories()) {
-			assertTrue(f.getVars().size() > 0);
-			for(Var v : f.getVars()) {
-				if(v.getNumStates() == 0)
-					System.out.println("wut");
-				assertTrue(v.getNumStates() > 0);
-			}
-		}
-	}
-	
-	@Test
 	public void overfitting() {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
@@ -106,7 +75,10 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		parser.train(train, 12, 1, 1d, 1d);
+		if(parser.params.debug)
+			parser.train(train, 4, 1, 0.5d, 1d);
+		else	// for full feature set, need less regularization and more iterations to converge
+			parser.train(train, 15, 1, 0.5d, 10d);
 		parser.writeoutWeights(new File("weights.txt"));
 		
 		System.out.println("====== Running Prediction ======");
