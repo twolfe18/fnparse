@@ -191,8 +191,8 @@ public class ParserExperiment {
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 60;
-		int nTest = 20;
+		int nTrain = 100;
+		int nTest = 30;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
