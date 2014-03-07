@@ -9,12 +9,17 @@ import edu.jhu.util.Alphabet;
 
 public class RoleConstituencyFeatures extends AbstractFeatures<RoleConstituencyFeatures> implements Features.RE {
 
+	/**
+	 * if false, use frame and role names instead of their indices
+	 */
+	public final boolean fastFeatNames = true;
+	
 	public RoleConstituencyFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
 	}
 
 	@Override
-	public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
+	public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
 		
 		if(argSpan == Span.nullSpan)
 			return emptyFeatures;
@@ -23,25 +28,27 @@ public class RoleConstituencyFeatures extends AbstractFeatures<RoleConstituencyF
 		
 		String r = frameFrom_r_ijk == Frame.nullFrame
 				? "null-frame"
-				: frameFrom_r_ijk.getName();
+				: (fastFeatNames ? String.valueOf(frameFrom_r_ijk.getId()) : frameFrom_r_ijk.getName());
 		String rr = frameFrom_r_ijk == Frame.nullFrame
 				? "role-for-null-frame"
-				: frameFrom_r_ijk.getName() + "." + frameFrom_r_ijk.getRole(roleIdx);
+				: (fastFeatNames
+						? frameFrom_r_ijk.getId() + "." + roleIdx
+						: frameFrom_r_ijk.getName() + "." + frameFrom_r_ijk.getRole(roleIdx));
 		
 		b(v, 2d, "intercept");
 		b(v, 0.5d, r, "intercept");
 		b(v, rr, "intercept");
 
 		b(v, 2d, "width=", String.valueOf(argSpan.width()));
-		b(v, 2d, "width/2=", String.valueOf(argSpan));
+		b(v, 2d, "width/2=", String.valueOf(argSpan.width()/2));
 		b(v, 2d, "width/3=", String.valueOf(argSpan.width()/3));
 		b(v, 2d, "width/4=", String.valueOf(argSpan.width()/4));
 		b(v, 0.5d, r, "width=", String.valueOf(argSpan.width()));
-		b(v, 0.5d, r, "width/2=", String.valueOf(argSpan));
+		b(v, 0.5d, r, "width/2=", String.valueOf(argSpan.width()/2));
 		b(v, 0.5d, r, "width/3=", String.valueOf(argSpan.width()/3));
 		b(v, 0.5d, r, "width/4=", String.valueOf(argSpan.width()/4));
 		b(v, rr, "width=", String.valueOf(argSpan.width()));
-		b(v, rr, "width/2=", String.valueOf(argSpan));
+		b(v, rr, "width/2=", String.valueOf(argSpan.width()/2));
 		b(v, rr, "width/3=", String.valueOf(argSpan.width()/3));
 		b(v, rr, "width/4=", String.valueOf(argSpan.width()/4));
 		
@@ -49,6 +56,21 @@ public class RoleConstituencyFeatures extends AbstractFeatures<RoleConstituencyF
 		b(v, 2d, "propWidth=" + p);
 		b(v, r, "propWidth=" + p);
 		b(v, rr, "propWidth=" + p);
+		
+
+		int expLeft = argHeadIdx - argSpan.start;
+		assert expLeft >= 0;
+		int expRight = argSpan.end - argHeadIdx - 1;
+		assert expRight >= 0;
+		String er = String.valueOf(expRight);
+		String el = String.valueOf(expLeft);
+		b(v, "expandRight", er);
+		b(v, "expandLeft", el);
+		b(v, 0.5d, r, "expandRight", er);
+		b(v, 0.5d, r, "expandLeft", el);
+		b(v, 2d, rr, "expandRight", er);
+		b(v, 2d, rr, "expandLeft", el);
+		
 		
 		int s = argSpan.start;
 		if(s > 0) {
@@ -77,6 +99,9 @@ public class RoleConstituencyFeatures extends AbstractFeatures<RoleConstituencyF
 				b(v, rr, "twoRight=", sent.getPos(e+1));
 			}
 		}
+		
+		
+		// TODO words included in the expansion left and right (from the head word)
 		
 		for(int i=argSpan.start; i<argSpan.end; i++) {
 			

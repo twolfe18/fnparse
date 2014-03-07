@@ -3,10 +3,7 @@ package edu.jhu.hlt.fnparse.features;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.*;
 
 /**
  * F = frame head
@@ -63,7 +60,7 @@ public interface Features {
 	}
 	
 	public static interface RE extends Features {
-		public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int roleIdx, Span argSpan, Sentence s);
+		public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence s);
 	}
 	
 	/** @deprecated this will be too slow, and not really needed given that R now contains Frame information, please don't use */

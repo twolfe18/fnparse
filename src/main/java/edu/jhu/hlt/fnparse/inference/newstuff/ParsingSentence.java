@@ -8,6 +8,7 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
 import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.*;
@@ -115,6 +116,8 @@ public class ParsingSentence {
 						: hf.head(roleKspan, sentence);
 				
 				for(int j=0; j<n; j++) {
+					if(pruneArgHead(j, fi))
+						continue;
 					RoleVars rv = new RoleVars(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
 					roleVars[i][j][k] = rv;
 					if(r_ijkType == VarType.PREDICTED) {	// set gold
@@ -141,9 +144,12 @@ public class ParsingSentence {
 			if(fv == null) continue;
 			final int K = fv.getMaxRoles();
 			roleVars[i] = new RoleVars[n][K];
-			for(int j=0; j<n; j++)
+			for(int j=0; j<n; j++) {
+				if(pruneArgHead(j, fv))
+					continue;
 				for(int k=0; k<K; k++)
 					roleVars[i][j][k] = new RoleVars(roleVarsLatentOrPredicted, fv.getFrames(), sentence, i, j, k, params.logDomain);
+			}
 		}
 	}
 
@@ -164,6 +170,8 @@ public class ParsingSentence {
 			final int K = f.numRoles();
 			roleVars[i] = new RoleVars[n][K];
 			for(int j=0; j<n; j++) {
+				if(pruneArgHead(j, fv))
+					continue;
 				for(int k=0; k<K; k++) {
 					RoleVars rv = new RoleVars(VarType.PREDICTED, possibleFrames, sentence, i, j, k, params.logDomain);
 					roleVars[i][j][k] = rv;
@@ -175,6 +183,11 @@ public class ParsingSentence {
 				}
 			}
 		}
+	}
+	
+	private boolean pruneArgHead(int j, FrameVar f_i) {
+		String pos = sentence.getPos(j);
+		return pos.endsWith("DT") || ArgHeadPruning.pennPunctuationPosTags.contains(pos);
 	}
 
 	
@@ -262,6 +275,7 @@ public class ParsingSentence {
 					double[] riskBuf = new double[2];
 					for(int j=0; j<n; j++) {
 						RoleVars r_ijk = roleVars[i][j][k];
+						if(r_ijk == null) continue;
 						DenseFactor df = inf2.getMarginals(r_ijk.getRoleVar());
 						int nullIndex = 0;
 						assert r_ijk.getFrame(nullIndex) == Frame.nullFrame;
@@ -482,9 +496,13 @@ public class ParsingSentence {
 			for(int i=0; i<n; i++) {
 				if(roleVars[i] == null)
 					continue;
-				for(int j=0; j<n; j++)
-					for(int k=0; k<roleVars[i][j].length; k++)
-						roleVars[i][j][k].register(fg, gold);
+				for(int j=0; j<n; j++) {
+					for(int k=0; k<roleVars[i][j].length; k++) {
+						RoleVars rv = roleVars[i][j][k];
+						if(rv != null)
+							rv.register(fg, gold);
+					}
+				}
 			}
 		}
 

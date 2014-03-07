@@ -1,31 +1,52 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
 
-import java.io.*;
-import java.util.*;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.data.FgExample;
+import edu.jhu.gm.data.FgExampleCache;
+import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.FgExampleMemoryStore;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.hlt.fnparse.data.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.features.RoleConstituencyFeatures;
+import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.util.*;
-import edu.jhu.optimize.*;
+import edu.jhu.hlt.fnparse.util.Avg;
+import edu.jhu.hlt.fnparse.util.HeterogeneousL2;
+import edu.jhu.optimize.AdaGrad;
+import edu.jhu.optimize.Regularizer;
+import edu.jhu.optimize.SGD;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
 	
-	public static class ParserParams {
+	public static class ParserParams implements Serializable {
 		public boolean debug;
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
@@ -40,8 +61,8 @@ public class Parser {
 		public FrameIndex frameIndex;
 		public TargetPruningData targetPruningData;
 
-		public CrfTrainer trainer;
-		public CrfTrainer.CrfTrainerPrm trainerParams;
+		public transient CrfTrainer trainer;
+		public transient CrfTrainer.CrfTrainerPrm trainerParams;
 	}
 	
 	
@@ -122,6 +143,27 @@ public class Parser {
 		//return new L2(10d);
 		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, regularizerMult, numParams);
 	}
+	
+	public ParsingSentence getSentenceForTraining(FNParse p) {
+		ParsingSentence s = new ParsingSentence(p.getSentence(), params);
+		s.setupRoleVarsForTrain(p);
+		return s;
+	}
+	
+	public FgExample getExampleForTraining(FNParse p, boolean initFeatures) {
+		FgExample fge = getSentenceForTraining(p).getFgExample();
+		if(initFeatures) {
+			double cantGetThisWithoutFeatures = 0d;
+			FactorGraph fg = fge.getFgLatPred();
+			for(Factor f : fg.getFactors()) {
+				// my jenk way to get features to be computed (might not work for other classes)
+				int n = f.getVars().calcNumConfigs();
+				for(int i=0; i<n; i++)
+					cantGetThisWithoutFeatures += f.getUnormalizedScore(i);
+			}
+		}
+		return fge;
+	}
 
 	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
@@ -144,7 +186,7 @@ public class Parser {
 		
 		int numParams = params.debug
 				? 750 * 1000
-				: 30 * 1000 * 1000;	// TODO
+				: 50 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)
@@ -156,26 +198,26 @@ public class Parser {
 		Avg framesPerTarget = new Avg();
 		Avg targetsPerSent = new Avg();
 		
-		FgExampleMemoryStore exs = new FgExampleMemoryStore();
-		for(FNParse parse : examples) {
-			
-			ParsingSentence s = new ParsingSentence(parse.getSentence(), params);
-			s.setupRoleVarsForTrain(parse);
-			exs.add(s.getFgExample());
-
-			// compute upper bound on target recall
-			double recall = s.computeMaxTargetRecall(parse);
-			macroTargetRecall.accum(recall);
-			microTargetRecall.accum(recall, parse.numFrameInstances());
-			
-			int numVars = 0;
-			for(FrameVar fv : s.frameVars) {
-				if(fv == null) continue;
-				framesPerTarget.accum(fv.getFrames().size());
-				numVars++;
-			}
-			targetsPerSent.accum(numVars);
-		}
+		//FgExampleMemoryStore exs = new FgExampleMemoryStore();
+//		for(FNParse parse : examples) {
+//			
+//			ParsingSentence s = getSentenceForTraining(parse);
+//			exs.add(s.getFgExample());
+//
+//			// compute upper bound on target recall
+//			double recall = s.computeMaxTargetRecall(parse);
+//			macroTargetRecall.accum(recall);
+//			microTargetRecall.accum(recall, parse.numFrameInstances());
+//			
+//			int numVars = 0;
+//			for(FrameVar fv : s.frameVars) {
+//				if(fv == null) continue;
+//				framesPerTarget.accum(fv.getFrames().size());
+//				numVars++;
+//			}
+//			targetsPerSent.accum(numVars);
+//		}
+		FgExampleList exs = new FgExampleCache(new RawExampleFactory(examples, this), 2, false);
 		
 		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
 				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());

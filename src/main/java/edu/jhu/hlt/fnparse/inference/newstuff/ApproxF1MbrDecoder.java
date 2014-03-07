@@ -13,13 +13,24 @@ public class ApproxF1MbrDecoder {
     // TODO do decoding over (f_i, r_ijk)!
     // if you're going to bother with joint training you better do joint decoding!
 	
+	public ApproxF1MbrDecoder() {
+		setRecallBias(1d);
+	}
+	
+	public ApproxF1MbrDecoder(double recallBias) {
+		setRecallBias(recallBias);
+	}
+	
 	/**
 	 * @param recallBias higher values will penalize false negatives
 	 * more than false positives, and thus increase recall. If you give
 	 * 1, then false positives and false negatives will have the same
 	 * loss.
 	 */
-	public ApproxF1MbrDecoder(double recallBias) {
+	public void setRecallBias(double recallBias) {
+		if(recallBias < 1e-3 || recallBias > 1e3)
+			throw new IllegalArgumentException();
+		recallBias = Math.sqrt(recallBias);	// makes this value zoom-off a little more slowly
 		this.falseNegPenalty = recallBias;
 		this.falsePosPenalty = 1d / recallBias;
 	}

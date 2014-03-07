@@ -1,11 +1,6 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
@@ -15,16 +10,22 @@ import edu.jhu.util.Alphabet;
 
 public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
 	
-	public final boolean verbose = false;
-	public final boolean debug = true;
+	public static final boolean verbose = false;
+	public static final boolean debug = true;
+
+	private static final String intercept = "intercept";
+	private static final String frameFeatPrefix = "frame=";
+	private static final String luMatch = "LU-match";
 	
 	public Timer full = Timer.noOp; //new Timer("all", 75000);
 	public Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 	
-	private static final String intercept = "intercept";
-	private static final String frameFeatPrefix = "frame=";
-	private static final String luMatch = "LU-match";
+	/**
+	 * if false, use frame and role names instead of their indices
+	 */
+	public final boolean fastFeatNames = true;
+	
 	private List<Integer> dontRegularize;
 	
 	public BasicFrameFeatures(Alphabet<String> featIdx) {
@@ -61,7 +62,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		FeatureVector v = new FeatureVector();
 		
 		LexicalUnit headLU = s.getLU(head);
-		String fs = "f=" + (debug ? f.getName() : f.getId());
+		String fs = "f=" + (fastFeatNames ? f.getId() : f.getName());
 		String fsc = f == Frame.nullFrame ? "nullFrame" : "nonNullFrame";
 		
 		b(v, intercept);

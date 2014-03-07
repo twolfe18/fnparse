@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-
 public class Frame {
 
 	private int idx;
@@ -44,6 +43,12 @@ public class Frame {
 	
 	public String getRole(int i) {
 		return roles[i];
+	}
+	
+	public String getRoleSafe(int i) {
+		if(i < roles.length)
+			return roles[i];
+		return "<not-a-role>";
 	}
 	
 	public int numRoles() {

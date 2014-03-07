@@ -72,6 +72,7 @@ public class ParserTests {
 		List<Sentence> test = new ArrayList<Sentence>();
 		
 		System.out.println("====== Training ======");
+		parser.params.argDecoder.setRecallBias(1d);
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 

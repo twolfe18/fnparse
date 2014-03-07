@@ -11,7 +11,7 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 	}
 
 	@Override
-	public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int roleIdx, Span argSpan, Sentence s) {
+	public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence s) {
 		FeatureVector fv = new FeatureVector();
 		b(fv, frameFrom_r_ijk.getName(), String.valueOf(targetHeadIdx), String.valueOf(roleIdx), argSpan.toString());
 		return fv;

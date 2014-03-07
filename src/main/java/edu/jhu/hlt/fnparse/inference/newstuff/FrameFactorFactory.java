@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.io.Serializable;
 import java.util.*;
 
 import edu.jhu.gm.feat.*;
@@ -22,6 +23,8 @@ import edu.jhu.hlt.fnparse.features.*;
  * @author travis
  */
 public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
+
+	private static final long serialVersionUID = 1L;
 
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
@@ -83,15 +86,17 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 	 * features should be safe (there is no cache invalidation aside from this
 	 * object being garbage collected).
 	 */
-	static final class F extends ExpFamFactor {	// is the actual factor
+	static final class F extends ExpFamFactor implements Serializable {	// is the actual factor
 		
 		private static final long serialVersionUID = 1L;
 		
-		private HasFrameFeatures features;
-		private FrameVar frameVar;
-		private Sentence sent;
-		private boolean readP, readF, readE;
+		private transient HasFrameFeatures features;
+		private transient FrameVar frameVar;
+		private transient Sentence sent;
+		private transient boolean readP, readF, readE;
 
+		// this is the only thing we need to serialize
+		// TODO need to just check this, not any other vars when we read stuff in
 		private FeatureVector[] cache;
 
 		public F(FrameVar fv, HasFrameFeatures features, Sentence sent, VarSet varsNeeded) {

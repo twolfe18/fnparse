@@ -8,6 +8,11 @@ import edu.jhu.util.Alphabet;
 
 public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FR {
 
+	/**
+	 * if false, use frame and role names instead of their indices
+	 */
+	public final boolean fastFeatNames = true;
+	
 	public boolean verbose = false;
 	
 	public BasicFrameRoleFeatures(Alphabet<String> featIdx) {
@@ -28,8 +33,8 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		
 		FeatureVector fv = new FeatureVector();
 		
-		String fs = "f" + f.getId();
-		String rs = "r" + roleIdx;
+		String fs = "f" + (fastFeatNames ? f.getId() : f.getName());
+		String rs = "r" + (fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
 		String fsrs = fs + "-" + rs + (argIsRealized ? "-isRealize" : "-isntRealized");
 		LexicalUnit tHead = sent.getLU(targetHead);
 		LexicalUnit aHead = sent.getLU(argHead);

@@ -42,6 +42,7 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 				for(int k=0; k<r[i][j].length; k++) {
 					
 					RoleVars r_ijk = r[i][j][k];
+					if(r_ijk == null) continue;
 					
 					// containsR and containsE could in principle be the same set
 					if(this.freFeatures != null)
@@ -80,13 +81,15 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 
 		private static final long serialVersionUID = 1L;
 		
-		private Sentence sent;
-		private HasRoleFeatures features;
-		private FrameVar frameVar;
-		private RoleVars roleVar;
+		private transient Sentence sent;
+		private transient HasRoleFeatures features;
+		private transient FrameVar frameVar;
+		private transient RoleVars roleVar;
 		
-		private boolean readF, readR, readE;
+		private transient boolean readF, readR, readE;
 		
+		// this is the only thing we need to serialize
+		// TODO need to just check this, not any other vars when we read stuff in
 		private FeatureVector[] cache;
 		
 		// TODO reintroduce this optimization later

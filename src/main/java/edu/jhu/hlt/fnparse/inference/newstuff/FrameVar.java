@@ -89,7 +89,7 @@ public class FrameVar implements FgRelated {
 		if(goldFrame < 0) {
 			// our filtering heuristic didn't include the correct answer
 			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
-					gold.getFrame(), Arrays.toString(gold.getSentence().getWordFor(gold.getTarget())));
+					gold.getFrame(), gold.getSentence().getLU(headIdx));
 			goldFrame = frames.indexOf(Frame.nullFrame);
 		}
 		if(goldFrame < 0)

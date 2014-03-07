@@ -13,6 +13,9 @@ import edu.mit.jwi.IRAMDictionary;
  */
 public class ArgHeadPruning {
 
+	public static final Set<String> pennPunctuationPosTags =
+			new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\""));
+	
 	public static void main(String[] args) {
 		
 		FileFrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
@@ -24,8 +27,6 @@ public class ArgHeadPruning {
 		IRAMDictionary dict = null;
 		if(useFNpos)
 			dict = parser.params.targetPruningData.getWordnetDict();
-		
-		Set<String> punc = new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\""));
 		
 		int total = 0;
 		int pruned = 0;
@@ -40,7 +41,7 @@ public class ArgHeadPruning {
 			for(int i=0; i<n; i++) {
 				boolean prune = useFNpos
 						? s.getFNStyleLU(i, dict).pos.startsWith(Sentence.fnStyleBadPOSstrPrefix)
-						: s.getLU(i).pos.endsWith("DT") || punc.contains(s.getPos(i));
+						: s.getLU(i).pos.endsWith("DT") || pennPunctuationPosTags.contains(s.getPos(i));
 				if(prune) {
 					pruned++;
 					prnd[i] = true;

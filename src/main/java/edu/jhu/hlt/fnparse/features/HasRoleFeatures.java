@@ -88,7 +88,7 @@ public class HasRoleFeatures {
 		if(frFeatures != null)
 			fv.add(frFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
 		if(reFeatures != null)
-			fv.add(reFeatures.getFeatures(r_ijk, targetHeadIdx, roleIdx, arg, s));
+			fv.add(reFeatures.getFeatures(r_ijk, targetHeadIdx, argHead, roleIdx, arg, s));
 		if(eFeatures != null)
 			fv.add(eFeatures.getFeatures(arg, s));
 		return fv;

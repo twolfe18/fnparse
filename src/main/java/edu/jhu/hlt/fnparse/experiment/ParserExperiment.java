@@ -122,6 +122,7 @@ public class ParserExperiment {
 	
 	public static void mainNew(String[] args) {
 		
+		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
@@ -191,8 +192,10 @@ public class ParserExperiment {
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		int nTrain = 100;
-		int nTest = 30;
+		boolean eval = false;
+		
+		int nTrain = 20;
+		int nTest = 10;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
@@ -207,9 +210,9 @@ public class ParserExperiment {
 		Map<String, Double> results;
 		Parser parser = new Parser();
 		parser.params.onlyFrameIdent = false;
-		for(int epoch=0; epoch<2; epoch++) {
+		for(int epoch=0; epoch<1; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 1;
+			int passes = 3;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
 			double regularizerMult = 1d;
@@ -221,37 +224,51 @@ public class ParserExperiment {
 				epoch, parser.params.featIdx.size());
 			printMemUsage();
 
-			System.out.println("[ParserExperiment] predicting on test set...");
-			decodeTimer.start();
-			predicted = parser.parseWithoutPeeking(test);
-			decodeTimer.stop();
-			results = BasicEvaluation.evaluate(test, predicted);
-			BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
-			printMemUsage();
-			
-			System.out.println("[ParserExperiment] predicting on train set...");
-			decodeTimer.start();
-			predicted = parser.parseWithoutPeeking(trainSubset);
-			decodeTimer.stop();
-			results = BasicEvaluation.evaluate(trainSubset, predicted);
-			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
-			printMemUsage();
-			parser.writeoutWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
+			if(eval) {
+				System.out.println("[ParserExperiment] predicting on test set...");
+				decodeTimer.start();
+				predicted = parser.parseWithoutPeeking(test);
+				decodeTimer.stop();
+				results = BasicEvaluation.evaluate(test, predicted);
+				BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
+				printMemUsage();
+
+				System.out.println("[ParserExperiment] predicting on train set...");
+				decodeTimer.start();
+				predicted = parser.parseWithoutPeeking(trainSubset);
+				decodeTimer.stop();
+				results = BasicEvaluation.evaluate(trainSubset, predicted);
+				BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
+				printMemUsage();
+				parser.writeoutWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
+			}
 			
 			double secPerInst = trainTimer.totalTimeInSec() / trainSentencesProcessed;
 			System.out.println("time to train on 1000 sentences: " + (1000d * secPerInst));
 		}
+		System.out.println("total train time " + trainTimer.totalTimeInSec());
+		System.out.println("total decode time " + decodeTimer.totalTimeInSec());
 	}
 	
 	/** @deprecated */
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
-		final int maxArgWidth = 10;
-		final int maxTargetWidth = 3;
-		final int maxSentLen = 20;
+		final int maxArgWidth = 999999;
+		final int maxTargetWidth = 999999;
+		final int maxSentLen = 25;
+		int total = 0;
 		List<FNParse> buf = new ArrayList<FNParse>();
+		
+		int[] lengthHist = new int[50];
+		
 		outer: for(FNParse t : train) {
+			Sentence s = t.getSentence();
+			if(s.size() >= lengthHist.length)
+				lengthHist[0]++;
+			else
+				lengthHist[s.size()]++;
 			for(FrameInstance fi : t.getFrameInstances()) {
-				if(fi.getSentence().size() > maxSentLen)
+				total++;
+				if(s.size() > maxSentLen)
 					continue outer;
 				if(fi.getTarget().width() > maxTargetWidth)
 					continue outer;
@@ -261,6 +278,18 @@ public class ParserExperiment {
 			}
 			buf.add(t);
 		}
+		System.out.printf("[getSuitableTrainingExamples] kept %d of %d FrameInstances (%.1f %%)\n",
+				buf.size(), total, (100d*buf.size())/total);
+		
+		System.out.println("histogram of lengths (cutoff is currently " + maxSentLen + ")");
+		for(int i=0; i<lengthHist.length; i++) {
+			if(i == 0)
+				System.out.printf(">%d\t%d\n", lengthHist.length-1, lengthHist[lengthHist.length-1]);
+			else
+				System.out.printf(" %d\t%d\n", i, lengthHist[i]);
+		}
+		System.out.println();
+		
 		return buf;
 	}
 }

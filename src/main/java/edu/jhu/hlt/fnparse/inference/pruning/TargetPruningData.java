@@ -13,7 +13,7 @@ import edu.mit.jwi.morph.WordnetStemmer;
 
 // TODO make an init() method that observes a single pass over lex examples
 // so that we only ever have to make one pass (rather than one per data-structure)
-public class TargetPruningData {
+public class TargetPruningData implements Serializable {
 
 	public static final boolean debug = false;
 
@@ -68,7 +68,7 @@ public class TargetPruningData {
 	}
 	
 	
-	private IRAMDictionary dict;
+	private transient IRAMDictionary dict;
 	public IRAMDictionary getWordnetDict() {
 		if(dict == null) {
 			long start = System.currentTimeMillis();
@@ -84,7 +84,7 @@ public class TargetPruningData {
 		return dict;
 	}
 
-	private Map<String, List<FrameInstance>> prototypesByStem;
+	private transient Map<String, List<FrameInstance>> prototypesByStem;
 	public Map<String, List<FrameInstance>> getPrototypesByStem() {
 		if(prototypesByStem == null)
 			init();
@@ -92,7 +92,7 @@ public class TargetPruningData {
 	}
 	
 	
-	private Map<LexicalUnit, List<Frame>> lu2frames;
+	private transient Map<LexicalUnit, List<Frame>> lu2frames;
 	/**
 	 * keys use Penn treebank POS tags (not Framenet POS tags)
 	 */
@@ -136,7 +136,7 @@ public class TargetPruningData {
 	}
 	
 	
-	private Set<String> stopwordsForTargets;
+	private transient Set<String> stopwordsForTargets;
 	public boolean isTargetStopword(String word) {
 		if(stopwordsForTargets == null) {
 			stopwordsForTargets = new HashSet<String>();
