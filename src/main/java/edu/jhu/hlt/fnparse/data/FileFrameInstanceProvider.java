@@ -29,7 +29,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 		private String curLineConllFile;
 		private String curSentIdConll;	
 
-		private String prevSentId;
+		private String prevSentIdConll;
+		private String prevSentIdFrames;
+		
 		
 		private Map<String, Frame> frameByName;
 		
@@ -57,7 +59,6 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				String[] cf = curLineFramesFile.split("\t");
 				curSentIdFrames = cf[2];
 				prevAnnoSetId = curAnnoSetId = cf[3];
-
 				prevFrameName = cf[5];
 				prevTargetCharStart = cf[7];
 				prevTargetCharEnd = cf[8];
@@ -65,8 +66,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				String[] ff = curLineConllFile.split("\t");
 				curSentIdConll = ff[2];
 
-				assert curSentIdConll.equals(curSentIdFrames);
-				prevSentId = curSentIdFrames;
+				//assert curSentIdConll.equals(curSentIdFrames);
+				prevSentIdFrames = curSentIdFrames;
+				prevSentIdConll = curSentIdConll;
 			}
 			catch (Exception e) {
 				throw new RuntimeException(e);
@@ -87,7 +89,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 			List<String> depType = new ArrayList<String>();
 			List<Integer> tokenCharStart = new ArrayList<Integer>();
 			List<Integer> tokenCharEnd = new ArrayList<Integer>();
-			while(litrConll.hasNext() && curSentIdConll.equals(prevSentId)){
+			while(litrConll.hasNext() && curSentIdConll.equals(prevSentIdConll)){
 				String[] l = curLineConllFile.split("\t");
 				tokens.add(l[4]);
 				pos.add(l[10]);
@@ -115,67 +117,76 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 			else throw new RuntimeException("where did " + curSentIdConll + " come from?");
 
 			Sentence s = new Sentence( datasetOfSentence, 
-					prevSentId, 
+					prevSentIdConll, 
 					tokens.toArray(new String[0]), 
 					pos.toArray(new String[0]),
 					lemmas.toArray(new String[0]),
 					ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 					depType.toArray(new String[0]));
-
+			
 			List<FrameInstance> frameInstancesForFNTagging = new ArrayList<FrameInstance>();
-			while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentId)){
-				Map<String, Span> triggeredRoles = new HashMap<String, Span>();
-				// This has a mini FSM inside it.
-				// Every time the annotationsetid column changes it makes a new frameinstance
-				while(litrFrames.hasNext() && curAnnoSetId.equals(prevAnnoSetId)){
-					String[] l=curLineFramesFile.split("\t");
-					// Note down all the roles that were triggered.
-					String roleName = l[10];
-					String nullInstantiation = l[11]; // the itype column
-					if(!roleName.equals("NULL") && !roleName.equals("") && nullInstantiation.equals("NULL")){
-						triggeredRoles.put(
-								roleName, 
-								getSpanInTokens(
-										Integer.parseInt(l[12]), 
-										Integer.parseInt(l[13]),
-										tokenCharStart,
-										tokenCharEnd
-										));
+			if(prevSentIdConll.equals(curSentIdFrames)){
+				while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentIdFrames)){
+					Map<String, Span> triggeredRoles = new HashMap<String, Span>();
+					// This has a mini FSM inside it.
+					// Every time the annotationsetid column changes it makes a new frameinstance
+					while(litrFrames.hasNext() && curAnnoSetId.equals(prevAnnoSetId)){
+						String[] l=curLineFramesFile.split("\t");
+						// Note down all the roles that were triggered.
+						String roleName = l[10];
+						String nullInstantiation = l[11]; // the itype column
+						if(!roleName.equals("NULL") && !roleName.equals("") && nullInstantiation.equals("NULL")){
+							triggeredRoles.put(
+									roleName, 
+									getSpanInTokens(
+											Integer.parseInt(l[12]), 
+											Integer.parseInt(l[13]),
+											tokenCharStart,
+											tokenCharEnd
+									));
+						}
+						curLineFramesFile=litrFrames.nextLine();
+						curAnnoSetId=(curLineFramesFile.split("\t"))[3];
 					}
-					curLineFramesFile=litrFrames.nextLine();
-					curAnnoSetId=(curLineFramesFile.split("\t"))[3];
+					String framename = prevFrameName;
+					Span targetSpan = getSpanInTokens(
+							Integer.parseInt(prevTargetCharStart), 
+							Integer.parseInt(prevTargetCharEnd),
+							tokenCharStart,
+							tokenCharEnd);
+					Frame f = frameByName.get(framename);
+					if(f==null){
+						// There is a frame in the fulltext data called Test35, which is clearly erroeneous.
+						// Earlier I just manually filtered it out.
+						// But semafor was not so for the sake of comparability I am dealing with it in code.
+						// It really doesn't make a lot of sense, but for the sake of comparability.
+						assert framename.equals("Test35");
+					} else {
+						Span[] roleSpans = new Span[f.numRoles()];
+						Arrays.fill(roleSpans, Span.nullSpan);
+						for(int i=0; i<roleSpans.length; i++){
+							Span tmp = triggeredRoles.get(f.getRole(i));
+							if(tmp != null) roleSpans[i] = tmp;					
+						}
+						FrameInstance fi = FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s);
+						frameInstancesForFNTagging.add(fi);
+					}
+					// Add fi to the FrameInstances list before updating the prev[VAR] with cur[VAR]
+					// but add fi only if 
+					String[] l = curLineFramesFile.split("\t");
+					prevAnnoSetId = l[3];
+					prevFrameName = l[5];
+					prevTargetCharStart = l[7];
+					prevTargetCharEnd = l[8];
+					curSentIdFrames = l[2];
 				}
-				String framename = prevFrameName;
-				Span targetSpan = getSpanInTokens(
-						Integer.parseInt(prevTargetCharStart), 
-						Integer.parseInt(prevTargetCharEnd),
-						tokenCharStart,
-						tokenCharEnd);
-				Frame f = frameByName.get(framename);
-				Span[] roleSpans = new Span[f.numRoles()];
-				Arrays.fill(roleSpans, Span.nullSpan);
-				for(int i=0; i<roleSpans.length; i++){
-					Span tmp = triggeredRoles.get(f.getRole(i));
-					if(tmp != null) roleSpans[i] = tmp;					
-				}
-				FrameInstance fi = FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s);
-				
-				// Add fi to the FrameInstances list before updating the prev[VAR] with cur[VAR]
-				// but add fi only if 
-				frameInstancesForFNTagging.add(fi);
-				String[] l = curLineFramesFile.split("\t");
-				prevAnnoSetId = l[3];
-				prevFrameName = l[5];
-				prevTargetCharStart = l[7];
-				prevTargetCharEnd = l[8];
-				curSentIdFrames = l[2];
 			}
 
 			FNTagging ret = isFullParse(s.getId())
 				? new FNParse(s, frameInstancesForFNTagging)
 				: new FNTagging(s, frameInstancesForFNTagging);
-			prevSentId = curSentIdFrames;
-
+			prevSentIdFrames = curSentIdFrames;
+			prevSentIdConll = curSentIdConll;
 			return ret;
 		}
 		
@@ -213,6 +224,12 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
 	
+	public static final FileFrameInstanceProvider dipanjantrainFIP =
+		new FileFrameInstanceProvider(UsefulConstants.TrainDipanjanFramesPath, UsefulConstants.TrainDipanjanConllPath);
+
+	public static final FileFrameInstanceProvider dipanjantestFIP =
+		new FileFrameInstanceProvider(UsefulConstants.TestDipanjanFramesPath, UsefulConstants.TestDipanjanConllPath);
+
 //	public static final FileFrameInstanceProvider semlinkFIP =
 //			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);
 
