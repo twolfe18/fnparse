@@ -32,8 +32,6 @@ public class ParserExperiment {
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
 		Set<LexicalUnit> lexInstance = new HashSet<LexicalUnit>();
-//		while(instances.hasNext()) {
-//			FNTagging p = instances.next();
 		for(FNTagging p : instances) {
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();

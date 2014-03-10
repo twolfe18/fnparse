@@ -61,11 +61,11 @@ public class RoleVars implements FgRelated {
 	private int roleIdx;		// aka "k"
 	
 	// if(training) 
-	//   boolean latent = f_i == Frame.nullFrame;
+	//   latent = (f_i == Frame.nullFrame)
 	// else if(doingFrameDecode)
-	//   boolean latent = true;
+	//   latent = true
 	// else
-	//   boolean prune = f_i == Frame.nullFrame;	// not latent or predicted!
+	//   prune = (f_i == Frame.nullFrame)	// not latent or predicted!
 	private VarType varType;
 	
 	// primary var

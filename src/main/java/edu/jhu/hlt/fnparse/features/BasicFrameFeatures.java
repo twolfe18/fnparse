@@ -5,13 +5,12 @@ import java.util.*;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.Features.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
-import edu.jhu.util.Alphabet;
 
 public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
 	
 	public static final boolean verbose = false;
-	public static final boolean debug = true;
 
 	private static final String intercept = "intercept";
 	private static final String frameFeatPrefix = "frame=";
@@ -20,16 +19,13 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	public Timer full = Timer.noOp; //new Timer("all", 75000);
 	public Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public Timer childTimer = Timer.noOp; //new Timer("children", 75000);
-	
-	/**
-	 * if false, use frame and role names instead of their indices
-	 */
-	public final boolean fastFeatNames = true;
-	
+
+	private ParserParams params;
 	private List<Integer> dontRegularize;
 	
-	public BasicFrameFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public BasicFrameFeatures(ParserParams params) {
+		super(params.featIdx);
+		this.params = params;
 		
 		// compute the features that we don't want regularized
 		FeatureVector noop = new FeatureVector();
@@ -62,7 +58,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		FeatureVector v = new FeatureVector();
 		
 		LexicalUnit headLU = s.getLU(head);
-		String fs = "f=" + (fastFeatNames ? f.getId() : f.getName());
+		String fs = "f=" + (params.fastFeatNames ? f.getId() : f.getName());
 		String fsc = f == Frame.nullFrame ? "nullFrame" : "nonNullFrame";
 		
 		b(v, intercept);
@@ -110,59 +106,63 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			b(v, "softMatch", fsc, whichLU.pos);
 		}
 		
-		// parent words
-		parentTimer.start();
-		int parentIdx = s.governor(head);
-		LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
-		b(v, fs, "parent=", parent.getFullString());
-		b(v, fs, "parent=", parent.word);
-		b(v, fs, "parent=", parent.pos);
-		b(v, fsc, "parent=", parent.getFullString());
-		b(v, fsc, "parent=", parent.word);
-		b(v, fsc, "parent=", parent.pos);
-		int up = 1;
-		boolean[] seen = new boolean[n];
-		while(parentIdx >= 0 && !seen[parentIdx]) {
-			parentIdx = s.governor(parentIdx);
-			parent = AbstractFeatures.getLUSafe(parentIdx, s);
-			b(v, fs, "gov-by=", parent.getFullString());
-			b(v, fs, "gov-by=", parent.word);
-			b(v, fs, "gov-by=", parent.word);
-			b(v, fsc, "gov-by=", parent.getFullString());
-			b(v, fsc, "gov-by=", parent.word);
-			b(v, fsc, "gov-by=", parent.word);
-			b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.getFullString());
-			b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.word);
-			b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.pos);
-			if(parentIdx >= 0)
-				seen[parentIdx] = true;
-			up++;
-		}
-		parentTimer.stop();
 		
-		// direct children and descendants
-		childTimer.start();
-		Arrays.fill(seen, false);
-		seen[head] = true;
-		for(int i : s.childrenOf(head)) {
-			seen[i] = true;
-			LexicalUnit c = s.getLU(i);
-			b(v, fs, "child=", c.getFullString());
-			b(v, fs, "child=", c.word);
-			b(v, fs, "child=", c.pos);
-			b(v, fsc, "child=", c.getFullString());
-			b(v, fsc, "child=", c.word);
-			b(v, fsc, "child=", c.pos);
-			allChildren(fs, i, 1, seen, s, v);
-			allChildren(fsc, i, 1, seen, s, v);
+		if(params.useSyntaxFeatures) {
+		
+			// parent words
+			parentTimer.start();
+			int parentIdx = s.governor(head);
+			LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
+			b(v, fs, "parent=", parent.getFullString());
+			b(v, fs, "parent=", parent.word);
+			b(v, fs, "parent=", parent.pos);
+			b(v, fsc, "parent=", parent.getFullString());
+			b(v, fsc, "parent=", parent.word);
+			b(v, fsc, "parent=", parent.pos);
+			int up = 1;
+			boolean[] seen = new boolean[n];
+			while(parentIdx >= 0 && !seen[parentIdx]) {
+				parentIdx = s.governor(parentIdx);
+				parent = AbstractFeatures.getLUSafe(parentIdx, s);
+				b(v, fs, "gov-by=", parent.getFullString());
+				b(v, fs, "gov-by=", parent.word);
+				b(v, fs, "gov-by=", parent.word);
+				b(v, fsc, "gov-by=", parent.getFullString());
+				b(v, fsc, "gov-by=", parent.word);
+				b(v, fsc, "gov-by=", parent.word);
+				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.getFullString());
+				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.word);
+				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.pos);
+				if(parentIdx >= 0)
+					seen[parentIdx] = true;
+				up++;
+			}
+			parentTimer.stop();
+
+			// direct children and descendants
+			childTimer.start();
+			Arrays.fill(seen, false);
+			seen[head] = true;
+			for(int i : s.childrenOf(head)) {
+				seen[i] = true;
+				LexicalUnit c = s.getLU(i);
+				b(v, fs, "child=", c.getFullString());
+				b(v, fs, "child=", c.word);
+				b(v, fs, "child=", c.pos);
+				b(v, fsc, "child=", c.getFullString());
+				b(v, fsc, "child=", c.word);
+				b(v, fsc, "child=", c.pos);
+				allChildren(fs, i, 1, seen, s, v);
+				allChildren(fsc, i, 1, seen, s, v);
+			}
+			childTimer.stop();
 		}
-		childTimer.stop();
 		
 		
 		// TODO wordnet
 		// synsetId * frame
 		// LU in synset of target
-		// 
+		
 		
 		// pairs of words in sentence
 		bag.clear();
@@ -221,6 +221,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, fsc, "to-the-left=", ll.pos, l.word);
 		b(v, fsc, "to-the-left=", ll.pos, l.pos);
 		b(v, fsc, "to-the-left=", ll.word, l.pos);
+		
 		LexicalUnit r = AbstractFeatures.getLUSafe(head+1, s);
 		LexicalUnit rr = AbstractFeatures.getLUSafe(head+2, s);
 		b(v, fs, "to-the-right=", r.getFullString());

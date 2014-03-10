@@ -46,7 +46,7 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 			containsF.add(fv.getFrameVar());
 			
 			// TODO new code path (expansion features are going away)
-			if(fpeFeatures == null && feFeatures == null && eFeatures == null) {
+			if(fpeFeatures == null && eFeatures == null) {
 				// now the only question is whether p is in the mix
 				if(fpFeatures != null)
 					containsF.add(fv.getPrototypeVar());
@@ -68,9 +68,7 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 
 					if(fpFeatures != null)
 						containsF.add(fv.getPrototypeVar());
-					if(feFeatures != null)
-						containsE.add(fv.getFrameVar());
-
+					
 					factors.add(new F(fv, this, s, containsF));
 					factors.add(new F(fv, this, s, containsE));
 				}

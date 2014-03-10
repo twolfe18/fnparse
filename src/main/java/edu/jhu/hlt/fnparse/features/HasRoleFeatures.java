@@ -12,12 +12,13 @@ import edu.jhu.util.Alphabet;
 public class HasRoleFeatures {
 	
 	protected ParserParams params;
-
-	/** @deprecated */
-	protected Features.FRE freFeatures;
+	
 	protected Features.FR frFeatures;
 	protected Features.RE reFeatures;
 	protected Features.E eFeatures;
+	
+	/** @deprecated slow! */
+	protected Features.FRE freFeatures;
 	
 	private FeatureVector fv_nullFrame;
 	private int fv_nullFrame_idx;

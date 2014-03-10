@@ -4,19 +4,15 @@ import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FR {
 
-	/**
-	 * if false, use frame and role names instead of their indices
-	 */
-	public final boolean fastFeatNames = true;
+	private ParserParams params;
 	
-	public boolean verbose = false;
-	
-	public BasicFrameRoleFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public BasicFrameRoleFeatures(ParserParams params) {
+		super(params.featIdx);
+		this.params = params;
 	}
 	
 	@Override
@@ -33,9 +29,9 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		
 		FeatureVector fv = new FeatureVector();
 		
-		String fs = "f" + (fastFeatNames ? f.getId() : f.getName());
-		String rs = "r" + (fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
-		String fsrs = fs + "-" + rs + (argIsRealized ? "-isRealize" : "-isntRealized");
+		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
+		String rs = "r" + (params.fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
+		String fsrs = fs + "-" + rs + (argIsRealized ? "-isRealize" : "-notRealized");
 		LexicalUnit tHead = sent.getLU(targetHead);
 		LexicalUnit aHead = sent.getLU(argHead);
 		
@@ -84,6 +80,9 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		}
 		
 		// TODO dependency tree features
+		if(params.useSyntaxFeatures) {
+			throw new RuntimeException("implement me");
+		}
 
 		return fv;
 	}

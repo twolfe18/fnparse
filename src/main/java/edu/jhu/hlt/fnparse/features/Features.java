@@ -67,15 +67,6 @@ public interface Features {
 	public static interface FRE extends Features {
 		public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argument, Sentence s);
 	}
-
-	/**
-	 * @deprecated
-	 * if given f == Frame.nullFrame, this feature should return a FeatureVector with exactly one
-	 * feature one (nullFrame feature), which never fires for f != Frame.nullFrame.
-	 */
-	public static interface FE extends Features {
-		public FeatureVector getFeatures(Frame f, Span trigger, Sentence s);
-	}
 	
 	public static interface E extends Features {
 		public FeatureVector getFeatures(Span constituent, Sentence s);

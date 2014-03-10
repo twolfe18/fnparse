@@ -12,8 +12,9 @@ public abstract class HasFrameFeatures {
 
 	public Features.FPE fpeFeatures;
 	public Features.FP fpFeatures;
-	public Features.FE feFeatures;
 	public Features.F fFeatures;
+	
+	/** @deprecated we've given up on width>1 targets */
 	public Features.E eFeatures;
 	
 	public HasFrameFeatures() {}
@@ -22,7 +23,6 @@ public abstract class HasFrameFeatures {
 		List<Features> features = new ArrayList<Features>();
 		if(fpeFeatures != null) features.add(fpeFeatures);
 		if(fpFeatures != null) features.add(fpFeatures);
-		if(feFeatures != null) features.add(feFeatures);
 		if(fFeatures != null) features.add(fFeatures);
 		if(eFeatures != null) features.add(eFeatures);
 		return features;
@@ -38,7 +38,6 @@ public abstract class HasFrameFeatures {
 	public void setFeatures(HasFrameFeatures from) {
 		this.fpeFeatures = from.fpeFeatures;
 		this.fpFeatures = from.fpFeatures;
-		this.feFeatures = from.feFeatures;
 		this.fFeatures = from.fFeatures;
 		this.eFeatures = from.eFeatures;
 	}
@@ -49,10 +48,6 @@ public abstract class HasFrameFeatures {
 
 	public void setFeatures(Features.FP features) {
 		this.fpFeatures = features;
-	}
-	
-	public void setFeatures(Features.FE features) {
-		this.feFeatures = features;
 	}
 
 	public void setFeatures(Features.F features) {
@@ -69,8 +64,6 @@ public abstract class HasFrameFeatures {
 			fv.add(fpeFeatures.getFeatures(f, t, p, sent));
 		if(fpFeatures != null && f != null && p != null)
 			fv.add(fpFeatures.getFeatures(f, targetHead, p, sent));
-		if(feFeatures != null && f != null && t != null)
-			fv.add(feFeatures.getFeatures(f, t, sent));
 		if(fFeatures != null && f != null)
 			fv.add(fFeatures.getFeatures(f, targetHead, sent));
 		if(eFeatures != null && t != null)

@@ -29,11 +29,20 @@ import edu.jhu.util.Alphabet;
 public class Parser {
 	
 	public static class ParserParams implements Serializable {
+		
+		private static final long serialVersionUID = 1L;
+		
 		public boolean debug;
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
 		public boolean onlyFrameIdent;
 		public boolean usePrototypes;
+		public boolean useSyntaxFeatures;
+		
+		/**
+		 * if false, use frame and role names instead of their indices
+		 */
+		public boolean fastFeatNames;
 		
 		public Alphabet<String> featIdx;
 		public FgModel model;
@@ -65,6 +74,8 @@ public class Parser {
 		params.useLatentDepenencies = false;
 		params.onlyFrameIdent = false;
 		params.usePrototypes = false;
+		params.useSyntaxFeatures = true;
+		params.fastFeatNames = debug;
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);
@@ -74,7 +85,7 @@ public class Parser {
 		FrameFactorFactory fff = new FrameFactorFactory();
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		else {
-			fff.setFeatures(new BasicFrameFeatures(params.featIdx));
+			fff.setFeatures(new BasicFrameFeatures(params));
 			//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		}
 		params.factors.add(fff);
@@ -86,8 +97,8 @@ public class Parser {
 				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 			}
 			else {
-				rff.setFeatures(new RoleConstituencyFeatures(params.featIdx));
-				rff.setFeatures(new BasicFrameRoleFeatures(params.featIdx));
+				rff.setFeatures(new BasicRoleSpanFeatures(params));
+				rff.setFeatures(new BasicFrameRoleFeatures(params));
 			}
 			params.factors.add(rff);
 		}

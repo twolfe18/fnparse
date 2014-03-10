@@ -21,7 +21,7 @@ public class ParserTests {
 	private Parser parser;
 	
 	@Before
-	public void setupBob() {
+	public void setup() {
 		boolean debug = true;
 		parser = new Parser(debug);
 		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);

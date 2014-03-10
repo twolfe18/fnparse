@@ -4,6 +4,10 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.util.Alphabet;
 
+/**
+ * @deprecated take a look at this before using it again.
+ * @author travis
+ */
 public class BasicFramePrototypeFeatures extends AbstractFeatures<BasicFramePrototypeFeatures> implements Features.FP {
 	
 //	private Random rand = new Random(9001);
