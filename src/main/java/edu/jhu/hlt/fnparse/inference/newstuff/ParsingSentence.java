@@ -119,9 +119,6 @@ public class ParsingSentence {
 				continue;
 			}
 			
-			if(params.mode == Mode.PIPELINE_FRAME_ARG)
-				assert fi.getFrames().size() == 1;
-			
 			FrameInstance goldFI = fi.getGold();
 		
 			int K = fi.getMaxRoles();
@@ -140,17 +137,38 @@ public class ParsingSentence {
 				}
 				else {
 					// HAVE LABELS (TRAINING)
-					if(k >= goldFI.getFrame().numRoles()) {
-						r_ijkType = VarType.LATENT;
-						roleKspan = Span.nullSpan;
-						roleKhead = -1;
+					if(params.mode == Mode.PIPELINE_FRAME_ARG) {
+						// for pipeline training, check that we predicted the correct frame,
+						// and if not, set the arg labels to nullSpan (to improve precision at no cost to recall).
+						if(fi.getFrames().size() != 1)
+							throw new IllegalStateException();
+						boolean predictedWrongFrame = fi.getFrame(0) != goldFI.getFrame();
+						r_ijkType = VarType.PREDICTED;
+						if(predictedWrongFrame) {
+							roleKspan = Span.nullSpan;
+							roleKhead = -1;
+						}
+						else {
+							roleKspan = goldFI.getArgument(k);
+							roleKhead = roleKspan != Span.nullSpan
+									? hf.head(roleKspan, sentence)
+									: -1;
+						}
 					}
 					else {
-						r_ijkType = VarType.PREDICTED;
-						roleKspan = goldFI.getArgument(k);
-						roleKhead = roleKspan != Span.nullSpan
-								? hf.head(roleKspan, sentence)
-								: -1;
+						assert params.mode == Mode.JOINT_FRAME_ARG : "FRAME_ID shouldn't bother with role vars";
+						if(k >= goldFI.getFrame().numRoles()) {
+							r_ijkType = VarType.LATENT;
+							roleKspan = Span.nullSpan;
+							roleKhead = -1;
+						}
+						else {
+							r_ijkType = VarType.PREDICTED;
+							roleKspan = goldFI.getArgument(k);
+							roleKhead = roleKspan != Span.nullSpan
+									? hf.head(roleKspan, sentence)
+									: -1;
+						}
 					}
 				}
 				

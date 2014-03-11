@@ -152,33 +152,10 @@ public class Parser {
 			return Arrays.asList(s.getFgExample());
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-
-			
-			// DEBUG:
-			// i'm running into the case where sharing data between two
-			// examples is causing problems (specifically with the frameVars)
-			
-			// what should be the copying policy for variables and factors?
-			// - it is nice to have state in the frameVars so that we get
-			//   a) labels
-			//   b) the set of possible frames
-			// factor are easily copied (make a ExpFamFactor that stores its features, and no other information)
-			// variables are also easy to copy
-			// the problem is that the ancillary information for variables is not easy: which frames
-			//   - this should be both 1) state in the frameVars and 2) only a value in FactorGraph
-			
-			// one solution is to have one ParsingSentence per training instance
-			// for pipeline training, this will be two 
-			// -> if we follow this, then the hard(er) case will be for PIPELINE training where we pass in a FNTagging
-			//    ...not really. we just create the sentence as normal, and then do setGold(tagging, true)
-			//    
-			
 			
 			// only frame id (no args)
 			s.setGold(p, false);
 			ParsingSentence.FgExample e1 = s.getFgExample();
-			
-			// TODO how do we set gold for r_ijk after we've decoded our own f_i?
 			
 			// clamped frames, predict args
 			s = new ParsingSentence(p.getSentence(), params);

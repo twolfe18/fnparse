@@ -5,8 +5,6 @@ import static org.junit.Assert.*;
 import java.io.File;
 import java.util.*;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.junit.*;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -57,13 +55,13 @@ public class ParserTests {
 		System.out.println(Describe.fnParse(dummyParse));
 	}
 	
-	//@Test
+	@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, true);
 		overfitting(p, true, "FRAME_ID");
 	}
 
-	//@Test
+	@Test
 	public void joint() {
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
 		p.params.argDecoder.setRecallBias(1d);
