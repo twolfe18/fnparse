@@ -87,29 +87,34 @@ public class RoleVars implements FgRelated {
 	
 	
 	
-	@Override
-	public String toString() {
-		return String.format("<r_{i=%d, j=%d, k=%d} domain={%d frames} varType=%s>",
-				targetHeadIdx, argHeadIdx, roleIdx, possibleFrames.size(), varType);
-	}
-	
-	public RoleVars(VarType latentOrPredicted, List<Frame> possibleFrames, Sentence s,
+	/**
+	 * might return null if the only possible frame is nullFrame
+	 */
+	public static RoleVars tryToSetup(VarType latentOrPredicted, List<Frame> possibleFrames, Sentence s,
 			int targetHeadIdx, int argHeadIdx, int roleIdx, boolean logDomain) {
-		
+
 		// we need to prune down the number of frames based on roleIdx
-		this.possibleFrames = new ArrayList<Frame>();
-		this.possibleFrames.add(Frame.nullFrame);	// represents "arg is not realized"
+		List<Frame> feasibleFrames = new ArrayList<Frame>();
+		feasibleFrames.add(Frame.nullFrame);	// represents "arg is not realized"
 		for(Frame f : possibleFrames)
 			if(roleIdx < f.numRoles() && f != Frame.nullFrame)
-				this.possibleFrames.add(f);
+				feasibleFrames.add(f);
 
-		if(this.possibleFrames.size() < 2)
-			throw new IllegalArgumentException();
+		if(feasibleFrames.size() < 2)
+			return null;
+		else {
+			return new RoleVars(latentOrPredicted, feasibleFrames, s,
+					targetHeadIdx, argHeadIdx, roleIdx, logDomain);
+		}
+	}
+	
+	private RoleVars(VarType latentOrPredicted, List<Frame> possibleFrames, Sentence s,
+			int targetHeadIdx, int argHeadIdx, int roleIdx, boolean logDomain) {
 		
+		this.possibleFrames = possibleFrames;
 		this.targetHeadIdx = targetHeadIdx;
 		this.argHeadIdx = argHeadIdx;
 		this.roleIdx = roleIdx;
-		
 		this.varType = latentOrPredicted;
 		
 		String headVarName = String.format("r_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
@@ -126,6 +131,12 @@ public class RoleVars implements FgRelated {
 		this.expansions = new Expansion.Iter(argHeadIdx, s.size(), maxLeft, maxRight);
 		String expVarName = String.format("r^e_{%d,%d,%d}", targetHeadIdx, argHeadIdx, roleIdx);
 		this.expansionVar = new Var(latentOrPredicted, this.expansions.size(), expVarName, null);
+	}
+	
+	@Override
+	public String toString() {
+		return String.format("<r_{i=%d, j=%d, k=%d} domain={%d frames} varType=%s>",
+				targetHeadIdx, argHeadIdx, roleIdx, possibleFrames.size(), varType);
 	}
 	
 	/**

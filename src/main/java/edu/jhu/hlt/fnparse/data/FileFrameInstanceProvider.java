@@ -38,12 +38,12 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 		public FIIterator(File frameFile, File conllFile) {
 			
 			// I need to print who is calling this iterator function so I can figure out why I'm using so much memory
-			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
 			System.err.println("[FIIterator] iterating over " +
 					frameFile.getPath() + " and " + conllFile.getPath());
-			int n = Math.min(stack.length, 15);
-			for(int i=0; i<n; i++)
-				System.err.println("\t" + stack[i]);
+//			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
+//			int n = Math.min(stack.length, 15);
+//			for(int i=0; i<n; i++)
+//				System.err.println("\t" + stack[i]);
 			
 			try {
 				litrFrames = new LineIterator(new FileReader(frameFile));

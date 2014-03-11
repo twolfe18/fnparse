@@ -35,6 +35,14 @@ public class ApproxF1MbrDecoder {
 		this.falsePosPenalty = 1d / recallBias;
 	}
 	
+	public double getFalsePosPenalty() {
+		return falsePosPenalty;
+	}
+	
+	public double getFalseNegPenalty() {
+		return falseNegPenalty;
+	}
+	
 	public Map<Var, Integer> decode(Map<Var, DenseFactor> margins, int nullIndex) {
 		Map<Var, Integer> m = new HashMap<Var, Integer>();
 		for(Map.Entry<Var, DenseFactor> x : margins.entrySet()) {

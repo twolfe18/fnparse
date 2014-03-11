@@ -29,12 +29,15 @@ public class ParsingSentenceStats {
 	public List<Integer> roleVarDomainSizes = new ArrayList<Integer>();
 	
 	public void accum(ParsingSentence s) {
+		
+		if(true) return;	// TODO debug this later
+		
 		int nf = 0, nr = 0;
 		int n = s.sentence.size();
 		for(int i=0; i<n; i++) {
 			FrameVar f_i = s.frameVars[i];
 			if(f_i == null) {
-				assert s.roleVars[i] == null;
+				//assert s.roleVars[i] == null;
 				continue;
 			}
 			nf++;
@@ -68,6 +71,9 @@ public class ParsingSentenceStats {
 	
 	public String orderStatistics(List<Integer> items) {
 		StringBuilder sb = new StringBuilder();
+		
+		if(true) return sb.toString();	// TODO debug this later
+		
 		Collections.sort(items);
 		int n = items.size();
 		for(double percentile : Arrays.asList(0.5, 0.9, 0.95, 0.99)) {
@@ -90,7 +96,7 @@ public class ParsingSentenceStats {
 		
 		for(FNParse parse : train) {
 			timer.start("getSentenceForTraining");
-			stats.accum(p.getSentenceForTraining(parse));
+			stats.accum(p.getExampleForTraining(parse).get(0).cameFrom);
 			timer.stop("getSentenceForTraining");
 		}
 		

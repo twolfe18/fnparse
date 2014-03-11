@@ -19,20 +19,14 @@ public class FrameVar implements FgRelated {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 	
-	@SuppressWarnings("unused")
-	private Sentence sent;	// TODO this can be removed (good for debugging)
-	private int headIdx;
+	private final int headIdx;	// aka i in f_i
 	
 	private List<FrameInstance> prototypes;
-	private Var prototypeVar;	// f_i == nullFrame  =>  prototypeVar = 0
+	private Var prototypeVar;
 	
 	private List<Frame> frames;
 	private Var frameVar;
-	
-	/** @deprecated */
-	private Expansion.Iter expansions;
-	/** @deprecated */
-	private Var expansionVar;	// f_i == nullFrame  =>  expansionVar = 0
+	private FrameInstance gold;
 	
 	@Override
 	public String toString() {
@@ -40,7 +34,7 @@ public class FrameVar implements FgRelated {
 				headIdx, frames.size(), prototypes.size(), maxRoles);
 	}
 	
-	public FrameVar(Sentence s, int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
+	public FrameVar(int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
 		
 		if(frames.size() == 0 || prototypes.size() == 0)
 			throw new IllegalArgumentException("#frames=" + frames.size() + ", #prototypes=" + prototypes.size());
@@ -56,7 +50,6 @@ public class FrameVar implements FgRelated {
 				protoVarNames.add(fi.getFrame().getId() + "_" + fi.getFrame().getName() + "_" + fi.getSentence().getId());
 		}
 		
-		this.sent = s;
 		this.headIdx = headIdx;
 		
 		this.frames = frames;
@@ -66,15 +59,14 @@ public class FrameVar implements FgRelated {
 			this.prototypes = prototypes;
 			this.prototypeVar = new Var(VarType.LATENT, prototypes.size(), "p_" + headIdx, protoVarNames);
 		}
-		
-		//this.expansions = new Expansion.Iter(headIdx, s.size(), maxTargetExpandLeft, maxTargetExpandRight);
-		//this.expansionVar = new Var(VarType.PREDICTED, expansions.size(), "f^e_" + headIdx, null);
 	}
 	
-	// indices into frames and expansions respectively
-	private int goldFrame;
-	/** @deprecated */
-	private int goldExpansion;
+	public void clamp(Frame prediction) {
+		prototypes = null;
+		prototypeVar = null;
+		frames = Arrays.asList(prediction);
+		frameVar = new Var(VarType.PREDICTED, frames.size(), "f_" + headIdx, null);
+	}
 	
 	/**
 	 * instances of FrameVar who's label is nullFrame should use the
@@ -82,60 +74,51 @@ public class FrameVar implements FgRelated {
 	 */
 	public void setGold(FrameInstance gold) {
 		
-		if(!gold.getTarget().includes(headIdx))
+		Span target = gold.getTarget();
+		if(target.width() != 1 || target.start != headIdx)
 			throw new IllegalArgumentException();
 		
-		goldFrame = frames.indexOf(gold.getFrame());
-		if(goldFrame < 0) {
-			// our filtering heuristic didn't include the correct answer
+		this.gold = gold;
+		if(!frames.contains(gold.getFrame())) {
 			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
 					gold.getFrame(), gold.getSentence().getLU(headIdx));
-			goldFrame = frames.indexOf(Frame.nullFrame);
-		}
-		if(goldFrame < 0)
-			throw new IllegalStateException();
-		
-		if(expansions != null) {
-			assert false;
-			goldExpansion = -1;
-			int n = expansions.size();
-			for(int i=0; i<n; i++) {
-				Expansion e = expansions.get(i);
-				Span target = e.upon(headIdx);	// target implied by this expansion
-				if(target.equals(gold.getTarget())) {
-					if(goldExpansion >= 0) throw new IllegalStateException();
-					goldExpansion = i;
-				}
-			}
-			if(goldExpansion < 0)
-				throw new IllegalStateException();
 		}
 	}
 	
 	public Frame getGoldFrame() {
-		return frames.get(goldFrame);
+		if(gold == null)
+			return null;
+		return gold.getFrame();
+	}
+	
+	public FrameInstance getGold() {
+		return gold;
 	}
 	
 	public int numberOfConfigs() {
-		int nc = prototypes.size() * frames.size();
-//		if(nc > 500) {
-//			System.err.println("poop3");
-//		}
+		int nc = frames.size();
+		if(prototypes != null)
+			nc *= prototypes.size();
 		return nc;
 	}
 	
 	@Override
-	public void register(FactorGraph fg, VarConfig gold) {
+	public void register(FactorGraph fg, VarConfig goldConf) {
 		
+		fg.addVar(frameVar);
 		if(prototypeVar != null)
 			fg.addVar(prototypeVar);
 		
-		fg.addVar(frameVar);
-		//fg.addVar(expansionVar);
-		
-		// prototypeVar is latent, no gold label
-		gold.put(frameVar, goldFrame);
-		//gold.put(expansionVar, goldExpansion);
+		int gi = -1;
+		if(this.gold != null && this.gold.getFrame() != null)
+			gi = frames.indexOf(this.gold.getFrame());
+		if(gi < 0)
+			gi = frames.indexOf(Frame.nullFrame);
+		if(gi < 0) {
+			assert this.gold == null;
+			gi = 0;	// this is because Matt's code requires a gold label
+		}
+		goldConf.put(frameVar, gi);
 	}
 
 	private int maxRoles = -1;
@@ -153,12 +136,6 @@ public class FrameVar implements FgRelated {
 	public Var getPrototypeVar() { return prototypeVar; }
 	public Var getFrameVar() { return frameVar; }
 	
-	/** @deprecated */
-	public Var getExpansionVar() {
-		assert false;	// smoke out the callers of this function
-		return expansionVar;
-	}
-	
 	public FrameInstance getPrototype(VarConfig conf) {
 		return getPrototype(conf.getState(prototypeVar));
 	}
@@ -167,32 +144,7 @@ public class FrameVar implements FgRelated {
 		return getFrame(conf.getState(frameVar));
 	}
 	
-	/** @deprecated */
-	public Expansion getExpansion(VarConfig conf) {
-		assert false;	// smoke out the callers of this function
-		return getExpansion(conf.getState(expansionVar));
-	}
-	
-	/** @deprecated */
-	public Span getTarget(VarConfig conf) {
-		assert false;	// smoke out the callers of this function
-		return getExpansion(conf).upon(headIdx);
-	}
-	
 	public FrameInstance getPrototype(int localIdx) { return prototypes.get(localIdx); }
 	public Frame getFrame(int localIdx) { return frames.get(localIdx); }
 	public List<Frame> getFrames() { return frames; }
-	
-	/** @deprecated */
-	public Expansion getExpansion(int localIdx) {
-		assert false;	// smoke out the callers of this function
-		return expansions.get(localIdx);
-	}
-	
-	/** @deprecated */
-	public Expansion.Iter getExpansions() {
-		assert false;	// smoke out the callers of this function
-		return expansions;
-	}
-	
 }

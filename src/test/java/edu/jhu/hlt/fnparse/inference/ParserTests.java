@@ -11,22 +11,15 @@ import org.junit.*;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
+import edu.jhu.hlt.fnparse.evaluation.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {
 
 	private FNParse dummyParse;
-	private Parser parser;
-	
-	@Before
-	public void setup() {
-		boolean debug = true;
-		parser = new Parser(debug);
-		Logger.getLogger(ParsingSentence.class).setLevel(Level.ALL);
-	}
-	
+
 	@Before
 	public void setupDummyParse() {
 		
@@ -65,29 +58,59 @@ public class ParserTests {
 	}
 	
 	@Test
-	public void overfitting() {
+	public void frameId() {
+		Parser p = new Parser(Mode.FRAME_ID, true);
+		overfitting(p, true, "FRAME_ID");
+	}
+
+	@Test
+	public void joint() {
+		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
+		p.params.argDecoder.setRecallBias(1d);
+		overfitting(p, false, "JOINT");
+	}
+
+	@Test
+	public void pipeline() {
+		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		p.params.argDecoder.setRecallBias(1d);
+		overfitting(p, false, "PIPELINE");
+	}
+	
+	public void overfitting(Parser p, boolean onlyFrames, String desc) {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<Sentence> test = new ArrayList<Sentence>();
 		
-		System.out.println("====== Training ======");
-		parser.params.argDecoder.setRecallBias(1d);
+		System.out.println("====== Training " + desc + " ======");
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		if(parser.params.debug)
-			parser.train(train, 4, 1, 0.5d, 1d);
+		if(p.params.debug)
+			p.train(train, 4, 1, 0.5d, 1d);
 		else	// for full feature set, need less regularization and more iterations to converge
-			parser.train(train, 15, 1, 0.5d, 10d);
-		parser.writeoutWeights(new File("weights.txt"));
+			p.train(train, 15, 1, 0.5d, 10d);
+		p.writeoutWeights(new File("weights.txt"));
 		
-		System.out.println("====== Running Prediction ======");
-		List<FNParse> predicted = parser.parse(test);
+		System.out.println("====== Running Prediction " + desc + " ======");
+		List<FNParse> predicted = p.parse(test);
 		assertEquals(test.size(), predicted.size());
 		System.out.println("gold: " + Describe.fnParse(train.get(0)));
 		System.out.println("hyp:  " + Describe.fnParse(predicted.get(0)));
-		assertSameParse(train.get(0), predicted.get(0));
+		
+		SentenceEval sentEval = new SentenceEval(dummyParse, predicted.get(0));
+		
+		if(onlyFrames) {
+			assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
+			assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
+		}
+		else {
+			assertSameParse(train.get(0), predicted.get(0));
+			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
+			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);
+		}
+		System.out.println("done with " + desc + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
 	}
 	
 	public void assertSameParse(FNParse a, FNParse b) {

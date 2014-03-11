@@ -30,14 +30,15 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 	
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
+		
 		if(this.hasNoFeatures())
 			return Collections.emptyList();
+		
 		List<Factor> factors = new ArrayList<Factor>();
 		int n = s.size();
 		for(int i=0; i<n; i++) {
 			FrameVar f_i = f[i];
-			if(r[i] == null) continue;
-			assert f_i != null;
+			if(f_i == null || r == null || r[i] == null) continue;
 			for(int j=0; j<n; j++) {
 				for(int k=0; k<r[i][j].length; k++) {
 					

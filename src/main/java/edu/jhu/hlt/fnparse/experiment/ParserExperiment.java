@@ -7,6 +7,7 @@ import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.Timer;
@@ -191,6 +192,7 @@ public class ParserExperiment {
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
 		boolean eval = false;
+		boolean debug = true;
 		
 		int nTrain = 30;
 		int nTest = 3;
@@ -206,8 +208,7 @@ public class ParserExperiment {
 		int trainSentencesProcessed = 0;
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		Parser parser = new Parser();
-		parser.params.onlyFrameIdent = false;
+		Parser parser = new Parser(Mode.JOINT_FRAME_ARG, debug);
 		for(int epoch=0; epoch<1; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 1;

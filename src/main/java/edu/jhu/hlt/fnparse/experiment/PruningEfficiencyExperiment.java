@@ -169,18 +169,9 @@ public class PruningEfficiencyExperiment {
 			List<Boolean> parserReachable = new ArrayList<Boolean>();
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
-				boolean targetReachable = false;
-				for(int i=target.start; i<target.end; i++) {
-					Expansion e = Expansion.headToSpan(i, target);
-					FrameVar fv = ps.frameVars[i];
-					if(fv == null) continue;
-					int fv_fi = fv.getFrames().indexOf(fi.getFrame());
-					int fv_ei = fv.getExpansions().indexOf(e);
-					if(fv_ei >= 0 && fv_fi >= 0) {
-						targetReachable = true;
-						break;
-					}					
-				}
+				boolean targetReachable =
+						target.width() == 1 &&
+						ps.frameVars[target.start].getFrames().contains(fi.getFrame());
 				parserStats.accumTarget(fi.getFrame(), targetReachable);
 				parserReachable.add(targetReachable);
 			}
@@ -207,19 +198,10 @@ public class PruningEfficiencyExperiment {
 				}
 				
 				Span target = fi.getTarget();
-				boolean stillReachable = false;
-				for(int i=target.start; i<target.end; i++) {
-					Expansion e = Expansion.headToSpan(i, target);
-					FrameVar fv = ps.frameVars[i];
-					if(fv == null) continue;
-					if(pruned[i]) continue;		// the difference from above!
-					int fv_fi = fv.getFrames().indexOf(fi.getFrame());
-					int fv_ei = fv.getExpansions().indexOf(e);
-					if(fv_ei >= 0 && fv_fi >= 0) {
-						stillReachable = true;
-						break;
-					}
-				}
+				boolean stillReachable =
+						target.width() == 1 &&
+						!pruned[target.start] &&	// this is the diff from above
+						ps.frameVars[target.start].getFrames().contains(fi.getFrame());
 				prunerStats.accumTarget(fi.getFrame(), stillReachable);
 			}
 			

@@ -1,10 +1,14 @@
 package edu.jhu.hlt.fnparse.features.caching;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
 
-import edu.jhu.gm.data.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.*;
+import edu.jhu.gm.data.FgExample;
+import edu.jhu.gm.data.FgExampleList;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.ParsingSentenceStats;
 import edu.jhu.hlt.fnparse.util.Timer;
 
@@ -45,18 +49,29 @@ public class RawExampleFactory implements FgExampleList {
 	public FgExample get(int i) {
 		System.out.println("[RawExampleFactory] get " + i);
 		getTimer.start();
-		FNParse p = baseExamples.get(i);
-		ParsingSentence ps = makeExamplesWith.getSentenceForTraining(p);
-		FgExample fge = ps.getFgExample();
+		
+		ParsingSentence.FgExample use;
+		if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG) {
+			FNParse p = baseExamples.get(i / 2);
+			List<ParsingSentence.FgExample> exs = makeExamplesWith.getExampleForTraining(p);
+			assert exs.size() == 2;
+			use = exs.get(i % 2);
+		}
+		else {
+			FNParse p = baseExamples.get(i);
+			List<ParsingSentence.FgExample> exs = makeExamplesWith.getExampleForTraining(p);
+			assert exs.size() == 1;
+			use = exs.get(0);
+		}
 		getTimer.stop();
 		
 		if(psStats != null) {
-			psStats.accum(ps);
+			psStats.accum(use.cameFrom);
 			if(i % 10 == 0)
 				psStats.printStats(System.out);
 		}
 		
-		return fge;
+		return use;
 	}
 
 	@Override

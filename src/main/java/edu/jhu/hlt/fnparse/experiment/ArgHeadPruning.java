@@ -5,6 +5,7 @@ import java.util.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.mit.jwi.IRAMDictionary;
 
 /**
@@ -21,7 +22,7 @@ public class ArgHeadPruning {
 		FileFrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
 		List<FNParse> parses = DataUtil.iter2list(fip.getParsedSentences());
 		
-		Parser parser = new Parser(false);
+		Parser parser = new Parser(Mode.JOINT_FRAME_ARG, false);
 		
 		boolean useFNpos = false;
 		IRAMDictionary dict = null;

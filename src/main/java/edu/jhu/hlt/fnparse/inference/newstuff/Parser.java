@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.log4j.Level;
@@ -28,6 +29,12 @@ import edu.jhu.util.Alphabet;
 
 public class Parser {
 	
+	public static enum Mode {
+		FRAME_ID,
+		PIPELINE_FRAME_ARG,
+		JOINT_FRAME_ARG
+	}
+	
 	public static class ParserParams implements Serializable {
 		
 		private static final long serialVersionUID = 1L;
@@ -35,21 +42,16 @@ public class Parser {
 		public boolean debug;
 		public boolean logDomain;
 		public boolean useLatentDepenencies;
-		public boolean onlyFrameIdent;
 		public boolean usePrototypes;
 		public boolean useSyntaxFeatures;
+		public boolean fastFeatNames;	// if false, use frame and role names instead of their indices
 		
-		/**
-		 * if false, use frame and role names instead of their indices
-		 */
-		public boolean fastFeatNames;
-		
+		public Mode mode;
 		public Alphabet<String> featIdx;
 		public FgModel model;
 		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
 		public List<FactorFactory> factors;
-		public FrameIndex frameIndex;
 		public TargetPruningData targetPruningData;
 
 		public transient CrfTrainer trainer;
@@ -61,18 +63,17 @@ public class Parser {
 	public final boolean benchmarkBP = false;
 	
 	public Parser() {
-		this(false);
+		this(Mode.JOINT_FRAME_ARG, false);
 	}
 	
-	public Parser(boolean debug) {
+	public Parser(Mode mode, boolean debug) {
 
 		params = new ParserParams();
 		params.debug = debug;
 		params.featIdx = new Alphabet<String>();
 		params.logDomain = false;
-		params.frameIndex = FrameIndex.getInstance();
 		params.useLatentDepenencies = false;
-		params.onlyFrameIdent = false;
+		params.mode = mode;
 		params.usePrototypes = false;
 		params.useSyntaxFeatures = true;
 		params.fastFeatNames = debug;
@@ -90,7 +91,7 @@ public class Parser {
 		}
 		params.factors.add(fff);
 		
-		if(!params.onlyFrameIdent) {
+		if(mode != Mode.FRAME_ID) {
 			RoleFactorFactory rff = new RoleFactorFactory(params);
 			if(params.debug) {
 				rff.setFeatures(new DebuggingRoleSpanFeatures(params.featIdx));
@@ -137,14 +138,54 @@ public class Parser {
 		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, regularizerMult, numParams);
 	}
 	
-	public ParsingSentence getSentenceForTraining(FNParse p) {
+	public List<ParsingSentence.FgExample> getExampleForTraining(FNParse p) {
+		
 		ParsingSentence s = new ParsingSentence(p.getSentence(), params);
-		s.setupRoleVarsForJointTrain(p);
-		return s;
-	}
-	
-	public FgExample getExampleForTraining(FNParse p) {
-		return getSentenceForTraining(p).getFgExample();
+		
+		if(params.mode == Mode.FRAME_ID) {
+			s.setGold(p, false);
+			return Arrays.asList(s.getFgExample());
+		}
+		else if(params.mode == Mode.JOINT_FRAME_ARG) {
+			s.setGold(p, false);
+			s.setupRoleVars();
+			return Arrays.asList(s.getFgExample());
+		}
+		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
+
+			
+			// DEBUG:
+			// i'm running into the case where sharing data between two
+			// examples is causing problems (specifically with the frameVars)
+			
+			// what should be the copying policy for variables and factors?
+			// - it is nice to have state in the frameVars so that we get
+			//   a) labels
+			//   b) the set of possible frames
+			// factor are easily copied (make a ExpFamFactor that stores its features, and no other information)
+			// variables are also easy to copy
+			// the problem is that the ancillary information for variables is not easy: which frames
+			//   - this should be both 1) state in the frameVars and 2) only a value in FactorGraph
+			
+			// one solution is to have one ParsingSentence per training instance
+			// for pipeline training, this will be two 
+			// -> if we follow this, then the hard(er) case will be for PIPELINE training where we pass in a FNTagging
+			//    ...not really. we just create the sentence as normal, and then do setGold(tagging, true)
+			//    
+			
+			
+			// only frame id (no args)
+			s.setGold(p, false);
+			ParsingSentence.FgExample e1 = s.getFgExample();
+			
+			// clamped frames, predict args
+			s.setGold(p, true);
+			s.setupRoleVars();
+			ParsingSentence.FgExample e2 = s.getFgExample();
+			
+			return Arrays.asList(e1, e2);
+		}
+		else throw new RuntimeException();
 	}
 
 	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
@@ -180,25 +221,6 @@ public class Parser {
 		Avg framesPerTarget = new Avg();
 		Avg targetsPerSent = new Avg();
 		
-		//FgExampleMemoryStore exs = new FgExampleMemoryStore();
-//		for(FNParse parse : examples) {
-//			
-//			ParsingSentence s = getSentenceForTraining(parse);
-//			exs.add(s.getFgExample());
-//
-//			// compute upper bound on target recall
-//			double recall = s.computeMaxTargetRecall(parse);
-//			macroTargetRecall.accum(recall);
-//			microTargetRecall.accum(recall, parse.numFrameInstances());
-//			
-//			int numVars = 0;
-//			for(FrameVar fv : s.frameVars) {
-//				if(fv == null) continue;
-//				framesPerTarget.accum(fv.getFrames().size());
-//				numVars++;
-//			}
-//			targetsPerSent.accum(numVars);
-//		}
 		FgExampleList exs = new FgExampleCache(new RawExampleFactory(examples, this), 2, false);
 		
 		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
@@ -214,14 +236,17 @@ public class Parser {
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
 	}
 	
+	
 	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
 		return parse(DataUtil.stripAnnotations(raw));
 	}
 	public List<FNParse> parse(List<Sentence> raw) {
+		FgInferencerFactory infFact = this.infFactory();
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
 			ParsingSentence ps = new ParsingSentence(s, params);
-			pred.add(ps.decode(params.model, this.infFactory()));
+			ps.decodeFrames(params.model, infFact);
+			pred.add(ps.decodeArgs(params.model, infFact));
 		}
 		return pred;
 	}
