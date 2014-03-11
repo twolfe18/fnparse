@@ -61,6 +61,9 @@ public class FrameVar implements FgRelated {
 		}
 	}
 	
+	/**
+	 * doesn't change the gold label
+	 */
 	public void clamp(Frame prediction) {
 		prototypes = null;
 		prototypeVar = null;

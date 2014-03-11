@@ -114,6 +114,14 @@ public class ParsingSentence {
 			FrameVar fi = frameVars[i];
 			if(fi == null) continue;	// no frame => no args
 			
+			if(fi.getFrames().size() == 1 && fi.getFrame(0) == Frame.nullFrame) {
+				assert params.mode == Mode.PIPELINE_FRAME_ARG;
+				continue;
+			}
+			
+			if(params.mode == Mode.PIPELINE_FRAME_ARG)
+				assert fi.getFrames().size() == 1;
+			
 			FrameInstance goldFI = fi.getGold();
 		
 			int K = fi.getMaxRoles();
@@ -124,7 +132,7 @@ public class ParsingSentence {
 				Span roleKspan;
 				int roleKhead;
 				
-				if(fi.getGoldFrame() == null) {
+				if(goldFI == null) {
 					// NO LABELS (PREDICTION)
 					r_ijkType = VarType.PREDICTED;
 					roleKspan = null;
@@ -164,6 +172,9 @@ public class ParsingSentence {
 	}
 	
 	
+	/**
+	 * clamps frame variable at the decoded value
+	 */
 	public FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
 
 		if(params.mode == Mode.JOINT_FRAME_ARG)

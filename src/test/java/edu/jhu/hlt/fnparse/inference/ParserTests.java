@@ -57,13 +57,13 @@ public class ParserTests {
 		System.out.println(Describe.fnParse(dummyParse));
 	}
 	
-	@Test
+	//@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, true);
 		overfitting(p, true, "FRAME_ID");
 	}
 
-	@Test
+	//@Test
 	public void joint() {
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
 		p.params.argDecoder.setRecallBias(1d);
@@ -87,8 +87,10 @@ public class ParserTests {
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		if(p.params.debug)
+		if(p.params.debug) {
 			p.train(train, 4, 1, 0.5d, 1d);
+			p.train(train, 4, 1, 0.5d, 1d);
+		}
 		else	// for full feature set, need less regularization and more iterations to converge
 			p.train(train, 15, 1, 0.5d, 10d);
 		p.writeoutWeights(new File("weights.txt"));

@@ -178,9 +178,12 @@ public class Parser {
 			s.setGold(p, false);
 			ParsingSentence.FgExample e1 = s.getFgExample();
 			
+			// TODO how do we set gold for r_ijk after we've decoded our own f_i?
+			
 			// clamped frames, predict args
 			s = new ParsingSentence(p.getSentence(), params);
-			s.setGold(p, true);
+			s.setGold(p, false);
+			s.decodeFrames(params.model, this.infFactory());
 			s.setupRoleVars();
 			ParsingSentence.FgExample e2 = s.getFgExample();
 			
@@ -199,7 +202,6 @@ public class Parser {
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
 		sgdParams.batchSize = batchSize;
-		//sgdParams.initialLr = 0.1d;	// adagrad ignores this
 		sgdParams.numPasses = passes;
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
 		adagParams.sgdPrm = sgdParams;
