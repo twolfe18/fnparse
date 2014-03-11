@@ -59,15 +59,18 @@ public abstract class HasFrameFeatures {
 	}
 	
 	public FeatureVector getFeatures(Frame f, FrameInstance p, int targetHead, Span t, Sentence sent) {
+		// NOTE: casting to travis.Vector ensures that the best implementation is dispatched
+		// both the travis.Vector and IntDoubleUnsortedVector implementations forward to the same
+		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
 		if(fpeFeatures != null && f != null && p != null && t != null)
-			fv.add(fpeFeatures.getFeatures(f, t, p, sent));
+			fv.add((travis.Vector) fpeFeatures.getFeatures(f, t, p, sent));
 		if(fpFeatures != null && f != null && p != null)
-			fv.add(fpFeatures.getFeatures(f, targetHead, p, sent));
+			fv.add((travis.Vector) fpFeatures.getFeatures(f, targetHead, p, sent));
 		if(fFeatures != null && f != null)
-			fv.add(fFeatures.getFeatures(f, targetHead, sent));
+			fv.add((travis.Vector) fFeatures.getFeatures(f, targetHead, sent));
 		if(eFeatures != null && t != null)
-			fv.add(eFeatures.getFeatures(t, sent));
+			fv.add((travis.Vector) eFeatures.getFeatures(t, sent));
 		return fv;
 	}
 

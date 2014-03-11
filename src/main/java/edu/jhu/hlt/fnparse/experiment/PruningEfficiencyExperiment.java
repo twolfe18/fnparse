@@ -8,6 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.newstuff.*;
 import edu.jhu.hlt.fnparse.inference.pruning.*;
+import edu.jhu.hlt.fnparse.util.DataSplitter;
 
 /**
  * @deprecated see discussion of pruning in TriggerPruning

@@ -1,10 +1,8 @@
-package edu.jhu.hlt.fnparse.experiment;
+package edu.jhu.hlt.fnparse.util;
 
 import java.io.*;
 import java.util.*;
 import java.util.regex.Pattern;
-
-import edu.jhu.hlt.fnparse.util.HasId;
 
 public class DataSplitter {
 	

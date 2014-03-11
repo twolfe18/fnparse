@@ -81,17 +81,20 @@ public class HasRoleFeatures {
 	 * the catch-all method that dispatches to the appropriate non-null features
 	 * and concatenates them all together.
 	 */
-	public FeatureVector getFeatures(Frame f_i, Frame r_ijk, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {		
+	public FeatureVector getFeatures(Frame f_i, Frame r_ijk, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {
+		// NOTE: casting to travis.Vector ensures that the best implementation is dispatched
+		// both the travis.Vector and IntDoubleUnsortedVector implementations forward to the same
+		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
 		final boolean argIsRealized = r_ijk != Frame.nullFrame;
 		if(freFeatures != null)
-			fv.add(freFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, arg, s));
+			fv.add((travis.Vector) freFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, arg, s));
 		if(frFeatures != null)
-			fv.add(frFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
+			fv.add((travis.Vector) frFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
 		if(reFeatures != null)
-			fv.add(reFeatures.getFeatures(r_ijk, targetHeadIdx, argHead, roleIdx, arg, s));
+			fv.add((travis.Vector) reFeatures.getFeatures(r_ijk, targetHeadIdx, argHead, roleIdx, arg, s));
 		if(eFeatures != null)
-			fv.add(eFeatures.getFeatures(arg, s));
+			fv.add((travis.Vector) eFeatures.getFeatures(arg, s));
 		return fv;
 	}
 }

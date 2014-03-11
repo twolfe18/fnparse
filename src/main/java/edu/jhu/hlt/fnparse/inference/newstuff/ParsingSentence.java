@@ -28,15 +28,15 @@ public class ParsingSentence {
 	// ==== VARIABLES ====
 	public FrameVar[] frameVars;
 	public RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
-	private ProjDepTreeFactor depTree;	// holds variables too
+	public ProjDepTreeFactor depTree;	// holds variables too
 	
 	// ==== FACTORS ====
 	private List<FactorFactory> factorHolders;
 	private List<Factor> factors;
 	
 	// ==== MISC ====
-	private Sentence sentence;
-	private FactorGraph fg;
+	public Sentence sentence;
+	public FactorGraph fg;
 	private VarConfig gold;
 	private ParserParams params;
 	private FrameFilteringStrategy frameFilterStrat;
@@ -83,7 +83,7 @@ public class ParsingSentence {
 	 * all r_ijk are instantiated with arity of \max_f f.numRoles,
 	 * and r_ijk corresponding to f_i == nullFrame are considered latent.
 	 */
-	public void setupRoleVarsForTrain(FNParse p) {
+	public void setupRoleVarsForJointTrain(FNParse p) {
 		
 		// set the gold labels for all the f_i
 		FrameInstance[] goldFiTargets = setGoldForFrameVars(p);
@@ -185,11 +185,6 @@ public class ParsingSentence {
 		}
 	}
 	
-	private boolean pruneArgHead(int j, FrameVar f_i) {
-		String pos = sentence.getPos(j);
-		return pos.endsWith("DT") || ArgHeadPruning.pennPunctuationPosTags.contains(pos);
-	}
-
 	
 	/**
 	 * This is a two step process:
@@ -338,6 +333,41 @@ public class ParsingSentence {
 	}
 	
 	
+//	/**
+//	 * only do frame id, no r_ijk
+//	 */
+//	public FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
+//		
+//		final int n = sentence.size();
+//		List<FrameInstance> fis = new ArrayList<FrameInstance>();
+//		FgExample fge1 = this.getFgExample();
+//		FactorGraph fg1 = fge1.updateFgLatPred(model, params.logDomain);
+//		FgInferencer inf1 = infFactory.getInferencer(fg1);
+//		inf1.run();
+//		for(int i=0; i<n; i++) {
+//			FrameVar fv = frameVars[i];
+//			if(fv == null) continue;
+//			
+//			DenseFactor df = inf1.getMarginals(fv.getFrameVar());
+//			int nullFrameIdx = 0;
+//			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
+//			int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
+//
+//			if(debugDecodePart1 && params.debug)
+//				System.out.println("margins at " + i + " = " + df);
+//
+//			Frame f = fv.getFrame(f_dec_idx);
+//			if(f == Frame.nullFrame)
+//				continue;
+//			
+//			Span[] args = new Span[f.numRoles()];
+//			Arrays.fill(args, Span.nullSpan);
+//			fis.add(FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence));
+//		}
+//		return new FNTagging(sentence, fis);
+//	}
+
+	
 	/**
 	 * Returns an array with the indices corresponding to tokens in the sentence,
 	 * and values are what FrameInstance has a target headed at the corresponding
@@ -378,6 +408,12 @@ public class ParsingSentence {
 		return locationsOfGoldFIs;
 	}
 	
+
+	private boolean pruneArgHead(int j, FrameVar f_i) {
+		String pos = sentence.getPos(j);
+		return pos.endsWith("DT") || ArgHeadPruning.pennPunctuationPosTags.contains(pos);
+	}
+
 	
 	/**
 	 * based on our target extraction and possible frame triage,

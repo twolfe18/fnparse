@@ -31,7 +31,8 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		
 		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
 		String rs = "r" + (params.fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
-		String fsrs = fs + "-" + rs + (argIsRealized ? "-isRealize" : "-notRealized");
+		String as = argIsRealized ? "-isRealize" : "-notRealized";
+		String fsrs = fs + "-" + rs + as;
 		LexicalUnit tHead = sent.getLU(targetHead);
 		LexicalUnit aHead = sent.getLU(argHead);
 		
@@ -79,9 +80,11 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 			}
 		}
 		
-		// TODO dependency tree features
+		// dependency tree features
 		if(params.useSyntaxFeatures) {
-			throw new RuntimeException("implement me");
+			if(sent.governor(argHead) == targetHead)
+				b(fv, "trigger-arg-dep", as);
+			// TODO more?
 		}
 
 		return fv;

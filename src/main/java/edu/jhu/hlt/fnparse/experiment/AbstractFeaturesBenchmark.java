@@ -9,7 +9,8 @@ import edu.jhu.util.Alphabet;
 
 /**
  * the best i could get is 19% with StringBuilder.setLength(0)
- * probably not worth it in light of other possible optimzations.
+ * probably not worth it in light of other possible optimizations.
+ * @deprecated
  * @author travis
  */
 public class AbstractFeaturesBenchmark extends AbstractFeatures<AbstractFeaturesBenchmark> {

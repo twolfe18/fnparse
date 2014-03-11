@@ -192,8 +192,8 @@ public class ParserExperiment {
 		
 		boolean eval = false;
 		
-		int nTrain = 20;
-		int nTest = 10;
+		int nTrain = 30;
+		int nTest = 3;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
@@ -210,7 +210,7 @@ public class ParserExperiment {
 		parser.params.onlyFrameIdent = false;
 		for(int epoch=0; epoch<1; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 3;
+			int passes = 1;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
 			double regularizerMult = 1d;
@@ -252,7 +252,7 @@ public class ParserExperiment {
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
 		final int maxArgWidth = 999999;
 		final int maxTargetWidth = 999999;
-		final int maxSentLen = 25;
+		final int maxSentLen = 30;
 		int total = 0;
 		List<FNParse> buf = new ArrayList<FNParse>();
 		

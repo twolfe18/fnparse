@@ -5,6 +5,8 @@ import java.util.*;
 import edu.jhu.gm.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.*;
+import edu.jhu.hlt.fnparse.util.ParsingSentenceStats;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
  * stores a list of sentences and then instantiates FgExamples
@@ -13,8 +15,10 @@ import edu.jhu.hlt.fnparse.inference.newstuff.*;
  */
 public class RawExampleFactory implements FgExampleList {
 
-	final private List<FNParse> baseExamples;	// labels with no inference data (e.g. features)
-	final private Parser makeExamplesWith;
+	private ParsingSentenceStats psStats = new ParsingSentenceStats();
+	private Timer getTimer = new Timer("[RawExampleFactory get]", 1);
+	private List<FNParse> baseExamples;	// labels with no inference data (e.g. features)
+	private Parser makeExamplesWith;
 	
 	public RawExampleFactory(List<FNParse> baseExamples, Parser makeExamplesWith) {
 		this.baseExamples = baseExamples;
@@ -40,8 +44,19 @@ public class RawExampleFactory implements FgExampleList {
 	@Override
 	public FgExample get(int i) {
 		System.out.println("[RawExampleFactory] get " + i);
+		getTimer.start();
 		FNParse p = baseExamples.get(i);
-		return makeExamplesWith.getExampleForTraining(p, true);
+		ParsingSentence ps = makeExamplesWith.getSentenceForTraining(p);
+		FgExample fge = ps.getFgExample();
+		getTimer.stop();
+		
+		if(psStats != null) {
+			psStats.accum(ps);
+			if(i % 10 == 0)
+				psStats.printStats(System.out);
+		}
+		
+		return fge;
 	}
 
 	@Override

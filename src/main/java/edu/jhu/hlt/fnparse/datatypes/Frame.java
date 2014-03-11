@@ -21,8 +21,8 @@ public class Frame {
 	private Frame() {
 		this.idx = 0;
 		this.name = "NOT_A_FRAME";
-		this.lexicalUnits = null;
-		this.roles = null;
+		this.lexicalUnits = new LexicalUnit[0];
+		this.roles = new String[0];
 	}
 	
 	public String toString() {

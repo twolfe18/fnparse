@@ -139,23 +139,12 @@ public class Parser {
 	
 	public ParsingSentence getSentenceForTraining(FNParse p) {
 		ParsingSentence s = new ParsingSentence(p.getSentence(), params);
-		s.setupRoleVarsForTrain(p);
+		s.setupRoleVarsForJointTrain(p);
 		return s;
 	}
 	
-	public FgExample getExampleForTraining(FNParse p, boolean initFeatures) {
-		FgExample fge = getSentenceForTraining(p).getFgExample();
-		if(initFeatures) {
-			double cantGetThisWithoutFeatures = 0d;
-			FactorGraph fg = fge.getFgLatPred();
-			for(Factor f : fg.getFactors()) {
-				// my jenk way to get features to be computed (might not work for other classes)
-				int n = f.getVars().calcNumConfigs();
-				for(int i=0; i<n; i++)
-					cantGetThisWithoutFeatures += f.getUnormalizedScore(i);
-			}
-		}
-		return fge;
+	public FgExample getExampleForTraining(FNParse p) {
+		return getSentenceForTraining(p).getFgExample();
 	}
 
 	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
@@ -179,7 +168,7 @@ public class Parser {
 		
 		int numParams = params.debug
 				? 750 * 1000
-				: 50 * 1000 * 1000;	// TODO
+				: 15 * 1000 * 1000;	// TODO
 		params.trainerParams = trainerParams;
 		params.trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)
