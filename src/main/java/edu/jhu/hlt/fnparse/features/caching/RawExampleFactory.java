@@ -20,13 +20,17 @@ import edu.jhu.hlt.fnparse.util.Timer;
 public class RawExampleFactory implements FgExampleList {
 
 	private ParsingSentenceStats psStats = new ParsingSentenceStats();
-	private Timer getTimer = new Timer("[RawExampleFactory get]", 1);
+	private Timer getTimer = new Timer("[RawExampleFactory get]");
 	private List<FNParse> baseExamples;	// labels with no inference data (e.g. features)
 	private Parser makeExamplesWith;
 	
 	public RawExampleFactory(List<FNParse> baseExamples, Parser makeExamplesWith) {
 		this.baseExamples = baseExamples;
 		this.makeExamplesWith = makeExamplesWith;
+	}
+	
+	public void setTimerPrintInterval(int interval) {
+		getTimer.printIterval = interval;
 	}
 	
 	@Override
@@ -47,7 +51,7 @@ public class RawExampleFactory implements FgExampleList {
 
 	@Override
 	public FgExample get(int i) {
-		System.out.println("[RawExampleFactory] get " + i);
+		
 		getTimer.start();
 		
 		ParsingSentence.FgExample use;
@@ -71,7 +75,7 @@ public class RawExampleFactory implements FgExampleList {
 		
 		if(psStats != null) {
 			psStats.accum(use.cameFrom);
-			if(i % 10 == 0)
+			if(i % 250 == 0)
 				psStats.printStats(System.out);
 		}
 		

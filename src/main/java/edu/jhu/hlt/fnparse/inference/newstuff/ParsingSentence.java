@@ -53,9 +53,7 @@ public class ParsingSentence {
 	public Sentence sentence;
 	public FactorGraph fg;
 	private VarConfig gold;
-	private ParserParams params;
-	private HeadFinder hf = new BraindeadHeadFinder();	// TODO
-	
+	private ParserParams params;	
 	
 	public ParsingSentence(Sentence s, ParserParams params) {
 		this.params = params;
@@ -90,8 +88,10 @@ public class ParsingSentence {
 
 		// set the non-nullFrame vars to their correct Frame (and target Span) values
 		for(FrameInstance fi : p.getFrameInstances()) {
-			int head = hf.head(fi.getTarget(), p.getSentence());
-			FrameVar fv = frameVars[head];
+			Span target = fi.getTarget();
+			if(target.width() != 1)
+				continue;
+			FrameVar fv = frameVars[target.start];
 			if(fv == null) continue;
 			fv.setGold(fi);
 			if(clampFrameVars)
@@ -115,7 +115,7 @@ public class ParsingSentence {
 			if(fi == null) continue;	// no frame => no args
 			
 			if(fi.getFrames().size() == 1 && fi.getFrame(0) == Frame.nullFrame) {
-				assert params.mode == Mode.PIPELINE_FRAME_ARG;
+				assert params.mode == Mode.PIPELINE_FRAME_ARG : "FRAME_ID shouldn't bother with role vars";
 				continue;
 			}
 			
@@ -151,7 +151,7 @@ public class ParsingSentence {
 						else {
 							roleKspan = goldFI.getArgument(k);
 							roleKhead = roleKspan != Span.nullSpan
-									? hf.head(roleKspan, sentence)
+									? params.headFinder.head(roleKspan, sentence)
 									: -1;
 						}
 					}
@@ -166,7 +166,7 @@ public class ParsingSentence {
 							r_ijkType = VarType.PREDICTED;
 							roleKspan = goldFI.getArgument(k);
 							roleKhead = roleKspan != Span.nullSpan
-									? hf.head(roleKspan, sentence)
+									? params.headFinder.head(roleKspan, sentence)
 									: -1;
 						}
 					}
@@ -243,6 +243,8 @@ public class ParsingSentence {
 			System.out.printf("[decode part2] fpPen=%.3f fnPen=%.3f\n",
 					params.argDecoder.getFalsePosPenalty(), params.argDecoder.getFalseNegPenalty());
 		}
+		if(params.mode == Mode.FRAME_ID)
+			throw new IllegalStateException();
 		
 		// now that we've clamped the f_i at our predictions,
 		// there will be much fewer r_ijk to instantiate.

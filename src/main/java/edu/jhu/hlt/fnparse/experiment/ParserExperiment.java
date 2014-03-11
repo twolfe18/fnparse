@@ -137,7 +137,7 @@ public class ParserExperiment {
 		
 		// get the data
 		DataSplitter ds = new DataSplitter();
-		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
+		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
@@ -184,18 +184,18 @@ public class ParserExperiment {
 		
 		// get the data
 		DataSplitter ds = new DataSplitter();
-		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
+		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
 		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
 		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
-		boolean eval = false;
-		boolean debug = true;
+		boolean eval = true;
+		boolean debug = false;
 		
-		int nTrain = 30;
-		int nTest = 3;
+		int nTrain = 120;
+		int nTest = 30;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
@@ -208,10 +208,10 @@ public class ParserExperiment {
 		int trainSentencesProcessed = 0;
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		Parser parser = new Parser(Mode.JOINT_FRAME_ARG, debug);
+		Parser parser = new Parser(Mode.FRAME_ID, debug);
 		for(int epoch=0; epoch<1; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 1;
+			int passes = 3;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
 			double regularizerMult = 1d;
@@ -253,7 +253,7 @@ public class ParserExperiment {
 	public static List<FNParse> getSuitableTrainingExamples(List<FNParse> train) {
 		final int maxArgWidth = 999999;
 		final int maxTargetWidth = 999999;
-		final int maxSentLen = 30;
+		final int maxSentLen = 99;
 		int total = 0;
 		List<FNParse> buf = new ArrayList<FNParse>();
 		

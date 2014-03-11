@@ -22,6 +22,8 @@ import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
+import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.optimize.*;
@@ -49,6 +51,7 @@ public class Parser {
 		public Mode mode;
 		public Alphabet<String> featIdx;
 		public FgModel model;
+		public HeadFinder headFinder;
 		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
 		public List<FactorFactory> factors;
@@ -79,6 +82,7 @@ public class Parser {
 		params.fastFeatNames = debug;
 		params.targetPruningData = TargetPruningData.getInstance();
 
+		params.headFinder = new BraindeadHeadFinder();	// TODO
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);
 		params.argDecoder = new ApproxF1MbrDecoder(1.5d);
 		
@@ -201,7 +205,13 @@ public class Parser {
 		Avg framesPerTarget = new Avg();
 		Avg targetsPerSent = new Avg();
 		
-		FgExampleList exs = new FgExampleCache(new RawExampleFactory(examples, this), 2, false);
+		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
+		
+		RawExampleFactory rexs = new RawExampleFactory(examples, this);
+		FgExampleList exs = new FgExampleCache(rexs, keepInMemory, false);
+		
+		if(params.debug)
+			rexs.setTimerPrintInterval(params.mode == Mode.FRAME_ID ? 500 : (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1));
 		
 		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
 				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
@@ -225,8 +235,11 @@ public class Parser {
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
 			ParsingSentence ps = new ParsingSentence(s, params);
-			ps.decodeFrames(params.model, infFact);
-			pred.add(ps.decodeArgs(params.model, infFact));
+			FNTagging onlyTargets = ps.decodeFrames(params.model, infFact);
+			if(params.mode == Mode.FRAME_ID)
+				pred.add(new FNParse(s, onlyTargets.getFrameInstances()));
+			else
+				pred.add(ps.decodeArgs(params.model, infFact));
 		}
 		return pred;
 	}

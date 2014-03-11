@@ -29,9 +29,6 @@ public class ParsingSentenceStats {
 	public List<Integer> roleVarDomainSizes = new ArrayList<Integer>();
 	
 	public void accum(ParsingSentence s) {
-		
-		if(true) return;	// TODO debug this later
-		
 		int nf = 0, nr = 0;
 		int n = s.sentence.size();
 		for(int i=0; i<n; i++) {
@@ -43,6 +40,8 @@ public class ParsingSentenceStats {
 			nf++;
 			frameVarDomainSizes.add(f_i.getFrames().size());
 			
+			if(s.roleVars == null)
+				continue;
 			int K = f_i.getMaxRoles();
 			for(int j=0; j<n; j++) {
 				for(int k=0; k<K; k++) {
@@ -70,10 +69,11 @@ public class ParsingSentenceStats {
 	}
 	
 	public String orderStatistics(List<Integer> items) {
+		
+		if(items.size() == 0)
+			return "no statistics";
+		
 		StringBuilder sb = new StringBuilder();
-		
-		if(true) return sb.toString();	// TODO debug this later
-		
 		Collections.sort(items);
 		int n = items.size();
 		for(double percentile : Arrays.asList(0.5, 0.9, 0.95, 0.99)) {

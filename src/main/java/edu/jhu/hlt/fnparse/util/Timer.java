@@ -8,7 +8,7 @@ public class Timer {
 	private int count;
 	private long time;
 	private long lastStart = -1;
-	private int printIterval;
+	public int printIterval;
 	
 	public boolean ignoreFirstTime;
 	private long firstTime;
