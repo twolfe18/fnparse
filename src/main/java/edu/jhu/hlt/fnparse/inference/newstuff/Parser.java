@@ -179,6 +179,7 @@ public class Parser {
 			ParsingSentence.FgExample e1 = s.getFgExample();
 			
 			// clamped frames, predict args
+			s = new ParsingSentence(p.getSentence(), params);
 			s.setGold(p, true);
 			s.setupRoleVars();
 			ParsingSentence.FgExample e2 = s.getFgExample();

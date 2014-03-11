@@ -15,6 +15,7 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
 import edu.jhu.hlt.fnparse.inference.heads.*;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
@@ -165,7 +166,8 @@ public class ParsingSentence {
 	
 	public FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
 
-		setupRoleVars();
+		if(params.mode == Mode.JOINT_FRAME_ARG)
+			setupRoleVars();
 		
 		FgExample fge = this.getFgExample();
 		FactorGraph fg = fge.updateFgLatPred(model, params.logDomain);

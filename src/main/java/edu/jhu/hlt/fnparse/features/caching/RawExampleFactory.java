@@ -52,6 +52,10 @@ public class RawExampleFactory implements FgExampleList {
 		
 		ParsingSentence.FgExample use;
 		if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG) {
+			
+			// TODO this is inefficient!
+			// i call getExampleForTraining twice when I should be calling it once.
+			
 			FNParse p = baseExamples.get(i / 2);
 			List<ParsingSentence.FgExample> exs = makeExamplesWith.getExampleForTraining(p);
 			assert exs.size() == 2;
@@ -76,6 +80,9 @@ public class RawExampleFactory implements FgExampleList {
 
 	@Override
 	public int size() {
-		return baseExamples.size();
+		int n = baseExamples.size();
+		if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG)
+			return n * 2;
+		return n;
 	}	
 }
