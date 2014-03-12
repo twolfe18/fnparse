@@ -26,9 +26,9 @@ public class ParserExperiment {
 //		fnTrain = null;
 //		fnLex = null;
 		
-		mainOld(args);
+//		mainOld(args);
 		
-//		mainNew(args);
+		mainNew(args);
 	}
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
@@ -123,17 +123,20 @@ public class ParserExperiment {
 		
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(150, 999999));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(300, 999999));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1d, 3d, 10d, 30d, 100d));
-		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 0.3d, 1d, 3d, 10d));
-		Option<Double> lrDecay = ajh.addOption("lrDecay", Arrays.asList(1d, 0.85d, 0.7d, 0.55d));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.2, 1d, 5d));
+		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 1d, 10d));
+		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 5, 10));
+		Option<Double> recallBias = ajh.addOption("recallBias", Arrays.asList(1d, 3d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
 		
-		File workingDir = new File(modelDir, getDescription(ajh));
+		//File workingDir = new File(modelDir, getDescription(ajh));
+		File workingDir = new File(modelDir, args[0]);
 		if(!workingDir.isDirectory())
 			workingDir.mkdir();
+		System.out.println("[main] workingDir = " + workingDir.getPath());
 		
 		// get the data
 		DataSplitter ds = new DataSplitter();
@@ -141,40 +144,44 @@ public class ParserExperiment {
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
-		List<FNParse> trainSubset = DataUtil.reservoirSample(train, 100);
+		
 		printMemUsage();
 
 		if(nTrainLimit.get() < train.size())
 			train = DataUtil.reservoirSample(train, nTrainLimit.get());
+		List<FNParse> trainSubset = DataUtil.reservoirSample(train, test.size());
 		
-		final int passesPerEpoch = 2;
-		double lrMultRunning = lrMult.get();
+		System.out.printf("[main] #train=%d #test=%d\n", train.size(), test.size());
+		
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		Parser parser = new Parser();
-		for(int epoch=0; epoch<10; epoch++) {
-			System.out.printf("[ParserExperiment] starting epoch %d, lrMult=%.3f\n", epoch, lrMultRunning);
-			parser.train(train, passesPerEpoch, batchSize.get(), lrMultRunning, regularizer.get());
-			System.out.printf("[ParserExperiment] after training in epoch %d, #features=%d\n",
-				epoch, parser.params.featIdx.size());
-			printMemUsage();
+		boolean debug = false;
+		Parser parser = new Parser(Mode.FRAME_ID, debug);
+		parser.params.frameDecoder.setRecallBias(recallBias.get());
 
-			System.out.println("[ParserExperiment] predicting on test set...");
-			predicted = parser.parseWithoutPeeking(test);
-			results = BasicEvaluation.evaluate(test, predicted);
-			BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
-			printMemUsage();
-			
-			System.out.println("[ParserExperiment] predicting on train set...");
-			predicted = parser.parseWithoutPeeking(trainSubset);
-			results = BasicEvaluation.evaluate(trainSubset, predicted);
-			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
-			printMemUsage();
-			
-			parser.writeWeights(new File(workingDir, "weights.epoch" + (epoch+1) + ".txt"));
-			
-			lrMultRunning *= lrDecay.get();
-		}
+		System.out.println("[ParserExperiment] following statistics are for the train subset:");
+		parser.computeStatistcs(trainSubset);
+		printMemUsage();
+
+		System.out.printf("[ParserExperiment] starting, lrMult=%.3f\n", lrMult.get());
+		parser.train(train, passes.get(), batchSize.get(), lrMult.get(), regularizer.get());
+		System.out.printf("[ParserExperiment] after training, #features=%d\n", parser.params.featIdx.size());
+		printMemUsage();
+
+		System.out.println("[ParserExperiment] predicting on test set...");
+		predicted = parser.parseWithoutPeeking(test);
+		results = BasicEvaluation.evaluate(test, predicted);
+		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
+		printMemUsage();
+
+		System.out.println("[ParserExperiment] predicting on train set...");
+		predicted = parser.parseWithoutPeeking(trainSubset);
+		results = BasicEvaluation.evaluate(trainSubset, predicted);
+		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
+		printMemUsage();
+
+		parser.writeWeights(new File(workingDir, "weights.frameId.txt"));
+		parser.writeModel(new File(workingDir, "model.frameId.ser"));
 	}
 	
 	public static void mainOld(String[] args) {

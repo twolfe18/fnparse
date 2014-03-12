@@ -13,7 +13,7 @@ all:
 		2>&1 | tee experiments/targetId/ParserExperiment.mba.log
 
 frameIdQsub:
-	qsub -q text.q -t 1-600 frame-id-experiment.qsub && \
+	qsub -q text.q -t 1-216 frame-id-experiment.qsub && \
 		sleep 2 && qinfo
 
 frameIdPerf.txt:
