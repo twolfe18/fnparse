@@ -32,10 +32,17 @@ public class ApproxF1MbrDecoder implements Serializable {
 	 */
 	public void setRecallBias(double recallBias) {
 		if(recallBias < 1e-3 || recallBias > 1e3)
-			throw new IllegalArgumentException();
-		recallBias = Math.sqrt(recallBias);	// makes this value zoom-off a little more slowly
-		this.falseNegPenalty = recallBias;
-		this.falsePosPenalty = 1d / recallBias;
+			throw new IllegalArgumentException();		
+		if(recallBias >= 1) {
+			double rb = Math.sqrt(recallBias);
+			this.falseNegPenalty = rb;
+			this.falsePosPenalty = 1d / rb;
+		}
+		else {
+			double rb = Math.sqrt(1d / recallBias);
+			this.falseNegPenalty = rb;
+			this.falsePosPenalty = 1d / rb;
+		}
 	}
 	
 	public double getFalsePosPenalty() {

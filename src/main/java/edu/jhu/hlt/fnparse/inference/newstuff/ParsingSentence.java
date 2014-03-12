@@ -14,7 +14,6 @@ import edu.jhu.gm.model.FactorGraph.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
-import edu.jhu.hlt.fnparse.inference.heads.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
@@ -33,7 +32,7 @@ public class ParsingSentence {
 		}
 	}
 	
-	private static final boolean debugTargetRecall = false;
+	private static final boolean debugTargetRecall = true;
 	private static final boolean debugDecodePart1 = true;	// frame decode
 	private static final boolean debugDecodePart2 = true;	// arg decode
 	
@@ -407,6 +406,7 @@ public class ParsingSentence {
 				}
 			}
 		}
+		int framesFromLexExamples = frameMatches.size();
 		
 		// get frames that list this as an LU
 		//LexicalUnit fnLU = s.getFNStyleLU(headIdx, params.targetPruningData.getWordnetDict());
@@ -421,9 +421,13 @@ public class ParsingSentence {
 		if(frameMatches.size() == 1)	// nullFrame
 			return null;
 		
-		if(debugTargetRecall) {
-			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n", s.getLU(headIdx), frameMatches);
-			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n", s.getLU(headIdx), prototypes);
+		if(debugTargetRecall && params.debug) {
+			System.out.printf("[ParsingSentence makeFrameVar] #frames-from-LEX=%d #frames-from-LUs=%d\n",
+					framesFromLexExamples, listedAsLUs.size());
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n",
+					s.getLU(headIdx), frameMatches);
+			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n",
+					s.getLU(headIdx), prototypes);
 		}
 		
 		return new FrameVar(headIdx, prototypes, frameMatches, params);

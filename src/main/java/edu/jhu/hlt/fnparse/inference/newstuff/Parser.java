@@ -296,7 +296,7 @@ public class Parser {
 	 * uses java serialization to read everything in to fill {@code this.params}
 	 */
 	public void readModel(File f) {
-		System.out.println("[writeModel] to " + f.getPath());
+		System.out.println("[readModel] to " + f.getPath());
 		try {
 			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
 			params = (ParserParams) ois.readObject();

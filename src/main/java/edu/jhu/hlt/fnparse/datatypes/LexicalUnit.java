@@ -18,22 +18,6 @@ public class LexicalUnit {
 		this.hc = word.hashCode() ^ pos.hashCode();
 	}
 	
-	/**
-	 * compares word by ignoring case, checks for prefix match of POS type
-	 * @param fromSentence
-	 * @param fromFrameNet should have a POS of "V" not "VBZ"
-	 * @return
-	 */
-	public static boolean approxMatch(LexicalUnit fromSentence, LexicalUnit fromFrameNet) {
-		
-		String fnPos = PosUtil.getFrameNetPosToPennPrefixesMap().get(fromFrameNet.pos);
-		if(fnPos == null)
-			throw new IllegalArgumentException();
-		
-		return fromSentence.word.equalsIgnoreCase(fromFrameNet.word)
-				&& fromSentence.pos.startsWith(fnPos);
-	}
-	
 	public String getFullString() {
 		if(fullStr == null)
 			fullStr = word + "." + pos;

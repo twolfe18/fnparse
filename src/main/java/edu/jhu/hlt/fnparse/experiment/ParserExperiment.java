@@ -194,8 +194,8 @@ public class ParserExperiment {
 		boolean eval = true;
 		boolean debug = false;
 		
-		int nTrain = 40;
-		int nTest = 10;
+		int nTrain = 20;
+		int nTest = 5;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
@@ -209,7 +209,7 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		Parser parser = new Parser(Mode.FRAME_ID, debug);
-		for(int epoch=0; epoch<1; epoch++) {
+		for(int epoch=0; epoch<2; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
 			int passes = 2;
 			int batchSize = 1;

@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 
 public class PosUtil {
+	
+	public static boolean pedantic = false;
 
 	public static edu.mit.jwi.item.POS ptb2wordNet(String ptbPosTag) {
 		if(ptbPosTag.startsWith("J"))
@@ -16,10 +18,25 @@ public class PosUtil {
 			return edu.mit.jwi.item.POS.NOUN;
 		if(ptbPosTag.startsWith("V"))
 			return edu.mit.jwi.item.POS.VERB;
-		//throw new IllegalArgumentException("is this a ptb tag? " + ptbPosTag);
+		if(pedantic)
+			throw new IllegalArgumentException("is this a ptb tag? " + ptbPosTag);
 		return null;
 	}
 
+	public static edu.mit.jwi.item.POS fn2wordNet(String fnPosTag) {
+		if(fnPosTag.equals("A"))
+			return edu.mit.jwi.item.POS.ADJECTIVE;
+		if(fnPosTag.equals("ADV"))
+			return edu.mit.jwi.item.POS.ADVERB;
+		if(fnPosTag.equals("N"))
+			return edu.mit.jwi.item.POS.NOUN;
+		if(fnPosTag.equals("V"))
+			return edu.mit.jwi.item.POS.VERB;
+		if(pedantic)
+			throw new IllegalArgumentException("is this a fn tag? " + fnPosTag);
+		return null;
+	}
+	
 	private static Map<String, String> frameNetPosToPennPrefixes;
 	public static Map<String, String> getFrameNetPosToPennPrefixesMap() {
 		if(frameNetPosToPennPrefixes == null) {

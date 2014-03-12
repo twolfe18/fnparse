@@ -30,11 +30,21 @@ public class TargetPruningData implements Serializable {
 		IRAMDictionary dict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		prototypesByStem = new HashMap<String, List<FrameInstance>>();
+		prototypesByFrame = new HashMap<Frame, List<FrameInstance>>();
 		Iterator<FNTagging> iter = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
 		while(iter.hasNext()) {
 			FNTagging p = iter.next();
 			Sentence s = p.getSentence();
 			for(FrameInstance fi : p.getFrameInstances()) {
+				
+				List<FrameInstance> prototypes = prototypesByFrame.get(fi.getFrame());
+				if(prototypes == null) {
+					prototypes = new ArrayList<FrameInstance>();
+					prototypes.add(fi);
+					prototypesByFrame.put(fi.getFrame(), prototypes);
+				}
+				else prototypes.add(fi);
+				
 				Span target = fi.getTarget();
 				if(target.width() != 1) continue;
 				assert target.width() == 1;
@@ -93,6 +103,15 @@ public class TargetPruningData implements Serializable {
 		return prototypesByStem;
 	}
 	
+	
+	// what i want is the same Frame -> List[Prototype] mapping that i would
+	// have built for prototype vars anyway
+	private transient Map<Frame, List<FrameInstance>> prototypesByFrame;
+	public Map<Frame, List<FrameInstance>> getPrototypesByFrame() {
+		if(prototypesByFrame == null)
+			init();
+		return prototypesByFrame;
+	}
 	
 	private transient Map<LexicalUnit, List<Frame>> lu2frames;
 	/**
@@ -156,4 +175,5 @@ public class TargetPruningData implements Serializable {
 		if(lu.pos.endsWith("DT")) return true;	// DT and PDT, 0.4% of width1 targets in train data
 		return false;
 	}
+
 }

@@ -28,8 +28,10 @@ public class WordNetTest {
 	public void printSomeStuff() {
 		show("write", POS.VERB);
 		show("table", POS.NOUN);
+		show("attack", POS.NOUN);
 		show("fast", POS.ADJECTIVE);
 		show("quickly", POS.ADVERB);
+		show("quick", POS.ADJECTIVE);
 	}
 	
 	public void show(String w, POS pos) {
@@ -42,7 +44,7 @@ public class WordNetTest {
 		//dict.getSynset(synsetId);
 		for(IWordID wid : idxWord.getWordIDs()) {
 			IWord word = dict.getWord(wid);
-			System.out.println(word + "\t" + word.getRelatedMap());
+			System.out.println(word + "\t" + word.getSynset().getRelatedMap());
 		}
 		
 		long time = System.currentTimeMillis() - start;
