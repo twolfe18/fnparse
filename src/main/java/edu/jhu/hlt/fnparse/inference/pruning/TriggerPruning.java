@@ -92,18 +92,19 @@ public class TriggerPruning {
 			b(fv, "lu=" + x.getFullString(), 2d);
 			
 			// check for match to known LU
-			List<Frame> frameMatchesByLU = params.data.getLU2Frames().get(sent.getLU(index));
-			if(frameMatchesByLU == null)
-				b(fv, "doesnt-match-LU-for-any-frame", 2d);
-			else {
-				b(fv, "#LU-match=" + frameMatchesByLU.size());
-				if(!simple) {
-					for(Frame f : frameMatchesByLU) {
-						b(fv, "LU-matches-" + f.getName());
-						b(fv, "LU-matches-" + f.getName() + "-using-" + x.word);
-					}
-				}
-			}
+			assert false : "uncomment/fix code below";
+//			List<Frame> frameMatchesByLU = params.data.getLU2Frames().get(sent.getLU(index));
+//			if(frameMatchesByLU == null)
+//				b(fv, "doesnt-match-LU-for-any-frame", 2d);
+//			else {
+//				b(fv, "#LU-match=" + frameMatchesByLU.size());
+//				if(!simple) {
+//					for(Frame f : frameMatchesByLU) {
+//						b(fv, "LU-matches-" + f.getName());
+//						b(fv, "LU-matches-" + f.getName() + "-using-" + x.word);
+//					}
+//				}
+//			}
 			
 			// check for similarity to an existing lex FI example
 //			List<FrameInstance> lexFIs = params.data.getWord2FrameInstances().get(sent.getWord(index));

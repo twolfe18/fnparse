@@ -346,16 +346,12 @@ public class ParsingSentence {
 	 * what is the best recall we could hope to get?
 	 */
 	public double computeMaxTargetRecall(FNParse p) {
-		final boolean debug = true;
 		int reachable = 0, total = 0;
 		for(FrameInstance fi : p.getFrameInstances()) {
 			if(couldRecallTarget(fi)) reachable++;
-			else if(debug) {
-				System.err.printf("[ParsingSentence computeMaxTargetRecall] could not "
-						+ "recover the frame %s listed in %s\n", fi.getFrame(), p.getSentence());
-			}
 			total++;
 		}
+		if(total == 0) return 1d;
 		return ((double)reachable) / total;
 	}
 	private boolean couldRecallTarget(FrameInstance fi) {
@@ -409,9 +405,16 @@ public class ParsingSentence {
 		int framesFromLexExamples = frameMatches.size();
 		
 		// get frames that list this as an LU
-		//LexicalUnit fnLU = s.getFNStyleLU(headIdx, params.targetPruningData.getWordnetDict());
-		List<Frame> listedAsLUs = params.targetPruningData.getFramesFromLU(s.getLU(headIdx));
+		LexicalUnit fnLU = s.getFNStyleLU(headIdx, params.targetPruningData.getWordnetDict());
+		List<Frame> listedAsLUs = params.targetPruningData.getFramesFromLU(fnLU);
 		for(Frame f : listedAsLUs) {
+			if(uniqFrames.add(f)) {
+				frameMatches.add(f);
+				//prototypes.add(???);
+			}
+		}
+		// infrequently, stemming messes up, "means" is listed for the Means frame, but "mean" isn't
+		for(Frame f : params.targetPruningData.getFramesFromLU(s.getLU(headIdx))) {
 			if(uniqFrames.add(f)) {
 				frameMatches.add(f);
 				//prototypes.add(???);

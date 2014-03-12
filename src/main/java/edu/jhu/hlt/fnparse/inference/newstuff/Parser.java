@@ -214,10 +214,6 @@ public class Parser {
 			params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		
-		Avg macroTargetRecall = new Avg();
-		Avg microTargetRecall = new Avg();
-		Avg framesPerTarget = new Avg();
-		Avg targetsPerSent = new Avg();
 		
 		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
 		
@@ -227,17 +223,42 @@ public class Parser {
 		if(params.debug)
 			rexs.setTimerPrintInterval(params.mode == Mode.FRAME_ID ? 500 : (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1));
 		
-		System.out.printf("[train] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
-				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
-		System.out.printf("[train] frames/target=%.2f targets/sent=%.2f total-#targets=%d\n",
-				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.sum());
-		
 		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
 		params.featIdx.stopGrowth();
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
+	}
+	
+	public void computeStatistcs(List<FNParse> examples) {
+		Avg macroTargetRecall = new Avg();
+		Avg microTargetRecall = new Avg();
+		Avg framesPerTarget = new Avg();
+		Avg targetsPerSent = new Avg();
+		Avg rolesPerFrameVar = new Avg();
+		
+		for(FNParse p : examples) {
+			Sentence s = p.getSentence();
+			ParsingSentence ps = new ParsingSentence(s, params);
+			double tr = ps.computeMaxTargetRecall(p);
+			macroTargetRecall.accum(tr);
+			microTargetRecall.accum(tr, p.getFrameInstances().size());
+			int ts = 0;
+			for(int i=0; i<s.size(); i++) {
+				FrameVar fv = ps.frameVars[i];
+				if(fv == null) continue;
+				ts++;
+				framesPerTarget.accum(fv.getFrames().size());
+				rolesPerFrameVar.accum(fv.getMaxRoles());
+			}
+			targetsPerSent.accum(ts);
+		}
+
+		System.out.printf("[computeStatistcs] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
+				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
+		System.out.printf("[computeStatistcs] frames/target=%.2f targets/sent=%.2f total-#targets=%d roles/frame=%.1f\n",
+				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.sum(), rolesPerFrameVar.average());
 	}
 	
 	

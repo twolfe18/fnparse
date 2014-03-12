@@ -8,6 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
 import edu.mit.jwi.*;
 import edu.mit.jwi.data.ILoadPolicy;
+import edu.mit.jwi.item.LexFile;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
@@ -115,7 +116,7 @@ public class TargetPruningData implements Serializable {
 	
 	private transient Map<LexicalUnit, List<Frame>> lu2frames;
 	/**
-	 * keys use Penn treebank POS tags (not Framenet POS tags)
+	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
 	public Map<LexicalUnit, List<Frame>> getLU2Frames() {
 		if(lu2frames == null) {
@@ -123,23 +124,23 @@ public class TargetPruningData implements Serializable {
 			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
 			int numF = 0;
 			for(Frame f : FrameIndex.getInstance().allFrames()) {
-				for(int i=0; i<f.numLexicalUnits(); i++) {
-					// the FN => Penn tagset mapping is lossy
-					// but... i could just add all Penn tags that
-					// agree with the FN tag to this hashmap.
+				int nLU = f.numLexicalUnits();
+				for(int i=0; i<nLU; i++) {
 					LexicalUnit lu = f.getLexicalUnit(i);
-					List<String> possiblePennTags = PosUtil.getFrameNetPosToAllPennTags().get(lu.pos);
-					for(String pos : possiblePennTags) {
-						LexicalUnit newLU = new LexicalUnit(lu.word, pos);
-						List<Frame> lf = lu2frames.get(newLU);
-						if(lf == null) {
-							lf = new ArrayList<Frame>();
-							lf.add(f);
-							lu2frames.put(newLU, lf);
-						}
-						else lf.add(f);
-						numF += 1;
+					
+					// "protection_((entity)).n" -> "protection.n"
+					int j = lu.word.indexOf("_(");
+					if(j > 0)
+						lu = new LexicalUnit(lu.word.substring(0, j), lu.pos);
+					
+					List<Frame> lf = lu2frames.get(lu);
+					if(lf == null) {
+						lf = new ArrayList<Frame>();
+						lf.add(f);
+						lu2frames.put(lu, lf);
 					}
+					else lf.add(f);
+					numF += 1;
 				}
 			}
 			System.out.printf("[TargetPruningData] lu2frames contains %d keys and %.1f Frames/key\n",
@@ -148,7 +149,7 @@ public class TargetPruningData implements Serializable {
 		return lu2frames;
 	}
 	/**
-	 * keys use Penn treebank POS tags (not Framenet POS tags)
+	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
 	public List<Frame> getFramesFromLU(LexicalUnit lu) {
 		List<Frame> fs = getLU2Frames().get(lu);
