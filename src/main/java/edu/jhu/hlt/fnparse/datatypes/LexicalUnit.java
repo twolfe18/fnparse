@@ -15,7 +15,7 @@ public class LexicalUnit {
 			throw new IllegalArgumentException();
 		this.word = word;
 		this.pos = pos.toUpperCase();
-		this.hc = word.hashCode() ^ pos.hashCode();
+		this.hc = this.word.hashCode() ^ this.pos.hashCode();
 	}
 	
 	public String getFullString() {
