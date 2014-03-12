@@ -171,7 +171,7 @@ public class ParserExperiment {
 			BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
 			printMemUsage();
 			
-			parser.writeoutWeights(new File(workingDir, "weights.epoch" + (epoch+1) + ".txt"));
+			parser.writeWeights(new File(workingDir, "weights.epoch" + (epoch+1) + ".txt"));
 			
 			lrMultRunning *= lrDecay.get();
 		}
@@ -188,14 +188,14 @@ public class ParserExperiment {
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train");
-		train = getSuitableTrainingExamples(train);	// get rid of nasty examples
-		test = getSuitableTrainingExamples(test);	// get rid of nasty examples
+		//train = getSuitableTrainingExamples(train);	// get rid of nasty examples
+		//test = getSuitableTrainingExamples(test);	// get rid of nasty examples
 		
 		boolean eval = true;
 		boolean debug = false;
 		
-		int nTrain = 120;
-		int nTest = 30;
+		int nTrain = 40;
+		int nTest = 10;
 		train = DataUtil.reservoirSample(train, nTrain);
 		test = DataUtil.reservoirSample(test, nTest);
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, nTest);
@@ -211,7 +211,7 @@ public class ParserExperiment {
 		Parser parser = new Parser(Mode.FRAME_ID, debug);
 		for(int epoch=0; epoch<1; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);
-			int passes = 3;
+			int passes = 2;
 			int batchSize = 1;
 			double lrMult = 4d / (5d + epoch);
 			double regularizerMult = 1d;
@@ -239,7 +239,7 @@ public class ParserExperiment {
 				results = BasicEvaluation.evaluate(trainSubset, predicted);
 				BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);
 				printMemUsage();
-				parser.writeoutWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
+				parser.writeWeights(new File(modelDir, "weights.epoch" + (epoch+1) + ".txt"));
 			}
 			
 			double secPerInst = trainTimer.totalTimeInSec() / trainSentencesProcessed;

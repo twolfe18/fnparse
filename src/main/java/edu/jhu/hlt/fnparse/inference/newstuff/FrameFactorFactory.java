@@ -23,6 +23,8 @@ import edu.jhu.hlt.fnparse.features.*;
  */
 public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
 
+	private static final long serialVersionUID = 1L;
+
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
 		List<Factor> factors = new ArrayList<Factor>();

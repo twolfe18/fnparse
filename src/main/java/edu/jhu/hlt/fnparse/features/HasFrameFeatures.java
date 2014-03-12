@@ -1,12 +1,18 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.*;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
-public abstract class HasFrameFeatures {
+public abstract class HasFrameFeatures implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+	
 	public Features.FP fpFeatures;
 	public Features.F fFeatures;
 	

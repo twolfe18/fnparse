@@ -11,6 +11,12 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 
+/**
+ * @deprecated this can't work
+ * files are too big, some stuff is a pain to serialize,
+ * and its just as fast to compute the features the first time.
+ * @author travis
+ */
 public class WriteExamplesToDisk {
 
 	// FgExampleDiskStore settings
@@ -33,10 +39,11 @@ public class WriteExamplesToDisk {
 		// this should initialize a lot of junk
 		parser.train(Collections.<FNParse>emptyList());
 		
-		try { parser.params.model = parser.params.trainer.train(parser.params.model, store); }
-		catch(cc.mallet.optimize.OptimizationException oe) {
-			oe.printStackTrace();
-		}
+		throw new RuntimeException("fix the lines below");
+//		try { parser.params.model = parser.params.trainer.train(parser.params.model, store); }
+//		catch(cc.mallet.optimize.OptimizationException oe) {
+//			oe.printStackTrace();
+//		}
 	}
 	
 	public static void writeToDisk() {

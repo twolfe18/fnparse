@@ -8,6 +8,8 @@ import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FR {
 
+	private static final long serialVersionUID = 1L;
+	
 	private ParserParams params;
 	
 	public BasicFrameRoleFeatures(ParserParams params) {

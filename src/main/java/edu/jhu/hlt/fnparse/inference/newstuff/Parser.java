@@ -3,7 +3,10 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.io.BufferedWriter;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -13,20 +16,35 @@ import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.data.*;
-import edu.jhu.gm.inf.*;
-import edu.jhu.gm.inf.BeliefPropagation.*;
-import edu.jhu.gm.model.*;
+import edu.jhu.gm.data.FgExampleCache;
+import edu.jhu.gm.data.FgExampleList;
+import edu.jhu.gm.inf.BeliefPropagation;
+import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
+import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.hlt.fnparse.data.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.util.*;
-import edu.jhu.optimize.*;
+import edu.jhu.hlt.fnparse.util.Avg;
+import edu.jhu.optimize.AdaGrad;
+import edu.jhu.optimize.HeterogeneousL2;
+import edu.jhu.optimize.Regularizer;
+import edu.jhu.optimize.SGD;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
@@ -56,9 +74,6 @@ public class Parser {
 		public ApproxF1MbrDecoder argDecoder;
 		public List<FactorFactory> factors;
 		public TargetPruningData targetPruningData;
-
-		public transient CrfTrainer trainer;
-		public transient CrfTrainer.CrfTrainerPrm trainerParams;
 	}
 	
 	
@@ -194,8 +209,7 @@ public class Parser {
 		int numParams = params.debug
 				? 750 * 1000
 				: 15 * 1000 * 1000;	// TODO
-		params.trainerParams = trainerParams;
-		params.trainer = new CrfTrainer(trainerParams);
+		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)
 			params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
@@ -218,7 +232,7 @@ public class Parser {
 		System.out.printf("[train] frames/target=%.2f targets/sent=%.2f total-#targets=%d\n",
 				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.sum());
 		
-		try { params.model = params.trainer.train(params.model, exs); }
+		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
@@ -247,8 +261,10 @@ public class Parser {
 	
 	public ParserParams getParams() { return params; }
 
-	
-	public void writeoutWeights(File f) {
+	/**
+	 * writes out weights in human readable form
+	 */
+	public void writeWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
 		try {
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
@@ -259,6 +275,32 @@ public class Parser {
 			for(int i=0; i<params.featIdx.size(); i++)
 				w.write(String.format("%f\t%s\n", outParams[i], params.featIdx.lookupObject(i)));
 			w.close();
+		}
+		catch(Exception e) { throw new RuntimeException(e); }
+	}
+	
+	/**
+	 * uses java serialization to save everything in {@code this.params}
+	 */
+	public void writeModel(File f) {
+		System.out.println("[writeModel] to " + f.getPath());
+		try {
+			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f));
+			oos.writeObject(params);
+			oos.close();
+		}
+		catch(Exception e) { throw new RuntimeException(e); }
+	}
+	
+	/**
+	 * uses java serialization to read everything in to fill {@code this.params}
+	 */
+	public void readModel(File f) {
+		System.out.println("[writeModel] to " + f.getPath());
+		try {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
+			params = (ParserParams) ois.readObject();
+			ois.close();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}

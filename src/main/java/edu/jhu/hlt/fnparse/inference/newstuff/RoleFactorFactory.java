@@ -14,18 +14,14 @@ import edu.jhu.util.Alphabet;
  * instantiate factors that concatenate features rather than have multiple
  * factors because this is more efficient for BP.
  * 
- * this should enforce all hard constraints on variables related to r_ijk.
- * 
- * TODO i need to do the same thing i did with {@link FrameFactorFactory},
- * that is allow it to instantiate two different factor types:
- *   FR and RE (FRE will almost certainly be too expensive and isn't really needed)
- * 
  * @author travis
  */
 public final class RoleFactorFactory extends HasRoleFeatures implements FactorFactory {
 	
+	private static final long serialVersionUID = 1L;
+
 	public RoleFactorFactory(ParserParams params) {
-		super(params);
+		super(params.featIdx);
 	}
 	
 	@Override

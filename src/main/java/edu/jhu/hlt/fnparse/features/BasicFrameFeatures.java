@@ -10,15 +10,15 @@ import edu.jhu.hlt.fnparse.util.Timer;
 
 public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
 	
-	public static final boolean verbose = false;
-
+	private static final long serialVersionUID = 1L;
+	
 	private static final String intercept = "intercept";
 	private static final String frameFeatPrefix = "frame=";
 	private static final String luMatch = "LU-match";
 	
-	public Timer full = Timer.noOp; //new Timer("all", 75000);
-	public Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
-	public Timer childTimer = Timer.noOp; //new Timer("children", 75000);
+	public transient Timer full = Timer.noOp; //new Timer("all", 75000);
+	public transient Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
+	public transient Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 
 	private ParserParams params;
 	private List<Integer> dontRegularize;

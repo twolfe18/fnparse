@@ -1,17 +1,17 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.io.Serializable;
 import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.util.Alphabet;
 
-public class HasRoleFeatures {
+public class HasRoleFeatures implements Serializable {
 	
-	protected ParserParams params;
+	private static final long serialVersionUID = 1L;
+
+	protected Alphabet<String> featIdx;
 	
 	protected Features.FR frFeatures;
 	protected Features.RE reFeatures;
@@ -20,14 +20,8 @@ public class HasRoleFeatures {
 	/** @deprecated slow! */
 	protected Features.FRE freFeatures;
 	
-	private FeatureVector fv_nullFrame;
-	private int fv_nullFrame_idx;
-	
-	public HasRoleFeatures(ParserParams params) {
-		this.params = params;
-		this.fv_nullFrame_idx = params.featIdx.lookupIndex("HasRoleFeatures_f=nullFrame", true);
-		this.fv_nullFrame = new FeatureVector();
-		this.fv_nullFrame.add(fv_nullFrame_idx, 1d);
+	public HasRoleFeatures(Alphabet<String> featIdx) {
+		this.featIdx = featIdx;
 	}
 	
 	public HasRoleFeatures(HasRoleFeatures copy) {
@@ -35,9 +29,7 @@ public class HasRoleFeatures {
 		frFeatures = copy.frFeatures;
 		reFeatures = copy.reFeatures;
 		eFeatures = copy.eFeatures;
-		params = copy.params;
-		fv_nullFrame = copy.fv_nullFrame;
-		fv_nullFrame_idx = copy.fv_nullFrame_idx;
+		featIdx = copy.featIdx;
 	}
 	
 	public List<Features> getFeatures() {
@@ -75,7 +67,7 @@ public class HasRoleFeatures {
 		return freFeatures == null && frFeatures == null && eFeatures == null;
 	}
 	
-	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
+	public Alphabet<String> getFeatureAlph() { return featIdx; }
 	
 	/**
 	 * the catch-all method that dispatches to the appropriate non-null features

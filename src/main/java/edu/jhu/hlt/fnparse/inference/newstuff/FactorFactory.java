@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.io.Serializable;
 import java.util.List;
 
 import edu.jhu.gm.model.Factor;
@@ -7,7 +8,7 @@ import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 
-public interface FactorFactory {
+public interface FactorFactory extends Serializable {
 	
 	/**
 	 * Return the features used by the factors that this factory instanitates.

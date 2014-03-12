@@ -15,6 +15,8 @@ import edu.mit.jwi.morph.WordnetStemmer;
 // so that we only ever have to make one pass (rather than one per data-structure)
 public class TargetPruningData implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+	
 	public static final boolean debug = false;
 
 	private TargetPruningData() {}	// singleton

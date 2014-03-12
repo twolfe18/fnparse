@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference;
 import static org.junit.Assert.*;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.*;
 
 import org.junit.*;
@@ -58,41 +59,87 @@ public class ParserTests {
 	@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, true);
-		overfitting(p, true, "FRAME_ID");
+		overfitting(p, true, true, "FRAME_ID");
 	}
 
 	@Test
 	public void joint() {
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
 		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, false, "JOINT");
+		overfitting(p, false, true, "JOINT");
 	}
 
 	@Test
 	public void pipeline() {
 		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true);
 		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, false, "PIPELINE");
+		overfitting(p, false, true, "PIPELINE");
 	}
 	
-	public void overfitting(Parser p, boolean onlyFrames, String desc) {
+	private Parser trained, readIn;
+	private File f;
+	
+	@Before
+	public void setupSerStuff() throws IOException {
+		f = File.createTempFile("ParserTests", ".model");
+	}
+	
+	@Test
+	public void serializationFrameId() throws IOException {
+	
+		// frame id
+		trained = new Parser(Mode.FRAME_ID, true);
+		overfitting(trained, true, true, "FRAME_ID_SER1");
+		trained.writeModel(f);
+		readIn = new Parser(Mode.JOINT_FRAME_ARG, true);	// not even same mode to try to screw things up!
+		readIn.readModel(f);
+		//readIn.params.targetPruningData = trained.params.targetPruningData;	// lets cheat a bit to speed things up...
+		overfitting(readIn, true, false, "FRAME_ID_SER2");
+	}
+	
+	@Test
+	public void serializationJoint() throws IOException {
+		// joint
+		trained = new Parser(Mode.JOINT_FRAME_ARG, true);
+		trained.params.argDecoder.setRecallBias(1d);
+		overfitting(trained, false, true, "JOINT_SER1");
+		trained.writeModel(f);
+		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
+		readIn.readModel(f);
+		overfitting(readIn, false, false, "JOINT_SER2");
+	}
+	
+	@Test
+	public void serializationPipeline() throws IOException {
+		// pipeline
+		trained = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		trained.params.argDecoder.setRecallBias(1d);
+		overfitting(trained, false, true, "PIPELINE_SER1");
+		trained.writeModel(f);
+		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
+		readIn.readModel(f);
+		overfitting(readIn, false, false, "PIPELINE_SER2");
+	}
+	
+	public void overfitting(Parser p, boolean onlyFrames, boolean doTraining, String desc) {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<Sentence> test = new ArrayList<Sentence>();
-		
-		System.out.println("====== Training " + desc + " ======");
 		train.add(dummyParse);
 		test.add(dummyParse.getSentence());
 
-		if(p.params.debug) {
-			p.train(train, 4, 1, 0.5d, 1d);
-			p.train(train, 4, 1, 0.5d, 1d);
+		if(doTraining) {
+			System.out.println("====== Training " + desc + " ======");
+			if(p.params.debug) {
+				p.train(train, 4, 1, 0.5d, 1d);
+				p.train(train, 4, 1, 0.5d, 1d);
+			}
+			else	// for full feature set, need less regularization and more iterations to converge
+				p.train(train, 15, 1, 0.5d, 10d);
+			p.writeWeights(new File("weights.txt"));
 		}
-		else	// for full feature set, need less regularization and more iterations to converge
-			p.train(train, 15, 1, 0.5d, 10d);
-		p.writeoutWeights(new File("weights.txt"));
-		
+
 		System.out.println("====== Running Prediction " + desc + " ======");
 		List<FNParse> predicted = p.parse(test);
 		assertEquals(test.size(), predicted.size());

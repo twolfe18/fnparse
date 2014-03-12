@@ -1,12 +1,15 @@
 package edu.jhu.hlt.fnparse.inference.newstuff;
 
+import java.io.Serializable;
 import java.util.*;
 
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Var;
 
-public class ApproxF1MbrDecoder {
+public class ApproxF1MbrDecoder implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+	
 	private double falsePosPenalty;
 	private double falseNegPenalty;
     

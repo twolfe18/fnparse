@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -13,8 +14,10 @@ import edu.jhu.util.Alphabet;
  * let T be the class that is extending this class.
  * @author travis
  */
-public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
+public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+	
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
 	
@@ -27,6 +30,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> {
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
 	protected Alphabet<String> featIdx;
+	
 	private List<String> refinements;
 	private List<Double> weights;
 	
