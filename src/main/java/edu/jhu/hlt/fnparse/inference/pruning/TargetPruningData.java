@@ -24,6 +24,23 @@ public class TargetPruningData implements Serializable {
 	private static final TargetPruningData singleton = new TargetPruningData();
 	public static TargetPruningData getInstance() { return singleton; }
 	
+
+	private transient IRAMDictionary dict;
+	public IRAMDictionary getWordnetDict() {
+		if(dict == null) {
+			long start = System.currentTimeMillis();
+			File f = new File("toydata/wordnet/dict");
+			dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);
+			try { dict.open(); }
+			catch(Exception e) {
+				throw new RuntimeException(e);
+			}
+			long time = System.currentTimeMillis() - start;
+			System.out.printf("loaded wordnet in %.1f seconds\n", time/1000d);
+		}
+		return dict;
+	}
+
 	
 	private void init() {
 		long start = System.currentTimeMillis();
@@ -81,22 +98,6 @@ public class TargetPruningData implements Serializable {
 	}
 	
 	
-	private transient IRAMDictionary dict;
-	public IRAMDictionary getWordnetDict() {
-		if(dict == null) {
-			long start = System.currentTimeMillis();
-			File f = new File("toydata/wordnet/dict");
-			dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);
-			try { dict.open(); }
-			catch(Exception e) {
-				throw new RuntimeException(e);
-			}
-			long time = System.currentTimeMillis() - start;
-			System.out.printf("loaded wordnet in %.1f seconds\n", time/1000d);
-		}
-		return dict;
-	}
-
 	private transient Map<String, List<FrameInstance>> prototypesByStem;
 	public Map<String, List<FrameInstance>> getPrototypesByStem() {
 		if(prototypesByStem == null)
@@ -112,6 +113,12 @@ public class TargetPruningData implements Serializable {
 		if(prototypesByFrame == null)
 			init();
 		return prototypesByFrame;
+	}
+	public List<FrameInstance> getPrototypesByFrame(Frame f) {
+		Map<Frame, List<FrameInstance>> prototypes = getPrototypesByFrame();
+		List<FrameInstance> ret = prototypes.get(f);
+		if(ret == null) ret = Collections.emptyList();
+		return ret;
 	}
 	
 	private transient Map<LexicalUnit, List<Frame>> lu2frames;

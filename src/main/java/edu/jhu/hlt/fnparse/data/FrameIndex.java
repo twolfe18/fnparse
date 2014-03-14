@@ -84,7 +84,6 @@ public class FrameIndex implements Iterable<Frame> {
 		}
 		return byName.get(name);
 	}
-	
 
 	/**
 	 * given a role name (e.g. returned by frame.getRole(3)),

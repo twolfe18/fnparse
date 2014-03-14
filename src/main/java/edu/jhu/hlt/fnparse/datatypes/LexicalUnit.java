@@ -1,5 +1,9 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 
 public class LexicalUnit {
 
@@ -36,5 +40,21 @@ public class LexicalUnit {
 			return word.equals(olu.word) && pos.equals(olu.pos);
 		}
 		else return false;
+	}
+	
+	
+	
+	
+	// methods for reading/writing from/to a Data(In|Out)putStream
+	
+	public static void writeTo(LexicalUnit lu, DataOutputStream dos) throws IOException {
+		dos.writeUTF(lu.word);
+		dos.writeUTF(lu.pos);
+	}
+	
+	public static LexicalUnit readFrom(DataInputStream dis) throws IOException {
+		String w = dis.readUTF();
+		String p = dis.readUTF();
+		return new LexicalUnit(w, p);
 	}
 }

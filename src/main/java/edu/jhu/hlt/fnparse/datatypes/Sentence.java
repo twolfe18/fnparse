@@ -77,7 +77,13 @@ public final class Sentence implements HasId {
 		// "later" -> "lat"
 		// lets try wordnet's stemmer instead
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
-		List<String> allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
+		List<String> allStems;
+		try {
+			allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
+		}
+		catch(java.lang.IllegalArgumentException e) {
+			throw new RuntimeException("bad word? " + getLU(i), e);
+		}
 		String word = allStems.isEmpty() ? tokens[i] : allStems.get(0);
 		//System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s) (fnTag %s)\n", tokens[i], word, lemmas[i], allStems, fnTag);
 		return new LexicalUnit(word, fnTag);
