@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.util.Avg;
 
 public class BasicEvaluation {
 
@@ -14,6 +15,20 @@ public class BasicEvaluation {
 		public String getName();
 		public double evaluate(List<SentenceEval> instances);
 	}
+	
+	public static class FrameAccuracy implements EvalFunc {
+		@Override
+		public String getName() { return "FrameAccuracy"; }
+		@Override
+		public double evaluate(List<SentenceEval> instances) {
+			Avg a = new Avg();
+			for(SentenceEval s : instances)
+				a.accum(s.getFrameAccuracy(), s.size());
+			return a.average();
+		}
+	}
+	
+	public static final FrameAccuracy frameAccuracy = new FrameAccuracy();
 	
 	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, true, FPR.Mode.PRECISION);
 	public static final StdEvalFunc targetMacroRecall = new StdEvalFunc(true, true, FPR.Mode.RECALL);
@@ -81,7 +96,8 @@ public class BasicEvaluation {
 			targetMacroF1, targetMacroPrecision, targetMacroRecall,
 			targetMicroF1, targetMicroPrecision, targetMicroRecall,
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
-			fullMicroF1, fullMicroPrecision, fullMicroRecall};
+			fullMicroF1, fullMicroPrecision, fullMicroRecall,
+			frameAccuracy};
 	
 	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
 		

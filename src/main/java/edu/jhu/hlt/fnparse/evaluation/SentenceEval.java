@@ -24,13 +24,18 @@ public class SentenceEval {
 	 */
 	private int[][] targetConfusion;
 	private int[][] fullConfusion;
+	private int size;
 	
 	public SentenceEval(FNParse gold, FNParse hyp) {
+		
+		if(!gold.getSentence().getId().equals(hyp.getSentence().getId()))
+			throw new IllegalArgumentException();
 		
 		//this.gold = gold;
 		//this.hyp = hyp;
 		this.targetConfusion = new int[2][2];
 		this.fullConfusion = new int[2][2];
+		this.size = gold.getSentence().size();
 	
 		Set<Prediction> goldTargets = new HashSet<Prediction>();
 		Set<Prediction> hypTargets = new HashSet<Prediction>();
@@ -43,6 +48,8 @@ public class SentenceEval {
 		fillConfusionTable(goldTargets, hypTargets, targetConfusion);
 		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion);
 	}
+	
+	public int size() { return size; }
 	
 	public void fillPredictions(List<FrameInstance> fis, Set<Prediction> targetPreds, Set<Prediction> targetRolePreds) {
 		for(FrameInstance fi : fis) {
@@ -78,6 +85,15 @@ public class SentenceEval {
 		s.addAll(gold);
 		s.removeAll(hyp);
 		confusion[1][0] = s.size();
+		
+		// TN
+		confusion[0][0] = gold.size() - (confusion[1][1] + confusion[0][1] + confusion[1][0]);
+		
+		assert confusion[1][1] >= 0;
+		assert confusion[0][1] >= 0;
+		assert confusion[1][0] >= 0;
+		assert confusion[0][0] >= 0;
+		assert confusion[1][1] + confusion[0][1] + confusion[1][0] + confusion[0][0] == gold.size();
 	}
 	
 	public int targetTP() { return targetConfusion[1][1]; }
@@ -87,4 +103,12 @@ public class SentenceEval {
 	public int fullTP() { return fullConfusion[1][1]; }
 	public int fullFP() { return fullConfusion[0][1]; }
 	public int fullFN() { return fullConfusion[1][0]; }
+	
+	public double getFrameAccuracy() {
+		int right = targetConfusion[0][0] + targetConfusion[1][1];
+		int wrong = targetConfusion[0][1] + targetConfusion[1][0];
+		return ((double) right) / (right + wrong);
+	}
+	
+	// TODO arg accuracy (both predictions? just args?)
 }
