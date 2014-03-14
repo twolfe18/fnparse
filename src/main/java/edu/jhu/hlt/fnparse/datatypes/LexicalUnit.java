@@ -3,9 +3,10 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 
 
-public class LexicalUnit {
+public class LexicalUnit implements Serializable {
 
 	public final String word;
 	public final String pos;
