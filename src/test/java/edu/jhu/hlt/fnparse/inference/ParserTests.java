@@ -32,7 +32,7 @@ public class ParserTests {
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
 		
-		Frame speed = frameIdx.getFrameByName("Speed");
+		Frame speed = frameIdx.getFrame("Speed");
 		//System.out.println("speedArgs: " + Arrays.toString(speed.getRoles()));
 		Span[] speedArgs = new Span[speed.numRoles()];
 		Arrays.fill(speedArgs, Span.nullSpan);
@@ -41,7 +41,7 @@ public class ParserTests {
 		instances.add(speedInst);
 		System.out.println("[setupDummyParse] adding instance of " + speed);
 		
-		Frame jump = frameIdx.getFrameByName("Self_motion");
+		Frame jump = frameIdx.getFrame("Self_motion");
 		//System.out.println("speedArgs: " + Arrays.toString(jump.getRoles()));
 		Span[] jumpArgs = new Span[jump.numRoles()];
 		Arrays.fill(jumpArgs, Span.nullSpan);

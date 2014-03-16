@@ -84,11 +84,11 @@ public class ParserExperiment {
 //		pruningDebug(new LexicalUnit("of", "IN"), fi.getFrameByName("Partitive"));
 //		pruningDebug(new LexicalUnit("representatives", "NNS"), fi.getFrameByName("Leadership"));
 		
-		pruningDebug(new LexicalUnit("idea", "NN"), fi.getFrameByName("Desirable_event"));
-		pruningDebug(new LexicalUnit("do", "VB"), fi.getFrameByName("Intentionally_act"));
-		pruningDebug(new LexicalUnit("sooner", "RBR"), fi.getFrameByName("Time_vector"));
-		pruningDebug(new LexicalUnit("several", "JJ"), fi.getFrameByName("Quantity"));
-		pruningDebug(new LexicalUnit("factories", "NNS"), fi.getFrameByName("Locale_by_use"));
+		pruningDebug(new LexicalUnit("idea", "NN"), fi.getFrame("Desirable_event"));
+		pruningDebug(new LexicalUnit("do", "VB"), fi.getFrame("Intentionally_act"));
+		pruningDebug(new LexicalUnit("sooner", "RBR"), fi.getFrame("Time_vector"));
+		pruningDebug(new LexicalUnit("several", "JJ"), fi.getFrame("Quantity"));
+		pruningDebug(new LexicalUnit("factories", "NNS"), fi.getFrame("Locale_by_use"));
 		
 		
 		/*
