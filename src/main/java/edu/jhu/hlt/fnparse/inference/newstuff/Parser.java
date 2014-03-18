@@ -39,6 +39,7 @@ import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.optimize.AdaGrad;
@@ -74,6 +75,7 @@ public class Parser {
 		public ApproxF1MbrDecoder argDecoder;
 		public List<FactorFactory> factors;
 		public TargetPruningData targetPruningData;
+		public ArgPruner argPruner;
 	}
 	
 	
@@ -100,6 +102,7 @@ public class Parser {
 		params.headFinder = new BraindeadHeadFinder();	// TODO
 		params.frameDecoder = new ApproxF1MbrDecoder(1d);
 		params.argDecoder = new ApproxF1MbrDecoder(1.5d);
+		params.argPruner = new ArgPruner(params);		// TODO fix this, should pass in required data
 		
 		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
@@ -258,7 +261,7 @@ public class Parser {
 		System.out.printf("[computeStatistcs] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
 				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
 		System.out.printf("[computeStatistcs] frames/target=%.2f targets/sent=%.2f total-#targets=%d roles/frame=%.1f\n",
-				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.sum(), rolesPerFrameVar.average());
+				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.numerator(), rolesPerFrameVar.average());
 	}
 	
 	

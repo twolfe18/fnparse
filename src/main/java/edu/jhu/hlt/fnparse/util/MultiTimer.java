@@ -27,7 +27,7 @@ public class MultiTimer {
 		Timer t = timers.get(key);
 		if(t == null)
 			throw new IllegalArgumentException("there is no timer for " + key);
-		t.print(ps);
+		ps.println(t);
 	}
 	
 	@Override

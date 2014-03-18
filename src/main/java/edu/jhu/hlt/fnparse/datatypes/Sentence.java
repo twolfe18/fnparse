@@ -71,11 +71,16 @@ public final class Sentence implements HasId {
 	 * a FrameNet style POS.
 	 */
 	public LexicalUnit getFNStyleLU(int i, IDictionary dict) {
+		LexicalUnit x = getFNStyleLUUnsafe(i, dict);
+		if(x == null)
+			return new LexicalUnit(tokens[i], fnStyleBadPOSstrPrefix + pos[i]);
+		else
+			return x;
+	}
+	
+	public LexicalUnit getFNStyleLUUnsafe(int i, IDictionary dict) {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
-		if(fnTag == null) fnTag = fnStyleBadPOSstrPrefix + pos[i];
-		// wow, the lemmas i have right now are goofy
-		// "later" -> "lat"
-		// lets try wordnet's stemmer instead
+		if(fnTag == null) return null;
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		List<String> allStems;
 		try {
@@ -84,9 +89,8 @@ public final class Sentence implements HasId {
 		catch(java.lang.IllegalArgumentException e) {
 			throw new RuntimeException("bad word? " + getLU(i), e);
 		}
-		String word = allStems.isEmpty() ? tokens[i] : allStems.get(0);
-		//System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s) (fnTag %s)\n", tokens[i], word, lemmas[i], allStems, fnTag);
-		return new LexicalUnit(word, fnTag);
+		if(allStems.isEmpty()) return null;
+		return new LexicalUnit(allStems.get(0), fnTag);
 	}
 	
 	/**

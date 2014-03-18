@@ -7,6 +7,7 @@ public class Avg {
 	private int nObservations = 0;
 	
 	public void accum(double value) { accum(value, 1d); }
+	
 	public void accum(double value, double weight) {
 		if(weight < 0d) throw new IllegalArgumentException();
 		num += value * weight;
@@ -15,8 +16,7 @@ public class Avg {
 	}
 	
 	public double average() { return num / denom; }
-	
-	public double sum() { return num; }
-	
 	public int numObservations() { return nObservations; }
+	public double numerator() { return num; }
+	public double denominator() { return denom; }
 }

@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.util;
 
-import java.io.PrintStream;
-
 public class Timer {
 	
 	private String id;
@@ -24,6 +22,13 @@ public class Timer {
 		ignoreFirstTime = true;
 	}
 	
+	public static Timer start(String id) {
+		Timer t = new Timer(id, 1);
+		t.ignoreFirstTime = false;
+		t.start();
+		return t;
+	}
+	
 	public void start() {
 		lastStart = System.currentTimeMillis();
 	}
@@ -35,16 +40,16 @@ public class Timer {
 		time += t;
 		count++;
 		if(printIterval > 0 && count % printIterval == 0)
-			print(System.out);
+			System.out.println(this);
 		return t;
 	}
 	
-	public void print(PrintStream ps) {
+	public String toString() {
 		double rate = countsPerMSec();
 		if(rate >= 0.5d)
-			ps.printf("<Timer %s %.2f sec and %d calls total, %.1f k call/sec\n", id, totalTimeInSec(), count, rate);
+			return String.format("<Timer %s %.2f sec and %d calls total, %.1f k call/sec>", id, totalTimeInSec(), count, rate);
 		else
-			ps.printf("<Timer %s %.2f sec and %d calls total, %.1f sec/call\n", id, totalTimeInSec(), count, secPerCall());
+			return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSec(), count, secPerCall());
 	}
 	
 	private double countsPerMSec() {

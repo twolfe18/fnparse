@@ -2,17 +2,32 @@ package edu.jhu.hlt.fnparse.inference.newstuff;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.gm.inf.*;
+import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
-import edu.jhu.gm.model.*;
-import edu.jhu.gm.model.FactorGraph.*;
+import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FactorGraph.FgEdge;
+import edu.jhu.gm.model.FactorGraph.FgNode;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.gm.model.VarConfig;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.PosUtil;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
@@ -32,7 +47,7 @@ public class ParsingSentence {
 		}
 	}
 	
-	private static final boolean debugTargetRecall = true;
+	private static final boolean debugTargetRecall = false;
 	private static final boolean debugDecodePart1 = true;	// frame decode
 	private static final boolean debugDecodePart2 = true;	// arg decode
 	
@@ -104,8 +119,22 @@ public class ParsingSentence {
 	 * and optionally the gold arg labels if they're there.
 	 * 
 	 * if not latent, then you must have already called setGold().
+	 * 
+	 * @return HACK: a map with the keys "kept" and "possible" representing the number of
+	 * variables that would be kept, **under the new binary variable scheme**, and would
+	 * be kept naively (aka possible) respectively.
 	 */
-	public void setupRoleVars() {
+	public Map<String, Integer> setupRoleVars() {
+		
+		// if you want to turn off this HACK, set ret to null
+		Map<String, Integer> ret = new HashMap<String, Integer>();
+		int kept = 0, possible = 0;
+		// an arg can be:
+		// 1) pruning its Frame
+		// 2) pruning its arg head
+		// 3) being ok
+		// we can't see stage see arguments that fell into category 1 right now
+		int argsPruned = 0, argsKept = 0;
 		
 		final int n = sentence.size();
 		roleVars = new RoleVars[n][][];
@@ -120,6 +149,45 @@ public class ParsingSentence {
 			
 			FrameInstance goldFI = fi.getGold();
 		
+			
+			
+			// HACK FOR SIDE EXPERIMENT:
+			if(ret != null) {
+				for(Frame f : fi.getFrames()) {
+					int K = f.numRoles();
+					for(int k=0; k<K; k++) {
+						
+						// setup: can we reach the gold argument?
+						Span goldSpan = f == goldFI.getFrame()
+							? goldFI.getArgument(k)
+							: null;
+						int goldHead = goldSpan == null || goldSpan == Span.nullSpan
+								? -1 : params.headFinder.head(goldSpan, sentence);
+						boolean canReachGoldArg = goldSpan == Span.nullSpan;
+						
+						// count how many role vars we pruned
+						for(int j=0; j<n; j++) {
+							possible++;
+							if(!params.argPruner.pruneArgHead(f, k, j, sentence)) {
+								kept++;
+								if(j == goldHead)
+									canReachGoldArg = true;
+							}
+						}
+						
+						if(goldSpan != null) {
+							if(canReachGoldArg)
+								argsKept++;
+							else
+								argsPruned++;
+						}
+					}
+				}
+				continue;	// don't bother with real variable setup
+				// TODO REMOVE THIS
+			}
+			
+			
 			int K = fi.getMaxRoles();
 			roleVars[i] = new RoleVars[n][K];
 			for(int k=0; k<K; k++) {
@@ -172,7 +240,7 @@ public class ParsingSentence {
 				}
 				
 				for(int j=0; j<n; j++) {
-					if(pruneArgHead(j, fi)) continue;
+					if(pruneArgHead(j, fi)) continue;	// TODO replace with params.argPruner.prune()
 					RoleVars rv = RoleVars.tryToSetup(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
 					if(rv == null) continue;
 					roleVars[i][j][k] = rv;
@@ -186,6 +254,13 @@ public class ParsingSentence {
 				
 			}
 		}
+		if(ret != null) {
+			ret.put("kept", kept);
+			ret.put("possible", possible);
+			ret.put("argsKept", argsKept);
+			ret.put("argsPruned", argsPruned);
+		}
+		return ret;
 	}
 	
 	
