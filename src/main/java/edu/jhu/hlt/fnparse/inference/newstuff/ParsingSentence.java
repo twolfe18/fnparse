@@ -28,9 +28,9 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
@@ -86,7 +86,7 @@ public class ParsingSentence {
 	 * @param p
 	 */
 	public void setGold(FNParse p, boolean clampFrameVars) {
-		
+			
 		if(p.getSentence() != sentence)
 			throw new IllegalArgumentException();
 		if(frameVars == null)
@@ -119,22 +119,8 @@ public class ParsingSentence {
 	 * and optionally the gold arg labels if they're there.
 	 * 
 	 * if not latent, then you must have already called setGold().
-	 * 
-	 * @return HACK: a map with the keys "kept" and "possible" representing the number of
-	 * variables that would be kept, **under the new binary variable scheme**, and would
-	 * be kept naively (aka possible) respectively.
 	 */
-	public Map<String, Integer> setupRoleVars() {
-		
-		// if you want to turn off this HACK, set ret to null
-		Map<String, Integer> ret = new HashMap<String, Integer>();
-		int kept = 0, possible = 0;
-		// an arg can be:
-		// 1) pruning its Frame
-		// 2) pruning its arg head
-		// 3) being ok
-		// we can't see stage see arguments that fell into category 1 right now
-		int argsPruned = 0, argsKept = 0;
+	public void setupRoleVars() {
 		
 		final int n = sentence.size();
 		roleVars = new RoleVars[n][][];
@@ -149,45 +135,6 @@ public class ParsingSentence {
 			
 			FrameInstance goldFI = fi.getGold();
 		
-			
-			
-			// HACK FOR SIDE EXPERIMENT:
-			if(ret != null) {
-				for(Frame f : fi.getFrames()) {
-					int K = f.numRoles();
-					for(int k=0; k<K; k++) {
-						
-						// setup: can we reach the gold argument?
-						Span goldSpan = f == goldFI.getFrame()
-							? goldFI.getArgument(k)
-							: null;
-						int goldHead = goldSpan == null || goldSpan == Span.nullSpan
-								? -1 : params.headFinder.head(goldSpan, sentence);
-						boolean canReachGoldArg = goldSpan == Span.nullSpan;
-						
-						// count how many role vars we pruned
-						for(int j=0; j<n; j++) {
-							possible++;
-							if(!params.argPruner.pruneArgHead(f, k, j, sentence)) {
-								kept++;
-								if(j == goldHead)
-									canReachGoldArg = true;
-							}
-						}
-						
-						if(goldSpan != null) {
-							if(canReachGoldArg)
-								argsKept++;
-							else
-								argsPruned++;
-						}
-					}
-				}
-				continue;	// don't bother with real variable setup
-				// TODO REMOVE THIS
-			}
-			
-			
 			int K = fi.getMaxRoles();
 			roleVars[i] = new RoleVars[n][K];
 			for(int k=0; k<K; k++) {
@@ -254,13 +201,6 @@ public class ParsingSentence {
 				
 			}
 		}
-		if(ret != null) {
-			ret.put("kept", kept);
-			ret.put("possible", possible);
-			ret.put("argsKept", argsKept);
-			ret.put("argsPruned", argsPruned);
-		}
-		return ret;
 	}
 	
 	
@@ -412,7 +352,7 @@ public class ParsingSentence {
 	
 	protected boolean pruneArgHead(int j, FrameVar f_i) {
 		String pos = sentence.getPos(j);
-		return pos.endsWith("DT") || ArgHeadPruning.pennPunctuationPosTags.contains(pos);
+		return pos.endsWith("DT") || ArgPruner.pennPunctuationPosTags.contains(pos);
 	}
 
 	

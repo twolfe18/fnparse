@@ -7,50 +7,58 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 
 /**
- * reasons to keep r_ijk distinct from r_ijk^e:
- * - l_ij variables will want to talk to on j variable, rather than many r_ijk vars (where j indexes spans instead of heads)
- * 
- * 
- * Proposal:
- * let domain(r_ijk) = {null} union {expansions}
- * psi(f_i, r_ijk, l_ij) fires 1 if(f_i != nullFrame && r_ijk != null && l_ij == 1)
- *   => this is now a bigger loop because it must go over all expansions rather than just binary for r_ijk
- *   
- * The reason I wanted to do this is so that I could get marginal probs for (r_ijk,r_ijk^e) during decoding
- * (this term is needed to determine the predictions/loss)
- * 
- * Exactly1 only works in a collection of one-hot binary variables...
- * actually i'm pretty sure this could be generalized to k-ary variables where one of k is "null"
- * 
- * where did i want to use Exactly1?
- * a given role can only show up once...
- * Exactly1(r_i*k) \forall i,k
- * 
- * 
- * Siblings:
- * Its common to see that an arg is a sibling to its frame.
- * How to encode:
- * phi(f_i, r_ijk, l_pi, l_pj) \forall p
- * 
- * =============================================================================================
- * march 4
- * ok, we're going to go another direction with these variables.
- * r_ijk and r_ijk^e are no longer fused, and r_ijk is changing.
- * instead of r_ijk \in {0, 1} for off/on, r_ijk will take on the
- * same values as f_i, except we'll call nullFrame "off".
- * 
- * there will be a hard factor enforcing:
- *   f_i=X, r_ijk=Y, X!=Y, X!=nullFrame => 0 probability
- * 
- * also, r_ijk s.t. f_i=nullFrame will be considered latent.
- * 
- * the expansion variable is back.
- * 
  * @author travis
  */
 public class RoleVars implements FgRelated {
+	
+	
+	
+	public static class NewRoleVars {
+		
+		// frame-target that this belongs to
+		public int i;
+		public Frame t;
+		
+		public int n;	// length of sentence
+		
+		// the indices of r_jk and r_jk_e correspond
+		// r_jk[k][N], where N=sentence.size, represents this arg not being realized
+		// there will be an Exactly1 factor on each r_jk[j] forall j
+		public Var[][] r_kj;	// [k][j], may contain null values
+		public Var[][] r_kj_e;	// [k][j], may contain null values
+		
+		public VarType varType;	// if f_it != gold, then latent, otherwise predicted
+		
+		public NewRoleVars(int targetHeadIdx, Frame evoked, VarType varType, Sentence s, ArgPruner argPruner) {
+			
+			if(evoked == Frame.nullFrame)
+				throw new IllegalArgumentException("only create these for non-nullFrame f_it");
+			
+			this.i = targetHeadIdx;
+			this.t = evoked;
+			this.n = s.size();
+			this.varType = varType;
+			
+			int K = evoked.numRoles();
+			r_kj = new Var[K][n+1];
+			//r_jk_e = new Var[K][n+1];
+			for(int k=0; k<K; k++) {
+				for(int j=0; j<n; j++) {
+					if(argPruner.pruneArgHead(t, k, j, s))
+						continue;
+					String name = String.format("r_{i=%d,j=%d,k=%d}", i, j, k);
+					r_kj[k][j] = new Var(varType, 2, name, BinaryVarUtil.stateNames);
+				}
+			}
+		}
+	}
+	
+	
+	
+	
 	
 	public static final int maxArgRoleExpandLeft = 10;
 	public static final int maxArgRoleExpandRight = 3;

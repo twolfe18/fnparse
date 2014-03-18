@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -20,7 +21,6 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.experiment.ArgHeadPruning;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
@@ -94,6 +94,8 @@ public class ArgPruner {
 		System.out.println(t);
 	}
 	
+	public static final Set<String> pennPunctuationPosTags =
+			new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\""));
 	
 	public static enum LexPruneMethod {
 		NONE,
@@ -142,7 +144,7 @@ public class ArgPruner {
 		String pos = sentence.getPos(headWordIdx);
 		if(determiners && pos.endsWith("DT"))
 			return true;
-		if(punc && ArgHeadPruning.pennPunctuationPosTags.contains(pos))
+		if(punc && ArgPruner.pennPunctuationPosTags.contains(pos))
 			return true;
 		if(lexMethod != LexPruneMethod.NONE) {
 			Set<LexicalUnit> possibleLUs;
