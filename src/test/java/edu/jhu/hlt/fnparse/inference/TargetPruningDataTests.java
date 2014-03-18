@@ -20,8 +20,8 @@ public class TargetPruningDataTests {
 		Parser p = new Parser();
 		Map<LexicalUnit, List<Frame>> framesByLU = p.params.targetPruningData.getLU2Frames();
 		FrameIndex fi = FrameIndex.getInstance();
-		checkLU(new LexicalUnit("area", "N"), framesByLU, fi.getFrameByName("Dimension"));
-		checkLU(new LexicalUnit("year", "N"), framesByLU, fi.getFrameByName("Calendric_unit"));
+		checkLU(new LexicalUnit("area", "N"), framesByLU, fi.getFrame("Dimension"));
+		checkLU(new LexicalUnit("year", "N"), framesByLU, fi.getFrame("Calendric_unit"));
 	}
 	
 	public void checkLU(LexicalUnit shouldBeThere, Map<LexicalUnit, List<Frame>> where, Frame... shouldInclude) {
