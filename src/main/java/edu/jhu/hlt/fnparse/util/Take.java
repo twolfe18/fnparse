@@ -19,6 +19,7 @@ public class Take<T> implements Iterator<T> {
 
 	@Override
 	public T next() {
+		remaining--;
 		return base.next();
 	}
 
