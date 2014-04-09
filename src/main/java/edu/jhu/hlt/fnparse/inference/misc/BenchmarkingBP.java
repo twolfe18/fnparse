@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.misc;
 
 import java.util.*;
 

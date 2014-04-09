@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.sentence;
+package edu.jhu.hlt.fnparse.inference.misc;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -6,22 +6,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.data.UnlabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.newstuff.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.newstuff.FrameInstanceHypothesis;
-import edu.jhu.hlt.fnparse.inference.newstuff.FrameVars;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
@@ -35,81 +36,93 @@ import edu.mit.jwi.morph.WordnetStemmer;
  * class, if you want to create two FgExamples for training (e.g. for a pipeline
  * model), you need to create two ParsingSentences for the one underlying Sentence.
  * 
+ * @param Hypothesis is the type that serves as a variable wrapper. This class must
+ * be capable of storing a label, and the {@code setGold} method should change the
+ * state of the {@code Hypothesis}s' labels.
+ * 
+ * @param Label is the type for whatever information you need to set the labels in
+ * the factor graph.
+ * 
+ * @see {@code FrameIdSentence}, {@code RoleIdSentence}, {@code JointFrameRoleIdSentence}.
+ * 
  * @author travis
  */
-public abstract class ParsingSentence {
+public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
+	
+	protected final Label gold;	// must be set at construction
 
-	/* like a regular FgExample, but stores a backpointer to the ParsingSentence it came from
-	public static class FgExample extends edu.jhu.gm.data.LabeledFgExample {
-		private static final long serialVersionUID = 1L;
-		public final ParsingSentence cameFrom;
-		public FgExample(FactorGraph fg, VarConfig goldConfig, ParsingSentence cameFrome) {
-			super(fg, goldConfig);
-			this.cameFrom = cameFrome;
-		}
-	}
-	*/
-	
-	
-	// move this into ParserParams?
-	public static final int maxLexPrototypesPerFrame = 30;
-	
+	// hyp could be FrameVars, RoleVars, or FrameInstanceHypothesis
+	// should be populated at construction
+	public List<Hypothesis> hypotheses;
 
-	// ==== VARIABLES ====
-	public List<FrameInstanceHypothesis> frameRoleVars;
 	public ProjDepTreeFactor depTree;	// holds variables too
 	
-	// ==== FACTORS ====
-	protected List<FactorFactory> factorTemplates;
+	protected FactorFactory<Hypothesis> factorTemplate;
 	
-	// ==== MISC ====
 	public Sentence sentence;
 	protected ParserParams params;
 	
 
-	public ParsingSentence(Sentence s, ParserParams params) {
+	/** constructor for cases where you don't know the label */
+	public ParsingSentence(Sentence s, ParserParams params, FactorFactory<Hypothesis> factorTemplate) {
+		this(s, params, factorTemplate, null);
+	}
+
+	/** constructor for cases where you do know the label */
+	public ParsingSentence(Sentence s, ParserParams params, FactorFactory<Hypothesis> factorTemplate, Label label) {
 		this.params = params;
-		this.factorTemplates = params.factors;
+		this.factorTemplate = factorTemplate;
 		this.sentence = s;
-		this.frameRoleVars = new ArrayList<FrameInstanceHypothesis>();
+		this.hypotheses = new ArrayList<Hypothesis>();
+		this.gold = label;
 	}
 	
 	
-	protected void setGold(FNTagging p) {	//, boolean clampFrameVars) {
-			
-		if(p.getSentence() != sentence)
-			throw new IllegalArgumentException();
+
+	/** you should use this in your implementation of decode() */
+	protected FgExample getExample(boolean labeled) {
 		
-		// build an index from targetHeadIdx to FrameRoleVars
-		Set<FrameInstanceHypothesis> haventSet = new HashSet<FrameInstanceHypothesis>();
-		FrameInstanceHypothesis[] byHead = new FrameInstanceHypothesis[sentence.size()];
-		for(FrameInstanceHypothesis fHyp : this.frameRoleVars) {
-			byHead[fHyp.getTargetHeadIdx()] = fHyp;
-			haventSet.add(fHyp);
+		FactorGraph fg = new FactorGraph();
+		VarConfig gold = new VarConfig();
+		
+		// create factors
+		List<Factor> factors = new ArrayList<Factor>();
+		if(params.useLatentDepenencies) {
+			assert depTree != null;
+			factors.add(depTree);
 		}
+		factors.addAll(factorTemplate.initFactorsFor(sentence, hypotheses, depTree));
 		
-		// match up each FI to a FIHypothesis by the head word in the target
-		for(FrameInstance fi : p.getFrameInstances()) {
-			Span target = fi.getTarget();
-			int head = params.headFinder.head(target, sentence);
-			FrameInstanceHypothesis fHyp = byHead[head];
-			if(fHyp == null) continue;	// nothing you can do here
-			fHyp.setGold(fi);
-			boolean removed = haventSet.remove(fHyp);
-			assert removed : "two FrameInstances with same head?";
-		}
-		
-		// the remaining hypotheses must be null because they didn't correspond to a FI in the parse
-		for(FrameInstanceHypothesis fHyp : haventSet)
-			fHyp.setGoldIsNull();
+		// register all the variables and factors
+		for(Hypothesis hyp : hypotheses)
+			hyp.register(fg, gold);
+
+		// add factors to the factor graph
+		for(Factor f : factors)
+			fg.addFactor(f);
+
+		return labeled
+			? new LabeledFgExample(fg, gold)
+			: new UnlabeledFgExample(fg, gold);
 	}
+
+	/**
+	 * This method should zoom down to the variables held in the hypotheses and set the gold value.
+	 * After this call, calling hyp.register(fg, goldConf) should actually add to goldConf.
+	 */
+	protected abstract void setGold(Label gold);
 
 	
 	/** might return a FNParse depending on the settings */
 	// NOTE: you might want to return a FNTaggin (e.g. if you're only doing frameId), but the types are more annoying than they're worth: everything's a FNParse now
 	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);
 	
-	public abstract LabeledFgExample getTrainingExample();
+	public LabeledFgExample getTrainingExample() {
+		if(gold == null)
+			throw new RuntimeException();
+		setGold(gold);
+		return (LabeledFgExample) getExample(true);
+	}
 
 	
 
@@ -141,6 +154,8 @@ public abstract class ParsingSentence {
 	 * lemma(t) == lemma(f.target)
 	 */
 	protected FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
+
+		final int maxLexPrototypesPerFrame = 30;
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
@@ -204,33 +219,6 @@ public abstract class ParsingSentence {
 		
 		return new FrameVars(headIdx, prototypes, frameMatches, params);
 	}
-	
-	
-	/* replaced by getTrainingExample above,
-	 * this implementation will vary by subclass
-	public FgExample makeFgExample() {
-		
-		FactorGraph fg = new FactorGraph();
-		VarConfig gold = new VarConfig();
-		
-		// create factors
-		factors = new ArrayList<Factor>();
-		if(params.useLatentDepenencies)
-			factors.add(depTree);
-		for(FactorFactory ff : factorTemplates)
-			factors.addAll(ff.initFactorsFor(sentence, frameRoleVars, depTree));
-		
-		// register all the variables and factors
-		for(FrameInstanceHypothesis fhyp : this.frameRoleVars)
-			fhyp.register(fg, gold);
-
-		// add factors to the factor graph
-		for(Factor f : factors)
-			fg.addFactor(f);
-
-		return new FgExample(fg, gold, this);
-	}
-	 */
 	
 }
 

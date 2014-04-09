@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.jointid;
 
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
@@ -7,7 +7,11 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
+import edu.jhu.hlt.fnparse.inference.misc.FgRelated;
+import edu.jhu.hlt.fnparse.inference.misc.Parser;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
 
 /**
  * This class is only good for holding information that is indexed in the same way.

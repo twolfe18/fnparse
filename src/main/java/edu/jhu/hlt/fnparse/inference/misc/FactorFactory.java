@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.misc;
 
 import java.io.Serializable;
 import java.util.List;
@@ -8,7 +8,7 @@ import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 
-public interface FactorFactory extends Serializable {
+public interface FactorFactory<Hypothesis> extends Serializable {
 	
 	/**
 	 * Return the features used by the factors that this factory instanitates.
@@ -24,6 +24,6 @@ public interface FactorFactory extends Serializable {
 	 * The variables given should correspond to a frame target head word,
 	 * such that r.parent == f.
 	 */
-	public List<Factor> initFactorsFor(Sentence s, List<FrameInstanceHypothesis> fr, ProjDepTreeFactor l);
+	public List<Factor> initFactorsFor(Sentence s, List<Hypothesis> inThisSentence, ProjDepTreeFactor l);
 	
 }

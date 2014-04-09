@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.misc;
 
 
 import java.io.BufferedWriter;
@@ -38,14 +38,18 @@ import edu.jhu.hlt.fnparse.features.DebuggingFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdSentence;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
+import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.sentence.ArgIdSentence;
-import edu.jhu.hlt.fnparse.inference.sentence.FrameIdSentence;
-import edu.jhu.hlt.fnparse.inference.sentence.JointFrameArgIdSentence;
-import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
@@ -78,9 +82,13 @@ public class Parser {
 		public HeadFinder headFinder;
 		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
-		public List<FactorFactory> factors;
 		public TargetPruningData targetPruningData;
 		public ArgPruner argPruner;
+
+		//public List<FactorFactory<FgRelated>> factors;
+		public FactorFactory<FrameVars> factorsForFrameId;
+		public FactorFactory<RoleVars> factorsForRoleId;
+		public FactorFactory<FrameInstanceHypothesis> factorsForJointId;
 	}
 	
 	
@@ -109,14 +117,13 @@ public class Parser {
 		params.argDecoder = new ApproxF1MbrDecoder(1.5d);
 		params.argPruner = new ArgPruner(params);		// TODO fix this, should pass in required data
 		
-		params.factors = new ArrayList<FactorFactory>();
 		FrameFactorFactory fff = new FrameFactorFactory();
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		else {
 			fff.setFeatures(new BasicFrameFeatures(params));
 			//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
 		}
-		params.factors.add(fff);
+		params.factorsForFrameId = fff;
 		
 		if(mode != Mode.FRAME_ID) {
 			RoleFactorFactory rff = new RoleFactorFactory(params);
@@ -128,7 +135,10 @@ public class Parser {
 				rff.setFeatures(new BasicRoleSpanFeatures(params));
 				rff.setFeatures(new BasicFrameRoleFeatures(params));
 			}
-			params.factors.add(rff);
+			params.factorsForRoleId = rff;
+			
+			// TODO check for joint factors
+			assert mode != Mode.JOINT_FRAME_ARG : "not really implemented";
 		}
 	}
 	
@@ -154,7 +164,7 @@ public class Parser {
 	public Regularizer getRegularizer(int numParams, double regularizerMult) {
 		
 		List<Integer> dontRegularize = new ArrayList<Integer>();
-		for(FactorFactory ff : this.params.factors)
+		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId))
 			for(Features f : ff.getFeatures())
 				dontRegularize.addAll(f.dontRegularize());
 		System.out.printf("[getRegularizer] not regularizing %d parameters\n", dontRegularize.size());
@@ -168,24 +178,24 @@ public class Parser {
 	public List<LabeledFgExample> getExampleForTraining(FNParse p) {
 		
 		if(params.mode == Mode.FRAME_ID) {
-			ParsingSentence s = new FrameIdSentence(p, params);
+			FrameIdSentence s = new FrameIdSentence(p.getSentence(), params, p);
 			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.JOINT_FRAME_ARG) {
-			ParsingSentence s = new JointFrameArgIdSentence(p, params);
+			JointFrameRoleIdSentence s = new JointFrameRoleIdSentence(p.getSentence(), params, p);
 			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			
 			// only frame id (no args)
-			FrameIdSentence fid = new FrameIdSentence(p, params);
+			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
 			LabeledFgExample e1 = fid.getTrainingExample();
 			
 			// run prediction to see what frames we'll be predicting roles for
 			FNTagging predictedFrames = fid.decode(params.model, infFactory());
 			
 			// clamped frames, predict args
-			ArgIdSentence argId = new ArgIdSentence(p, predictedFrames, params);
+			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
 			LabeledFgExample e2 = argId.getTrainingExample();
 			
 			return Arrays.asList(e1, e2);
@@ -281,10 +291,10 @@ public class Parser {
 			if(params.mode == Mode.FRAME_ID)
 				pred.add(new FrameIdSentence(s, params).decode(params.model, infFact));
 			else if(params.mode == Mode.JOINT_FRAME_ARG)
-				pred.add(new JointFrameArgIdSentence(s, params).decode(params.model, infFact));
+				pred.add(new JointFrameRoleIdSentence(s, params).decode(params.model, infFact));
 			else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 				FNTagging predictedFrames = new FrameIdSentence(s, params).decode(params.model, infFact);
-				pred.add(new ArgIdSentence(predictedFrames, params).decode(params.model, infFact));
+				pred.add(new RoleIdSentence(s, predictedFrames, params).decode(params.model, infFact));
 			}
 			else throw new RuntimeException();
 		}

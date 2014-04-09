@@ -1,5 +1,6 @@
-package edu.jhu.hlt.fnparse.inference.sentence;
+package edu.jhu.hlt.fnparse.inference.roleid;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -7,8 +8,9 @@ import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.inference.newstuff.RoleVars;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
 
 /**
  * given some frames (grounded with targets), find out where there args are.
@@ -16,23 +18,23 @@ import edu.jhu.hlt.fnparse.inference.newstuff.RoleVars;
  * 
  * @author travis
  */
-public class ArgIdSentence extends ParsingSentence {
+public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	
 	private List<RoleVars> roles;	// this stores frame info too
 
-	/**
-	 * @param evoked the frames that appear in this sentence
-	 * @param params
-	 */
-	public ArgIdSentence(FNTagging evoked, ParserParams params) {
-		super(evoked.getSentence(), params);
+	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params) {
+		super(s, params, params.factorsForRoleId);
+		initRoleVars(frames);
 	}
 
-	public ArgIdSentence(FNParse gold, FNTagging evoked, ParserParams params) {
-		super(gold.getSentence(), params);
-		if(gold.getSentence() != evoked.getSentence())
-			throw new IllegalArgumentException();
-		this.setGold(gold);
+	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params, FNParse gold) {
+		super(s, params, params.factorsForRoleId, gold);
+		initRoleVars(frames);
+	}
+	
+	private void initRoleVars(FNTagging frames) {
+		roles = new ArrayList<RoleVars>();
+		throw new RuntimeException("implement me");
 	}
 
 	@Override
@@ -40,8 +42,7 @@ public class ArgIdSentence extends ParsingSentence {
 		throw new RuntimeException("implement me");
 	}
 
-	@Override
-	public LabeledFgExample getTrainingExample() {
+	public LabeledFgExample getTrainingExamplelksdjflskd() {
 		
 		// 1) only make the frameVar's needed for the given targets
 		// 2) this will give you FrameInstanceHypothesis, on which you can call setupRoles(VarType.Predicted)
@@ -51,6 +52,13 @@ public class ArgIdSentence extends ParsingSentence {
 		// all you need is one RoleVars per FrameInstance given on construction
 		
 		
+		throw new RuntimeException("implement me");
+	}
+
+	@Override
+	protected void setGold(FNParse gold) {
+		
+		// find the roles realize for every FrameInstance in this.roles
 		throw new RuntimeException("implement me");
 	}
 

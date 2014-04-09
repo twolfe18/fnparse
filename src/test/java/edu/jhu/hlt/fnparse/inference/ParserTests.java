@@ -11,8 +11,8 @@ import org.junit.*;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.misc.*;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {

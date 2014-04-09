@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.roleid;
 
 import java.util.Iterator;
 
@@ -10,7 +10,10 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.misc.FgRelated;
+import edu.jhu.hlt.fnparse.inference.misc.Parser;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 
 /**
@@ -66,6 +69,10 @@ public class RoleVars implements FgRelated {
 			}
 		}
 	}
+	
+	public Frame getFrame() { return t; }
+	
+	public int getTargetHead() { return i; }
 	
 	public void setGold(FrameInstance fi, ParserParams params) {
 		assert fi.getFrame() == t;

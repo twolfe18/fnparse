@@ -9,8 +9,8 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.misc.Parser;
+import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
 
 /**
  * keeps statistics about ParsingSentences so that I can figure out what's slow.

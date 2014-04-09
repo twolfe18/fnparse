@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.util.*;
 
@@ -7,6 +7,8 @@ import edu.jhu.gm.model.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance.Prototype;
 import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.misc.FactorFactory;
 
 /**
  * all features that DON'T look at a role variable should be housed here.
@@ -22,7 +24,7 @@ import edu.jhu.hlt.fnparse.features.*;
  * 
  * @author travis
  */
-public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory {
+public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory<FrameVars> {
 
 	private static final long serialVersionUID = 1L;
 	
@@ -30,15 +32,15 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 	public String toString() { return "<FrameFactorFactory>"; }
 
 	@Override
-	public List<Factor> initFactorsFor(Sentence s, List<FrameInstanceHypothesis> fr, ProjDepTreeFactor l) {
+	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
 		List<Factor> factors = new ArrayList<Factor>();
-		for(FrameInstanceHypothesis fhyp : fr) {
+		for(FrameVars fhyp : fr) {
 			final int T = fhyp.numFrames();
 			final int i = fhyp.getTargetHeadIdx();
 			for(int t=0; t<T; t++) {
 				Frame f = fhyp.getFrame(t);
 				Prototype p = null;
-				VarSet vs = new VarSet(fhyp.getFrameVar(t));
+				VarSet vs = new VarSet(fhyp.getVariable(t));
 				FeatureVector features = getFeatures(f, p, i, s);
 				factors.add(new FF(vs, features));
 			}

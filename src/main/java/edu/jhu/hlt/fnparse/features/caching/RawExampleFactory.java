@@ -7,8 +7,8 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.misc.Parser;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 /**

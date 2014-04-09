@@ -6,10 +6,10 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
+import edu.jhu.hlt.fnparse.inference.misc.Parser;
+import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner.LexPruneMethod;
-import edu.jhu.hlt.fnparse.inference.sentence.JointFrameArgIdSentence;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 
@@ -49,7 +49,7 @@ public class ArgPruningEfficiencyExperiment {
 			
 			t.start("lexPrune="+lexPrune);
 			for(FNParse p : examples) {				
-				JointFrameArgIdSentence js = new JointFrameArgIdSentence(p, parser.params);
+				JointFrameRoleIdSentence js = new JointFrameRoleIdSentence(p.getSentence(), parser.params, p);
 				countPruning(js, avgKeepRatio, keepRatio, avgRecallRatio, recallRatio, roleVarsPerSent, fiPerSent, fiPerWord, rolesPerFrame);
 			}
 			t.stop("lexPrune="+lexPrune);
@@ -72,7 +72,7 @@ public class ArgPruningEfficiencyExperiment {
 	 * I need to re-implement setup and pruning in JointFrameArgIdSentence,
 	 * so this should wait until after that.
 	 */
-	private static void countPruning(JointFrameArgIdSentence js,
+	private static void countPruning(JointFrameRoleIdSentence js,
 			Avg avgKeepRatio, Avg keepRatio, Avg avgRecallRatio, Avg recallRatio, Avg roleVarsPerSent,
 			Avg fiPerSent, Avg fiPerWord, Avg rolesPerFrame) {
 		
