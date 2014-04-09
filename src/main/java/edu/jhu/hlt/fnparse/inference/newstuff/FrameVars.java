@@ -7,13 +7,18 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
-public class FrameVar implements FgRelated {
+/**
+ * Represents all of the frames that could be evoked at a given headword.
+ * 
+ * @author travis
+ */
+public class FrameVars implements FgRelated {
 
 	public static FrameInstance nullFrameInstance(Sentence s, int head) {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 	
-	
+	// these arrays are indexed by t (frame), and i is implicit information in the instance
 	public Frame[] f_it_values;		// first value is nullFrame
 	public Var[] f_it;
 	public int i;
@@ -22,7 +27,7 @@ public class FrameVar implements FgRelated {
 	/**
 	 * @param frames should not contain Frame.nullFrame
 	 */
-	public FrameVar(int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
+	public FrameVars(int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
 		this.i = headIdx;
 		int n = frames.size() + 1;
 		this.f_it = new Var[n];
@@ -44,8 +49,20 @@ public class FrameVar implements FgRelated {
 	public int getTargetHeadIdx() { return i; }
 
 	public Frame getFrame(int t) { return f_it_values[t]; }
+	
+	public Var getVariable(int t) { return f_it[t]; }
 
 	public int numFrames() { return f_it_values.length; }
+	
+	private int maxRoles = -1;
+	public int getMaxRoles() {
+		if(maxRoles < 0) {
+			for(Frame f : f_it_values)
+				if(f.numRoles() > maxRoles)
+					maxRoles = f.numRoles();
+		}
+		return maxRoles;
+	}
 
 	@Override
 	public String toString() {

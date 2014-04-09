@@ -20,6 +20,8 @@ import edu.jhu.util.Alphabet;
 
 public class BasicFrameRoleLinkFeatures extends AbstractFeatures<BasicFrameRoleLinkFeatures> implements FRL {
 
+	private static final long serialVersionUID = 4825729945197288970L;
+
 	private FeatureVector nullFrameFeatures;
 	private int nullFrameFeatureIdx;
 	
@@ -36,8 +38,9 @@ public class BasicFrameRoleLinkFeatures extends AbstractFeatures<BasicFrameRoleL
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, boolean argIsRealized, boolean linkFromTargetHeadToArgHead,
-			int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s) {
+	public FeatureVector getFeatures(Frame f, boolean linkFromTargetHeadToArgHead, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s) {
+	//public FeatureVector getFeatures(Frame f, boolean linkFromTargetHeadToArgHead,
+		//	int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s) {
 		
 		if(f == Frame.nullFrame)
 			return nullFrameFeatures;
@@ -46,7 +49,6 @@ public class BasicFrameRoleLinkFeatures extends AbstractFeatures<BasicFrameRoleL
 		
 		String fs = "f" + f.getId();
 		String fsb = f == Frame.nullFrame ? "fNull" : "fX";
-		String as = "-argRealized=" + argIsRealized;
 		String ak = "-k" + roleIdx;
 		String ls = "-link=" + linkFromTargetHeadToArgHead;
 		String dir = "-dir=" + (targetHeadIdx < argHeadIdx ? "right" : "left");
@@ -55,25 +57,25 @@ public class BasicFrameRoleLinkFeatures extends AbstractFeatures<BasicFrameRoleL
 		String mag3 = "-m3=" + (Math.abs(targetHeadIdx - argHeadIdx)/4);
 		
 		// full
-		b(fv, fs + as + ak + ls + dir + mag1);
-		b(fv, fs + as + ak + ls + dir + mag2);
-		b(fv, fs + as + ak + ls + dir + mag3);
-		b(fv, fs + as + ak + ls + dir);
-		b(fv, fs + as + ak + ls);
+		b(fv, fs + ak + ls + dir + mag1);
+		b(fv, fs + ak + ls + dir + mag2);
+		b(fv, fs + ak + ls + dir + mag3);
+		b(fv, fs + ak + ls + dir);
+		b(fv, fs + ak + ls);
 		
 		// frame backoff
-		b(fv, fsb + as + ls + dir + mag1);
-		b(fv, fsb + as + ls + dir + mag2);
-		b(fv, fsb + as + ls + dir + mag3);
-		b(fv, fsb + as + ls + dir);
-		b(fv, fsb + as + ls);
+		b(fv, fsb + ls + dir + mag1);
+		b(fv, fsb + ls + dir + mag2);
+		b(fv, fsb + ls + dir + mag3);
+		b(fv, fsb + ls + dir);
+		b(fv, fsb + ls);
 		
 		// role backoff
-		b(fv, fs + as + ls + dir + mag1);
-		b(fv, fs + as + ls + dir + mag2);
-		b(fv, fs + as + ls + dir + mag3);
-		b(fv, fs + as + ls + dir);
-		b(fv, fs + as + ls);
+		b(fv, fs + ls + dir + mag1);
+		b(fv, fs + ls + dir + mag2);
+		b(fv, fs + ls + dir + mag3);
+		b(fv, fs + ls + dir);
+		b(fv, fs + ls);
 		
 		// TODO add more specific features (e.g. distance, lexicalizations, etc)
 		

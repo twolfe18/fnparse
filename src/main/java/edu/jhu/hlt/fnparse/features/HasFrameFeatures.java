@@ -13,14 +13,12 @@ public abstract class HasFrameFeatures implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	
-	public Features.FP fpFeatures;
 	public Features.F fFeatures;
 	
 	public HasFrameFeatures() {}
 	
 	public List<Features> getFeatures() {
 		List<Features> features = new ArrayList<Features>();
-		if(fpFeatures != null) features.add(fpFeatures);
 		if(fFeatures != null) features.add(fFeatures);
 		return features;
 	}
@@ -33,12 +31,7 @@ public abstract class HasFrameFeatures implements Serializable {
 	}
 	
 	public void setFeatures(HasFrameFeatures from) {
-		this.fpFeatures = from.fpFeatures;
 		this.fFeatures = from.fFeatures;
-	}
-
-	public void setFeatures(Features.FP features) {
-		this.fpFeatures = features;
 	}
 
 	public void setFeatures(Features.F features) {
@@ -50,8 +43,6 @@ public abstract class HasFrameFeatures implements Serializable {
 		// both the travis.Vector and IntDoubleUnsortedVector implementations forward to the same
 		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
-		if(fpFeatures != null && f != null && p != null)
-			fv.add((travis.Vector) fpFeatures.getFeatures(f, targetHead, p, sent));
 		if(fFeatures != null && f != null)
 			fv.add((travis.Vector) fFeatures.getFeatures(f, targetHead, sent));
 		return fv;

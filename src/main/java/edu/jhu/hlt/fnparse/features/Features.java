@@ -6,35 +6,11 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 
 /**
- * F = frame head
- * FE = frame head + extent
- * FR = frame head + role
- * FP = frame head + prototype
- * FC = frame head + expansion (full trigger/target)
- * R = role head
- * C = constituent or span
- * L = (dependency) link
- * 
- * TODO I goofed by mixing up E and C. We should merge them.
- * If we run the model with latent syntax, we will use these
- * span-features in conjunction with the constituency variables.
- * e.g. features: (Frame, Span) => FeatureVector
- * then instantiate an "FC" factor for latent syntax by using a
- * ternary factor on (f_i, f_i^e, c_jk) s.t. j <= i < k
- * 
- * fudge...
- * how to connect frame trigger/targets to constituency variables?
- * f_i^e takes on Expansion values, so it would need to touch every
- * c_jk that would correspond to an expansion about i; which is
- * very high treewidth...
- * there is something going on where f_i^e is one-hot, and there
- * might be an efficient way to do this, like Exactly1, but for
- * now its much easier to just ignore it. the large number of
- * prototypes should wash out this effect.
- * 
- * 
- * Use S for "span" instead of E or C, which both refer to the
- * variable type, not the type signature of the features that we need.
+ * The semantics of these has changed a bit since last time.
+ * Information like the frame or role in question is now known statically
+ * (because we are using binary variables, we know this information from the identity of the variable).
+ * The letters are now only used to describe the signature of the method, how they are used is
+ * left for the downstream user. 
  * 
  * @author travis
  */
@@ -50,22 +26,12 @@ public interface Features {
 		public FeatureVector getFeatures(Frame f, int targetHeadIdx, FrameInstance prototype, Sentence s);
 	}
 	
-	/** @deprecated */
-	public static interface FPE extends Features {
-		public FeatureVector getFeatures(Frame f, Span target, FrameInstance prototype, Sentence s);
-	}
-	
 	public static interface FR extends Features {
-		public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
+		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
 	}
 	
 	public static interface RE extends Features {
-		public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence s);
-	}
-	
-	/** @deprecated this will be too slow, and not really needed given that R now contains Frame information, please don't use */
-	public static interface FRE extends Features {
-		public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHeadIdx, int roleIdx, Span argument, Sentence s);
+		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence s);
 	}
 	
 	public static interface E extends Features {
@@ -73,6 +39,7 @@ public interface Features {
 	}
 	
 	public static interface FRL extends Features {
-		public FeatureVector getFeatures(Frame f, boolean argIsRealized, boolean linkFromTargetHeadToArgHead, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
+		public FeatureVector getFeatures(Frame f, boolean linkFromTargetHeadToArgHead, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
 	}
+	
 }

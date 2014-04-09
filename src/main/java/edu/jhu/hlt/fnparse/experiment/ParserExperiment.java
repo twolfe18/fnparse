@@ -169,13 +169,13 @@ public class ParserExperiment {
 		printMemUsage();
 
 		System.out.println("[ParserExperiment] predicting on test set...");
-		predicted = parser.parseWithoutPeeking(test);
+		predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(test);	// double cast ftw!
 		results = BasicEvaluation.evaluate(test, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		System.out.println("[ParserExperiment] predicting on train set...");
-		predicted = parser.parseWithoutPeeking(trainSubset);
+		predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(trainSubset);	// double case ftw!
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();
@@ -237,7 +237,7 @@ public class ParserExperiment {
 			if(eval) {
 				System.out.println("[ParserExperiment] predicting on test set...");
 				decodeTimer.start();
-				predicted = parser.parseWithoutPeeking(test);
+				predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(test);
 				decodeTimer.stop();
 				results = BasicEvaluation.evaluate(test, predicted);
 				BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
@@ -245,7 +245,7 @@ public class ParserExperiment {
 
 				System.out.println("[ParserExperiment] predicting on train set...");
 				decodeTimer.start();
-				predicted = parser.parseWithoutPeeking(trainSubset);
+				predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(trainSubset);
 				decodeTimer.stop();
 				results = BasicEvaluation.evaluate(trainSubset, predicted);
 				BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);

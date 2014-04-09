@@ -24,7 +24,6 @@ public interface FactorFactory extends Serializable {
 	 * The variables given should correspond to a frame target head word,
 	 * such that r.parent == f.
 	 */
-	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l);
+	public List<Factor> initFactorsFor(Sentence s, List<FrameInstanceHypothesis> fr, ProjDepTreeFactor l);
 	
-	// TODO add constituency parse variables to the signature above
 }

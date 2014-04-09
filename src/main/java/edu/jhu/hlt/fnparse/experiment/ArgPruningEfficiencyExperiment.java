@@ -2,17 +2,14 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.inference.newstuff.FrameVar;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
-import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner.LexPruneMethod;
+import edu.jhu.hlt.fnparse.inference.sentence.JointFrameArgIdSentence;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 
@@ -52,10 +49,8 @@ public class ArgPruningEfficiencyExperiment {
 			
 			t.start("lexPrune="+lexPrune);
 			for(FNParse p : examples) {				
-				ParsingSentence ps = new ParsingSentence(p.getSentence(), parser.params);
-				ps.setGold(p, false);
-				ps.setupRoleVars();
-				countPruning(ps, avgKeepRatio, keepRatio, avgRecallRatio, recallRatio, roleVarsPerSent, fiPerSent, fiPerWord, rolesPerFrame);
+				JointFrameArgIdSentence js = new JointFrameArgIdSentence(p, parser.params);
+				countPruning(js, avgKeepRatio, keepRatio, avgRecallRatio, recallRatio, roleVarsPerSent, fiPerSent, fiPerWord, rolesPerFrame);
 			}
 			t.stop("lexPrune="+lexPrune);
 			
@@ -74,20 +69,14 @@ public class ArgPruningEfficiencyExperiment {
 	}
 	
 	/**
-	 * So there is a problem...
-	 * I haven't changed my variables yet, so I don't have a way to do "partial pruning".
-	 * Right now, i have r_ijk that takes on F frame values, but i will be refactoring
-	 * to have F * #r_ijk variables that are binary.
-	 * Right now I can only prune an entire r_ijk, but in the future i can prune individual
-	 * binary variables.
-	 * 
-	 * I'll handle this by counting as if we had done the refactor.
-	 * I'll commandeer ParsingSentence.setupRoleVars to return the number of variables kept.
+	 * I need to re-implement setup and pruning in JointFrameArgIdSentence,
+	 * so this should wait until after that.
 	 */
-	private static void countPruning(ParsingSentence ps,
+	private static void countPruning(JointFrameArgIdSentence js,
 			Avg avgKeepRatio, Avg keepRatio, Avg avgRecallRatio, Avg recallRatio, Avg roleVarsPerSent,
 			Avg fiPerSent, Avg fiPerWord, Avg rolesPerFrame) {
 		
+		/* old way:
 		Map<String, Integer> m = ps.setupRoleVars();
 		int kept = m.get("kept");
 		int possible = m.get("possible");
@@ -116,6 +105,7 @@ public class ArgPruningEfficiencyExperiment {
 		}
 		fiPerSent.accum(num_f_i);
 		fiPerWord.accum(((double) num_f_i) / n, n);
+		*/
 	}
 
 //	private Set<Role> inGoldSentence(ParsingSentence ps) {

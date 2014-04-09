@@ -41,6 +41,10 @@ import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.jhu.hlt.fnparse.inference.sentence.ArgIdSentence;
+import edu.jhu.hlt.fnparse.inference.sentence.FrameIdSentence;
+import edu.jhu.hlt.fnparse.inference.sentence.JointFrameArgIdSentence;
+import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.optimize.AdaGrad;
 import edu.jhu.optimize.HeterogeneousL2;
@@ -162,29 +166,26 @@ public class Parser {
 	
 	public List<ParsingSentence.FgExample> getExampleForTraining(FNParse p) {
 		
-		ParsingSentence s = new ParsingSentence(p.getSentence(), params);
-		
 		if(params.mode == Mode.FRAME_ID) {
-			s.setGold(p, false);
-			return Arrays.asList(s.getFgExample());
+			ParsingSentence s = new FrameIdSentence(p, params);
+			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.JOINT_FRAME_ARG) {
-			s.setGold(p, false);
-			s.setupRoleVars();
-			return Arrays.asList(s.getFgExample());
+			ParsingSentence s = new JointFrameArgIdSentence(p, params);
+			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			
 			// only frame id (no args)
-			s.setGold(p, false);
-			ParsingSentence.FgExample e1 = s.getFgExample();
+			FrameIdSentence fid = new FrameIdSentence(p, params);
+			ParsingSentence.FgExample e1 = fid.getTrainingExample();
+			
+			// run prediction to see what frames we'll be predicting roles for
+			FNTagging predictedFrames = fid.decode();
 			
 			// clamped frames, predict args
-			s = new ParsingSentence(p.getSentence(), params);
-			s.setGold(p, false);
-			s.decodeFrames(params.model, this.infFactory());
-			s.setupRoleVars();
-			ParsingSentence.FgExample e2 = s.getFgExample();
+			ArgIdSentence argId = new ArgIdSentence(p, predictedFrames, params);
+			ParsingSentence.FgExample e2 = argId.getTrainingExample();
 			
 			return Arrays.asList(e1, e2);
 		}
@@ -241,6 +242,7 @@ public class Parser {
 		Avg targetsPerSent = new Avg();
 		Avg rolesPerFrameVar = new Avg();
 		
+		/* TODO get this back
 		for(FNParse p : examples) {
 			Sentence s = p.getSentence();
 			ParsingSentence ps = new ParsingSentence(s, params);
@@ -257,6 +259,7 @@ public class Parser {
 			}
 			targetsPerSent.accum(ts);
 		}
+		*/
 
 		System.out.printf("[computeStatistcs] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
 				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
@@ -265,19 +268,21 @@ public class Parser {
 	}
 	
 	
-	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
+	public List<FNTagging> parseWithoutPeeking(List<FNParse> raw) {
 		return parse(DataUtil.stripAnnotations(raw));
 	}
-	public List<FNParse> parse(List<Sentence> raw) {
-		FgInferencerFactory infFact = this.infFactory();
-		List<FNParse> pred = new ArrayList<FNParse>();
+	public List<FNTagging> parse(List<Sentence> raw) {
+		List<FNTagging> pred = new ArrayList<FNTagging>();
 		for(Sentence s : raw) {
-			ParsingSentence ps = new ParsingSentence(s, params);
-			FNTagging onlyTargets = ps.decodeFrames(params.model, infFact);
 			if(params.mode == Mode.FRAME_ID)
-				pred.add(new FNParse(s, onlyTargets.getFrameInstances()));
-			else
-				pred.add(ps.decodeArgs(params.model, infFact));
+				pred.add(new FrameIdSentence(s, params).decode());
+			else if(params.mode == Mode.JOINT_FRAME_ARG)
+				pred.add(new JointFrameArgIdSentence(s, params).decode());
+			else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
+				FNTagging predictedFrames = new FrameIdSentence(s, params).decode();
+				pred.add(new ArgIdSentence(predictedFrames, params).decode());
+			}
+			else throw new RuntimeException();
 		}
 		return pred;
 	}

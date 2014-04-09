@@ -5,6 +5,7 @@ import java.util.*;
 import edu.jhu.gm.feat.*;
 import edu.jhu.gm.model.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance.Prototype;
 import edu.jhu.hlt.fnparse.features.*;
 
 /**
@@ -26,92 +27,95 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public List<Factor> initFactorsFor(Sentence s, FrameVar[] f, RoleVars[][][] r, ProjDepTreeFactor l) {
+	public List<Factor> initFactorsFor(Sentence s, List<FrameInstanceHypothesis> fr, ProjDepTreeFactor l) {
 		List<Factor> factors = new ArrayList<Factor>();
-		int n = s.size();
-		for(int i=0; i<n; i++) {
-			FrameVar fv = f[i];
-			if(fv == null) continue;
-			
-			VarSet containsF = new VarSet();
-			containsF.add(fv.getFrameVar());
-
-			//  the only question is whether p is in the mix
-			if(fpFeatures != null)
-				containsF.add(fv.getPrototypeVar());
-			factors.add(new F(fv, this, s, containsF));
+		for(FrameInstanceHypothesis fhyp : fr) {
+			final int T = fhyp.numFrames();
+			final int i = fhyp.getTargetHeadIdx();
+			for(int t=0; t<T; t++) {
+				Frame f = fhyp.getFrame(t);
+				Prototype p = null;
+				VarSet vs = new VarSet(fhyp.getFrameVar(t));
+				FeatureVector features = getFeatures(f, p, i, s);
+				factors.add(new FF(vs, features));
+			}
 		}
 		return factors;
 	}
+	
+	static final class FF extends ExpFamFactor {
+
+		private static final long serialVersionUID = 1L;
+
+		private FeatureVector features;
+
+		public FF(VarSet vars, FeatureVector features) {
+			super(vars);
+			if(vars.size() != 1)
+				throw new IllegalArgumentException("shouldn't this have just the frame var?");
+			this.features = features;
+		}
+
+		@Override
+		public FeatureVector getFeatures(int config) {
+			if(BinaryVarUtil.configToBool(config))
+				return features;
+			return AbstractFeatures.emptyFeatures;
+		}
+		
+	}
 
 	/**
-	 * with regards to feature extraction/caching, I know that the data that
-	 * this factor points to never changes (i.e. frameVar, sent), so caching
-	 * features should be safe (there is no cache invalidation aside from this
-	 * object being garbage collected).
+	 * features will only fire for an active representation of a variable
+	 * @deprecated
 	 */
-	static final class F extends ExpFamFactor {	// is the actual factor
+	static final class F extends ExpFamFactor {
 		
 		private static final long serialVersionUID = 1L;
 		
-		private transient HasFrameFeatures features;
-		private transient FrameVar frameVar;
-		private transient Sentence sent;
-		private transient boolean readP, readF;
+		private HasFrameFeatures features;
+		private int targetHead;
+		private Frame frame;
+		private Sentence sent;
+		private FeatureVector cache;
 
-		// this is the only thing we need to serialize
-		// TODO need to just check this, not any other vars when we read stuff in
-		private FeatureVector[] cache;
-
-		public F(FrameVar fv, HasFrameFeatures features, Sentence sent, VarSet varsNeeded) {
-			//super(new VarSet(fv.getPrototypeVar(), fv.getFrameVar(), fv.getExpansionVar()));
+		public F(Frame f, int targetHead, HasFrameFeatures features, Sentence sent, VarSet varsNeeded) {
 			super(varsNeeded);
-			this.frameVar = fv;
+			this.frame = f;
+			this.targetHead = targetHead;
 			this.sent = sent;
 			this.features = features;
-			readP = varsNeeded.contains(fv.getPrototypeVar());
-			readF = varsNeeded.contains(fv.getFrameVar());
-
-			int n = getVars().calcNumConfigs();
-			cache = new FeatureVector[n];
 		}
 		
 		public void setFeatures(HasFrameFeatures features) {
 			this.features.setFeatures(features);
 		}
 		
+		/* i don't know why i would still need this...
 		@Override
 		public double getDotProd(int config, FgModel model, boolean logDomain) {
 			
 			VarConfig conf = this.getVars().getVarConfig(config);
-			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
-			Frame frame = readF ? frameVar.getFrame(conf) : null;
+			FrameInstance prototype = null;
 			
 			// if it is one of the special prototypes, let it pass through
 			boolean hasNoRealFrame = prototype instanceof FrameInstance.Prototype;
-			if(readP && readF && !hasNoRealFrame && !prototype.getFrame().equals(frame))
+			if(!hasNoRealFrame && !prototype.getFrame().equals(frame))
 				return logDomain ? Double.NEGATIVE_INFINITY : 0d;
 			
 			else return super.getDotProd(config, model, logDomain);
 		}
+		*/
 		
 		@Override
 		public FeatureVector getFeatures(int config) {
-
-			assert config < cache.length;
-			FeatureVector fv = cache[config];
-			if(fv != null) return fv;
-			
-			VarConfig conf = this.getVars().getVarConfig(config);
-			FrameInstance prototype = readP ? frameVar.getPrototype(conf) : null;
-			Frame frame = readF ? frameVar.getFrame(conf) : null;
-			
-			// if it is one of the special prototypes, let it pass through
-			boolean hasNoRealFrame = prototype instanceof FrameInstance.Prototype;
-			if(readP && readF && !hasNoRealFrame && !prototype.getFrame().equals(frame))
-				return AbstractFeatures.emptyFeatures;	// gradient calls this, no params associated with this constraint.
-			
-			return features.getFeatures(frame, prototype, frameVar.getTargetHeadIdx(), sent);
+			boolean active = BinaryVarUtil.configToBool(config);
+			if(active) {
+				if(cache == null)
+					cache = features.getFeatures(frame, null, targetHead, sent);
+				return cache;
+			}
+			else return AbstractFeatures.emptyFeatures;
 		}
 		
 	}

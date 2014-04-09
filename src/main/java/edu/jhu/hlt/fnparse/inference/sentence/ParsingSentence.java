@@ -1,24 +1,14 @@
-package edu.jhu.hlt.fnparse.inference.newstuff;
+package edu.jhu.hlt.fnparse.inference.sentence;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.gm.inf.BeliefPropagation;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
-import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.FactorGraph.FgEdge;
-import edu.jhu.gm.model.FactorGraph.FgNode;
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -28,16 +18,29 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.newstuff.FactorFactory;
+import edu.jhu.hlt.fnparse.inference.newstuff.FrameInstanceHypothesis;
+import edu.jhu.hlt.fnparse.inference.newstuff.FrameVars;
+import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public class ParsingSentence {
+/**
+ * wraps the variables needed for training/predicting the factor graph
+ * for FN parsing.
+ * 
+ * because FgExamples store pointers to Vars which are statefully used in this
+ * class, if you want to create two FgExamples for training (e.g. for a pipeline
+ * model), you need to create two ParsingSentences for the one underlying Sentence.
+ * 
+ * @author travis
+ */
+public abstract class ParsingSentence {
 
+	/** like a regular FgExample, but stores a backpointer to the ParsingSentence it came from */
 	public static class FgExample extends edu.jhu.gm.data.FgExample {
 		private static transient final long serialVersionUID = 1L;
 		public final ParsingSentence cameFrom;
@@ -47,172 +50,103 @@ public class ParsingSentence {
 		}
 	}
 	
-	private static final boolean debugTargetRecall = false;
-	private static final boolean debugDecodePart1 = true;	// frame decode
-	private static final boolean debugDecodePart2 = true;	// arg decode
 	
+	// move this into ParserParams?
 	public static final int maxLexPrototypesPerFrame = 30;
 	
 
 	// ==== VARIABLES ====
-	public FrameVar[] frameVars;	// these store the labels for the roles as well
-	public RoleVars[][][] roleVars;	// indexed as [i][j][k], i=target head, j=arg head, k=frame role idx
+	public List<FrameInstanceHypothesis> frameRoleVars;
 	public ProjDepTreeFactor depTree;	// holds variables too
 	
 	// ==== FACTORS ====
-	private List<FactorFactory> factorTemplates;
-	private List<Factor> factors;
+	protected List<FactorFactory> factorTemplates;
+	protected List<Factor> factors;
 	
 	// ==== MISC ====
 	public Sentence sentence;
-	public FactorGraph fg;
-	private VarConfig gold;
-	private ParserParams params;	
+	protected ParserParams params;
 	
 	public ParsingSentence(Sentence s, ParserParams params) {
 		this.params = params;
 		this.factorTemplates = params.factors;
 		this.sentence = s;
-		
-		final int n = sentence.size();
-		frameVars = new FrameVar[n];
-		for(int i=0; i<n; i++)
-			frameVars[i] = makeFrameVar(sentence, i, params.logDomain);
+		this.frameRoleVars = new ArrayList<FrameInstanceHypothesis>();
 	}
 	
 	
-	/**
-	 * NOTE: this should be called before setupRoleVars().
-	 * @param p
-	 */
-	public void setGold(FNParse p, boolean clampFrameVars) {
+	protected void setGold(FNTagging p) {	//, boolean clampFrameVars) {
 			
 		if(p.getSentence() != sentence)
 			throw new IllegalArgumentException();
-		if(frameVars == null)
-			throw new IllegalStateException("did you call setupFrameVars()?");
 		
-		// set all the labels to nullFrame/nullSpan, and then overwrite those that aren't null
-		final int n = p.getSentence().size();
-		for(int i=0; i<n; i++) {
-			if(frameVars[i] == null) continue;
-			FrameInstance fiNull = FrameVar.nullFrameInstance(sentence, i);
-			frameVars[i].setGold(fiNull);
+		// build an index from targetHeadIdx to FrameRoleVars
+		Set<FrameInstanceHypothesis> haventSet = new HashSet<FrameInstanceHypothesis>();
+		FrameInstanceHypothesis[] byHead = new FrameInstanceHypothesis[sentence.size()];
+		for(FrameInstanceHypothesis fHyp : this.frameRoleVars) {
+			byHead[fHyp.getTargetHeadIdx()] = fHyp;
+			haventSet.add(fHyp);
 		}
-
-		// set the non-nullFrame vars to their correct Frame (and target Span) values
+		
+		// match up each FI to a FIHypothesis by the head word in the target
 		for(FrameInstance fi : p.getFrameInstances()) {
 			Span target = fi.getTarget();
-			if(target.width() != 1)
-				continue;
-			FrameVar fv = frameVars[target.start];
-			if(fv == null) continue;
-			fv.setGold(fi);
-			if(clampFrameVars)
-				fv.clamp(fi.getFrame());
+			int head = params.headFinder.head(target, sentence);
+			FrameInstanceHypothesis fHyp = byHead[head];
+			if(fHyp == null) continue;	// nothing you can do here
+			fHyp.setGold(fi);
+			boolean added = haventSet.add(fHyp);
+			assert added : "two FrameInstances with same head?";
 		}
+		
+		// the remaining hypotheses must be null because they didn't correspond to a FI in the parse
+		for(FrameInstanceHypothesis fHyp : haventSet)
+			fHyp.setGoldIsNull();
 	}
-		
-
-	/**
-	 * looks at the current state of frameVars for the set of roles need to be created,
-	 * and optionally the gold arg labels if they're there.
-	 * 
-	 * if not latent, then you must have already called setGold().
-	 */
-	public void setupRoleVars() {
-		
+	
+	// i should expose the following methods
+	// these methods are meant to generalize over the types of inference
+	
+	// how am i going to do setup for
+	// pipeline (2 steps) vs joint (1 step)?
+	// => simple, just setup for the first pass and in decode you will need to do another step
+	
+	/* reads the type of setup needed from parameters
+	private void setupVars() {
+		frameRoleVars.clear();
 		final int n = sentence.size();
-		roleVars = new RoleVars[n][][];
 		for(int i=0; i<n; i++) {
-			FrameVar fi = frameVars[i];
-			if(fi == null) continue;	// no frame => no args
-			
-			if(fi.getFrames().size() == 1 && fi.getFrame(0) == Frame.nullFrame) {
-				assert params.mode == Mode.PIPELINE_FRAME_ARG : "FRAME_ID shouldn't bother with role vars";
-				continue;
+			FrameVars fv = makeFrameVar(sentence, i, params.logDomain);
+			if(fv == null) continue;
+			FrameInstanceHypothesis fhyp = new FrameInstanceHypothesis(sentence, fv, params);
+			this.frameRoleVars.add(fhyp);
+			if(params.mode == Mode.FRAME_ID) continue;
+			if(params.mode == Mode.JOINT_FRAME_ARG)
+				fhyp.setupRoles(VarType.PREDICTED);
+			else {
+				assert params.mode == Mode.PIPELINE_FRAME_ARG;
+				fhyp.setupRoles(VarType.LATENT);
 			}
 			
-			FrameInstance goldFI = fi.getGold();
-		
-			int K = fi.getMaxRoles();
-			roleVars[i] = new RoleVars[n][K];
-			for(int k=0; k<K; k++) {
-
-				VarType r_ijkType;
-				Span roleKspan;
-				int roleKhead;
-				
-				if(goldFI == null) {
-					// NO LABELS (PREDICTION)
-					r_ijkType = VarType.PREDICTED;
-					roleKspan = null;
-					roleKhead = -1;
-				}
-				else {
-					// HAVE LABELS (TRAINING)
-					if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-						// for pipeline training, check that we predicted the correct frame,
-						// and if not, set the arg labels to nullSpan (to improve precision at no cost to recall).
-						if(fi.getFrames().size() != 1)
-							throw new IllegalStateException();
-						boolean predictedWrongFrame = fi.getFrame(0) != goldFI.getFrame();
-						r_ijkType = VarType.PREDICTED;
-						if(predictedWrongFrame) {
-							roleKspan = Span.nullSpan;
-							roleKhead = -1;
-						}
-						else {
-							roleKspan = goldFI.getArgument(k);
-							roleKhead = roleKspan != Span.nullSpan
-									? params.headFinder.head(roleKspan, sentence)
-									: -1;
-						}
-					}
-					else {
-						assert params.mode == Mode.JOINT_FRAME_ARG : "FRAME_ID shouldn't bother with role vars";
-						if(k >= goldFI.getFrame().numRoles()) {
-							r_ijkType = VarType.LATENT;
-							roleKspan = Span.nullSpan;
-							roleKhead = -1;
-						}
-						else {
-							r_ijkType = VarType.PREDICTED;
-							roleKspan = goldFI.getArgument(k);
-							roleKhead = roleKspan != Span.nullSpan
-									? params.headFinder.head(roleKspan, sentence)
-									: -1;
-						}
-					}
-				}
-				
-				for(int j=0; j<n; j++) {
-					if(pruneArgHead(j, fi)) continue;	// TODO replace with params.argPruner.prune()
-					RoleVars rv = RoleVars.tryToSetup(r_ijkType, fi.getFrames(), sentence, i, j, k, params.logDomain);
-					if(rv == null) continue;
-					roleVars[i][j][k] = rv;
-					if(r_ijkType == VarType.PREDICTED) {	// set gold
-						if(roleKhead == j)
-							rv.setGold(goldFI.getFrame(), roleKspan);
-						else
-							rv.setGoldIsNull();
-					}
-				}
-				
-			}
 		}
 	}
+	*/
+
+
+	/** might return a FNParse depending on the settings */
+	public abstract FNTagging decode();
 	
-	
-	/**
+	public abstract FgExample getTrainingExample();
+
+
+	/*
 	 * clamps frame variable at the decoded value
-	 */
-	public FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
+	private FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
 
 		if(params.mode == Mode.JOINT_FRAME_ARG)
 			setupRoleVars();
 		
-		FgExample fge = this.getFgExample();
+		FgExample fge = this.makeFgExample();
 		FactorGraph fg = fge.updateFgLatPred(model, params.logDomain);
 		BeliefPropagation inf = (BeliefPropagation) infFactory.getInferencer(fg);
 		inf.run();
@@ -249,9 +183,11 @@ public class ParsingSentence {
 		}
 		return new FNTagging(sentence, fis);
 	}
+	 */
 	
 	
-	public FNParse decodeArgs(FgModel model, FgInferencerFactory infFactory) {
+	/*
+	private FNParse decodeArgs(FgModel model, FgInferencerFactory infFactory) {
 
 		if(debugDecodePart2 && params.debug) {
 			System.out.printf("[decode part2] fpPen=%.3f fnPen=%.3f\n",
@@ -264,7 +200,7 @@ public class ParsingSentence {
 		// there will be much fewer r_ijk to instantiate.
 		setupRoleVars();
 
-		FgExample fge = this.getFgExample();
+		FgExample fge = this.makeFgExample();
 		fge.updateFgLatPred(model, params.logDomain);
 		FgInferencer inf = infFactory.getInferencer(fge.getOriginalFactorGraph());
 		inf.run();
@@ -348,18 +284,11 @@ public class ParsingSentence {
 
 		return new FNParse(sentence, fis);
 	}
-
+	*/
 	
-	protected boolean pruneArgHead(int j, FrameVar f_i) {
-		String pos = sentence.getPos(j);
-		return pos.endsWith("DT") || ArgPruner.pennPunctuationPosTags.contains(pos);
-	}
-
-	
-	/**
+	/*
 	 * based on our target extraction and possible frame triage,
 	 * what is the best recall we could hope to get?
-	 */
 	public double computeMaxTargetRecall(FNParse p) {
 		int reachable = 0, total = 0;
 		for(FrameInstance fi : p.getFrameInstances()) {
@@ -372,10 +301,11 @@ public class ParsingSentence {
 	private boolean couldRecallTarget(FrameInstance fi) {
 		Span target = fi.getTarget();
 		if(target.width() > 1) return false;
-		FrameVar fv = frameVars[target.start];
+		FrameVars fv = frameVars[target.start];
 		if(fv == null) return false;
 		return fv.getFrames().contains(fi.getFrame());
 	}
+	 */
 	
 	
 	/**
@@ -383,7 +313,7 @@ public class ParsingSentence {
 	 * Basic idea: given a target with head word t, include any frame f s.t.
 	 * lemma(t) == lemma(f.target)
 	 */
-	public FrameVar makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
+	private FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
@@ -439,7 +369,7 @@ public class ParsingSentence {
 		if(frameMatches.size() == 1)	// nullFrame
 			return null;
 		
-		if(debugTargetRecall && params.debug) {
+		if(params.debug) {
 			System.out.printf("[ParsingSentence makeFrameVar] #frames-from-LEX=%d #frames-from-LUs=%d\n",
 					framesFromLexExamples, listedAsLUs.size());
 			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n",
@@ -448,42 +378,27 @@ public class ParsingSentence {
 					s.getLU(headIdx), prototypes);
 		}
 		
-		return new FrameVar(headIdx, prototypes, frameMatches, params);
+		return new FrameVars(headIdx, prototypes, frameMatches, params);
 	}
 	
 	
-	public FgExample getFgExample() {
+	/* replaced by getTrainingExample above,
+	 * this implementation will vary by subclass
+	public FgExample makeFgExample() {
 		
-		int n = this.sentence.size();
-		this.fg = new FactorGraph();
-		this.gold = new VarConfig();
+		FactorGraph fg = new FactorGraph();
+		VarConfig gold = new VarConfig();
 		
 		// create factors
 		factors = new ArrayList<Factor>();
 		if(params.useLatentDepenencies)
 			factors.add(depTree);
 		for(FactorFactory ff : factorTemplates)
-			factors.addAll(ff.initFactorsFor(sentence, frameVars, roleVars, depTree));
+			factors.addAll(ff.initFactorsFor(sentence, frameRoleVars, depTree));
 		
 		// register all the variables and factors
-		for(int i=0; i<n; i++) {
-			if(frameVars[i] ==  null)
-				continue;
-			frameVars[i].register(fg, gold);
-		}
-		if(roleVars != null) {
-			for(int i=0; i<n; i++) {
-				if(roleVars[i] == null)
-					continue;
-				for(int j=0; j<n; j++) {
-					for(int k=0; k<roleVars[i][j].length; k++) {
-						RoleVars rv = roleVars[i][j][k];
-						if(rv != null)
-							rv.register(fg, gold);
-					}
-				}
-			}
-		}
+		for(FrameInstanceHypothesis fhyp : this.frameRoleVars)
+			fhyp.register(fg, gold);
 
 		// add factors to the factor graph
 		for(Factor f : factors)
@@ -491,6 +406,7 @@ public class ParsingSentence {
 
 		return new FgExample(fg, gold, this);
 	}
+	 */
 	
 }
 

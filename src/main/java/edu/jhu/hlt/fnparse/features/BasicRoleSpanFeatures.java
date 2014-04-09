@@ -9,6 +9,8 @@ import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 
+	private static final long serialVersionUID = 1L;
+
 	private ParserParams params;
 	
 	private boolean aroundSpan = true;
@@ -21,21 +23,21 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 	}
 
 	@Override
-	public FeatureVector getFeatures(Frame frameFrom_r_ijk, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
+	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence sent) {
 		
 		if(argSpan == Span.nullSpan)
 			return emptyFeatures;
 		
 		FeatureVector v = new FeatureVector();
 		
-		String r = frameFrom_r_ijk == Frame.nullFrame
+		String r = f == Frame.nullFrame
 				? "null-frame"
-				: (params.fastFeatNames ? String.valueOf(frameFrom_r_ijk.getId()) : frameFrom_r_ijk.getName());
-		String rr = frameFrom_r_ijk == Frame.nullFrame
+				: (params.fastFeatNames ? String.valueOf(f.getId()) : f.getName());
+		String rr = f == Frame.nullFrame
 				? "role-for-null-frame"
 				: (params.fastFeatNames
-						? frameFrom_r_ijk.getId() + "." + roleIdx
-						: frameFrom_r_ijk.getName() + "." + frameFrom_r_ijk.getRole(roleIdx));
+						? f.getId() + "." + roleIdx
+						: f.getName() + "." + f.getRole(roleIdx));
 		
 		b(v, 2d, "intercept");
 		b(v, 0.5d, r, "intercept");

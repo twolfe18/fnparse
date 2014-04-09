@@ -9,10 +9,8 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.newstuff.FrameVar;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
-import edu.jhu.hlt.fnparse.inference.newstuff.ParsingSentence;
-import edu.jhu.hlt.fnparse.inference.newstuff.RoleVars;
+import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
 
 /**
  * keeps statistics about ParsingSentences so that I can figure out what's slow.
@@ -32,6 +30,8 @@ public class ParsingSentenceStats {
 		int nf = 0, nr = 0;
 		int n = s.sentence.size();
 		for(int i=0; i<n; i++) {
+			/*
+			 * TODO fixme
 			FrameVar f_i = s.frameVars[i];
 			if(f_i == null) {
 				//assert s.roleVars[i] == null;
@@ -51,6 +51,7 @@ public class ParsingSentenceStats {
 					roleVarDomainSizes.add(r_ijk.getPossibleFrames().size());
 				}
 			}
+			 */
 		}
 		
 		totalFrameVars += nf;

@@ -17,15 +17,11 @@ public class HasRoleFeatures implements Serializable {
 	protected Features.RE reFeatures;
 	protected Features.E eFeatures;
 	
-	/** @deprecated slow! */
-	protected Features.FRE freFeatures;
-	
 	public HasRoleFeatures(Alphabet<String> featIdx) {
 		this.featIdx = featIdx;
 	}
 	
 	public HasRoleFeatures(HasRoleFeatures copy) {
-		freFeatures = copy.freFeatures;
 		frFeatures = copy.frFeatures;
 		reFeatures = copy.reFeatures;
 		eFeatures = copy.eFeatures;
@@ -34,15 +30,10 @@ public class HasRoleFeatures implements Serializable {
 	
 	public List<Features> getFeatures() {
 		List<Features> features = new ArrayList<Features>();
-		if(freFeatures != null) features.add(freFeatures);
 		if(frFeatures != null) features.add(frFeatures);
 		if(reFeatures != null) features.add(reFeatures);
 		if(eFeatures != null) features.add(eFeatures);
 		return features;
-	}
-	
-	public void setFeatures(Features.FRE features) {
-		this.freFeatures = features;
 	}
 	
 	public void setFeatures(Features.FR features) {
@@ -58,13 +49,13 @@ public class HasRoleFeatures implements Serializable {
 	}
 
 	public void setFeatures(HasRoleFeatures from) {
-		this.freFeatures = from.freFeatures;
 		this.frFeatures = from.frFeatures;
+		this.reFeatures = from.reFeatures;
 		this.eFeatures = from.eFeatures;
 	}
 
 	public boolean hasNoFeatures() {
-		return freFeatures == null && frFeatures == null && eFeatures == null;
+		return frFeatures == null && reFeatures == null && eFeatures == null;
 	}
 	
 	public Alphabet<String> getFeatureAlph() { return featIdx; }
@@ -73,18 +64,15 @@ public class HasRoleFeatures implements Serializable {
 	 * the catch-all method that dispatches to the appropriate non-null features
 	 * and concatenates them all together.
 	 */
-	public FeatureVector getFeatures(Frame f_i, Frame r_ijk, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {
+	public FeatureVector getFeatures(Frame f_i, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {
 		// NOTE: casting to travis.Vector ensures that the best implementation is dispatched
 		// both the travis.Vector and IntDoubleUnsortedVector implementations forward to the same
 		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
-		final boolean argIsRealized = r_ijk != Frame.nullFrame;
-		if(freFeatures != null)
-			fv.add((travis.Vector) freFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, arg, s));
 		if(frFeatures != null)
-			fv.add((travis.Vector) frFeatures.getFeatures(f_i, argIsRealized, targetHeadIdx, roleIdx, argHead, s));
+			fv.add((travis.Vector) frFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, s));
 		if(reFeatures != null)
-			fv.add((travis.Vector) reFeatures.getFeatures(r_ijk, targetHeadIdx, argHead, roleIdx, arg, s));
+			fv.add((travis.Vector) reFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, arg, s));
 		if(eFeatures != null)
 			fv.add((travis.Vector) eFeatures.getFeatures(arg, s));
 		return fv;

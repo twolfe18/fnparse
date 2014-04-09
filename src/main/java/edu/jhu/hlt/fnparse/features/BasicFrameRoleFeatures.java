@@ -18,12 +18,9 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, boolean argIsRealized, int targetHead, int roleIdx, int argHead, Sentence sent) {
+	public FeatureVector getFeatures(Frame f, int targetHead, int roleIdx, int argHead, Sentence sent) {
 		
-		if(argIsRealized && f == Frame.nullFrame)
-			throw new IllegalArgumentException();
-		
-		if(argIsRealized && roleIdx >= f.numRoles())
+		if(roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();
 		
 		// NOTE: don't write any back-off features that only look at just roleIdx
@@ -33,8 +30,7 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		
 		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
 		String rs = "r" + (params.fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
-		String as = argIsRealized ? "-isRealize" : "-notRealized";
-		String fsrs = fs + "-" + rs + as;
+		String fsrs = fs + "-" + rs;
 		LexicalUnit tHead = sent.getLU(targetHead);
 		LexicalUnit aHead = sent.getLU(argHead);
 		
@@ -85,7 +81,7 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 		// dependency tree features
 		if(params.useSyntaxFeatures) {
 			if(sent.governor(argHead) == targetHead)
-				b(fv, "trigger-arg-dep", as);
+				b(fv, "trigger-arg-dep");
 			// TODO more?
 		}
 
