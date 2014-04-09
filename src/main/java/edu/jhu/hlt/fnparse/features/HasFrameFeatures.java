@@ -44,7 +44,7 @@ public abstract class HasFrameFeatures implements Serializable {
 		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
 		if(fFeatures != null && f != null)
-			fv.add((travis.Vector) fFeatures.getFeatures(f, targetHead, sent));
+			fv.add(fFeatures.getFeatures(f, targetHead, sent));
 		return fv;
 	}
 

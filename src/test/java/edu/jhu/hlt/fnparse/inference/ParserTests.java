@@ -62,7 +62,7 @@ public class ParserTests {
 		overfitting(p, true, true, "FRAME_ID");
 	}
 
-	@Test
+	//@Test
 	public void joint() {
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
 		p.params.argDecoder.setRecallBias(1d);
@@ -97,7 +97,7 @@ public class ParserTests {
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
 	}
 	
-	@Test
+	//@Test
 	public void serializationJoint() throws IOException {
 		// joint
 		trained = new Parser(Mode.JOINT_FRAME_ARG, true);
@@ -148,11 +148,9 @@ public class ParserTests {
 		
 		SentenceEval sentEval = new SentenceEval(dummyParse, predicted.get(0));
 		
-		if(onlyFrames) {
-			assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
-			assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
-		}
-		else {
+		assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
+		assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
+		if(!onlyFrames) {
 			assertSameParse(train.get(0), predicted.get(0));
 			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
 			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);

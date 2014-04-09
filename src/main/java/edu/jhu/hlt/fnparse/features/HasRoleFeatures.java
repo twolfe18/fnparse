@@ -70,11 +70,11 @@ public class HasRoleFeatures implements Serializable {
 		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
 		if(frFeatures != null)
-			fv.add((travis.Vector) frFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, s));
+			fv.add(frFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, s));
 		if(reFeatures != null)
-			fv.add((travis.Vector) reFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, arg, s));
+			fv.add(reFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, arg, s));
 		if(eFeatures != null)
-			fv.add((travis.Vector) eFeatures.getFeatures(arg, s));
+			fv.add(eFeatures.getFeatures(arg, s));
 		return fv;
 	}
 }

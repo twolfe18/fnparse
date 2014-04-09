@@ -82,9 +82,6 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 */
 	protected final int b(FeatureVector fv, double weight, String... featureNamePieces) {
 		
-		fv.warnOfInefficientOps = true;
-		fv.showStackTracesOfInefficientOps = true;
-		
 		int idx = -1;
 		StringBuilder sn = new StringBuilder();
 		sn.append(getName());

@@ -46,10 +46,10 @@ import edu.jhu.hlt.fnparse.inference.sentence.FrameIdSentence;
 import edu.jhu.hlt.fnparse.inference.sentence.JointFrameArgIdSentence;
 import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
 import edu.jhu.hlt.fnparse.util.Avg;
-import edu.jhu.optimize.AdaGrad;
-import edu.jhu.optimize.HeterogeneousL2;
-import edu.jhu.optimize.Regularizer;
-import edu.jhu.optimize.SGD;
+import edu.jhu.hlt.optimize.AdaGrad;
+import edu.jhu.hlt.optimize.SGD;
+import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.optimize.functions.HeterogeneousL2;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
@@ -199,15 +199,17 @@ public class Parser {
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
+
+		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
+		adagParams.eta = 0.1d * learningRateMultiplier;
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
 		sgdParams.batchSize = batchSize;
 		sgdParams.numPasses = passes;
-		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
-		adagParams.sgdPrm = sgdParams;
-		adagParams.eta = 0.1d * learningRateMultiplier;
+		sgdParams.sched = new AdaGrad(adagParams);
+
 		trainerParams.maximizer = null;
-		trainerParams.batchMaximizer = new AdaGrad(adagParams);
+		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
 		
 		int numParams = params.debug

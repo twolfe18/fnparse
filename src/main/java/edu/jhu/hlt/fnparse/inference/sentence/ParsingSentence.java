@@ -41,7 +41,7 @@ import edu.mit.jwi.morph.WordnetStemmer;
 public abstract class ParsingSentence {
 
 	/** like a regular FgExample, but stores a backpointer to the ParsingSentence it came from */
-	public static class FgExample extends edu.jhu.gm.data.FgExample {
+	public static class FgExample extends edu.jhu.gm.data.LabeledFgExample {
 		private static transient final long serialVersionUID = 1L;
 		public final ParsingSentence cameFrom;
 		public FgExample(FactorGraph fg, VarConfig goldConfig, ParsingSentence cameFrome) {
@@ -61,7 +61,6 @@ public abstract class ParsingSentence {
 	
 	// ==== FACTORS ====
 	protected List<FactorFactory> factorTemplates;
-	protected List<Factor> factors;
 	
 	// ==== MISC ====
 	public Sentence sentence;
@@ -104,35 +103,6 @@ public abstract class ParsingSentence {
 			fHyp.setGoldIsNull();
 	}
 	
-	// i should expose the following methods
-	// these methods are meant to generalize over the types of inference
-	
-	// how am i going to do setup for
-	// pipeline (2 steps) vs joint (1 step)?
-	// => simple, just setup for the first pass and in decode you will need to do another step
-	
-	/* reads the type of setup needed from parameters
-	private void setupVars() {
-		frameRoleVars.clear();
-		final int n = sentence.size();
-		for(int i=0; i<n; i++) {
-			FrameVars fv = makeFrameVar(sentence, i, params.logDomain);
-			if(fv == null) continue;
-			FrameInstanceHypothesis fhyp = new FrameInstanceHypothesis(sentence, fv, params);
-			this.frameRoleVars.add(fhyp);
-			if(params.mode == Mode.FRAME_ID) continue;
-			if(params.mode == Mode.JOINT_FRAME_ARG)
-				fhyp.setupRoles(VarType.PREDICTED);
-			else {
-				assert params.mode == Mode.PIPELINE_FRAME_ARG;
-				fhyp.setupRoles(VarType.LATENT);
-			}
-			
-		}
-	}
-	*/
-
-
 	/** might return a FNParse depending on the settings */
 	public abstract FNTagging decode();
 	
@@ -313,7 +283,7 @@ public abstract class ParsingSentence {
 	 * Basic idea: given a target with head word t, include any frame f s.t.
 	 * lemma(t) == lemma(f.target)
 	 */
-	private FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
+	protected FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
 		
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
