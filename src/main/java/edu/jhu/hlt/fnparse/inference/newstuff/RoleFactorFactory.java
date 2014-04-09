@@ -49,6 +49,8 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		
 		List<Factor> factors = new ArrayList<Factor>();
 		for(FrameInstanceHypothesis fhyp : fr) {
+			
+			if(!fhyp.hasRoles()) continue;
 
 			for(int t=0; t<fhyp.numFrames(); t++) {
 				Frame ft = fhyp.getFrameVars().getFrame(t);

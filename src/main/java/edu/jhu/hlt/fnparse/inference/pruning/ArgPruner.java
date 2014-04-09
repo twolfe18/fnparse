@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -33,7 +34,9 @@ import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public class ArgPruner {
+public class ArgPruner implements Serializable {
+
+	private static final long serialVersionUID = 1L;
 
 	/**
 	 * just creates an arg pruner and memoizes the results on disk

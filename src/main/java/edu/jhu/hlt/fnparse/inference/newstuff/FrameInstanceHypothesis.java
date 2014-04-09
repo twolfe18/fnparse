@@ -14,6 +14,12 @@ import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
  * Don't put much logic here because joint/pipeline decoding still factorizes at the
  * Sentence level, not the FrameInstance level.
  * 
+ * FrameIdSentence only really needs a FrameVars
+ * ArgIdSentence only really needs a RoleVars
+ * this class is really only ever fully used by Joint
+ * the other reason to keep this is that FactorFactory uses a list of these in the signature
+ * could make this abstract and have implementing classes for each case
+ * 
  * @author travis
  */
 public class FrameInstanceHypothesis implements FgRelated {
