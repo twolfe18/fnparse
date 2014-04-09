@@ -97,7 +97,8 @@ public class ParsingSentenceStats {
 		
 		for(FNParse parse : train) {
 			timer.start("getSentenceForTraining");
-			stats.accum(p.getExampleForTraining(parse).get(0).cameFrom);
+			//stats.accum(p.getExampleForTraining(parse).get(0).cameFrom);
+			assert false : "i removed backpointer, make this work";
 			timer.stop("getSentenceForTraining");
 		}
 		

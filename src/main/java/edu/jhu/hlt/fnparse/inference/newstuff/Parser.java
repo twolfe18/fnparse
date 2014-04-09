@@ -18,6 +18,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExampleCache;
 import edu.jhu.gm.data.FgExampleList;
+import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
@@ -164,7 +165,7 @@ public class Parser {
 		return HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, regularizerMult, numParams);
 	}
 	
-	public List<ParsingSentence.FgExample> getExampleForTraining(FNParse p) {
+	public List<LabeledFgExample> getExampleForTraining(FNParse p) {
 		
 		if(params.mode == Mode.FRAME_ID) {
 			ParsingSentence s = new FrameIdSentence(p, params);
@@ -178,14 +179,14 @@ public class Parser {
 			
 			// only frame id (no args)
 			FrameIdSentence fid = new FrameIdSentence(p, params);
-			ParsingSentence.FgExample e1 = fid.getTrainingExample();
+			LabeledFgExample e1 = fid.getTrainingExample();
 			
 			// run prediction to see what frames we'll be predicting roles for
-			FNTagging predictedFrames = fid.decode();
+			FNTagging predictedFrames = fid.decode(params.model, infFactory());
 			
 			// clamped frames, predict args
 			ArgIdSentence argId = new ArgIdSentence(p, predictedFrames, params);
-			ParsingSentence.FgExample e2 = argId.getTrainingExample();
+			LabeledFgExample e2 = argId.getTrainingExample();
 			
 			return Arrays.asList(e1, e2);
 		}
@@ -270,19 +271,20 @@ public class Parser {
 	}
 	
 	
-	public List<FNTagging> parseWithoutPeeking(List<FNParse> raw) {
+	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
 		return parse(DataUtil.stripAnnotations(raw));
 	}
-	public List<FNTagging> parse(List<Sentence> raw) {
-		List<FNTagging> pred = new ArrayList<FNTagging>();
+	public List<FNParse> parse(List<Sentence> raw) {
+		FgInferencerFactory infFact = infFactory();
+		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
 			if(params.mode == Mode.FRAME_ID)
-				pred.add(new FrameIdSentence(s, params).decode());
+				pred.add(new FrameIdSentence(s, params).decode(params.model, infFact));
 			else if(params.mode == Mode.JOINT_FRAME_ARG)
-				pred.add(new JointFrameArgIdSentence(s, params).decode());
+				pred.add(new JointFrameArgIdSentence(s, params).decode(params.model, infFact));
 			else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-				FNTagging predictedFrames = new FrameIdSentence(s, params).decode();
-				pred.add(new ArgIdSentence(predictedFrames, params).decode());
+				FNTagging predictedFrames = new FrameIdSentence(s, params).decode(params.model, infFact);
+				pred.add(new ArgIdSentence(predictedFrames, params).decode(params.model, infFact));
 			}
 			else throw new RuntimeException();
 		}

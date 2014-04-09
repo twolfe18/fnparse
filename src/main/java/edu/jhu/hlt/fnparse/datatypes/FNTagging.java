@@ -26,6 +26,22 @@ public class FNTagging implements HasId {
 		this.frameInstances = frameMentions;
 	}
 	
+	@Override
+	public String toString() {
+		String className = this.getClass().getName().replace("edu.jhu.hlt.fnparse.datatypes.", "");
+		StringBuilder sb = new StringBuilder();
+		sb.append("<");
+		sb.append(className);
+		sb.append(" of ");
+		sb.append(sent.getId());
+		for(FrameInstance fi : frameInstances) {
+			sb.append(" ");
+			sb.append(fi.toString());
+		}
+		sb.append(">");
+		return sb.toString();
+	}
+	
 	public Sentence getSentence() { return sent; }
 	
 	public List<FrameInstance> getFrameInstances() { return frameInstances; }

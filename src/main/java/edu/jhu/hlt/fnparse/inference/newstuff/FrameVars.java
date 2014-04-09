@@ -23,6 +23,7 @@ public class FrameVars implements FgRelated {
 	public Var[] f_it;
 	public int i;
 	public FrameInstance gold;
+	public boolean goldSet = false;
 
 	/**
 	 * @param frames should not contain Frame.nullFrame
@@ -44,6 +45,12 @@ public class FrameVars implements FgRelated {
 			this.f_it[i] = new Var(VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
 			this.f_it_values[i] = f;
 		}
+	}
+	
+	public int getNullFrameIdx() {
+		final int i = 0;
+		assert f_it_values[i] == Frame.nullFrame;
+		return i;
 	}
 
 	public int getTargetHeadIdx() { return i; }
@@ -68,14 +75,23 @@ public class FrameVars implements FgRelated {
 	public String toString() {
 		return String.format("f_{i=%d,t=1:%d}", i, f_it.length);
 	}
+	
+	public void setGoldIsNull() {
+		this.gold = null;
+		this.goldSet = true;
+	}
 
 	public void setGold(FrameInstance gold) {
+
+		if(gold.getFrame() == Frame.nullFrame || gold.getFrame() == null)
+			throw new IllegalArgumentException();
 
 		Span target = gold.getTarget();
 		if(target.width() != 1 || target.start != getTargetHeadIdx())
 			throw new IllegalArgumentException();
 
 		this.gold = gold;
+		this.goldSet = true;
 		if(!Arrays.asList(f_it_values).contains(gold.getFrame())) {
 			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
 					gold.getFrame(), gold.getSentence().getLU(getTargetHeadIdx()));
@@ -87,16 +103,15 @@ public class FrameVars implements FgRelated {
 		int n = f_it.length;
 		for(int i=0; i<n; i++)
 			fg.addVar(f_it[i]);
-		if(gold != null) {
-			Frame gf = this.gold.getFrame();
+		if(this.goldSet) {
+			Frame gf = this.gold == null ? Frame.nullFrame : this.gold.getFrame();
 			boolean foundGold = false;
 			for(int i=0; i<n; i++) {
 				boolean v = f_it_values[i] == gf;
-				foundGold |= v;
 				gold.put(f_it[i], BinaryVarUtil.boolToConfig(v));
+				foundGold |= v;
 			}
-			if(!foundGold)
-				gold.put(f_it[0], BinaryVarUtil.boolToConfig(true));	// nullFrame
+			assert foundGold;
 		}
 	}
 

@@ -5,11 +5,10 @@ import java.util.List;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleList;
+import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
-import edu.jhu.hlt.fnparse.inference.sentence.ParsingSentence;
-import edu.jhu.hlt.fnparse.util.ParsingSentenceStats;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
@@ -19,7 +18,7 @@ import edu.jhu.hlt.fnparse.util.Timer;
  */
 public class RawExampleFactory implements FgExampleList {
 
-	private ParsingSentenceStats psStats = new ParsingSentenceStats();
+	//private ParsingSentenceStats psStats = new ParsingSentenceStats();
 	private Timer getTimer = new Timer("[RawExampleFactory get]");
 	private List<FNParse> baseExamples;	// labels with no inference data (e.g. features)
 	private Parser makeExamplesWith;
@@ -54,30 +53,32 @@ public class RawExampleFactory implements FgExampleList {
 		
 		getTimer.start();
 		
-		ParsingSentence.FgExample use;
+		LabeledFgExample use;
 		if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG) {
 			
 			// TODO this is inefficient!
 			// i call getExampleForTraining twice when I should be calling it once.
 			
 			FNParse p = baseExamples.get(i / 2);
-			List<ParsingSentence.FgExample> exs = makeExamplesWith.getExampleForTraining(p);
+			List<LabeledFgExample> exs = makeExamplesWith.getExampleForTraining(p);
 			assert exs.size() == 2;
 			use = exs.get(i % 2);
 		}
 		else {
 			FNParse p = baseExamples.get(i);
-			List<ParsingSentence.FgExample> exs = makeExamplesWith.getExampleForTraining(p);
+			List<LabeledFgExample> exs = makeExamplesWith.getExampleForTraining(p);
 			assert exs.size() == 1;
 			use = exs.get(0);
 		}
 		getTimer.stop();
 		
+		/* TODO get this back
 		if(psStats != null) {
 			psStats.accum(use.cameFrom);
 			if(i % 250 == 0)
 				psStats.printStats(System.out);
 		}
+		*/
 		
 		return use;
 	}

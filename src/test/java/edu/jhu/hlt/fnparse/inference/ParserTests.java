@@ -141,7 +141,7 @@ public class ParserTests {
 		}
 
 		System.out.println("====== Running Prediction " + desc + " ======");
-		List<FNParse> predicted = (List<FNParse>) (Object) p.parse(test);
+		List<FNParse> predicted = p.parse(test);
 		assertEquals(test.size(), predicted.size());
 		System.out.println("gold: " + Describe.fnParse(train.get(0)));
 		System.out.println("hyp:  " + Describe.fnParse(predicted.get(0)));

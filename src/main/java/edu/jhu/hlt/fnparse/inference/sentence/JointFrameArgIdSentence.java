@@ -1,5 +1,9 @@
 package edu.jhu.hlt.fnparse.inference.sentence;
 
+import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
@@ -21,12 +25,12 @@ public class JointFrameArgIdSentence extends ParsingSentence {
 	}
 
 	@Override
-	public FNTagging decode() {
+	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
 		throw new RuntimeException("implement me");
 	}
 
 	@Override
-	public FgExample getTrainingExample() {
+	public LabeledFgExample getTrainingExample() {
 		throw new RuntimeException("implement me");
 	}
 

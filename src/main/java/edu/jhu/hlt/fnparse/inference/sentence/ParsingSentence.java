@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -21,7 +21,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.newstuff.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.newstuff.FrameInstanceHypothesis;
 import edu.jhu.hlt.fnparse.inference.newstuff.FrameVars;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
 import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
@@ -40,15 +39,16 @@ import edu.mit.jwi.morph.WordnetStemmer;
  */
 public abstract class ParsingSentence {
 
-	/** like a regular FgExample, but stores a backpointer to the ParsingSentence it came from */
+	/* like a regular FgExample, but stores a backpointer to the ParsingSentence it came from
 	public static class FgExample extends edu.jhu.gm.data.LabeledFgExample {
-		private static transient final long serialVersionUID = 1L;
+		private static final long serialVersionUID = 1L;
 		public final ParsingSentence cameFrom;
 		public FgExample(FactorGraph fg, VarConfig goldConfig, ParsingSentence cameFrome) {
 			super(fg, goldConfig);
 			this.cameFrom = cameFrome;
 		}
 	}
+	*/
 	
 	
 	// move this into ParserParams?
@@ -94,8 +94,8 @@ public abstract class ParsingSentence {
 			FrameInstanceHypothesis fHyp = byHead[head];
 			if(fHyp == null) continue;	// nothing you can do here
 			fHyp.setGold(fi);
-			boolean added = haventSet.add(fHyp);
-			assert added : "two FrameInstances with same head?";
+			boolean removed = haventSet.remove(fHyp);
+			assert removed : "two FrameInstances with same head?";
 		}
 		
 		// the remaining hypotheses must be null because they didn't correspond to a FI in the parse
@@ -104,57 +104,11 @@ public abstract class ParsingSentence {
 	}
 	
 	/** might return a FNParse depending on the settings */
-	public abstract FNTagging decode();
+	// NOTE: you might want to return a FNTaggin (e.g. if you're only doing frameId), but the types are more annoying than they're worth: everything's a FNParse now
+	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);
 	
-	public abstract FgExample getTrainingExample();
+	public abstract LabeledFgExample getTrainingExample();
 
-
-	/*
-	 * clamps frame variable at the decoded value
-	private FNTagging decodeFrames(FgModel model, FgInferencerFactory infFactory) {
-
-		if(params.mode == Mode.JOINT_FRAME_ARG)
-			setupRoleVars();
-		
-		FgExample fge = this.makeFgExample();
-		FactorGraph fg = fge.updateFgLatPred(model, params.logDomain);
-		BeliefPropagation inf = (BeliefPropagation) infFactory.getInferencer(fg);
-		inf.run();
-		
-		List<FrameInstance> fis = new ArrayList<FrameInstance>();
-		final int n = sentence.size();
-		for(int i=0; i<n; i++) {
-			FrameVar fv = frameVars[i];
-			if(fv == null) continue;
-			
-			DenseFactor df = inf.getMarginals(fv.getFrameVar());
-			int nullFrameIdx = 0;
-			assert fv.getFrame(nullFrameIdx) == Frame.nullFrame;
-			int f_dec_idx = params.frameDecoder.decode(df.getValues(), nullFrameIdx);
-
-			if(debugDecodePart1 && params.debug) {
-				System.out.println("margins at " + i + " = " + df);
-				System.out.println("frame options: " + fv.getFrames());
-				
-				FgNode f_i_node = fg.getNode(fv.getFrameVar());
-				for(FgEdge evidence : f_i_node.getInEdges()) {
-					System.out.println("evidence: " + evidence);
-					System.out.println("msg: " + inf.getMessages()[evidence.getId()].message);
-				}
-				
-				System.out.println();
-			}
-			
-			Frame fhat = fv.getFrame(f_dec_idx);
-			fv.clamp(fhat);
-			
-			if(fhat != Frame.nullFrame)
-				fis.add(FrameInstance.frameMention(fhat, Span.widthOne(i), sentence));
-		}
-		return new FNTagging(sentence, fis);
-	}
-	 */
-	
 	
 	/*
 	private FNParse decodeArgs(FgModel model, FgInferencerFactory infFactory) {
@@ -292,9 +246,6 @@ public abstract class ParsingSentence {
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
 		
-		prototypes.addAll(FrameInstance.Prototype.miscPrototypes());
-		frameMatches.add(Frame.nullFrame);
-		
 		// we need to limit the number of prototypes per frame
 		Counts<Frame> numPrototypes = new Counts<Frame>();
 		
@@ -336,7 +287,7 @@ public abstract class ParsingSentence {
 			}
 		}
 		
-		if(frameMatches.size() == 1)	// nullFrame
+		if(frameMatches.size() == 0)
 			return null;
 		
 		if(params.debug) {

@@ -27,9 +27,20 @@ public class FrameInstanceHypothesis implements FgRelated {
 	private FrameInstance gold;
 	
 	public FrameInstanceHypothesis(Sentence sent, FrameVars f_it, ParserParams params) {
+		if(sent == null) throw new IllegalArgumentException();
+		if(f_it == null) throw new IllegalArgumentException();
+		if(params == null) throw new IllegalArgumentException();
 		this.sent = sent;
 		this.frames = f_it;
 		this.params = params;
+	}
+	
+	@Override
+	public String toString() {
+		return "<FrInstHyp in " + sent.getId() + " @ " + frames.getTargetHeadIdx() +
+				" with " + frames.numFrames() + " possible frames " +
+				(roles == null ? "and no roles" : "and roles") +
+				">";
 	}
 	
 	public int numFrames() { return frames.numFrames(); }
@@ -54,18 +65,21 @@ public class FrameInstanceHypothesis implements FgRelated {
 		}
 	}
 	
+	/** sets the gold label for the variables that this class is responsible */
 	public void setGoldIsNull() {
-		gold = null;
+		frames.setGoldIsNull();
+		if(roles != null) {
+			for(int i=0; i<roles.length; i++)
+				roles[i].setGoldIsNull();
+		}
 	}
 	
+	/** sets the gold label for the variables that this class is responsible */
 	public void setGold(FrameInstance goldFI) {
-		/*
 		frames.setGold(goldFI);
 		if(roles != null)
 			for(RoleVars rv : roles)
 				rv.setGold(goldFI, params);
-		*/
-		gold = goldFI;
 	}
 	
 	public boolean hasRoles() { return roles != null; }
@@ -73,7 +87,9 @@ public class FrameInstanceHypothesis implements FgRelated {
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		frames.register(fg, gold);
-		for(int i=0; i<roles.length; i++)
-			roles[i].register(fg, gold);
+		if(roles != null) {
+			for(int i=0; i<roles.length; i++)
+				roles[i].register(fg, gold);
+		}
 	}
 }
