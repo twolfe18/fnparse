@@ -5,23 +5,27 @@ import java.util.*;
 
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Var;
+import edu.jhu.prim.util.math.FastMath;
 
 public class ApproxF1MbrDecoder implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 	
+	private boolean logSpace;
 	private double falsePosPenalty;
 	private double falseNegPenalty;
     
     // TODO do decoding over (f_i, r_ijk)!
     // if you're going to bother with joint training you better do joint decoding!
 	
-	public ApproxF1MbrDecoder() {
+	public ApproxF1MbrDecoder(boolean logSpace) {
 		setRecallBias(1d);
+		this.logSpace = logSpace;
 	}
 	
-	public ApproxF1MbrDecoder(double recallBias) {
+	public ApproxF1MbrDecoder(boolean logSpace, double recallBias) {
 		setRecallBias(recallBias);
+		this.logSpace = logSpace;
 	}
 	
 	/**
@@ -33,16 +37,9 @@ public class ApproxF1MbrDecoder implements Serializable {
 	public void setRecallBias(double recallBias) {
 		if(recallBias < 1e-3 || recallBias > 1e3)
 			throw new IllegalArgumentException();		
-		if(recallBias >= 1) {
-			double rb = Math.sqrt(recallBias);
-			this.falseNegPenalty = rb;
-			this.falsePosPenalty = 1d / rb;
-		}
-		else {
-			double rb = Math.sqrt(1d / recallBias);
-			this.falseNegPenalty = rb;
-			this.falsePosPenalty = 1d / rb;
-		}
+		double rb = Math.sqrt(recallBias);
+		this.falseNegPenalty = rb;
+		this.falsePosPenalty = 1d / rb;
 	}
 	
 	public double getFalsePosPenalty() {
@@ -52,6 +49,8 @@ public class ApproxF1MbrDecoder implements Serializable {
 	public double getFalseNegPenalty() {
 		return falseNegPenalty;
 	}
+	
+	public boolean isLogSpace() { return logSpace; }
 	
 	public Map<Var, Integer> decode(Map<Var, DenseFactor> margins, int nullIndex) {
 		Map<Var, Integer> m = new HashMap<Var, Integer>();
@@ -81,23 +80,28 @@ public class ApproxF1MbrDecoder implements Serializable {
 	 * @param risks can be null, but otherwise will be filled with the risk estimates.
 	 */
     public int decode(double[] posterior, int nullIndex, double[] risks) {
+
     	if(risks != null && risks.length != posterior.length)
     		throw new IllegalArgumentException();
-    	final int n = posterior.length;
+
     	int minI = -1;
     	double minR = 0d;
-    	double Z = 0d;
+    	double Z = zero();
+
+    	final int n = posterior.length;
     	for(int i=0; i<n; i++)  {		// i indexes predictions
-    		Z += posterior[i];
-    		double pFP = 0d;
-    		double pFN = 0d;
+    		if(!check(posterior[i])) throw new RuntimeException();
+    		Z = plus(Z, posterior[i]);
+    		double pFP = zero();
+    		double pFN = zero();
+    		// TODO this can be made more efficient by keeping a sum and subtracting out
     		for(int j=0; j<n; j++) {	// j indexes the correct answer under the posterior
     			if(i == nullIndex && j != nullIndex)
-    				pFN += posterior[j];
+    				pFN = plus(pFN, posterior[j]);
     			if(i != nullIndex && j != i)
-    				pFP += posterior[j];
+    				pFP = plus(pFP, posterior[j]);
     		}
-    		double risk = pFP * falsePosPenalty + pFN * falseNegPenalty;
+    		double risk = risk(pFP, falsePosPenalty, pFN, falseNegPenalty);
     		if(risk < minR || minI < 0) {
     			minR = risk;
     			minI = i;
@@ -105,12 +109,39 @@ public class ApproxF1MbrDecoder implements Serializable {
     		if(risks != null)
     			risks[i] = risk;
     	}
-    	if(Math.abs(Z - 1d) > 1e-5)
-    		throw new IllegalArgumentException("that posterior ain't a distribution! " + Arrays.toString(posterior));
+
+    	if(Math.abs(Z - one()) > 1e-5)
+    		throw new IllegalArgumentException("that posterior isn't a distribution! " + Arrays.toString(posterior));
+
     	return minI;
     }
+
     public int decode(double[] posterior, int nullIndex) {
     	return decode(posterior, nullIndex, null);
+    }
+    
+    public double risk(double probA, double lossA, double probB, double lossB) {
+    	if(this.logSpace) return Math.exp(probA) * lossA + Math.exp(probB) * lossB;
+    	else return probA * lossA + probB * lossB;
+    }
+    
+    public double plus(double a, double b) {
+    	if(this.logSpace) return FastMath.logAdd(a, b);
+    	else return a + b;
+    }
+    
+    public double one() {
+    	return this.logSpace ? 0d : 1d;
+    }
+    
+    public double zero() {
+    	return this.logSpace ? Double.NEGATIVE_INFINITY : 0d;
+    }
+    
+    public boolean check(double prob) {
+    	if(Double.isNaN(prob)) return false;
+    	if(this.logSpace) return prob <= 1d;
+    	else return prob >= 0d && prob <= 1d;
     }
     
 }
