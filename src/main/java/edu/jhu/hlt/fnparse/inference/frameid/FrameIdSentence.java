@@ -9,6 +9,7 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -31,12 +32,23 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 
 	public FrameIdSentence(Sentence s, ParserParams params) {
 		super(s, params, params.factorsForFrameId);
+		initHypotheses();
 	}
 
 	public FrameIdSentence(Sentence s, ParserParams params, FNTagging gold) {
 		super(s, params, params.factorsForFrameId, gold);
+		initHypotheses();
+		setGold(gold);
 	}
 	
+	protected void initHypotheses() {
+		final int n = sentence.size();
+		hypotheses = new ArrayList<FrameVars>();
+		for(int i=0; i<n; i++) {
+			FrameVars fv = makeFrameVar(sentence, i, params.logDomain);
+			if(fv != null) hypotheses.add(fv);
+		}
+	}
 
 	@Override
 	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
@@ -44,7 +56,8 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 		FgExample fg = getExample(false);
 		fg.updateFgLatPred(model, params.logDomain);
 
-		FgInferencer inf = infFactory.getInferencer(fg.getFgLatPred());
+		FactorGraph fgLatPred = fg.getFgLatPred();
+		FgInferencer inf = infFactory.getInferencer(fgLatPred);
 		inf.run();
 
 		List<FrameInstance> fis = new ArrayList<FrameInstance>();
@@ -70,8 +83,7 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 	}
 
 
-	@Override
-	protected void setGold(FNTagging p) {
+	private void setGold(FNTagging p) {
 			
 		if(p.getSentence() != sentence)
 			throw new IllegalArgumentException();

@@ -1,16 +1,26 @@
 package edu.jhu.hlt.fnparse.inference.roleid;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
-import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.Var;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 /**
  * given some frames (grounded with targets), find out where there args are.
@@ -20,145 +30,107 @@ import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
  */
 public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	
-	private List<RoleVars> roles;	// this stores frame info too
+	// List<RoleVars> hypothesis, each one stores a frame
 
 	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params) {
 		super(s, params, params.factorsForRoleId);
-		initRoleVars(frames);
+		initHypotheses(frames, null, false);
 	}
 
 	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params, FNParse gold) {
 		super(s, params, params.factorsForRoleId, gold);
-		initRoleVars(frames);
+		initHypotheses(frames, gold, true);
 	}
 	
-	private void initRoleVars(FNTagging frames) {
-		roles = new ArrayList<RoleVars>();
-		throw new RuntimeException("implement me");
+	private void initHypotheses(FNTagging frames, FNParse gold, boolean hasGold) {
+
+		if(hasGold && gold.getSentence() != frames.getSentence())
+			throw new IllegalArgumentException();
+
+		final int n = sentence.size();
+		
+		// build an index keying off of the target head index
+		FrameInstance[] fiByTarget = null;
+		if(hasGold) {
+			fiByTarget = new FrameInstance[n];
+			for(FrameInstance fi : gold.getFrameInstances()) {
+				int targetHead = params.headFinder.head(fi.getTarget(), sentence);
+				assert fiByTarget[targetHead] == null;
+				fiByTarget[targetHead] = fi;
+			}
+		}
+
+		hypotheses = new ArrayList<RoleVars>();
+		for(FrameInstance fi : frames.getFrameInstances()) {
+			Span target = fi.getTarget();
+			int targetHead = params.headFinder.head(target, fi.getSentence());
+			
+			RoleVars rv;
+			if(hasGold) {	// train mode
+				FrameInstance goldFI = fiByTarget[targetHead];
+				if(goldFI != null && goldFI.getFrame() == fi.getFrame())
+					rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), params);
+				else {
+					// if we got the frame wrong, then train to predict no args
+					rv = new RoleVars(null, targetHead, fi.getFrame(), fi.getSentence(), params);
+				}
+			}
+			else	// predict/decode mode
+				rv = new RoleVars(targetHead, fi.getFrame(), fi.getSentence(), params);
+
+			hypotheses.add(rv);
+		}
+	}
+	
+	private static void fill2d(double[][] mat, double val) {
+		for(int i=0; i<mat.length; i++)
+			Arrays.fill(mat[i], val);
 	}
 
 	@Override
 	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
-		throw new RuntimeException("implement me");
-	}
-
-	public LabeledFgExample getTrainingExamplelksdjflskd() {
 		
-		// 1) only make the frameVar's needed for the given targets
-		// 2) this will give you FrameInstanceHypothesis, on which you can call setupRoles(VarType.Predicted)
+		FgExample fg = getExample(false);
+		fg.updateFgLatPred(model, params.logDomain);
 		
-		// need to make sure that the the Vars from the FrameVars *is not added to the FactorGraph*
-		// don't ever instantiate a FrameInstanceHypothesis!
-		// all you need is one RoleVars per FrameInstance given on construction
-		
-		
-		throw new RuntimeException("implement me");
-	}
-
-	@Override
-	protected void setGold(FNParse gold) {
-		
-		// find the roles realize for every FrameInstance in this.roles
-		throw new RuntimeException("implement me");
-	}
-
-	/*
-	private FNParse decodeArgs(FgModel model, FgInferencerFactory infFactory) {
-
-		if(debugDecodePart2 && params.debug) {
-			System.out.printf("[decode part2] fpPen=%.3f fnPen=%.3f\n",
-					params.argDecoder.getFalsePosPenalty(), params.argDecoder.getFalseNegPenalty());
-		}
-		if(params.mode == Mode.FRAME_ID)
-			throw new IllegalStateException();
-		
-		// now that we've clamped the f_i at our predictions,
-		// there will be much fewer r_ijk to instantiate.
-		setupRoleVars();
-
-		FgExample fge = this.makeFgExample();
-		fge.updateFgLatPred(model, params.logDomain);
-		FgInferencer inf = infFactory.getInferencer(fge.getOriginalFactorGraph());
+		FactorGraph fgLatPred = fg.getFgLatPred();
+		FgInferencer inf = infFactory.getInferencer(fgLatPred);
 		inf.run();
-
+		
 		List<FrameInstance> fis = new ArrayList<FrameInstance>();
 		final int n = sentence.size();
-		for(int i=0; i<n; i++) {
+		for(RoleVars rv : hypotheses) {
+			
+			
+			// max over j for every role
+			int K = rv.getFrame().numRoles();
+			Span[] arguments = new Span[K];
+			double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
+			if(params.logDomain) fill2d(beliefs, Double.NEGATIVE_INFINITY);	// otherwise default is 0
 
-			FrameVar fv = frameVars[i];
-			if(fv == null) continue;
-			Frame f = fv.getFrame(0);
-			if(f == Frame.nullFrame) continue;
-
-			Span[] args = new Span[f.numRoles()];
-			Arrays.fill(args, Span.nullSpan);
-
-			// for each role, choose the most sensible realization of this role
-			for(int k=0; k<f.numRoles(); k++) {
-
-				// we are going to decode every r_ijk separately (they're all binary variables for arg realized or not)
-				// the only time you have a problem is when more than one r_ijk is decoded (given i,k ranging over j)
-				// among these cases, choose the positive r_ijk with the smallest risk
-				List<Integer> active = new ArrayList<Integer>();
-				List<Double> risks = new ArrayList<Double>();
-				double[] riskBuf = new double[2];
-				for(int j=0; j<n; j++) {
-					RoleVars r_ijk = roleVars[i][j][k];
-					if(r_ijk == null) continue;
-					DenseFactor df = inf.getMarginals(r_ijk.getRoleVar());
-					int nullIndex = 0;
-					assert r_ijk.getFrame(nullIndex) == Frame.nullFrame;
-					int r_ijk_dec = params.argDecoder.decode(df.getValues(), nullIndex, riskBuf);
-					assert r_ijk.getPossibleFrames().size() == 2;
-					boolean argIsRealized = r_ijk_dec != nullIndex;
-					if(argIsRealized) {
-						active.add(j);
-						risks.add(riskBuf[r_ijk_dec]);
-					}
-					if(debugDecodePart2 && params.debug) {
-						System.out.printf("[decode part2] %s.%s = %s risks: %s\n",
-								f.getName(), f.getRole(k), sentence.getLU(j), Arrays.toString(riskBuf));
-					}
-				}
-
-				if(active.size() == 0)
-					args[k] = Span.nullSpan;
-				else  {
-					int j = -1;
-					if(active.size() == 1) {
-						j = active.get(0);
-						if(debugDecodePart2 && params.debug)
-							System.out.println("[decode part2] unabiguous min risk: " + sentence.getLU(j).getFullString());
-					}
-					else {
-						// have to choose which index has the lowest (marginal) risk
-						if(debugDecodePart2 && params.debug) {
-							System.out.printf("[decode part2] more than one token has min risk @ arg realized. indices=%s risks=%s\n",
-									active, risks);
-						}
-						double minR = 0d;
-						for(int ji=0; ji<active.size(); ji++) {
-							double r = risks.get(ji);
-							if(r < minR || j < 0) {
-								minR = r;
-								j = active.get(ji);
-							}
-						}
-					}
-					// choose the most likely expansion/span conditioned on the arg head index
-					RoleVars r_ijk = roleVars[i][j][k];
-					DenseFactor df = inf.getMarginals(r_ijk.getExpansionVar());
-					if(debugDecodePart2 && params.debug) {
-						System.out.println("[decode part2] expansion marginals: " + Arrays.toString(df.getValues()));
-					}
-					int expansionConfig = df.getArgmaxConfigId();
-					args[k] = r_ijk.getSpan(expansionConfig);
+			Iterator<RVar> iter = rv.getVars();
+			while(iter.hasNext()) {
+				RVar rvar = iter.next();
+				DenseFactor df = inf.getMarginals(rvar.roleVar);
+				beliefs[rvar.k][rvar.j] = df.getValue(BinaryVarUtil.boolToConfig(true));
+			}
+			for(int k=0; k<K; k++) {
+				
+				// TODO add Exactly1 factor!
+				params.normalize(beliefs[k]);
+				
+				int jHat = params.argDecoder.decode(beliefs[k], n);
+				if(jHat < n) {
+					Var expansionVar = rv.getExpansionVar(jHat, k);
+					DenseFactor df = inf.getMarginals(expansionVar);
+					arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
 				}
 			}
-			fis.add(FrameInstance.newFrameInstance(f, Span.widthOne(i), args, sentence));
+			
+			fis.add(FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sentence));
 		}
-
+		
 		return new FNParse(sentence, fis);
 	}
-	*/
+
 }

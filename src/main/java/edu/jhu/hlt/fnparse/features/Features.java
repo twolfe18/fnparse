@@ -26,10 +26,12 @@ public interface Features {
 		public FeatureVector getFeatures(Frame f, int targetHeadIdx, FrameInstance prototype, Sentence s);
 	}
 	
+	/** argHeadIdx == s.size means that this argument is not realized */
 	public static interface FR extends Features {
 		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
 	}
 	
+	/** argHeadIdx == s.size means that this argument is not realized */
 	public static interface RE extends Features {
 		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence s);
 	}

@@ -16,10 +16,12 @@ public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypot
 
 	public JointFrameRoleIdSentence(Sentence s, ParserParams params) {
 		super(s, params, params.factorsForJointId);
+		throw new RuntimeException("implement me");
 	}
 
 	public JointFrameRoleIdSentence(Sentence s, ParserParams params, FNParse gold) {
 		super(s, params, params.factorsForJointId, gold);
+		throw new RuntimeException("implement me");
 	}
 
 	@Override
@@ -27,12 +29,4 @@ public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypot
 		throw new RuntimeException("implement me");
 	}
 
-	@Override
-	protected void setGold(FNParse gold) {
-		// TODO Auto-generated method stub
-		for(FrameInstanceHypothesis fhyp : this.hypotheses) {
-			//fhyp.setGold(someFIiMatchedUpByTargetHeadEarlier);
-		}
-		throw new RuntimeException("implement me");
-	}
 }

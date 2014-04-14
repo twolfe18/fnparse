@@ -7,7 +7,6 @@ import edu.jhu.gm.model.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.*;
 import edu.jhu.hlt.fnparse.inference.misc.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
 import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
@@ -25,21 +24,26 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 	private static final long serialVersionUID = 1L;
 	
 	public ParserParams params;
-	public boolean binaryDepParentFactor;
-	public boolean binaryDepChildFactor;
-	//public boolean binaryFrameFactor;
+	public boolean binaryDepParentFactor = true;
+	public boolean binaryDepChildFactor = false;
 
 	public RoleFactorFactory(ParserParams params) {
 		super(params.featIdx);
 		this.params = params;
+		
+		if(params.useLatentDepenencies)
+			assert binaryDepChildFactor || binaryDepParentFactor;
 	}
 	
 	/**
 	 * instantiates the following factors:
 	 * r_itjk --$$
-	 * r_itjk --$$-- f_it
+	 * r_itjk --$$-- r_itjk^e	TODO
+	 * r_itjk^e --$$
 	 * r_itjk --$$-- l_*j
 	 * r_itjk --$$-- l_j*
+	 * 
+	 * TODO create an Exactly1 factor for r_{i,t,j=*,k}
 	 */
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l) {
@@ -58,44 +62,92 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 			Iterator<RVar> it = rv.getVars();
 			while(it.hasNext()) {
 				RVar rvar = it.next();
-				FeatureVector features = super.getFeatures(ft, rv.getTargetHead(), rvar.k, null, rvar.j, s);
+				
+				// am i supposed to know the expansion/span value here?
+				// maybe, maybe not
+				// i cannot share those features across all implementations...
+				// maybe i should go back to factors that compute features?
+				
+				/*
+				 * AH, i see
+				 * responsibility for what factors get instantiated moved from HasRoleFeatures into this code.
+				 * i think i can basically take the features for the statically known data.
+				 * do it this way (simple) and maybe add different features later.
+				 */
+				Span argSpan = Span.widthOne(rvar.j);	// TODO replace this with features that don't look at the argSpan, e-var-factors should be conjoined with width?
+				FeatureVector features = super.getFeatures(ft, rv.getTargetHead(), rvar.k, argSpan, rvar.j, s);
 
 				// r_itjk --$$
-				factors.add(new FF(new VarSet(rvar.var), params.featIdx, new String[] {"r=0", "r=1"}, features));
+				factors.add(new F(new VarSet(rvar.roleVar), params.featIdx, new String[] {"r=0", "r=1"}, features));
 
 				// r_itjk --$$-- l_*j
-				if(binaryDepParentFactor) {
+				if(binaryDepParentFactor && params.useLatentDepenencies) {
 					String[] configNames = new String[] {"r=0,lp=0", "r=0,lp=1", "r=1,lp=0", "r=1,lp=1"};	// "lp" is for "link parent"
 					for(int i=0; i<n; i++) {
-						VarSet vs = new VarSet(rvar.var, l.getLinkVar(rvar.j, i));
-						factors.add(new FF(vs, params.featIdx, configNames, features));
+						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(rvar.j, i));
+						factors.add(new F(vs, params.featIdx, configNames, features));
 					}
 				}
 
 				// r_itjk --$$-- l_j*
-				if(binaryDepChildFactor) {
+				if(binaryDepChildFactor && params.useLatentDepenencies) {
 					String[] configNames = new String[] {"r=0,lc=0", "r=0,lc=1", "r=1,lc=0", "r=1,lc=1"};	// "lc" is for "link child"
 					for(int i=0; i<n; i++) {
-						VarSet vs = new VarSet(rvar.var, l.getLinkVar(rvar.j, i));
-						factors.add(new FF(vs, params.featIdx, configNames, features));
+						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(rvar.j, i));
+						factors.add(new F(vs, params.featIdx, configNames, features));
 					}
 				}
+				
+				
+				// r_itjk^e --$$
+				if(rvar.expansionVar != null)
+					factors.add(new FE(rvar.expansionVar, rv.i, rv.t, rvar.j, rvar.k, rvar.expansionValues, s, this));
 
-				/* this has to move. JointFrameRoleId should have a module that serves as its FactorFactory
-				// r_itjk --$$-- f_it
-				if(binaryFrameFactor) {
-					String[] configNames = new String[] {"r=0,f=0", "r=0,f=1", "r=1,f=0", "r=1,f=1"};
-					VarSet vs = new VarSet(rvar.var, fhyp.getFrameVar(t));
-					factors.add(new FF(vs, params.featIdx, configNames, features));
-				}
-				*/
 			}
 		}
 		return factors;
 	}
 	
+	static final class FE extends ExpFamFactor {
 
-	static class FF extends ExpFamFactor {
+
+		private static final long serialVersionUID = 1L;
+
+		private Expansion.Iter expansions;
+		private int i;
+		private Frame t;
+		private int j;
+		private int k;
+		private Sentence sent;
+		private Features.RE fRE;
+		private Features.E fE;
+
+		public FE(Var expansionVar, int i, Frame t, int j, int k, Expansion.Iter expansions, Sentence sent, HasRoleFeatures features) {
+			super(new VarSet(expansionVar));
+			this.i = i;
+			this.t = t;
+			this.j = j;
+			this.k = k;
+			this.sent = sent;
+			this.fE = features.eFeatures;
+			this.fRE = features.reFeatures;
+			this.expansions = expansions;
+		}
+		
+		@Override
+		public FeatureVector getFeatures(int config) {
+			Expansion e = expansions.get(config);
+			Span s = e.upon(j);
+			FeatureVector fv = new FeatureVector();
+			if(fRE != null)
+				fv.add(fRE.getFeatures(t, i, k, j, s, sent));
+			if(fE != null)
+				fv.add(fE.getFeatures(s, sent));
+			return fv;
+		}
+	}
+	
+	static class F extends ExpFamFactor {
 
 		private static final long serialVersionUID = 3383011899524311722L;
 
@@ -103,7 +155,7 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		private String[] specifics;
 		private FeatureVector features;
 
-		public FF(VarSet needed, Alphabet<String> alph, String[] specifics, FeatureVector base) {
+		public F(VarSet needed, Alphabet<String> alph, String[] specifics, FeatureVector base) {
 			super(needed);
 			this.alph = alph;
 			this.specifics = specifics;

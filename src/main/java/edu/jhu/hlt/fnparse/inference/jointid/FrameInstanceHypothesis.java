@@ -43,6 +43,8 @@ public class FrameInstanceHypothesis implements FgRelated {
 		this.sent = sent;
 		this.frames = f_it;
 		this.params = params;
+		
+		throw new RuntimeException("move stuff from setupRoles to constructor, take gold configuration");
 	}
 	
 	@Override
@@ -66,6 +68,7 @@ public class FrameInstanceHypothesis implements FgRelated {
 	public int getTargetHeadIdx() { return frames.getTargetHeadIdx(); }
 	
 	public void setupRoles(VarType varType) {
+		/*
 		final int T = frames.numFrames();
 		final int i = frames.getTargetHeadIdx();
 		roles = new RoleVars[frames.numFrames()];
@@ -73,23 +76,31 @@ public class FrameInstanceHypothesis implements FgRelated {
 			Frame f_it = frames.getFrame(t);
 			roles[t] = new RoleVars(i, f_it, varType, sent, params.argPruner);
 		}
+		*/
+		throw new RuntimeException("update me");
 	}
 	
 	/** sets the gold label for the variables that this class is responsible */
 	public void setGoldIsNull() {
+		/*
 		frames.setGoldIsNull();
 		if(roles != null) {
 			for(int i=0; i<roles.length; i++)
 				roles[i].setGoldIsNull();
 		}
+		*/
+		throw new RuntimeException("update me");
 	}
 	
 	/** sets the gold label for the variables that this class is responsible */
 	public void setGold(FrameInstance goldFI) {
+		/*
 		frames.setGold(goldFI);
 		if(roles != null)
 			for(RoleVars rv : roles)
 				rv.setGold(goldFI, params);
+		*/
+		throw new RuntimeException("update me");
 	}
 	
 	public boolean hasRoles() { return roles != null; }

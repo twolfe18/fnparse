@@ -36,6 +36,12 @@ import edu.mit.jwi.morph.WordnetStemmer;
  * class, if you want to create two FgExamples for training (e.g. for a pipeline
  * model), you need to create two ParsingSentences for the one underlying Sentence.
  * 
+ * classes that extend this should not have a setGold method, but rather have two constructors:
+ * one for when you know the label and one for when you don't (which should call the
+ * respective constructor in this class). The only downside of this is that if you construct
+ * a ParsingSentence for training (and you provide a gold label), you cannot reuse this
+ * instance for prediction because the VarType's of some of the variables may not be correctly set.
+ * 
  * @param Hypothesis is the type that serves as a variable wrapper. This class must
  * be capable of storing a label, and the {@code setGold} method should change the
  * state of the {@code Hypothesis}s' labels.
@@ -73,7 +79,7 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		this.params = params;
 		this.factorTemplate = factorTemplate;
 		this.sentence = s;
-		this.hypotheses = new ArrayList<Hypothesis>();
+		this.hypotheses = null;
 		this.gold = label;
 	}
 	
@@ -103,55 +109,27 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 
 		return labeled
 			? new LabeledFgExample(fg, gold)
-			: new UnlabeledFgExample(fg, gold);
+			: new UnlabeledFgExample(fg, new VarConfig());	// if you ever add observed variables, this needs to change
 	}
-
-	/**
-	 * This method should zoom down to the variables held in the hypotheses and set the gold value.
-	 * After this call, calling hyp.register(fg, goldConf) should actually add to goldConf.
-	 */
-	protected abstract void setGold(Label gold);
-
+	
 	
 	/** might return a FNParse depending on the settings */
-	// NOTE: you might want to return a FNTaggin (e.g. if you're only doing frameId), but the types are more annoying than they're worth: everything's a FNParse now
 	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);
+	// NOTE: you might want to return a FNTaggin (e.g. if you're only doing frameId), but the types are more annoying than they're worth: everything's a FNParse now
+
 	
 	public LabeledFgExample getTrainingExample() {
 		if(gold == null)
-			throw new RuntimeException();
-		setGold(gold);
+			throw new RuntimeException("are you sure you used the constructor with the gold label?");
 		return (LabeledFgExample) getExample(true);
 	}
 
-	
-
-	/*
-	 * based on our target extraction and possible frame triage,
-	 * what is the best recall we could hope to get?
-	public double computeMaxTargetRecall(FNParse p) {
-		int reachable = 0, total = 0;
-		for(FrameInstance fi : p.getFrameInstances()) {
-			if(couldRecallTarget(fi)) reachable++;
-			total++;
-		}
-		if(total == 0) return 1d;
-		return ((double)reachable) / total;
-	}
-	private boolean couldRecallTarget(FrameInstance fi) {
-		Span target = fi.getTarget();
-		if(target.width() > 1) return false;
-		FrameVars fv = frameVars[target.start];
-		if(fv == null) return false;
-		return fv.getFrames().contains(fi.getFrame());
-	}
-	 */
-	
-	
 	/**
 	 * Given a word in a sentence, extract the set of frames it might evoke.
 	 * Basic idea: given a target with head word t, include any frame f s.t.
 	 * lemma(t) == lemma(f.target)
+	 * 
+	 * TODO move this into FrameIdSentence? does JointIdSentence need this?
 	 */
 	protected FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
 

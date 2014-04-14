@@ -33,6 +33,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingConstituencyFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameRoleFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
@@ -55,6 +56,7 @@ import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.HeterogeneousL2;
+import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 
 public class Parser {
@@ -89,6 +91,14 @@ public class Parser {
 		public FactorFactory<FrameVars> factorsForFrameId;
 		public FactorFactory<RoleVars> factorsForRoleId;
 		public FactorFactory<FrameInstanceHypothesis> factorsForJointId;
+		
+		/** checks if they're log proportions from this.logDomain */
+		public void normalize(double[] proportions) {
+			if(this.logDomain)
+				Multinomials.normalizeLogProps(proportions);
+			else
+				Multinomials.normalizeProps(proportions);
+		}
 	}
 	
 	
@@ -113,8 +123,8 @@ public class Parser {
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.headFinder = new BraindeadHeadFinder();	// TODO
-		params.frameDecoder = new ApproxF1MbrDecoder(1d);
-		params.argDecoder = new ApproxF1MbrDecoder(1.5d);
+		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
+		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argPruner = new ArgPruner(params);		// TODO fix this, should pass in required data
 		
 		FrameFactorFactory fff = new FrameFactorFactory();
@@ -128,6 +138,7 @@ public class Parser {
 		if(mode != Mode.FRAME_ID) {
 			RoleFactorFactory rff = new RoleFactorFactory(params);
 			if(params.debug) {
+				rff.setFeatures(new DebuggingConstituencyFeatures(params.featIdx));
 				rff.setFeatures(new DebuggingRoleSpanFeatures(params.featIdx));
 				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
 			}
@@ -165,8 +176,9 @@ public class Parser {
 		
 		List<Integer> dontRegularize = new ArrayList<Integer>();
 		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId))
-			for(Features f : ff.getFeatures())
-				dontRegularize.addAll(f.dontRegularize());
+			if(ff != null)
+				for(Features f : ff.getFeatures())
+					dontRegularize.addAll(f.dontRegularize());
 		System.out.printf("[getRegularizer] not regularizing %d parameters\n", dontRegularize.size());
 
 		// L2's parameter is variance => bigger means less regularization
@@ -188,7 +200,7 @@ public class Parser {
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			
 			// only frame id (no args)
-			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
+			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params, p);
 			LabeledFgExample e1 = fid.getTrainingExample();
 			
 			// run prediction to see what frames we'll be predicting roles for

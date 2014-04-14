@@ -31,6 +31,7 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 	@Override
 	public String toString() { return "<FrameFactorFactory>"; }
 
+	// TODO need to add an Exactly1 factor to each FrameVars
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
 		List<Factor> factors = new ArrayList<Factor>();

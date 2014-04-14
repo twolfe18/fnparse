@@ -20,7 +20,7 @@ public class DebuggingFrameRoleFeatures extends AbstractFeatures<DebuggingFrameR
 
 		FeatureVector fv = new FeatureVector();
 		String t = sent.getLU(targetHeadIdx).getFullString();
-		String a = sent.getLU(argHead).getFullString();
+		String a = argHead < sent.size() ? sent.getLU(argHead).getFullString() : "null";
 		b(fv, "frame=", f.getName(), "roleIdx=", String.valueOf(roleIdx), "target=", t, "arg=", a);
 		return fv;
 	}

@@ -21,7 +21,12 @@ public class ParserTests {
 
 	@Before
 	public void setupDummyParse() {
+		dummyParse = makeDummyParse();
+		System.out.println("[ParserTests] dummy parse:");
+		System.out.println(Describe.fnParse(dummyParse));
+	}
 		
+	public static FNParse makeDummyParse() {
 		String[] tokens  = new String[] {"The", "fox", "quickly", "jumped", "over", "the", "fence"};
 		String[] lemmas = new String[] {"The", "fox", "quickly", "jump", "over", "the", "fence"};
 		String[] pos     = new String[] {"DT",  "NN",    "RB",  "VBD",    "IN",   "DT",  "NN"};
@@ -51,12 +56,10 @@ public class ParserTests {
 		instances.add(jumpInst);
 		System.out.println("[setupDummyParse] adding instance of " + jump);
 		
-		dummyParse = new FNParse(s, instances);
-		System.out.println("[ParserTests] dummy parse:");
-		System.out.println(Describe.fnParse(dummyParse));
+		return new FNParse(s, instances);
 	}
 	
-	@Test
+	//@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, true);
 		overfitting(p, true, true, "FRAME_ID");
@@ -84,7 +87,7 @@ public class ParserTests {
 		f = File.createTempFile("ParserTests", ".model");
 	}
 	
-	@Test
+	//@Test
 	public void serializationFrameId() throws IOException {
 	
 		// frame id
@@ -109,7 +112,7 @@ public class ParserTests {
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
-	@Test
+	//@Test
 	public void serializationPipeline() throws IOException {
 		// pipeline
 		trained = new Parser(Mode.PIPELINE_FRAME_ARG, true);
@@ -132,12 +135,11 @@ public class ParserTests {
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
 			if(p.params.debug) {
-				p.train(train, 4, 1, 0.5d, 1d);
-				p.train(train, 4, 1, 0.5d, 1d);
+				p.train(train, 15, 1, 0.5d, 1d);
 			}
-			else	// for full feature set, need less regularization and more iterations to converge
+			else
 				p.train(train, 15, 1, 0.5d, 10d);
-			p.writeWeights(new File("weights.txt"));
+			p.writeWeights(new File("weights." + desc + ".txt"));
 		}
 
 		System.out.println("====== Running Prediction " + desc + " ======");

@@ -13,9 +13,9 @@ public class HasRoleFeatures implements Serializable {
 
 	protected Alphabet<String> featIdx;
 	
-	protected Features.FR frFeatures;
-	protected Features.RE reFeatures;
-	protected Features.E eFeatures;
+	public Features.FR frFeatures;
+	public Features.RE reFeatures;
+	public Features.E eFeatures;
 	
 	public HasRoleFeatures(Alphabet<String> featIdx) {
 		this.featIdx = featIdx;
@@ -65,9 +65,6 @@ public class HasRoleFeatures implements Serializable {
 	 * and concatenates them all together.
 	 */
 	public FeatureVector getFeatures(Frame f_i, int targetHeadIdx, int roleIdx, Span arg, int argHead, Sentence s) {
-		// NOTE: casting to travis.Vector ensures that the best implementation is dispatched
-		// both the travis.Vector and IntDoubleUnsortedVector implementations forward to the same
-		// code, this is just an issue of ambiguity.
 		FeatureVector fv = new FeatureVector();
 		if(frFeatures != null)
 			fv.add(frFeatures.getFeatures(f_i, targetHeadIdx, roleIdx, argHead, s));
