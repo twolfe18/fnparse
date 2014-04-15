@@ -4,7 +4,7 @@ import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FR {
 

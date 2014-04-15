@@ -4,8 +4,8 @@ import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypothesis, FNParse> {
 	

@@ -101,7 +101,9 @@ public final class Sentence implements HasId {
 	
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
+	public String[] getPos() { return pos; }
 	public String getPos(int i) { return pos[i]; }
+	public String[] getLemmas() { return lemmas; }
 	public String getLemma(int i){return lemmas[i];}
 	
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }

@@ -6,8 +6,8 @@ import java.io.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.Timer;
@@ -156,7 +156,7 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		boolean debug = false;
-		Parser parser = new Parser(Mode.FRAME_ID, debug);
+		Parser parser = new Parser(Mode.FRAME_ID, false, debug);
 		parser.params.frameDecoder.setRecallBias(recallBias.get());
 
 		System.out.println("[ParserExperiment] following statistics are for the train subset:");
@@ -215,7 +215,7 @@ public class ParserExperiment {
 		int trainSentencesProcessed = 0;
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		Parser parser = new Parser(Mode.FRAME_ID, debug);
+		Parser parser = new Parser(Mode.FRAME_ID, false, debug);
 		parser.params.frameDecoder.setRecallBias(1.5d);
 		
 		//parser.computeStatistcs(train);

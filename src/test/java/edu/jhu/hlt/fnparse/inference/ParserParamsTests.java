@@ -7,8 +7,8 @@ import java.io.*;
 import org.junit.Test;
 
 import edu.jhu.gm.model.FgModel;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public class ParserParamsTests {
 

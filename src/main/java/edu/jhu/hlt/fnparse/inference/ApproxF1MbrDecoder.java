@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.misc;
+package edu.jhu.hlt.fnparse.inference;
 
 import java.io.Serializable;
 import java.util.*;

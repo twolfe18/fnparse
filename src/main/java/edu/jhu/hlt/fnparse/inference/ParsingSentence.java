@@ -1,6 +1,7 @@
-package edu.jhu.hlt.fnparse.inference.misc;
+package edu.jhu.hlt.fnparse.inference;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -15,14 +16,16 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
@@ -64,6 +67,7 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	public ProjDepTreeFactor depTree;	// holds variables too
 	
 	protected FactorFactory<Hypothesis> factorTemplate;
+	protected FactorFactory<Object> depParseFactorTemplate;
 	
 	public Sentence sentence;
 	protected ParserParams params;
@@ -77,8 +81,10 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	/** constructor for cases where you do know the label */
 	public ParsingSentence(Sentence s, ParserParams params, FactorFactory<Hypothesis> factorTemplate, Label label) {
 		this.params = params;
+		this.depParseFactorTemplate = new DepParseFactorFactory(params);
 		this.factorTemplate = factorTemplate;
 		this.sentence = s;
+		this.depTree = null;
 		this.hypotheses = null;
 		this.gold = label;
 	}
@@ -94,9 +100,11 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		// create factors
 		List<Factor> factors = new ArrayList<Factor>();
 		if(params.useLatentDepenencies) {
-			assert depTree != null;
-			factors.add(depTree);
+			depTree = new ProjDepTreeFactor(sentence.size(), VarType.LATENT);
+			factors.addAll(depParseFactorTemplate.initFactorsFor(sentence, Collections.emptyList(), depTree));
+			assert factors.size() > 1 + sentence.size() : "should be at least a global factor and edge factors (N^2 rather than just N)";
 		}
+		else depTree = null;
 		factors.addAll(factorTemplate.initFactorsFor(sentence, hypotheses, depTree));
 		
 		// register all the variables and factors
@@ -115,7 +123,6 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	
 	/** might return a FNParse depending on the settings */
 	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);
-	// NOTE: you might want to return a FNTaggin (e.g. if you're only doing frameId), but the types are more annoying than they're worth: everything's a FNParse now
 
 	
 	public LabeledFgExample getTrainingExample() {

@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.misc;
+package edu.jhu.hlt.fnparse.inference;
 
 import static edu.jhu.hlt.fnparse.util.ScalaLike.require;
 

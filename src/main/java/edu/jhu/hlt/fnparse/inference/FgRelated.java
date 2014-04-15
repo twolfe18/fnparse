@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.misc;
+package edu.jhu.hlt.fnparse.inference;
 
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.VarConfig;

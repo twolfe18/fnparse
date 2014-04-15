@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.misc;
+package edu.jhu.hlt.fnparse.inference;
 
 
 import java.io.BufferedWriter;
@@ -106,16 +106,16 @@ public class Parser {
 	public final boolean benchmarkBP = false;
 	
 	public Parser() {
-		this(Mode.JOINT_FRAME_ARG, false);
+		this(Mode.JOINT_FRAME_ARG, false, false);
 	}
 	
-	public Parser(Mode mode, boolean debug) {
+	public Parser(Mode mode, boolean latentDeps, boolean debug) {
 
 		params = new ParserParams();
 		params.debug = debug;
 		params.featIdx = new Alphabet<String>();
 		params.logDomain = false;
-		params.useLatentDepenencies = false;
+		params.useLatentDepenencies = latentDeps;
 		params.mode = mode;
 		params.usePrototypes = false;
 		params.useSyntaxFeatures = true;
@@ -125,16 +125,9 @@ public class Parser {
 		params.headFinder = new BraindeadHeadFinder();	// TODO
 		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
-		
-		/* I can pass my simple test with pruning, run separate experiment to check pruning perf tradeoff
-		if(debug)
-			params.argPruner = new NoArgPruner();
-		else
-			params.argPruner = new ArgPruner(params);
-		*/
 		params.argPruner = new ArgPruner(params);
 		
-		FrameFactorFactory fff = new FrameFactorFactory();
+		FrameFactorFactory fff = new FrameFactorFactory(params);
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
 		else {
 			fff.setFeatures(new BasicFrameFeatures(params));

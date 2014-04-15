@@ -17,9 +17,9 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.misc.ParsingSentence;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.ParsingSentence;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.prim.arrays.Multinomials;
 
 /**

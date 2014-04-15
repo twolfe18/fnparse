@@ -22,9 +22,9 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IDictionary;
@@ -48,7 +48,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 		boolean plain = true;	// just write out the data
 		
 		File parent = new File("toydata/arg-pruning");
-		Parser p = new Parser(Mode.FRAME_ID, true);
+		Parser p = new Parser(Mode.FRAME_ID, false, true);
 		ArgPruner ap = new ArgPruner(p.params);
 		
 		if(plain) {

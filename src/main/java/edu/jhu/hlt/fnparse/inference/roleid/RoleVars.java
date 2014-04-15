@@ -11,9 +11,9 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.misc.FgRelated;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.FgRelated;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 /**
  * Represents all of the role information for a given frame instantiation (target).

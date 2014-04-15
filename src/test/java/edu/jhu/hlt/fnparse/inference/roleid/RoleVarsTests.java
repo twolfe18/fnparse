@@ -10,8 +10,8 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserTests;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 public class RoleVarsTests {

@@ -11,8 +11,7 @@ import org.junit.*;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.*;
-import edu.jhu.hlt.fnparse.inference.misc.*;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {
@@ -59,25 +58,36 @@ public class ParserTests {
 		return new FNParse(s, instances);
 	}
 	
-	@Test
+	//@Test
 	public void frameId() {
-		Parser p = new Parser(Mode.FRAME_ID, true);
+		Parser p = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(p, true, true, "FRAME_ID");
+	}
+
+	@Test
+	public void frameIdWithLatentDeps() {
+		boolean useLatentDeps = true;
+		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
+		overfitting(p, true, true, "FRAME_ID_LATENT");
 	}
 
 	//@Test
 	public void joint() {
-		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
+		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "JOINT");
 	}
 
-	@Test
+	//@Test
 	public void pipeline() {
-		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "PIPELINE");
 	}
+	
+	
+	
+	
 	
 	private Parser trained, readIn;
 	private File f;
@@ -87,14 +97,14 @@ public class ParserTests {
 		f = File.createTempFile("ParserTests", ".model");
 	}
 	
-	@Test
+	//@Test
 	public void serializationFrameId() throws IOException {
 	
 		// frame id
-		trained = new Parser(Mode.FRAME_ID, true);
+		trained = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(trained, true, true, "FRAME_ID_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.JOINT_FRAME_ARG, true);	// not even same mode to try to screw things up!
+		readIn = new Parser(Mode.JOINT_FRAME_ARG, false, true);	// not even same mode to try to screw things up!
 		readIn.readModel(f);
 		//readIn.params.targetPruningData = trained.params.targetPruningData;	// lets cheat a bit to speed things up...
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
@@ -103,23 +113,23 @@ public class ParserTests {
 	//@Test
 	public void serializationJoint() throws IOException {
 		// joint
-		trained = new Parser(Mode.JOINT_FRAME_ARG, true);
+		trained = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "JOINT_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
+		readIn = new Parser(Mode.FRAME_ID, false, true);	// not even same mode to try to screw things up!
 		readIn.readModel(f);
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
-	@Test
+	//@Test
 	public void serializationPipeline() throws IOException {
 		// pipeline
-		trained = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		trained = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "PIPELINE_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
+		readIn = new Parser(Mode.FRAME_ID, false, true);	// not even same mode to try to screw things up!
 		readIn.readModel(f);
 		overfitting(readIn, false, false, "PIPELINE_SER2");
 	}

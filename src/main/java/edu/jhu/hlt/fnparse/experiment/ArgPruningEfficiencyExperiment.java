@@ -6,9 +6,9 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner.LexPruneMethod;
 import edu.jhu.hlt.fnparse.util.Avg;
@@ -34,7 +34,7 @@ public class ArgPruningEfficiencyExperiment {
 		t.stop("data");
 		
 		for(LexPruneMethod lexPrune : Arrays.asList(LexPruneMethod.NONE, LexPruneMethod.EXACT, LexPruneMethod.SYNSET)) {
-			Parser parser = new Parser(Mode.JOINT_FRAME_ARG, true);
+			Parser parser = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 			boolean punc = lexPrune == LexPruneMethod.NONE;
 			boolean determiners = lexPrune == LexPruneMethod.NONE;
 			((ArgPruner) parser.params.argPruner).set(punc, determiners, lexPrune);

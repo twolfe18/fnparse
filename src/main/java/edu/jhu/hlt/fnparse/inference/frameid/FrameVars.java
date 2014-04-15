@@ -5,10 +5,10 @@ import java.util.*;
 import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.inference.misc.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.misc.FgRelated;
-import edu.jhu.hlt.fnparse.inference.misc.Parser;
-import edu.jhu.hlt.fnparse.inference.misc.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.FgRelated;
+import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 /**
  * Represents all of the frames that could be evoked at a given headword.

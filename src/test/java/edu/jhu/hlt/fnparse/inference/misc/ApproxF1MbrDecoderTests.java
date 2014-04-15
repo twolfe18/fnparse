@@ -6,6 +6,8 @@ import java.util.Arrays;
 
 import org.junit.Test;
 
+import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
+
 public class ApproxF1MbrDecoderTests {
 	
 	@Test
