@@ -48,7 +48,6 @@ import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
-import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
@@ -127,10 +126,13 @@ public class Parser {
 		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		
+		/* I can pass my simple test with pruning, run separate experiment to check pruning perf tradeoff
 		if(debug)
 			params.argPruner = new NoArgPruner();
 		else
 			params.argPruner = new ArgPruner(params);
+		*/
+		params.argPruner = new ArgPruner(params);
 		
 		FrameFactorFactory fff = new FrameFactorFactory();
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
