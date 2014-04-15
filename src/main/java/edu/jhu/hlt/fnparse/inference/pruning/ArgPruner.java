@@ -34,7 +34,7 @@ import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public class ArgPruner implements Serializable {
+public class ArgPruner implements Serializable, IArgPruner {
 
 	private static final long serialVersionUID = 1L;
 
@@ -143,6 +143,7 @@ public class ArgPruner implements Serializable {
 	}
 	
 	// this is the method we care about!
+	@Override
 	public boolean pruneArgHead(Frame f, int roleIdx, int headWordIdx, Sentence sentence) {
 		String pos = sentence.getPos(headWordIdx);
 		if(determiners && pos.endsWith("DT"))

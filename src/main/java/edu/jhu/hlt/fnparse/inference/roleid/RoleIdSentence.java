@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	
 	// List<RoleVars> hypothesis, each one stores a frame
+	public boolean debugDecode = true;
 
 	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params) {
 		super(s, params, params.factorsForRoleId);
@@ -105,6 +106,7 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 			// max over j for every role
 			int K = rv.getFrame().numRoles();
 			Span[] arguments = new Span[K];
+			Arrays.fill(arguments, Span.nullSpan);
 			double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
 			if(params.logDomain) fill2d(beliefs, Double.NEGATIVE_INFINITY);	// otherwise default is 0
 
@@ -125,6 +127,9 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 					DenseFactor df = inf.getMarginals(expansionVar);
 					arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
 				}
+				
+				if(debugDecode)
+					System.out.printf("beliefs for %s.%s: %s\n", rv.getFrame().getName(), rv.getFrame().getRole(k), Arrays.toString(beliefs[k]));
 			}
 			
 			fis.add(FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sentence));

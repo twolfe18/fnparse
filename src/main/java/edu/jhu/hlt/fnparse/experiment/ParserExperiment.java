@@ -160,7 +160,7 @@ public class ParserExperiment {
 		parser.params.frameDecoder.setRecallBias(recallBias.get());
 
 		System.out.println("[ParserExperiment] following statistics are for the train subset:");
-		parser.computeStatistcs(trainSubset);
+		//parser.computeStatistcs(trainSubset);
 		printMemUsage();
 
 		System.out.printf("[ParserExperiment] starting, lrMult=%.3f\n", lrMult.get());
@@ -218,7 +218,7 @@ public class ParserExperiment {
 		Parser parser = new Parser(Mode.FRAME_ID, debug);
 		parser.params.frameDecoder.setRecallBias(1.5d);
 		
-		parser.computeStatistcs(train);
+		//parser.computeStatistcs(train);
 		
 		for(int epoch=0; epoch<2; epoch++) {
 			System.out.println("[ParserExperiment] starting epoch " + epoch);

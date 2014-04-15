@@ -165,6 +165,11 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 		@Override
 		public FeatureVector getFeatures(int config) {
 			// TODO maybe cache these conjoins?
+			
+			// this should be faster
+			//if(config == 0)
+			//	return AbstractFeatures.emptyFeatures;
+
 			return conjoin(features, specifics[config], alph);
 		}
 
@@ -180,7 +185,7 @@ public final class RoleFactorFactory extends HasRoleFeatures implements FactorFa
 					return val;
 				}
 			});
-			return base;
+			return fv;
 		}
 	}
 

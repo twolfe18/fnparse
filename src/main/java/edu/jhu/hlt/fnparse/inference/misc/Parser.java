@@ -47,11 +47,12 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
+import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
+import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
-import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -85,7 +86,7 @@ public class Parser {
 		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
 		public TargetPruningData targetPruningData;
-		public ArgPruner argPruner;
+		public IArgPruner argPruner;
 
 		//public List<FactorFactory<FgRelated>> factors;
 		public FactorFactory<FrameVars> factorsForFrameId;
@@ -125,7 +126,11 @@ public class Parser {
 		params.headFinder = new BraindeadHeadFinder();	// TODO
 		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
-		params.argPruner = new ArgPruner(params);		// TODO fix this, should pass in required data
+		
+		if(debug)
+			params.argPruner = new NoArgPruner();
+		else
+			params.argPruner = new ArgPruner(params);
 		
 		FrameFactorFactory fff = new FrameFactorFactory();
 		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
@@ -204,7 +209,15 @@ public class Parser {
 			LabeledFgExample e1 = fid.getTrainingExample();
 			
 			// run prediction to see what frames we'll be predicting roles for
-			FNTagging predictedFrames = fid.decode(params.model, infFactory());
+			//FNTagging predictedFrames = fid.decode(params.model, infFactory());
+			/*
+			 * TODO i need to split out this training into stages where i train the frame id
+			 * and role id separately (role id depends on frame id). for now i'm just going to
+			 * train the role id as if the frame id system were perfect. this is not ideal because
+			 * it will lead to lower precision than is necessary (i.e. if you get the frame wrong,
+			 * you should train the model to not predict roles).
+			 */
+			FNTagging predictedFrames = p;
 			
 			// clamped frames, predict args
 			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
@@ -218,6 +231,7 @@ public class Parser {
 	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
 		
+		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
 		params.featIdx.startGrowth();
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
@@ -258,38 +272,6 @@ public class Parser {
 		}
 		params.featIdx.stopGrowth();
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
-	}
-	
-	public void computeStatistcs(List<FNParse> examples) {
-		Avg macroTargetRecall = new Avg();
-		Avg microTargetRecall = new Avg();
-		Avg framesPerTarget = new Avg();
-		Avg targetsPerSent = new Avg();
-		Avg rolesPerFrameVar = new Avg();
-		
-		/* TODO get this back
-		for(FNParse p : examples) {
-			Sentence s = p.getSentence();
-			ParsingSentence ps = new ParsingSentence(s, params);
-			double tr = ps.computeMaxTargetRecall(p);
-			macroTargetRecall.accum(tr);
-			microTargetRecall.accum(tr, p.getFrameInstances().size());
-			int ts = 0;
-			for(int i=0; i<s.size(); i++) {
-				FrameVar fv = ps.frameVars[i];
-				if(fv == null) continue;
-				ts++;
-				framesPerTarget.accum(fv.getFrames().size());
-				rolesPerFrameVar.accum(fv.getMaxRoles());
-			}
-			targetsPerSent.accum(ts);
-		}
-		*/
-
-		System.out.printf("[computeStatistcs] upper bound on target recall (due to heuristics) = %.1f/%.1f (micro/macro)\n",
-				100d*microTargetRecall.average(), 100d*macroTargetRecall.average());
-		System.out.printf("[computeStatistcs] frames/target=%.2f targets/sent=%.2f total-#targets=%d roles/frame=%.1f\n",
-				framesPerTarget.average(), targetsPerSent.average(), (int) targetsPerSent.numerator(), rolesPerFrameVar.average());
 	}
 	
 	

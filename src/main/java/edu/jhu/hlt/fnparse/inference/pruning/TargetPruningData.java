@@ -42,7 +42,8 @@ public class TargetPruningData implements Serializable {
 	}
 
 	
-	private void init() {
+	/** only use this if you want to gaurantee when the data is loaded (it calls the automatically otherwise */
+	public void init() {
 		long start = System.currentTimeMillis();
 		System.out.println("[TargetPruningData] init starting...");
 		IRAMDictionary dict = getWordnetDict();

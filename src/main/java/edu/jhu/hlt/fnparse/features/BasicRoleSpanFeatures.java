@@ -42,6 +42,15 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		b(v, 2d, "intercept");
 		b(v, 0.5d, r, "intercept");
 		b(v, rr, "intercept");
+		
+		if(argHeadIdx < targetHeadIdx)
+			b(v, 3d, "arg-is-left-of-target");
+		if(argHeadIdx > targetHeadIdx)
+			b(v, 3d, "arg-is-right-of-target");
+		if(argHeadIdx == targetHeadIdx)
+			b(v, 3d, "arg-is-target");
+		
+		// TODO features that count number of intermediate POS between arg and target
 
 		b(v, 2d, "width=", String.valueOf(argSpan.width()));
 		b(v, 2d, "width/2=", String.valueOf(argSpan.width()/2));

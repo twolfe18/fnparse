@@ -29,6 +29,8 @@ public class RoleVars implements FgRelated {
 	public static final int maxArgRoleExpandLeft = 10;
 	public static final int maxArgRoleExpandRight = 3;
 	
+	public boolean verbose = true;
+	
 	// frame-target that this belongs to
 	public final int i;
 	public final Frame t;
@@ -79,10 +81,15 @@ public class RoleVars implements FgRelated {
 
 			for(int j=0; j<n; j++) {
 
-				if(params.argPruner.pruneArgHead(t, k, j, sent))
-					continue;
-
 				boolean argRealized = (j == jGold);
+
+				if(params.argPruner.pruneArgHead(t, k, j, sent)) {
+					if(verbose && argRealized) {
+						System.err.printf("[RoleVars] pruned %s.%s for head \"%s\"\n",
+								gold.getFrame().getName(), gold.getFrame().getRole(k), sent.getWord(j));
+					}
+					continue;
+				}
 
 				String name = String.format("r_{i=%d,t=%s,j=%d,k=%d}", i, evoked.getName(), j, k);
 				r_kj[k][j] = new Var(VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);

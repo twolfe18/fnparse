@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.misc.Parser;
 import edu.jhu.hlt.fnparse.inference.misc.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner.LexPruneMethod;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
@@ -36,7 +37,7 @@ public class ArgPruningEfficiencyExperiment {
 			Parser parser = new Parser(Mode.JOINT_FRAME_ARG, true);
 			boolean punc = lexPrune == LexPruneMethod.NONE;
 			boolean determiners = lexPrune == LexPruneMethod.NONE;
-			parser.params.argPruner.set(punc, determiners, lexPrune);
+			((ArgPruner) parser.params.argPruner).set(punc, determiners, lexPrune);
 
 			Avg avgKeepRatio = new Avg();	// macro (tells you a little about the skew)
 			Avg keepRatio = new Avg();		// micro (what we care about)

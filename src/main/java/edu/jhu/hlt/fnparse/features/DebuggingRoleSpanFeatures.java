@@ -13,10 +13,31 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 	}
 
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int argHeadIdx, int roleIdx, Span argSpan, Sentence s) {
+	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence s) {
+		
+		String aLemma = argHeadIdx >= s.size() ? "null" : s.getLemma(argHeadIdx);
+		String aPOS = argHeadIdx >= s.size() ? "nullPOS" : s.getPos(argHeadIdx);
+		String fs = f.getName();
+		String rs = f.getRole(roleIdx);
+		
 		FeatureVector fv = new FeatureVector();
-		b(fv, f.getName(), String.valueOf(targetHeadIdx), String.valueOf(roleIdx), argSpan.toString());
-		b(fv, f.getName(), String.valueOf(targetHeadIdx), String.valueOf(roleIdx));
+		b(fv, fs, String.valueOf(targetHeadIdx), rs, argSpan.toString());
+		b(fv, fs, String.valueOf(targetHeadIdx), rs);
+		b(fv, rs);
+		b(fv, fs, rs);
+		b(fv, fs, rs, aLemma);
+		b(fv, fs, rs, aPOS);
+		
+		if(argHeadIdx < targetHeadIdx) {
+			b(fv, fs, rs, "arg-left");
+			b(fv, fs, "arg-left");
+			b(fv, "arg-left");
+		}
+		if(argHeadIdx > targetHeadIdx) {
+			b(fv, fs, rs, "arg-right");
+			b(fv, fs, "arg-right");
+			b(fv, "arg-right");
+		}
 		return fv;
 	}
 

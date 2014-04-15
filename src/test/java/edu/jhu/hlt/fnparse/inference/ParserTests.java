@@ -6,6 +6,8 @@ import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.*;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -25,7 +27,7 @@ public class ParserTests {
 		System.out.println("[ParserTests] dummy parse:");
 		System.out.println(Describe.fnParse(dummyParse));
 	}
-		
+	
 	public static FNParse makeDummyParse() {
 		String[] tokens  = new String[] {"The", "fox", "quickly", "jumped", "over", "the", "fence"};
 		String[] lemmas = new String[] {"The", "fox", "quickly", "jump", "over", "the", "fence"};
@@ -59,7 +61,7 @@ public class ParserTests {
 		return new FNParse(s, instances);
 	}
 	
-	//@Test
+	@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, true);
 		overfitting(p, true, true, "FRAME_ID");
@@ -87,7 +89,7 @@ public class ParserTests {
 		f = File.createTempFile("ParserTests", ".model");
 	}
 	
-	//@Test
+	@Test
 	public void serializationFrameId() throws IOException {
 	
 		// frame id
@@ -112,7 +114,7 @@ public class ParserTests {
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
-	//@Test
+	@Test
 	public void serializationPipeline() throws IOException {
 		// pipeline
 		trained = new Parser(Mode.PIPELINE_FRAME_ARG, true);
@@ -134,9 +136,8 @@ public class ParserTests {
 
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
-			if(p.params.debug) {
-				p.train(train, 15, 1, 0.5d, 1d);
-			}
+			if(p.params.debug) 
+				p.train(train, 15, 1, 0.5d, 10d);
 			else
 				p.train(train, 15, 1, 0.5d, 10d);
 			p.writeWeights(new File("weights." + desc + ".txt"));
