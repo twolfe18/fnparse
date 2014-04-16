@@ -109,6 +109,18 @@ public class ParserTests {
 		//readIn.params.targetPruningData = trained.params.targetPruningData;	// lets cheat a bit to speed things up...
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
 	}
+
+	@Test
+	public void serializationFrameIdWithLatentDeps() throws IOException {
+	
+		// frame id
+		trained = new Parser(Mode.FRAME_ID, true, true);
+		overfitting(trained, true, true, "FRAME_ID_LATENT_SER1");
+		trained.writeModel(f);
+		readIn = new Parser(Mode.FRAME_ID, true, true);
+		readIn.readModel(f);
+		overfitting(readIn, true, false, "FRAME_ID_LATENT_SER2");
+	}
 	
 	//@Test
 	public void serializationJoint() throws IOException {

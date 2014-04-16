@@ -124,7 +124,7 @@ public class ParserExperiment {
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(300, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1));//, 10, 100));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.2, 1d, 5d));
 		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 1d, 10d));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 5, 10));
@@ -169,13 +169,13 @@ public class ParserExperiment {
 		printMemUsage();
 
 		System.out.println("[ParserExperiment] predicting on test set...");
-		predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(test);	// double cast ftw!
+		predicted = parser.parseWithoutPeeking(test);
 		results = BasicEvaluation.evaluate(test, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		System.out.println("[ParserExperiment] predicting on train set...");
-		predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(trainSubset);	// double case ftw!
+		predicted = parser.parseWithoutPeeking(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();
@@ -184,6 +184,9 @@ public class ParserExperiment {
 		parser.writeModel(new File(workingDir, "model.frameId.ser"));
 	}
 	
+	/**
+	 * @deprecated
+	 */
 	public static void mainOld(String[] args) {
 
 		if(!modelDir.isDirectory())
@@ -237,7 +240,7 @@ public class ParserExperiment {
 			if(eval) {
 				System.out.println("[ParserExperiment] predicting on test set...");
 				decodeTimer.start();
-				predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(test);
+				predicted = parser.parseWithoutPeeking(test);
 				decodeTimer.stop();
 				results = BasicEvaluation.evaluate(test, predicted);
 				BasicEvaluation.showResults("[test] after " + (epoch+1) + " epochs", results);
@@ -245,7 +248,7 @@ public class ParserExperiment {
 
 				System.out.println("[ParserExperiment] predicting on train set...");
 				decodeTimer.start();
-				predicted = (List<FNParse>) (Object) parser.parseWithoutPeeking(trainSubset);
+				predicted = parser.parseWithoutPeeking(trainSubset);
 				decodeTimer.stop();
 				results = BasicEvaluation.evaluate(trainSubset, predicted);
 				BasicEvaluation.showResults("[train] after " + (epoch+1) + " epochs", results);

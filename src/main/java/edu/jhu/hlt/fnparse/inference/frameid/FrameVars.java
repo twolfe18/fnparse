@@ -7,7 +7,6 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FgRelated;
-import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 /**
@@ -25,7 +24,7 @@ public class FrameVars implements FgRelated {
 	public Frame[] f_it_values;		// first value is nullFrame
 	public Var[] f_it;
 	public int i;
-	public FrameInstance gold;
+	public Frame gold;
 	public boolean goldSet = false;
 
 	/**
@@ -80,7 +79,7 @@ public class FrameVars implements FgRelated {
 	}
 	
 	public void setGoldIsNull() {
-		this.gold = null;
+		this.gold = Frame.nullFrame;
 		this.goldSet = true;
 	}
 
@@ -90,15 +89,16 @@ public class FrameVars implements FgRelated {
 			throw new IllegalArgumentException();
 
 		Span target = gold.getTarget();
-		if(target.width() != 1 || target.start != getTargetHeadIdx())
+		if(!target.includes(this.getTargetHeadIdx()))
 			throw new IllegalArgumentException();
 
-		this.gold = gold;
 		this.goldSet = true;
 		if(!Arrays.asList(f_it_values).contains(gold.getFrame())) {
 			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
 					gold.getFrame(), gold.getSentence().getLU(getTargetHeadIdx()));
+			this.gold = Frame.nullFrame;
 		}
+		else this.gold = gold.getFrame();
 	}
 
 	@Override
@@ -107,14 +107,14 @@ public class FrameVars implements FgRelated {
 		for(int i=0; i<n; i++)
 			fg.addVar(f_it[i]);
 		if(this.goldSet) {
-			Frame gf = this.gold == null ? Frame.nullFrame : this.gold.getFrame();
 			boolean foundGold = false;
 			for(int i=0; i<n; i++) {
-				boolean v = f_it_values[i] == gf;
+				boolean v = f_it_values[i] == this.gold;
 				gold.put(f_it[i], BinaryVarUtil.boolToConfig(v));
 				foundGold |= v;
 			}
-			assert foundGold;
+			if(!foundGold)
+				assert false;
 		}
 	}
 

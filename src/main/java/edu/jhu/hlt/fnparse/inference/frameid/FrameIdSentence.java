@@ -92,6 +92,7 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 		Set<FrameVars> haventSet = new HashSet<FrameVars>();
 		FrameVars[] byHead = new FrameVars[sentence.size()];
 		for(FrameVars fHyp : this.hypotheses) {
+			assert byHead[fHyp.getTargetHeadIdx()] == null;
 			byHead[fHyp.getTargetHeadIdx()] = fHyp;
 			haventSet.add(fHyp);
 		}

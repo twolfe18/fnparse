@@ -251,16 +251,16 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 	@Override
 	public Iterator<FNParse> getParsedSentences() {
-		return new FNIterFilters.OnlyParses(new FIIterator(frameFile, conllFile));
+		return new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getTaggedSentences() {
-		return new FNIterFilters.OnlyTaggings(new FIIterator(frameFile, conllFile));
+		return new FNIterFilters.OnlyTaggings(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getParsedOrTaggedSentences() {
-		return new FIIterator(frameFile, conllFile);
+		return new FNIterFilters.SkipExceptions(new FIIterator(frameFile, conllFile));
 	}
 }
