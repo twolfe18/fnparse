@@ -18,30 +18,35 @@ public interface Features {
 	
 	public List<Integer> dontRegularize();
 	
+	/*
+	 * these features say nothing about where they are applied (i.e. what factor they belong to).
+	 * the interface only specifies what information they featurize, and likely this will need
+	 * to be conjoined with a particular configuration.
+	 * 
+	 * AH, TODO pass into each of these functions a "refinements" object that has string prefixes and weights.
+	 * this will let the caller decide what these things are parameterizing without needing to duplicate the vector.
+	 * The simplest example of using this is to conjoin with the variable configuration that the factor takes on.
+	 */
+
+	/** frame */
 	public static interface F extends Features {
-		public FeatureVector getFeatures(Frame f, int targetHeadIdx, Sentence s);
+		public void featurize(FeatureVector v, Refinements r, int i, Frame t, Sentence s);
 	}
-	
-	public static interface FP extends Features {
-		public FeatureVector getFeatures(Frame f, int targetHeadIdx, FrameInstance prototype, Sentence s);
+	/** frame + link */
+	public static interface FD extends Features {
+		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int l, Sentence s);
 	}
-	
-	/** argHeadIdx == s.size means that this argument is not realized */
-	public static interface FR extends Features {
-		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
+	/** frame + role */
+	public static interface R extends Features {
+		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Sentence s);
 	}
-	
-	/** argHeadIdx == s.size means that this argument is not realized */
+	/** frame + role + link */
+	public static interface RD extends Features {
+		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, int l, Sentence s);
+	}
+	/** frame + role + expansion */
 	public static interface RE extends Features {
-		public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence s);
+		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Span arg, Sentence s);
 	}
-	
-	public static interface E extends Features {
-		public FeatureVector getFeatures(Span constituent, Sentence s);
-	}
-	
-	public static interface FRL extends Features {
-		public FeatureVector getFeatures(Frame f, boolean linkFromTargetHeadToArgHead, int targetHeadIdx, int roleIdx, int argHeadIdx, Sentence s);
-	}
-	
+
 }

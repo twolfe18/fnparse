@@ -241,6 +241,11 @@ public class RoleVars implements FgRelated {
 		public void remove() { throw new UnsupportedOperationException(); }
 	}
 
+	/**
+	 * returns an iterator of unpruned (a wrapper around) role variables (RVars).
+	 * an RVar will always have a roleVar, but its expansion may be null (in the case
+	 * of the roleVar for "arg not realized").
+	 */
 	public Iterator<RVar> getVars() {
 		return new RVarIter(this.r_kj, this.r_kj_e, this.r_kj_e_values);
 	}

@@ -22,13 +22,15 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		this.params = params;
 	}
 
+
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence sent) {
+	public void featurize(FeatureVector v, Refinements refs, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
 		
+		if(refs != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
+
 		if(argSpan == Span.nullSpan)
-			return emptyFeatures;
-		
-		FeatureVector v = new FeatureVector();
+			return;
 		
 		String r = f == Frame.nullFrame
 				? "null-frame"
@@ -174,7 +176,6 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 		
-		return v;
 	}
 
 }

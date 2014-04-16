@@ -4,16 +4,19 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.util.Alphabet;
 
-public class DebuggingFrameRoleFeatures extends AbstractFeatures<DebuggingFrameRoleFeatures> implements Features.FR {
+public class DebuggingRoleFeatures extends AbstractFeatures<DebuggingRoleFeatures> implements Features.R {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingFrameRoleFeatures(Alphabet<String> featIdx) {
+	public DebuggingRoleFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHead, Sentence sent) {
+	public void featurize(FeatureVector v, Refinements r, int targetHeadIdx, Frame f, int argHead, int roleIdx, Sentence sent) {
+
+		if(r != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
 
 		if(roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();
@@ -22,7 +25,7 @@ public class DebuggingFrameRoleFeatures extends AbstractFeatures<DebuggingFrameR
 		String t = sent.getLU(targetHeadIdx).getFullString();
 		String a = argHead < sent.size() ? sent.getLU(argHead).getFullString() : "null";
 		b(fv, "frame=", f.getName(), "roleIdx=", String.valueOf(roleIdx), "target=", t, "arg=", a);
-		return fv;
 	}
+
 }
 

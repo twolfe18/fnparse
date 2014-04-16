@@ -4,39 +4,41 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.model.ExpFamFactor;
+import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance.Prototype;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.HasFrameFeatures;
+import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
-import edu.jhu.util.Alphabet;
 
 /**
  * Instantiates factors that touch f_it.
  * 
  * @author travis
  */
-public final class FrameFactorFactory extends HasFrameFeatures implements FactorFactory<FrameVars> {
+public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
 	private static final long serialVersionUID = 1L;
 	
-	private boolean frameDepFactors;
-	private boolean depParents = true;
-	private boolean depChildren = true;
+	private ParserParams params;
+	private boolean includeDepFactors;
+	private boolean includeGovFactors;
 	
-	private Alphabet<String> featIdx;	// TODO remove this
-	
-	public FrameFactorFactory(ParserParams params) {
-		this.frameDepFactors = params.useLatentDepenencies;
-		this.featIdx = params.featIdx;
+	/**
+	 * @param params
+	 * @param includeDepFactors include binary factors f_it ~ l_ij
+	 * @param includeGovFactors include binary factors f_it ~ l_ji
+	 */
+	public FrameFactorFactory(ParserParams params, boolean includeDepFactors, boolean includeGovFactors) {
+		this.params = params;
+		this.includeDepFactors = includeDepFactors;
+		this.includeGovFactors = includeGovFactors;
 	}
 	
 	@Override
@@ -45,63 +47,78 @@ public final class FrameFactorFactory extends HasFrameFeatures implements Factor
 	// TODO need to add an Exactly1 factor to each FrameVars
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
+		
+		VarSet vs;
+		ExplicitExpFamFactor phi;
+		FeatureVector fv;
+
 		final int n = s.size();
 		List<Factor> factors = new ArrayList<Factor>();
 		for(FrameVars fhyp : fr) {
 			final int T = fhyp.numFrames();
 			final int i = fhyp.getTargetHeadIdx();
-			for(int t=0; t<T; t++) {
-				Frame f = fhyp.getFrame(t);
-				Prototype p = null;
-				VarSet vs = new VarSet(fhyp.getVariable(t));
-				FeatureVector features = getFeatures(f, p, i, s);
-				factors.add(new F(vs, features));
+			for(int tIdx=0; tIdx<T; tIdx++) {
+
+				Frame t = fhyp.getFrame(tIdx);
 				
-				// binary factors that touch a f_it variable and an l_ij variable
-				if(frameDepFactors) {
+				// unary factor on f_it
+				vs = new VarSet(fhyp.getVariable(tIdx));
+				fv = new FeatureVector();
+				params.fFeatures.featurize(fv, Refinements.noRefinements, i, t, s);
+				phi = new ExplicitExpFamFactor(vs);
+				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
+				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
+				factors.add(phi);
+				
+				// binary factor f_it ~ l_ji
+				if(this.includeGovFactors) {
 					for(int j=-1; j<n; j++) {
-						if(depParents) {
-							Var link = l.getLinkVar(j, i);
-							if(link == null) continue;
-							FrameDepFactor fdf = new FrameDepFactor(fhyp.getVariable(t), i, f, link, true, j);
-							fdf.setState(featIdx, s);
-							factors.add(fdf);
+						if(i == j) continue;
+						vs = new VarSet(fhyp.getVariable(tIdx), l.getLinkVar(j, i));
+						phi = new ExplicitExpFamFactor(vs);
+						int nv = vs.calcNumConfigs();
+						for(int c=0; c<nv; c++) {
+							int[] cfg = vs.getVarConfigAsArray(c);
+							// TODO here i could check if cfg[0] == cfg[1] and use AbstractFeatures.emptyFeatures if not
+							Refinements r = new Refinements("f=" + cfg[0] + ",lg=" + cfg[1]);
+							fv = new FeatureVector();
+							params.fdFeatures.featurize(fv, r, i, t, j, s);
+							phi.setFeatures(c, fv);
 						}
-						if(depChildren && j >= 0) {
-							Var link = l.getLinkVar(i, j);
-							if(link == null) continue;
-							FrameDepFactor fdf = new FrameDepFactor(fhyp.getVariable(t), i, f, link, false, j);
-							fdf.setState(featIdx, s);
-							factors.add(fdf);
+						factors.add(phi);
+					}
+				}
+				
+				// binary factor f_it ~ l_ij
+				if(this.includeDepFactors) {
+					for(int j=0; j<n; j++) {
+						if(i == j) continue;
+						vs = new VarSet(fhyp.getVariable(tIdx), l.getLinkVar(i, j));
+						phi = new ExplicitExpFamFactor(vs);
+						int nv = vs.calcNumConfigs();
+						for(int c=0; c<nv; c++) {
+							int[] cfg = vs.getVarConfigAsArray(c);
+							// TODO here i could check if cfg[0] == cfg[1] and use AbstractFeatures.emptyFeatures if not
+							Refinements r = new Refinements("f=" + cfg[0] + ",ld=" + cfg[1]);
+							fv = new FeatureVector();
+							params.fdFeatures.featurize(fv, r, i, t, j, s);
+							phi.setFeatures(c, fv);
 						}
+						factors.add(phi);
 					}
 				}
 			}
 		}
 		return factors;
 	}
-	
 
-	static final class F extends ExpFamFactor {
-
-		private static final long serialVersionUID = 1L;
-
-		private FeatureVector features;
-
-		public F(VarSet vars, FeatureVector features) {
-			super(vars);
-			if(vars.size() != 1)
-				throw new IllegalArgumentException("shouldn't this have just the frame var?");
-			this.features = features;
-		}
-
-		@Override
-		public FeatureVector getFeatures(int config) {
-			if(BinaryVarUtil.configToBool(config))
-				return features;
-			return AbstractFeatures.emptyFeatures;
-		}
-		
+	@Override
+	public List<Features> getFeatures() {
+		List<Features> feats = new ArrayList<Features>();
+		feats.add(params.fFeatures);
+		if(this.includeDepFactors || this.includeGovFactors)
+			feats.add(params.fdFeatures);
+		return feats;
 	}
 }
 

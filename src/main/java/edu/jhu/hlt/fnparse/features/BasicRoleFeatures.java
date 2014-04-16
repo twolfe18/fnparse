@@ -6,27 +6,32 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
-public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRoleFeatures> implements Features.FR {
+public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures> implements Features.R {
 
 	private static final long serialVersionUID = 1L;
 	
 	private ParserParams params;
 	
-	public BasicFrameRoleFeatures(ParserParams params) {
+	public BasicRoleFeatures(ParserParams params) {
 		super(params.featIdx);
 		this.params = params;
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHead, int roleIdx, int argHead, Sentence sent) {
+	public void featurize(FeatureVector fv, Refinements r, int targetHead, Frame f, int argHead, int roleIdx, Sentence sent) {
 		
 		if(roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();
 		
+		if(r != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
+
 		// NOTE: don't write any back-off features that only look at just roleIdx
 		// because it is meaningless outside without considering the frame.
-		
-		FeatureVector fv = new FeatureVector();
+		// CORRECTION: the way they named the roles in framenet, there is frame-to-frame overlap of
+		// roles, so it may be a good idea to allow backing off from the frame,
+		// ***but only if you're not using params.fastFeatNames!!!***
+		// (if you are, you will get an int, rather than a role name, which will not generalize across frames)
 		
 		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
 		String rs = "r" + (params.fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
@@ -84,7 +89,6 @@ public final class BasicFrameRoleFeatures extends AbstractFeatures<BasicFrameRol
 				b(fv, "trigger-arg-dep");
 			// TODO more?
 		}
-
-		return fv;
 	}
+
 }

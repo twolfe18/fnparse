@@ -31,11 +31,11 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleDepFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.DebuggingConstituencyFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
-import edu.jhu.hlt.fnparse.features.DebuggingFrameRoleFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
@@ -58,6 +58,7 @@ import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.HeterogeneousL2;
 import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
+
 
 public class Parser {
 	
@@ -86,8 +87,14 @@ public class Parser {
 		public ApproxF1MbrDecoder argDecoder;
 		public TargetPruningData targetPruningData;
 		public IArgPruner argPruner;
+		
+		public Features.F  fFeatures;
+		public Features.FD fdFeatures;
+		public Features.R  rFeatures;
+		public Features.RD rdFeatures;
+		public Features.RE reFeatures;
 
-		//public List<FactorFactory<FgRelated>> factors;
+		// these are additive (as in when doing jointId, you include factors from factorsForFrameId)
 		public FactorFactory<FrameVars> factorsForFrameId;
 		public FactorFactory<RoleVars> factorsForRoleId;
 		public FactorFactory<FrameInstanceHypothesis> factorsForJointId;
@@ -106,7 +113,7 @@ public class Parser {
 	public final boolean benchmarkBP = false;
 	
 	public Parser() {
-		this(Mode.JOINT_FRAME_ARG, false, false);
+		this(Mode.PIPELINE_FRAME_ARG, false, false);
 	}
 	
 	public Parser(Mode mode, boolean latentDeps, boolean debug) {
@@ -127,29 +134,24 @@ public class Parser {
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argPruner = new ArgPruner(params);
 		
-		FrameFactorFactory fff = new FrameFactorFactory(params);
-		if(params.debug) fff.setFeatures(new DebuggingFrameFeatures(params.featIdx));
-		else {
-			fff.setFeatures(new BasicFrameFeatures(params));
-			//fff.setFeatures(new BasicFramePrototypeFeatures(params.featIdx));
-		}
-		params.factorsForFrameId = fff;
+		params.factorsForFrameId = new FrameFactorFactory(params, latentDeps, latentDeps);
+		params.factorsForRoleId = new RoleFactorFactory(params, latentDeps, latentDeps, false);
+		params.factorsForJointId = null;
+		assert mode != Mode.JOINT_FRAME_ARG : "not really implemented";
 		
-		if(mode != Mode.FRAME_ID) {
-			RoleFactorFactory rff = new RoleFactorFactory(params);
-			if(params.debug) {
-				rff.setFeatures(new DebuggingConstituencyFeatures(params.featIdx));
-				rff.setFeatures(new DebuggingRoleSpanFeatures(params.featIdx));
-				rff.setFeatures(new DebuggingFrameRoleFeatures(params.featIdx));
-			}
-			else {
-				rff.setFeatures(new BasicRoleSpanFeatures(params));
-				rff.setFeatures(new BasicFrameRoleFeatures(params));
-			}
-			params.factorsForRoleId = rff;
-			
-			// TODO check for joint factors
-			assert mode != Mode.JOINT_FRAME_ARG : "not really implemented";
+		if(params.debug) {
+			params.fFeatures = new DebuggingFrameFeatures(params.featIdx);
+			params.fdFeatures = null;	// TODO
+			params.rFeatures = new DebuggingRoleFeatures(params.featIdx);
+			params.rdFeatures = null;	// TODO
+			params.reFeatures = new DebuggingRoleSpanFeatures(params.featIdx);
+		}
+		else {
+			params.fFeatures = new BasicFrameFeatures(params);
+			params.fdFeatures = null;	// TODO
+			params.rFeatures = new BasicRoleFeatures(params);
+			params.rdFeatures = new BasicRoleDepFeatures(params.featIdx);
+			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 	}
 	

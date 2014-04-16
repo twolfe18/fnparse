@@ -7,20 +7,23 @@ import edu.jhu.util.Alphabet;
 
 public class DebuggingFrameFeatures extends AbstractFeatures<DebuggingFrameFeatures> implements edu.jhu.hlt.fnparse.features.Features.F {
 
+	private static final long serialVersionUID = 1L;
+
 	public DebuggingFrameFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
 	}
 	
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, Sentence sent) {
+	public void featurize(FeatureVector fv, Refinements r, int targetHeadIdx, Frame f, Sentence sent) {
 		
+		if(r != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
+
 //		if(f == Frame.nullFrame)
 //			return emptyFeatures;
 		
-		FeatureVector fv = new FeatureVector();
 		b(fv, "frame=", f.getName(), "targetHead=", String.valueOf(targetHeadIdx), "sent=", sent.getId());
 		b(fv, "frame=", f.getName());
-		return fv;
 	}
 
 }

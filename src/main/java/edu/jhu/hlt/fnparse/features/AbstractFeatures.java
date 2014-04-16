@@ -8,6 +8,7 @@ import java.util.List;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -111,5 +112,20 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 		}
 		
 		return idx;
+	}
+
+	/** take a feature vector and conjoin each of its features with a string like "f=0,r=1" or "r=0,l=1" or "r=1,e=1:3" */
+	public static FeatureVector conjoin(final FeatureVector base, final String specific, final Alphabet<String> featureNames) {
+		final FeatureVector fv = new FeatureVector();
+		base.apply(new FnIntDoubleToDouble() {
+			@Override
+			public double call(int idx, double val) {
+				String fullFeatName = specific + ":" + featureNames.lookupObject(idx);
+				int newIdx = featureNames.lookupIndex(fullFeatName, true);
+				fv.add(newIdx, val);
+				return val;
+			}
+		});
+		return fv;
 	}
 }

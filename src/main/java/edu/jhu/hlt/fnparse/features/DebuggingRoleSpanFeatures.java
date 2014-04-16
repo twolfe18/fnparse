@@ -13,14 +13,16 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 	}
 
 	@Override
-	public FeatureVector getFeatures(Frame f, int targetHeadIdx, int roleIdx, int argHeadIdx, Span argSpan, Sentence s) {
-		
+	public void featurize(FeatureVector fv, Refinements r, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence s) {
+
+		if(r != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
+
 		String aLemma = argHeadIdx >= s.size() ? "null" : s.getLemma(argHeadIdx);
 		String aPOS = argHeadIdx >= s.size() ? "nullPOS" : s.getPos(argHeadIdx);
 		String fs = f.getName();
 		String rs = f.getRole(roleIdx);
 		
-		FeatureVector fv = new FeatureVector();
 		b(fv, fs, String.valueOf(targetHeadIdx), rs, argSpan.toString());
 		b(fv, fs, String.valueOf(targetHeadIdx), rs);
 		b(fv, rs);
@@ -38,7 +40,6 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 			b(fv, fs, "arg-right");
 			b(fv, "arg-right");
 		}
-		return fv;
 	}
 
 }

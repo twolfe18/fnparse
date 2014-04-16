@@ -18,7 +18,6 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.Features.F;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IRAMDictionary;
@@ -30,7 +29,7 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
+public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements Features.F {
 	
 	private static final long serialVersionUID = 1L;
 	
@@ -70,13 +69,14 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	}
 
 	@Override
-	public FeatureVector getFeatures(final Frame f, final int head, final Sentence s) {
+	public void featurize(FeatureVector v, Refinements refs, int head, Frame f, Sentence s) {
+		
+		if(refs != Refinements.noRefinements)
+			throw new RuntimeException("implement me (in AbstractFeatures.b)!");
 		
 		full.start();
 		final int n = s.size();
 		Set<String> bag = new HashSet<String>();
-		
-		FeatureVector v = new FeatureVector();
 		
 		LexicalUnit headLU = s.getLU(head);
 		String fs = "f=" + (params.fastFeatNames ? f.getId() : f.getName());
@@ -264,7 +264,6 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		
 		//System.out.println("fv.size=" + v.size());
 		full.stop();
-		return v;
 	}
 	
 	private transient IRAMDictionary dict;
