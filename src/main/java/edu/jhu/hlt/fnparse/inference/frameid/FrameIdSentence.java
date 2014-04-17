@@ -49,6 +49,12 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 			if(fv != null) hypotheses.add(fv);
 		}
 	}
+	
+	/**
+	 * @return a list of FrameVars, each of which represents the possible
+	 * frames that could be evoked at a particular location in a sentence.
+	 */
+	public List<FrameVars> getPossibleFrames() { return hypotheses; }
 
 	@Override
 	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {

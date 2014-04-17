@@ -152,7 +152,7 @@ public class RoleVars implements FgRelated {
 		r_kj_e[k][j] = new Var(varType, ei.size(), name, null);
 		r_kj_e_values[k][j] = ei;
 	}
-
+	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		// i dont think i really need to add the variables to fg

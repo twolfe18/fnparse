@@ -99,7 +99,6 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		final int n = sentence.size();
 		for(RoleVars rv : hypotheses) {
 			
-			
 			// max over j for every role
 			int K = rv.getFrame().numRoles();
 			Span[] arguments = new Span[K];
