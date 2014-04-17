@@ -15,17 +15,21 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 	@Override
 	public void featurize(FeatureVector fv, Refinements r, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence s) {
 
-		String aLemma = argHeadIdx >= s.size() ? "null" : s.getLemma(argHeadIdx);
-		String aPOS = argHeadIdx >= s.size() ? "nullPOS" : s.getPos(argHeadIdx);
-		String fs = f.getName();
-		String rs = f.getRole(roleIdx);
+		LexicalUnit a = s.getLemmaLU(argHeadIdx);
+		String tLoc = "target@" + targetHeadIdx;	// wouldn't include this in non-debugging features, it will clearly overfit
+		String fs = "frame=" + f.getName();
+		String rs = "role=" + f.getRole(roleIdx);
+		String width = "argWidth=" + Math.min(argSpan.width() / 5, 3);
 		
-		b(fv, r, fs, String.valueOf(targetHeadIdx), rs, argSpan.toString());
-		b(fv, r, fs, String.valueOf(targetHeadIdx), rs);
+		b(fv, r, fs, tLoc, rs, argSpan.toString());
+		b(fv, r, fs, tLoc, rs);
 		b(fv, r, rs);
 		b(fv, r, fs, rs);
-		b(fv, r, fs, rs, aLemma);
-		b(fv, r, fs, rs, aPOS);
+		b(fv, r, fs, rs, a.word);
+		b(fv, r, fs, rs, a.pos);
+		
+		b(fv, r, fs, rs, width);
+		b(fv, r, rs, width);
 		
 		if(argHeadIdx < targetHeadIdx) {
 			b(fv, r, fs, rs, "arg-left");

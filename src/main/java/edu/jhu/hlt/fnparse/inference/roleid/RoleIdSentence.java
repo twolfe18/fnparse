@@ -69,12 +69,9 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 			RoleVars rv;
 			if(hasGold) {	// train mode
 				FrameInstance goldFI = fiByTarget[targetHead];
-				if(goldFI != null && goldFI.getFrame() == fi.getFrame())
-					rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), params);
-				else {
-					// if we got the frame wrong, then train to predict no args
-					rv = new RoleVars(null, targetHead, fi.getFrame(), fi.getSentence(), params);
-				}
+				if(goldFI != null && goldFI.getFrame() != fi.getFrame())
+					goldFI = null;	// if we got the frame wrong, then train to predict no args
+				rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), params);
 			}
 			else	// predict/decode mode
 				rv = new RoleVars(targetHead, fi.getFrame(), fi.getSentence(), params);

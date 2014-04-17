@@ -13,15 +13,16 @@ public class DebuggingRoleFeatures extends AbstractFeatures<DebuggingRoleFeature
 	}
 	
 	@Override
-	public void featurize(FeatureVector v, Refinements r, int targetHeadIdx, Frame f, int argHead, int roleIdx, Sentence sent) {
+	public void featurize(FeatureVector v, Refinements refs, int targetHeadIdx, Frame f, int argHead, int roleIdx, Sentence sent) {
 
 		if(roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();
 
-		FeatureVector fv = new FeatureVector();
-		String t = sent.getLU(targetHeadIdx).getFullString();
-		String a = argHead < sent.size() ? sent.getLU(argHead).getFullString() : "null";
-		b(fv, r, "frame=", f.getName(), "roleIdx=", String.valueOf(roleIdx), "target=", t, "arg=", a);
+		String fs = "frame=" + f.getName();
+		String t = "target=" + sent.getLU(targetHeadIdx).getFullString();
+		String a = "arg=" + (argHead < sent.size() ? sent.getLU(argHead).getFullString() : "null");
+		String r = "roleIdx=" + f.getRole(roleIdx);
+		b(v, refs, fs, r, t, a);
 	}
 
 }

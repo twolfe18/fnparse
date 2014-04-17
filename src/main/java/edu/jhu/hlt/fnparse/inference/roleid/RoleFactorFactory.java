@@ -69,20 +69,23 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				// r_itjk ~ 1
 				fv = new FeatureVector();
 				params.rFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, s);
+				assert fv.l0Norm() > 0;
 				phi = new ExplicitExpFamFactor(new VarSet(rvar.roleVar));
 				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
 				factors.add(phi);
 
 				// r_itjk^e ~ 1
-				phi = new ExplicitExpFamFactor(new VarSet(rvar.expansionVar));
-				for(int ei=0; ei<rvar.expansionValues.size(); ei++) {
-					fv = new FeatureVector();
-					Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
-					params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
-					phi.setFeatures(ei, fv);
+				if(rvar.expansionVar != null) {
+					phi = new ExplicitExpFamFactor(new VarSet(rvar.expansionVar));
+					for(int ei=0; ei<rvar.expansionValues.size(); ei++) {
+						fv = new FeatureVector();
+						Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
+						params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
+						phi.setFeatures(ei, fv);
+					}
+					factors.add(phi);
 				}
-				factors.add(phi);
 
 				// r_itjk ~ l_*j
 				if(this.includeGovFactors) {
@@ -115,7 +118,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				}
 				
 				// r_itjk ~ r_itjk^e
-				if(this.includeExpansionBinaryFactor) {
+				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor) {
 					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
 					int C = vs.calcNumConfigs();
 					phi = new ExplicitExpFamFactor(vs);

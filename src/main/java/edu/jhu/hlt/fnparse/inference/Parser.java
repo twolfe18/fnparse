@@ -144,7 +144,7 @@ public class Parser {
 			params.fFeatures = new DebuggingFrameFeatures(params.featIdx);
 			params.fdFeatures = new DebuggingFrameDepFeatures(params.featIdx);
 			params.rFeatures = new DebuggingRoleFeatures(params.featIdx);
-			params.rdFeatures = null;	// TODO
+			params.rdFeatures = new BasicRoleDepFeatures(params.featIdx);
 			params.reFeatures = new DebuggingRoleSpanFeatures(params.featIdx);
 		}
 		else {

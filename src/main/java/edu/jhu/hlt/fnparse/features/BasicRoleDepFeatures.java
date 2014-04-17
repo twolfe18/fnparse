@@ -1,8 +1,5 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.Arrays;
-import java.util.List;
-
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
@@ -23,20 +20,9 @@ import edu.jhu.util.Alphabet;
 public class BasicRoleDepFeatures extends AbstractFeatures<BasicRoleDepFeatures> implements RD {
 
 	private static final long serialVersionUID = 4825729945197288970L;
-
-	private FeatureVector nullFrameFeatures;
-	private int nullFrameFeatureIdx;
 	
 	public BasicRoleDepFeatures(Alphabet<String> featIdx) {
 		super(featIdx);
-		nullFrameFeatureIdx = featIdx.lookupIndex(getName() + "_nullFeature", true);
-		nullFrameFeatures = new FeatureVector();
-		nullFrameFeatures.add(nullFrameFeatureIdx, 1d);
-	}
-	
-	@Override
-	public List<Integer> dontRegularize() {
-		return Arrays.asList(nullFrameFeatureIdx);
 	}
 	
 	@Override
