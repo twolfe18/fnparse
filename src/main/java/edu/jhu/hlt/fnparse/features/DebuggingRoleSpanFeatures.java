@@ -15,30 +15,27 @@ public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpa
 	@Override
 	public void featurize(FeatureVector fv, Refinements r, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence s) {
 
-		if(r != Refinements.noRefinements)
-			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
-
 		String aLemma = argHeadIdx >= s.size() ? "null" : s.getLemma(argHeadIdx);
 		String aPOS = argHeadIdx >= s.size() ? "nullPOS" : s.getPos(argHeadIdx);
 		String fs = f.getName();
 		String rs = f.getRole(roleIdx);
 		
-		b(fv, fs, String.valueOf(targetHeadIdx), rs, argSpan.toString());
-		b(fv, fs, String.valueOf(targetHeadIdx), rs);
-		b(fv, rs);
-		b(fv, fs, rs);
-		b(fv, fs, rs, aLemma);
-		b(fv, fs, rs, aPOS);
+		b(fv, r, fs, String.valueOf(targetHeadIdx), rs, argSpan.toString());
+		b(fv, r, fs, String.valueOf(targetHeadIdx), rs);
+		b(fv, r, rs);
+		b(fv, r, fs, rs);
+		b(fv, r, fs, rs, aLemma);
+		b(fv, r, fs, rs, aPOS);
 		
 		if(argHeadIdx < targetHeadIdx) {
-			b(fv, fs, rs, "arg-left");
-			b(fv, fs, "arg-left");
-			b(fv, "arg-left");
+			b(fv, r, fs, rs, "arg-left");
+			b(fv, r, fs, "arg-left");
+			b(fv, r, "arg-left");
 		}
 		if(argHeadIdx > targetHeadIdx) {
-			b(fv, fs, rs, "arg-right");
-			b(fv, fs, "arg-right");
-			b(fv, "arg-right");
+			b(fv, r, fs, rs, "arg-right");
+			b(fv, r, fs, "arg-right");
+			b(fv, r, "arg-right");
 		}
 	}
 

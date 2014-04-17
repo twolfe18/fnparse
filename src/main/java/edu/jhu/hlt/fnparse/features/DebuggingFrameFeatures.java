@@ -16,14 +16,11 @@ public class DebuggingFrameFeatures extends AbstractFeatures<DebuggingFrameFeatu
 	@Override
 	public void featurize(FeatureVector fv, Refinements r, int targetHeadIdx, Frame f, Sentence sent) {
 		
-		if(r != Refinements.noRefinements)
-			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
-
 //		if(f == Frame.nullFrame)
 //			return emptyFeatures;
 		
-		b(fv, "frame=", f.getName(), "targetHead=", String.valueOf(targetHeadIdx), "sent=", sent.getId());
-		b(fv, "frame=", f.getName());
+		b(fv, r, "frame=", f.getName(), "targetHead=", String.valueOf(targetHeadIdx), "sent=", sent.getId());
+		b(fv, r, "frame=", f.getName());
 	}
 
 }

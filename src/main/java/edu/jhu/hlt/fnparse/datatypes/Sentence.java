@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.*;
 
+import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -91,6 +92,18 @@ public final class Sentence implements HasId {
 		}
 		if(allStems.isEmpty()) return null;
 		return new LexicalUnit(allStems.get(0), fnTag);
+	}
+	
+	/**
+	 * gives you a LexicalUnit using the lemma for this token rather than the actual word.
+	 * this method is safe (if you call with i=-1 or i=n, it will return "<S>" and "</S>" fields).
+	 */
+	public LexicalUnit getLemmaLU(int i) {
+		if(i == -1)
+			return AbstractFeatures.luStart;
+		if(i == tokens.length)
+			return AbstractFeatures.luEnd;
+		return new LexicalUnit(lemmas[i], pos[i]);
 	}
 	
 	/**

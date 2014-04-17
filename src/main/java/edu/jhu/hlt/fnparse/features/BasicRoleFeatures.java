@@ -23,9 +23,6 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		if(roleIdx >= f.numRoles())
 			throw new IllegalArgumentException();
 		
-		if(r != Refinements.noRefinements)
-			throw new RuntimeException("implement me (in AbstractFeatures.b)!");		
-
 		// NOTE: don't write any back-off features that only look at just roleIdx
 		// because it is meaningless outside without considering the frame.
 		// CORRECTION: the way they named the roles in framenet, there is frame-to-frame overlap of
@@ -39,32 +36,32 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		LexicalUnit tHead = sent.getLU(targetHead);
 		LexicalUnit aHead = sent.getLU(argHead);
 		
-		b(fv, fsrs, "intercept");
+		b(fv, r, fsrs, "intercept");
 
 		if(argHead > targetHead)
-			b(fv, fsrs, "arg_after_target");
+			b(fv, r, fsrs, "arg_after_target");
 		else if(argHead < targetHead)
-			b(fv, fsrs, "arg_before_target");
+			b(fv, r, fsrs, "arg_before_target");
 		else
-			b(fv, fsrs, "arg=target");
+			b(fv, r, fsrs, "arg=target");
 		
-		b(fv, fsrs, "roleHead=", aHead.word);
-		b(fv, fsrs, "roleHead=", aHead.pos);
-		b(fv, fsrs, "roleHead=", aHead.getFullString());
+		b(fv, r, fsrs, "roleHead=", aHead.word);
+		b(fv, r, fsrs, "roleHead=", aHead.pos);
+		b(fv, r, fsrs, "roleHead=", aHead.getFullString());
 		
-		b(fv, fsrs, "targetHead=", tHead.word);
-		b(fv, fsrs, "targetHead=", tHead.pos);
-		b(fv, fsrs, "targetHead=", tHead.getFullString());
+		b(fv, r, fsrs, "targetHead=", tHead.word);
+		b(fv, r, fsrs, "targetHead=", tHead.pos);
+		b(fv, r, fsrs, "targetHead=", tHead.getFullString());
 		
-		b(fv, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.getFullString());
-		b(fv, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.word);
-		b(fv, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.pos);
-		b(fv, fsrs, "argHead=", aHead.word, "targetHead=", tHead.getFullString());
-		b(fv, fsrs, "argHead=", aHead.word, "targetHead=", tHead.word);
-		b(fv, fsrs, "argHead=", aHead.word, "targetHead=", tHead.pos);
-		b(fv, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.getFullString());
-		b(fv, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.word);
-		b(fv, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.pos);
+		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.getFullString());
+		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.word);
+		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.pos);
+		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.getFullString());
+		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.word);
+		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.pos);
+		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.getFullString());
+		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.word);
+		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.pos);
 		
 		// words around target and arg heads
 		for(int targetOffset : Arrays.asList(-2, -1, 1, 2)) {
@@ -76,17 +73,17 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 				String a = "argOffset=" + argOffset;
 				LexicalUnit tLU = AbstractFeatures.getLUSafe(targetHead + targetOffset, sent);
 				LexicalUnit aLU = AbstractFeatures.getLUSafe(argHead + argOffset, sent);
-				b(fv, fsrs, t, tLU.word, a, aLU.word);
-				b(fv, fsrs, t, tLU.pos,  a, aLU.word);
-				b(fv, fsrs, t, tLU.word, a, aLU.pos);
-				b(fv, fsrs, t, tLU.pos,  a, aLU.pos);
+				b(fv, r, fsrs, t, tLU.word, a, aLU.word);
+				b(fv, r, fsrs, t, tLU.pos,  a, aLU.word);
+				b(fv, r, fsrs, t, tLU.word, a, aLU.pos);
+				b(fv, r, fsrs, t, tLU.pos,  a, aLU.pos);
 			}
 		}
 		
 		// dependency tree features
 		if(params.useSyntaxFeatures) {
 			if(sent.governor(argHead) == targetHead)
-				b(fv, "trigger-arg-dep");
+				b(fv, r, "trigger-arg-dep");
 			// TODO more?
 		}
 	}

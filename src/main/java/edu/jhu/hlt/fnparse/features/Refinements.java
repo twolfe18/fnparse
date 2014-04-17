@@ -27,6 +27,9 @@ public class Refinements {
 		this.names[i] = name;
 		this.weights[i] = weight;
 	}
+	
+	public String getName(int i) { return names[i]; }
+	public double getWeight(int i) { return weights[i]; }
 
 	public int size() {
 		return this.names.length;

@@ -34,6 +34,7 @@ import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleDepFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.DebuggingFrameDepFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
@@ -141,14 +142,14 @@ public class Parser {
 		
 		if(params.debug) {
 			params.fFeatures = new DebuggingFrameFeatures(params.featIdx);
-			params.fdFeatures = null;	// TODO
+			params.fdFeatures = new DebuggingFrameDepFeatures(params.featIdx);
 			params.rFeatures = new DebuggingRoleFeatures(params.featIdx);
 			params.rdFeatures = null;	// TODO
 			params.reFeatures = new DebuggingRoleSpanFeatures(params.featIdx);
 		}
 		else {
 			params.fFeatures = new BasicFrameFeatures(params);
-			params.fdFeatures = null;	// TODO
+			params.fdFeatures = new DebuggingFrameDepFeatures(params.featIdx);
 			params.rFeatures = new BasicRoleFeatures(params);
 			params.rdFeatures = new BasicRoleDepFeatures(params.featIdx);
 			params.reFeatures = new BasicRoleSpanFeatures(params);
@@ -177,10 +178,14 @@ public class Parser {
 	public Regularizer getRegularizer(int numParams, double regularizerMult) {
 		
 		List<Integer> dontRegularize = new ArrayList<Integer>();
-		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId))
-			if(ff != null)
-				for(Features f : ff.getFeatures())
-					dontRegularize.addAll(f.dontRegularize());
+		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId)) {
+			if(ff == null) continue;
+			for(Features f : ff.getFeatures()) {
+				if(f == null)
+					throw new RuntimeException("dont return null features: " + ff);
+				dontRegularize.addAll(f.dontRegularize());
+			}
+		}
 		System.out.printf("[getRegularizer] not regularizing %d parameters\n", dontRegularize.size());
 
 		// L2's parameter is variance => bigger means less regularization
