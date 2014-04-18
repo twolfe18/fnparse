@@ -46,6 +46,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
 import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
+import edu.jhu.hlt.fnparse.inference.jointid.JointFactorFactory;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
@@ -137,8 +138,7 @@ public class Parser {
 		
 		params.factorsForFrameId = new FrameFactorFactory(params, latentDeps, latentDeps);
 		params.factorsForRoleId = new RoleFactorFactory(params, latentDeps, latentDeps, false);
-		params.factorsForJointId = null;
-		assert mode != Mode.JOINT_FRAME_ARG : "not really implemented";
+		params.factorsForJointId = new JointFactorFactory(params);
 		
 		if(params.debug) {
 			params.fFeatures = new DebuggingFrameFeatures(params.featIdx);

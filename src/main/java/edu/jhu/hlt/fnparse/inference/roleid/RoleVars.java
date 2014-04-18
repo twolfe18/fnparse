@@ -55,7 +55,7 @@ public class RoleVars implements FgRelated {
 		if(evoked == Frame.nullFrame)
 			throw new IllegalArgumentException("only create these for non-nullFrame f_it");
 		
-		if(hasGold && gold.getFrame() != evoked)
+		if(hasGold && gold != null && gold.getFrame() != evoked)
 			throw new IllegalArgumentException();
 
 		this.i = targetHeadIdx;
@@ -75,7 +75,7 @@ public class RoleVars implements FgRelated {
 			Span jGoldSpan = null;
 			int jGold = -1;
 			if(hasGold) {
-				jGoldSpan = gold.getArgument(k);
+				jGoldSpan = gold == null ? Span.nullSpan : gold.getArgument(k);
 				jGold = jGoldSpan == Span.nullSpan ? n : params.headFinder.head(jGoldSpan, gold.getSentence());
 			}
 
@@ -129,7 +129,7 @@ public class RoleVars implements FgRelated {
 	}
 
 	/**
-	 * constructor for training
+	 * constructor for training.
 	 * @param gold may be null if these roles should be predicted as "not-realized". This may happen
 	 *        for example if the frame predicted is incorrect (can save precision by not making predictions in this case).
 	 */

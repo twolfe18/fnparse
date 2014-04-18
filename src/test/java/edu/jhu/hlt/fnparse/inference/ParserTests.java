@@ -58,32 +58,35 @@ public class ParserTests {
 		return new FNParse(s, instances);
 	}
 	
-	@Test
+	//@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(p, true, true, "FRAME_ID");
 	}
 
-	@Test
+	//@Test
 	public void frameIdWithLatentDeps() {
 		boolean useLatentDeps = true;
 		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
 		overfitting(p, true, true, "FRAME_ID_LATENT");
 	}
 
-	//@Test
+	@Test
 	public void joint() {
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "JOINT");
 	}
 
-	@Test
+	//@Test
 	public void pipeline() {
 		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "PIPELINE");
 	}
+	
+	// TODO pipeline with latent
+	// TODO joint with latent
 	
 	
 	
@@ -97,7 +100,7 @@ public class ParserTests {
 		f = File.createTempFile("ParserTests", ".model");
 	}
 	
-	@Test
+	//@Test
 	public void serializationFrameId() throws IOException {
 	
 		// frame id
@@ -110,7 +113,7 @@ public class ParserTests {
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
 	}
 
-	@Test
+	//@Test
 	public void serializationFrameIdWithLatentDeps() throws IOException {
 		trained = new Parser(Mode.FRAME_ID, true, true);
 		overfitting(trained, true, true, "FRAME_ID_LATENT_SER1");
@@ -131,7 +134,7 @@ public class ParserTests {
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
-	@Test
+	//@Test
 	public void serializationPipeline() throws IOException {
 		trained = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);

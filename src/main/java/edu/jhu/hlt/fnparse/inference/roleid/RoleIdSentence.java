@@ -96,42 +96,42 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		inf.run();
 		
 		List<FrameInstance> fis = new ArrayList<FrameInstance>();
-		final int n = sentence.size();
-		for(RoleVars rv : hypotheses) {
-			
-			// max over j for every role
-			int K = rv.getFrame().numRoles();
-			Span[] arguments = new Span[K];
-			Arrays.fill(arguments, Span.nullSpan);
-			double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
-			if(params.logDomain) fill2d(beliefs, Double.NEGATIVE_INFINITY);	// otherwise default is 0
-
-			Iterator<RVar> iter = rv.getVars();
-			while(iter.hasNext()) {
-				RVar rvar = iter.next();
-				DenseFactor df = inf.getMarginals(rvar.roleVar);
-				beliefs[rvar.k][rvar.j] = df.getValue(BinaryVarUtil.boolToConfig(true));
-			}
-			for(int k=0; k<K; k++) {
-				
-				// TODO add Exactly1 factor!
-				params.normalize(beliefs[k]);
-				
-				int jHat = params.argDecoder.decode(beliefs[k], n);
-				if(jHat < n) {
-					Var expansionVar = rv.getExpansionVar(jHat, k);
-					DenseFactor df = inf.getMarginals(expansionVar);
-					arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
-				}
-				
-				if(debugDecode)
-					System.out.printf("beliefs for %s.%s: %s\n", rv.getFrame().getName(), rv.getFrame().getRole(k), Arrays.toString(beliefs[k]));
-			}
-			
-			fis.add(FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sentence));
-		}
+		for(RoleVars rv : hypotheses)
+			fis.add(decodeRoleVars(rv, inf, sentence, params));
 		
 		return new FNParse(sentence, fis);
+	}
+	
+	public static FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf, Sentence sentence, ParserParams params) {
+
+		// max over j for every role
+		final int n = sentence.size();
+		final int K = rv.getFrame().numRoles();
+		Span[] arguments = new Span[K];
+		Arrays.fill(arguments, Span.nullSpan);
+		double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
+		if(params.logDomain) fill2d(beliefs, Double.NEGATIVE_INFINITY);	// otherwise default is 0
+
+		Iterator<RVar> iter = rv.getVars();
+		while(iter.hasNext()) {
+			RVar rvar = iter.next();
+			DenseFactor df = inf.getMarginals(rvar.roleVar);
+			beliefs[rvar.k][rvar.j] = df.getValue(BinaryVarUtil.boolToConfig(true));
+		}
+		for(int k=0; k<K; k++) {
+
+			// TODO add Exactly1 factor!
+			params.normalize(beliefs[k]);
+
+			int jHat = params.argDecoder.decode(beliefs[k], n);
+			if(jHat < n) {
+				Var expansionVar = rv.getExpansionVar(jHat, k);
+				DenseFactor df = inf.getMarginals(expansionVar);
+				arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
+			}
+		}
+
+		return FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sentence);
 	}
 
 }
