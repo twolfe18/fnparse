@@ -70,6 +70,7 @@ public class SentenceEval {
 		Set<Prediction> s = new HashSet<Prediction>();
 		
 		// TP = G & H
+		s.clear();
 		s.addAll(gold);
 		s.retainAll(hyp);
 		confusion[1][1] = s.size();
@@ -87,13 +88,15 @@ public class SentenceEval {
 		confusion[1][0] = s.size();
 		
 		// TN
-		confusion[0][0] = gold.size() - (confusion[1][1] + confusion[0][1] + confusion[1][0]);
+		s.clear();
+		s.addAll(gold);
+		s.addAll(hyp);
+		confusion[0][0] = s.size() - (confusion[1][1] + confusion[0][1] + confusion[1][0]);
 		
 		assert confusion[1][1] >= 0;
 		assert confusion[0][1] >= 0;
 		assert confusion[1][0] >= 0;
 		assert confusion[0][0] >= 0;
-		assert confusion[1][1] + confusion[0][1] + confusion[1][0] + confusion[0][0] == gold.size();
 	}
 	
 	public int targetTP() { return targetConfusion[1][1]; }
