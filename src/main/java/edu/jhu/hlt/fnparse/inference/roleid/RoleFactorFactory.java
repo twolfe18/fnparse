@@ -69,7 +69,6 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				// r_itjk ~ 1
 				fv = new FeatureVector();
 				params.rFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, s);
-				assert fv.l0Norm() > 0;
 				phi = new ExplicitExpFamFactor(new VarSet(rvar.roleVar));
 				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
@@ -89,30 +88,38 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 
 				// r_itjk ~ l_*j
 				if(this.includeGovFactors) {
-					Refinements r = new Refinements("gov-of-r");
 					for(int m=-1; m<n; m++) {
 						if(m == rvar.j) continue; 
-						fv = new FeatureVector();
-						params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
+						if(rvar.j == n) continue;	// j="no arg" should not have children links
 						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(m, rvar.j));
 						phi = new ExplicitExpFamFactor(vs);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
+						int C = vs.calcNumConfigs();
+						for(int c=0; c<C; c++) {
+							// TODO maybe only want r=1,l=1 config for speed?
+							Refinements r = new Refinements("gov-of-r-" + c);
+							fv = new FeatureVector();
+							params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
+							phi.setFeatures(c, fv);
+						}
 						factors.add(phi);
 					}
 				}
 
 				// r_itjk ~ l_j*
 				if(this.includeDepFactors) {
-					Refinements r = new Refinements("dep-of-r");
 					for(int m=0; m<n; m++) {
-						if(m == rvar.j) continue; 
-						fv = new FeatureVector();
-						params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
+						if(m == rvar.j) continue;
+						if(rvar.j == n) continue;	// j="no arg" is never a parent
 						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(rvar.j, m));
 						phi = new ExplicitExpFamFactor(vs);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
+						int C = vs.calcNumConfigs();
+						for(int c=0; c<C; c++) {
+							// TODO maybe only want r=1,l=1 config for speed?
+							Refinements r = new Refinements("dep-of-r-" + c);
+							fv = new FeatureVector();
+							params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
+							phi.setFeatures(c, fv);
+						}
 						factors.add(phi);
 					}
 				}
@@ -120,8 +127,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				// r_itjk ~ r_itjk^e
 				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor) {
 					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
-					int C = vs.calcNumConfigs();
 					phi = new ExplicitExpFamFactor(vs);
+					int C = vs.calcNumConfigs();
 					for(int c=0; c<C; c++) {
 						VarConfig conf = vs.getVarConfig(c);
 						boolean argRealized = BinaryVarUtil.configToBool(conf.getState(rvar.roleVar));
