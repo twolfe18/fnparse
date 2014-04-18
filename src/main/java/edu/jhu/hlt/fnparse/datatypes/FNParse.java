@@ -1,8 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 /**
  * a Sentence with Frame's identified with their arguments.
@@ -20,14 +18,9 @@ public class FNParse extends FNTagging {
 	 */
 	public FNParse(Sentence s, List<FrameInstance> frameInstances) {
 		super(s, frameInstances);
-		Set<Span> seenTargets = new HashSet<Span>();
 		for(FrameInstance fi : frameInstances) {
 			if(fi.onlyTargetLabeled())
 				throw new IllegalArgumentException();
-			if(!seenTargets.add(fi.getTarget())) {
-				throw new IllegalArgumentException(
-						"you can't have two FrameInstances with the same target!: " + s.getId());
-			}
 		}
 	}
 	

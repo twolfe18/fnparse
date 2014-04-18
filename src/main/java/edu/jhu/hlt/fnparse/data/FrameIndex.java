@@ -6,9 +6,7 @@ import java.util.*;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.LineIterator;
 
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 
 /**
@@ -122,6 +120,7 @@ public class FrameIndex implements FrameIndexInterface{
 	private List<Frame> allFrames = new ArrayList<Frame>(framesInFrameNet);;
 	private Map<String, Frame> nameToFrameMap = new HashMap<String, Frame>();
 	private Map<Integer, String> indexToNameMap = new HashMap<Integer, String>();
+	private Frame[] byId = new Frame[framesInFrameNet + 1];
 	
 	private FrameIndex() { 
 		// singleton
@@ -132,6 +131,8 @@ public class FrameIndex implements FrameIndexInterface{
 			allFrames.add(f);
 			nameToFrameMap.put(f.getName(), f);
 			indexToNameMap.put(idx, f.getName());
+			assert byId[f.getId()] == null;
+			byId[f.getId()] = f;
 		}
 	}	
 
@@ -143,7 +144,10 @@ public class FrameIndex implements FrameIndexInterface{
 
 	
 	public Frame getFrame(int id) {
-		throw new RuntimeException("implement me");
+		Frame f = byId[id];
+		if(f == null)
+			throw new RuntimeException();
+		return f;
 	}
 
 	public Frame getFrame(String name) {

@@ -78,6 +78,8 @@ public class FrameVars implements FgRelated {
 		return String.format("f_{i=%d,t=1:%d}", i, f_it.length);
 	}
 	
+	public boolean goldIsSet() { return goldSet; }
+	
 	public void setGoldIsNull() {
 		this.gold = Frame.nullFrame;
 		this.goldSet = true;

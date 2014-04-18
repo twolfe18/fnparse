@@ -158,7 +158,10 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
 		String word = s.getWord(headIdx);
 		POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
-		for(String stem : stemmer.findStems(word, pos)) {
+		List<String> stems = null;
+		try { stems = stemmer.findStems(word, pos); }
+		catch(IllegalArgumentException e) { return null; }	// words that normalized to an empty string throw an exception
+		for(String stem : stems) {
 			List<FrameInstance> protos = stem2prototypes.get(stem);
 			if(protos == null) continue;
 			for(FrameInstance fi : protos) {

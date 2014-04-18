@@ -109,9 +109,14 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 			int head = params.headFinder.head(target, sentence);
 			FrameVars fHyp = byHead[head];
 			if(fHyp == null) continue;	// nothing you can do here
+			if(fHyp.goldIsSet()) {
+				System.err.println("WARNING: " + p.getId() +
+						" has at least two FrameInstances with the same target head word, choosing the first one");
+				continue;
+			}
 			fHyp.setGold(fi);
 			boolean removed = haventSet.remove(fHyp);
-			assert removed : "two FrameInstances with same head?";
+			assert removed : "two FrameInstances with same head? " + p.getSentence().getId();
 		}
 		
 		// the remaining hypotheses must be null because they didn't correspond to a FI in the parse

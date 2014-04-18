@@ -171,8 +171,10 @@ public final class Sentence implements HasId {
 		StringBuilder sb = new StringBuilder("<Sentence");
 		sb.append(" ");
 		sb.append(id);
-		for(int i=0; i<size(); i++)
-			sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
+		for(int i=0; i<size(); i++) {
+			//sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
+			sb.append(String.format(" %s", getWord(i)));
+		}
 		sb.append(">");
 		return sb.toString();
 	}

@@ -1,8 +1,10 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.util.HasId;
 
@@ -24,6 +26,13 @@ public class FNTagging implements HasId {
 			throw new IllegalArgumentException();
 		this.sent = s;
 		this.frameInstances = frameMentions;
+		Set<Span> seenTargets = new HashSet<Span>();
+		for(FrameInstance fi : frameInstances) {
+			if(!seenTargets.add(fi.getTarget())) {
+				throw new IllegalArgumentException(
+						"you can't have two FrameInstances with the same target!: " + s.getId());
+			}
+		}
 	}
 	
 	@Override

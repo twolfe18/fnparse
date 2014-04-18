@@ -123,12 +123,12 @@ public class ParserExperiment {
 		
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(300, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1));//, 10, 100));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.2, 1d, 5d));
-		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(0.1d, 1d, 10d));
-		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 5, 10));
-		Option<Double> recallBias = ajh.addOption("recallBias", Arrays.asList(1d, 3d));
+		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(5, 2, 5, 10));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(600, 999999));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10));//, 10, 100));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(10d, 5d));
+		Option<Double> lrMult = ajh.addOption("lrMult", Arrays.asList(1d, 10d));
+		Option<Double> recallBias = ajh.addOption("recallBias", Arrays.asList(1.5d, 1d, 3d));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
 		
