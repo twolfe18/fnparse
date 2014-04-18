@@ -13,11 +13,11 @@ all:
 		2>&1 | tee experiments/targetId/ParserExperiment.mba.log
 
 frameIdQsub:
-	qsub -q text.q -t 1-216 frame-id-experiment.qsub && \
+	qsub -q text.q -t 1-324 frame-id-experiment.qsub && \
 		sleep 2 && qinfo
 
 frameIdPerf.txt:
-	for f in experiments/targetId/logging/frame-id-experiment.qsub.o7674770.*; do \
+	for f in logging/targetId/*; do \
 		p=`grep "test" $$f | grep TargetMicroF1 | tail -n 1 | awk '{print $$NF}'` && \
 		c=`grep -m 1 "config =" $$f` && \
 		echo "$$p $$c"; \
