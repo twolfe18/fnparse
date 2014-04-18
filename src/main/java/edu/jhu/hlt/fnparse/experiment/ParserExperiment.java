@@ -156,7 +156,8 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		boolean debug = false;
-		Parser parser = new Parser(Mode.FRAME_ID, false, debug);
+		boolean latentDependencies = true;
+		Parser parser = new Parser(Mode.FRAME_ID, latentDependencies, debug);
 		parser.params.frameDecoder.setRecallBias(recallBias.get());
 
 		System.out.println("[ParserExperiment] following statistics are for the train subset:");

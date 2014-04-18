@@ -85,9 +85,14 @@ public class ParserTests {
 		overfitting(p, false, true, "PIPELINE");
 	}
 	
-	// TODO pipeline with latent
+	@Test
+	public void pipelineWithLatentDeps() {
+		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true, true);
+		p.params.argDecoder.setRecallBias(1d);
+		overfitting(p, false, true, "PIPELINE_LATENT");
+	}
+
 	// TODO joint with latent
-	
 	
 	
 	
@@ -102,14 +107,10 @@ public class ParserTests {
 	
 	@Test
 	public void serializationFrameId() throws IOException {
-	
-		// frame id
 		trained = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(trained, true, true, "FRAME_ID_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.JOINT_FRAME_ARG, false, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
-		//readIn.params.targetPruningData = trained.params.targetPruningData;	// lets cheat a bit to speed things up...
+		readIn = new Parser(f);
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
 	}
 
@@ -118,8 +119,7 @@ public class ParserTests {
 		trained = new Parser(Mode.FRAME_ID, true, true);
 		overfitting(trained, true, true, "FRAME_ID_LATENT_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, true, true);
-		readIn.readModel(f);
+		readIn = new Parser(f);
 		overfitting(readIn, true, false, "FRAME_ID_LATENT_SER2");
 	}
 	
@@ -129,8 +129,7 @@ public class ParserTests {
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "JOINT_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, false, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
+		readIn = new Parser(f);
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
@@ -140,8 +139,7 @@ public class ParserTests {
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "PIPELINE_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, false, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
+		readIn = new Parser(f);
 		overfitting(readIn, false, false, "PIPELINE_SER2");
 	}
 	

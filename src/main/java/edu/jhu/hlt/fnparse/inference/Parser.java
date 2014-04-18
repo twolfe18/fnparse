@@ -118,6 +118,16 @@ public class Parser {
 		this(Mode.PIPELINE_FRAME_ARG, false, false);
 	}
 	
+	public Parser(File f) {
+		System.out.println("[Parser] reading parser from " + f.getPath());
+		try {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
+			params = (ParserParams) ois.readObject();
+			ois.close();
+		}
+		catch(Exception e) { throw new RuntimeException(e); }
+	}
+	
 	public Parser(Mode mode, boolean latentDeps, boolean debug) {
 
 		params = new ParserParams();
@@ -250,6 +260,7 @@ public class Parser {
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
+		trainerParams.numThreads = 1;	// can't do multithreaded until i make sure my feature extraction is serial (alphabet updates need locking)
 		
 		int numParams = params.debug
 				? 750 * 1000
@@ -258,7 +269,6 @@ public class Parser {
 		if(params.model == null)
 			params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
-		
 		
 		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
 		
@@ -319,7 +329,8 @@ public class Parser {
 	}
 	
 	/**
-	 * uses java serialization to save everything in {@code this.params}
+	 * uses java serialization to save everything in {@code this.params}.
+	 * inverse of this method is the constructor that takes a file.
 	 */
 	public void writeModel(File f) {
 		System.out.println("[writeModel] to " + f.getPath());
@@ -327,19 +338,6 @@ public class Parser {
 			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f));
 			oos.writeObject(params);
 			oos.close();
-		}
-		catch(Exception e) { throw new RuntimeException(e); }
-	}
-	
-	/**
-	 * uses java serialization to read everything in to fill {@code this.params}
-	 */
-	public void readModel(File f) {
-		System.out.println("[readModel] to " + f.getPath());
-		try {
-			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
-			params = (ParserParams) ois.readObject();
-			ois.close();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}

@@ -18,6 +18,9 @@ public class MakeFrameVarsTests {
 	
 //	WARNING: frame filtering heuristic didn't extract <Frame 151 Cardinal_numbers has 4 roles> for <LU thousand.CD>
 //	WARNING: frame filtering heuristic didn't extract <Frame 142 Building has 16 roles> for <LU building.NN>
+	
+//	WARNING: frame filtering heuristic didn't extract <Frame 754 Quantity has 5 roles> for <LU lot.NN>
+
 
 	@Test
 	public void building() {
