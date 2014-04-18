@@ -8,7 +8,6 @@ import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
 import edu.mit.jwi.*;
 import edu.mit.jwi.data.ILoadPolicy;
-import edu.mit.jwi.item.LexFile;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
@@ -26,7 +25,7 @@ public class TargetPruningData implements Serializable {
 	
 
 	private transient IRAMDictionary dict;
-	public IRAMDictionary getWordnetDict() {
+	public synchronized IRAMDictionary getWordnetDict() {
 		if(dict == null) {
 			long start = System.currentTimeMillis();
 			File f = new File("toydata/wordnet/dict");
@@ -43,7 +42,7 @@ public class TargetPruningData implements Serializable {
 
 	
 	/** only use this if you want to gaurantee when the data is loaded (it calls the automatically otherwise */
-	public void init() {
+	public synchronized void init() {
 		long start = System.currentTimeMillis();
 		System.out.println("[TargetPruningData] init starting...");
 		IRAMDictionary dict = getWordnetDict();
@@ -100,7 +99,7 @@ public class TargetPruningData implements Serializable {
 	
 	
 	private transient Map<String, List<FrameInstance>> prototypesByStem;
-	public Map<String, List<FrameInstance>> getPrototypesByStem() {
+	public synchronized Map<String, List<FrameInstance>> getPrototypesByStem() {
 		if(prototypesByStem == null)
 			init();
 		return prototypesByStem;
@@ -110,7 +109,7 @@ public class TargetPruningData implements Serializable {
 	// what i want is the same Frame -> List[Prototype] mapping that i would
 	// have built for prototype vars anyway
 	private transient Map<Frame, List<FrameInstance>> prototypesByFrame;
-	public Map<Frame, List<FrameInstance>> getPrototypesByFrame() {
+	public synchronized Map<Frame, List<FrameInstance>> getPrototypesByFrame() {
 		if(prototypesByFrame == null)
 			init();
 		return prototypesByFrame;
@@ -126,7 +125,7 @@ public class TargetPruningData implements Serializable {
 	/**
 	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
-	public Map<LexicalUnit, List<Frame>> getLU2Frames() {
+	public synchronized Map<LexicalUnit, List<Frame>> getLU2Frames() {
 		if(lu2frames == null) {
 			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
 			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
@@ -167,7 +166,7 @@ public class TargetPruningData implements Serializable {
 	
 	
 	private transient Set<String> stopwordsForTargets;
-	public boolean isTargetStopword(String word) {
+	public synchronized boolean isTargetStopword(String word) {
 		if(stopwordsForTargets == null) {
 			stopwordsForTargets = new HashSet<String>();
 			stopwordsForTargets.addAll(SpanPruningExperiment.lthSpecialWords);
