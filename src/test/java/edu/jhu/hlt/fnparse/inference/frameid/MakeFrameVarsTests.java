@@ -50,5 +50,60 @@ public class MakeFrameVarsTests {
 		//System.out.println("found " + found);
 		assertTrue(found);
 	}
+	
+	// OLD CODE THAT MIGHT BE USEFUL
+	/*
+	public static void pruningDebug(LexicalUnit head, Frame missed) {
+		
+		Set<LexicalUnit> lexInstances;
+		System.out.printf("[pruningDebug] did not recall the frame %s given the trigger %s\n",
+				missed.getName(), head.getFullString());
+		
+		// all LUs for this frame
+		for(int i=0; i<missed.numLexicalUnits(); i++)
+			System.out.printf("[pruningDebug] %s.LU[%d]=%s\n", missed.getName(), i, missed.getLexicalUnit(i));
+		
+		// all examples lex for this frame
+		lexInstances = observedTriggers(fnLex, missed);
+		System.out.printf("[pruningDebug] triggers for %s in lex/p examples (%d):", missed.getName(), lexInstances.size());
+		for(LexicalUnit lu : lexInstances)
+			System.out.print(" " + lu.getFullString());
+		System.out.println();
+		
+		lexInstances = observedTriggers(fnLex, missed);
+		System.out.printf("[pruningDebug] triggers for %s in lex/t examples (%d):", missed.getName(), lexInstances.size());
+		for(LexicalUnit lu : lexInstances)
+			System.out.print(" " + lu.getFullString());
+		System.out.println();
+		
+		lexInstances = observedTriggers(fnTrain, missed);
+		System.out.printf("[pruningDebug] triggers for %s in train examples (%d):", missed.getName(), lexInstances.size());
+		for(LexicalUnit lu : lexInstances)
+			System.out.print(" " + lu.getFullString());
+		System.out.println();
+		
+		System.out.println();
+	}
+	
+	public static void mainDebugging(String[] args) {
+		FrameIndex fi = FrameIndex.getInstance();
+		
+		// old
+//		pruningDebug(new LexicalUnit("toxins", "NNS"), fi.getFrameByName("Toxic_substance"));
+//		pruningDebug(new LexicalUnit("Potential", "JJ"), fi.getFrameByName("Capability"));
+//		pruningDebug(new LexicalUnit("of", "IN"), fi.getFrameByName("Partitive"));
+//		pruningDebug(new LexicalUnit("representatives", "NNS"), fi.getFrameByName("Leadership"));
+		
+		pruningDebug(new LexicalUnit("idea", "NN"), fi.getFrame("Desirable_event"));
+		pruningDebug(new LexicalUnit("do", "VB"), fi.getFrame("Intentionally_act"));
+		pruningDebug(new LexicalUnit("sooner", "RBR"), fi.getFrame("Time_vector"));
+		pruningDebug(new LexicalUnit("several", "JJ"), fi.getFrame("Quantity"));
+		pruningDebug(new LexicalUnit("factories", "NNS"), fi.getFrame("Locale_by_use"));
+		
+//[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU idea.NN> did not include the gold frame: <Frame 306 Desirable_event>
+//[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU do.VB> did not include the gold frame: <Frame 525 Intentionally_act>
+//[setGold] invoking USE_NULLFRAME_FOR_FILTERING_MISTAKES because the candidate set of frames for <LU sooner.RBR> did not include the gold frame: <Frame 954 Time_vector>
+	}
+	*/
 
 }

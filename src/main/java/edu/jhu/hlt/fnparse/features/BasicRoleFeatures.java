@@ -83,8 +83,13 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		// dependency tree features
 		if(params.useSyntaxFeatures) {
 			if(sent.governor(argHead) == targetHead)
-				b(fv, r, "trigger-arg-dep");
+				b(fv, r, 3d, "trigger-arg-dep");
 			// TODO more?
+			// common parent (path, word, etc)
+			// children of target ~ arg
+			// parents of target ~ arg
+			// target ~ children of target
+			// target ~ parents of target
 		}
 	}
 

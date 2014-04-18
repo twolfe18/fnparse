@@ -18,6 +18,17 @@ public class DataSplitter {
 		this.rand = rand;
 	}
 
+	/** aims to put nTest examples into the test set (rather than a proportion */
+	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, int nTest, String key) {
+		double propTest = ((double) nTest) / all.size();
+		if(propTest > 0.9d) {
+			propTest = 0.9d;
+			System.err.printf("WARNING: you tried to put nTest=%d from all.size=%d, setting propTest to %.2f\n", nTest, all.size(), propTest);
+			assert false : "you probably don't want to let this slide...";
+		}
+		return split(all, train, test, propTest, true, key);
+	}
+
 	public <T extends HasId> boolean split(List<T> all, List<T> train, List<T> test, double propTest, String key) {
 		return split(all, train, test, propTest, true, key);
 	}

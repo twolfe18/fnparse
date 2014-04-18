@@ -11,13 +11,19 @@ public class ArrayJobHelper {
 
 	// only for Option
 	private int configIdx = -1;
-	public void setConfig(int i) { configIdx = i; }
+	public void setConfig(int i) {
+		if(i < 0) throw new IllegalArgumentException();
+		configIdx = i;
+	}
 	public void setConfig(String[] argsFromMain) {
+		boolean showAll = false;
 		try {
-			setConfig(Integer.parseInt(argsFromMain[0]));
+			int i = Integer.parseInt(argsFromMain[0]);
+			if(i < 0) showAll = true;
+			setConfig(i);
 		}
 		catch(Exception e) {
-			System.err.println(helpString());
+			System.err.println(showAll ? helpString(9999) : helpString());
 			throw new RuntimeException(e);
 		}
 	}
@@ -68,12 +74,14 @@ public class ArrayJobHelper {
 	 * may return null.
 	 */
 	public Map<String, Object> getConfig(String[] argsFromMain) {
+		boolean showAll = false;
 		try {
 			int i = Integer.parseInt(argsFromMain[0]);
+			if(i < 0) showAll = true;
 			return getConfig(i);
 		}
 		catch(Exception e) {
-			System.err.println(helpString());
+			System.err.println(showAll ? helpString(9999) : helpString());
 			return null;
 		}
 	}

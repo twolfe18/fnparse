@@ -30,6 +30,9 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleDepFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
@@ -54,6 +57,7 @@ import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
+import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -166,6 +170,8 @@ public class Parser {
 		}
 	}
 	
+	public ParserParams getParams() { return params; }
+	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = true;
@@ -216,6 +222,10 @@ public class Parser {
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			
+			// TODO once i'm loading frameId models from disk,
+			// this should only return one example, which is a roleId example
+			
+			
 			// only frame id (no args)
 			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params, p);
 			LabeledFgExample e1 = fid.getTrainingExample();
@@ -240,7 +250,7 @@ public class Parser {
 		else throw new RuntimeException();
 	}
 
-	public void train(List<FNParse> examples) { train(examples, 10, 1, 1d, 1d); }
+	public void train(List<FNParse> examples) { train(examples, 10, 5, 1d, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
 		
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
@@ -250,7 +260,7 @@ public class Parser {
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
-		adagParams.eta = 0.1d * learningRateMultiplier;
+		adagParams.eta = learningRateMultiplier;
 		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
 		sgdParams.batchSize = batchSize;
@@ -308,7 +318,49 @@ public class Parser {
 	}
 	
 	
-	public ParserParams getParams() { return params; }
+	/**
+	 * mode=FRAME_ID: will tune params.frameDecoder.recallBias
+	 * mode=PIPELINE: will tune recallBias for params.frameDecoder first, then params.argDecoder
+	 * mode=JOINT: will do a sweep over recallBias for (frameDecoder x argDecoder)
+	 */
+	public void tune(List<FNParse> examples) { tune(examples, examples.size()); }
+	public void tune(List<FNParse> examples, int maxExamples) {
+		
+		if(examples.size() > maxExamples) {
+			System.out.printf("[Parser tune] only using %d of %d examples\n", maxExamples, examples.size());
+			examples = DataUtil.reservoirSample(examples, maxExamples);
+		}
+		
+		Timer t = Timer.start("tune");
+		switch(params.mode) {
+		case FRAME_ID:
+			StdEvalFunc obj = BasicEvaluation.targetMicroF1;
+			double origRecallBias = params.frameDecoder.getRecallBias();
+			double bestRecallBias = origRecallBias;
+			double bestScore = Double.NEGATIVE_INFINITY;
+			for(double recallBias = 0.5d; recallBias < 6d; recallBias *= 1.5d) {
+				params.frameDecoder.setRecallBias(recallBias);
+				List<FNParse> predicted = this.parseWithoutPeeking(examples);
+				List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
+				double score = BasicEvaluation.targetMicroF1.evaluate(instances);
+				System.out.printf("[Parser tune FRAME_ID] recallBias=%.2f %s=%.3f\n", recallBias, obj.getName(), score);
+				if(score > bestScore) {
+					bestRecallBias = recallBias;
+					bestScore = score;
+				}
+			}
+			System.out.printf("[Parser tune FRAME_ID] took %.1f sec, done. recallBias %.2f => %.2f\n", t.totalTimeInSec(), origRecallBias, bestRecallBias);
+			params.frameDecoder.setRecallBias(bestRecallBias);
+			break;
+		case PIPELINE_FRAME_ARG:
+			throw new RuntimeException("implement me");
+		case JOINT_FRAME_ARG:
+			throw new RuntimeException("implement me");
+		default:
+			throw new RuntimeException("unknown mode: " + params.mode);
+		}
+	}
+	
 
 	/**
 	 * writes out weights in human readable form

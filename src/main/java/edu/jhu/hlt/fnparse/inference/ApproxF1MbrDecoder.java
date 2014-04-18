@@ -14,6 +14,7 @@ public class ApproxF1MbrDecoder implements Serializable {
 	private boolean logSpace;
 	private double falsePosPenalty;
 	private double falseNegPenalty;
+	private double recallBias;
     
     // TODO do decoding over (f_i, r_ijk)!
     // if you're going to bother with joint training you better do joint decoding!
@@ -37,9 +38,14 @@ public class ApproxF1MbrDecoder implements Serializable {
 	public void setRecallBias(double recallBias) {
 		if(recallBias < 1e-3 || recallBias > 1e3)
 			throw new IllegalArgumentException();		
+		this.recallBias = recallBias;
 		double rb = Math.sqrt(recallBias);
 		this.falseNegPenalty = rb;
 		this.falsePosPenalty = 1d / rb;
+	}
+	
+	public double getRecallBias() {
+		return recallBias;
 	}
 	
 	public double getFalsePosPenalty() {

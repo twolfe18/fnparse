@@ -11,20 +11,20 @@ public class Timer {
 	public boolean ignoreFirstTime;
 	private long firstTime;
 	
-	public Timer(String id) {
-		this.id = id;
-		printIterval = -1;
-		ignoreFirstTime = true;
+	public Timer() {
+		this(null, -1, false);
 	}
-	public Timer(String id, int printInterval) {
+	public Timer(String id) {
+		this(id, -1, false);
+	}
+	public Timer(String id, int printInterval, boolean ignoreFirstTime) {
 		this.id = id;
 		this.printIterval = printInterval;
-		ignoreFirstTime = true;
+		this.ignoreFirstTime = ignoreFirstTime;
 	}
 	
 	public static Timer start(String id) {
-		Timer t = new Timer(id, 1);
-		t.ignoreFirstTime = false;
+		Timer t = new Timer(id, 1, false);
 		t.start();
 		return t;
 	}
@@ -68,7 +68,7 @@ public class Timer {
 	
 	public static final class NoOp extends Timer {
 		public NoOp(String id) { super(id); }
-		public NoOp(String id, int printInterval)  { super(id, printInterval); }
+		public NoOp(String id, int printInterval)  { super(id, printInterval, false); }
 		public void start() {}
 		public long stop() { return -1; }
 	}

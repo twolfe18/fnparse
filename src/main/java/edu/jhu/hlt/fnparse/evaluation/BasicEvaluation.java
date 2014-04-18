@@ -91,7 +91,19 @@ public class BasicEvaluation {
 		}
 	}
 
-	
+	public static List<SentenceEval> zip(List<FNParse> gold, List<FNParse> hyp) {
+
+		if(gold.size() != hyp.size())
+			throw new IllegalArgumentException();
+
+		List<SentenceEval> se = new ArrayList<SentenceEval>();
+		for(int i=0; i<gold.size(); i++)
+			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
+
+		return se;
+	}
+
+
 	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {
 			targetMacroF1, targetMacroPrecision, targetMacroRecall,
 			targetMicroF1, targetMicroPrecision, targetMicroRecall,
@@ -101,13 +113,7 @@ public class BasicEvaluation {
 	
 	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
 		
-		if(gold.size() != hyp.size())
-			throw new IllegalArgumentException();
-		
-		List<SentenceEval> se = new ArrayList<SentenceEval>();
-		for(int i=0; i<gold.size(); i++)
-			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
-		
+		List<SentenceEval> se = zip(gold, hyp);
 		Map<String, Double> results = new HashMap<String, Double>();
 		int n = evaluationFunctions.length;
 		for(int i=0; i<n; i++) {
