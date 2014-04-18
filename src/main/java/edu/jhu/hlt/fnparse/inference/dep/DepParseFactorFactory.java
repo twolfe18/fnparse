@@ -58,7 +58,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		// for some reason one of the feature templates is asking for morphological features
 		// i'm going to create a bunch of empty feature lists because I have no way to generate these
 		ArrayList<List<String>> feats = new ArrayList<List<String>>();
-		for(String w : s.getWords())
+		for(int i=0; i<s.size(); i++)
 			feats.add(Collections.<String>emptyList());
 		sas.setFeats(feats);
 		
@@ -75,6 +75,11 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 	public List<Factor> initFactorsFor(Sentence s, List<Object> inThisSentence, ProjDepTreeFactor l) {
 
 		List<Factor> factors = new ArrayList<Factor>();
+		
+		if(s.size() < 4) {	// 3 words + 1 punc is about as short as you might ever see as a legit sentence
+			System.err.println("[DepParseFactorFactory] really short sentence (skipping): " + s);
+			return factors;
+		}
 
 		factors.add(l);	// global factor
 		
@@ -93,7 +98,6 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 				// TODO grandparent and sibling links
 			}
 		}
-		
 		
 		return factors;
 	}

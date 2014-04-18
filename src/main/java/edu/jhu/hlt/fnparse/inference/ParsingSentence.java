@@ -102,7 +102,6 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		if(params.useLatentDepenencies) {
 			depTree = new ProjDepTreeFactor(sentence.size(), VarType.LATENT);
 			factors.addAll(depParseFactorTemplate.initFactorsFor(sentence, Collections.emptyList(), depTree));
-			assert factors.size() > 1 + sentence.size() : "should be at least a global factor and edge factors (N^2 rather than just N)";
 		}
 		else depTree = null;
 		factors.addAll(factorTemplate.initFactorsFor(sentence, hypotheses, depTree));
