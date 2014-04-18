@@ -18,9 +18,10 @@ public class FNParse extends FNTagging {
 	 */
 	public FNParse(Sentence s, List<FrameInstance> frameInstances) {
 		super(s, frameInstances);
-		for(FrameInstance fi : frameInstances)
+		for(FrameInstance fi : frameInstances) {
 			if(fi.onlyTargetLabeled())
 				throw new IllegalArgumentException();
+		}
 	}
 	
 }

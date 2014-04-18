@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.*;
 
+import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -71,16 +72,38 @@ public final class Sentence implements HasId {
 	 * a FrameNet style POS.
 	 */
 	public LexicalUnit getFNStyleLU(int i, IDictionary dict) {
+		LexicalUnit x = getFNStyleLUUnsafe(i, dict);
+		if(x == null)
+			return new LexicalUnit(tokens[i], fnStyleBadPOSstrPrefix + pos[i]);
+		else
+			return x;
+	}
+	
+	public LexicalUnit getFNStyleLUUnsafe(int i, IDictionary dict) {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
-		if(fnTag == null) fnTag = fnStyleBadPOSstrPrefix + pos[i];
-		// wow, the lemmas i have right now are goofy
-		// "later" -> "lat"
-		// lets try wordnet's stemmer instead
+		if(fnTag == null) return null;
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
-		List<String> allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
-		String word = allStems.isEmpty() ? tokens[i] : allStems.get(0);
-		//System.out.printf("%s => (WordnetStemmer: %s) (Lemma %s) (Alt.Stems %s) (fnTag %s)\n", tokens[i], word, lemmas[i], allStems, fnTag);
-		return new LexicalUnit(word, fnTag);
+		List<String> allStems;
+		try {
+			allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
+		}
+		catch(java.lang.IllegalArgumentException e) {
+			throw new RuntimeException("bad word? " + getLU(i), e);
+		}
+		if(allStems.isEmpty()) return null;
+		return new LexicalUnit(allStems.get(0), fnTag);
+	}
+	
+	/**
+	 * gives you a LexicalUnit using the lemma for this token rather than the actual word.
+	 * this method is safe (if you call with i=-1 or i=n, it will return "<S>" and "</S>" fields).
+	 */
+	public LexicalUnit getLemmaLU(int i) {
+		if(i == -1)
+			return AbstractFeatures.luStart;
+		if(i == tokens.length)
+			return AbstractFeatures.luEnd;
+		return new LexicalUnit(lemmas[i], pos[i]);
 	}
 	
 	/**
@@ -91,7 +114,9 @@ public final class Sentence implements HasId {
 	
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
+	public String[] getPos() { return pos; }
 	public String getPos(int i) { return pos[i]; }
+	public String[] getLemmas() { return lemmas; }
 	public String getLemma(int i){return lemmas[i];}
 	
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
@@ -146,8 +171,10 @@ public final class Sentence implements HasId {
 		StringBuilder sb = new StringBuilder("<Sentence");
 		sb.append(" ");
 		sb.append(id);
-		for(int i=0; i<size(); i++)
-			sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
+		for(int i=0; i<size(); i++) {
+			//sb.append(String.format(" %s/%s", getWord(i), getPos(i)));
+			sb.append(String.format(" %s", getWord(i)));
+		}
 		sb.append(">");
 		return sb.toString();
 	}

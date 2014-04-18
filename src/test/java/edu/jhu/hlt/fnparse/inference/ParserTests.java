@@ -11,8 +11,7 @@ import org.junit.*;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.*;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {
@@ -21,7 +20,12 @@ public class ParserTests {
 
 	@Before
 	public void setupDummyParse() {
-		
+		dummyParse = makeDummyParse();
+		System.out.println("[ParserTests] dummy parse:");
+		System.out.println(Describe.fnParse(dummyParse));
+	}
+	
+	public static FNParse makeDummyParse() {
 		String[] tokens  = new String[] {"The", "fox", "quickly", "jumped", "over", "the", "fence"};
 		String[] lemmas = new String[] {"The", "fox", "quickly", "jump", "over", "the", "fence"};
 		String[] pos     = new String[] {"DT",  "NN",    "RB",  "VBD",    "IN",   "DT",  "NN"};
@@ -32,7 +36,7 @@ public class ParserTests {
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
 		
-		Frame speed = frameIdx.getFrameByName("Speed");
+		Frame speed = frameIdx.getFrame("Speed");
 		//System.out.println("speedArgs: " + Arrays.toString(speed.getRoles()));
 		Span[] speedArgs = new Span[speed.numRoles()];
 		Arrays.fill(speedArgs, Span.nullSpan);
@@ -41,7 +45,7 @@ public class ParserTests {
 		instances.add(speedInst);
 		System.out.println("[setupDummyParse] adding instance of " + speed);
 		
-		Frame jump = frameIdx.getFrameByName("Self_motion");
+		Frame jump = frameIdx.getFrame("Self_motion");
 		//System.out.println("speedArgs: " + Arrays.toString(jump.getRoles()));
 		Span[] jumpArgs = new Span[jump.numRoles()];
 		Arrays.fill(jumpArgs, Span.nullSpan);
@@ -51,30 +55,47 @@ public class ParserTests {
 		instances.add(jumpInst);
 		System.out.println("[setupDummyParse] adding instance of " + jump);
 		
-		dummyParse = new FNParse(s, instances);
-		System.out.println("[ParserTests] dummy parse:");
-		System.out.println(Describe.fnParse(dummyParse));
+		return new FNParse(s, instances);
 	}
 	
 	@Test
 	public void frameId() {
-		Parser p = new Parser(Mode.FRAME_ID, true);
+		Parser p = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(p, true, true, "FRAME_ID");
 	}
 
 	@Test
+	public void frameIdWithLatentDeps() {
+		boolean useLatentDeps = true;
+		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
+		overfitting(p, true, true, "FRAME_ID_LATENT");
+	}
+
+	@Test
 	public void joint() {
-		Parser p = new Parser(Mode.JOINT_FRAME_ARG, true);
+		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "JOINT");
 	}
 
 	@Test
 	public void pipeline() {
-		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
 		overfitting(p, false, true, "PIPELINE");
 	}
+	
+	@Test
+	public void pipelineWithLatentDeps() {
+		Parser p = new Parser(Mode.PIPELINE_FRAME_ARG, true, true);
+		p.params.argDecoder.setRecallBias(1d);
+		overfitting(p, false, true, "PIPELINE_LATENT");
+	}
+
+	// TODO joint with latent
+	
+	
+	
 	
 	private Parser trained, readIn;
 	private File f;
@@ -86,38 +107,39 @@ public class ParserTests {
 	
 	@Test
 	public void serializationFrameId() throws IOException {
-	
-		// frame id
-		trained = new Parser(Mode.FRAME_ID, true);
+		trained = new Parser(Mode.FRAME_ID, false, true);
 		overfitting(trained, true, true, "FRAME_ID_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.JOINT_FRAME_ARG, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
-		//readIn.params.targetPruningData = trained.params.targetPruningData;	// lets cheat a bit to speed things up...
+		readIn = new Parser(f);
 		overfitting(readIn, true, false, "FRAME_ID_SER2");
+	}
+
+	@Test
+	public void serializationFrameIdWithLatentDeps() throws IOException {
+		trained = new Parser(Mode.FRAME_ID, true, true);
+		overfitting(trained, true, true, "FRAME_ID_LATENT_SER1");
+		trained.writeModel(f);
+		readIn = new Parser(f);
+		overfitting(readIn, true, false, "FRAME_ID_LATENT_SER2");
 	}
 	
 	@Test
 	public void serializationJoint() throws IOException {
-		// joint
-		trained = new Parser(Mode.JOINT_FRAME_ARG, true);
+		trained = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "JOINT_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
+		readIn = new Parser(f);
 		overfitting(readIn, false, false, "JOINT_SER2");
 	}
 	
 	@Test
 	public void serializationPipeline() throws IOException {
-		// pipeline
-		trained = new Parser(Mode.PIPELINE_FRAME_ARG, true);
+		trained = new Parser(Mode.PIPELINE_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);
 		overfitting(trained, false, true, "PIPELINE_SER1");
 		trained.writeModel(f);
-		readIn = new Parser(Mode.FRAME_ID, true);	// not even same mode to try to screw things up!
-		readIn.readModel(f);
+		readIn = new Parser(f);
 		overfitting(readIn, false, false, "PIPELINE_SER2");
 	}
 	
@@ -131,13 +153,11 @@ public class ParserTests {
 
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
-			if(p.params.debug) {
-				p.train(train, 4, 1, 0.5d, 1d);
-				p.train(train, 4, 1, 0.5d, 1d);
-			}
-			else	// for full feature set, need less regularization and more iterations to converge
+			if(p.params.debug) 
 				p.train(train, 15, 1, 0.5d, 10d);
-			p.writeWeights(new File("weights.txt"));
+			else
+				p.train(train, 15, 1, 0.5d, 10d);
+			p.writeWeights(new File("weights." + desc + ".txt"));
 		}
 
 		System.out.println("====== Running Prediction " + desc + " ======");
@@ -148,11 +168,9 @@ public class ParserTests {
 		
 		SentenceEval sentEval = new SentenceEval(dummyParse, predicted.get(0));
 		
-		if(onlyFrames) {
-			assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
-			assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
-		}
-		else {
+		assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
+		assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
+		if(!onlyFrames) {
 			assertSameParse(train.get(0), predicted.get(0));
 			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
 			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);

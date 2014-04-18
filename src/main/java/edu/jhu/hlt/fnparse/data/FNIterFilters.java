@@ -2,17 +2,16 @@ package edu.jhu.hlt.fnparse.data;
 
 import java.util.*;
 
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider.FIIterator;
 import edu.jhu.hlt.fnparse.datatypes.*;
 
 public class FNIterFilters {
 
 	public static final class OnlyParses implements Iterator<FNParse> {
 		
-		private FIIterator iter;
+		private Iterator<FNTagging> iter;
 		private FNParse next;
 		
-		public OnlyParses(FIIterator iter) {
+		public OnlyParses(Iterator<FNTagging> iter) {
 			this.iter = iter;
 			this.next = findNext();
 		}
@@ -43,10 +42,10 @@ public class FNIterFilters {
 	
 	public static final class OnlyTaggings implements Iterator<FNTagging> {
 
-		private FIIterator iter;
+		private Iterator<FNTagging> iter;
 		private FNTagging next;
 		
-		public OnlyTaggings(FIIterator iter) {
+		public OnlyTaggings(Iterator<FNTagging> iter) {
 			this.iter = iter;
 			this.next = findNext();
 		}
@@ -74,5 +73,49 @@ public class FNIterFilters {
 		@Override
 		public void remove() { throw new UnsupportedOperationException(); }
 		
+	}
+	
+	public static final class SkipExceptions implements Iterator<FNTagging> {
+		
+		private int totalSkipped = 0;
+		private Iterator<FNTagging> iter;
+		private FNTagging next;
+		
+		public SkipExceptions(Iterator<FNTagging> iter) {
+			this.iter = iter;
+			this.next = findNext();
+		}
+		
+		private FNTagging findNext() {
+			while(iter.hasNext()) {
+				try {
+					FNTagging n = iter.next();
+					return n;
+				}
+				catch(IllegalArgumentException iae) {
+					totalSkipped++;
+					//System.err.println("[SkipExceptions] bad FNTagging, " + totalSkipped + " total");
+				}
+			}
+			return null;
+		}
+
+		
+		@Override
+		public boolean hasNext() {
+			if(next == null && totalSkipped > 0)
+				System.err.println("[SkipExceptions] skipped " + totalSkipped + " FNParses");
+			return next != null;
+		}
+
+		@Override
+		public FNTagging next() {
+			FNTagging ret = next;
+			next = findNext();
+			return ret;
+		}
+
+		@Override
+		public void remove() { throw new UnsupportedOperationException(); }
 	}
 }

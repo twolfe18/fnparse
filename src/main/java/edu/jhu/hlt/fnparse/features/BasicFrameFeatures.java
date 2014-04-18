@@ -11,15 +11,13 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.Features.F;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
@@ -30,20 +28,18 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements F {
+public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeatures> implements Features.F {
 	
 	private static final long serialVersionUID = 1L;
 	
 	private static final String intercept = "intercept";
 	private static final String frameFeatPrefix = "frame=";
-	private static final String luMatch = "LU-match";
 	
 	public transient Timer full = Timer.noOp; //new Timer("all", 75000);
 	public transient Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public transient Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 
 	private ParserParams params;
-	private List<Integer> dontRegularize;
 	private boolean bowWithDirection = false;
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
@@ -52,31 +48,14 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	public BasicFrameFeatures(ParserParams params) {
 		super(params.featIdx);
 		this.params = params;
-		
-		// compute the features that we don't want regularized
-		FeatureVector noop = new FeatureVector();
-		dontRegularize = new ArrayList<Integer>();
-		dontRegularize.add(b(noop, intercept));
-		dontRegularize.add(b(noop, luMatch));
-		for(Frame f : FrameIndex.getInstance().allFrames()) {
-			dontRegularize.add(b(noop, frameFeatPrefix, f.getName()));
-		}
 	}
 	
 	@Override
-	public List<Integer> dontRegularize() {
-		assert dontRegularize.size() > 1;
-		return dontRegularize;
-	}
-
-	@Override
-	public FeatureVector getFeatures(final Frame f, final int head, final Sentence s) {
+	public void featurize(FeatureVector v, Refinements refs, int head, Frame f, Sentence s) {
 		
 		full.start();
 		final int n = s.size();
 		Set<String> bag = new HashSet<String>();
-		
-		FeatureVector v = new FeatureVector();
 		
 		LexicalUnit headLU = s.getLU(head);
 		String fs = "f=" + (params.fastFeatNames ? f.getId() : f.getName());
@@ -94,25 +73,25 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		
 		
 		// start of features
-		b(v, intercept);
-		b(v, frameFeatPrefix, f.getName());
-		b(v, 0.5d, fs, "-target-head=", headLU.getFullString());
-		b(v, 1d,   fs, "-target-head=", headLU.word);
-		b(v, 2d,   fs, "-target-head=", headLU.pos);
-		b(v, 0.1d, fs, "-sentence-length/2=", String.valueOf(n/2));
-		b(v, 0.2d, fs, "-sentence-length/3=", String.valueOf(n/3));
-		b(v, 0.3d, fs, "-sentence-length/4=", String.valueOf(n/4));
-		b(v, 0.4d, fs, "-sentence-length/5=", String.valueOf(n/5));
-		b(v, 0.5d, fs, "-sentence-length/6=", String.valueOf(n/6));
-		b(v, 0.6d, fs, "-sentence-length/7=", String.valueOf(n/7));
-		b(v, 0.7d, fs, "-sentence-length/8=", String.valueOf(n/8));
+		b(v, refs, 10d, intercept);
+		b(v, refs, 4d, frameFeatPrefix, f.getName());
+		b(v, refs, 0.5d, fs, "-target-head=", headLU.getFullString());
+		b(v, refs, 1d,   fs, "-target-head=", headLU.word);
+		b(v, refs, 2d,   fs, "-target-head=", headLU.pos);
+		b(v, refs, 0.1d, fs, "-sentence-length/2=", String.valueOf(n/2));
+		b(v, refs, 0.2d, fs, "-sentence-length/3=", String.valueOf(n/3));
+		b(v, refs, 0.3d, fs, "-sentence-length/4=", String.valueOf(n/4));
+		b(v, refs, 0.4d, fs, "-sentence-length/5=", String.valueOf(n/5));
+		b(v, refs, 0.5d, fs, "-sentence-length/6=", String.valueOf(n/6));
+		b(v, refs, 0.6d, fs, "-sentence-length/7=", String.valueOf(n/7));
+		b(v, refs, 0.7d, fs, "-sentence-length/8=", String.valueOf(n/8));
 		
 		
 		// matches a Lexical Unit for this Frame?
 		final int nLU = f.numLexicalUnits();
 		for(int i=0; i<nLU; i++) {
 			LexicalUnit lu = f.getLexicalUnit(i);
-			lexicalMatch(v, headLU, lu, ResourceForPos.LU, lexicalMatchVariants, allowDifferentPosLU);
+			lexicalMatch(v, headLU, lu, ResourceForPos.LU, lexicalMatchVariants, allowDifferentPosLU, refs);
 		}
 		
 		
@@ -123,10 +102,10 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 				Span t = proto.getTarget();
 				if(t.width() > 1) continue;
 				LexicalUnit protoLU = proto.getSentence().getLU(t.start);
-				lexicalMatch(v, headLU, protoLU, ResourceForPos.LEX, lexicalMatchVariants, allowDifferentPosLEX);
+				lexicalMatch(v, headLU, protoLU, ResourceForPos.LEX, lexicalMatchVariants, allowDifferentPosLEX, refs);
 			}
 		}
-		else b(v, "no-LEX-prototypes");
+		else b(v, refs, "no-LEX-prototypes");
 
 		
 		if(params.useSyntaxFeatures) {
@@ -135,26 +114,26 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			parentTimer.start();
 			int parentIdx = s.governor(head);
 			LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
-			b(v, fs, "parent=", parent.getFullString());
-			b(v, fs, "parent=", parent.word);
-			b(v, fs, "parent=", parent.pos);
-			b(v, fsc, "parent=", parent.getFullString());
-			b(v, fsc, "parent=", parent.word);
-			b(v, fsc, "parent=", parent.pos);
+			b(v, refs, fs, "parent=", parent.getFullString());
+			b(v, refs, fs, "parent=", parent.word);
+			b(v, refs, fs, "parent=", parent.pos);
+			b(v, refs, fsc, "parent=", parent.getFullString());
+			b(v, refs, fsc, "parent=", parent.word);
+			b(v, refs, fsc, "parent=", parent.pos);
 			int up = 1;
 			boolean[] seen = new boolean[n];
 			while(parentIdx >= 0 && !seen[parentIdx]) {
 				parentIdx = s.governor(parentIdx);
 				parent = AbstractFeatures.getLUSafe(parentIdx, s);
-				b(v, fs, "gov-by=", parent.getFullString());
-				b(v, fs, "gov-by=", parent.word);
-				b(v, fs, "gov-by=", parent.word);
-				b(v, fsc, "gov-by=", parent.getFullString());
-				b(v, fsc, "gov-by=", parent.word);
-				b(v, fsc, "gov-by=", parent.word);
-				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.getFullString());
-				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.word);
-				b(v, fs, "up=", String.valueOf(up), "-gov-by=", parent.pos);
+				b(v, refs, fs, "gov-by=", parent.getFullString());
+				b(v, refs, fs, "gov-by=", parent.word);
+				b(v, refs, fs, "gov-by=", parent.word);
+				b(v, refs, fsc, "gov-by=", parent.getFullString());
+				b(v, refs, fsc, "gov-by=", parent.word);
+				b(v, refs, fsc, "gov-by=", parent.word);
+				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.getFullString());
+				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.word);
+				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.pos);
 				if(parentIdx >= 0)
 					seen[parentIdx] = true;
 				up++;
@@ -168,14 +147,14 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			for(int i : s.childrenOf(head)) {
 				seen[i] = true;
 				LexicalUnit c = s.getLU(i);
-				b(v, fs, "child=", c.getFullString());
-				b(v, fs, "child=", c.word);
-				b(v, fs, "child=", c.pos);
-				b(v, fsc, "child=", c.getFullString());
-				b(v, fsc, "child=", c.word);
-				b(v, fsc, "child=", c.pos);
-				allChildren(fs, i, 1, seen, s, v);
-				allChildren(fsc, i, 1, seen, s, v);
+				b(v, refs, fs, "child=", c.getFullString());
+				b(v, refs, fs, "child=", c.word);
+				b(v, refs, fs, "child=", c.pos);
+				b(v, refs, fsc, "child=", c.getFullString());
+				b(v, refs, fsc, "child=", c.word);
+				b(v, refs, fsc, "child=", c.pos);
+				allChildren(fs, i, 1, seen, s, v, refs);
+				allChildren(fsc, i, 1, seen, s, v, refs);
 			}
 			childTimer.stop();
 		}
@@ -185,86 +164,85 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		bag.clear();
 		for(int i=0; i<s.size(); i++) {
 			String w = s.getWord(i);
-			b(v, 0.75d, fs, w, "appears-in-sentence");
-			b(v, 0.75d, fsc, w, "appears-in-sentence");
+			b(v, refs, 0.75d, fs, w, "appears-in-sentence");
+			b(v, refs, 0.75d, fsc, w, "appears-in-sentence");
 		}
-		pairFeatures(fs, 0.75d, bag, v, "-in-sentence");
-		pairFeatures(fsc, 0.75d, bag, v, "-in-sentence");
+		pairFeatures(fs, 0.75d, bag, v, "-in-sentence", refs);
+		pairFeatures(fsc, 0.75d, bag, v, "-in-sentence", refs);
 		
 		if(bowWithDirection) {
 			// pairs of words on left
 			bag.clear();
 			for(int i=0; i<head; i++) {
 				String w = s.getWord(i);
-				b(v, 0.5d, fs, w, "appears-to-the-left");
-				b(v, 0.5d, fsc, w, "appears-to-the-left");
+				b(v, refs, 0.5d, fs, w, "appears-to-the-left");
+				b(v, refs, 0.5d, fsc, w, "appears-to-the-left");
 			}
 			if(bag.size() == 0) {
-				b(v, 0.5d, fs, "nothing-to-the-left");
-				b(v, 0.5d, fsc, "nothing-to-the-left");
+				b(v, refs, 0.5d, fs, "nothing-to-the-left");
+				b(v, refs, 0.5d, fsc, "nothing-to-the-left");
 			}
-			else pairFeatures(fs, 0.5d, bag, v, "-to-the-left");
+			else pairFeatures(fs, 0.5d, bag, v, "-to-the-left", refs);
 
 			// pairs of words on right
 			bag.clear();
 			for(int i=head+1; i<s.size(); i++) {
 				String w = s.getWord(i);
-				b(v, 0.5d, fs, w, "appears-to-the-right");
-				b(v, 0.5d, fsc, w, "appears-to-the-right");
+				b(v, refs, 0.5d, fs, w, "appears-to-the-right");
+				b(v, refs, 0.5d, fsc, w, "appears-to-the-right");
 			}
 			if(bag.size() == 0) {
-				b(v, 0.5d, fs, "nothing-to-the-right");
-				b(v, 0.5d, fsc, "nothing-to-the-right");
+				b(v, refs, 0.5d, fs, "nothing-to-the-right");
+				b(v, refs, 0.5d, fsc, "nothing-to-the-right");
 			}
-			else pairFeatures(fs, 0.5d, bag, v, "-to-the-right");
+			else pairFeatures(fs, 0.5d, bag, v, "-to-the-right", refs);
 		}
 		
 		// word/pos to the left/right of the extent
 		LexicalUnit l = AbstractFeatures.getLUSafe(head-1, s);
 		LexicalUnit ll = AbstractFeatures.getLUSafe(head-2, s);
-		b(v, fs, "to-the-left=", l.getFullString());
-		b(v, fs, "to-the-left=", l.word);
-		b(v, fs, "to-the-left=", l.pos);
-		b(v, fs, "to-the-left=", ll.word, l.getFullString());
-		b(v, fs, "to-the-left=", ll.pos, l.getFullString());
-		b(v, fs, "to-the-left=", ll.word, l.word);
-		b(v, fs, "to-the-left=", ll.pos, l.word);
-		b(v, fs, "to-the-left=", ll.pos, l.pos);
-		b(v, fs, "to-the-left=", ll.word, l.pos);
-		b(v, fsc, "to-the-left=", l.getFullString());
-		b(v, fsc, "to-the-left=", l.word);
-		b(v, fsc, "to-the-left=", l.pos);
-		b(v, fsc, "to-the-left=", ll.word, l.getFullString());
-		b(v, fsc, "to-the-left=", ll.pos, l.getFullString());
-		b(v, fsc, "to-the-left=", ll.word, l.word);
-		b(v, fsc, "to-the-left=", ll.pos, l.word);
-		b(v, fsc, "to-the-left=", ll.pos, l.pos);
-		b(v, fsc, "to-the-left=", ll.word, l.pos);
+		b(v, refs, fs, "to-the-left=", l.getFullString());
+		b(v, refs, fs, "to-the-left=", l.word);
+		b(v, refs, fs, "to-the-left=", l.pos);
+		b(v, refs, fs, "to-the-left=", ll.word, l.getFullString());
+		b(v, refs, fs, "to-the-left=", ll.pos, l.getFullString());
+		b(v, refs, fs, "to-the-left=", ll.word, l.word);
+		b(v, refs, fs, "to-the-left=", ll.pos, l.word);
+		b(v, refs, fs, "to-the-left=", ll.pos, l.pos);
+		b(v, refs, fs, "to-the-left=", ll.word, l.pos);
+		b(v, refs, fsc, "to-the-left=", l.getFullString());
+		b(v, refs, fsc, "to-the-left=", l.word);
+		b(v, refs, fsc, "to-the-left=", l.pos);
+		b(v, refs, fsc, "to-the-left=", ll.word, l.getFullString());
+		b(v, refs, fsc, "to-the-left=", ll.pos, l.getFullString());
+		b(v, refs, fsc, "to-the-left=", ll.word, l.word);
+		b(v, refs, fsc, "to-the-left=", ll.pos, l.word);
+		b(v, refs, fsc, "to-the-left=", ll.pos, l.pos);
+		b(v, refs, fsc, "to-the-left=", ll.word, l.pos);
 		
 		LexicalUnit r = AbstractFeatures.getLUSafe(head+1, s);
 		LexicalUnit rr = AbstractFeatures.getLUSafe(head+2, s);
-		b(v, fs, "to-the-right=", r.getFullString());
-		b(v, fs, "to-the-right=", r.word);
-		b(v, fs, "to-the-right=", r.pos);
-		b(v, fs, "to-the-right=", rr.word, r.getFullString());
-		b(v, fs, "to-the-right=", rr.pos, r.getFullString());
-		b(v, fs, "to-the-right=", rr.word, r.word);
-		b(v, fs, "to-the-right=", rr.pos, r.word);
-		b(v, fs, "to-the-right=", rr.pos, r.pos);
-		b(v, fs, "to-the-right=", rr.word, r.pos);
-		b(v, fsc, "to-the-right=", r.getFullString());
-		b(v, fsc, "to-the-right=", r.word);
-		b(v, fsc, "to-the-right=", r.pos);
-		b(v, fsc, "to-the-right=", rr.word, r.getFullString());
-		b(v, fsc, "to-the-right=", rr.pos, r.getFullString());
-		b(v, fsc, "to-the-right=", rr.word, r.word);
-		b(v, fsc, "to-the-right=", rr.pos, r.word);
-		b(v, fsc, "to-the-right=", rr.pos, r.pos);
-		b(v, fsc, "to-the-right=", rr.word, r.pos);
+		b(v, refs, fs, "to-the-right=", r.getFullString());
+		b(v, refs, fs, "to-the-right=", r.word);
+		b(v, refs, fs, "to-the-right=", r.pos);
+		b(v, refs, fs, "to-the-right=", rr.word, r.getFullString());
+		b(v, refs, fs, "to-the-right=", rr.pos, r.getFullString());
+		b(v, refs, fs, "to-the-right=", rr.word, r.word);
+		b(v, refs, fs, "to-the-right=", rr.pos, r.word);
+		b(v, refs, fs, "to-the-right=", rr.pos, r.pos);
+		b(v, refs, fs, "to-the-right=", rr.word, r.pos);
+		b(v, refs, fsc, "to-the-right=", r.getFullString());
+		b(v, refs, fsc, "to-the-right=", r.word);
+		b(v, refs, fsc, "to-the-right=", r.pos);
+		b(v, refs, fsc, "to-the-right=", rr.word, r.getFullString());
+		b(v, refs, fsc, "to-the-right=", rr.pos, r.getFullString());
+		b(v, refs, fsc, "to-the-right=", rr.word, r.word);
+		b(v, refs, fsc, "to-the-right=", rr.pos, r.word);
+		b(v, refs, fsc, "to-the-right=", rr.pos, r.pos);
+		b(v, refs, fsc, "to-the-right=", rr.word, r.pos);
 		
 		//System.out.println("fv.size=" + v.size());
 		full.stop();
-		return v;
 	}
 	
 	private transient IRAMDictionary dict;
@@ -284,7 +262,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	private static enum ResourceForPos { LU, LEX }
 	
 	private void lexicalMatch(FeatureVector v, LexicalUnit inTarget, LexicalUnit inResource,
-			ResourceForPos resource, Map<String, Double> descriptions, boolean allowDifferentPOS) {
+			ResourceForPos resource, Map<String, Double> descriptions, boolean allowDifferentPOS, Refinements refs) {
 
 		// sort out the POS tags
 		edu.mit.jwi.item.POS inTargetTag = PosUtil.ptb2wordNet(inTarget.pos);
@@ -320,7 +298,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		
 		// vanilla match
 		for(Map.Entry<String, Double> x : descriptions.entrySet())
-			b(v, x.getValue() * mult, resource.toString(), x.getKey());
+			b(v, refs, x.getValue() * mult, resource.toString(), x.getKey());
 		
 		
 		// wordnet match
@@ -352,8 +330,8 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			ISynset tss = tw.getSynset();
 			if(tss.getWords().contains(rw)) {
 				for(Map.Entry<String, Double> x : descriptions.entrySet()) {
-					b(v, x.getValue(),      resource.toString(), x.getKey(), "same-synset");
-					b(v, x.getValue() / 2d, resource.toString(), x.getKey(), "same-synset", inTarget.pos);
+					b(v, refs, x.getValue(),      resource.toString(), x.getKey(), "same-synset");
+					b(v, refs, x.getValue() / 2d, resource.toString(), x.getKey(), "same-synset", inTarget.pos);
 				}
 			}
 			
@@ -370,8 +348,8 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 									relation.getName(), inTarget.getFullString(), inResource.getFullString());
 						}
 						for(Map.Entry<String, Double> x : descriptions.entrySet()) {
-							b(v, x.getValue(),      "wordnet", resource.toString(), x.getKey(), relation.getName());
-							b(v, x.getValue() / 2d, "wordnet", resource.toString(), x.getKey(), relation.getName(), inTarget.pos);
+							b(v, refs, x.getValue(),      "wordnet", resource.toString(), x.getKey(), relation.getName());
+							b(v, refs, x.getValue() / 2d, "wordnet", resource.toString(), x.getKey(), relation.getName(), inTarget.pos);
 						}
 					}
 				}
@@ -394,20 +372,20 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		return m;
 	}
 	
-	private void allChildren(String fs, int head, int depth, boolean[] seen, Sentence s, FeatureVector v) {
+	private void allChildren(String fs, int head, int depth, boolean[] seen, Sentence s, FeatureVector v, Refinements refs) {
 		for(int i : s.childrenOf(head)) {
 			if(!seen[i]) {
 				seen[i] = true;
 				LexicalUnit d = s.getLU(i);
-				b(v, fs, "descendant=", d.word);
-				b(v, fs, "descendant=", d.word, "depth=", String.valueOf(depth));
-				b(v, fs, "descendant=", d.pos, "depth=", String.valueOf(depth));
-				allChildren(fs, i, depth+1, seen, s, v);
+				b(v, refs, fs, "descendant=", d.word);
+				b(v, refs, fs, "descendant=", d.word, "depth=", String.valueOf(depth));
+				b(v, refs, fs, "descendant=", d.pos, "depth=", String.valueOf(depth));
+				allChildren(fs, i, depth+1, seen, s, v, refs);
 			}
 		}
 	}
 	
-	private void pairFeatures(String fs, double weight, Set<String> items, FeatureVector v, String meta) {
+	private void pairFeatures(String fs, double weight, Set<String> items, FeatureVector v, String meta, Refinements refs) {
 		List<String> l = new ArrayList<String>();
 		l.addAll(items);
 		Collections.sort(l);
@@ -416,7 +394,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			String li = l.get(i);
 			for(int j=i+1; j<n; j++) {
 				String lj = l.get(j);
-				b(v, weight, fs, li, lj, "appears", meta);
+				b(v, refs, weight, fs, li, lj, "appears", meta);
 			}
 		}
 	}

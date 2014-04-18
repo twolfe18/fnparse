@@ -89,6 +89,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 			List<String> depType = new ArrayList<String>();
 			List<Integer> tokenCharStart = new ArrayList<Integer>();
 			List<Integer> tokenCharEnd = new ArrayList<Integer>();
+			String lastConllLine = null;
 			while(litrConll.hasNext() && curSentIdConll.equals(prevSentIdConll)){
 				String[] l = curLineConllFile.split("\t");
 				tokens.add(l[4]);
@@ -102,11 +103,12 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				depType.add(l[9]);
 				tokenCharStart.add(Integer.parseInt(l[6]));
 				tokenCharEnd.add(Integer.parseInt(l[7]));
+				lastConllLine = curLineConllFile;
 				curLineConllFile=litrConll.nextLine();
 				l=curLineConllFile.split("\t");
 				curSentIdConll = l[2];
 			}
-			assert tokens.size() > 0;
+			assert tokens.size() > 0 : "last conll line: " + lastConllLine;
 			String datasetOfSentence;
 			if(curSentIdConll.startsWith("FNFUTXT"))
 				datasetOfSentence = "FNFUTXT";
@@ -182,11 +184,11 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				}
 			}
 
+			prevSentIdFrames = curSentIdFrames;
+			prevSentIdConll = curSentIdConll;
 			FNTagging ret = isFullParse(s.getId())
 				? new FNParse(s, frameInstancesForFNTagging)
 				: new FNTagging(s, frameInstancesForFNTagging);
-			prevSentIdFrames = curSentIdFrames;
-			prevSentIdConll = curSentIdConll;
 			return ret;
 		}
 		
@@ -251,16 +253,16 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 	@Override
 	public Iterator<FNParse> getParsedSentences() {
-		return new FNIterFilters.OnlyParses(new FIIterator(frameFile, conllFile));
+		return new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getTaggedSentences() {
-		return new FNIterFilters.OnlyTaggings(new FIIterator(frameFile, conllFile));
+		return new FNIterFilters.OnlyTaggings(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getParsedOrTaggedSentences() {
-		return new FIIterator(frameFile, conllFile);
+		return new FNIterFilters.SkipExceptions(new FIIterator(frameFile, conllFile));
 	}
 }

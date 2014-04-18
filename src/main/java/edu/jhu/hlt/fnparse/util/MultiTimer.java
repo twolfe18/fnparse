@@ -27,6 +27,14 @@ public class MultiTimer {
 		Timer t = timers.get(key);
 		if(t == null)
 			throw new IllegalArgumentException("there is no timer for " + key);
-		t.print(ps);
+		ps.println(t);
+	}
+	
+	@Override
+	public String toString() {
+		StringBuilder sb = new StringBuilder();
+		for(Map.Entry<String, Timer> x : timers.entrySet())
+			sb.append(x.getKey() + ": " + x.getValue() + "\n");
+		return sb.toString();
 	}
 }

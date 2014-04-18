@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.util;
 
-import java.io.PrintStream;
-
 public class Timer {
 	
 	private String id;
@@ -13,15 +11,22 @@ public class Timer {
 	public boolean ignoreFirstTime;
 	private long firstTime;
 	
-	public Timer(String id) {
-		this.id = id;
-		printIterval = -1;
-		ignoreFirstTime = true;
+	public Timer() {
+		this(null, -1, false);
 	}
-	public Timer(String id, int printInterval) {
+	public Timer(String id) {
+		this(id, -1, false);
+	}
+	public Timer(String id, int printInterval, boolean ignoreFirstTime) {
 		this.id = id;
 		this.printIterval = printInterval;
-		ignoreFirstTime = true;
+		this.ignoreFirstTime = ignoreFirstTime;
+	}
+	
+	public static Timer start(String id) {
+		Timer t = new Timer(id, 1, false);
+		t.start();
+		return t;
 	}
 	
 	public void start() {
@@ -35,16 +40,16 @@ public class Timer {
 		time += t;
 		count++;
 		if(printIterval > 0 && count % printIterval == 0)
-			print(System.out);
+			System.out.println(this);
 		return t;
 	}
 	
-	public void print(PrintStream ps) {
+	public String toString() {
 		double rate = countsPerMSec();
 		if(rate >= 0.5d)
-			ps.printf("<Timer %s %.2f sec and %d calls total, %.1f k call/sec\n", id, totalTimeInSec(), count, rate);
+			return String.format("<Timer %s %.2f sec and %d calls total, %.1f k call/sec>", id, totalTimeInSec(), count, rate);
 		else
-			ps.printf("<Timer %s %.2f sec and %d calls total, %.1f sec/call\n", id, totalTimeInSec(), count, secPerCall());
+			return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSec(), count, secPerCall());
 	}
 	
 	private double countsPerMSec() {
@@ -63,7 +68,7 @@ public class Timer {
 	
 	public static final class NoOp extends Timer {
 		public NoOp(String id) { super(id); }
-		public NoOp(String id, int printInterval)  { super(id, printInterval); }
+		public NoOp(String id, int printInterval)  { super(id, printInterval, false); }
 		public void start() {}
 		public long stop() { return -1; }
 	}

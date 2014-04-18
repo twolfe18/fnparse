@@ -105,6 +105,15 @@ public class FrameInstance {
 	public Span getArgument(int roleIdx) { return arguments[roleIdx]; }
 	
 	public int numArguments() { return arguments.length; }
+	
+	public int numRealizedArguments() {
+		int c = 0;
+		for(Span a : arguments) {
+			assert a != null;
+			if(a != Span.nullSpan) c++;
+		}
+		return c;
+	}
 
 	public String[] getArgumentTokens(int roleIdx) { return sentence.getWordFor(arguments[roleIdx]); }
 	
@@ -114,7 +123,7 @@ public class FrameInstance {
 
 	@Override
 	public String toString() {
-		return String.format("<FrameInstance %s @ %s with %d roles>", frame, target, numArguments());
+		return String.format("<FrInst %s @ %s with %d args>", frame.getName(), target, numRealizedArguments());
 	}
 	
 	@Override

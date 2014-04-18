@@ -9,7 +9,7 @@ import edu.jhu.gm.data.FgExampleDiskStore;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser;
 
 /**
  * @deprecated this can't work

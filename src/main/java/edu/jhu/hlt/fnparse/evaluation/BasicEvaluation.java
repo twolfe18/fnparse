@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.util.Avg;
 
 public class BasicEvaluation {
 
@@ -14,6 +15,20 @@ public class BasicEvaluation {
 		public String getName();
 		public double evaluate(List<SentenceEval> instances);
 	}
+	
+	public static class FrameAccuracy implements EvalFunc {
+		@Override
+		public String getName() { return "FrameAccuracy"; }
+		@Override
+		public double evaluate(List<SentenceEval> instances) {
+			Avg a = new Avg();
+			for(SentenceEval s : instances)
+				a.accum(s.getFrameAccuracy(), s.size());
+			return a.average();
+		}
+	}
+	
+	public static final FrameAccuracy frameAccuracy = new FrameAccuracy();
 	
 	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, true, FPR.Mode.PRECISION);
 	public static final StdEvalFunc targetMacroRecall = new StdEvalFunc(true, true, FPR.Mode.RECALL);
@@ -76,22 +91,29 @@ public class BasicEvaluation {
 		}
 	}
 
-	
+	public static List<SentenceEval> zip(List<FNParse> gold, List<FNParse> hyp) {
+
+		if(gold.size() != hyp.size())
+			throw new IllegalArgumentException();
+
+		List<SentenceEval> se = new ArrayList<SentenceEval>();
+		for(int i=0; i<gold.size(); i++)
+			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
+
+		return se;
+	}
+
+
 	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {
 			targetMacroF1, targetMacroPrecision, targetMacroRecall,
 			targetMicroF1, targetMicroPrecision, targetMicroRecall,
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
-			fullMicroF1, fullMicroPrecision, fullMicroRecall};
+			fullMicroF1, fullMicroPrecision, fullMicroRecall,
+			frameAccuracy};
 	
 	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
 		
-		if(gold.size() != hyp.size())
-			throw new IllegalArgumentException();
-		
-		List<SentenceEval> se = new ArrayList<SentenceEval>();
-		for(int i=0; i<gold.size(); i++)
-			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
-		
+		List<SentenceEval> se = zip(gold, hyp);
 		Map<String, Double> results = new HashMap<String, Double>();
 		int n = evaluationFunctions.length;
 		for(int i=0; i<n; i++) {

@@ -10,7 +10,7 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.inference.newstuff.Parser;
+import edu.jhu.hlt.fnparse.inference.Parser;
 
 public class TargetPruningDataTests {
 
@@ -20,8 +20,8 @@ public class TargetPruningDataTests {
 		Parser p = new Parser();
 		Map<LexicalUnit, List<Frame>> framesByLU = p.params.targetPruningData.getLU2Frames();
 		FrameIndex fi = FrameIndex.getInstance();
-		checkLU(new LexicalUnit("area", "N"), framesByLU, fi.getFrameByName("Dimension"));
-		checkLU(new LexicalUnit("year", "N"), framesByLU, fi.getFrameByName("Calendric_unit"));
+		checkLU(new LexicalUnit("area", "N"), framesByLU, fi.getFrame("Dimension"));
+		checkLU(new LexicalUnit("year", "N"), framesByLU, fi.getFrame("Calendric_unit"));
 	}
 	
 	public void checkLU(LexicalUnit shouldBeThere, Map<LexicalUnit, List<Frame>> where, Frame... shouldInclude) {

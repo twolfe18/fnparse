@@ -6,9 +6,9 @@ import java.util.*;
 
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.inference.newstuff.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.optimize.L2;
+import edu.jhu.hlt.optimize.functions.L2;
 import edu.jhu.util.*;
 import edu.jhu.gm.data.*;
 import edu.jhu.gm.decode.MbrDecoder;
@@ -340,7 +340,7 @@ public class TriggerPruning {
 		fg.addFactor(f);
 		VarConfig gold = new VarConfig();
 		gold.put(y, BinaryVarUtil.boolToConfig(label));
-		return new FgExample(fg, gold);
+		return new LabeledFgExample(fg, gold);
 	}
 	
 	/**

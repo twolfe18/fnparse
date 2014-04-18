@@ -4,6 +4,7 @@ import java.util.Random;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
+import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
 
@@ -53,9 +54,9 @@ public class AbstractFeaturesBenchmark extends AbstractFeatures<AbstractFeatures
 			t.start();
 			FeatureVector fv = new FeatureVector();
 			for(int j=0; j<numFeatsPerAdd; j++) {
-				b(fv, "foo", "bar", "baz");
+				b(fv, Refinements.noRefinements, "foo", "bar", "baz");
 				//b(fv, "foo", String.valueOf(r.nextInt(100)));
-				b(fv, "foo", "bar", "baz", "zing", String.valueOf(r.nextBoolean()));
+				b(fv, Refinements.noRefinements, "foo", "bar", "baz", "zing", String.valueOf(r.nextBoolean()));
 				//b(fv, "foo", "bar", String.valueOf(r.nextInt(1000)));
 				//b(fv, String.valueOf(r.nextInt(10000)));
 			}
