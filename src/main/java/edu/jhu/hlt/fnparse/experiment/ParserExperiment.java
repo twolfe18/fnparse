@@ -37,12 +37,13 @@ public class ParserExperiment {
 	
 	public static void main(String[] args) {
 		
+		long start = System.currentTimeMillis();
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(100, 400, 1600, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100, 1));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(0.3d, 1d, 3d));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1d, 3d, 10d, 30d));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 10));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
@@ -68,7 +69,7 @@ public class ParserExperiment {
 			train = DataUtil.reservoirSample(train, nTrainLimit.get());
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, test.size());
 		
-		System.out.printf("[main] #train=%d #test=%d\n", train.size(), test.size());
+		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
 		
 		List<FNParse> predicted;
 		Map<String, Double> results;
@@ -121,6 +122,7 @@ public class ParserExperiment {
 
 		parser.writeWeights(new File(workingDir, "weights.frameId.txt"));
 		parser.writeModel(new File(workingDir, "model.frameId.ser"));
+		System.out.printf("[ParserExperiment] done, took %.1f minutes\n", (System.currentTimeMillis() - start) / (1000d * 60));
 	}
 	
 }
