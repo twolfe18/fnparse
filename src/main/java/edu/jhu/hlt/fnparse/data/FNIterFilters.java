@@ -77,6 +77,7 @@ public class FNIterFilters {
 	
 	public static final class SkipExceptions implements Iterator<FNTagging> {
 		
+		private int totalSkipped = 0;
 		private Iterator<FNTagging> iter;
 		private FNTagging next;
 		
@@ -92,7 +93,8 @@ public class FNIterFilters {
 					return n;
 				}
 				catch(IllegalArgumentException iae) {
-					System.err.println("[SkipExceptions] bad FNTagging!");
+					totalSkipped++;
+					//System.err.println("[SkipExceptions] bad FNTagging, " + totalSkipped + " total");
 				}
 			}
 			return null;
@@ -100,7 +102,11 @@ public class FNIterFilters {
 
 		
 		@Override
-		public boolean hasNext() { return next != null; }
+		public boolean hasNext() {
+			if(next == null && totalSkipped > 0)
+				System.err.println("[SkipExceptions] skipped " + totalSkipped + " FNParses");
+			return next != null;
+		}
 
 		@Override
 		public FNTagging next() {

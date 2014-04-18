@@ -184,11 +184,11 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				}
 			}
 
+			prevSentIdFrames = curSentIdFrames;
+			prevSentIdConll = curSentIdConll;
 			FNTagging ret = isFullParse(s.getId())
 				? new FNParse(s, frameInstancesForFNTagging)
 				: new FNTagging(s, frameInstancesForFNTagging);
-			prevSentIdFrames = curSentIdFrames;
-			prevSentIdConll = curSentIdConll;
 			return ret;
 		}
 		
