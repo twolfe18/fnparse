@@ -17,6 +17,8 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.Path.EdgeType;
+import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IRAMDictionary;
@@ -53,7 +55,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	@Override
 	public void featurize(FeatureVector v, Refinements refs, int head, Frame f, Sentence s) {
 		
-		full.start();
+		if(full != null) full.start();
 		final int n = s.size();
 		Set<String> bag = new HashSet<String>();
 		
@@ -111,7 +113,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		if(params.useSyntaxFeatures) {
 		
 			// parent words
-			parentTimer.start();
+			if(parentTimer != null) parentTimer.start();
 			int parentIdx = s.governor(head);
 			LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
 			b(v, refs, fs, "parent=", parent.getFullString());
@@ -120,32 +122,11 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			b(v, refs, fsc, "parent=", parent.getFullString());
 			b(v, refs, fsc, "parent=", parent.word);
 			b(v, refs, fsc, "parent=", parent.pos);
-			int up = 1;
-			boolean[] seen = new boolean[n];
-			while(parentIdx >= 0 && !seen[parentIdx]) {
-				parentIdx = s.governor(parentIdx);
-				parent = AbstractFeatures.getLUSafe(parentIdx, s);
-				b(v, refs, fs, "gov-by=", parent.getFullString());
-				b(v, refs, fs, "gov-by=", parent.word);
-				b(v, refs, fs, "gov-by=", parent.word);
-				b(v, refs, fsc, "gov-by=", parent.getFullString());
-				b(v, refs, fsc, "gov-by=", parent.word);
-				b(v, refs, fsc, "gov-by=", parent.word);
-				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.getFullString());
-				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.word);
-				b(v, refs, fs, "up=", String.valueOf(up), "-gov-by=", parent.pos);
-				if(parentIdx >= 0)
-					seen[parentIdx] = true;
-				up++;
-			}
-			parentTimer.stop();
+			if(parentTimer != null) parentTimer.stop();
 
 			// direct children and descendants
-			childTimer.start();
-			Arrays.fill(seen, false);
-			seen[head] = true;
+			if(childTimer != null) childTimer.start();
 			for(int i : s.childrenOf(head)) {
-				seen[i] = true;
 				LexicalUnit c = s.getLU(i);
 				b(v, refs, fs, "child=", c.getFullString());
 				b(v, refs, fs, "child=", c.word);
@@ -153,10 +134,38 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 				b(v, refs, fsc, "child=", c.getFullString());
 				b(v, refs, fsc, "child=", c.word);
 				b(v, refs, fsc, "child=", c.pos);
-				allChildren(fs, i, 1, seen, s, v, refs);
-				allChildren(fsc, i, 1, seen, s, v, refs);
+				//allChildren(fs, i, 1, seen, s, v, refs);
+				//allChildren(fsc, i, 1, seen, s, v, refs);
 			}
-			childTimer.stop();
+			if(childTimer != null) childTimer.stop();
+			
+			// path to target head
+			List<String> pathFragments = new ArrayList<String>();
+			for(Path p : Arrays.asList(
+					new Path(s, head, NodeType.LEMMA, EdgeType.DEP),
+					new Path(s, head, NodeType.LEMMA, EdgeType.DIRECTION),
+					new Path(s, head, NodeType.POS, EdgeType.DEP),
+					new Path(s, head, NodeType.POS, EdgeType.DIRECTION),
+					new Path(s, head, NodeType.NONE, EdgeType.DEP),
+					new Path(s, head, NodeType.NONE, EdgeType.DIRECTION))) {
+
+				double w = 1d;
+				if(p.getEdgeType() == EdgeType.DEP)
+					w *= 0.8d;
+				if(p.getNodeType() == NodeType.LEMMA)
+					w *= 0.5d;
+				b(v, refs, w, fs, "path-to-target-head", p.getPath());
+				b(v, refs, w, fsc, "path-to-target-head", p.getPath());
+				int length = 5;
+				if(p.getNodeType() == NodeType.NONE)
+					length = 7;
+				p.pathNGrams(length, pathFragments, null);
+				for(String pf : pathFragments) {
+					b(v, refs, w, "path-frag-to-target-head", fs, pf);
+					b(v, refs, w, "path-frag-to-target-head", fsc, pf);
+				}
+				pathFragments.clear();
+			}
 		}
 		
 		
@@ -241,8 +250,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, refs, fsc, "to-the-right=", rr.pos, r.pos);
 		b(v, refs, fsc, "to-the-right=", rr.word, r.pos);
 		
-		//System.out.println("fv.size=" + v.size());
-		full.stop();
+		if(full != null) full.stop();
 	}
 	
 	private transient IRAMDictionary dict;
@@ -372,6 +380,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		return m;
 	}
 	
+	@SuppressWarnings("unused")
 	private void allChildren(String fs, int head, int depth, boolean[] seen, Sentence s, FeatureVector v, Refinements refs) {
 		for(int i : s.childrenOf(head)) {
 			if(!seen[i]) {

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -22,11 +23,17 @@ public class SentenceEval {
 	 * indexed with [gold][hyp]
 	 * e.g. targets[1][0] = # false negatives
 	 */
-	private int[][] targetConfusion;
-	private int[][] fullConfusion;
-	private int size;
+	private final int[][] targetConfusion;
+	private final int[][] fullConfusion;
+	private final int size;
+
+	private final FNParse gold, hyp;
+	private List<Prediction> targetFalsePos, targetFalseNeg;
+	private List<Prediction> fullFalsePos, fullFalseNeg;
 	
-	public SentenceEval(FNParse gold, FNParse hyp) {
+	public SentenceEval(FNParse gold, FNParse hyp) { this(gold, hyp, true); }
+
+	public SentenceEval(FNParse gold, FNParse hyp, boolean storeDebugInfo) {
 		
 		if(!gold.getSentence().getId().equals(hyp.getSentence().getId()))
 			throw new IllegalArgumentException();
@@ -36,6 +43,15 @@ public class SentenceEval {
 		this.targetConfusion = new int[2][2];
 		this.fullConfusion = new int[2][2];
 		this.size = gold.getSentence().size();
+		this.gold = gold;
+		this.hyp = hyp;
+		
+		if(storeDebugInfo) {
+			targetFalsePos = new ArrayList<Prediction>();
+			targetFalseNeg = new ArrayList<Prediction>();
+			fullFalsePos = new ArrayList<Prediction>();
+			fullFalseNeg = new ArrayList<Prediction>();
+		}
 	
 		Set<Prediction> goldTargets = new HashSet<Prediction>();
 		Set<Prediction> hypTargets = new HashSet<Prediction>();
@@ -45,8 +61,25 @@ public class SentenceEval {
 		fillPredictions(gold.getFrameInstances(), goldTargets, goldTargetRoles);
 		fillPredictions(hyp.getFrameInstances(), hypTargets, hypTargetRoles);
 		
-		fillConfusionTable(goldTargets, hypTargets, targetConfusion);
-		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion);
+		fillConfusionTable(goldTargets, hypTargets, targetConfusion, targetFalsePos, targetFalseNeg);
+		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion, fullFalsePos, targetFalseNeg);
+	}
+	
+	// only work if storeDebugInfo was true
+	public FNParse getGold() { return gold; }
+	public FNParse getHypothesis() { return hyp; }
+	public List<Prediction> getTargetFalsePos() { return targetFalsePos; }
+	public List<Prediction> getTargetFalseNeg() { return targetFalseNeg; }
+	public List<Prediction> getFullFalsePos() { return fullFalsePos; }
+	public List<Prediction> getFullFalseNeg() { return fullFalseNeg; }
+	
+	@Override
+	public String toString() {
+		return gold.toString() + "\n" + hyp.toString();
+	}
+	
+	public String longString() {
+		throw new RuntimeException("implement me");
 	}
 	
 	public int size() { return size; }
@@ -65,7 +98,7 @@ public class SentenceEval {
 		}
 	}
 	
-	public void fillConfusionTable(Set<Prediction> gold, Set<Prediction> hyp, int[][] confusion) {
+	public void fillConfusionTable(Set<Prediction> gold, Set<Prediction> hyp, int[][] confusion, List<Prediction> fpStore, List<Prediction> fnStore) {
 		
 		Set<Prediction> s = new HashSet<Prediction>();
 		
@@ -80,12 +113,16 @@ public class SentenceEval {
 		s.addAll(hyp);
 		s.removeAll(gold);
 		confusion[0][1] = s.size();
+		if(fpStore != null)
+			fpStore.addAll(s);
 		
 		// FN = G -- H
 		s.clear();
 		s.addAll(gold);
 		s.removeAll(hyp);
 		confusion[1][0] = s.size();
+		if(fnStore != null)
+			fnStore.addAll(s);
 		
 		// TN
 		s.clear();

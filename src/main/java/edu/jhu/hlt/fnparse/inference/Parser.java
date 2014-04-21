@@ -5,13 +5,17 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -124,10 +128,15 @@ public class Parser {
 	
 	public Parser(File f) {
 		System.out.println("[Parser] reading parser from " + f.getPath());
+		long start = System.currentTimeMillis();
 		try {
-			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(f));
+			InputStream is = new FileInputStream(f);
+			if(f.getName().toLowerCase().endsWith(".gz"))
+				is = new GZIPInputStream(is);
+			ObjectInputStream ois = new ObjectInputStream(is);
 			params = (ParserParams) ois.readObject();
 			ois.close();
+			System.out.printf("[Parser] done reading model in %.1f seconds\n", (System.currentTimeMillis() - start)/1000d);
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
@@ -367,6 +376,7 @@ public class Parser {
 	 */
 	public void writeWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
+		long start = System.currentTimeMillis();
 		try {
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
 			int n = params.model.getNumParams();	// overestimate
@@ -376,6 +386,7 @@ public class Parser {
 			for(int i=0; i<params.featIdx.size(); i++)
 				w.write(String.format("%f\t%s\n", outParams[i], params.featIdx.lookupObject(i)));
 			w.close();
+			System.out.printf("[writeoutWeights] done in %.1f seconds\n", (System.currentTimeMillis() - start)/1000d);
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
@@ -387,7 +398,10 @@ public class Parser {
 	public void writeModel(File f) {
 		System.out.println("[writeModel] to " + f.getPath());
 		try {
-			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(f));
+			OutputStream os = new FileOutputStream(f);
+			if(f.getName().toLowerCase().endsWith(".gz"))
+				os = new GZIPOutputStream(os);
+			ObjectOutputStream oos = new ObjectOutputStream(os);
 			oos.writeObject(params);
 			oos.close();
 		}
