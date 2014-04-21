@@ -43,7 +43,7 @@ public class ParserExperiment {
 		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(100, 400, 1600, 999999));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1d, 3d, 10d, 30d));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 10));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
@@ -121,7 +121,7 @@ public class ParserExperiment {
 		printMemUsage();
 
 		parser.writeWeights(new File(workingDir, "weights.frameId.txt"));
-		parser.writeModel(new File(workingDir, "model.frameId.ser"));
+		parser.writeModel(new File(workingDir, "model.frameId.ser.gz"));
 		System.out.printf("[ParserExperiment] done, took %.1f minutes\n", (System.currentTimeMillis() - start) / (1000d * 60));
 	}
 	

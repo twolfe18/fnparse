@@ -53,7 +53,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	@Override
 	public void featurize(FeatureVector v, Refinements refs, int head, Frame f, Sentence s) {
 		
-		full.start();
+		if(full != null) full.start();
 		final int n = s.size();
 		Set<String> bag = new HashSet<String>();
 		
@@ -111,7 +111,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		if(params.useSyntaxFeatures) {
 		
 			// parent words
-			parentTimer.start();
+			if(parentTimer != null) parentTimer.start();
 			int parentIdx = s.governor(head);
 			LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
 			b(v, refs, fs, "parent=", parent.getFullString());
@@ -138,10 +138,10 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 					seen[parentIdx] = true;
 				up++;
 			}
-			parentTimer.stop();
+			if(parentTimer != null) parentTimer.stop();
 
 			// direct children and descendants
-			childTimer.start();
+			if(childTimer != null) childTimer.start();
 			Arrays.fill(seen, false);
 			seen[head] = true;
 			for(int i : s.childrenOf(head)) {
@@ -156,7 +156,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 				allChildren(fs, i, 1, seen, s, v, refs);
 				allChildren(fsc, i, 1, seen, s, v, refs);
 			}
-			childTimer.stop();
+			if(childTimer != null) childTimer.stop();
 		}
 		
 		
@@ -241,8 +241,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, refs, fsc, "to-the-right=", rr.pos, r.pos);
 		b(v, refs, fsc, "to-the-right=", rr.word, r.pos);
 		
-		//System.out.println("fv.size=" + v.size());
-		full.stop();
+		if(full != null) full.stop();
 	}
 	
 	private transient IRAMDictionary dict;
