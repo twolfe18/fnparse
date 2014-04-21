@@ -9,7 +9,7 @@
 # -m as 		                # a=aborted b=begining e=end s=suspended
 
 cp="target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar"
-jvmOpts="-ea -Xmx5G -XX:+UseConcMarkSweepGC"
+jvmOpts="-ea -Xmx6G -XX:+UseConcMarkSweepGC"
 
 java -version
 java -cp $cp $jvmOpts edu.jhu.hlt.fnparse.experiment.ParserExperiment $SGE_TASK_ID
