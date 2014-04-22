@@ -41,15 +41,13 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	public transient Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public transient Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 
-	private ParserParams params;
 	private boolean bowWithDirection = false;
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
 	public boolean debug = false;
 	
 	public BasicFrameFeatures(ParserParams params) {
-		super(params.featIdx);
-		this.params = params;
+		super(params);
 	}
 	
 	@Override

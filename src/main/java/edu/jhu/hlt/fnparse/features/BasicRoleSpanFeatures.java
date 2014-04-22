@@ -10,16 +10,13 @@ import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 
 	private static final long serialVersionUID = 1L;
-
-	private ParserParams params;
 	
 	private boolean aroundSpan = true;
 	private boolean fromHead = true;
 	private boolean inSpan = false;
 	
 	public BasicRoleSpanFeatures(ParserParams params) {
-		super(params.featIdx);
-		this.params = params;
+		super(params);
 	}
 
 

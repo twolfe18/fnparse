@@ -10,11 +10,8 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 
 	private static final long serialVersionUID = 1L;
 	
-	private ParserParams params;
-	
 	public BasicRoleFeatures(ParserParams params) {
-		super(params.featIdx);
-		this.params = params;
+		super(params);
 	}
 	
 	@Override

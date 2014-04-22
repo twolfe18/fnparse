@@ -7,6 +7,7 @@ import java.util.List;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -28,13 +29,13 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
-	protected Alphabet<String> featIdx;
+	protected ParserParams params;
 	
-	public AbstractFeatures(Alphabet<String> featIdx) {
-		this.featIdx = featIdx;
+	public AbstractFeatures(ParserParams params) {
+		this.params = params;
 	}
 	
-	public Alphabet<String> getFeatureAlph() { return featIdx; }
+	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
 	
 	/**
 	 * by default, nothing is excluded from regularization,
@@ -78,6 +79,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 */
 	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
 		
+		Alphabet<String> featIdx = params.featIdx;
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
