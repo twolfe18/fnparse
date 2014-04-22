@@ -5,6 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.util.Alphabet;
+import java.util.Arrays;
 
 public class DebuggingFrameDepFeatures extends AbstractFeatures<DebuggingFrameDepFeatures> implements Features.FD {
 
@@ -27,20 +28,22 @@ public class DebuggingFrameDepFeatures extends AbstractFeatures<DebuggingFrameDe
 		String lDir = "lDir=" + (lIdx < i ? "left" : "right");
 		String lDist = "lDist=" + Math.min(Math.abs(i - lIdx) / 5, 3) + "-" + lDir;
 
-		b(v, r, reg, t.word, l.word);
-		b(v, r, reg, t.pos, l.word);
-		b(v, r, reg, t.word, l.pos);
-		b(v, r, big, t.pos, l.pos);
+		for(String fs : Arrays.asList(f.getName(), f == Frame.nullFrame ? "NullFrame" : "NonNullFrame")) {
+			b(v, r, reg, fs, t.word, l.word);
+			b(v, r, reg, fs, t.pos, l.word);
+			b(v, r, reg, fs, t.word, l.pos);
+			b(v, r, big, fs, t.pos, l.pos);
 
-		b(v, r, med, lDir, t.word, l.word);
-		b(v, r, reg, lDir, t.pos, l.word);
-		b(v, r, reg, lDir, t.word, l.pos);
-		b(v, r, reg, lDir, t.pos, l.pos);
+			b(v, r, med, fs, lDir, t.word, l.word);
+			b(v, r, reg, fs, lDir, t.pos, l.word);
+			b(v, r, reg, fs, lDir, t.word, l.pos);
+			b(v, r, reg, fs, lDir, t.pos, l.pos);
 
-		b(v, r, sml, lDist, t.word, l.word);
-		b(v, r, med, lDist, t.pos, l.word);
-		b(v, r, med, lDist, t.word, l.pos);
-		b(v, r, med, lDist, t.pos, l.pos);
+			b(v, r, sml, fs, lDist, t.word, l.word);
+			b(v, r, med, fs, lDist, t.pos, l.word);
+			b(v, r, med, fs, lDist, t.word, l.pos);
+			b(v, r, med, fs, lDist, t.pos, l.pos);
+		}
 	}
 
 }
