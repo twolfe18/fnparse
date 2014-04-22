@@ -41,7 +41,7 @@ public class ParserExperiment {
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(100, 400, 1600, 999999));
-		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 10));
+		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(5, 25));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
 		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
