@@ -39,7 +39,7 @@ public class AbstractFeaturesBenchmark extends AbstractFeatures<AbstractFeatures
 	
 	public boolean newWay;
 	public AbstractFeaturesBenchmark(boolean newWay) {
-		super(new Alphabet<String>());
+		super(null);	// FIXME
 		this.newWay = newWay;
 	}
 	

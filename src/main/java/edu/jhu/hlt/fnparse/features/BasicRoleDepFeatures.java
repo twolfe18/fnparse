@@ -5,7 +5,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features.RD;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 // this factor represents the cube (f_i, r_ijk, l_ij)
 // to prevent over-parameterization, we need to fix one of these entries
@@ -21,8 +21,8 @@ public class BasicRoleDepFeatures extends AbstractFeatures<BasicRoleDepFeatures>
 
 	private static final long serialVersionUID = 4825729945197288970L;
 	
-	public BasicRoleDepFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public BasicRoleDepFeatures(ParserParams params) {
+		super(params);
 	}
 	
 	@Override

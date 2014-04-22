@@ -1,15 +1,18 @@
 package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpanFeatures> implements Features.RE {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingRoleSpanFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public DebuggingRoleSpanFeatures(ParserParams params) {
+		super(params);
 	}
 
 	@Override

@@ -1,15 +1,16 @@
 package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public class DebuggingRoleFeatures extends AbstractFeatures<DebuggingRoleFeatures> implements Features.R {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingRoleFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public DebuggingRoleFeatures(ParserParams params) {
+		super(params);
 	}
 	
 	@Override

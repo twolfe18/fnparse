@@ -22,7 +22,6 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleCache;
-import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -46,6 +45,7 @@ import edu.jhu.hlt.fnparse.features.DebuggingFrameDepFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
@@ -165,17 +165,17 @@ public class Parser {
 		params.factorsForJointId = new JointFactorFactory(params);
 		
 		if(params.debug) {
-			params.fFeatures = new DebuggingFrameFeatures(params.featIdx);
-			params.fdFeatures = new DebuggingFrameDepFeatures(params.featIdx);
-			params.rFeatures = new DebuggingRoleFeatures(params.featIdx);
-			params.rdFeatures = new BasicRoleDepFeatures(params.featIdx);
-			params.reFeatures = new DebuggingRoleSpanFeatures(params.featIdx);
+			params.fFeatures = new DebuggingFrameFeatures(params);
+			params.fdFeatures = new DebuggingFrameDepFeatures(params);
+			params.rFeatures = new DebuggingRoleFeatures(params);
+			params.rdFeatures = new BasicRoleDepFeatures(params);
+			params.reFeatures = new DebuggingRoleSpanFeatures(params);
 		}
 		else {
 			params.fFeatures = new BasicFrameFeatures(params);
-			params.fdFeatures = new DebuggingFrameDepFeatures(params.featIdx);
+			params.fdFeatures = new DebuggingFrameDepFeatures(params);
 			params.rFeatures = new BasicRoleFeatures(params);
-			params.rdFeatures = new BasicRoleDepFeatures(params.featIdx);
+			params.rdFeatures = new BasicRoleDepFeatures(params);
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 	}
@@ -261,22 +261,26 @@ public class Parser {
 	}
 
 
-	private void scanFeatures(RawExampleFactory rexs) {
+	/** returns a modified alphabet */
+	private Alphabet<String> scanFeatures(RawExampleFactory rexs) {
 
-		System.out.println("[scanFeatures] counting the number of parameters needed");
 		long start = System.currentTimeMillis();
+		System.out.println("[scanFeatures] counting the number of parameters needed");
+		
+		FeatureCountFilter fcount = new FeatureCountFilter();
 
-		int maxIncrease = 5;
+		int maxIncrease = 0;
 		int maxExamplesInARow = 10;
 
 		int minExamples = 100;
-		int maxExamples = 1000;
+		int maxExamples = 5000;
 
 		int prevSize = params.featIdx.size();
 		int examplesSeen = 0;
 		int sameInARow = 0;
 		for(FgExample fge : rexs) {
 			examplesSeen++;
+			fcount.observe(fge);
 			if(examplesSeen >= maxExamples) {
 				System.out.println("[scanFeatures] stopping because we saw " + maxExamples + " graphs");
 				break;
@@ -294,6 +298,9 @@ public class Parser {
 		}
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
 			examplesSeen, (System.currentTimeMillis() - start) / (1000d * 60d), params.featIdx.size());
+		
+		int minFeatureOccurrences = 5;
+		return fcount.filterByCount(params.featIdx, minFeatureOccurrences);
 	}
 
 
@@ -322,7 +329,6 @@ public class Parser {
 		// setup the feature extraction
 		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
 		RawExampleFactory rexs = new RawExampleFactory(examples, this);
-		FgExampleList exs = new FgExampleCache(rexs, keepInMemory, false);
 		if(params.debug || true) {
 			int lim = params.mode == Mode.FRAME_ID
 					? 150
@@ -331,15 +337,15 @@ public class Parser {
 		}
 
 		// compute how many features we need
-		scanFeatures(rexs);
+		params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
 		params.featIdx.stopGrowth();
 		
 		// setup model and train
 		int numParams = params.featIdx.size() + 1;
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
-		if(params.model == null)
-			params.model = new FgModel(numParams);
+		params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
+		FgExampleCache exs = new FgExampleCache(rexs, keepInMemory, false);
 		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();

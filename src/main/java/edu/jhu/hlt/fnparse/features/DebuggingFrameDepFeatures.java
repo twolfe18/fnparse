@@ -1,18 +1,19 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.Arrays;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.util.Alphabet;
-import java.util.Arrays;
+import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public class DebuggingFrameDepFeatures extends AbstractFeatures<DebuggingFrameDepFeatures> implements Features.FD {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingFrameDepFeatures(Alphabet<String> featIdx) {
-		super(featIdx);
+	public DebuggingFrameDepFeatures(ParserParams params) {
+		super(params);
 	}
 
 	@Override
