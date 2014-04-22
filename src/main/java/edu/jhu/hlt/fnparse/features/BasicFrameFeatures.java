@@ -142,27 +142,30 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			// path to target head
 			List<String> pathFragments = new ArrayList<String>();
 			for(Path p : Arrays.asList(
-					new Path(s, head, NodeType.LEMMA, EdgeType.DEP),
+					//new Path(s, head, NodeType.LEMMA, EdgeType.DEP),
 					new Path(s, head, NodeType.LEMMA, EdgeType.DIRECTION),
 					new Path(s, head, NodeType.POS, EdgeType.DEP),
 					new Path(s, head, NodeType.POS, EdgeType.DIRECTION),
 					new Path(s, head, NodeType.NONE, EdgeType.DEP),
-					new Path(s, head, NodeType.NONE, EdgeType.DIRECTION))) {
+					new Path(s, head, NodeType.NONE, EdgeType.DIRECTION)
+				)) {
 
 				double w = 1d;
-				if(p.getEdgeType() == EdgeType.DEP)
-					w *= 0.8d;
+				if(p.getNodeType() == NodeType.POS)
+					w *= 0.6d;
 				if(p.getNodeType() == NodeType.LEMMA)
-					w *= 0.5d;
+					w *= 0.3d;
+
 				b(v, refs, w, fs, "path-to-target-head", p.getPath());
 				b(v, refs, w, fsc, "path-to-target-head", p.getPath());
+
 				int length = 5;
-				if(p.getNodeType() == NodeType.NONE)
-					length = 7;
+				//if(p.getNodeType() == NodeType.NONE)
+				//	length = 7;
 				p.pathNGrams(length, pathFragments, null);
 				for(String pf : pathFragments) {
 					b(v, refs, w, "path-frag-to-target-head", fs, pf);
-					b(v, refs, w, "path-frag-to-target-head", fsc, pf);
+					//b(v, refs, w, "path-frag-to-target-head", fsc, pf);
 				}
 				pathFragments.clear();
 			}

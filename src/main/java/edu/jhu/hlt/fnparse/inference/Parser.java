@@ -186,7 +186,7 @@ public class Parser {
 		bpParams.normalizeMessages = true;
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = 2;
+		bpParams.maxIterations = params.useLatentDepenencies ? 10 : 2;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
@@ -283,7 +283,7 @@ public class Parser {
 		
 		int numParams = params.debug
 				? 750 * 1000
-				: 15 * 1000 * 1000;	// TODO
+				: 4 * 1000 * 1000;	// TODO
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		if(params.model == null)
 			params.model = new FgModel(numParams);
@@ -294,8 +294,12 @@ public class Parser {
 		RawExampleFactory rexs = new RawExampleFactory(examples, this);
 		FgExampleList exs = new FgExampleCache(rexs, keepInMemory, false);
 		
-		if(params.debug)
-			rexs.setTimerPrintInterval(params.mode == Mode.FRAME_ID ? 500 : (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1));
+		if(params.debug || true) {
+			int lim = params.mode == Mode.FRAME_ID
+					? 150
+					: (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1);
+			rexs.setTimerPrintInterval(lim);
+		}
 		
 		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
@@ -303,6 +307,7 @@ public class Parser {
 		}
 		params.featIdx.stopGrowth();
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
+		System.out.printf("[train] used %d strings in feature name alphabet\n", params.featIdx.size());
 	}
 	
 	

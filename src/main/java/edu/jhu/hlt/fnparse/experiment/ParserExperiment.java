@@ -40,11 +40,11 @@ public class ParserExperiment {
 		long start = System.currentTimeMillis();
 		System.out.println("[main] args=" + Arrays.toString(args));
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(100, 400, 1600, 999999));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 10));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
+		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
 		ajh.setConfig(args);	// options are now valid
 		System.out.println("config = " + ajh.getStoredConfig());
 		

@@ -2,14 +2,14 @@
 #$ -j y                         # join stderr to stdout
 #$ -V                           # job has the same environment variables as the submission shell
 #$ -l h_rt=48:00:00             # runtime limit
-#$ -l mem_free=7G              # expected amount of mem
-#$ -l num_proc=1				# how many processors to use
+#$ -l mem_free=15G              # expected amount of mem
+#$ -l num_proc=2				# how many processors to use
 #$ -o logging/targetId   # where to do logging
 # -M twolfe18@gmail.com
 # -m as 		                # a=aborted b=begining e=end s=suspended
 
 cp="target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar"
-jvmOpts="-ea -Xmx6G -XX:+UseConcMarkSweepGC"
+jvmOpts="-ea -Xmx14G -XX:ParallelGCThreads=2"
 
 java -version
 java -cp $cp $jvmOpts edu.jhu.hlt.fnparse.experiment.ParserExperiment $SGE_TASK_ID
