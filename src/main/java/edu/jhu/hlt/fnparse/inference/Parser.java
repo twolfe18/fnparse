@@ -35,7 +35,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleDepFeatures;
@@ -392,17 +392,19 @@ public class Parser {
 		switch(params.mode) {
 		case FRAME_ID:
 
+			EvalFunc obj = BasicEvaluation.targetMicroF1;
+
 			List<Double> biases = new ArrayList<Double>();
 			for(double b=0.4d; b<7d; b*=1.3d) biases.add(b);
 
 			double bestScore = Double.NEGATIVE_INFINITY;
 			List<Double> scores = new ArrayList<Double>();
 			for(double b : biases) {
-				params.frameDecoder.setRecallBias(recallBias);
+				params.frameDecoder.setRecallBias(b);
 				List<FNParse> predicted = this.parseWithoutPeeking(examples);
 				List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
 				double score = BasicEvaluation.targetMicroF1.evaluate(instances);
-				System.out.printf("[Parser tune FRAME_ID] recallBias=%.2f %s=%.3f\n", recallBias, obj.getName(), score);
+				System.out.printf("[Parser tune FRAME_ID] recallBias=%.2f %s=%.3f\n", b, obj.getName(), score);
 				scores.add(score);
 				if(score > bestScore) bestScore = score;
 			}
