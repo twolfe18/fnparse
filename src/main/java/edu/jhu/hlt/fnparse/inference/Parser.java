@@ -20,6 +20,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleCache;
 import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
@@ -259,6 +260,43 @@ public class Parser {
 		else throw new RuntimeException();
 	}
 
+
+	private void scanFeatures(RawExampleFactory rexs) {
+
+		System.out.println("[scanFeatures] counting the number of parameters needed");
+		long start = System.currentTimeMillis();
+
+		int maxIncrease = 5;
+		int maxExamplesInARow = 10;
+
+		int minExamples = 100;
+		int maxExamples = 1000;
+
+		int prevSize = params.featIdx.size();
+		int examplesSeen = 0;
+		int sameInARow = 0;
+		for(FgExample fge : rexs) {
+			examplesSeen++;
+			if(examplesSeen >= maxExamples) {
+				System.out.println("[scanFeatures] stopping because we saw " + maxExamples + " graphs");
+				break;
+			}
+			int size = params.featIdx.size();
+			if(size - prevSize <= maxIncrease)
+				sameInARow++;
+			else sameInARow = 0;
+			if(sameInARow >= maxExamplesInARow && examplesSeen >= minExamples) {
+				System.out.printf("[scanFeatures] stopping because we saw %d examples in a row where the alphabet grew by no more than %d\n",
+					sameInARow, maxIncrease);
+				break;
+			}
+			prevSize = size;
+		}
+		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
+			examplesSeen, (System.currentTimeMillis() - start) / (1000d * 60d), params.featIdx.size());
+	}
+
+
 	public void train(List<FNParse> examples) { train(examples, 10, 5, 1d, 1d); }
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
 		
@@ -281,33 +319,32 @@ public class Parser {
 		trainerParams.infFactory = infFactory();
 		trainerParams.numThreads = 1;	// can't do multithreaded until i make sure my feature extraction is serial (alphabet updates need locking)
 		
-		int numParams = params.debug
-				? 750 * 1000
-				: 4 * 1000 * 1000;	// TODO
-		CrfTrainer trainer = new CrfTrainer(trainerParams);
-		if(params.model == null)
-			params.model = new FgModel(numParams);
-		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
-		
+		// setup the feature extraction
 		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
-		
 		RawExampleFactory rexs = new RawExampleFactory(examples, this);
 		FgExampleList exs = new FgExampleCache(rexs, keepInMemory, false);
-		
 		if(params.debug || true) {
 			int lim = params.mode == Mode.FRAME_ID
 					? 150
 					: (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1);
 			rexs.setTimerPrintInterval(lim);
 		}
+
+		// compute how many features we need
+		scanFeatures(rexs);
+		params.featIdx.stopGrowth();
 		
+		// setup model and train
+		int numParams = params.featIdx.size() + 1;
+		CrfTrainer trainer = new CrfTrainer(trainerParams);
+		if(params.model == null)
+			params.model = new FgModel(numParams);
+		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
-		params.featIdx.stopGrowth();
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
-		System.out.printf("[train] used %d strings in feature name alphabet\n", params.featIdx.size());
 	}
 	
 	
