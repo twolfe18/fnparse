@@ -61,6 +61,9 @@ public class Path {
 		
 		if(nodeType == NodeType.CFG)
 			throw new RuntimeException("not supported yet");
+
+		// used to detect loops
+		boolean[] seen = new boolean[n];
 	
 		// the path from start to root, counting up from 0
 		int[] upIndices = new int[n];
@@ -70,7 +73,8 @@ public class Path {
 		upNodes = new ArrayList<String>();
 		upEdges = new ArrayList<String>();
 		int ptr = start;
-		while(ptr >= 0 && ptr < n) {
+		while(ptr >= 0 && ptr < n && !seen[ptr]) {
+			seen[ptr] = true;
 			upIndices[ptr] = upNodes.size();
 			upNodes.add(getNodeNameFor(ptr));
 			upEdges.add(getEdgeNameFor(ptr, true));
@@ -79,10 +83,12 @@ public class Path {
 		
 		// the order down starts out backwards
 		if(!toRoot) {
+			Arrays.fill(seen, false);
 			downNodes = new ArrayList<String>();
 			downEdges = new ArrayList<String>();
 			ptr = end;
-			while(ptr >= 0 && ptr < n && upIndices[ptr] < 0) {
+			while(ptr >= 0 && ptr < n && upIndices[ptr] < 0 && !seen[ptr]) {
+				seen[ptr] = true;
 				downNodes.add(getNodeNameFor(ptr));
 				downEdges.add(getEdgeNameFor(ptr, false));
 				ptr = sent.governor(ptr);
