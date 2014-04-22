@@ -385,24 +385,42 @@ public class Parser {
 		Timer t = Timer.start("tune");
 		switch(params.mode) {
 		case FRAME_ID:
-			StdEvalFunc obj = BasicEvaluation.targetMicroF1;
-			double origRecallBias = params.frameDecoder.getRecallBias();
-			double bestRecallBias = origRecallBias;
+
+			List<Double> biases = new ArrayList<Double>();
+			for(double b=0.4d; b<7d; b*=1.3d) biases.add(b);
+
 			double bestScore = Double.NEGATIVE_INFINITY;
-			for(double recallBias = 0.5d; recallBias < 6d; recallBias *= 1.5d) {
+			List<Double> scores = new ArrayList<Double>();
+			for(double b : biases) {
 				params.frameDecoder.setRecallBias(recallBias);
 				List<FNParse> predicted = this.parseWithoutPeeking(examples);
 				List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
 				double score = BasicEvaluation.targetMicroF1.evaluate(instances);
 				System.out.printf("[Parser tune FRAME_ID] recallBias=%.2f %s=%.3f\n", recallBias, obj.getName(), score);
-				if(score > bestScore) {
-					bestRecallBias = recallBias;
-					bestScore = score;
-				}
+				scores.add(score);
+				if(score > bestScore) bestScore = score;
 			}
-			System.out.printf("[Parser tune FRAME_ID] took %.1f sec, done. recallBias %.2f => %.2f\n", t.totalTimeInSec(), origRecallBias, bestRecallBias);
-			params.frameDecoder.setRecallBias(bestRecallBias);
+
+			List<Double> regrets = new ArrayList<Double>();
+			for(double s : scores) regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
+
+			List<Double> weights = new ArrayList<Double>();
+			for(double r : regrets) weights.add(Math.exp(-r * 2));
+
+			double n = 0d, z = 0d;
+			for(int i=0; i<biases.size(); i++) {
+				double b = biases.get(i);
+				double w = weights.get(i);
+				n += w * b;
+				z += w;
+			}
+			double bias = n / z;
+			System.out.printf("[Parser tune FRAME_ID] took %.1f sec, done. recallBias %.2f => %.2f\n",
+				t.totalTimeInSec(), params.frameDecoder.getRecallBias(), bias);
+			params.frameDecoder.setRecallBias(bias);
+
 			break;
+
 		case PIPELINE_FRAME_ARG:
 			throw new RuntimeException("implement me");
 		case JOINT_FRAME_ARG:
