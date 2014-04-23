@@ -51,8 +51,8 @@ import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdSentence;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
-import edu.jhu.hlt.fnparse.inference.heads.BraindeadHeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFactorFactory;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
@@ -159,7 +159,7 @@ public class Parser {
 		params.fastFeatNames = debug;
 		params.targetPruningData = TargetPruningData.getInstance();
 
-		params.headFinder = new BraindeadHeadFinder();	// TODO
+		params.headFinder = new SemaforicHeadFinder();
 		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argPruner = new ArgPruner(params);
