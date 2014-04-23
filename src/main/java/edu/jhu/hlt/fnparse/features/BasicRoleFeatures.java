@@ -28,10 +28,10 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		// (if you are, you will get an int, rather than a role name, which will not generalize across frames)
 		
 		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
-		String rs = "r" + (params.fastFeatNames ? roleIdx : f.getRoleSafe(roleIdx));
+		String rs = "r" + f.getRoleSafe(roleIdx);	// use this instead of int because same role (string) may not have the same index across frames
 		String fsrs = fs + "-" + rs;
 		LexicalUnit tHead = sent.getLU(targetHead);
-		LexicalUnit aHead = sent.getLU(argHead);
+		LexicalUnit aHead = argHead >= sent.size() ? AbstractFeatures.luEnd : sent.getLU(argHead);
 		
 		b(fv, r, fsrs, "intercept");
 
@@ -42,23 +42,23 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		else
 			b(fv, r, fsrs, "arg=target");
 		
-		b(fv, r, fsrs, "roleHead=", aHead.word);
-		b(fv, r, fsrs, "roleHead=", aHead.pos);
-		b(fv, r, fsrs, "roleHead=", aHead.getFullString());
+		b(fv, r, fsrs, "roleHead", aHead.word);
+		b(fv, r, fsrs, "roleHead", aHead.pos);
+		b(fv, r, fsrs, "roleHead", aHead.getFullString());
 		
-		b(fv, r, fsrs, "targetHead=", tHead.word);
-		b(fv, r, fsrs, "targetHead=", tHead.pos);
-		b(fv, r, fsrs, "targetHead=", tHead.getFullString());
+		b(fv, r, fsrs, "targetHead", tHead.word);
+		b(fv, r, fsrs, "targetHead", tHead.pos);
+		b(fv, r, fsrs, "targetHead", tHead.getFullString());
 		
-		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.getFullString());
-		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.word);
-		b(fv, r, fsrs, "argHead=", aHead.getFullString(), "targetHead=", tHead.pos);
-		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.getFullString());
-		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.word);
-		b(fv, r, fsrs, "argHead=", aHead.word, "targetHead=", tHead.pos);
-		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.getFullString());
-		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.word);
-		b(fv, r, fsrs, "argHead=", aHead.pos, "targetHead=", tHead.pos);
+		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
+		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
+		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
+		b(fv, r, fsrs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+		b(fv, r, fsrs, "argHead", aHead.word, "targetHead", tHead.word);
+		b(fv, r, fsrs, "argHead", aHead.word, "targetHead", tHead.pos);
+		b(fv, r, fsrs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
+		b(fv, r, fsrs, "argHead", aHead.pos, "targetHead", tHead.word);
+		b(fv, r, fsrs, "argHead", aHead.pos, "targetHead", tHead.pos);
 		
 		// words around target and arg heads
 		for(int targetOffset : Arrays.asList(-2, -1, 1, 2)) {

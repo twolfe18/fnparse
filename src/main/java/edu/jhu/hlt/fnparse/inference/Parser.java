@@ -121,6 +121,7 @@ public class Parser {
 	
 	
 	public ParserParams params;
+	public final boolean readIn;
 	public final boolean benchmarkBP = false;
 	
 	public Parser() {
@@ -137,6 +138,7 @@ public class Parser {
 			ObjectInputStream ois = new ObjectInputStream(is);
 			params = (ParserParams) ois.readObject();
 			ois.close();
+			readIn = true;
 			System.out.printf("[Parser] done reading model in %.1f seconds\n", (System.currentTimeMillis() - start)/1000d);
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
@@ -144,6 +146,7 @@ public class Parser {
 	
 	public Parser(Mode mode, boolean latentDeps, boolean debug) {
 
+		readIn = false;
 		params = new ParserParams();
 		params.debug = debug;
 		params.featIdx = new Alphabet<String>();
@@ -156,7 +159,7 @@ public class Parser {
 		params.targetPruningData = TargetPruningData.getInstance();
 
 		params.headFinder = new BraindeadHeadFinder();	// TODO
-		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
+		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argPruner = new ArgPruner(params);
 		
@@ -178,6 +181,13 @@ public class Parser {
 			params.rdFeatures = new BasicRoleDepFeatures(params);
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
+	}
+	
+	public void setMode(Mode m, boolean useLatentDeps) {
+		if(params.useLatentDepenencies != useLatentDeps && params.mode != null && params.model.l2Norm() > 1e-4)
+			throw new RuntimeException("changing this on a trained model will break things");
+		params.mode = m;
+		params.useLatentDepenencies = useLatentDeps;
 	}
 	
 	public ParserParams getParams() { return params; }
@@ -231,31 +241,11 @@ public class Parser {
 			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-			
-			// TODO once i'm loading frameId models from disk,
-			// this should only return one example, which is a roleId example
-			
-			
-			// only frame id (no args)
-			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params, p);
-			LabeledFgExample e1 = fid.getTrainingExample();
-			
-			// run prediction to see what frames we'll be predicting roles for
-			//FNTagging predictedFrames = fid.decode(params.model, infFactory());
-			/*
-			 * TODO i need to split out this training into stages where i train the frame id
-			 * and role id separately (role id depends on frame id). for now i'm just going to
-			 * train the role id as if the frame id system were perfect. this is not ideal because
-			 * it will lead to lower precision than is necessary (i.e. if you get the frame wrong,
-			 * you should train the model to not predict roles).
-			 */
-			FNTagging predictedFrames = p;
-			
-			// clamped frames, predict args
+			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
+			FNTagging predictedFrames = fid.decode(params.model, infFactory());
 			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
-			LabeledFgExample e2 = argId.getTrainingExample();
-			
-			return Arrays.asList(e1, e2);
+			LabeledFgExample e = argId.getTrainingExample();
+			return Arrays.asList(e);
 		}
 		else throw new RuntimeException();
 	}
@@ -299,8 +289,14 @@ public class Parser {
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
 			examplesSeen, (System.currentTimeMillis() - start) / (1000d * 60d), params.featIdx.size());
 		
-		int minFeatureOccurrences = 5;
-		return fcount.filterByCount(params.featIdx, minFeatureOccurrences);
+		if(params.debug) {
+			System.out.println("[scanFeatures] not filtering features because we're in debug mode");
+			return params.featIdx;
+		}
+		else {
+			int minFeatureOccurrences = 4;
+			return fcount.filterByCount(params.featIdx, minFeatureOccurrences);
+		}
 	}
 
 
@@ -308,7 +304,6 @@ public class Parser {
 	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
 		
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
-		params.featIdx.startGrowth();
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
@@ -336,9 +331,12 @@ public class Parser {
 			rexs.setTimerPrintInterval(lim);
 		}
 
-		// compute how many features we need
-		params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
-		params.featIdx.stopGrowth();
+		if(!readIn) {
+			// compute how many features we need
+			params.featIdx.startGrowth();
+			params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
+			params.featIdx.stopGrowth();
+		}
 		
 		// setup model and train
 		int numParams = params.featIdx.size() + 1;
@@ -351,6 +349,7 @@ public class Parser {
 			oe.printStackTrace();
 		}
 		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
+		System.out.println("[train] params.featIdx.size = " + params.featIdx.size());
 	}
 	
 	

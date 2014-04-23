@@ -14,6 +14,8 @@ import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 public class ParserExperiment {
 
 	public static final File modelDir = new File("experiments/targetId");
+	public static final Mode parserMode = Mode.PIPELINE_FRAME_ARG;
+	public static final File frameIdModelFile = new File("saved-models/model.frameId.ser.gz");
 	
 	public static Set<LexicalUnit> observedTriggers(Collection<? extends FNTagging> instances, Frame f) {
 		Set<LexicalUnit> lexInstance = new HashSet<LexicalUnit>();
@@ -37,10 +39,14 @@ public class ParserExperiment {
 	
 	public static void main(String[] args) {
 		
+		if(parserMode == Mode.PIPELINE_FRAME_ARG && (frameIdModelFile == null || !frameIdModelFile.isFile()))
+			throw new RuntimeException("train a frameId model first");
+		
 		long start = System.currentTimeMillis();
 		System.out.println("[main] args=" + Arrays.toString(args));
+		System.out.println("[main] mode=" + parserMode);
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(100, 400, 1600, 999999));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(10, 400, 1600, 999999));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(5, 25));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
@@ -49,8 +55,9 @@ public class ParserExperiment {
 		System.out.println("config = " + ajh.getStoredConfig());
 		
 		File workingDir = new File(modelDir, args[0]);
-		if(!workingDir.isDirectory())
-			workingDir.mkdir();
+		if(!workingDir.isDirectory()) workingDir.mkdir();
+		workingDir = new File(workingDir, parserMode.toString());
+		if(!workingDir.isDirectory()) workingDir.mkdir();
 		System.out.println("[main] workingDir = " + workingDir.getPath());
 		
 		// get the data
@@ -73,27 +80,19 @@ public class ParserExperiment {
 		
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		final double recallBias = 1.5d;
 		final double lrMult = 0.1d;
 		final boolean debug = false;
 
-		Mode parserMode = Mode.FRAME_ID;
-		Parser parser = null;
-		if("regular".equals(syntaxMode.get())) {
-			parser = new Parser(parserMode, false, debug);
-			parser.params.useSyntaxFeatures = true;
+		boolean latentSyntax = "latentSyntax".equals(syntaxMode.get());
+		Parser parser;
+		if(frameIdModelFile == null)
+			parser = new Parser(parserMode, latentSyntax, debug);
+		else {
+			parser = new Parser(frameIdModelFile);
+			parser.setMode(parserMode, latentSyntax);
 		}
-		else if("noSyntax".equals(syntaxMode.get())) {
-			parser = new Parser(parserMode, false, debug);
+		if("noSyntax".equals(syntaxMode.get()))
 			parser.params.useSyntaxFeatures = false;
-		}
-		else if("latentSyntax".equals(syntaxMode.get())) {
-			parser = new Parser(parserMode, true, debug);
-			parser.params.useSyntaxFeatures = false;
-		}
-		else throw new RuntimeException("mode=" + syntaxMode.get());
-
-		parser.params.frameDecoder.setRecallBias(recallBias);
 
 		System.out.println("[ParserExperiment] following statistics are for the train subset:");
 		//parser.computeStatistcs(trainSubset);

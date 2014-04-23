@@ -7,6 +7,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -38,7 +39,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	 */
 	public FrameFactorFactory(ParserParams params, boolean includeDepFactors, boolean includeGovFactors) {
 		this.params = params;
-		this.includeDepFactors = includeDepFactors;
+		this.includeDepFactors = false; //includeDepFactors;
 		this.includeGovFactors = includeGovFactors;
 		this.onlyParemeterizeDiag = true;
 	}
@@ -51,6 +52,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
 		final int n = s.size();
+		assert n > 2 || fr.size() == 0;
 		List<Factor> factors = new ArrayList<Factor>();
 		for(FrameVars fhyp : fr) {
 			final int T = fhyp.numFrames();
@@ -70,15 +72,17 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 				
 				// binary factor f_it ~ l_ji
 				if(this.includeGovFactors) {
+					Refinements diagRef = new Refinements("parent-of-target");
 					for(int j=-1; j<n; j++) {
 						if(i == j) continue;
-						vs = new VarSet(fhyp.getVariable(tIdx), l.getLinkVar(j, i));
+						LinkVar l_ji = l.getLinkVar(j, i);
+						if(l_ji == null) continue;
+						vs = new VarSet(fhyp.getVariable(tIdx), l_ji);
 						phi = new ExplicitExpFamFactor(vs);
-						Refinements diagRef = new Refinements("parent-of-target");
 						fv = null;
 						FeatureVector fvInv = null;
-						int nv = vs.calcNumConfigs();
-						for(int c=0; c<nv; c++) {
+						assert vs.calcNumConfigs() == 4;
+						for(int c=0; c<4; c++) {
 							int[] cfg = vs.getVarConfigAsArray(c);
 
 							if(onlyParemeterizeDiag) {
@@ -113,15 +117,15 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 				
 				// binary factor f_it ~ l_ij
 				if(this.includeDepFactors) {
+					Refinements diagRef = new Refinements("child-of-target");
 					for(int j=0; j<n; j++) {
 						if(i == j) continue;
 						vs = new VarSet(fhyp.getVariable(tIdx), l.getLinkVar(i, j));
 						phi = new ExplicitExpFamFactor(vs);
-						Refinements diagRef = new Refinements("child-of-target");
 						fv = null;
 						FeatureVector fvInv = null;
-						int nv = vs.calcNumConfigs();
-						for(int c=0; c<nv; c++) {
+						assert vs.calcNumConfigs() == 4;
+						for(int c=0; c<4; c++) {
 							int[] cfg = vs.getVarConfigAsArray(c);
 
 							if(onlyParemeterizeDiag) {

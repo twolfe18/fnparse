@@ -44,6 +44,11 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 	protected void initHypotheses() {
 		final int n = sentence.size();
 		hypotheses = new ArrayList<FrameVars>();
+		if(n < 4) {
+			// TODO check more carefully, like 4 content words or has a verb
+			System.err.println("[FrameIdSentence] skipping short sentence: " + sentence);
+			return;
+		}
 		for(int i=0; i<n; i++) {
 			FrameVars fv = makeFrameVar(sentence, i, params.logDomain);
 			if(fv != null) hypotheses.add(fv);

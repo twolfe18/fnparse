@@ -88,8 +88,6 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		this.hypotheses = null;
 		this.gold = label;
 	}
-	
-	
 
 	/** you should use this in your implementation of decode() */
 	protected FgExample getExample(boolean labeled) {
@@ -105,7 +103,7 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		}
 		else depTree = null;
 		factors.addAll(factorTemplate.initFactorsFor(sentence, hypotheses, depTree));
-		
+
 		// register all the variables and factors
 		for(Hypothesis hyp : hypotheses)
 			hyp.register(fg, gold);
@@ -118,7 +116,8 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 			? new LabeledFgExample(fg, gold)
 			: new UnlabeledFgExample(fg, new VarConfig());	// if you ever add observed variables, this needs to change
 	}
-	
+
+	public List<Hypothesis> getHypotheses() { return hypotheses; }
 	
 	/** might return a FNParse depending on the settings */
 	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);

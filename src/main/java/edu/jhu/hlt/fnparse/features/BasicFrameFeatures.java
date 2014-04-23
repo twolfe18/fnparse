@@ -78,13 +78,10 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, refs, 0.5d, fs, "-target-head=", headLU.getFullString());
 		b(v, refs, 1d,   fs, "-target-head=", headLU.word);
 		b(v, refs, 2d,   fs, "-target-head=", headLU.pos);
-		b(v, refs, 0.1d, fs, "-sentence-length/2=", String.valueOf(n/2));
-		b(v, refs, 0.2d, fs, "-sentence-length/3=", String.valueOf(n/3));
 		b(v, refs, 0.3d, fs, "-sentence-length/4=", String.valueOf(n/4));
-		b(v, refs, 0.4d, fs, "-sentence-length/5=", String.valueOf(n/5));
-		b(v, refs, 0.5d, fs, "-sentence-length/6=", String.valueOf(n/6));
-		b(v, refs, 0.6d, fs, "-sentence-length/7=", String.valueOf(n/7));
+		b(v, refs, 0.3d, fsc, "-sentence-length/4=", String.valueOf(n/4));
 		b(v, refs, 0.7d, fs, "-sentence-length/8=", String.valueOf(n/8));
+		b(v, refs, 0.7d, fsc, "-sentence-length/8=", String.valueOf(n/8));
 		
 		
 		// matches a Lexical Unit for this Frame?
