@@ -104,6 +104,13 @@ public class RoleVars implements FgRelated {
 					if(argRealized) {	// expansion variables for non-instantiated arguments should be latent
 						Expansion eGold = Expansion.headToSpan(j, jGoldSpan);
 						int eGoldI = r_kj_e_values[k][j].indexOf(eGold);
+						if(eGoldI < 0) {
+							System.err.printf("[RoleVars] pruned gold expansion for %s.%s @ %d: %s\n",
+									t.getName(), t.getRole(k), j, eGold);
+							eGold = Expansion.headToSpan(j, Span.widthOne(j));
+							eGoldI = r_kj_e_values[k][j].indexOf(eGold);
+							assert eGoldI >= 0;
+						}
 						goldConf.put(r_kj_e[k][j], eGoldI);
 						assert eGoldI >= 0;
 						assert eGoldI < r_kj_e_values[k][j].size();

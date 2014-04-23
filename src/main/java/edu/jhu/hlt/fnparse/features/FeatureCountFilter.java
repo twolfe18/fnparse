@@ -30,17 +30,31 @@ public class FeatureCountFilter {
 		ignoredCounts = new HashMap<Class<?>, Integer>();
 	}
 	
-	public Alphabet<String> filterByCount(Alphabet<String> featureNames, int minFeatureOccurrences) {
+	/**
+	 * Make a new alphabet from only the features that occurred at lead a few times.
+	 * 
+	 * @param featureNames should include all the features in vectors passed into observe()
+	 * @param minFeatureOccurrences
+	 * @param keepRegardless may be null, otherwise feature names in this set will be included regardless of their count
+	 * @return
+	 */
+	public Alphabet<String> filterByCount(Alphabet<String> featureNames, int minFeatureOccurrences, Alphabet<String> keepRegardless) {
 		Alphabet<String> keep = new Alphabet<String>();
 		int n = featureNames.size();
 		for(int i=0; i<n; i++) {
-			if(counts[i] < minFeatureOccurrences)
-				continue;
 			String fn = featureNames.lookupObject(i);
-			keep.lookupIndex(fn, true);
+			if(counts[i] >= minFeatureOccurrences || keepRegardless.lookupIndex(fn, false) >= 0)
+				keep.lookupIndex(fn, true);
 		}
-		System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples, found %d of %d features appeared at least %d times\n",
-				nFG, keep.size(), featureNames.size(), minFeatureOccurrences);
+		if(keepRegardless != null && keepRegardless.size() > 0) {
+			System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples and given %d features to keep regardless, "
+					+ "%d features are in the resulting map because they either appeared %d times or were pre-existing\n",
+					nFG, keepRegardless.size(), keep.size(), minFeatureOccurrences);
+		}
+		else {
+			System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples, found %d of %d features appeared at least %d times\n",
+					nFG, keep.size(), featureNames.size(), minFeatureOccurrences);
+		}
 		System.out.println("[FeatureCountFilter] " + nF + " factors checked, skipped: " + ignoredCounts);
 		return keep;
 	}
@@ -70,15 +84,15 @@ public class FeatureCountFilter {
 			@Override
 			public double call(int idx, double val) {
 				if(idx >= counts.length)
-					grow();
+					grow(idx + 1);
 				counts[idx]++;
 				return -1;
 			}
 		});
 	}
 	
-	private void grow() {
-		int newSize = (int) (counts.length * 1.4) + 10;
+	private void grow(int minSize) {
+		int newSize = Math.max(minSize, (int) (counts.length * 1.4) + 10);
 		counts = Arrays.copyOf(counts, newSize);
 	}
 }

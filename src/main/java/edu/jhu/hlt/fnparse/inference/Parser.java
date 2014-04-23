@@ -139,7 +139,8 @@ public class Parser {
 			params = (ParserParams) ois.readObject();
 			ois.close();
 			readIn = true;
-			System.out.printf("[Parser] done reading model in %.1f seconds\n", (System.currentTimeMillis() - start)/1000d);
+			System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
+					(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
@@ -257,6 +258,11 @@ public class Parser {
 		long start = System.currentTimeMillis();
 		System.out.println("[scanFeatures] counting the number of parameters needed");
 		
+		// keep the set of features that are already in the model.
+		// e.g. you trained a frameId model, read it in, and now you want to train roleId.
+		//      you want to keep all of the frameId features and only filter the roleId features.
+		Alphabet<String> preExisting = new Alphabet<>(params.featIdx);
+		
 		FeatureCountFilter fcount = new FeatureCountFilter();
 
 		int maxIncrease = 0;
@@ -295,7 +301,7 @@ public class Parser {
 		}
 		else {
 			int minFeatureOccurrences = 4;
-			return fcount.filterByCount(params.featIdx, minFeatureOccurrences);
+			return fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
 		}
 	}
 
@@ -331,12 +337,10 @@ public class Parser {
 			rexs.setTimerPrintInterval(lim);
 		}
 
-		if(!readIn) {
-			// compute how many features we need
-			params.featIdx.startGrowth();
-			params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
-			params.featIdx.stopGrowth();
-		}
+		// compute how many features we need
+		params.featIdx.startGrowth();
+		params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
+		params.featIdx.stopGrowth();
 		
 		// setup model and train
 		int numParams = params.featIdx.size() + 1;
@@ -429,7 +433,8 @@ public class Parser {
 			break;
 
 		case PIPELINE_FRAME_ARG:
-			throw new RuntimeException("implement me");
+			System.err.println("[Parser tune PIPELINE] not tuning because i need to implement this TODO");
+			break;
 		case JOINT_FRAME_ARG:
 			throw new RuntimeException("implement me");
 		default:

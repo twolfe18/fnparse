@@ -46,7 +46,7 @@ public class ParserExperiment {
 		System.out.println("[main] args=" + Arrays.toString(args));
 		System.out.println("[main] mode=" + parserMode);
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(10, 400, 1600, 999999));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 400, 1600, 999999));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(5, 25));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
@@ -69,6 +69,12 @@ public class ParserExperiment {
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, trainTune, test, 0.2d, "fn15_train-test");
 		ds.split(trainTune, train, tune, Math.min(75, (int) (0.2d * trainTune.size())), "fn15_train-tune");
+		
+		
+		// DEBUGGING:
+		test = DataUtil.reservoirSample(test, 50);
+		
+		
 		
 		printMemUsage();
 
@@ -94,7 +100,7 @@ public class ParserExperiment {
 		if("noSyntax".equals(syntaxMode.get()))
 			parser.params.useSyntaxFeatures = false;
 
-		System.out.println("[ParserExperiment] following statistics are for the train subset:");
+		//System.out.println("[ParserExperiment] following statistics are for the train subset:");
 		//parser.computeStatistcs(trainSubset);
 		printMemUsage();
 
