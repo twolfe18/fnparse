@@ -125,8 +125,8 @@ public class ParserExperiment {
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();
 
-		parser.writeWeights(new File(workingDir, "weights.frameId.txt"));
-		parser.writeModel(new File(workingDir, "model.frameId.ser.gz"));
+		parser.writeWeights(new File(workingDir, "weights." + parserMode + ".txt"));
+		parser.writeModel(new File(workingDir, "model." + parserMode + ".ser.gz"));
 		System.out.printf("[ParserExperiment] done, took %.1f minutes\n", (System.currentTimeMillis() - start) / (1000d * 60));
 	}
 	
