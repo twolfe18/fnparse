@@ -109,7 +109,8 @@ public class BasicEvaluation {
 			targetMicroF1, targetMicroPrecision, targetMicroRecall,
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
 			fullMicroF1, fullMicroPrecision, fullMicroRecall,
-			frameAccuracy};
+			frameAccuracy,
+			GenerousEvaluation.generousF1, GenerousEvaluation.generousPrecision, GenerousEvaluation.generousRecall};
 	
 	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
 		
