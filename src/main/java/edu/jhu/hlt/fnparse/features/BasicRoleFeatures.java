@@ -31,7 +31,8 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		String rs = "r" + f.getRoleSafe(roleIdx);	// use this instead of int because same role (string) may not have the same index across frames
 		String fsrs = fs + "-" + rs;
 		LexicalUnit tHead = sent.getLU(targetHead);
-		LexicalUnit aHead = argHead >= sent.size() ? AbstractFeatures.luEnd : sent.getLU(argHead);
+		boolean argRealized = argHead < sent.size();
+		LexicalUnit aHead = !argRealized ? AbstractFeatures.luEnd : sent.getLU(argHead);
 		
 		b(fv, r, fsrs, "intercept");
 
@@ -79,7 +80,7 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		
 		// dependency tree features
 		if(params.useSyntaxFeatures) {
-			if(sent.governor(argHead) == targetHead)
+			if(argRealized && sent.governor(argHead) == targetHead)
 				b(fv, r, 3d, "trigger-arg-dep");
 			// TODO more?
 			// common parent (path, word, etc)
