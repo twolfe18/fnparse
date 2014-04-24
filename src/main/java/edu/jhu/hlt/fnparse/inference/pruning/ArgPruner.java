@@ -118,7 +118,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 	private File persistRoleSynsetMapTo = new File("toydata/arg-pruning/roleSynsetMap.gz");
 	
 	public ArgPruner(ParserParams params) {
-		lexMethod = LexPruneMethod.NONE;
+		lexMethod = LexPruneMethod.SYNSET;
 		determiners = true;
 		punc = true;
 		this.params = params;
