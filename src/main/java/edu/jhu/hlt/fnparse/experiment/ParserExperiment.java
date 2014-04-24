@@ -34,6 +34,7 @@ public class ParserExperiment {
 		used /= 1024d * 1024d * 1024d;
 		double free = Runtime.getRuntime().maxMemory();
 		free /= 1024d * 1024d * 1024d;
+		free -= used;
 		System.out.printf("[ParserExperiment] using %.2f GB, %.2f GB free\n", used, free);
 	}
 	
@@ -46,8 +47,8 @@ public class ParserExperiment {
 		System.out.println("[main] args=" + Arrays.toString(args));
 		System.out.println("[main] mode=" + parserMode);
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(30, 400, 1600, 999999));
-		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(5, 25));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(20, 400, 1600, 999999));
+		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(1, 25));
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(10, 100));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
 		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));

@@ -38,8 +38,8 @@ public class BasicRoleDepFeatures extends AbstractFeatures<BasicRoleDepFeatures>
 		double big = 2d;
 		
 		String rs = f.getName() + "." + f.getRole(roleIdx);
-		LexicalUnit a = s.getLemmaLU(argHeadIdx); //AbstractFeatures.getLUSafe(argHeadIdx, s);
-		LexicalUnit m = s.getLemmaLU(l); //AbstractFeatures.getLUSafe(l, s);
+		LexicalUnit a = s.getLemmaLU(argHeadIdx);
+		LexicalUnit m = s.getLemmaLU(l);
 		String amDir = l == targetHeadIdx ? "link=target" : (argHeadIdx < l ? "am=left" : "am=right");
 		String tmDir = targetHeadIdx < l ? (targetHeadIdx == l ? "tm=same" : "tm=left") : "tm=right";
 		String amDist = "amDist=" + Math.min(Math.abs(argHeadIdx - l) / 5, 3) + "-" + amDir;

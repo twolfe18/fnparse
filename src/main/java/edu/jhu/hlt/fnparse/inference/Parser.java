@@ -22,6 +22,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.FgExampleCache;
+import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -89,6 +90,7 @@ public class Parser {
 		public boolean usePrototypes;
 		public boolean useSyntaxFeatures;
 		public boolean fastFeatNames;	// if false, use frame and role names instead of their indices
+		public boolean usePredictedFramesToTrainRoleId;	// otherwise use gold frames
 		
 		public Mode mode;
 		public Alphabet<String> featIdx;
@@ -156,6 +158,7 @@ public class Parser {
 		params.mode = mode;
 		params.usePrototypes = false;
 		params.useSyntaxFeatures = true;
+		params.usePredictedFramesToTrainRoleId = true;
 		params.fastFeatNames = debug;
 		params.targetPruningData = TargetPruningData.getInstance();
 
@@ -173,7 +176,8 @@ public class Parser {
 			params.fdFeatures = new DebuggingFrameDepFeatures(params);
 			params.rFeatures = new DebuggingRoleFeatures(params);
 			params.rdFeatures = new BasicRoleDepFeatures(params);
-			params.reFeatures = new DebuggingRoleSpanFeatures(params);
+			//params.reFeatures = new DebuggingRoleSpanFeatures(params);	// make sure these are not used on real data -- they will overfit
+			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 		else {
 			params.fFeatures = new BasicFrameFeatures(params);
@@ -242,8 +246,11 @@ public class Parser {
 			return Arrays.asList(s.getTrainingExample());
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-			FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
-			FNTagging predictedFrames = fid.decode(params.model, infFactory());
+			FNTagging predictedFrames = p;
+			if(params.usePredictedFramesToTrainRoleId) {
+				FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
+				predictedFrames = fid.decode(params.model, infFactory());
+			}
 			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
 			LabeledFgExample e = argId.getTrainingExample();
 			return Arrays.asList(e);
@@ -253,7 +260,7 @@ public class Parser {
 
 
 	/** returns a modified alphabet */
-	private Alphabet<String> scanFeatures(RawExampleFactory rexs) {
+	private Alphabet<String> scanFeatures(FgExampleList exs) {
 
 		long start = System.currentTimeMillis();
 		System.out.println("[scanFeatures] counting the number of parameters needed");
@@ -274,7 +281,7 @@ public class Parser {
 		int prevSize = params.featIdx.size();
 		int examplesSeen = 0;
 		int sameInARow = 0;
-		for(FgExample fge : rexs) {
+		for(FgExample fge : exs) {
 			examplesSeen++;
 			fcount.observe(fge);
 			if(examplesSeen >= maxExamples) {
@@ -300,8 +307,11 @@ public class Parser {
 			return params.featIdx;
 		}
 		else {
-			int minFeatureOccurrences = 4;
-			return fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
+			int minFeatureOccurrences = 3;
+			Alphabet<String> newFeatIdx = fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
+			for(FgExample fge : exs)
+				fcount.prune(fge);
+			return newFeatIdx;
 		}
 	}
 
@@ -330,16 +340,17 @@ public class Parser {
 		// setup the feature extraction
 		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
 		RawExampleFactory rexs = new RawExampleFactory(examples, this);
+		FgExampleCache exs = new FgExampleCache(rexs, keepInMemory, false);
 		if(params.debug || true) {
 			int lim = params.mode == Mode.FRAME_ID
 					? 150
-					: (params.mode == Mode.PIPELINE_FRAME_ARG ? 10 : 1);
+					: (params.mode == Mode.PIPELINE_FRAME_ARG ? 30 : 1);
 			rexs.setTimerPrintInterval(lim);
 		}
 
 		// compute how many features we need
 		params.featIdx.startGrowth();
-		params.featIdx = scanFeatures(rexs);	// pass in the non-caching version
+		params.featIdx = scanFeatures(exs);	// pass in the non-caching version
 		params.featIdx.stopGrowth();
 		
 		// setup model and train
@@ -347,7 +358,6 @@ public class Parser {
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
-		FgExampleCache exs = new FgExampleCache(rexs, keepInMemory, false);
 		try { params.model = trainer.train(params.model, exs); }
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();

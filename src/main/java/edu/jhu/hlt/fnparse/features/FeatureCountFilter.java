@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.features;
 
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -8,6 +9,7 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
@@ -41,10 +43,13 @@ public class FeatureCountFilter {
 	public Alphabet<String> filterByCount(Alphabet<String> featureNames, int minFeatureOccurrences, Alphabet<String> keepRegardless) {
 		Alphabet<String> keep = new Alphabet<String>();
 		int n = featureNames.size();
+		this.keep = new BitSet(n);
 		for(int i=0; i<n; i++) {
 			String fn = featureNames.lookupObject(i);
-			if(counts[i] >= minFeatureOccurrences || keepRegardless.lookupIndex(fn, false) >= 0)
+			if(counts[i] >= minFeatureOccurrences || keepRegardless.lookupIndex(fn, false) >= 0) {
 				keep.lookupIndex(fn, true);
+				this.keep.set(i);
+			}
 		}
 		if(keepRegardless != null && keepRegardless.size() > 0) {
 			System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples and given %d features to keep regardless, "
@@ -74,6 +79,47 @@ public class FeatureCountFilter {
 				Integer c = ignoredCounts.get(key);
 				if(c == null) c = 0;
 				ignoredCounts.put(key, c + 1);
+			}
+		}
+	}
+	
+	private BitSet keep = null;	// set in filterByCount()
+
+	/**
+	 * removes features that have been pruned by a previous call to this.filterByCount().
+	 */
+	public void prune(FgExample instance) {
+
+/*
+ * When we train, we compute features, count how many times they appeared,
+ * and then prune the features that don't show up at least K times. Given that
+ * we computed the features to count them anyway, it is a waste to throw them
+ * away, but we need to remove the feature-values for the features that didn't
+ * show up at least K times. This class removes those features.
+ */
+
+		if(keep == null)
+			throw new IllegalStateException("you have to call this.filterByCount() before you call this method");
+		
+		boolean first = true;
+		for(FactorGraph fg : Arrays.asList(instance.getFgLat(), instance.getFgLatPred())) {
+			System.out.println("starting " + (first ? "fgLat" : "fgLatPred"));
+			first = false;
+			for(Factor f : fg.getFactors()) {
+				if(f instanceof ExplicitExpFamFactor) {
+					ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
+					int C = ef.getVars().calcNumConfigs();
+					for(int c=0; c<C; c++)
+						ef.getFeatures(c).retainAll(keep);
+				}
+				else
+					System.err.println("[FeatureCountFilter] f=" + f.getClass());
+				//			else {
+				//				Class<?> cl = f.getClass();
+				//				Integer c = missed.get(cl);
+				//				if(c == null) c = 0;
+				//				missed.put(cl, c + 1);
+				//			}
 			}
 		}
 	}
