@@ -29,10 +29,20 @@ public class Timer {
 		return t;
 	}
 	
+	public void setPrintInterval(int interval) {
+		if(interval <= 0) throw new IllegalArgumentException();
+		this.printIterval = interval;
+	}
+	
+	public void disablePrinting() {
+		this.printIterval = -1;
+	}
+	
 	public void start() {
 		lastStart = System.currentTimeMillis();
 	}
 	
+	/** returns the time taken between the last start/stop pair */
 	public long stop() {
 		long t = System.currentTimeMillis() - lastStart;
 		if(count == 0)
@@ -45,9 +55,13 @@ public class Timer {
 	}
 	
 	public String toString() {
-		double rate = countsPerMSec();
-		if(rate >= 0.5d)
-			return String.format("<Timer %s %.2f sec and %d calls total, %.1f k call/sec>", id, totalTimeInSec(), count, rate);
+		double rate = 1000d * countsPerMSec();
+		if(rate >= 0.5d) {
+			String rateStr = rate > 1100d
+					? String.format("%.1f k", rate/1000d)
+					: String.format("%.1f", rate);
+			return String.format("<Timer %s %.2f sec and %d calls total, %s call/sec>", id, totalTimeInSec(), count, rateStr);
+		}
 		else
 			return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSec(), count, secPerCall());
 	}
