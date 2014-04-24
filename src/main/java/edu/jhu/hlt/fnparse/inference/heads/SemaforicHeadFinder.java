@@ -40,6 +40,17 @@ public class SemaforicHeadFinder implements HeadFinder {
 				return i;
 		}
 		
+		// NOT IN THEIR PAPER:
+		// collapsed dependencies might lead to "incest" (no parent outside this span)
+		// choose the last word in the first sequence of nouns?
+		boolean inNP = false;
+		for(int i=s.start; i<s.end; i++) {
+			String p = sent.getPos(i);
+			inNP |= p.startsWith("N") || p.endsWith("DT");
+			if(inNP && (i == s.end-1 || !sent.getPos(i+1).startsWith("N")))
+				return i;
+		}
+
 		throw new IllegalStateException("how?");
 	}
 
