@@ -120,13 +120,18 @@ public class RoleVars implements FgRelated {
 				inThisRow++;
 			}
 			
-			// there is no expansion variable for null-realized-arg
-			r_kj[k][n] = new Var(VarType.PREDICTED, 2, String.format("r_{i=%d,t=%s,k=%d,notRealized}", i, evoked.getName(), k), BinaryVarUtil.stateNames);
-			if(hasGold)
-				goldConf.put(r_kj[k][n], BinaryVarUtil.boolToConfig(n == jGold));
-			
-			// TODO
-			assert inThisRow >= 2 : "fixme";
+			if(inThisRow == 0) {	// if all roles were pruned, then no need to use that var (or the "no arg" var)
+				r_kj[k] = null;
+				r_kj_e[k] = null;
+				r_kj_e_values[k] = null;
+				// i'm not removing the Vars from goldConf because it doesn't have a drop method, probably doesn't matter
+			}
+			else {
+				// there is no expansion variable for null-realized-arg
+				r_kj[k][n] = new Var(VarType.PREDICTED, 2, String.format("r_{i=%d,t=%s,k=%d,notRealized}", i, evoked.getName(), k), BinaryVarUtil.stateNames);
+				if(hasGold)
+					goldConf.put(r_kj[k][n], BinaryVarUtil.boolToConfig(n == jGold));
+			}
 		}
 	}
 
@@ -217,19 +222,20 @@ public class RoleVars implements FgRelated {
 			this.expansionValues = expansionValues;
 			this.k = 0;
 			this.j = 0;
-			while(hasNext() && roleVars[k][j] == null)
+			while(hasNext() && (roleVars[k] == null || roleVars[k][j] == null))
 				bump();
 		}
 		private void bump() {
 			j++;
 			if(j == roleVars[k].length) {
-				k++;
+				do { k++; }
+				while(k < roleVars.length && roleVars[k] == null);
 				j = 0;
 			}
 		}
 		@Override
 		public boolean hasNext() {
-			return k < roleVars.length && j < roleVars[k].length;
+			return k < roleVars.length && roleVars[k] != null && j < roleVars[k].length;
 		}
 		@Override
 		public RVar next() {
