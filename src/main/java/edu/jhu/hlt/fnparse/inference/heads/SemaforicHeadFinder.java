@@ -40,8 +40,15 @@ public class SemaforicHeadFinder implements HeadFinder {
 				return i;
 		}
 		
-		// NOT IN THEIR PAPER:
+		// BELOW NOT IN THEIR PAPER:
 		// collapsed dependencies might lead to "incest" (no parent outside this span)
+		
+		// choose the first verb
+		for(int i=s.start; i<s.end; i++) {
+			if(sent.getPos(i).startsWith("V"))
+				return i;
+		}
+		
 		// choose the last word in the first sequence of nouns?
 		boolean inNP = false;
 		for(int i=s.start; i<s.end; i++) {
