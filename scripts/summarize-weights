@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -e
+
+weightsFile=$1
+temp=`mktemp`
+
+awk '$1 > 0.005 || $1 < -0.005' <$weightsFile | sort -n >$temp
+#sort -n $weightsFile >$temp
+
+n=`cat $temp | wc -l`
+if [[ "$n" -gt 40 ]]; then
+	head -n 20 $temp
+	r=`echo "$n - 40" | bc`
+	echo "... $r more weights ..."
+	tail -n 20 $temp
+else
+	cat $temp
+fi
+
+rm $temp
+
