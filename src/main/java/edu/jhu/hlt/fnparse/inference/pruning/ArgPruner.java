@@ -98,7 +98,9 @@ public class ArgPruner implements Serializable, IArgPruner {
 	}
 	
 	public static final Set<String> pennPunctuationPosTags =
-			new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\""));
+			new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\"", "''"));
+	public static final Set<String> pennOtherPrunePosTags =
+			new HashSet<String>(Arrays.asList("#", "$", "FW", "EX", "POS", "LS"));
 	
 	public static enum LexPruneMethod {
 		NONE,
@@ -107,9 +109,32 @@ public class ArgPruner implements Serializable, IArgPruner {
 	}
 	
 	private ParserParams params;
-	private boolean determiners;
-	private boolean punc;
+	private boolean pruneByPOS;
 	private LexPruneMethod lexMethod;
+	
+	private int argsKept = 0;
+	private int argsPrunedPos = 0;
+	private int argsPrunedLex = 0;
+	private int argsFalsePruned = 0;
+	private int argsPruningInterval = 2500;	// <=0 for no reporting
+	
+	@Override
+	public double pruneRatio() {
+		int pruned = argsPrunedLex + argsPrunedPos;
+		int total = pruned + argsKept;
+		if(total == 0) return 0d;
+		return ((double) pruned) / total;
+	}
+	
+	@Override
+	public void falsePrune() {
+		argsFalsePruned++;
+	}
+	
+	@Override
+	public int numFalsePrunes() {
+		return argsFalsePruned;
+	}
 	
 	// indexing is [frameId][roleId], null Sets mean this role was never seen in data
 	private transient Set<LexicalUnit>[][] roleWordMap;		// words that have appeared as the headword of [frame.id][roleIdx]
@@ -119,14 +144,12 @@ public class ArgPruner implements Serializable, IArgPruner {
 	
 	public ArgPruner(ParserParams params) {
 		lexMethod = LexPruneMethod.SYNSET;
-		determiners = true;
-		punc = true;
+		pruneByPOS = true;
 		this.params = params;
 	}
 	
-	public void set(boolean punc, boolean determiners, LexPruneMethod lexMethod) {
-		this.punc = punc;
-		this.determiners = determiners;
+	public void set(boolean pos, LexPruneMethod lexMethod) {
+		this.pruneByPOS = pos;
 		this.lexMethod = lexMethod;
 	}
 
@@ -146,10 +169,10 @@ public class ArgPruner implements Serializable, IArgPruner {
 	@Override
 	public boolean pruneArgHead(Frame f, int roleIdx, int headWordIdx, Sentence sentence) {
 		String pos = sentence.getPos(headWordIdx);
-		if(determiners && pos.endsWith("DT"))
+		if(pruneByPOS && (pos.endsWith("DT") || pennPunctuationPosTags.contains(pos) || pennOtherPrunePosTags.contains(pos))) {
+			argsPrunedPos++;
 			return true;
-		if(punc && ArgPruner.pennPunctuationPosTags.contains(pos))
-			return true;
+		}
 		if(lexMethod != LexPruneMethod.NONE) {
 			Set<LexicalUnit> possibleLUs;
 			if(lexMethod == LexPruneMethod.EXACT)
@@ -160,12 +183,21 @@ public class ArgPruner implements Serializable, IArgPruner {
 				assert false : "need to update this code for: " + lexMethod;
 				possibleLUs = null;
 			}
+			argsPrunedLex++;
 			if(possibleLUs == null)
 				return true;
 			LexicalUnit lu = sentence.getFNStyleLUUnsafe(headWordIdx, params.targetPruningData.getWordnetDict());
 			if(lu == null || possibleLUs.contains(lu))
 				return true;
+			argsPrunedLex--;
 		}
+		argsKept++;
+		
+		if(argsPruningInterval > 0 && argsKept % argsPruningInterval == 0) {
+			System.out.printf("[ArgPruner] pruned %.1f %% of args seen, %d by POS, %d by lex, with %d false prunes\n",
+					pruneRatio()*100d, argsPrunedPos, argsPrunedLex, argsFalsePruned);
+		}
+
 		return false;
 	}
 	

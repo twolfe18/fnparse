@@ -14,4 +14,17 @@ public class NoArgPruner implements IArgPruner, Serializable {
 		return false;
 	}
 
+	@Override
+	public void falsePrune() {}
+
+	@Override
+	public int numFalsePrunes() {
+		return 0;
+	}
+
+	@Override
+	public double pruneRatio() {
+		return 0;
+	}
+
 }
