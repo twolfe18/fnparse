@@ -99,6 +99,7 @@ public class Parser {
 		public ApproxF1MbrDecoder argDecoder;
 		public TargetPruningData targetPruningData;
 		public IArgPruner argPruner;
+		public int maxTrainSentenceLength;
 		
 		public Features.F  fFeatures;
 		public Features.FD fdFeatures;
@@ -165,6 +166,7 @@ public class Parser {
 		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
 		params.argPruner = new ArgPruner(params);
+		params.maxTrainSentenceLength = 50;	// <= 0 for no pruning
 		
 		params.factorsForFrameId = new FrameFactorFactory(params, latentDeps, latentDeps);
 		params.factorsForRoleId = new RoleFactorFactory(params, latentDeps, latentDeps, false);
@@ -321,6 +323,17 @@ public class Parser {
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
+		
+		if(params.mode != Mode.FRAME_ID && params.maxTrainSentenceLength > 0) {
+			List<FNParse> notHuge = new ArrayList<FNParse>();
+			for(FNParse p : examples)
+				if(p.getSentence().size() <= params.maxTrainSentenceLength)
+					notHuge.add(p);
+			System.out.printf("[Parser train] filtering out sentences longer than %d words, kept %d of %d examples\n",
+					params.maxTrainSentenceLength, notHuge.size(), examples.size());
+			examples = notHuge;
+		}
+		
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 
 		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
