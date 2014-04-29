@@ -2,16 +2,20 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import static org.junit.Assert.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.ParserTests;
 import edu.jhu.hlt.fnparse.inference.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.ParserTests;
 
 // TODO make these pass!
 public class MakeFrameVarsTests {
@@ -20,6 +24,27 @@ public class MakeFrameVarsTests {
 //	WARNING: frame filtering heuristic didn't extract <Frame 142 Building has 16 roles> for <LU building.NN>
 	
 //	WARNING: frame filtering heuristic didn't extract <Frame 754 Quantity has 5 roles> for <LU lot.NN>
+	
+	@Test
+	public void basic() {
+		FNParse p = ParserTests.makeDummyParse();
+
+		Set<Frame> goldFrames = new HashSet<>();
+		for(FrameInstance fi : p.getFrameInstances()) {
+			boolean added = goldFrames.add(fi.getFrame());
+			assertTrue("dummy doesn't have repeated frames", added);
+		}
+		
+		Parser parser = new Parser(Mode.FRAME_ID, false, true);
+		FrameIdSentence fid = new FrameIdSentence(p.getSentence(), parser.params, p);
+		Set<Frame> frames = new HashSet<Frame>();
+		for(FrameVars fv : fid.getPossibleFrames()) {
+			assertTrue(fv.goldIsSet());
+			boolean added = frames.add(fv.getGold());
+			assertTrue("dummy doesn't have repeated frames", added);
+		}
+		assertEquals(goldFrames, frames);
+	}
 
 
 	@Test

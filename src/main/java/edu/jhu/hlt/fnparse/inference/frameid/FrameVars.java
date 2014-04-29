@@ -49,6 +49,11 @@ public class FrameVars implements FgRelated {
 		}
 	}
 	
+	public Frame getGold() {
+		assert goldSet;
+		return gold;
+	}
+	
 	public int getNullFrameIdx() {
 		final int i = 0;
 		assert f_it_values[i] == Frame.nullFrame;

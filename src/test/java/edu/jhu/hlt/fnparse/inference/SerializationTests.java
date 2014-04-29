@@ -26,20 +26,20 @@ public class SerializationTests {
 	@Test
 	public void serializationFrameId() throws IOException {
 		trained = new Parser(Mode.FRAME_ID, false, true);
-		ParserTests.overfitting(trained, true, true, "FRAME_ID_SER1");
+		ParserTests.overfitting(trained, true, "FRAME_ID_SER1");
 		trained.writeModel(f);
 		readIn = new Parser(f);
-		ParserTests.overfitting(readIn, true, false, "FRAME_ID_SER2");
+		ParserTests.overfitting(readIn, false, "FRAME_ID_SER2");
 	}
 
 	@Test
 	public void serializationFrameIdWithLatentDeps() throws IOException {
 		if(!testLatentDeps) assertTrue("not testing latent deps", false);
 		trained = new Parser(Mode.FRAME_ID, true, true);
-		ParserTests.overfitting(trained, true, true, "FRAME_ID_LATENT_SER1");
+		ParserTests.overfitting(trained, true, "FRAME_ID_LATENT_SER1");
 		trained.writeModel(f);
 		readIn = new Parser(f);
-		ParserTests.overfitting(readIn, true, false, "FRAME_ID_LATENT_SER2");
+		ParserTests.overfitting(readIn, false, "FRAME_ID_LATENT_SER2");
 	}
 	
 	@Test
@@ -47,10 +47,10 @@ public class SerializationTests {
 		if(!testJoint) assertTrue("not testing joint", false);
 		trained = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		trained.params.argDecoder.setRecallBias(1d);
-		ParserTests.overfitting(trained, false, true, "JOINT_SER1");
+		ParserTests.overfitting(trained, true, "JOINT_SER1");
 		trained.writeModel(f);
 		readIn = new Parser(f);
-		ParserTests.overfitting(readIn, false, false, "JOINT_SER2");
+		ParserTests.overfitting(readIn, false, "JOINT_SER2");
 	}
 	
 	@Test
@@ -58,10 +58,10 @@ public class SerializationTests {
 		trained = ParserTests.getFrameIdTrainedOnDummy();
 		trained.setMode(Mode.PIPELINE_FRAME_ARG, false);
 		trained.params.argDecoder.setRecallBias(1d);
-		ParserTests.overfitting(trained, false, true, "PIPELINE_SER1");
+		ParserTests.overfitting(trained, true, "PIPELINE_SER1");
 		trained.writeModel(f);
 		readIn = new Parser(f);
-		ParserTests.overfitting(readIn, false, false, "PIPELINE_SER2");
+		ParserTests.overfitting(readIn, false, "PIPELINE_SER2");
 	}
 	
 }

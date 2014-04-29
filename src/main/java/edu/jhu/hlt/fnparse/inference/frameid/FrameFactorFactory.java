@@ -42,6 +42,11 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 		this.includeDepFactors = false; //includeDepFactors;
 		this.includeGovFactors = includeGovFactors;
 		this.onlyParemeterizeDiag = true;
+		
+		if(!params.useLatentDepenencies) {
+			assert !includeDepFactors;
+			assert !includeGovFactors;
+		}
 	}
 	
 	@Override

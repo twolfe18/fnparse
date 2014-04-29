@@ -45,7 +45,6 @@ import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameDepFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
-import edu.jhu.hlt.fnparse.features.DebuggingRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
@@ -350,7 +349,7 @@ public class Parser {
 
 		// compute how many features we need
 		params.featIdx.startGrowth();
-		params.featIdx = scanFeatures(exs);	// pass in the non-caching version
+		params.featIdx = scanFeatures(exs);	// pass in the caching version
 		params.featIdx.stopGrowth();
 		
 		// setup model and train
@@ -358,7 +357,9 @@ public class Parser {
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		params.model = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
-		try { params.model = trainer.train(params.model, exs); }
+		try {
+			params.model = trainer.train(params.model, exs);
+		}
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
@@ -458,6 +459,8 @@ public class Parser {
 	 */
 	public void writeWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
+		if(params.model == null)
+			throw new IllegalStateException();
 		long start = System.currentTimeMillis();
 		try {
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));

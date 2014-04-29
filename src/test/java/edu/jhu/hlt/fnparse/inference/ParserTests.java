@@ -23,7 +23,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 
 public class ParserTests {
 	
-	private static final boolean testLatentDeps = false;
+	private static final boolean testLatentDeps = true;
 	private static final boolean testJoint = false;
 
 	public static FNParse makeDummyParse() {
@@ -66,8 +66,8 @@ public class ParserTests {
 	@Test
 	public void frameId() {
 		Parser p = new Parser(Mode.FRAME_ID, false, true);
-		p.params.frameDecoder.setRecallBias(2d);
-		overfitting(p, true, true, "FRAME_ID");
+		p.params.frameDecoder.setRecallBias(1d);
+		overfitting(p, true, "FRAME_ID");
 	}
 
 	@Test
@@ -75,7 +75,7 @@ public class ParserTests {
 		if(!testLatentDeps) assertTrue("not testing latent deps", false);
 		boolean useLatentDeps = true;
 		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
-		overfitting(p, true, true, "FRAME_ID_LATENT");
+		overfitting(p, true, "FRAME_ID_LATENT");
 	}
 
 	@Test
@@ -83,7 +83,7 @@ public class ParserTests {
 		if(!testJoint) assertTrue("not testing joint", false);
 		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, false, true, "JOINT");
+		overfitting(p, true, "JOINT");
 	}
 
 	
@@ -92,7 +92,7 @@ public class ParserTests {
 		Parser p = getFrameIdTrainedOnDummy();
 		p.setMode(Mode.PIPELINE_FRAME_ARG, false);
 		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, false, true, "PIPELINE");
+		overfitting(p, true, "PIPELINE");
 	}
 	
 	@Test
@@ -100,7 +100,7 @@ public class ParserTests {
 		if(!testLatentDeps) assertTrue("not testing latent deps", false);
 		Parser p = getFrameIdTrainedOnDummy();
 		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, false, true, "PIPELINE_LATENT");
+		overfitting(p, true, "PIPELINE_LATENT");
 	}
 
 	// TODO joint with latent
@@ -123,7 +123,7 @@ public class ParserTests {
 	}
 
 	
-	public static void overfitting(Parser p, boolean onlyFrames, boolean doTraining, String desc) {
+	public static void overfitting(Parser p, boolean doTraining, String desc) {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
 		List<FNParse> train = new ArrayList<FNParse>();
@@ -135,7 +135,7 @@ public class ParserTests {
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
 			p.train(train, 15, 1, 0.5d, 100d);
-			p.writeWeights(new File("weights." + desc + ".txt"));
+			p.writeWeights(new File("saved-models/testing/" + desc + ".txt"));
 		}
 
 		System.out.println("====== Running Prediction " + desc + " ======");
@@ -148,7 +148,7 @@ public class ParserTests {
 		
 		assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
 		assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
-		if(!onlyFrames) {
+		if(p.params.mode != Mode.FRAME_ID) {
 			assertSameParse(train.get(0), predicted.get(0));
 			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
 			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);

@@ -109,8 +109,14 @@ public class FeatureCountFilter {
 				if(f instanceof ExplicitExpFamFactor) {
 					ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
 					int C = ef.getVars().calcNumConfigs();
-					for(int c=0; c<C; c++)
-						ef.getFeatures(c).retainAll(keep);
+					for(int c=0; c<C; c++) {
+						ef.getFeatures(c).apply(new FnIntDoubleToDouble() {	// only keep indices in the bitset
+							@Override
+							public double call(int idx, double val) {
+								return keep.get(idx) ? val : 0d;
+							}
+						});
+					}
 				}
 				else
 					System.err.println("[FeatureCountFilter] f=" + f.getClass());
@@ -132,7 +138,7 @@ public class FeatureCountFilter {
 				if(idx >= counts.length)
 					grow(idx + 1);
 				counts[idx]++;
-				return -1;
+				return val;
 			}
 		});
 	}

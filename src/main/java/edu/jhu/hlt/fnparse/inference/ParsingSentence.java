@@ -15,8 +15,9 @@ import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -111,7 +112,7 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		// add factors to the factor graph
 		for(Factor f : factors)
 			fg.addFactor(f);
-
+		
 		return labeled
 			? new LabeledFgExample(fg, gold)
 			: new UnlabeledFgExample(fg, new VarConfig());	// if you ever add observed variables, this needs to change

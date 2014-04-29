@@ -79,10 +79,7 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 				DenseFactor df = inf.getMarginals(fvars.getVariable(t));
 				beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
 			}
-
-			if(params.logDomain)
-				Multinomials.normalizeLogProps(beliefs);	
-			else Multinomials.normalizeProps(beliefs);
+			params.normalize(beliefs);
 
 			final int nullFrameIdx = fvars.getNullFrameIdx();
 			int tHat = params.frameDecoder.decode(beliefs, nullFrameIdx);
