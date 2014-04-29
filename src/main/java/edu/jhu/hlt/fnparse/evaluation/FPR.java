@@ -110,6 +110,7 @@ public final class FPR {
 			throw new IllegalArgumentException();
 		double p = precision();
 		double r = recall();
+		if(p + r == 0d) return 0d;
 		return (1d + beta * beta) * p * r / (beta * beta * p + r);
 	}
 	
