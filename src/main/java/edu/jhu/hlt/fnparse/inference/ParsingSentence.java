@@ -126,7 +126,8 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	public LabeledFgExample getTrainingExample() {
 		if(gold == null)
 			throw new RuntimeException("are you sure you used the constructor with the gold label?");
-		return (LabeledFgExample) getExample(true);
+		LabeledFgExample fge = (LabeledFgExample) getExample(true);
+		return fge;
 	}
 
 	/**

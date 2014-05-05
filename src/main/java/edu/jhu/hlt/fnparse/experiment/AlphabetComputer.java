@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -18,6 +19,9 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  */
 public class AlphabetComputer {
 	
+	public static final double scanFeaturesTimeInMinutes = 4;
+	public static boolean checkForPreExistingModelFile = false;
+	
 	public static void main(String[] args) {
 		
 		if(args.length < 3 || args.length > 4) {
@@ -30,7 +34,7 @@ public class AlphabetComputer {
 		}
 		
 		File saveModelTo = new File(args[0]);
-		if(saveModelTo.isFile())
+		if(checkForPreExistingModelFile && saveModelTo.isFile())
 			throw new RuntimeException("this file already exists: " + saveModelTo.getPath());
 
 		Mode mode = null;
@@ -66,7 +70,8 @@ public class AlphabetComputer {
 		ds.split(all, train, test, 0.2d, "fn15_train-test");
 		test = null;	// don't need this
 		
-		p.scanFeatures(train);
+		p.scanFeatures(train, scanFeaturesTimeInMinutes);
+		p.train(Collections.<FNParse>emptyList(), 1, 1, 1d, 1d, true);
 		p.writeModel(saveModelTo);
 	}
 

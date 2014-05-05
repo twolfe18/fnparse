@@ -26,6 +26,7 @@ import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
+import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.FactorGraph;
@@ -144,8 +145,16 @@ public class Parser {
 			readIn = true;
 			//System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
 			//		(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
+			
+			assert verifyParamConsistency(params);
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
+	}
+	
+	private static boolean verifyParamConsistency(ParserParams params) {
+		if(params.mode != Mode.FRAME_ID && params.logDomain == false)
+			return false;
+		return true;
 	}
 	
 	public Parser(Mode mode, boolean latentDeps, boolean debug) {
@@ -188,6 +197,8 @@ public class Parser {
 			params.rdFeatures = new BasicRoleDepFeatures(params);
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
+
+		assert verifyParamConsistency(params);
 	}
 	
 	public void setMode(Mode m, boolean useLatentDeps) {
@@ -195,13 +206,24 @@ public class Parser {
 			throw new RuntimeException("changing this on a trained model will break things");
 		params.mode = m;
 		params.useLatentDepenencies = useLatentDeps;
+		assert verifyParamConsistency(params);
 	}
 	
 	public ParserParams getParams() { return params; }
 	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
-		bpParams.normalizeMessages = true;
+		if(params.useLatentDepenencies) {
+			bpParams.normalizeMessages = true;
+			bpParams.schedule = BpScheduleType.RANDOM;
+		}
+		else {
+			// this should have no loops, use these settings so that
+			// we can exactly compute the log-likelihood rather than using
+			// Bethe free energy
+			bpParams.normalizeMessages = false;
+			bpParams.schedule = BpScheduleType.TREE_LIKE;
+		}
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
 		bpParams.maxIterations = params.useLatentDepenencies ? 10 : 2;
@@ -263,11 +285,15 @@ public class Parser {
 	/**
 	 * Goes over the features in the given dataset and adds them to the alphabet.
 	 */
-	public void scanFeatures(List<FNParse> examples) {
-		scanFeatures(parses2examples(examples));
+	public void scanFeatures(List<FNParse> examples) { scanFeatures(examples, maxTimeInMinutesForScanFeatures); }
+	public void scanFeatures(List<FNParse> examples, double maxTimeInMinutes) {
+		scanFeatures(parses2examples(examples), maxTimeInMinutes);
 	}
+	
+	public static final double maxTimeInMinutesForScanFeatures = 30;
 
-	protected void scanFeatures(FgExampleList exs) {
+	protected void scanFeatures(FgExampleList exs) { scanFeatures(exs, maxTimeInMinutesForScanFeatures); }
+	protected void scanFeatures(FgExampleList exs, double maxTimeInMinutes) {
 
 		MultiTimer timer = new MultiTimer();
 		System.out.println("[scanFeatures] counting the number of parameters needed over " + exs.size() + " examples");
@@ -287,7 +313,6 @@ public class Parser {
 		int minExamples = params.mode == Mode.FRAME_ID ? 300 : 50;
 		int maxExamples = 25000;
 		int maxAlphSize = 50 * 1000 * 1000;
-		double maxTimeInMinutes = 5 * 60;
 
 		int prevSize = params.featIdx.size();
 		int examplesSeen = 0;
@@ -364,6 +389,7 @@ public class Parser {
 	 */
 	public void train(List<FNParse> examples, int passes, int batchSize, Double learningRateMultiplier, double regularizerMult, boolean freezeAlphabet) {
 		
+		assert verifyParamConsistency(params);
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
@@ -440,6 +466,7 @@ public class Parser {
 		}
 		System.out.printf("[train] done training on %d examples for %.1f minutes\n", exs.size(), (System.currentTimeMillis()-start)/(1000d*60d));
 		System.out.println("[train] params.featIdx.size = " + params.featIdx.size());
+		assert verifyParamConsistency(params);
 	}
 	
 	
@@ -498,6 +525,7 @@ public class Parser {
 		else throw new RuntimeException();
 
 		tuneRecallBias(examples, decoder, obj, biases);
+		assert verifyParamConsistency(params);
 	}
 	
 	private void tuneRecallBias(List<FNParse> examples, ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {

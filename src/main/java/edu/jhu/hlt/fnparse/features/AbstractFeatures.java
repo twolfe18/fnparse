@@ -66,7 +66,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 * default implementation is class name.
 	 */
 	public String getName() {
-		return this.getClass().getName();
+		return this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
 	}
 	
 	protected final void b(FeatureVector fv, Refinements refs, String... featureNamePieces) {
@@ -96,7 +96,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 			if(featIdx.isGrowing()) {
 				int sz = featIdx.size();
 				int idx = featIdx.lookupIndex(s, true);
-				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 100000 == 0)
+				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
 				fv.add(idx, weight * refs.getWeight(ri));
 			}

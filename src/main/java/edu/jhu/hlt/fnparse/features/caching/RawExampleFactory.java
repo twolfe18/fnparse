@@ -8,7 +8,6 @@ import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
@@ -51,39 +50,18 @@ public class RawExampleFactory implements FgExampleList {
 	@Override
 	public FgExample get(int i) {
 		
+		FNParse p = baseExamples.get(i);
+
 		getTimer.start();
-		
-		LabeledFgExample use;
-		if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG) {
-			FNParse p = baseExamples.get(i);
-			List<LabeledFgExample> exs = makeExamplesWith.getExampleForTraining(p);
-			assert exs.size() == 1;
-			use = exs.get(0);
-		}
-		else {
-			FNParse p = baseExamples.get(i);
-			List<LabeledFgExample> exs = makeExamplesWith.getExampleForTraining(p);
-			assert exs.size() == 1;
-			use = exs.get(0);
-		}
+		List<LabeledFgExample> exs = makeExamplesWith.getExampleForTraining(p);
 		getTimer.stop();
-		
-		/* TODO get this back
-		if(psStats != null) {
-			psStats.accum(use.cameFrom);
-			if(i % 250 == 0)
-				psStats.printStats(System.out);
-		}
-		*/
-		
-		return use;
+
+		assert exs.size() == 1;
+		return exs.get(0);
 	}
 
 	@Override
 	public int size() {
-		int n = baseExamples.size();
-		//if(makeExamplesWith.params.mode == Mode.PIPELINE_FRAME_ARG)
-		//	return n * 2;
-		return n;
+		return baseExamples.size();
 	}	
 }

@@ -83,12 +83,13 @@ public final class Sentence implements HasId {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
 		if(fnTag == null) return null;
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
-		List<String> allStems;
+		List<String> allStems = Collections.emptyList();
 		try {
 			allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
 		}
 		catch(java.lang.IllegalArgumentException e) {
-			throw new RuntimeException("bad word? " + getLU(i), e);
+			//throw new RuntimeException("bad word? " + getLU(i), e);
+			System.err.println("bad word? " + getLU(i));
 		}
 		if(allStems.isEmpty()) return null;
 		return new LexicalUnit(allStems.get(0), fnTag);
