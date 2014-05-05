@@ -25,7 +25,7 @@ frameIdTrainOne:
 		frameId 189 saved-models/temp saved-models/alphabets/frameId-reg.model.gz \
 		2>&1 | tee saved-models/full/frameId.log
 	mv -f saved-models/temp/FRAME_ID/FRAME_ID.model.gz saved-models/full/frameId-reg.model.gz
-	rm -rf saved-models/temp
+	sort -n saved-models/temp/FRAME_ID/FRAME_ID.weights.txt >saved-models/full/frameId.weights.txt
 
 
 # launch all the frame id training jobs to the grid
@@ -55,7 +55,7 @@ argIdTrainOne:
 		argId 12 saved-models/temp saved-models/alphabets/argId-reg.model.gz \
 		2>&1 | tee saved-models/full/argId-reg.log
 	mv -f saved-models/temp/PIPELINE_FRAME_ARG/PIPELINE_FRAME_ARG.model.gz saved-models/full/argId-reg.model.gz
-	rm -rf saved-models/temp
+	sort -n saved-models/temp/PIPELINE_FRAME_ARG/PIPELINE_FRAME_ARG.weights.txt >saved-models/full/argId.weights.txt
 
 
 # TODO fixme

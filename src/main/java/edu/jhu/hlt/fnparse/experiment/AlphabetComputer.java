@@ -19,19 +19,23 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  */
 public class AlphabetComputer {
 	
-	public static final double scanFeaturesTimeInMinutes = 4;
+	public static double scanFeaturesTimeInMinutes = 15;
 	public static boolean checkForPreExistingModelFile = false;
 	
 	public static void main(String[] args) {
 		
-		if(args.length < 3 || args.length > 4) {
+		if(args.length < 3 || args.length > 5) {
 			System.out.println("please provide:");
 			System.out.println("1) an file to save the model to");
 			System.out.println("2) a parser mode (\"frameId\", \"argId\", or \"jointId\")");
 			System.out.println("3) a syntax mode (\"none\", \"latent\", or \"regular\")");
 			System.out.println("4) [optional] an existing model for pipeline training");
+			System.out.println("5) [optional] how many minutes to run this for (default is 15 minutes)");
 			return;
 		}
+		
+		if(args.length == 5)
+			scanFeaturesTimeInMinutes = Double.parseDouble(args[4]);
 		
 		File saveModelTo = new File(args[0]);
 		if(checkForPreExistingModelFile && saveModelTo.isFile())
@@ -69,7 +73,8 @@ public class AlphabetComputer {
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train-test");
 		test = null;	// don't need this
-		
+		Collections.shuffle(train);	// make sure they aren't sorted by frame for instance
+
 		p.scanFeatures(train, scanFeaturesTimeInMinutes);
 		p.train(Collections.<FNParse>emptyList(), 1, 1, 1d, 1d, true);
 		p.writeModel(saveModelTo);
