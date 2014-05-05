@@ -97,7 +97,7 @@ public class Path {
 			Collections.reverse(downEdges);
 		}
 
-		if(ptr >= 0 && ptr < n) {
+		if(ptr >= 0 && ptr < n && !seen[ptr]) {
 			assert upIndices[ptr] >= 0;
 			connected = true;
 			top = getNodeNameFor(ptr);
@@ -118,8 +118,10 @@ public class Path {
 	}
 	
 	private String getEdgeNameFor(int i, boolean goingUp) {
-		if(edgeType == EdgeType.DEP) return sent.dependencyType(i);
-		else if(edgeType == EdgeType.DIRECTION) return goingUp ? "<" : ">";
+		if(edgeType == EdgeType.DEP)
+			return sent.dependencyType(i) + (goingUp ? "<" : ">");
+		else if(edgeType == EdgeType.DIRECTION)
+			return goingUp ? "<" : ">";
 		else throw new RuntimeException();
 	}
 	
