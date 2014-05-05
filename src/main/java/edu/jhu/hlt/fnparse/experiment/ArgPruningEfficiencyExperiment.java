@@ -35,9 +35,8 @@ public class ArgPruningEfficiencyExperiment {
 		
 		for(LexPruneMethod lexPrune : Arrays.asList(LexPruneMethod.NONE, LexPruneMethod.EXACT, LexPruneMethod.SYNSET)) {
 			Parser parser = new Parser(Mode.JOINT_FRAME_ARG, false, true);
-			boolean punc = lexPrune == LexPruneMethod.NONE;
-			boolean determiners = lexPrune == LexPruneMethod.NONE;
-			((ArgPruner) parser.params.argPruner).set(punc, determiners, lexPrune);
+			boolean pruneByPos = lexPrune == LexPruneMethod.NONE;
+			((ArgPruner) parser.params.argPruner).set(pruneByPos, lexPrune);
 
 			Avg avgKeepRatio = new Avg();	// macro (tells you a little about the skew)
 			Avg keepRatio = new Avg();		// micro (what we care about)

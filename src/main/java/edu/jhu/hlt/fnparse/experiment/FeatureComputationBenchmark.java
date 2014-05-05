@@ -23,7 +23,7 @@ public class FeatureComputationBenchmark {
 		Map<FNParse, Long> timeTakenPerExample = new HashMap<FNParse, Long>();
 		
 		MultiTimer timer = new MultiTimer();
-		int c = 0, maxIter = 100;
+		int c = 0, maxIter = 60;
 		int k = 1;
 		timer.get("read-parse", true).setPrintInterval(k);
 		timer.get("read-parse", true).ignoreFirstTime = true;

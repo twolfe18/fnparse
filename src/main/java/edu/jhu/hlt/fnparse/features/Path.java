@@ -98,6 +98,7 @@ public class Path {
 		}
 
 		if(ptr >= 0 && ptr < n) {
+			assert upIndices[ptr] >= 0;
 			connected = true;
 			top = getNodeNameFor(ptr);
 			upNodes = upNodes.subList(0, upIndices[ptr]);	// trim up at the point where the two paths meet

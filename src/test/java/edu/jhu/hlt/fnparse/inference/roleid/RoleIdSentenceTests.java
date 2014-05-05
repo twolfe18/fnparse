@@ -79,8 +79,8 @@ public class RoleIdSentenceTests {
 		RawExampleFactory rexs = new RawExampleFactory(Arrays.asList(parse), p);
 		FgExampleCache exs = new FgExampleCache(rexs, 10, false);
 		CrfObjective obj = new CrfObjective(exs, p.infFactory());
-		AvgBatchObjective obj2 = new AvgBatchObjective(obj, p.params.model, 1);
-		double v = obj2.getValue(p.params.model.getParams());
+		AvgBatchObjective obj2 = new AvgBatchObjective(obj, p.params.weights, 1);
+		double v = obj2.getValue(p.params.weights.getParams());
 		assertFalse(Double.isNaN(v));
 	}
 }

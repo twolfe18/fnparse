@@ -101,10 +101,7 @@ public class FeatureCountFilter {
 		if(keep == null)
 			throw new IllegalStateException("you have to call this.filterByCount() before you call this method");
 		
-		boolean first = true;
 		for(FactorGraph fg : Arrays.asList(instance.getFgLat(), instance.getFgLatPred())) {
-			System.out.println("starting " + (first ? "fgLat" : "fgLatPred"));
-			first = false;
 			for(Factor f : fg.getFactors()) {
 				if(f instanceof ExplicitExpFamFactor) {
 					ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
@@ -118,14 +115,10 @@ public class FeatureCountFilter {
 						});
 					}
 				}
-				else
-					System.err.println("[FeatureCountFilter] f=" + f.getClass());
-				//			else {
-				//				Class<?> cl = f.getClass();
-				//				Integer c = missed.get(cl);
-				//				if(c == null) c = 0;
-				//				missed.put(cl, c + 1);
-				//			}
+				
+				// I don't think i need to prune the clamped versions because i think they
+				// point to the original factor which will be pruned
+				//else System.err.println("[FeatureCountFilter] f=" + f.getClass());
 			}
 		}
 	}

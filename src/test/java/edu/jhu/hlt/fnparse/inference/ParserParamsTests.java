@@ -19,10 +19,10 @@ public class ParserParamsTests {
 		double v = 1.45d;
 		
 		Parser p = new Parser();
-		p.params.model = new FgModel(d);
+		p.params.weights = new FgModel(d);
 		double[] weights = new double[d];
 		weights[k] = v;
-		p.params.model.updateModelFromDoubles(weights);
+		p.params.weights.updateModelFromDoubles(weights);
 		
 		File f = File.createTempFile("serialization-test", ".ser");
 		
@@ -34,7 +34,7 @@ public class ParserParamsTests {
 		ParserParams pp = (ParserParams) ois.readObject();
 		ois.close();
 		double[] newWeights = new double[d];
-		pp.model.updateDoublesFromModel(newWeights);
+		pp.weights.updateDoublesFromModel(newWeights);
 		for(int i=0; i<d; i++)
 			assertEquals(weights[i], newWeights[i], 1e-10);
 	}

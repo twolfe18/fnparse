@@ -62,7 +62,7 @@ import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -78,7 +78,7 @@ public class Parser {
 		PIPELINE_FRAME_ARG,
 		JOINT_FRAME_ARG
 	}
-	
+
 	public static class ParserParams implements Serializable {
 		
 		private static final long serialVersionUID = 1L;
@@ -92,8 +92,9 @@ public class Parser {
 		public boolean usePredictedFramesToTrainRoleId;	// otherwise use gold frames
 		
 		public Mode mode;
+		public FgModel weights;
 		public Alphabet<String> featIdx;
-		public FgModel model;
+
 		public HeadFinder headFinder;
 		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
@@ -132,7 +133,7 @@ public class Parser {
 	
 	public Parser(File f) {
 		System.out.println("[Parser] reading parser from " + f.getPath());
-		long start = System.currentTimeMillis();
+		//long start = System.currentTimeMillis();
 		try {
 			InputStream is = new FileInputStream(f);
 			if(f.getName().toLowerCase().endsWith(".gz"))
@@ -141,8 +142,8 @@ public class Parser {
 			params = (ParserParams) ois.readObject();
 			ois.close();
 			readIn = true;
-			System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
-					(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
+			//System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
+			//		(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
@@ -153,7 +154,7 @@ public class Parser {
 		params = new ParserParams();
 		params.debug = debug;
 		params.featIdx = new Alphabet<String>();
-		params.logDomain = false;
+		params.logDomain = true;
 		params.useLatentDepenencies = latentDeps;
 		params.mode = mode;
 		params.usePrototypes = false;
@@ -190,7 +191,7 @@ public class Parser {
 	}
 	
 	public void setMode(Mode m, boolean useLatentDeps) {
-		if(params.useLatentDepenencies != useLatentDeps && params.mode != null && params.model.l2Norm() > 1e-4)
+		if(params.useLatentDepenencies != useLatentDeps)
 			throw new RuntimeException("changing this on a trained model will break things");
 		params.mode = m;
 		params.useLatentDepenencies = useLatentDeps;
@@ -250,7 +251,7 @@ public class Parser {
 			FNTagging predictedFrames = p;
 			if(params.usePredictedFramesToTrainRoleId) {
 				FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
-				predictedFrames = fid.decode(params.model, infFactory());
+				predictedFrames = fid.decode(params.weights, infFactory());
 			}
 			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
 			LabeledFgExample e = argId.getTrainingExample();
@@ -259,30 +260,44 @@ public class Parser {
 		else throw new RuntimeException();
 	}
 
+	/**
+	 * Goes over the features in the given dataset and adds them to the alphabet.
+	 */
+	public void scanFeatures(List<FNParse> examples) {
+		scanFeatures(parses2examples(examples));
+	}
 
-	/** returns a modified alphabet */
-	private Alphabet<String> scanFeatures(FgExampleList exs) {
+	protected void scanFeatures(FgExampleList exs) {
 
-		long start = System.currentTimeMillis();
-		System.out.println("[scanFeatures] counting the number of parameters needed");
+		MultiTimer timer = new MultiTimer();
+		System.out.println("[scanFeatures] counting the number of parameters needed over " + exs.size() + " examples");
+		params.featIdx.startGrowth();
 		
 		// keep the set of features that are already in the model.
 		// e.g. you trained a frameId model, read it in, and now you want to train roleId.
 		//      you want to keep all of the frameId features and only filter the roleId features.
 		Alphabet<String> preExisting = new Alphabet<>(params.featIdx);
 		
+		// this stores counts in an array
+		// it gets the indices from the feature vectors, w/o knowing which alphabet they came from
 		FeatureCountFilter fcount = new FeatureCountFilter();
 
 		int maxIncrease = 0;
 		int maxExamplesInARow = 10;
-
-		int minExamples = 100;
-		int maxExamples = 5000;
+		int minExamples = params.mode == Mode.FRAME_ID ? 300 : 50;
+		int maxExamples = 25000;
+		int maxAlphSize = 50 * 1000 * 1000;
+		double maxTimeInMinutes = 5 * 60;
 
 		int prevSize = params.featIdx.size();
 		int examplesSeen = 0;
 		int sameInARow = 0;
+		timer.start("compute-features");
+		timer.get("compute-features", true).ignoreFirstTime = true;
+		timer.get("compute-features", true).printIterval = 1;
 		for(FgExample fge : exs) {
+			timer.stop("compute-features");
+			timer.start("compute-features");
 			examplesSeen++;
 			fcount.observe(fge);
 			if(examplesSeen >= maxExamples) {
@@ -298,27 +313,56 @@ public class Parser {
 					sameInARow, maxIncrease);
 				break;
 			}
+			if(size > maxAlphSize) {
+				System.out.println("[scanFeatures] stopping because the alphabet grew to the max size: " + maxAlphSize);
+				break;
+			}
+			if(timer.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
+				System.out.println("[scanFeatures] stopping because we used the max time (in minutes): " + maxTimeInMinutes);
+				break;
+			}
 			prevSize = size;
 		}
+		timer.stop("compute-features");
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
-			examplesSeen, (System.currentTimeMillis() - start) / (1000d * 60d), params.featIdx.size());
-		
-		if(params.debug) {
-			System.out.println("[scanFeatures] not filtering features because we're in debug mode");
-			return params.featIdx;
-		}
-		else {
-			int minFeatureOccurrences = 3;
-			Alphabet<String> newFeatIdx = fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
-			for(FgExample fge : exs)
-				fcount.prune(fge);
-			return newFeatIdx;
-		}
+			examplesSeen, timer.totalTimeInSeconds() / 60d, params.featIdx.size());
+
+		int minFeatureOccurrences = 3;
+		params.featIdx = fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
+		params.featIdx.stopGrowth();
+	}
+	
+
+	/** for caching FgExamples, how many should we keep in memory? */
+	protected int keepInMemory() {
+		return params.mode == Mode.FRAME_ID ? 15000 : 1;
+	}
+	
+	/** pacaya needs an example list, this calls needed methods to convert from raw parses to examples */
+	protected FgExampleList parses2examples(List<FNParse> examples) {
+		RawExampleFactory rexs = new RawExampleFactory(examples, this);
+		int lim = params.mode == Mode.FRAME_ID
+				? 150
+				: (params.mode == Mode.PIPELINE_FRAME_ARG ? 30 : 1);
+		rexs.setTimerPrintInterval(lim);
+		int kim = keepInMemory();
+		if(kim <= 1) return rexs;
+		else return new FgExampleCache(rexs, kim, false);
 	}
 
 
-	public void train(List<FNParse> examples) { train(examples, 10, 5, 1d, 1d); }
-	public void train(List<FNParse> examples, int passes, int batchSize, double learningRateMultiplier, double regularizerMult) {
+	public void train(List<FNParse> examples) { train(examples, 10, 5, 1d, 1d, false); }
+
+	/**
+	 * @param examples
+	 * @param passes
+	 * @param batchSize
+	 * @param learningRateMultiplier if null, will do auto learning rate selection
+	 * @param regularizerMult
+	 * @param freezeAlphabet if true, will assume that the alphabet is fully populated. otherwise, we
+	 *                       scan the data for new features and filter out very rare features (extra step that takes a long time).
+	 */
+	public void train(List<FNParse> examples, int passes, int batchSize, Double learningRateMultiplier, double regularizerMult, boolean freezeAlphabet) {
 		
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
@@ -335,11 +379,16 @@ public class Parser {
 		}
 		
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
-
-		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
-		adagParams.eta = learningRateMultiplier;
-		
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();
+		AdaGrad.AdaGradPrm adagParams = new AdaGrad.AdaGradPrm();
+		if(learningRateMultiplier == null) {
+			adagParams.eta = 1d;
+			sgdParams.autoSelectLr = true;
+		}
+		else {
+			adagParams.eta = learningRateMultiplier;
+			sgdParams.autoSelectLr = false;
+		}
 		sgdParams.batchSize = batchSize;
 		sgdParams.numPasses = passes;
 		sgdParams.sched = new AdaGrad(adagParams);
@@ -349,34 +398,47 @@ public class Parser {
 		trainerParams.infFactory = infFactory();
 		trainerParams.numThreads = 1;	// can't do multithreaded until i make sure my feature extraction is serial (alphabet updates need locking)
 		
-		// setup the feature extraction
-		int keepInMemory = params.mode == Mode.FRAME_ID ? 15000 : 10;
-		RawExampleFactory rexs = new RawExampleFactory(examples, this);
-		FgExampleCache exs = new FgExampleCache(rexs, keepInMemory, false);
-		if(params.debug || true) {
-			int lim = params.mode == Mode.FRAME_ID
-					? 150
-					: (params.mode == Mode.PIPELINE_FRAME_ARG ? 30 : 1);
-			rexs.setTimerPrintInterval(lim);
-		}
+		FgExampleList exs = parses2examples(examples);
 
 		// compute how many features we need
-		params.featIdx.startGrowth();
-		params.featIdx = scanFeatures(exs);	// pass in the caching version
-		params.featIdx.stopGrowth();
+		if(!freezeAlphabet) {
+			
+			// count the number of features needed by scanning the data once
+			scanFeatures(exs);	// pass in the caching version
+
+			/* this doesn't work yet, we're going to recompute features
+			if(params.debug)
+				System.out.println("[scanFeatures] not filtering features because we're in debug mode");
+			else {
+				int minFeatureOccurrences = 3;
+				Alphabet<String> newFeatIdx = fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
+				for(FgExample fge : exs)
+					fcount.prune(fge);
+				params.featIdx = newFeatIdx;
+			}
+			 */
+
+			// flushing prune features is not working, make sure features are freshly computed
+			exs = parses2examples(examples);
+		}
+		else {
+			// otherwise, we have already scanned the file and the needed features are in the alphabet
+			System.out.printf("[Parser train] alphabet is frozen (size=%d), going straight into training\n", params.featIdx.size());
+			assert !params.featIdx.isGrowing();
+		}
 		
 		// setup model and train
 		int numParams = params.featIdx.size() + 1;
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
-		params.model = new FgModel(numParams);
+		params.weights = new FgModel(numParams);
 		trainerParams.regularizer = getRegularizer(numParams, regularizerMult);
 		try {
-			params.model = trainer.train(params.model, exs);
+			params.weights = trainer.train(params.weights, exs);
 		}
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
-		System.out.printf("[train] done training on %d examples for %.1f seconds\n", exs.size(), (System.currentTimeMillis()-start)/1000d);
+		System.out.printf("[train] done training on %d examples for %.1f minutes\n", exs.size(), (System.currentTimeMillis()-start)/(1000d*60d));
 		System.out.println("[train] params.featIdx.size = " + params.featIdx.size());
 	}
 	
@@ -389,12 +451,12 @@ public class Parser {
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
 			if(params.mode == Mode.FRAME_ID)
-				pred.add(new FrameIdSentence(s, params).decode(params.model, infFact));
+				pred.add(new FrameIdSentence(s, params).decode(params.weights, infFact));
 			else if(params.mode == Mode.JOINT_FRAME_ARG)
-				pred.add(new JointFrameRoleIdSentence(s, params).decode(params.model, infFact));
+				pred.add(new JointFrameRoleIdSentence(s, params).decode(params.weights, infFact));
 			else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-				FNTagging predictedFrames = new FrameIdSentence(s, params).decode(params.model, infFact);
-				pred.add(new RoleIdSentence(s, predictedFrames, params).decode(params.model, infFact));
+				FNTagging predictedFrames = new FrameIdSentence(s, params).decode(params.weights, infFact);
+				pred.add(new RoleIdSentence(s, predictedFrames, params).decode(params.weights, infFact));
 			}
 			else throw new RuntimeException();
 		}
@@ -414,56 +476,62 @@ public class Parser {
 			System.out.printf("[Parser tune] only using %d of %d examples\n", maxExamples, examples.size());
 			examples = DataUtil.reservoirSample(examples, maxExamples);
 		}
-		
-		Timer t = Timer.start("tune");
-		switch(params.mode) {
-		case FRAME_ID:
 
-			EvalFunc obj = BasicEvaluation.targetMicroF1;
-
-			List<Double> biases = new ArrayList<Double>();
+		List<Double> biases;
+		EvalFunc obj;
+		ApproxF1MbrDecoder decoder;
+		if(params.mode == Mode.FRAME_ID) {
+			obj = BasicEvaluation.targetMicroF1;
+			decoder = params.frameDecoder;
+			biases = new ArrayList<Double>();
 			for(double b=0.4d; b<7d; b*=1.3d) biases.add(b);
-
-			double bestScore = Double.NEGATIVE_INFINITY;
-			List<Double> scores = new ArrayList<Double>();
-			for(double b : biases) {
-				params.frameDecoder.setRecallBias(b);
-				List<FNParse> predicted = this.parseWithoutPeeking(examples);
-				List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
-				double score = BasicEvaluation.targetMicroF1.evaluate(instances);
-				System.out.printf("[Parser tune FRAME_ID] recallBias=%.2f %s=%.3f\n", b, obj.getName(), score);
-				scores.add(score);
-				if(score > bestScore) bestScore = score;
-			}
-
-			List<Double> regrets = new ArrayList<Double>();
-			for(double s : scores) regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
-
-			List<Double> weights = new ArrayList<Double>();
-			for(double r : regrets) weights.add(Math.exp(-r * 2));
-
-			double n = 0d, z = 0d;
-			for(int i=0; i<biases.size(); i++) {
-				double b = biases.get(i);
-				double w = weights.get(i);
-				n += w * b;
-				z += w;
-			}
-			double bias = n / z;
-			System.out.printf("[Parser tune FRAME_ID] took %.1f sec, done. recallBias %.2f => %.2f\n",
-				t.totalTimeInSec(), params.frameDecoder.getRecallBias(), bias);
-			params.frameDecoder.setRecallBias(bias);
-
-			break;
-
-		case PIPELINE_FRAME_ARG:
-			System.err.println("[Parser tune PIPELINE] not tuning because i need to implement this TODO");
-			break;
-		case JOINT_FRAME_ARG:
-			throw new RuntimeException("implement me");
-		default:
-			throw new RuntimeException("unknown mode: " + params.mode);
 		}
+		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
+			obj = BasicEvaluation.fullMicroF1;
+			decoder = params.argDecoder;
+			biases = Arrays.asList(1d, 2d, 4d);
+		}
+		else if(params.mode == Mode.JOINT_FRAME_ARG) {
+			System.err.println("[tune joint] implement me! doing nothing");
+			return;
+		}
+		else throw new RuntimeException();
+
+		tuneRecallBias(examples, decoder, obj, biases);
+	}
+	
+	private void tuneRecallBias(List<FNParse> examples, ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {
+		long t = System.currentTimeMillis();
+		double originalBias = decoder.getRecallBias();
+		double bestScore = Double.NEGATIVE_INFINITY;
+		List<Double> scores = new ArrayList<Double>();
+		for(double b : biases) {
+			decoder.setRecallBias(b);
+			List<FNParse> predicted = this.parseWithoutPeeking(examples);
+			List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
+			double score = obj.evaluate(instances);
+			System.out.printf("[tuneRecallBias %s] recallBias=%.2f %s=%.3f\n", params.mode, b, obj.getName(), score);
+			scores.add(score);
+			if(score > bestScore) bestScore = score;
+		}
+
+		List<Double> regrets = new ArrayList<Double>();
+		for(double s : scores) regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
+
+		List<Double> weights = new ArrayList<Double>();
+		for(double r : regrets) weights.add(Math.exp(-r * 2));
+
+		double n = 0d, z = 0d;
+		for(int i=0; i<biases.size(); i++) {
+			double b = biases.get(i);
+			double w = weights.get(i);
+			n += w * b;
+			z += w;
+		}
+		double bestBias = n / z;
+		System.out.printf("[tuneRecalBias %s] took %.1f minutes, done. recallBias %.2f => %.2f\n",
+				params.mode, (System.currentTimeMillis()-t)/(1000d*60d), originalBias, bestBias);
+		decoder.setRecallBias(bestBias);
 	}
 	
 
@@ -472,15 +540,15 @@ public class Parser {
 	 */
 	public void writeWeights(File f) {
 		System.out.println("[writeoutWeights] to " + f.getPath());
-		if(params.model == null)
+		if(params.weights == null)
 			throw new IllegalStateException();
 		long start = System.currentTimeMillis();
 		try {
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
-			int n = params.model.getNumParams();	// overestimate
+			int n = params.weights.getNumParams();	// overestimate
 			assert n >= params.featIdx.size();
 			double[] outParams = new double[n];
-			params.model.updateDoublesFromModel(outParams);
+			params.weights.updateDoublesFromModel(outParams);
 			for(int i=0; i<params.featIdx.size(); i++)
 				w.write(String.format("%f\t%s\n", outParams[i], params.featIdx.lookupObject(i)));
 			w.close();

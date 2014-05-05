@@ -4,6 +4,8 @@ import java.util.*;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.features.Path.EdgeType;
+import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures> implements Features.R {
@@ -34,23 +36,45 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		boolean argRealized = argHead < sent.size();
 		LexicalUnit aHead = !argRealized ? AbstractFeatures.luEnd : sent.getLU(argHead);
 		
-		b(fv, r, fsrs, "intercept");
+		b(fv, r, 4d, fsrs, "intercept");
+		b(fv, r, 2d, rs, "intercept");
 
-		if(argHead > targetHead)
+		if(argHead > targetHead) {
+			b(fv, r, rs, "arg_after_target");
 			b(fv, r, fsrs, "arg_after_target");
-		else if(argHead < targetHead)
+		}
+		else if(argHead < targetHead) {
+			b(fv, r, rs, "arg_before_target");
 			b(fv, r, fsrs, "arg_before_target");
-		else
+		}
+		else {
+			b(fv, r, rs, "arg=target");
 			b(fv, r, fsrs, "arg=target");
+		}
 		
+		b(fv, r, rs, "roleHead", aHead.word);
+		b(fv, r, rs, "roleHead", aHead.pos);
+		b(fv, r, rs, "roleHead", aHead.getFullString());
 		b(fv, r, fsrs, "roleHead", aHead.word);
 		b(fv, r, fsrs, "roleHead", aHead.pos);
 		b(fv, r, fsrs, "roleHead", aHead.getFullString());
 		
+		b(fv, r, rs, "targetHead", tHead.word);
+		b(fv, r, rs, "targetHead", tHead.pos);
+		b(fv, r, rs, "targetHead", tHead.getFullString());
 		b(fv, r, fsrs, "targetHead", tHead.word);
 		b(fv, r, fsrs, "targetHead", tHead.pos);
 		b(fv, r, fsrs, "targetHead", tHead.getFullString());
 		
+		b(fv, r, rs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
+		b(fv, r, rs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
+		b(fv, r, rs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
+		b(fv, r, rs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+		b(fv, r, rs, "argHead", aHead.word, "targetHead", tHead.word);
+		b(fv, r, rs, "argHead", aHead.word, "targetHead", tHead.pos);
+		b(fv, r, rs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
+		b(fv, r, rs, "argHead", aHead.pos, "targetHead", tHead.word);
+		b(fv, r, rs, "argHead", aHead.pos, "targetHead", tHead.pos);
 		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
 		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
 		b(fv, r, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
@@ -71,6 +95,10 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 				String a = "argOffset=" + argOffset;
 				LexicalUnit tLU = AbstractFeatures.getLUSafe(targetHead + targetOffset, sent);
 				LexicalUnit aLU = AbstractFeatures.getLUSafe(argHead + argOffset, sent);
+				b(fv, r, rs, t, tLU.word, a, aLU.word);
+				b(fv, r, rs, t, tLU.pos,  a, aLU.word);
+				b(fv, r, rs, t, tLU.word, a, aLU.pos);
+				b(fv, r, rs, t, tLU.pos,  a, aLU.pos);
 				b(fv, r, fsrs, t, tLU.word, a, aLU.word);
 				b(fv, r, fsrs, t, tLU.pos,  a, aLU.word);
 				b(fv, r, fsrs, t, tLU.word, a, aLU.pos);
@@ -80,8 +108,25 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		
 		// dependency tree features
 		if(params.useSyntaxFeatures) {
-			if(argRealized && sent.governor(argHead) == targetHead)
+
+			if(argRealized && sent.governor(argHead) == targetHead) {
 				b(fv, r, 3d, "trigger-arg-dep");
+				b(fv, r, 2d, rs, "trigger-arg-dep");
+				b(fv, r, 2d, fsrs, "trigger-arg-dep");
+			}
+			
+			/* TODO there is something wrong with my Path class... debug that...
+			for(Path p : Arrays.asList(
+					new Path(sent, targetHead, argHead, NodeType.POS, EdgeType.DEP),
+					new Path(sent, targetHead, argHead, NodeType.LEMMA, EdgeType.DIRECTION),
+					new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DEP),
+					new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DIRECTION))) {
+				String ps = p.getPath();
+				b(fv, r, rs, "path", ps);
+				b(fv, r, fsrs, "path", ps);
+			}
+			*/
+			
 			// TODO more?
 			// common parent (path, word, etc)
 			// children of target ~ arg
@@ -92,3 +137,8 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 	}
 
 }
+
+
+
+
+

@@ -84,9 +84,12 @@ public class RoleVars implements FgRelated {
 				boolean argRealized = (j == jGold);
 
 				if(params.argPruner.pruneArgHead(t, k, j, sent)) {
-					if(verbose && argRealized) {
-						System.err.printf("[RoleVars] pruned %s.%s for head \"%s\"\n",
-								gold.getFrame().getName(), gold.getFrame().getRole(k), sent.getWord(j));
+					if(argRealized) {
+						params.argPruner.falsePrune();
+						if(verbose) {
+							System.err.printf("[RoleVars] pruned %s.%s for head \"%s\"\n",
+									gold.getFrame().getName(), gold.getFrame().getRole(k), sent.getWord(j));
+						}
 					}
 					continue;
 				}

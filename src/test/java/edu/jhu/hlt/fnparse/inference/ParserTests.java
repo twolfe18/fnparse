@@ -112,7 +112,7 @@ public class ParserTests {
 		assertTrue(p.params.debug);
 		assertEquals(Mode.FRAME_ID, p.params.mode);
 		assertTrue(p.params.featIdx.size() > 0);
-		assertTrue(p.params.model.l2Norm() > 0d);
+		assertTrue(p.params.weights.l2Norm() > 0d);
 	}
 	
 	public static Parser getFrameIdTrainedOnDummy() {
@@ -134,7 +134,7 @@ public class ParserTests {
 
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
-			p.train(train, 15, 1, 0.5d, 100d);
+			p.train(train, 15, 1, 0.5d, 100d, true);
 			p.writeWeights(new File("saved-models/testing/" + desc + ".txt"));
 		}
 
