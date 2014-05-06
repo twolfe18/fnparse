@@ -299,11 +299,6 @@ public class Parser {
 		System.out.println("[scanFeatures] counting the number of parameters needed over " + exs.size() + " examples");
 		params.featIdx.startGrowth();
 		
-		// keep the set of features that are already in the model.
-		// e.g. you trained a frameId model, read it in, and now you want to train roleId.
-		//      you want to keep all of the frameId features and only filter the roleId features.
-		Alphabet<String> preExisting = new Alphabet<>(params.featIdx);
-		
 		// this stores counts in an array
 		// it gets the indices from the feature vectors, w/o knowing which alphabet they came from
 		FeatureCountFilter fcount = new FeatureCountFilter();
@@ -352,6 +347,10 @@ public class Parser {
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
 			examplesSeen, timer.totalTimeInSeconds() / 60d, params.featIdx.size());
 
+		// keep the set of features that are already in the model.
+		// e.g. you trained a frameId model, read it in, and now you want to train roleId.
+		//      you want to keep all of the frameId features and only filter the roleId features.
+		Alphabet<String> preExisting = new Alphabet<>(params.featIdx);
 		int minFeatureOccurrences = 3;
 		params.featIdx = fcount.filterByCount(params.featIdx, minFeatureOccurrences, preExisting);
 		params.featIdx.stopGrowth();
@@ -360,7 +359,7 @@ public class Parser {
 
 	/** for caching FgExamples, how many should we keep in memory? */
 	protected int keepInMemory() {
-		return params.mode == Mode.FRAME_ID ? 15000 : 1;
+		return params.mode == Mode.FRAME_ID ? 500 : 1;
 	}
 	
 	/** pacaya needs an example list, this calls needed methods to convert from raw parses to examples */
