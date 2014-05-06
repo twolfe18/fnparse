@@ -135,12 +135,14 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				// this is the only factor which introduces loops
 				if(params.useLatentDepenencies && depFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
 					feats.set(s, i, t, rvar.j, rvar.k);
-					LinkVar link = l.getLinkVar(i, rvar.j);
-					assert link != null;
-					VarSet vs = new VarSet(rvar.roleVar, link);
-					phi = bbfh.getFactor(vs);
-					assert phi != null;
-					factors.add(phi);
+					if(rvar.j < s.size()) {	// j==sent.size means "not realized argument"
+						LinkVar link = l.getLinkVar(i, rvar.j);
+						assert link != null;
+						VarSet vs = new VarSet(rvar.roleVar, link);
+						phi = bbfh.getFactor(vs);
+						assert phi != null;
+						factors.add(phi);
+					}
 				}
 
 				// r_itjk ~ r_itjk^e
