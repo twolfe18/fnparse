@@ -125,7 +125,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 					Refinements diagRef = new Refinements("child-of-target");
 					for(int j=0; j<n; j++) {
 						if(i == j) continue;
-						vs = new VarSet(fhyp.getVariable(tIdx), l.getLinkVar(i, j));
+						LinkVar l_ij = l.getLinkVar(i, j);
+						if(l_ij == null) continue;
+						vs = new VarSet(fhyp.getVariable(tIdx), l_ij);
 						phi = new ExplicitExpFamFactor(vs);
 						fv = null;
 						FeatureVector fvInv = null;

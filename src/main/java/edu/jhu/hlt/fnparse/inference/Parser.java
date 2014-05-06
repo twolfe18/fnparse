@@ -469,6 +469,17 @@ public class Parser {
 		assert verifyParamConsistency(params);
 	}
 	
+	public List<FNParse> parseUsingGoldFrameId(List<FNParse> gold) {
+		if(params.mode != Mode.PIPELINE_FRAME_ARG)
+			throw new IllegalArgumentException();
+		FgInferencerFactory infFact = infFactory();
+		List<FNParse> predicted = new ArrayList<>();
+		for(FNParse p : gold) {
+			RoleIdSentence ris = new RoleIdSentence(p.getSentence(), p, params);
+			predicted.add(ris.decode(params.weights, infFact));
+		}
+		return predicted;
+	}
 	
 	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
 		return parse(DataUtil.stripAnnotations(raw));

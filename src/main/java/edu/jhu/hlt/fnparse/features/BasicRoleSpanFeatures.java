@@ -202,13 +202,4 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		
 	}
 	
-	private final String intTrunc(int value, int max) {
-		assert value >= 0;
-		assert max >= 0;
-		if(value > max)
-			return (max+1) + "+";
-		else
-			return String.valueOf(value);
-	}
-
 }

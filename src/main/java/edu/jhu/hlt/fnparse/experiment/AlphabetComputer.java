@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -19,7 +20,7 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  */
 public class AlphabetComputer {
 	
-	public static double scanFeaturesTimeInMinutes = 15;
+	public static double scanFeaturesTimeInMinutes = 30;
 	public static boolean checkForPreExistingModelFile = false;
 	
 	public static void main(String[] args) {
@@ -30,12 +31,18 @@ public class AlphabetComputer {
 			System.out.println("2) a parser mode (\"frameId\", \"argId\", or \"jointId\")");
 			System.out.println("3) a syntax mode (\"none\", \"latent\", or \"regular\")");
 			System.out.println("4) [optional] an existing model for pipeline training");
-			System.out.println("5) [optional] how many minutes to run this for (default is 15 minutes)");
+			System.out.println("5) [optional] how many minutes to run this for (default is 30 minutes)");
 			return;
 		}
 		
-		if(args.length == 5)
-			scanFeaturesTimeInMinutes = Double.parseDouble(args[4]);
+		boolean lastArgIsTimeout = false;
+		if(args.length > 3) {
+			try {
+				scanFeaturesTimeInMinutes = Double.parseDouble(args[args.length-1]);
+				lastArgIsTimeout = true;
+			}
+			catch(Exception e) {}
+		}
 		
 		File saveModelTo = new File(args[0]);
 		if(checkForPreExistingModelFile && saveModelTo.isFile())
@@ -50,21 +57,21 @@ public class AlphabetComputer {
 		else throw new RuntimeException("not supported");
 		
 		String syntaxMode = args[2].toLowerCase();
+		if(!Arrays.asList("none", "latent", "regular").contains(syntaxMode))
+			throw new RuntimeException("unknown syntax mode: " + syntaxMode);
 		boolean latentSyntax = syntaxMode.equals("latent");
 		boolean noSyntaxFeatures = syntaxMode.equals("none");
 		
 		Parser p;	// either make new one or read from file if provided
-		File existingModel = args.length == 3 ? null : new File(args[3]);
-		if(existingModel != null) {
-			p = new Parser(existingModel);
+		if(args.length == 5 || (args.length == 4 && !lastArgIsTimeout)) {
+			p = new Parser(new File(args[3]));
 			p.setMode(mode, latentSyntax);
 		}
 		else {
 			p = new Parser(mode, latentSyntax, false);
+			assert mode != Mode.PIPELINE_FRAME_ARG;
 		}
 		p.params.useSyntaxFeatures = !noSyntaxFeatures;
-		
-		assert !(mode == Mode.PIPELINE_FRAME_ARG && existingModel == null);
 
 		// get the data
 		DataSplitter ds = new DataSplitter();

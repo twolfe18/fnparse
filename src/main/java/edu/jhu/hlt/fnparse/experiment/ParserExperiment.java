@@ -14,17 +14,17 @@ import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 public class ParserExperiment {
 
 	public static Mode parserMode;
-	// TODO syntax mode
 	private static File alphabetModelFile;	// input
 	
 	public static void main(String[] args) {
 		
-		if(args.length != 4) {
+		if(args.length != 5) {
 			System.out.println("please provide:");
 			System.out.println("1) a mode (e.g. \"frameId\" or \"argId\")");
 			System.out.println("2) a job index (run with -1 to see options)");
 			System.out.println("3) a working directory (for output files");
 			System.out.println("4) an alphabet model that specifies which features to use (use AlphabetComputer)");
+			System.out.println("5) a syntax mode (either \"regular\", \"none\", or \"latent\")");
 			return;
 		}
 		System.out.println("[main] args=" + Arrays.toString(args));
@@ -49,11 +49,13 @@ public class ParserExperiment {
 		// job index
 		long start = System.currentTimeMillis();
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(40, 400, 1600, 999999));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 200, 800, 999999));
 		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 25));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 10, 100));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 30));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
-		Option<String> syntaxMode = ajh.addOption("syntaxMode", Arrays.asList("regular", "noSyntax", "latentSyntax"));
+		Option<Boolean> useGoldFrames = null;
+		if(parserMode == Mode.PIPELINE_FRAME_ARG)
+			useGoldFrames = ajh.addOption("useGoldFrames", Arrays.asList(true, false));
 		int jobIdx = Integer.parseInt(args[1]);
 		if(jobIdx < 0) {
 			System.out.println(ajh.helpString(999999));
@@ -67,6 +69,11 @@ public class ParserExperiment {
 		if(!alphabetModelFile.isFile())
 			throw new RuntimeException(alphabetModelFile.getPath() + " is not a file\n  use AlphabetComputer to make an alphabet model");
 		
+		// syntax mode
+		String syntaxMode = args[4];
+		if(!Arrays.asList("regular", "none", "latent").contains(syntaxMode))
+			throw new IllegalStateException("unknown syntax mode: " + syntaxMode);
+		
 		// get the data
 		DataSplitter ds = new DataSplitter();
 		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
@@ -77,10 +84,6 @@ public class ParserExperiment {
 		ds.split(all, trainTune, test, 0.2d, "fn15_train-test");
 		ds.split(trainTune, train, tune, Math.min(75, (int) (0.15d * trainTune.size())), "fn15_train-tune");
 		
-		// DEBUGGING:
-		tune = DataUtil.reservoirSample(tune, 40);
-		test = DataUtil.reservoirSample(test, 50);
-		
 		if(nTrainLimit.get() < train.size())
 			train = DataUtil.reservoirSample(train, nTrainLimit.get());
 		List<FNParse> trainSubset = DataUtil.reservoirSample(train, test.size());
@@ -89,8 +92,9 @@ public class ParserExperiment {
 		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
 		
 		// create parser
-		boolean latentSyntax = "latentSyntax".equals(syntaxMode.get());
-		boolean noSyntaxFeatures = "noSyntax".equals(syntaxMode.get());
+		boolean latentSyntax = "latent".equals(syntaxMode);
+		boolean noSyntaxFeatures = "none".equals(syntaxMode);
+		assert !(latentSyntax && noSyntaxFeatures);
 		if(latentSyntax) assert noSyntaxFeatures;
 		Parser parser = new Parser(alphabetModelFile);
 		parser.setMode(parserMode, latentSyntax);
@@ -123,14 +127,20 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", test.size());
-		predicted = parser.parseWithoutPeeking(test);
+		if(useGoldFrames != null && useGoldFrames.get())
+			predicted = parser.parseUsingGoldFrameId(test);
+		else
+			predicted = parser.parseWithoutPeeking(test);
 		results = BasicEvaluation.evaluate(test, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		// evaluate (train data)
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
-		predicted = parser.parseWithoutPeeking(trainSubset);
+		if(useGoldFrames != null && useGoldFrames.get())
+			predicted = parser.parseUsingGoldFrameId(trainSubset);
+		else
+			predicted = parser.parseWithoutPeeking(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();

@@ -44,6 +44,17 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	public List<Integer> dontRegularize() {
 		return Collections.emptyList();
 	}
+
+
+	public static final String intTrunc(int value, int max) {
+		assert value >= 0;
+		assert max >= 0;
+		if(value > max)
+			return (max+1) + "+";
+		else
+			return String.valueOf(value);
+	}
+
 	
 	/*
 	 * adds a refinement to this feature function.
