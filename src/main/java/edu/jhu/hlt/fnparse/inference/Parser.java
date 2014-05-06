@@ -168,7 +168,7 @@ public class Parser {
 		params.mode = mode;
 		params.usePrototypes = false;
 		params.useSyntaxFeatures = true;
-		params.usePredictedFramesToTrainRoleId = true;
+		params.usePredictedFramesToTrainRoleId = false;
 		params.fastFeatNames = debug;
 		params.targetPruningData = TargetPruningData.getInstance();
 

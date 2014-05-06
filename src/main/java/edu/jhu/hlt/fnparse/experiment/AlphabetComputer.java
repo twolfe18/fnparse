@@ -81,6 +81,11 @@ public class AlphabetComputer {
 		ds.split(all, train, test, 0.2d, "fn15_train-test");
 		test = null;	// don't need this
 		Collections.shuffle(train);	// make sure they aren't sorted by frame for instance
+		
+		
+		// debugging
+		p.params.usePredictedFramesToTrainRoleId = false;
+
 
 		p.scanFeatures(train, scanFeaturesTimeInMinutes);
 		p.train(Collections.<FNParse>emptyList(), 1, 1, 1d, 1d, true);
