@@ -1,0 +1,6 @@
+#!/bin/bash
+
+# use this script for viewing a serialized model (rather than a text file)
+
+java -cp target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar edu.jhu.hlt.fnparse.util.ModelViewer $@
+
