@@ -449,7 +449,7 @@ public class Parser {
 		else {
 			// otherwise, we have already scanned the file and the needed features are in the alphabet
 			System.out.printf("[Parser train] alphabet is frozen (size=%d), going straight into training\n", params.featIdx.size());
-			assert !params.featIdx.isGrowing();
+			params.featIdx.stopGrowth();
 		}
 		
 		// setup model and train

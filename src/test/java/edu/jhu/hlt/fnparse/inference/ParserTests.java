@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -61,6 +62,11 @@ public class ParserTests {
 			System.out.println("[setupDummyParse] adding instance of " + jump);
 		
 		return new FNParse(s, instances);
+	}
+	
+	@Before
+	public void ensureWorkingDirExists() {
+		new File("saved-models/testing").mkdirs();
 	}
 	
 	@Test
@@ -134,7 +140,7 @@ public class ParserTests {
 
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
-			p.train(train, 15, 1, 0.5d, 100d, true);
+			p.train(train, 15, 1, null, 10000d, false);
 			p.writeWeights(new File("saved-models/testing/" + desc + ".txt"));
 		}
 
