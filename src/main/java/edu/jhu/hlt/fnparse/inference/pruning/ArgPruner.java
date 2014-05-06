@@ -153,14 +153,14 @@ public class ArgPruner implements Serializable, IArgPruner {
 		this.lexMethod = lexMethod;
 	}
 
-	public void clearCachedFiles() {
+	public synchronized void clearCachedFiles() {
 		if(persistRoleSynsetMapTo != null)
 			persistRoleSynsetMapTo.delete();
 		if(persistRoleWordMapTo != null)
 			persistRoleWordMapTo.delete();
 	}
 	
-	public void serialize() {
+	public synchronized void serialize() {
 		writeLUTensor(persistRoleSynsetMapTo, getRoleSynsetMap());
 		writeLUTensor(persistRoleWordMapTo, getRoleWordMap());
 	}
@@ -202,7 +202,9 @@ public class ArgPruner implements Serializable, IArgPruner {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private void init() {
+	private synchronized void init() {
+		if(roleSynsetMap != null && roleWordMap != null)
+			return;
 		if(persistRoleWordMapTo != null && persistRoleWordMapTo.isFile() &&
 				persistRoleSynsetMapTo != null && persistRoleSynsetMapTo.isFile()) {
 			roleWordMap = readLUTensor(persistRoleWordMapTo);

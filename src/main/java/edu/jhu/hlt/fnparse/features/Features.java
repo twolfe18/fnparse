@@ -32,17 +32,9 @@ public interface Features {
 	public static interface F extends Features {
 		public void featurize(FeatureVector v, Refinements r, int i, Frame t, Sentence s);
 	}
-	/** frame + link */
-	public static interface FD extends Features {
-		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int l, Sentence s);
-	}
 	/** frame + role */
 	public static interface R extends Features {
 		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Sentence s);
-	}
-	/** frame + role + link */
-	public static interface RD extends Features {
-		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, int l, Sentence s);
 	}
 	/** frame + role + expansion */
 	public static interface RE extends Features {

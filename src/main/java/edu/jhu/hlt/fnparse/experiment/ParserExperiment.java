@@ -47,8 +47,8 @@ public class ParserExperiment {
 		long start = System.currentTimeMillis();
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 200, 800, 999999));
-		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 25));
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(1, 30));
+		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 15));
+		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(4, 40));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(300d, 1000d, 3000d, 10000d, 30000d));
 		Option<Boolean> useGoldFrames = null;
 		if(parserMode == Mode.PIPELINE_FRAME_ARG)
@@ -91,11 +91,11 @@ public class ParserExperiment {
 		// create parser
 		boolean latentSyntax = "latent".equals(syntaxMode);
 		boolean noSyntaxFeatures = "none".equals(syntaxMode);
-		assert !(latentSyntax && noSyntaxFeatures);
-		if(latentSyntax) assert noSyntaxFeatures;
 		Parser parser = new Parser(alphabetModelFile);
 		parser.setMode(parserMode, latentSyntax);
 		parser.params.useSyntaxFeatures = !noSyntaxFeatures;
+		if(latentSyntax)
+			parser.params.useSyntaxFeatures = false;
 		System.out.printf("[ParserExperiment] this model was read in from %s, "
 				+ "and i'm assuming that this model's alphabet (size=%d) already "
 				+ "includes all of the features needed to train in %s mode\n",

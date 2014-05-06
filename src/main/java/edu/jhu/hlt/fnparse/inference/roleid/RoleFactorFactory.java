@@ -1,11 +1,23 @@
 package edu.jhu.hlt.fnparse.inference.roleid;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.model.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
-import edu.jhu.hlt.fnparse.features.*;
+import edu.jhu.gm.model.ExplicitExpFamFactor;
+import edu.jhu.gm.model.Factor;
+import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
+import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.AbstractFeatures;
+import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
+import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
@@ -23,38 +35,71 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	private static final long serialVersionUID = 1L;
 	
 	public final ParserParams params;
-	public final boolean includeGovFactors;
-	public final boolean includeDepFactors;
 	public final boolean includeExpansionBinaryFactor;
-
+	public final BinaryBinaryFactorHelper.Mode depFactorMode;
+	
 	/**
 	 * @param params
 	 * @param includeDepFactors include binary r_itjk ~ l_jm factors
 	 * @param includeGovFactors include binary r_itjk ~ l_mj factors
 	 */
-	public RoleFactorFactory(ParserParams params, boolean includeDepFactors, boolean includeGovFactors, boolean includeExpansionBinaryFactor) {
+	public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode depFactorMode, boolean includeExpansionBinaryFactor) {
 		this.params = params;
-		this.includeDepFactors = includeDepFactors;
-		this.includeGovFactors = includeGovFactors;
+		this.depFactorMode = depFactorMode;
 		this.includeExpansionBinaryFactor = includeExpansionBinaryFactor;
+
+		if(!params.useLatentDepenencies)
+			assert depFactorMode == BinaryBinaryFactorHelper.Mode.NONE;
 	}
+	
+	
+	private static class RoleDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
+		private ParserParams params;
+		private String refinement;
+		
+		public RoleDepObservedFeatures(ParserParams params, String ref) {
+			this.params = params;
+			this.refinement = ref;
+		}
+		
+		private Sentence sent;
+		private int i, j, k;
+		private Frame t;
+		
+		public void set(Sentence sent, int i, Frame t, int j, int k) {
+			this.sent = sent;
+			this.i = i;
+			this.t = t;
+			this.j = j;
+			this.k = k;
+		}
+
+		@Override
+		public FeatureVector getObservedFeatures(Refinements r) {
+			r = Refinements.product(r, this.refinement, 1d);
+			FeatureVector fv = new FeatureVector();
+			params.rFeatures.featurize(fv, r, i, t, j, k, sent);
+			params.fFeatures.featurize(fv, r, i, t, sent);
+			return fv;
+		}
+	}
+	
 	
 	/**
 	 * instantiates the following factors:
 	 * r_itjk ~ 1
 	 * r_itjk^e ~ 1
+	 * r_itjk ~ l_ij
 	 * r_itjk ~ r_itjk^e
-	 * r_itjk ~ l_*j
-	 * r_itjk ~ l_j*
 	 * 
 	 * TODO create an Exactly1 factor for r_{i,t,j=*,k}
 	 */
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l) {
+
+		RoleDepObservedFeatures feats = new RoleDepObservedFeatures(params, "r_itjk~l_ij");
+		BinaryBinaryFactorHelper bbfh = new BinaryBinaryFactorHelper(depFactorMode, feats);
 		
-		FeatureVector fv;
-		ExplicitExpFamFactor phi;
-		final int n = s.size();
 		List<Factor> factors = new ArrayList<Factor>();
 		for(RoleVars rv : fr) {
 
@@ -67,9 +112,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				RVar rvar = it.next();
 				
 				// r_itjk ~ 1
-				fv = new FeatureVector();
+				FeatureVector fv = new FeatureVector();
 				params.rFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, s);
-				phi = new ExplicitExpFamFactor(new VarSet(rvar.roleVar));
+				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(new VarSet(rvar.roleVar));
 				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
 				factors.add(phi);
@@ -86,44 +131,18 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 					factors.add(phi);
 				}
 
-				// r_itjk ~ l_*j
-				if(this.includeGovFactors) {
-					for(int m=-1; m<n; m++) {
-						if(m == rvar.j) continue; 
-						if(rvar.j == n) continue;	// j="no arg" should not have children links
-						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(m, rvar.j));
-						phi = new ExplicitExpFamFactor(vs);
-						int C = vs.calcNumConfigs();
-						for(int c=0; c<C; c++) {
-							// TODO maybe only want r=1,l=1 config for speed?
-							Refinements r = new Refinements("gov-of-r-" + c);
-							fv = new FeatureVector();
-							params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
-							phi.setFeatures(c, fv);
-						}
-						factors.add(phi);
-					}
+				// r_itjk ~ l_ij
+				// this is the only factor which introduces loops
+				if(params.useLatentDepenencies && depFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
+					feats.set(s, i, t, rvar.j, rvar.k);
+					LinkVar link = l.getLinkVar(i, rvar.j);
+					assert link != null;
+					VarSet vs = new VarSet(rvar.roleVar, link);
+					phi = bbfh.getFactor(vs);
+					assert phi != null;
+					factors.add(phi);
 				}
 
-				// r_itjk ~ l_j*
-				if(this.includeDepFactors) {
-					for(int m=0; m<n; m++) {
-						if(m == rvar.j) continue;
-						if(rvar.j == n) continue;	// j="no arg" is never a parent
-						VarSet vs = new VarSet(rvar.roleVar, l.getLinkVar(rvar.j, m));
-						phi = new ExplicitExpFamFactor(vs);
-						int C = vs.calcNumConfigs();
-						for(int c=0; c<C; c++) {
-							// TODO maybe only want r=1,l=1 config for speed?
-							Refinements r = new Refinements("dep-of-r-" + c);
-							fv = new FeatureVector();
-							params.rdFeatures.featurize(fv, r, i, t, rvar.j, rvar.k, m, s);
-							phi.setFeatures(c, fv);
-						}
-						factors.add(phi);
-					}
-				}
-				
 				// r_itjk ~ r_itjk^e
 				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor) {
 					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
@@ -158,8 +177,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 		List<Features> features = new ArrayList<Features>();
 		features.add(params.rFeatures);
 		features.add(params.reFeatures);
-		if(this.includeDepFactors || this.includeGovFactors)
-			features.add(params.rdFeatures);
+		if(params.useLatentDepenencies && depFactorMode != BinaryBinaryFactorHelper.Mode.NONE)
+			features.add(params.fFeatures);
 		if(this.includeExpansionBinaryFactor)
 			features.add(params.reFeatures);
 		return features;

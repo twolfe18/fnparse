@@ -12,6 +12,7 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
+import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -27,35 +28,61 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
 	private static final long serialVersionUID = 1L;
 	
-	private ParserParams params;
-	private boolean includeDepFactors;
-	private boolean includeGovFactors;
-	private boolean onlyParemeterizeDiag;
+	public final ParserParams params;
+	public final BinaryBinaryFactorHelper.Mode rootFactorMode;
 	
-	/**
-	 * @param params
-	 * @param includeDepFactors include binary factors f_it ~ l_ij
-	 * @param includeGovFactors include binary factors f_it ~ l_ji
-	 */
-	public FrameFactorFactory(ParserParams params, boolean includeDepFactors, boolean includeGovFactors) {
+	public FrameFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode rootFactorMode) {
 		this.params = params;
-		this.includeDepFactors = false; //includeDepFactors;
-		this.includeGovFactors = includeGovFactors;
-		this.onlyParemeterizeDiag = true;
+		this.rootFactorMode = rootFactorMode;
 		
-		if(!params.useLatentDepenencies) {
-			assert !includeDepFactors;
-			assert !includeGovFactors;
-		}
+		if(!params.useLatentDepenencies)
+			assert rootFactorMode == BinaryBinaryFactorHelper.Mode.NONE;
 	}
 	
 	@Override
 	public String toString() { return "<FrameFactorFactory>"; }
 
+	/**
+	 * needed to interact with BinaryBinaryFactorHelper,
+	 * just implements partial application.
+	 */
+	private static class FrameDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
+		private ParserParams params;
+		private String refinement;
+		
+		public FrameDepObservedFeatures(ParserParams params, String refinement) {
+			this.params = params;
+			this.refinement = refinement;
+		}
+		
+		private Sentence sent;
+		private int i;
+		private Frame t;
+		
+		public void set(Sentence s, int i, Frame t) {
+			this.sent = s;
+			this.i = i;
+			this.t = t;
+		}
+		
+		@Override
+		public FeatureVector getObservedFeatures(Refinements r) {
+			r = Refinements.product(r, this.refinement, 1d);
+			FeatureVector fv = new FeatureVector();
+			params.fFeatures.featurize(fv, r, i, t, sent);
+			return fv;
+		}
+	}
+
+
 	// TODO need to add an Exactly1 factor to each FrameVars
 	// ^^^^ do i really need this if i'm not doing joint inference?
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
+
+		FrameDepObservedFeatures depFeats = new FrameDepObservedFeatures(params, "f_it~l_{root,i}");
+		BinaryBinaryFactorHelper bbfh = new BinaryBinaryFactorHelper(this.rootFactorMode, depFeats);
+
 		final int n = s.size();
 		assert n > 2 || fr.size() == 0;
 		List<Factor> factors = new ArrayList<Factor>();
@@ -75,94 +102,15 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
 				factors.add(phi);
 				
-				// binary factor f_it ~ l_ji
-				if(this.includeGovFactors) {
-					Refinements diagRef = new Refinements("parent-of-target");
-					for(int j=-1; j<n; j++) {
-						if(i == j) continue;
-						LinkVar l_ji = l.getLinkVar(j, i);
-						if(l_ji == null) continue;
-						vs = new VarSet(fhyp.getVariable(tIdx), l_ji);
-						phi = new ExplicitExpFamFactor(vs);
-						fv = null;
-						FeatureVector fvInv = null;
-						assert vs.calcNumConfigs() == 4;
-						for(int c=0; c<4; c++) {
-							int[] cfg = vs.getVarConfigAsArray(c);
-
-							if(onlyParemeterizeDiag) {
-								if(cfg[0] != cfg[1])
-									phi.setFeatures(c, AbstractFeatures.emptyFeatures);
-								else {
-									
-									// only need to compute features once
-									if(fv == null) {
-										fv = new FeatureVector();
-										params.fdFeatures.featurize(fv, diagRef, i, t, j, s);
-										fvInv = new FeatureVector(fv);
-										fvInv.scale(-1d);
-									}
-									
-									if(BinaryVarUtil.configToBool(cfg[0]))
-										phi.setFeatures(c, fv);
-									else
-										phi.setFeatures(c, fvInv);
-								}
-							}
-							else {
-								Refinements r = new Refinements("f=" + cfg[0] + ",lg=" + cfg[1]);
-								fv = new FeatureVector();
-								params.fdFeatures.featurize(fv, r, i, t, j, s);
-								phi.setFeatures(c, fv);
-							}
-						}
-						factors.add(phi);
-					}
-				}
-				
-				// binary factor f_it ~ l_ij
-				if(this.includeDepFactors) {
-					Refinements diagRef = new Refinements("child-of-target");
-					for(int j=0; j<n; j++) {
-						if(i == j) continue;
-						LinkVar l_ij = l.getLinkVar(i, j);
-						if(l_ij == null) continue;
-						vs = new VarSet(fhyp.getVariable(tIdx), l_ij);
-						phi = new ExplicitExpFamFactor(vs);
-						fv = null;
-						FeatureVector fvInv = null;
-						assert vs.calcNumConfigs() == 4;
-						for(int c=0; c<4; c++) {
-							int[] cfg = vs.getVarConfigAsArray(c);
-
-							if(onlyParemeterizeDiag) {
-								if(cfg[0] != cfg[1])
-									phi.setFeatures(c, AbstractFeatures.emptyFeatures);
-								else {
-									
-									// only need to compute features once
-									if(fv == null) {
-										fv = new FeatureVector();
-										params.fdFeatures.featurize(fv, diagRef, i, t, j, s);
-										fvInv = new FeatureVector(fv);
-										fvInv.scale(-1d);
-									}
-									
-									if(BinaryVarUtil.configToBool(cfg[0]))
-										phi.setFeatures(c, fv);
-									else
-										phi.setFeatures(c, fvInv);
-								}
-							}
-							else {
-								Refinements r = new Refinements("f=" + cfg[0] + ",ld=" + cfg[1]);
-								fv = new FeatureVector();
-								params.fdFeatures.featurize(fv, r, i, t, j, s);
-								phi.setFeatures(c, fv);
-							}
-						}
-						factors.add(phi);
-					}
+				// binary factor f_it ~ l_{root,i}
+				if(params.useLatentDepenencies && rootFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
+					depFeats.set(s, i, t);
+					LinkVar link = l.getLinkVar(-1, i);
+					assert link != null;
+					vs = new VarSet(fhyp.getVariable(tIdx), link);
+					phi = bbfh.getFactor(vs);
+					assert phi != null;
+					factors.add(phi);
 				}
 			}
 		}
@@ -173,8 +121,6 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	public List<Features> getFeatures() {
 		List<Features> feats = new ArrayList<Features>();
 		feats.add(params.fFeatures);
-		if(this.includeDepFactors || this.includeGovFactors)
-			feats.add(params.fdFeatures);
 		return feats;
 	}
 }

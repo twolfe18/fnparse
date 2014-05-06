@@ -38,54 +38,52 @@ public class PosUtil {
 	}
 	
 	private static Map<String, String> frameNetPosToPennPrefixes;
-	public static Map<String, String> getFrameNetPosToPennPrefixesMap() {
-		if(frameNetPosToPennPrefixes == null) {
-			frameNetPosToPennPrefixes = new HashMap<String, String>();
-			frameNetPosToPennPrefixes.put("A", "J");	// A=adjective
-			frameNetPosToPennPrefixes.put("ADV", "R");
-			frameNetPosToPennPrefixes.put("ART", "D");	// D=determiner
-			frameNetPosToPennPrefixes.put("C", "CC");
-			frameNetPosToPennPrefixes.put("INTJ", "UH");
-			frameNetPosToPennPrefixes.put("N", "NN");
-			frameNetPosToPennPrefixes.put("NUM", "CD");
-			frameNetPosToPennPrefixes.put("PREP", "IN");
-			frameNetPosToPennPrefixes.put("SCON", "IN");
-			frameNetPosToPennPrefixes.put("V", "V");
+	private static Map<String, List<String>> frameNetPosToAllPennTags;
+	private static Map<String, String> penn2frameNetPos;
+	static {
+		frameNetPosToPennPrefixes = new HashMap<String, String>();
+		frameNetPosToPennPrefixes.put("A", "J");	// A=adjective
+		frameNetPosToPennPrefixes.put("ADV", "R");
+		frameNetPosToPennPrefixes.put("ART", "D");	// D=determiner
+		frameNetPosToPennPrefixes.put("C", "CC");
+		frameNetPosToPennPrefixes.put("INTJ", "UH");
+		frameNetPosToPennPrefixes.put("N", "NN");
+		frameNetPosToPennPrefixes.put("NUM", "CD");
+		frameNetPosToPennPrefixes.put("PREP", "IN");
+		frameNetPosToPennPrefixes.put("SCON", "IN");
+		frameNetPosToPennPrefixes.put("V", "V");
+
+		frameNetPosToAllPennTags = new HashMap<String, List<String>>();
+		frameNetPosToAllPennTags.put("A", Arrays.asList("JJ", "JJR", "JJS"));
+		frameNetPosToAllPennTags.put("ADV", Arrays.asList("RB", "RBR", "RBS"));
+		frameNetPosToAllPennTags.put("ART", Arrays.asList("DT", "PDT"));
+		frameNetPosToAllPennTags.put("C", Arrays.asList("CC"));
+		frameNetPosToAllPennTags.put("INTJ", Arrays.asList("UH"));
+		frameNetPosToAllPennTags.put("N", Arrays.asList("NN", "NNP", "NNPS", "NNS"));
+		frameNetPosToAllPennTags.put("NUM", Arrays.asList("CD"));
+		frameNetPosToAllPennTags.put("PREP", Arrays.asList("IN"));
+		frameNetPosToAllPennTags.put("SCON", Arrays.asList("IN"));
+		frameNetPosToAllPennTags.put("V", Arrays.asList("VB", "VBD", "VBG", "VBN", "VBP", "VBZ"));
+
+		penn2frameNetPos = new HashMap<String, String>();
+		for(Map.Entry<String, List<String>> x : getFrameNetPosToAllPennTags().entrySet()) {
+			String fnTag = x.getKey();
+			for(String pennTag : x.getValue())
+				penn2frameNetPos.put(pennTag, fnTag);
 		}
+
+		// there is only one non-bijective case:
+		penn2frameNetPos.put("IN", "PREP");
+	}
+
+	public static Map<String, String> getFrameNetPosToPennPrefixesMap() {
 		return frameNetPosToPennPrefixes;
 	}
 	
-	private static Map<String, List<String>> frameNetPosToAllPennTags;
 	public static Map<String, List<String>> getFrameNetPosToAllPennTags() {
-		if(frameNetPosToAllPennTags == null) {
-			frameNetPosToAllPennTags = new HashMap<String, List<String>>();
-			frameNetPosToAllPennTags.put("A", Arrays.asList("JJ", "JJR", "JJS"));
-			frameNetPosToAllPennTags.put("ADV", Arrays.asList("RB", "RBR", "RBS"));
-			frameNetPosToAllPennTags.put("ART", Arrays.asList("DT", "PDT"));
-			frameNetPosToAllPennTags.put("C", Arrays.asList("CC"));
-			frameNetPosToAllPennTags.put("INTJ", Arrays.asList("UH"));
-			frameNetPosToAllPennTags.put("N", Arrays.asList("NN", "NNP", "NNPS", "NNS"));
-			frameNetPosToAllPennTags.put("NUM", Arrays.asList("CD"));
-			frameNetPosToAllPennTags.put("PREP", Arrays.asList("IN"));
-			frameNetPosToAllPennTags.put("SCON", Arrays.asList("IN"));
-			frameNetPosToAllPennTags.put("V", Arrays.asList("VB", "VBD", "VBG", "VBN", "VBP", "VBZ"));
-		}
 		return frameNetPosToAllPennTags;
 	}
-	
-	private static Map<String, String> penn2frameNetPos;
 	public static Map<String, String> getPennToFrameNetTags() {
-		if(penn2frameNetPos == null) {
-			penn2frameNetPos = new HashMap<String, String>();
-			for(Map.Entry<String, List<String>> x : getFrameNetPosToAllPennTags().entrySet()) {
-				String fnTag = x.getKey();
-				for(String pennTag : x.getValue())
-					penn2frameNetPos.put(pennTag, fnTag);
-			}
-			
-			// there is only one non-bijective case:
-			penn2frameNetPos.put("IN", "PREP");
-		}
 		return penn2frameNetPos;
 	}
 

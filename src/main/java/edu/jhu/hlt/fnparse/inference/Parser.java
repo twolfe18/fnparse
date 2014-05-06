@@ -40,10 +40,9 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleDepFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.DebuggingFrameDepFeatures;
+import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
@@ -104,9 +103,7 @@ public class Parser {
 		public int maxTrainSentenceLength;
 		
 		public Features.F  fFeatures;
-		public Features.FD fdFeatures;
 		public Features.R  rFeatures;
-		public Features.RD rdFeatures;
 		public Features.RE reFeatures;
 
 		// these are additive (as in when doing jointId, you include factors from factorsForFrameId)
@@ -178,23 +175,20 @@ public class Parser {
 		params.argPruner = new ArgPruner(params);
 		params.maxTrainSentenceLength = 50;	// <= 0 for no pruning
 		
-		params.factorsForFrameId = new FrameFactorFactory(params, latentDeps, latentDeps);
-		params.factorsForRoleId = new RoleFactorFactory(params, latentDeps, latentDeps, false);
+		BinaryBinaryFactorHelper.Mode fDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
+		BinaryBinaryFactorHelper.Mode rDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
+		params.factorsForFrameId = new FrameFactorFactory(params, fDepMode);
+		params.factorsForRoleId = new RoleFactorFactory(params, rDepMode, false);
 		params.factorsForJointId = new JointFactorFactory(params);
 		
 		if(params.debug) {
 			params.fFeatures = new DebuggingFrameFeatures(params);
-			params.fdFeatures = new DebuggingFrameDepFeatures(params);
 			params.rFeatures = new DebuggingRoleFeatures(params);
-			params.rdFeatures = new BasicRoleDepFeatures(params);
-			//params.reFeatures = new DebuggingRoleSpanFeatures(params);	// make sure these are not used on real data -- they will overfit
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 		else {
 			params.fFeatures = new BasicFrameFeatures(params);
-			params.fdFeatures = new DebuggingFrameDepFeatures(params);
 			params.rFeatures = new BasicRoleFeatures(params);
-			params.rdFeatures = new BasicRoleDepFeatures(params);
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 
@@ -312,14 +306,18 @@ public class Parser {
 		int prevSize = params.featIdx.size();
 		int examplesSeen = 0;
 		int sameInARow = 0;
-		timer.start("compute-features");
 		timer.get("compute-features", true).ignoreFirstTime = true;
 		timer.get("compute-features", true).printIterval = 1;
-		for(FgExample fge : exs) {
-			timer.stop("compute-features");
+		final int n = exs.size();
+		for(int i=0; i<n; i++) {
+
 			timer.start("compute-features");
+			FgExample fge = exs.get(i);
+			timer.stop("compute-features");
+
 			examplesSeen++;
 			fcount.observe(fge);
+
 			if(examplesSeen >= maxExamples) {
 				System.out.println("[scanFeatures] stopping because we saw " + maxExamples + " graphs");
 				break;
@@ -343,7 +341,6 @@ public class Parser {
 			}
 			prevSize = size;
 		}
-		timer.stop("compute-features");
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
 			examplesSeen, timer.totalTimeInSeconds() / 60d, params.featIdx.size());
 
@@ -421,7 +418,7 @@ public class Parser {
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
-		trainerParams.numThreads = 1;	// can't do multithreaded until i make sure my feature extraction is serial (alphabet updates need locking)
+		trainerParams.numThreads = 2;	// can't do multithreaded until i make sure my feature extraction is serial (alphabet updates need locking)
 		
 		FgExampleList exs = parses2examples(examples);
 

@@ -23,6 +23,24 @@ public class Refinements {
 		Arrays.fill(this.weights, 1d);
 	}
 	
+	public Refinements(String[] names, double[] weights) {
+		assert names.length == weights.length;
+		assert names.length > 0;
+		int n = names.length;
+		this.names = Arrays.copyOf(names, n);
+		this.weights = Arrays.copyOf(weights, n);
+	}
+	
+	public static Refinements product(Refinements from, String newName, double newWeight) {
+		Refinements r = new Refinements(from.names, from.weights);
+		int n = from.names.length;
+		for(int i=0; i<n; i++) {
+			r.names[i] += newName;
+			r.weights[i] *= newWeight;
+		}
+		return r;
+	}
+	
 	public void set(int i, String name, double weight) {
 		this.names[i] = name;
 		this.weights[i] = weight;

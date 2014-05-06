@@ -30,12 +30,15 @@ frameIdSetup:
 
 # just train one model, no parmeter sweep
 frameIdTrainOne:
-	mkdir -p saved-models/temp
-	time java -ea $(frameIdMem) $(gc) -cp $(cp) edu.jhu.hlt.fnparse.experiment.ParserExperiment \
-		frameId 73 saved-models/temp saved-models/alphabets/frameId-reg.model.gz regular \
+	#mkdir -p saved-models/temp
+	#time java -ea $(frameIdMem) $(gc) -cp $(cp) edu.jhu.hlt.fnparse.experiment.ParserExperiment \
+		frameId 44 saved-models/temp saved-models/alphabets/frameId-reg.model.gz regular \
 		2>&1 | tee saved-models/full/frameId-reg.log
-	mv -f saved-models/temp/FRAME_ID/FRAME_ID.model.gz saved-models/full/frameId-reg.model.gz
-	sort -n saved-models/temp/FRAME_ID/FRAME_ID.weights.txt >saved-models/full/frameId.weights.txt
+	#mv -f saved-models/temp/FRAME_ID.model.gz saved-models/full/frameId-reg.model.gz
+	time java -ea $(frameIdMem) $(gc) -cp $(cp) edu.jhu.hlt.fnparse.experiment.ParserExperiment \
+		frameId 44 saved-models/temp saved-models/alphabets/frameId-latent.model.gz latent \
+		2>&1 | tee saved-models/full/frameId-latent.log
+	mv -f saved-models/temp/FRAME_ID.model.gz saved-models/full/frameId-latent.model.gz
 
 
 # launch all the frame id training jobs to the grid
@@ -68,7 +71,7 @@ argIdSetup:
 argIdTrainOne:
 	mkdir -p saved-models/temp
 	time java -ea $(argIdMem) $(gc) -cp $(cp) edu.jhu.hlt.fnparse.experiment.ParserExperiment \
-		argId 12 saved-models/temp saved-models/alphabets/argId-reg.model.gz \
+		argId 12 saved-models/temp saved-models/alphabets/argId-reg.model.gz regular \
 		2>&1 | tee saved-models/full/argId-reg.log
 	mv -f saved-models/temp/PIPELINE_FRAME_ARG/PIPELINE_FRAME_ARG.model.gz saved-models/full/argId-reg.model.gz
 	sort -n saved-models/temp/PIPELINE_FRAME_ARG/PIPELINE_FRAME_ARG.weights.txt >saved-models/full/argId.weights.txt
