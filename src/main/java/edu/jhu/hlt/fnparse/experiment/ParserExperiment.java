@@ -38,12 +38,12 @@ public class ParserExperiment {
 		else throw new RuntimeException("unknown mode: " + m);
 		
 		// working directory
-		File workingDir = new File(args[2]);	// parent
+		File workingDir = new File(args[2]);
 		if(!workingDir.isDirectory())
 			workingDir.mkdir();
-		workingDir = new File(workingDir, parserMode.toString());
-		if(!workingDir.isDirectory())
-			workingDir.mkdir();
+		//workingDir = new File(workingDir, parserMode.toString());
+		//if(!workingDir.isDirectory())
+		//	workingDir.mkdir();
 		System.out.println("[main] workingDir = " + workingDir.getPath());
 		
 		// job index

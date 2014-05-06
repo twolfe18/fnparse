@@ -3,10 +3,10 @@
 #$ -V                           # job has the same environment variables as the submission shell
 #$ -l h_rt=48:00:00             # runtime limit
 #$ -l mem_free=15G              # expected amount of mem
-#$ -l num_proc=2				# how many processors to use
-#$ -o logging/targetId   # where to do logging
+#$ -l num_proc=2                # how many processors to use
+#$ -o logging                   # where to do logging
 # -M twolfe18@gmail.com
-# -m as 		                # a=aborted b=begining e=end s=suspended
+# -m as                         # a=aborted b=begining e=end s=suspended
 
 set -e
 
