@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -12,9 +13,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * Holds the data needed to evaluate parses.
- * Do not put evaluation code in this class,
- * it is better to leave this to a separate module
- * for easy extension.
  * @author travis
  */
 public class SentenceEval {
@@ -22,9 +20,16 @@ public class SentenceEval {
 	/*
 	 * indexed with [gold][hyp]
 	 * e.g. targets[1][0] = # false negatives
+	 * 
+	 * NOTE: true negatives is a lower bound rather than exact,
+	 * it assumes that the only possible set of predictions in the
+	 * universe are the ones that were either predicted or in the gold
+	 * labels (real set of true negatives would include all possible
+	 * negatives, which is much larger).
 	 */
 	private final int[][] targetConfusion;
 	private final int[][] fullConfusion;
+	private final int[][] argOnlyConfusion;	// like fullConfusion, but doesn't include frame-targets as a prediction, should only be used for argId evaluation (gold frameId)
 	private final int size;
 
 	private final FNParse gold, hyp;
@@ -42,6 +47,7 @@ public class SentenceEval {
 		//this.hyp = hyp;
 		this.targetConfusion = new int[2][2];
 		this.fullConfusion = new int[2][2];
+		this.argOnlyConfusion = new int[2][2];
 		this.size = gold.getSentence().size();
 		this.gold = gold;
 		this.hyp = hyp;
@@ -57,12 +63,15 @@ public class SentenceEval {
 		Set<Prediction> hypTargets = new HashSet<Prediction>();
 		Set<Prediction> goldTargetRoles = new HashSet<Prediction>();
 		Set<Prediction> hypTargetRoles = new HashSet<Prediction>();
+		Set<Prediction> goldRoles = new HashSet<Prediction>();
+		Set<Prediction> hypRoles = new HashSet<Prediction>();
 		
-		fillPredictions(gold.getFrameInstances(), goldTargets, goldTargetRoles);
-		fillPredictions(hyp.getFrameInstances(), hypTargets, hypTargetRoles);
+		fillPredictions(gold.getFrameInstances(), goldTargets, goldTargetRoles, goldRoles);
+		fillPredictions(hyp.getFrameInstances(), hypTargets, hypTargetRoles, hypRoles);
 		
 		fillConfusionTable(goldTargets, hypTargets, targetConfusion, targetFalsePos, targetFalseNeg);
 		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion, fullFalsePos, targetFalseNeg);
+		fillConfusionTable(goldRoles, hypRoles, argOnlyConfusion, null, null);
 	}
 	
 	// only work if storeDebugInfo was true
@@ -84,7 +93,7 @@ public class SentenceEval {
 	
 	public int size() { return size; }
 	
-	public void fillPredictions(List<FrameInstance> fis, Set<Prediction> targetPreds, Set<Prediction> targetRolePreds) {
+	public void fillPredictions(List<FrameInstance> fis, Collection<Prediction> targetPreds, Collection<Prediction> targetRolePreds, Collection<Prediction> onlyArgPreds) {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
 			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
@@ -92,13 +101,16 @@ public class SentenceEval {
 			int n = fi.getFrame().numRoles();
 			for(int i=0; i<n; i++) {
 				Span arg = fi.getArgument(i);
-				if(arg != Span.nullSpan)
-					targetRolePreds.add(new Prediction(arg, f, i));
+				if(arg != Span.nullSpan) {
+					Prediction p = new Prediction(arg, f, i);
+					targetRolePreds.add(p);
+					onlyArgPreds.add(p);
+				}
 			}
 		}
 	}
 	
-	public void fillConfusionTable(Set<Prediction> gold, Set<Prediction> hyp, int[][] confusion, List<Prediction> fpStore, List<Prediction> fnStore) {
+	public void fillConfusionTable(Collection<Prediction> gold, Collection<Prediction> hyp, int[][] confusion, List<Prediction> fpStore, List<Prediction> fnStore) {
 		
 		Set<Prediction> s = new HashSet<Prediction>();
 		
@@ -144,11 +156,9 @@ public class SentenceEval {
 	public int fullFP() { return fullConfusion[0][1]; }
 	public int fullFN() { return fullConfusion[1][0]; }
 	
-	public double getFrameAccuracy() {
-		int right = targetConfusion[0][0] + targetConfusion[1][1];
-		int wrong = targetConfusion[0][1] + targetConfusion[1][0];
-		return ((double) right) / (right + wrong);
-	}
-	
+	public int argOnlyTP() { return argOnlyConfusion[1][1]; }
+	public int argOnlyFP() { return argOnlyConfusion[0][1]; }
+	public int argOnlyFN() { return argOnlyConfusion[1][0]; }
+
 	// TODO arg accuracy (both predictions? just args?)
 }

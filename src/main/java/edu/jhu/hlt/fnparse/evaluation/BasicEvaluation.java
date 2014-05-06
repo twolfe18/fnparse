@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.util.Avg;
 
 public class BasicEvaluation {
 
@@ -16,51 +15,50 @@ public class BasicEvaluation {
 		public double evaluate(List<SentenceEval> instances);
 	}
 	
-	public static class FrameAccuracy implements EvalFunc {
-		@Override
-		public String getName() { return "FrameAccuracy"; }
-		@Override
-		public double evaluate(List<SentenceEval> instances) {
-			Avg a = new Avg();
-			for(SentenceEval s : instances)
-				a.accum(s.getFrameAccuracy(), s.size());
-			return a.average();
-		}
-	}
+	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(false, true, true, FPR.Mode.PRECISION);
+	public static final StdEvalFunc targetMacroRecall = new StdEvalFunc(false, true, true, FPR.Mode.RECALL);
+	public static final StdEvalFunc targetMacroF1 = new StdEvalFunc(false, true, true, FPR.Mode.F1);
 	
-	public static final FrameAccuracy frameAccuracy = new FrameAccuracy();
+	public static final StdEvalFunc targetMicroPrecision = new StdEvalFunc(false, false, true, FPR.Mode.PRECISION);
+	public static final StdEvalFunc targetMicroRecall = new StdEvalFunc(false, false, true, FPR.Mode.RECALL);
+	public static final StdEvalFunc targetMicroF1 = new StdEvalFunc(false, false, true, FPR.Mode.F1);
 	
-	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, true, FPR.Mode.PRECISION);
-	public static final StdEvalFunc targetMacroRecall = new StdEvalFunc(true, true, FPR.Mode.RECALL);
-	public static final StdEvalFunc targetMacroF1 = new StdEvalFunc(true, true, FPR.Mode.F1);
+	public static final StdEvalFunc fullMacroPrecision = new StdEvalFunc(false, true, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc fullMacroRecall = new StdEvalFunc(false, true, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc fullMacroF1 = new StdEvalFunc(false, true, false, FPR.Mode.F1);
 	
-	public static final StdEvalFunc targetMicroPrecision = new StdEvalFunc(false, true, FPR.Mode.PRECISION);
-	public static final StdEvalFunc targetMicroRecall = new StdEvalFunc(false, true, FPR.Mode.RECALL);
-	public static final StdEvalFunc targetMicroF1 = new StdEvalFunc(false, true, FPR.Mode.F1);
+	public static final StdEvalFunc fullMicroPrecision = new StdEvalFunc(false, false, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc fullMicroRecall = new StdEvalFunc(false, false, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc fullMicroF1 = new StdEvalFunc(false, false, false, FPR.Mode.F1);
 	
-	public static final StdEvalFunc fullMacroPrecision = new StdEvalFunc(true, false, FPR.Mode.PRECISION);
-	public static final StdEvalFunc fullMacroRecall = new StdEvalFunc(true, false, FPR.Mode.RECALL);
-	public static final StdEvalFunc fullMacroF1 = new StdEvalFunc(true, false, FPR.Mode.F1);
+	public static final StdEvalFunc argOnlyMacroPrecision = new StdEvalFunc(true, true, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc argOnlyMacroRecall = new StdEvalFunc(true, true, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc argOnlyMacroF1 = new StdEvalFunc(true, true, false, FPR.Mode.F1);
 	
-	public static final StdEvalFunc fullMicroPrecision = new StdEvalFunc(false, false, FPR.Mode.PRECISION);
-	public static final StdEvalFunc fullMicroRecall = new StdEvalFunc(false, false, FPR.Mode.RECALL);
-	public static final StdEvalFunc fullMicroF1 = new StdEvalFunc(false, false, FPR.Mode.F1);
+	public static final StdEvalFunc argOnlyMicroPrecision = new StdEvalFunc(true, false, false, FPR.Mode.PRECISION);
+	public static final StdEvalFunc argOnlyMicroRecall = new StdEvalFunc(true, false, false, FPR.Mode.RECALL);
+	public static final StdEvalFunc argOnlyMicroF1 = new StdEvalFunc(true, false, false, FPR.Mode.F1);
 	
 	public static class StdEvalFunc implements EvalFunc {
 		
+		private boolean argOnly;	// if false, don't include frames/targets as a prediction
 		private boolean macro;
 		private boolean targets;	// else full/targetRoles
 		private FPR.Mode mode;
 		
-		public StdEvalFunc(boolean macro, boolean targets, FPR.Mode mode) {
+		public StdEvalFunc(boolean argOnly, boolean macro, boolean targets, FPR.Mode mode) {
+			this.argOnly = argOnly;
 			this.macro = macro;
 			this.targets = targets;
 			this.mode = mode;
+			
+			if(targets && argOnly)
+				throw new IllegalArgumentException("argOnly can only be used for argId evaluation");
 		}
 		
 		public String getName() {
 			StringBuilder sb = new StringBuilder();
-			sb.append(targets ? "Target" : "Full");
+			sb.append(targets ? "Target" : (argOnly ? "ArgOnly" : "Full"));
 			sb.append(macro ? "Macro" : "Micro");
 			sb.append(mode);
 			return sb.toString();
@@ -85,6 +83,8 @@ public class BasicEvaluation {
 			FPR fpr = new FPR(macro);
 			if(targets)
 				fpr.accum(inst.targetTP(), inst.targetFP(), inst.targetFN());
+			else if(argOnly)
+				fpr.accum(inst.argOnlyTP(), inst.argOnlyFP(), inst.argOnlyFN());
 			else
 				fpr.accum(inst.fullTP(), inst.fullFP(), inst.fullFN());
 			return fpr;
@@ -109,7 +109,8 @@ public class BasicEvaluation {
 			targetMicroF1, targetMicroPrecision, targetMicroRecall,
 			fullMacroF1, fullMacroPrecision, fullMacroRecall,
 			fullMicroF1, fullMicroPrecision, fullMicroRecall,
-			frameAccuracy,
+			argOnlyMacroF1, argOnlyMacroPrecision, argOnlyMacroRecall,
+			argOnlyMicroF1, argOnlyMicroPrecision, argOnlyMicroRecall,
 			GenerousEvaluation.generousF1, GenerousEvaluation.generousPrecision, GenerousEvaluation.generousRecall};
 	
 	public static Map<String, Double> evaluate(List<FNParse> gold, List<FNParse> hyp) {
