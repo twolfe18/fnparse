@@ -31,7 +31,7 @@ frameIdSetup:
 frameIdTrainOne:
 	mkdir -p saved-models/temp
 	time java -ea $(frameIdMem) -cp $(cp) edu.jhu.hlt.fnparse.experiment.ParserExperiment \
-		frameId 44 saved-models/temp saved-models/alphabets/frameId-reg.model.gz regular \
+		frameId 73 saved-models/temp saved-models/alphabets/frameId-reg.model.gz regular \
 		2>&1 | tee saved-models/full/frameId-reg.log
 	mv -f saved-models/temp/FRAME_ID/FRAME_ID.model.gz saved-models/full/frameId-reg.model.gz
 	sort -n saved-models/temp/FRAME_ID/FRAME_ID.weights.txt >saved-models/full/frameId.weights.txt
