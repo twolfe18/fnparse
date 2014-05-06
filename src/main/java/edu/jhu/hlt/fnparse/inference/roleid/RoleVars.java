@@ -50,10 +50,13 @@ public class RoleVars implements FgRelated {
 	
 	public boolean hasLabels() { return goldConf != null; }
 
-	private RoleVars(FrameInstance gold, boolean hasGold, int targetHeadIdx, Frame evoked, Sentence sent, ParserParams params) {
+	private RoleVars(FrameInstance gold, boolean gotFramePredictionWrong, boolean hasGold, int targetHeadIdx, Frame evoked, Sentence sent, ParserParams params) {
 
 		if(evoked == Frame.nullFrame)
 			throw new IllegalArgumentException("only create these for non-nullFrame f_it");
+		
+		if(gold == null && hasGold)
+			throw new IllegalArgumentException();
 		
 		if(hasGold && gold != null && gold.getFrame() != evoked)
 			throw new IllegalArgumentException();
@@ -75,7 +78,7 @@ public class RoleVars implements FgRelated {
 			Span jGoldSpan = null;
 			int jGold = -1;
 			if(hasGold) {
-				jGoldSpan = gold == null ? Span.nullSpan : gold.getArgument(k);
+				jGoldSpan = gold.getArgument(k);
 				jGold = jGoldSpan == Span.nullSpan ? n : params.headFinder.head(jGoldSpan, gold.getSentence());
 			}
 
@@ -132,15 +135,17 @@ public class RoleVars implements FgRelated {
 			else {
 				// there is no expansion variable for null-realized-arg
 				r_kj[k][n] = new Var(VarType.PREDICTED, 2, String.format("r_{i=%d,t=%s,k=%d,notRealized}", i, evoked.getName(), k), BinaryVarUtil.stateNames);
-				if(hasGold)
-					goldConf.put(r_kj[k][n], BinaryVarUtil.boolToConfig(n == jGold));
+				if(hasGold) {
+					boolean goldIsNull = gotFramePredictionWrong || (n == jGold);
+					goldConf.put(r_kj[k][n], BinaryVarUtil.boolToConfig(goldIsNull));
+				}
 			}
 		}
 	}
 
 	/** constructor for prediction */
 	public RoleVars(int targetHeadIdx, Frame evoked, Sentence s, ParserParams params) {
-		this(null, false, targetHeadIdx, evoked, s, params);
+		this(null, false, false, targetHeadIdx, evoked, s, params);
 	}
 
 	/**
@@ -149,7 +154,7 @@ public class RoleVars implements FgRelated {
 	 *        for example if the frame predicted is incorrect (can save precision by not making predictions in this case).
 	 */
 	public RoleVars(FrameInstance gold, int targetHeadIdx, Frame evoked, Sentence s, ParserParams params) {
-		this(gold, true, targetHeadIdx, evoked, s, params);
+		this(gold, gold.getFrame() != evoked, true, targetHeadIdx, evoked, s, params);
 	}
 	
 	private void setExpansionVarFor(int i, Frame t, int j, int k, Sentence s, VarType varType) {

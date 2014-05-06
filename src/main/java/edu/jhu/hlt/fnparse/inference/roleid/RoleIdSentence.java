@@ -43,6 +43,13 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		initHypotheses(frames, gold, true);
 	}
 	
+	/**
+	 * Creates the needed variables and puts them in super.hypotheses.
+	 * 
+	 * @param frames
+	 * @param gold can be null if !hasGold
+	 * @param hasGold
+	 */
 	private void initHypotheses(FNTagging frames, FNParse gold, boolean hasGold) {
 
 		if(hasGold && gold.getSentence() != frames.getSentence())
