@@ -23,8 +23,16 @@ import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
 
 /**
  * I'm making this class both the holder/decoder of hypotheses (extends ParsingSentence)
- * as well as the adder of factors (implements FactorFactory) because the decoding proceedure
+ * as well as the adder of factors (implements FactorFactory) because the decoding procedure
  * requires us to query for the beliefs at the joint (f_it ~ r_itjk) factors.
+ * 
+ * TODO consider how we might parameterize the "jointness" of the model.
+ * we basically have a triangle(-prism-like-thingy) formed by the
+ * frame, role, and link variables. If you remove the factor templates for
+ * any of the edges of this triangle, then the resulting graph is not loopy (desireable).
+ * (f_it ~ r_itjk) factors form many trees, where the roots are (i,t) values
+ * (r_itjk ~ l_ij) factors form many trees, where the roots are (i,j) values
+ * (f_it ~ l_{root,i}) factors form many 1-to-1 tree, rooted at (i) values
  * 
  * @author travis
  */

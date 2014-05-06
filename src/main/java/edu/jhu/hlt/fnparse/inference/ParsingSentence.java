@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
@@ -88,6 +89,26 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		this.hypotheses = null;
 		this.gold = label;
 	}
+	
+	
+	public static FrameInstance[] getFrameInstancesIndexByHeadword(List<FrameInstance> fis, Sentence s, HeadFinder hf) {
+		int n = s.size();
+		FrameInstance[] fiByTarget = new FrameInstance[n];
+		for(FrameInstance fi : fis) {
+			int targetHead = hf.head(fi.getTarget(), s);
+			//assert fiByTarget[targetHead] == null;
+			if(fiByTarget[targetHead] != null) {
+				System.err.println("[ParsingSentence getFrameInstancesIndexByHeadword] frame instance in " +
+						fi.getSentence().getId() + " has more than one frame-trigger per headword @ " + targetHead);
+				// keep the FI with more non-null arguments
+				if(fi.numRealizedArguments() < fiByTarget[targetHead].numRealizedArguments())
+					continue;
+			}
+			fiByTarget[targetHead] = fi;
+		}
+		return fiByTarget;
+	}
+	
 
 	/** you should use this in your implementation of decode() */
 	protected FgExample getExample(boolean labeled) {

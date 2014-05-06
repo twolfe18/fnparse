@@ -20,7 +20,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParsingSentence;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
-import edu.jhu.prim.arrays.Multinomials;
 
 /**
  * does just frame id (pipeline version -- no role vars ever instantiated).

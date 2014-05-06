@@ -54,26 +54,11 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 
 		if(hasGold && gold.getSentence() != frames.getSentence())
 			throw new IllegalArgumentException();
-
-		final int n = sentence.size();
 		
 		// build an index keying off of the target head index
 		FrameInstance[] fiByTarget = null;
-		if(hasGold) {
-			fiByTarget = new FrameInstance[n];
-			for(FrameInstance fi : gold.getFrameInstances()) {
-				int targetHead = params.headFinder.head(fi.getTarget(), sentence);
-				//assert fiByTarget[targetHead] == null;
-				if(fiByTarget[targetHead] != null) {
-					System.err.println("[RoleIdSentence initHypotheses] frame instance in " +
-						fi.getSentence().getId() + " has more than one frame-trigger per headword @ " + targetHead);
-					// keep the FI with more non-null arguments
-					if(fi.numRealizedArguments() < fiByTarget[targetHead].numRealizedArguments())
-						continue;
-				}
-				fiByTarget[targetHead] = fi;
-			}
-		}
+		if(hasGold)
+			fiByTarget = getFrameInstancesIndexByHeadword(gold.getFrameInstances(), sentence, params.headFinder);
 
 		hypotheses = new ArrayList<RoleVars>();
 		for(FrameInstance fi : frames.getFrameInstances()) {
@@ -83,8 +68,6 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 			RoleVars rv;
 			if(hasGold) {	// train mode
 				FrameInstance goldFI = fiByTarget[targetHead];
-				if(goldFI != null && goldFI.getFrame() != fi.getFrame())
-					goldFI = null;	// if we got the frame wrong, then train to predict no args
 				rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), params);
 			}
 			else	// predict/decode mode

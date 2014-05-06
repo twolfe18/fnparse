@@ -55,12 +55,6 @@ public class RoleVars implements FgRelated {
 		if(evoked == Frame.nullFrame)
 			throw new IllegalArgumentException("only create these for non-nullFrame f_it");
 		
-		if(gold == null && hasGold)
-			throw new IllegalArgumentException();
-		
-		if(hasGold && gold != null && gold.getFrame() != evoked)
-			throw new IllegalArgumentException();
-
 		this.i = targetHeadIdx;
 		this.t = evoked;
 		this.n = sent.size();
@@ -78,7 +72,7 @@ public class RoleVars implements FgRelated {
 			Span jGoldSpan = null;
 			int jGold = -1;
 			if(hasGold) {
-				jGoldSpan = gold.getArgument(k);
+				jGoldSpan = gotFramePredictionWrong ? Span.nullSpan : gold.getArgument(k);
 				jGold = jGoldSpan == Span.nullSpan ? n : params.headFinder.head(jGoldSpan, gold.getSentence());
 			}
 
@@ -150,11 +144,14 @@ public class RoleVars implements FgRelated {
 
 	/**
 	 * constructor for training.
-	 * @param gold may be null if these roles should be predicted as "not-realized". This may happen
-	 *        for example if the frame predicted is incorrect (can save precision by not making predictions in this case).
+	 * 
+	 * This will handle the case where gold's Frame is different from evoked (t).
+	 * If they are the same, then the normal thing happens: all of the r_itjk are set
+	 *   according to the arguments that actually appeared.
+	 * If they are different, then r_itjk are set to have a gold value of "not realized"
 	 */
 	public RoleVars(FrameInstance gold, int targetHeadIdx, Frame evoked, Sentence s, ParserParams params) {
-		this(gold, gold.getFrame() != evoked, true, targetHeadIdx, evoked, s, params);
+		this(gold, gold == null || gold.getFrame() != evoked, true, targetHeadIdx, evoked, s, params);
 	}
 	
 	private void setExpansionVarFor(int i, Frame t, int j, int k, Sentence s, VarType varType) {
