@@ -40,11 +40,11 @@ frameIdTrainOne:
 # launch all the frame id training jobs to the grid
 frameIdTrainJob:
 	#frameIdSetup jar
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-80 \
 		./ParserExperimentWrapper.qsub frameId saved-models/alphabets/frameId-reg.model.gz regular
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-80 \
 		./ParserExperimentWrapper.qsub frameId saved-models/alphabets/frameId-reg.model.gz none
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-80 \
 		./ParserExperimentWrapper.qsub frameId saved-models/alphabets/frameId-latent.model.gz latent
 
 
@@ -75,11 +75,11 @@ argIdTrainOne:
 
 argIdTrainJob:
 	#argIdSetup jar
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-160 \
 		./ParserExperimentWrapper.qsub argId saved-models/alphabets/argId-reg.model.gz regular
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-160 \
 		./ParserExperimentWrapper.qsub argId saved-models/alphabets/argId-reg.model.gz none
-	qsub -q text.q -t 1-240 \
+	qsub -q text.q -t 1-160 \
 		./ParserExperimentWrapper.qsub argId saved-models/alphabets/argId-latent.model.gz latent
 	
 

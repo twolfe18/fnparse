@@ -132,7 +132,7 @@ public class GenerousEvaluation {
 				int head = hf.head(fi.getTarget(), fi.getSentence());
 				Role role = new Role(f, fi.getTarget().start, -1);
 				Integer old = roleHeads.put(role, head);
-				assert old == null;
+				//assert old == null;
 			}
 		}
 		
