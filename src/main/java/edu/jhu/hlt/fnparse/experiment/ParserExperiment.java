@@ -40,10 +40,7 @@ public class ParserExperiment {
 		// working directory
 		File workingDir = new File(args[2]);
 		if(!workingDir.isDirectory())
-			workingDir.mkdir();
-		//workingDir = new File(workingDir, parserMode.toString());
-		//if(!workingDir.isDirectory())
-		//	workingDir.mkdir();
+			workingDir.mkdirs();
 		System.out.println("[main] workingDir = " + workingDir.getPath());
 		
 		// job index

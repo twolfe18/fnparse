@@ -56,7 +56,14 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 			fiByTarget = new FrameInstance[n];
 			for(FrameInstance fi : gold.getFrameInstances()) {
 				int targetHead = params.headFinder.head(fi.getTarget(), sentence);
-				assert fiByTarget[targetHead] == null;
+				//assert fiByTarget[targetHead] == null;
+				if(fiByTarget[targetHead] != null) {
+					System.err.println("[RoleIdSentence initHypotheses] frame instance in " +
+						fi.getSentence().getId() + " has more than one frame-trigger per headword @ " + targetHead);
+					// keep the FI with more non-null arguments
+					if(fi.numRealizedArguments() < fiByTarget[targetHead].numRealizedArguments())
+						continue;
+				}
 				fiByTarget[targetHead] = fi;
 			}
 		}
