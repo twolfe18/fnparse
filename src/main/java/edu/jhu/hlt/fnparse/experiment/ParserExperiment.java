@@ -47,7 +47,10 @@ public class ParserExperiment {
 		long start = System.currentTimeMillis();
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 400, 999999));
-		Option<Integer> passes = ajh.addOption("passes", Arrays.asList(2, 10));
+		List<Integer> possiblePasses = parserMode == Mode.FRAME_ID
+				? Arrays.asList(2, 6)
+				: Arrays.asList(1, 3);
+		Option<Integer> passes = ajh.addOption("passes", possiblePasses);
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(4, 40));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1000d, 10000d, 100000d));
 		Option<Boolean> useGoldFrames = null;
@@ -113,8 +116,9 @@ public class ParserExperiment {
 		parser.writeModel(new File(workingDir, parserMode + ".model.gz"));
 
 		// this can take a while!
-		System.out.printf("[ParserExperiment] tuning on %d examples\n", tune.size());
-		parser.tune(tune);
+		int maxNumTune = parserMode == Mode.FRAME_ID ? 9999 : 40;
+		System.out.printf("[ParserExperiment] tuning on %d examples\n", Math.min(maxNumTune, tune.size()));
+		parser.tune(tune, maxNumTune);
 		printMemUsage();
 		
 		// write model again so that tuning parameters are updated
