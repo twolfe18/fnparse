@@ -2,8 +2,10 @@ package edu.jhu.hlt.fnparse.inference.roleid;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
@@ -18,8 +20,8 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.ParsingSentence;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParsingSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 /**
@@ -43,6 +45,36 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		initHypotheses(frames, gold, true);
 	}
 	
+
+	/**
+	 * In the FN data, there are some parses which have two different FrameInstances
+	 * with the same target. Every instance of this I've seen has just been a mistake
+	 * (the same Frame, just double tagged). My code is really pedantic and throws an
+	 * exception if I produce a parse that has two FrameInstances with the same target,
+	 * and this will happen if I use gold frameId through no fault of my own code.
+	 * This method selects a FNTagging that doesn't violate this constraint.
+	 */
+	public static FNTagging filterOutTargetCollisions(FNTagging input) {
+		Map<Span, FrameInstance> keep = new HashMap<Span, FrameInstance>();
+		boolean someViolation = false;
+		for(FrameInstance fi : input.getFrameInstances()) {
+			FrameInstance collision = keep.put(fi.getTarget(), fi);
+			if(collision != null) {
+				someViolation = true;
+				// choose the FI with more realized arguments
+				if(collision.numRealizedArguments() > fi.numRealizedArguments())
+					keep.put(fi.getTarget(), fi);
+			}
+		}
+		if(!someViolation)
+			return input;
+		else {
+			List<FrameInstance> fis = new ArrayList<FrameInstance>(keep.values());
+			return new FNTagging(input.getSentence(), fis);
+		}
+	}
+
+	
 	/**
 	 * Creates the needed variables and puts them in super.hypotheses.
 	 * 
@@ -54,6 +86,9 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 
 		if(hasGold && gold.getSentence() != frames.getSentence())
 			throw new IllegalArgumentException();
+		
+		// make sure that we don't have overlapping targets
+		frames = filterOutTargetCollisions(frames);
 		
 		// build an index keying off of the target head index
 		FrameInstance[] fiByTarget = null;
