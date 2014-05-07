@@ -86,7 +86,6 @@ public class ParserExperiment {
 		
 		if(nTrainLimit.get() < train.size())
 			train = DataUtil.reservoirSample(train, nTrainLimit.get());
-		List<FNParse> trainSubset = DataUtil.reservoirSample(train, test.size());
 
 		printMemUsage();
 		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
@@ -116,9 +115,9 @@ public class ParserExperiment {
 		parser.writeModel(new File(workingDir, parserMode + ".model.gz"));
 
 		// this can take a while!
-		int maxNumTune = parserMode == Mode.FRAME_ID ? 9999 : 40;
-		System.out.printf("[ParserExperiment] tuning on %d examples\n", Math.min(maxNumTune, tune.size()));
-		parser.tune(tune, maxNumTune);
+		int maxTuneEval = parserMode == Mode.FRAME_ID ? 9999 : 40;
+		System.out.printf("[ParserExperiment] tuning on %d examples\n", Math.min(maxTuneEval, tune.size()));
+		parser.tune(tune, maxTuneEval);
 		printMemUsage();
 		
 		// write model again so that tuning parameters are updated
@@ -127,16 +126,20 @@ public class ParserExperiment {
 		// evaluate (test data)
 		List<FNParse> predicted;
 		Map<String, Double> results;
-		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", test.size());
+		int maxTestEval = 100;
+		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval) : test;
+		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset);
 		if(useGoldFrames != null && useGoldFrames.get())
-			predicted = parser.parseUsingGoldFrameId(test);
+			predicted = parser.parseUsingGoldFrameId(testSubset);
 		else
-			predicted = parser.parseWithoutPeeking(test);
-		results = BasicEvaluation.evaluate(test, predicted);
+			predicted = parser.parseWithoutPeeking(testSubset);
+		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		// evaluate (train data)
+		int maxTrainEval = 50;
+		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
 		if(useGoldFrames != null && useGoldFrames.get())
 			predicted = parser.parseUsingGoldFrameId(trainSubset);
