@@ -468,12 +468,15 @@ public class Parser {
 	public List<FNParse> parseUsingGoldFrameId(List<FNParse> gold) {
 		if(params.mode != Mode.PIPELINE_FRAME_ARG)
 			throw new IllegalArgumentException();
+		long start = System.currentTimeMillis();
 		FgInferencerFactory infFact = infFactory();
 		List<FNParse> predicted = new ArrayList<>();
 		for(FNParse p : gold) {
 			RoleIdSentence ris = new RoleIdSentence(p.getSentence(), p, params);
 			predicted.add(ris.decode(params.weights, infFact));
 		}
+		System.out.printf("[parseUsingGoldFrameId] done parsing %d examples in %.1f minutes\n",
+				gold.size(), (System.currentTimeMillis()-start) / (1000d * 60d));
 		return predicted;
 	}
 	
@@ -481,6 +484,7 @@ public class Parser {
 		return parse(DataUtil.stripAnnotations(raw));
 	}
 	public List<FNParse> parse(List<Sentence> raw) {
+		long start = System.currentTimeMillis();
 		FgInferencerFactory infFact = infFactory();
 		List<FNParse> pred = new ArrayList<FNParse>();
 		for(Sentence s : raw) {
@@ -494,6 +498,8 @@ public class Parser {
 			}
 			else throw new RuntimeException();
 		}
+		System.out.printf("[parse] done parsing %d examples in %.1f minutes\n",
+				raw.size(), (System.currentTimeMillis()-start) / (1000d * 60d));
 		return pred;
 	}
 	
