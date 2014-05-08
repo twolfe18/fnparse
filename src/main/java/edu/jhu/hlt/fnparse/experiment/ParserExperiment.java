@@ -115,7 +115,7 @@ public class ParserExperiment {
 		parser.writeModel(new File(workingDir, parserMode + ".model.gz"));
 
 		// this can take a while!
-		int maxTuneEval = parserMode == Mode.FRAME_ID ? 9999 : 40;
+		int maxTuneEval = parserMode == Mode.FRAME_ID ? 9999 : 30;
 		System.out.printf("[ParserExperiment] tuning on %d examples\n", Math.min(maxTuneEval, tune.size()));
 		parser.tune(tune, maxTuneEval);
 		printMemUsage();
@@ -128,7 +128,7 @@ public class ParserExperiment {
 		Map<String, Double> results;
 		int maxTestEval = 100;
 		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval) : test;
-		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset);
+		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset.size());
 		if(useGoldFrames != null && useGoldFrames.get())
 			predicted = parser.parseUsingGoldFrameId(testSubset);
 		else

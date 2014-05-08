@@ -1,10 +1,11 @@
 
-
 cp="target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar:lib/*"
+gc="-XX:ParallelGCThreads=2"
 memProf="-agentlib:hprof=heap=sites,interval=5000"
+
 frameIdMem="-Xmx7G"
 argIdMem="-Xmx14G"
-gc="-XX:ParallelGCThreads=2"
+argIdAlphTimeout="60"	# in minutes
 
 
 #############################################################################################################
@@ -55,15 +56,18 @@ frameIdTrainJob:
 #############################################################################################################
 
 
-argIdSetup:
+argIdSetupRegular:
 	#jar
 	time java -ea $(argIdMem) $(gc) -cp $(cp) edu.jhu.hlt.fnparse.experiment.AlphabetComputer \
 		saved-models/alphabets/argId-reg.model.gz argId regular \
-		saved-models/full/frameId-reg.model.gz 30 \
+		saved-models/full/frameId-reg.model.gz $(argIdAlphTimeout) \
 		2>&1 | tee saved-models/alphabets/argId-reg.log
+
+argIdSetupLatent:
+	#jar
 	time java -ea $(argIdMem) -cp $(cp) edu.jhu.hlt.fnparse.experiment.AlphabetComputer \
 		saved-models/alphabets/argId-latent.model.gz argId latent \
-		saved-models/full/frameId-latent.model.gz 30 \
+		saved-models/full/frameId-latent.model.gz $(argIdAlphTimeout) \
 		2>&1 | tee saved-models/alphabets/argId-latent.log
 
 

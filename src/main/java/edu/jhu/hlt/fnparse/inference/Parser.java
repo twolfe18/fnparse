@@ -529,7 +529,7 @@ public class Parser {
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			obj = BasicEvaluation.fullMicroF1;
 			decoder = params.argDecoder;
-			biases = Arrays.asList(2/3d, 3/3d, 4/3d);
+			biases = Arrays.asList(1/3d, 2/3d, 3/3d, 4/3d);
 		}
 		else if(params.mode == Mode.JOINT_FRAME_ARG) {
 			System.err.println("[tune joint] implement me! doing nothing");
