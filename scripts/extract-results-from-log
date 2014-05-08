@@ -1,0 +1,63 @@
+#!/usr/bin/env python
+
+output_keys = True
+
+class LogResults:
+
+	keys_to_print = ['test.FullMicroF1', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames']
+
+	def __init__(self, filename):
+
+		# [main] args=[argId, 1, experiments/argId/1, saved-models/alphabets/argId-reg.model.gz, regular]
+		# [main] workingDir = experiments/argId/1
+		# config = {nTrainLimit=50, batchSize=4, passes=1, regularizer=1000.0, useGoldFrames=false}
+
+		self.log_file = filename
+		self.test_perf = {}
+		self.train_perf = {}
+		self.config = {}
+
+		with open(filename) as f:
+			for line in f:
+				if line.startswith('[RoleVars]'): continue
+				if line.startswith('[ArgPruner]'): continue
+				if line.startswith('[test]'):
+					ar = line.split()
+					assert ar[-2] == '='
+					self.test_perf[ar[-3]] = ar[-1]
+				if line.startswith('[train]'):
+					ar = line.split()
+					if ar[-2] == '=':
+						self.train_perf[ar[-3]] = ar[-1]
+				if line.startswith('config = {'):
+					line = line[10:-2]
+					for chunk in line.replace(',', '').split():
+						ar = chunk.split('=')
+						assert len(ar) == 2
+						self.config[ar[0]] = ar[1]
+
+		self.all_values = {}
+		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
+		self.all_values.update({'test.' + k: v for k,v in self.test_perf.iteritems()})
+		self.all_values.update(self.config)
+
+	def result_string(self, show_keys=True):
+		toks = []
+		for k in LogResults.keys_to_print:
+			v = self.all_values.get(k, '???')
+			if show_keys:
+				toks.append(k + '=' + v)
+			else:
+				toks.append(v)
+		return ' '.join(toks)
+
+
+if __name__ == '__main__':
+	import sys
+	if len(sys.argv) < 2:
+		print 'please give some log files to go through'
+		sys.exit(-1)
+	for filename in sys.argv[1:]:
+		lr = LogResults(filename)
+		print lr.result_string()
+
