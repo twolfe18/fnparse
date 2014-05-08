@@ -4,7 +4,7 @@ output_keys = True
 
 class LogResults:
 
-	keys_to_print = ['test.FullMicroF1', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames']
+	keys_to_print = ['test.FullMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames', 'total_time']
 
 	def __init__(self, filename):
 
@@ -16,6 +16,7 @@ class LogResults:
 		self.test_perf = {}
 		self.train_perf = {}
 		self.config = {}
+		self.total_time = '???'
 
 		with open(filename) as f:
 			for line in f:
@@ -35,11 +36,23 @@ class LogResults:
 						ar = chunk.split('=')
 						assert len(ar) == 2
 						self.config[ar[0]] = ar[1]
+				if line.startswith('[main] args=['):
+					line = line[13:-2].replace(',', '')
+					ar = line.split()
+					self.mode = ar[0]
+					self.syntax_mode = ar[4]
+					self.alphabet_model = ar[3]
+				if line.startswith('[ParserExperiment] done, took'):
+					self.total_time = line.split()[3]
 
 		self.all_values = {}
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
 		self.all_values.update({'test.' + k: v for k,v in self.test_perf.iteritems()})
 		self.all_values.update(self.config)
+		self.all_values['mode'] = self.mode
+		self.all_values['syntax_mode'] = self.syntax_mode
+		self.all_values['alphabet_model'] = self.alphabet_model
+		self.all_values['total_time'] = self.total_time
 
 	def result_string(self, show_keys=True):
 		toks = []
