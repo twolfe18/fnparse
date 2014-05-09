@@ -48,7 +48,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		if(argHeadIdx == targetHeadIdx)
 			b(v, refs, 3d, "arg-is-target");
 		
-		int cutoff = 7;
+		int cutoff = 5;
 		b(v, refs, 2d, "width=", intTrunc(argSpan.width(), cutoff));
 		b(v, refs, 2d, "width/2=", intTrunc(argSpan.width()/2, cutoff));
 		b(v, refs, 2d, "width/3=", intTrunc(argSpan.width()/3, cutoff));
@@ -63,9 +63,9 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		b(v, refs, rr, "width/4=", intTrunc(argSpan.width()/4, cutoff));
 		
 		long p = Math.round((10d * argSpan.width()) / sent.size());
-		b(v, refs, "propWidth=" + p);
-		b(v, refs, r, "propWidth=" + p);
-		b(v, refs, rr, "propWidth=" + p);
+		b(v, refs, 2d, "propWidth=" + p);
+		b(v, refs, 2d, r, "propWidth=" + p);
+		b(v, refs, 2d, rr, "propWidth=" + p);
 		
 
 		int expLeft = argHeadIdx - argSpan.start;
@@ -74,12 +74,40 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		assert expRight >= 0;
 		String er = intTrunc(expRight, 6);
 		String el = intTrunc(expLeft, 6);
-		b(v, refs, "expandRight", er);
-		b(v, refs, "expandLeft", el);
-		b(v, refs, r, "expandRight", er);
-		b(v, refs, r, "expandLeft", el);
-		b(v, refs, rr, "expandRight", er);
-		b(v, refs, rr, "expandLeft", el);
+		String er2 = intTrunc(expRight/2, 4);
+		String el2 = intTrunc(expLeft/2, 4);
+		double w = 0.5d;
+		b(v, refs, w, "expandRight", er);
+		b(v, refs, w, "expandLeft", el);
+		b(v, refs, w, "expandRight/2", er2);
+		b(v, refs, w, "expandLeft/2", el2);
+		w = 1d;
+		b(v, refs, w, r, "expandRight", er);
+		b(v, refs, w, r, "expandLeft", el);
+		b(v, refs, w, r, "expandRight/2", er2);
+		b(v, refs, w, r, "expandLeft/2", el2);
+		w = 1.5d;
+		b(v, refs, w, rr, "expandRight", er);
+		b(v, refs, w, rr, "expandLeft", el);
+		b(v, refs, w, rr, "expandRight/2", er2);
+		b(v, refs, w, rr, "expandLeft/2", el2);
+		LexicalUnit headLemmaLU = sent.getLemmaLU(argHeadIdx);
+		w = 1.5d;
+		b(v, refs, w, headLemmaLU.pos, "expandRight", er);
+		b(v, refs, w, headLemmaLU.pos, "expandLeft", el);
+		b(v, refs, w, headLemmaLU.pos, "expandRight/2", er2);
+		b(v, refs, w, headLemmaLU.pos, "expandLeft/2", el2);
+		w = 0.5d;
+		b(v, refs, w, headLemmaLU.pos, r, "expandRight", er);
+		b(v, refs, w, headLemmaLU.pos, r, "expandLeft", el);
+		b(v, refs, w, headLemmaLU.pos, r, "expandRight/2", er2);
+		b(v, refs, w, headLemmaLU.pos, r, "expandLeft/2", el2);
+//		w = 0.2d;
+//		b(v, refs, w, headLemmaLU.pos, rr, "expandRight", er);
+//		b(v, refs, w, headLemmaLU.pos, rr, "expandLeft", el);
+//		b(v, refs, w, headLemmaLU.pos, rr, "expandRight/2", er2);
+//		b(v, refs, w, headLemmaLU.pos, rr, "expandLeft/2", el2);
+
 		
 		if(argSpan.includes(targetHeadIdx)) {
 			b(v, refs, 3d, "arg-overlaps-targetHead");
@@ -110,44 +138,49 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		
 		// words on either side of the expansion
 		if(aroundSpan) {
+			double sml = 0.25d;
+			double med = 0.5d;
+			double reg = 0.75d;
+			double lrg = 1d;
+
 			LexicalUnit s = AbstractFeatures.getLUSafe(argSpan.start-1, sent);
-			b(v, refs, "oneLeft", s.word);
-			b(v, refs, "oneLeft", s.pos);
-			b(v, refs, r, "oneLeft", s.word);
-			b(v, refs, r, "oneLeft", s.pos);
-			b(v, refs, rr, "oneLeft", s.word);
-			b(v, refs, rr, "oneLeft", s.pos);
+			b(v, refs, reg, "oneLeft", s.word);
+			b(v, refs, lrg, "oneLeft", s.pos);
+			b(v, refs, reg, r, "oneLeft", s.word);
+			b(v, refs, lrg, r, "oneLeft", s.pos);
+			b(v, refs, med, rr, "oneLeft", s.word);
+			b(v, refs, reg, rr, "oneLeft", s.pos);
 
 			LexicalUnit ss = AbstractFeatures.getLUSafe(argSpan.start-2, sent);
-			b(v, refs, "twoLeft", ss.word);
-			b(v, refs, "twoLeft", ss.pos);
-			b(v, refs, r, "twoLeft", ss.word);
-			b(v, refs, r, "twoLeft", ss.pos);
-			b(v, refs, rr, "twoLeft", ss.word);
-			b(v, refs, rr, "twoLeft", ss.pos);
+			b(v, refs, med, "twoLeft", ss.word);
+			b(v, refs, reg, "twoLeft", ss.pos);
+			b(v, refs, med, r, "twoLeft", ss.word);
+			b(v, refs, reg, r, "twoLeft", ss.pos);
+			b(v, refs, sml, rr, "twoLeft", ss.word);
+			b(v, refs, med, rr, "twoLeft", ss.pos);
 
 			LexicalUnit e = AbstractFeatures.getLUSafe(argSpan.end, sent);
-			b(v, refs, "oneRight", e.word);
-			b(v, refs, "oneRight", e.pos);
-			b(v, refs, r, "oneRight", e.word);
-			b(v, refs, r, "oneRight", e.pos);
-			b(v, refs, rr, "oneRight", e.word);
-			b(v, refs, rr, "oneRight", e.pos);
+			b(v, refs, reg, "oneRight", e.word);
+			b(v, refs, lrg, "oneRight", e.pos);
+			b(v, refs, reg, r, "oneRight", e.word);
+			b(v, refs, lrg, r, "oneRight", e.pos);
+			b(v, refs, med, rr, "oneRight", e.word);
+			b(v, refs, reg, rr, "oneRight", e.pos);
 
 			LexicalUnit ee = AbstractFeatures.getLUSafe(argSpan.end+1, sent);
-			b(v, refs, "twoRight", ee.word);
-			b(v, refs, "twoRight", ee.pos);
-			b(v, refs, r, "twoRight", ee.word);
-			b(v, refs, r, "twoRight", ee.pos);
-			b(v, refs, rr, "twoRight", ee.word);
-			b(v, refs, rr, "twoRight", ee.pos);
+			b(v, refs, med, "twoRight", ee.word);
+			b(v, refs, reg, "twoRight", ee.pos);
+			b(v, refs, med, r, "twoRight", ee.word);
+			b(v, refs, reg, r, "twoRight", ee.pos);
+			b(v, refs, sml, rr, "twoRight", ee.word);
+			b(v, refs, med, rr, "twoRight", ee.pos);
 		}
 		
 		// words included in the expansion left and right (from the head word)
 		if(fromHead) {
 			for(int i=argHeadIdx; i>=argSpan.start; i--) {
 				LexicalUnit x = sent.getLemmaLU(i);
-				String sh = "head<-" + (argHeadIdx - i);
+				String sh = "head<-" + intTrunc(argHeadIdx - i, 3);
 				b(v, refs, sh, x.word);
 				b(v, refs, sh, x.pos);
 				b(v, refs, r, sh, x.word);
@@ -157,7 +190,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 			for(int i=argHeadIdx; i<argSpan.end; i++) {
 				LexicalUnit x = sent.getLemmaLU(i);
-				String sh = "head->" + (i - argHeadIdx);
+				String sh = "head->" + intTrunc(i - argHeadIdx, 3);
 				b(v, refs, sh, x.word);
 				b(v, refs, sh, x.pos);
 				b(v, refs, r, sh, x.word);
@@ -167,7 +200,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 		
-		// words in the span
+		// words in the span (measured from left and right)
 		if(inSpan) {
 			double sml = 0.2d;
 			double med = 0.6d;
