@@ -135,7 +135,7 @@ public class ParserExperiment {
 		printMemUsage();
 
 		// evaluate (train data)
-		int maxTrainEval = 50;
+		int maxTrainEval = 150;
 		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
 		predicted = parser.parse(trainSubset);

@@ -208,20 +208,21 @@ public class Parser {
 	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
-		if(params.useLatentDepenencies) {
-			bpParams.normalizeMessages = true;
-			bpParams.schedule = BpScheduleType.RANDOM;
-		}
-		else {
+//		if(params.useLatentDepenencies) {
+//			bpParams.normalizeMessages = true;
+//			bpParams.schedule = BpScheduleType.RANDOM;
+//		}
+//		else {
 			// this should have no loops, use these settings so that
 			// we can exactly compute the log-likelihood rather than using
 			// Bethe free energy
-			bpParams.normalizeMessages = false;
-			bpParams.schedule = BpScheduleType.TREE_LIKE;
-		}
+		bpParams.normalizeMessages = false;
+		bpParams.schedule = BpScheduleType.TREE_LIKE;
+//		}
 		bpParams.logDomain = params.logDomain;
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = params.useLatentDepenencies ? 10 : 2;
+//		bpParams.maxIterations = params.useLatentDepenencies ? 10 : 2;
+		bpParams.maxIterations = 1;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
@@ -552,12 +553,13 @@ public class Parser {
 			obj = BasicEvaluation.targetMicroF1;
 			decoder = params.frameDecoder;
 			biases = new ArrayList<Double>();
-			for(double b=0.4d; b<7d; b*=1.3d) biases.add(b);
+			for(double b=0.4d; b<10d; b*=1.2d) biases.add(b);
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			obj = BasicEvaluation.fullMicroF1;
 			decoder = params.argDecoder;
-			biases = Arrays.asList(1/3d, 2/3d, 3/3d, 4/3d);
+			biases = new ArrayList<Double>();
+			for(double b=0.1d; b<1.2d; b*=1.2d) biases.add(b);
 		}
 		else if(params.mode == Mode.JOINT_FRAME_ARG) {
 			System.err.println("[tune joint] implement me! doing nothing");
@@ -572,15 +574,17 @@ public class Parser {
 	private void tuneRecallBias(List<FNParse> examples, ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {
 
 		// run inference and store the margins
+		long t = System.currentTimeMillis();
 		List<ParsingSentenceDecodable> margins = new ArrayList<>();
 		FgInferencerFactory infFact = this.infFactory();
 		for(FNParse parse : examples) {
 			ParsingSentence<?, ?> ps = getParsingSentenceFor(parse, infFact);
 			margins.add(ps.runInference(params.weights, infFact));
 		}
+		long tInf = System.currentTimeMillis() - t;
 		
 		// decode many times and store performance
-		long t = System.currentTimeMillis();
+		t = System.currentTimeMillis();
 		double originalBias = decoder.getRecallBias();
 		double bestScore = Double.NEGATIVE_INFINITY;
 		List<Double> scores = new ArrayList<Double>();
@@ -595,6 +599,7 @@ public class Parser {
 			scores.add(score);
 			if(score > bestScore) bestScore = score;
 		}
+		long tDec = System.currentTimeMillis() - t;
 
 		List<Double> regrets = new ArrayList<Double>();
 		for(double s : scores) regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
@@ -610,8 +615,8 @@ public class Parser {
 			z += w;
 		}
 		double bestBias = n / z;
-		System.out.printf("[tuneRecalBias %s] took %.1f minutes, done. recallBias %.2f => %.2f\n",
-				params.mode, (System.currentTimeMillis()-t)/(1000d*60d), originalBias, bestBias);
+		System.out.printf("[tuneRecalBias %s] took %.1f sec for inference and %.1f sec for decoding, done. recallBias %.2f => %.2f\n",
+				params.mode, tInf/1000d, tDec/1000d, originalBias, bestBias);
 		decoder.setRecallBias(bestBias);
 	}
 	

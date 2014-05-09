@@ -18,6 +18,7 @@ import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
  * Instantiates factors that touch f_it.

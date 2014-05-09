@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.ParsingSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
  * given some frames (grounded with targets), find out where there args are.
@@ -31,6 +32,8 @@ import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
  * @author travis
  */
 public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
+	
+	public static final MultiTimer timer = new MultiTimer();
 	
 	// List<RoleVars> hypothesis, each one stores a frame
 	public boolean debugDecode = true;
@@ -87,6 +90,8 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		if(hasGold && gold.getSentence() != frames.getSentence())
 			throw new IllegalArgumentException();
 		
+		timer.start("initHypotheses");
+		
 		// make sure that we don't have overlapping targets
 		frames = filterOutTargetCollisions(frames);
 		
@@ -110,6 +115,7 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 
 			hypotheses.add(rv);
 		}
+		timer.stop("initHypotheses");
 	}
 	
 	private static void fill2d(double[][] mat, double val) {
@@ -148,6 +154,8 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	}
 	
 	public static FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf, Sentence sentence, ParserParams params) {
+		
+		timer.start("decode");
 
 		// max over j for every role
 		final int n = sentence.size();
@@ -176,6 +184,7 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 			}
 		}
 
+		timer.stop("decode");
 		return FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sentence);
 	}
 

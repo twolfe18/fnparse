@@ -57,6 +57,8 @@ public class MultiTimer {
 		StringBuilder sb = new StringBuilder();
 		for(Map.Entry<String, Timer> x : timers.entrySet())
 			sb.append(x.getKey() + ": " + x.getValue() + "\n");
+		long total = System.currentTimeMillis() - firstStart;
+		sb.append("total: " + (total/1000d));
 		return sb.toString();
 	}
 }
