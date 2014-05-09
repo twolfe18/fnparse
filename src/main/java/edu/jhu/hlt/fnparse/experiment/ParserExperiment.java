@@ -129,10 +129,7 @@ public class ParserExperiment {
 		int maxTestEval = 100;
 		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval) : test;
 		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset.size());
-		if(useGoldFrames != null && useGoldFrames.get())
-			predicted = parser.parseUsingGoldFrameId(testSubset);
-		else
-			predicted = parser.parseWithoutPeeking(testSubset);
+		predicted = parser.parse(testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
@@ -141,10 +138,7 @@ public class ParserExperiment {
 		int maxTrainEval = 50;
 		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
-		if(useGoldFrames != null && useGoldFrames.get())
-			predicted = parser.parseUsingGoldFrameId(trainSubset);
-		else
-			predicted = parser.parseWithoutPeeking(trainSubset);
+		predicted = parser.parse(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();

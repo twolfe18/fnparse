@@ -93,26 +93,34 @@ public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypot
 	
 
 	@Override
-	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
-		
-		// this will need to iterate over the full (f_it, r_itjk) table to choose the max configuration
-		// i think this can be implemented by matt's BP code by asking for the factor beliefs for the
-		// f_it ~ r_itjk binary factor
+	public ParsingSentenceDecodable runInference(FgModel model, FgInferencerFactory infFactory) {
+		FgExample fg = getExample(false, true);
+		return new JIDDecodable(fg.getFgLatPred(), infFactory, sentence, hypotheses, params);
+	}
 
-		FgExample fg = getExample(false);
-		fg.updateFgLatPred(model, params.logDomain);
-
-		FactorGraph fgLatPred = fg.getFgLatPred();
-		FgInferencer inf = infFactory.getInferencer(fgLatPred);
-		inf.run();
+	private static class JIDDecodable extends ParsingSentenceDecodable {
 		
-		List<FrameInstance> frames = new ArrayList<FrameInstance>();
-		for(FrameInstanceHypothesis fhyp : this.hypotheses) {
-			FrameInstance fi = decodeHypothesis(inf, fhyp);
-			if(fi != null) frames.add(fi);
+		private Sentence sent;
+		private List<FrameInstanceHypothesis> hypotheses;
+		private ParserParams params;
+
+		public JIDDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<FrameInstanceHypothesis> hypotheses, ParserParams params) {
+			super(fg, infFact);
+			this.sent = sent;
+			this.hypotheses = hypotheses;
+			this.params = params;
 		}
-		
-		return new FNParse(this.sentence, frames);
+
+		@Override
+		public FNParse decode() {
+			FgInferencer inf = getMargins();
+			List<FrameInstance> frames = new ArrayList<FrameInstance>();
+			for(FrameInstanceHypothesis fhyp : this.hypotheses) {
+				FrameInstance fi = JointFrameRoleIdSentence.decodeHypothesis(inf, fhyp, sent, params);
+				if(fi != null) frames.add(fi);
+			}
+			return new FNParse(sent, frames);
+		}
 	}
 	
 	/**
@@ -122,7 +130,7 @@ public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypot
 	 * @param fhyp max over this.
 	 * @return null if nullFrame is decoded
 	 */
-	private FrameInstance decodeHypothesis(FgInferencer inf, FrameInstanceHypothesis fhyp) {
+	private static FrameInstance decodeHypothesis(FgInferencer inf, FrameInstanceHypothesis fhyp, Sentence sentence, ParserParams params) {
 		
 		int tBest = -1;
 		double tBestPotential = 0d;

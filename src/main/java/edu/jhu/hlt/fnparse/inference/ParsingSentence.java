@@ -11,6 +11,7 @@ import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.data.UnlabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
@@ -110,8 +111,11 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	}
 	
 
-	/** you should use this in your implementation of decode() */
-	protected FgExample getExample(boolean labeled) {
+	/**
+	 * @param labeled will return a LabeledFgExample if true, otherwise a UnlabeledFgExample
+	 * @param updateFromModel will call updateFgLatPred if true
+	 */
+	protected FgExample getExample(boolean labeled, boolean updateFromModel) {
 		
 		FactorGraph fg = new FactorGraph();
 		VarConfig gold = new VarConfig();
@@ -133,21 +137,67 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		for(Factor f : factors)
 			fg.addFactor(f);
 		
-		return labeled
+		FgExample fge = labeled
 			? new LabeledFgExample(fg, gold)
 			: new UnlabeledFgExample(fg, new VarConfig());	// if you ever add observed variables, this needs to change
+
+		if(updateFromModel) {
+			assert params.weights != null;
+			fge.updateFgLatPred(params.weights, params.logDomain);
+		}
+		return fge;
 	}
 
 	public List<Hypothesis> getHypotheses() { return hypotheses; }
 	
-	/** might return a FNParse depending on the settings */
-	public abstract FNParse decode(FgModel model, FgInferencerFactory infFactory);
+	
+	/**
+	 * basically a Future<FNParse>
+	 */
+	public abstract static class ParsingSentenceDecodable {
+
+		public final FactorGraph fg;
+		public final FgInferencerFactory infFact;
+		private FgInferencer inf;
+
+		/**
+		 * you should call fg.update*** before providing the factor graph to this constructor.
+		 */
+		public ParsingSentenceDecodable(FactorGraph fg, FgInferencerFactory infFact) {
+			this.fg = fg;
+			this.infFact = infFact;
+		}
+		
+		/**
+		 * forces inference to be run, but will only do so once
+		 * (future calls are just returned from cache).
+		 */
+		public FgInferencer getMargins() {
+			if(inf == null) {
+				inf = infFact.getInferencer(fg);
+				inf.run();
+			}
+			return inf;
+		}
+		
+		/**
+		 * re-decodes the sentence using the current state except for the margins,
+		 * which are computed once and don't change.
+		 */
+		public abstract FNParse decode();
+	}
+
+
+	/**
+	 * may not actually run inference, but returns a Future<FNParse>
+	 */
+	public abstract ParsingSentenceDecodable runInference(FgModel model, FgInferencerFactory infFactory);
 
 	
 	public LabeledFgExample getTrainingExample() {
 		if(gold == null)
 			throw new RuntimeException("are you sure you used the constructor with the gold label?");
-		LabeledFgExample fge = (LabeledFgExample) getExample(true);
+		LabeledFgExample fge = (LabeledFgExample) getExample(true, false);
 		return fge;
 	}
 

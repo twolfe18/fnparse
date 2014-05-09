@@ -48,6 +48,7 @@ import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
+import edu.jhu.hlt.fnparse.inference.ParsingSentence.ParsingSentenceDecodable;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdSentence;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
@@ -267,7 +268,7 @@ public class Parser {
 			FNTagging predictedFrames = p;
 			if(params.usePredictedFramesToTrainRoleId) {
 				FrameIdSentence fid = new FrameIdSentence(p.getSentence(), params);
-				predictedFrames = fid.decode(params.weights, infFactory());
+				predictedFrames = fid.runInference(params.weights, infFactory()).decode();
 			}
 			RoleIdSentence argId = new RoleIdSentence(p.getSentence(), predictedFrames, params, p);
 			LabeledFgExample e = argId.getTrainingExample();
@@ -465,43 +466,70 @@ public class Parser {
 		assert verifyParamConsistency(params);
 	}
 	
-	public List<FNParse> parseUsingGoldFrameId(List<FNParse> gold) {
-		if(params.mode != Mode.PIPELINE_FRAME_ARG)
-			throw new IllegalArgumentException();
-		long start = System.currentTimeMillis();
-		FgInferencerFactory infFact = infFactory();
-		List<FNParse> predicted = new ArrayList<>();
-		for(FNParse p : gold) {
-			RoleIdSentence ris = new RoleIdSentence(p.getSentence(), p, params);
-			predicted.add(ris.decode(params.weights, infFact));
-		}
-		System.out.printf("[parseUsingGoldFrameId] done parsing %d examples in %.1f minutes\n",
-				gold.size(), (System.currentTimeMillis()-start) / (1000d * 60d));
-		return predicted;
-	}
 	
 	public List<FNParse> parseWithoutPeeking(List<FNParse> raw) {
 		return parse(DataUtil.stripAnnotations(raw));
 	}
-	public List<FNParse> parse(List<Sentence> raw) {
+
+	/**
+	 * @param raw is either a List<FNParse> or a List<Sentence>
+	 */
+	public List<FNParse> parse(List<?> raw) {
 		long start = System.currentTimeMillis();
 		FgInferencerFactory infFact = infFactory();
 		List<FNParse> pred = new ArrayList<FNParse>();
-		for(Sentence s : raw) {
-			if(params.mode == Mode.FRAME_ID)
-				pred.add(new FrameIdSentence(s, params).decode(params.weights, infFact));
-			else if(params.mode == Mode.JOINT_FRAME_ARG)
-				pred.add(new JointFrameRoleIdSentence(s, params).decode(params.weights, infFact));
-			else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
-				FNTagging predictedFrames = new FrameIdSentence(s, params).decode(params.weights, infFact);
-				pred.add(new RoleIdSentence(s, predictedFrames, params).decode(params.weights, infFact));
-			}
-			else throw new RuntimeException();
+		for(Object os : raw) {
+			if(os instanceof Sentence)
+				pred.add(getParsingSentenceFor((Sentence) os, infFact).runInference(params.weights, infFact).decode());
+			else if(os instanceof FNParse)
+				pred.add(getParsingSentenceFor((FNParse) os, infFact).runInference(params.weights, infFact).decode());
+			else
+				throw new RuntimeException("os.class=" + os.getClass());
 		}
 		System.out.printf("[parse] done parsing %d examples in %.1f minutes\n",
 				raw.size(), (System.currentTimeMillis()-start) / (1000d * 60d));
 		return pred;
 	}
+	
+	
+	
+	/**
+	 * you only need to provide a {@link FgInferencerFactory} for pipeline with predicted frames,
+	 * otherwise it can be null.
+	 */
+	protected ParsingSentence<? extends FgRelated, ?> getParsingSentenceFor(Sentence s, FgInferencerFactory infFact) {
+		if(params.mode == Mode.FRAME_ID) {
+			return new FrameIdSentence(s, params);
+		}
+		else if(params.mode == Mode.JOINT_FRAME_ARG) {
+			return new JointFrameRoleIdSentence(s, params);
+		}
+		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
+			if(!params.usePredictedFramesToTrainRoleId)
+				throw new IllegalStateException("use the version with a FNParse instead of a Sentence");
+			FrameIdSentence fid = new FrameIdSentence(s, params);
+			ParsingSentenceDecodable almostFrames = fid.runInference(params.weights, infFact);
+			FNTagging frames = almostFrames.decode();
+			return new RoleIdSentence(s, frames, params);
+		}
+		else throw new RuntimeException("unknown mode: " + params.mode);
+	}
+
+	/**
+	 * may look at some gold information.
+	 * 
+	 * you only need to provide a {@link FgInferencerFactory} for pipeline with predicted frames,
+	 * otherwise it can be null.
+	 */
+	public ParsingSentence<? extends FgRelated, ?> getParsingSentenceFor(FNParse p, FgInferencerFactory infFact) {
+		if(params.mode == Mode.PIPELINE_FRAME_ARG && !params.usePredictedFramesToTrainRoleId) {
+			return new RoleIdSentence(p.getSentence(), p, params);
+		}
+		// otherwise, there is nothing we need to steal from the gold labels, use default parse method
+		else return getParsingSentenceFor(p.getSentence(), infFact);
+	}
+	
+	
 	
 	
 	/**
@@ -542,13 +570,25 @@ public class Parser {
 	}
 	
 	private void tuneRecallBias(List<FNParse> examples, ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {
+
+		// run inference and store the margins
+		List<ParsingSentenceDecodable> margins = new ArrayList<>();
+		FgInferencerFactory infFact = this.infFactory();
+		for(FNParse parse : examples) {
+			ParsingSentence<?, ?> ps = getParsingSentenceFor(parse, infFact);
+			margins.add(ps.runInference(params.weights, infFact));
+		}
+		
+		// decode many times and store performance
 		long t = System.currentTimeMillis();
 		double originalBias = decoder.getRecallBias();
 		double bestScore = Double.NEGATIVE_INFINITY;
 		List<Double> scores = new ArrayList<Double>();
 		for(double b : biases) {
 			decoder.setRecallBias(b);
-			List<FNParse> predicted = this.parseWithoutPeeking(examples);
+			List<FNParse> predicted = new ArrayList<FNParse>();
+			for(ParsingSentenceDecodable psd : margins)
+				predicted.add(psd.decode());
 			List<SentenceEval> instances = BasicEvaluation.zip(examples, predicted);
 			double score = obj.evaluate(instances);
 			System.out.printf("[tuneRecallBias %s] recallBias=%.2f %s=%.3f\n", params.mode, b, obj.getName(), score);

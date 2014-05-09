@@ -118,20 +118,33 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	}
 
 	@Override
-	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
+	public ParsingSentenceDecodable runInference(FgModel model, FgInferencerFactory infFactory) {
+		FgExample fg = getExample(false, true);
+		return new RIDDecodable(fg.getFgLatPred(), infFactory, sentence, hypotheses, params);
+	}
+
+	private static class RIDDecodable extends ParsingSentenceDecodable {
+
+		private Sentence sent;
+		private List<RoleVars> hypotheses;
+		private ParserParams params;
 		
-		FgExample fg = getExample(false);
-		fg.updateFgLatPred(model, params.logDomain);
+		public RIDDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<RoleVars> hypotheses, ParserParams params) {
+			super(fg, infFact);
+			this.sent = sent;
+			this.hypotheses = hypotheses;
+			this.params = params;
+		}
+
+		@Override
+		public FNParse decode() {
+			FgInferencer inf = getMargins();
+			List<FrameInstance> fis = new ArrayList<FrameInstance>();
+			for(RoleVars rv : hypotheses)
+				fis.add(decodeRoleVars(rv, inf, sent, params));
+			return new FNParse(sent, fis);
+		}
 		
-		FactorGraph fgLatPred = fg.getFgLatPred();
-		FgInferencer inf = infFactory.getInferencer(fgLatPred);
-		inf.run();
-		
-		List<FrameInstance> fis = new ArrayList<FrameInstance>();
-		for(RoleVars rv : hypotheses)
-			fis.add(decodeRoleVars(rv, inf, sentence, params));
-		
-		return new FNParse(sentence, fis);
 	}
 	
 	public static FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf, Sentence sentence, ParserParams params) {

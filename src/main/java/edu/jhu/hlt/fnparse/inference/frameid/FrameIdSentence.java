@@ -61,34 +61,46 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 	public List<FrameVars> getPossibleFrames() { return hypotheses; }
 
 	@Override
-	public FNParse decode(FgModel model, FgInferencerFactory infFactory) {
-
-		FgExample fg = getExample(false);
-		fg.updateFgLatPred(model, params.logDomain);
-
-		FactorGraph fgLatPred = fg.getFgLatPred();
-		FgInferencer inf = infFactory.getInferencer(fgLatPred);
-		inf.run();
-
-		List<FrameInstance> fis = new ArrayList<FrameInstance>();
-		for(FrameVars fvars : this.hypotheses) {
-			final int T = fvars.numFrames();
-			double[] beliefs = new double[T];
-			for(int t=0; t<T; t++) {
-				DenseFactor df = inf.getMarginals(fvars.getVariable(t));
-				beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
-			}
-			params.normalize(beliefs);
-
-			final int nullFrameIdx = fvars.getNullFrameIdx();
-			int tHat = params.frameDecoder.decode(beliefs, nullFrameIdx);
-			Frame fHat = fvars.getFrame(tHat);
-			if(fHat != Frame.nullFrame)
-				fis.add(FrameInstance.frameMention(fHat, Span.widthOne(fvars.getTargetHeadIdx()), sentence));
-		}
-		return new FNParse(sentence, fis);
+	public ParsingSentenceDecodable runInference(FgModel model, FgInferencerFactory infFactory) {
+		FgExample fg = getExample(false, true);
+		return new FIDDecodable(fg.getFgLatPred(), infFactory, sentence, hypotheses, params);
 	}
 
+	private static class FIDDecodable extends ParsingSentenceDecodable {
+		
+		private Sentence sent;
+		private List<FrameVars> hypotheses;
+		private ParserParams params;
+
+		public FIDDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<FrameVars> hypotheses, ParserParams params) {
+			super(fg, infFact);
+			this.sent = sent;
+			this.hypotheses = hypotheses;
+			this.params = params;
+		}
+
+		@Override
+		public FNParse decode() {
+			FgInferencer inf = this.getMargins();
+			List<FrameInstance> fis = new ArrayList<FrameInstance>();
+			for(FrameVars fvars : this.hypotheses) {
+				final int T = fvars.numFrames();
+				double[] beliefs = new double[T];
+				for(int t=0; t<T; t++) {
+					DenseFactor df = inf.getMarginals(fvars.getVariable(t));
+					beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
+				}
+				params.normalize(beliefs);
+
+				final int nullFrameIdx = fvars.getNullFrameIdx();
+				int tHat = params.frameDecoder.decode(beliefs, nullFrameIdx);
+				Frame fHat = fvars.getFrame(tHat);
+				if(fHat != Frame.nullFrame)
+					fis.add(FrameInstance.frameMention(fHat, Span.widthOne(fvars.getTargetHeadIdx()), sent));
+			}
+			return new FNParse(sent, fis);
+		}
+	}
 
 	private void setGold(FNTagging p) {
 			

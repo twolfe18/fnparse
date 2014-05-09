@@ -20,6 +20,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		super(params);
 	}
 
+	// TODO with syntax, have features describing how similar the projection of the dependency tree from j down is to the actual expanded span
 
 	@Override
 	public void featurize(FeatureVector v, Refinements refs, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {

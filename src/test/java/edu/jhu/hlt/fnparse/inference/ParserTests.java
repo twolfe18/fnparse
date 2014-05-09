@@ -132,11 +132,11 @@ public class ParserTests {
 	public static void overfitting(Parser p, boolean doTraining, String desc) {
 		// should be able to overfit the data
 		// give a simple sentence and make sure that we can predict it correctly when we train on it
-		List<FNParse> train = new ArrayList<FNParse>();
-		List<Sentence> test = new ArrayList<Sentence>();
+		List<FNParse> train = new ArrayList<>();
+		List<FNParse> test = new ArrayList<>();
 		FNParse dummyParse = makeDummyParse();
 		train.add(dummyParse);
-		test.add(dummyParse.getSentence());
+		test.add(dummyParse);
 
 		if(doTraining) {
 			System.out.println("====== Training " + desc + " ======");
