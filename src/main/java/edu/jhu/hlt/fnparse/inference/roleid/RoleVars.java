@@ -26,8 +26,17 @@ import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
  */
 public class RoleVars implements FgRelated {
 
-	public static final int maxArgRoleExpandLeft = 10;
+	// if you check the pareto frontier in ExpansionPruningExperiment:
+	// (6,0) gives 77.9 % recall
+	// (6,3) gives 86.7 % recall
+	// (8,3) gives 88.4 % recall
+	// (8,4) gives 90.0 % recall
+	// (10,5) gives 92.3 % recall
+	// (12,5) gives 93.2 % recall
+	public static final int maxArgRoleExpandLeft = 8;
 	public static final int maxArgRoleExpandRight = 3;
+	
+	private static int prunedExpansions = 0, totalExpansions = 0;
 	
 	public boolean verbose = true;
 	
@@ -107,10 +116,14 @@ public class RoleVars implements FgRelated {
 						if(eGoldI < 0) {
 							System.err.printf("[RoleVars] pruned gold expansion for %s.%s @ %d: %s\n",
 									t.getName(), t.getRole(k), j, eGold);
+							System.err.printf("[RoleVars] of %d roles, we pruned %d away (%.1f%%)\n",
+									totalExpansions+1, prunedExpansions+1, (100d*(prunedExpansions+1))/(totalExpansions+1));
 							eGold = Expansion.headToSpan(j, Span.widthOne(j));
 							eGoldI = r_kj_e_values[k][j].indexOf(eGold);
 							assert eGoldI >= 0;
+							prunedExpansions++;
 						}
+						totalExpansions++;
 						goldConf.put(r_kj_e[k][j], eGoldI);
 						assert eGoldI >= 0;
 						assert eGoldI < r_kj_e_values[k][j].size();

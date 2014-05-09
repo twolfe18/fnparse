@@ -118,6 +118,9 @@ public class Expansion {
 		expRight = right;
 	}
 	
+	public int getExpandLeft() { return expLeft; }
+	public int getExpandRight() { return expRight; }
+	
 	@Override
 	public int hashCode() { return (expLeft << 16) | expRight; }
 	
