@@ -498,7 +498,7 @@ public class Parser {
 	 * you only need to provide a {@link FgInferencerFactory} for pipeline with predicted frames,
 	 * otherwise it can be null.
 	 */
-	protected ParsingSentence<? extends FgRelated, ?> getParsingSentenceFor(Sentence s, FgInferencerFactory infFact) {
+	public ParsingSentence<? extends FgRelated, ?> getParsingSentenceFor(Sentence s, FgInferencerFactory infFact) {
 		if(params.mode == Mode.FRAME_ID) {
 			return new FrameIdSentence(s, params);
 		}
@@ -524,7 +524,7 @@ public class Parser {
 	 */
 	public ParsingSentence<? extends FgRelated, ?> getParsingSentenceFor(FNParse p, FgInferencerFactory infFact) {
 		if(params.mode == Mode.PIPELINE_FRAME_ARG && !params.usePredictedFramesToTrainRoleId) {
-			return new RoleIdSentence(p.getSentence(), p, params);
+			return new RoleIdSentence(p.getSentence(), p, params, p);
 		}
 		// otherwise, there is nothing we need to steal from the gold labels, use default parse method
 		else return getParsingSentenceFor(p.getSentence(), infFact);
