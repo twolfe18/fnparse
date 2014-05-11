@@ -234,6 +234,53 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 		
+		if(params.useSyntaxFeatures) {
+			
+			// how many external parents?
+			int externalParents = 0;
+			for(int i=argSpan.start; i<argSpan.end; i++)
+				if(!argSpan.includes(sent.governor(i)))
+					externalParents++;
+			if(externalParents > 0) {
+				String externalParentsStr = intTrunc(externalParents, 5);
+				b(v, refs, 3d, "externalParents", externalParentsStr);
+				b(v, refs, 2d, r, "externalParents", externalParentsStr);
+				b(v, refs, 1d, rr, "externalParents", externalParentsStr);
+			}
+			
+			// headword has external parent?
+			if(argSpan.includes(sent.governor(argHeadIdx))) {
+				b(v, refs, 3d, "no-head-external-parent");
+				b(v, refs, 2d, r, "no-head-external-parent");
+				b(v, refs, 1d, rr, "no-head-external-parent");
+			}
+			
+			// num children who are external to this span?
+			int externalChildren = 0;
+			for(int i=argSpan.start; i<argSpan.end; i++)
+				for(int j : sent.childrenOf(i))
+					if(!argSpan.includes(j))
+						externalChildren++;
+			if(externalChildren > 0) {
+				String externalChildrensStr = intTrunc(externalChildren, 5);
+				b(v, refs, 3d, "externalChildren", externalChildrensStr);
+				b(v, refs, 2d, r, "externalChildren", externalChildrensStr);
+				b(v, refs, 1d, rr, "externalChildren", externalChildrensStr);
+			}
+			
+			// headword's external children
+			int headExternalChildren = 0;
+			for(int i : sent.childrenOf(argHeadIdx))
+				if(!argSpan.includes(i))
+					headExternalChildren++;
+			if(headExternalChildren > 0) {
+				String headExternalChildrenStr = intTrunc(headExternalChildren, 5);
+				b(v, refs, 3d, "headExternalChildren", headExternalChildrenStr);
+				b(v, refs, 2d, r, "headExternalChildren", headExternalChildrenStr);
+				b(v, refs, 1d, rr, "headExternalChildren", headExternalChildrenStr);
+			}
+		}
+		
 	}
 	
 }
