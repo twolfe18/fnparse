@@ -10,15 +10,14 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 
 public class TargetPruningDataTests {
 
 	
 	@Test
 	public void checkForAFewLUs() {
-		Parser p = new Parser();
-		Map<LexicalUnit, List<Frame>> framesByLU = p.params.targetPruningData.getLU2Frames();
+		Map<LexicalUnit, List<Frame>> framesByLU = TargetPruningData.getInstance().getLU2Frames();
 		FrameIndex fi = FrameIndex.getInstance();
 		checkLU(new LexicalUnit("area", "N"), framesByLU, fi.getFrame("Dimension"));
 		checkLU(new LexicalUnit("year", "N"), framesByLU, fi.getFrame("Calendric_unit"));

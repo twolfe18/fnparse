@@ -178,9 +178,13 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 
 			int jHat = params.argDecoder.decode(beliefs[k], n);
 			if(jHat < n) {
-				Var expansionVar = rv.getExpansionVar(jHat, k);
-				DenseFactor df = inf.getMarginals(expansionVar);
-				arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
+				if(params.predictHeadValuedArguments)
+					arguments[k] = Span.widthOne(jHat);
+				else {
+					Var expansionVar = rv.getExpansionVar(jHat, k);
+					DenseFactor df = inf.getMarginals(expansionVar);
+					arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
+				}
 			}
 		}
 

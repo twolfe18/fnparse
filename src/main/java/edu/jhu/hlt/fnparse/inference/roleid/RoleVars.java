@@ -103,14 +103,16 @@ public class RoleVars implements FgRelated {
 				String name = String.format("r_{i=%d,t=%s,j=%d,k=%d}", i, evoked.getName(), j, k);
 				r_kj[k][j] = new Var(VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
 
-				VarType expansionType = VarType.PREDICTED;
-				if(hasGold && !argRealized)
-					expansionType = VarType.LATENT;
-				setExpansionVarFor(i, evoked, j, k, sent, expansionType);
+				if(!params.predictHeadValuedArguments) {
+					VarType expansionType = VarType.PREDICTED;
+					if(hasGold && !argRealized)
+						expansionType = VarType.LATENT;
+					setExpansionVarFor(i, evoked, j, k, sent, expansionType);
+				}
 
 				if(hasGold) {
 					goldConf.put(r_kj[k][j], BinaryVarUtil.boolToConfig(argRealized));
-					if(argRealized) {	// expansion variables for non-instantiated arguments should be latent
+					if(argRealized && !params.predictHeadValuedArguments) {	// expansion variables for non-instantiated arguments should be latent
 						Expansion eGold = Expansion.headToSpan(j, jGoldSpan);
 						int eGoldI = r_kj_e_values[k][j].indexOf(eGold);
 						if(eGoldI < 0) {

@@ -7,7 +7,6 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FgRelated;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 
 /**
  * Represents all of the frames that could be evoked at a given headword.
@@ -30,7 +29,7 @@ public class FrameVars implements FgRelated {
 	/**
 	 * @param frames should not contain Frame.nullFrame
 	 */
-	public FrameVars(int headIdx, List<FrameInstance> prototypes, List<Frame> frames, ParserParams params) {
+	public FrameVars(int headIdx, List<FrameInstance> prototypes, List<Frame> frames) {
 		this.i = headIdx;
 		int n = frames.size() + 1;
 		this.f_it = new Var[n];

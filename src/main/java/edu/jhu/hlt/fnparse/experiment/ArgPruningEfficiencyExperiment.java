@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -30,7 +31,7 @@ public class ArgPruningEfficiencyExperiment {
 		MultiTimer t = new MultiTimer();
 		t.start("data");
 		List<FNParse> examples = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-		examples = DataUtil.reservoirSample(examples, 1500);
+		examples = DataUtil.reservoirSample(examples, 1500, new Random(9001));
 		t.stop("data");
 		
 		for(LexPruneMethod lexPrune : Arrays.asList(LexPruneMethod.NONE, LexPruneMethod.EXACT, LexPruneMethod.SYNSET)) {

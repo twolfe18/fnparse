@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.data;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -15,17 +16,38 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class DataUtil {
 
-	public static <T extends FNTagging> List<Sentence> stripAnnotations(List<T> tagged) {
+	public static List<Sentence> stripAnnotations(List<? extends FNTagging> tagged) {
 		List<Sentence> raw = new ArrayList<Sentence>();
 		for(FNTagging t : tagged)
 			raw.add(t.getSentence());
 		return raw;
+	}
+	
+	/**
+	 * FNTaggings don't have arguments, this converts them to FNParses with all the
+	 * arguments set to nullSpan.
+	 */
+	public static List<FNParse> promoteTaggingsToParses(List<FNTagging> tags) {
+		List<FNParse> parses = new ArrayList<>();
+		for(FNTagging t : tags) {
+			List<FrameInstance> fis = new ArrayList<>();
+			for(FrameInstance fi : t.getFrameInstances()) {
+				int K = fi.getFrame().numRoles();
+				Span[] args = new Span[K];
+				Arrays.fill(args, Span.nullSpan);
+				fis.add(FrameInstance.newFrameInstance(fi.getFrame(), fi.getTarget(), args, fi.getSentence()));
+			}
+			parses.add(new FNParse(t.getSentence(), fis));
+		}
+		return parses;
 	}
 	
 	public static Map<Sentence, List<FrameInstance>> groupBySentence(List<FrameInstance> fis) {
@@ -40,8 +62,7 @@ public class DataUtil {
 	}
 	
 	
-	public static <T> List<T> reservoirSample(List<T> all, int howMany) {
-		Random rand = new Random(9001);
+	public static <T> List<T> reservoirSample(List<T> all, int howMany, Random rand) {
 		List<T> reservoir = new ArrayList<T>();
 		int i = 0;
 		for(T t : all) {

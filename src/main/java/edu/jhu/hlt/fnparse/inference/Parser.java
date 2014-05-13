@@ -14,6 +14,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -49,9 +50,7 @@ import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.caching.RawExampleFactory;
 import edu.jhu.hlt.fnparse.inference.ParsingSentence.ParsingSentenceDecodable;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdSentence;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
@@ -59,7 +58,6 @@ import edu.jhu.hlt.fnparse.inference.jointid.JointFactorFactory;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
@@ -91,15 +89,19 @@ public class Parser {
 		public boolean useSyntaxFeatures;
 		public boolean fastFeatNames;	// if false, use frame and role names instead of their indices
 		public boolean usePredictedFramesToTrainRoleId;	// otherwise use gold frames
+
+		public boolean predictHeadValuedArguments;	// if true, r_itjk^e is excluded from the model (should be much faster)
 		
 		public Mode mode;
 		public FgModel weights;
 		public Alphabet<String> featIdx;
 
+		public Random rand;
+		public MultiTimer timer;
 		public HeadFinder headFinder;
-		public ApproxF1MbrDecoder frameDecoder;
+//		public ApproxF1MbrDecoder frameDecoder;
 		public ApproxF1MbrDecoder argDecoder;
-		public TargetPruningData targetPruningData;
+//		public TargetPruningData targetPruningData;
 		public IArgPruner argPruner;
 		public int maxTrainSentenceLength;
 		
@@ -108,7 +110,7 @@ public class Parser {
 		public Features.RE reFeatures;
 
 		// these are additive (as in when doing jointId, you include factors from factorsForFrameId)
-		public FactorFactory<FrameVars> factorsForFrameId;
+//		public FactorFactory<FrameVars> factorsForFrameId;
 		public FactorFactory<RoleVars> factorsForRoleId;
 		public FactorFactory<FrameInstanceHypothesis> factorsForJointId;
 		
@@ -118,6 +120,12 @@ public class Parser {
 				Multinomials.normalizeLogProps(proportions);
 			else
 				Multinomials.normalizeProps(proportions);
+		}
+
+		public boolean verifyConsistency() {
+			if(mode != Mode.FRAME_ID && logDomain == false)
+				return false;
+			return true;
 		}
 	}
 	
@@ -144,16 +152,11 @@ public class Parser {
 			//System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
 			//		(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
 			
-			assert verifyParamConsistency(params);
+			assert params.verifyConsistency();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
 	
-	private static boolean verifyParamConsistency(ParserParams params) {
-		if(params.mode != Mode.FRAME_ID && params.logDomain == false)
-			return false;
-		return true;
-	}
 	
 	public Parser(Mode mode, boolean latentDeps, boolean debug) {
 
@@ -168,17 +171,17 @@ public class Parser {
 		params.useSyntaxFeatures = true;
 		params.usePredictedFramesToTrainRoleId = false;
 		params.fastFeatNames = debug;
-		params.targetPruningData = TargetPruningData.getInstance();
 
+		params.rand = new Random(9001);
+		params.timer = new MultiTimer();
 		params.headFinder = new SemaforicHeadFinder();
-		params.frameDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
-		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 1.5d);
-		params.argPruner = new ArgPruner(params);
+		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 0.6d);
+		params.argPruner = null;	//new ArgPruner(null, params.headFinder);
 		params.maxTrainSentenceLength = 50;	// <= 0 for no pruning
 		
-		BinaryBinaryFactorHelper.Mode fDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
+//		BinaryBinaryFactorHelper.Mode fDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
 		BinaryBinaryFactorHelper.Mode rDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-		params.factorsForFrameId = new FrameFactorFactory(params, fDepMode);
+//		params.factorsForFrameId = new FrameFactorFactory(params, fDepMode);
 		params.factorsForRoleId = new RoleFactorFactory(params, rDepMode, false);
 		params.factorsForJointId = new JointFactorFactory(params);
 		
@@ -193,7 +196,7 @@ public class Parser {
 			params.reFeatures = new BasicRoleSpanFeatures(params);
 		}
 
-		assert verifyParamConsistency(params);
+		assert params.verifyConsistency();
 	}
 	
 	public void setMode(Mode m, boolean useLatentDeps) {
@@ -201,7 +204,7 @@ public class Parser {
 			throw new RuntimeException("changing this on a trained model will break things");
 		params.mode = m;
 		params.useLatentDepenencies = useLatentDeps;
-		assert verifyParamConsistency(params);
+		assert params.verifyConsistency();
 	}
 	
 	public ParserParams getParams() { return params; }
@@ -239,14 +242,14 @@ public class Parser {
 	public Regularizer getRegularizer(int numParams, double regularizerMult) {
 		
 		List<Integer> dontRegularize = new ArrayList<Integer>();
-		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId)) {
-			if(ff == null) continue;
-			for(Features f : ff.getFeatures()) {
-				if(f == null)
-					throw new RuntimeException("dont return null features: " + ff);
-				dontRegularize.addAll(f.dontRegularize());
-			}
-		}
+//		for(FactorFactory<?> ff : Arrays.asList(params.factorsForFrameId, params.factorsForRoleId, params.factorsForJointId)) {
+//			if(ff == null) continue;
+//			for(Features f : ff.getFeatures()) {
+//				if(f == null)
+//					throw new RuntimeException("dont return null features: " + ff);
+//				dontRegularize.addAll(f.dontRegularize());
+//			}
+//		}
 		System.out.printf("[getRegularizer] not regularizing %d parameters\n", dontRegularize.size());
 
 		// L2's parameter is variance => bigger means less regularization
@@ -387,7 +390,7 @@ public class Parser {
 	 */
 	public void train(List<FNParse> examples, int passes, int batchSize, Double learningRateMultiplier, double regularizerMult, boolean freezeAlphabet) {
 		
-		assert verifyParamConsistency(params);
+		assert params.verifyConsistency();
 		System.out.println("[Parser train] starting training in " + params.mode + " mode...");
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
@@ -464,7 +467,7 @@ public class Parser {
 		}
 		System.out.printf("[train] done training on %d examples for %.1f minutes\n", exs.size(), (System.currentTimeMillis()-start)/(1000d*60d));
 		System.out.println("[train] params.featIdx.size = " + params.featIdx.size());
-		assert verifyParamConsistency(params);
+		assert params.verifyConsistency();
 	}
 	
 	
@@ -543,7 +546,7 @@ public class Parser {
 		
 		if(examples.size() > maxExamples) {
 			System.out.printf("[Parser tune] only using %d of %d examples\n", maxExamples, examples.size());
-			examples = DataUtil.reservoirSample(examples, maxExamples);
+			examples = DataUtil.reservoirSample(examples, maxExamples, params.rand);
 		}
 
 		List<Double> biases;
@@ -551,9 +554,10 @@ public class Parser {
 		ApproxF1MbrDecoder decoder;
 		if(params.mode == Mode.FRAME_ID) {
 			obj = BasicEvaluation.targetMicroF1;
-			decoder = params.frameDecoder;
+//			decoder = params.frameDecoder;
 			biases = new ArrayList<Double>();
 			for(double b=0.4d; b<10d; b*=1.2d) biases.add(b);
+			throw new RuntimeException("stop using Parser");
 		}
 		else if(params.mode == Mode.PIPELINE_FRAME_ARG) {
 			obj = BasicEvaluation.fullMicroF1;
@@ -568,7 +572,7 @@ public class Parser {
 		else throw new RuntimeException();
 
 		tuneRecallBias(examples, decoder, obj, biases);
-		assert verifyParamConsistency(params);
+		assert params.verifyConsistency();
 	}
 	
 	private void tuneRecallBias(List<FNParse> examples, ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {

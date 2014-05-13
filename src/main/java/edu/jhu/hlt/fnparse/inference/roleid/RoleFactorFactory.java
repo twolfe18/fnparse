@@ -125,7 +125,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				timer.stop("r_itjk ~ 1");
 
 				// r_itjk^e ~ 1
-				if(rvar.expansionVar != null) {
+				if(rvar.expansionVar != null && !params.predictHeadValuedArguments) {
 					timer.start("r_itjk^e ~ 1");
 					phi = new ExplicitExpFamFactor(new VarSet(rvar.expansionVar));
 					for(int ei=0; ei<rvar.expansionValues.size(); ei++) {
@@ -155,7 +155,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				}
 
 				// r_itjk ~ r_itjk^e
-				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor) {
+				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor && !params.predictHeadValuedArguments) {
 					timer.start("r_itjk ~ r_itjk^e");
 					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
 					phi = new ExplicitExpFamFactor(vs);

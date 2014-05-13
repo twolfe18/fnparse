@@ -85,7 +85,7 @@ public class ParserExperiment {
 		ds.split(trainTune, train, tune, Math.min(75, (int) (0.15d * trainTune.size())), "fn15_train-tune");
 		
 		if(nTrainLimit.get() < train.size())
-			train = DataUtil.reservoirSample(train, nTrainLimit.get());
+			train = DataUtil.reservoirSample(train, nTrainLimit.get(), new Random(9001));
 
 		printMemUsage();
 		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
@@ -102,6 +102,13 @@ public class ParserExperiment {
 				+ "and i'm assuming that this model's alphabet (size=%d) already "
 				+ "includes all of the features needed to train in %s mode\n",
 				alphabetModelFile.getPath(), parser.params.featIdx.size(), parserMode);
+		
+		
+		
+		// DEBUGGING:
+		parser.params.predictHeadValuedArguments = false;
+		
+		
 
 		// train
 		Double lrMult = parserMode == Mode.FRAME_ID ? null : 0.05d;	// null means do auto learning rate selection
@@ -127,7 +134,7 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		int maxTestEval = 100;
-		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval) : test;
+		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval, parser.params.rand) : test;
 		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset.size());
 		predicted = parser.parse(testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
@@ -136,7 +143,7 @@ public class ParserExperiment {
 
 		// evaluate (train data)
 		int maxTrainEval = 150;
-		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval) : train;
+		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval, parser.params.rand) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
 		predicted = parser.parse(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);

@@ -34,7 +34,7 @@ public class GenerousEvaluation {
 			double p = 0d;
 			GenerousEvaluation ge = new GenerousEvaluation(new SemaforicHeadFinder());
 			for(SentenceEval se : instances)
-				p += ge.precision(se.getGold(), se.getHypothesis());
+				p += ge.precision(se.getGoldParse(), se.getHypothesisParse());
 			return p / instances.size();
 		}
 	};
@@ -46,7 +46,7 @@ public class GenerousEvaluation {
 			double r = 0d;
 			GenerousEvaluation ge = new GenerousEvaluation(new SemaforicHeadFinder());
 			for(SentenceEval se : instances)
-				r += ge.recall(se.getGold(), se.getHypothesis());
+				r += ge.recall(se.getGoldParse(), se.getHypothesisParse());
 			return r / instances.size();
 		}
 	};

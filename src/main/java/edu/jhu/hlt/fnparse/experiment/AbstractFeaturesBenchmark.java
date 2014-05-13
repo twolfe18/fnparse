@@ -63,7 +63,7 @@ public class AbstractFeaturesBenchmark extends AbstractFeatures<AbstractFeatures
 			double test = fv.get(43);
 			t.stop();
 		}
-		return t.totalTimeInSec();
+		return t.totalTimeInSeconds();
 	}
 	
 }

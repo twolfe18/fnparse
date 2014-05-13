@@ -64,9 +64,9 @@ public class FeatureCountFilter {
 		return keep;
 	}
 
-	public void observe(FgExample instance) {
+	public void observe(FactorGraph instance) {
 		nFG++;
-		for(Factor f : instance.getFgLatPred().getFactors()) {
+		for(Factor f : instance.getFactors()) {
 			nF++;
 			if(f instanceof ExplicitExpFamFactor) {
 				ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
@@ -81,6 +81,10 @@ public class FeatureCountFilter {
 				ignoredCounts.put(key, c + 1);
 			}
 		}
+	}
+
+	public void observe(FgExample instance) {
+		observe(instance.getFgLatPred());
 	}
 	
 	private BitSet keep = null;	// set in filterByCount()

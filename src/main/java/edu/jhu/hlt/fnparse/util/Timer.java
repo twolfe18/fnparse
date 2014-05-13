@@ -60,10 +60,10 @@ public class Timer {
 			String rateStr = rate > 1100d
 					? String.format("%.1f k", rate/1000d)
 					: String.format("%.1f", rate);
-			return String.format("<Timer %s %.2f sec and %d calls total, %s call/sec>", id, totalTimeInSec(), count, rateStr);
+			return String.format("<Timer %s %.2f sec and %d calls total, %s call/sec>", id, totalTimeInSeconds(), count, rateStr);
 		}
 		else
-			return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSec(), count, secPerCall());
+			return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSeconds(), count, secPerCall());
 	}
 	
 	private double countsPerMSec() {
@@ -78,7 +78,7 @@ public class Timer {
 		return (time/1000d) / count;
 	}
 	
-	public double totalTimeInSec() { return time / 1000d; }
+	public double totalTimeInSeconds() { return time / 1000d; }
 	
 	public static final class NoOp extends Timer {
 		public NoOp(String id) { super(id); }

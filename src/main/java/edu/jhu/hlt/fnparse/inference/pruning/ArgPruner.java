@@ -24,7 +24,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.Parser.Mode;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.stages.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IDictionary;
@@ -49,7 +50,8 @@ public class ArgPruner implements Serializable, IArgPruner {
 		
 		File parent = new File("toydata/arg-pruning");
 		Parser p = new Parser(Mode.FRAME_ID, false, true);
-		ArgPruner ap = new ArgPruner(p.params);
+		FrameIdStage fid = new FrameIdStage(p.params);
+		ArgPruner ap = new ArgPruner(fid.params.targetPruningData, p.params.headFinder);
 		
 		if(plain) {
 			ap.clearCachedFiles();
@@ -108,7 +110,9 @@ public class ArgPruner implements Serializable, IArgPruner {
 		EXACT
 	}
 	
-	private ParserParams params;
+	//private ParserParams params;
+	private TargetPruningData targetPruningData;
+	private HeadFinder headFinder;
 	private boolean pruneByPOS;
 	private LexPruneMethod lexMethod;
 	
@@ -142,10 +146,16 @@ public class ArgPruner implements Serializable, IArgPruner {
 	private File persistRoleWordMapTo = new File("toydata/arg-pruning/roleWordMap.gz");
 	private File persistRoleSynsetMapTo = new File("toydata/arg-pruning/roleSynsetMap.gz");
 	
-	public ArgPruner(ParserParams params) {
+	public ArgPruner(TargetPruningData targetPruningData, HeadFinder headFinder) {
 		lexMethod = LexPruneMethod.SYNSET;
 		pruneByPOS = true;
-		this.params = params;
+		this.targetPruningData = targetPruningData;
+		this.headFinder = headFinder;
+		
+		if(targetPruningData == null)
+			throw new IllegalArgumentException();
+		if(headFinder == null)
+			throw new IllegalArgumentException();
 	}
 	
 	public void set(boolean pos, LexPruneMethod lexMethod) {
@@ -186,7 +196,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 			argsPrunedLex++;
 			if(possibleLUs == null)
 				return true;
-			LexicalUnit lu = sentence.getFNStyleLUUnsafe(headWordIdx, params.targetPruningData.getWordnetDict());
+			LexicalUnit lu = sentence.getFNStyleLUUnsafe(headWordIdx, targetPruningData.getWordnetDict());
 			if(lu == null || possibleLUs.contains(lu))
 				return true;
 			argsPrunedLex--;
@@ -217,13 +227,13 @@ public class ArgPruner implements Serializable, IArgPruner {
 			roleWordMap = new Set[FrameIndex.framesInFrameNet+1][];
 			roleSynsetMap = new Set[FrameIndex.framesInFrameNet+1][];
 			FrameIndex fi = FrameIndex.getInstance();
-			IDictionary dict = params.targetPruningData.getWordnetDict();
+			IDictionary dict = targetPruningData.getWordnetDict();
 			WordnetStemmer stemmer = new WordnetStemmer(dict);
 			for(Frame f : fi.allFrames()) {
 				int K = f.numRoles();
 				Set<LexicalUnit>[] roleWords = new Set[K];
 				Set<LexicalUnit>[] roleSynset = new Set[K];
-				for(FrameInstance frameInst : params.targetPruningData.getPrototypesByFrame(f)) {
+				for(FrameInstance frameInst : targetPruningData.getPrototypesByFrame(f)) {
 					for(int k=0; k<K; k++) {
 						Span s = frameInst.getArgument(k);
 						if(s == Span.nullSpan) continue;
@@ -231,7 +241,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 
 						int argHead = s.start;
 						if(s.width() > 1)
-							argHead = params.headFinder.head(s, frameInst.getSentence());
+							argHead = headFinder.head(s, frameInst.getSentence());
 						LexicalUnit lu;
 						try { lu = frameInst.getSentence().getFNStyleLUUnsafe(argHead, dict); }
 						catch(Exception e) {

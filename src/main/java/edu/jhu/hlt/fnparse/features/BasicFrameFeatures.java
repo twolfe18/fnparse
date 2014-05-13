@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
@@ -41,6 +42,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	public transient Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
 	public transient Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 
+	private TargetPruningData targetPruningData;
 	private boolean bowWithDirection = false;
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
@@ -48,6 +50,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	
 	public BasicFrameFeatures(ParserParams params) {
 		super(params);
+		targetPruningData = TargetPruningData.getInstance();
 	}
 	
 	@Override
@@ -93,7 +96,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		
 		
 		// match any of the prototypes from the LEX examples?
-		List<FrameInstance> prototypes = params.targetPruningData.getPrototypesByFrame().get(f);
+		List<FrameInstance> prototypes = targetPruningData.getPrototypesByFrame().get(f);
 		if(prototypes != null) {
 			for(FrameInstance proto : prototypes) {
 				Span t = proto.getTarget();
@@ -254,7 +257,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	private transient IRAMDictionary dict;
 	private IRAMDictionary getDict() {
 		if(dict == null)
-			dict = params.targetPruningData.getWordnetDict();
+			dict = targetPruningData.getWordnetDict();
 		return dict;
 	}
 	

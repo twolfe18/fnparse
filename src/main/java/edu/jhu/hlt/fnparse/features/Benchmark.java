@@ -2,8 +2,8 @@ package edu.jhu.hlt.fnparse.features;
 
 import java.io.File;
 import java.util.List;
+import java.util.Random;
 
-import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -24,7 +24,7 @@ public class Benchmark {
 		int n = 30;
 		if(mode == Mode.FRAME_ID)
 			n *= 10;
-		parses = DataUtil.reservoirSample(parses, n);
+		parses = DataUtil.reservoirSample(parses, n, new Random(9001));
 		
 		//Parser p = new Parser(mode, latentDeps, false);
 		Parser p = new Parser(new File("saved-models/alphabets/argId-reg.model.gz"));
@@ -35,11 +35,11 @@ public class Benchmark {
 		for(FNParse parse : parses) {
 			t.start();
 			ParsingSentence<?, ?> ps = p.getParsingSentenceFor(parse, infFact);
-			LabeledFgExample lfge = ps.getTrainingExample();	// forces features to be computed
+			ps.getTrainingExample();	// forces features to be computed
 			long time = t.stop();
 			System.out.println(parse.getSentence().size() + "\t" + time);
 		}
-		double time = t.totalTimeInSec();
+		double time = t.totalTimeInSeconds();
 		System.out.printf("total time %.1f seconds, %s", time, t.toString());
 	}
 }

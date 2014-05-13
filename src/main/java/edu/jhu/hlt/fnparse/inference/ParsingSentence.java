@@ -91,6 +91,9 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		this.gold = label;
 	}
 	
+	public Sentence getSentence() { return sentence; }
+	
+	public boolean hasGold() { return gold != null; }
 	
 	public static FrameInstance[] getFrameInstancesIndexByHeadword(List<FrameInstance> fis, Sentence s, HeadFinder hf) {
 		int n = s.size();
@@ -115,7 +118,7 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	 * @param labeled will return a LabeledFgExample if true, otherwise a UnlabeledFgExample
 	 * @param updateFromModel will call updateFgLatPred if true
 	 */
-	protected FgExample getExample(boolean labeled, boolean updateFromModel) {
+	public FgExample getExample(boolean labeled, boolean updateFromModel) {
 		
 		FactorGraph fg = new FactorGraph();
 		VarConfig gold = new VarConfig();
@@ -185,6 +188,8 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 		 * which are computed once and don't change.
 		 */
 		public abstract FNParse decode();
+		
+		public FactorGraph getFactorGraph() { return fg; }
 	}
 
 
@@ -209,73 +214,8 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	 * TODO move this into FrameIdSentence? does JointIdSentence need this?
 	 */
 	protected FrameVars makeFrameVar(Sentence s, int headIdx, boolean logDomain) {
-
-		final int maxLexPrototypesPerFrame = 30;
-		
-		if(params.targetPruningData.prune(headIdx, s))
-			return null;
-
-		Set<Frame> uniqFrames = new HashSet<Frame>();
-		List<Frame> frameMatches = new ArrayList<Frame>();
-		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
-		
-		// we need to limit the number of prototypes per frame
-		Counts<Frame> numPrototypes = new Counts<Frame>();
-		
-		// get prototypes/frames from the LEX examples
-		Map<String, List<FrameInstance>> stem2prototypes = params.targetPruningData.getPrototypesByStem();
-		IRAMDictionary wnDict = params.targetPruningData.getWordnetDict();
-		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
-		String word = s.getWord(headIdx);
-		POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
-		List<String> stems = null;
-		try { stems = stemmer.findStems(word, pos); }
-		catch(IllegalArgumentException e) { return null; }	// words that normalized to an empty string throw an exception
-		for(String stem : stems) {
-			List<FrameInstance> protos = stem2prototypes.get(stem);
-			if(protos == null) continue;
-			for(FrameInstance fi : protos) {
-				Frame f = fi.getFrame();
-				int c = numPrototypes.increment(f);
-				if(c > maxLexPrototypesPerFrame) continue;	// TODO reservoir sample
-				if(uniqFrames.add(f)) {
-					frameMatches.add(f);
-					prototypes.add(fi);
-				}
-			}
-		}
-		int framesFromLexExamples = frameMatches.size();
-		
-		// get frames that list this as an LU
-		LexicalUnit fnLU = s.getFNStyleLU(headIdx, params.targetPruningData.getWordnetDict());
-		List<Frame> listedAsLUs = params.targetPruningData.getFramesFromLU(fnLU);
-		for(Frame f : listedAsLUs) {
-			if(uniqFrames.add(f)) {
-				frameMatches.add(f);
-				//prototypes.add(???);
-			}
-		}
-		// infrequently, stemming messes up, "means" is listed for the Means frame, but "mean" isn't
-		for(Frame f : params.targetPruningData.getFramesFromLU(s.getLU(headIdx))) {
-			if(uniqFrames.add(f)) {
-				frameMatches.add(f);
-				//prototypes.add(???);
-			}
-		}
-		
-		if(frameMatches.size() == 0)
-			return null;
-		
-		if(params.debug) {
-			System.out.printf("[ParsingSentence makeFrameVar] #frames-from-LEX=%d #frames-from-LUs=%d\n",
-					framesFromLexExamples, listedAsLUs.size());
-			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n",
-					s.getLU(headIdx), frameMatches);
-			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n",
-					s.getLU(headIdx), prototypes);
-		}
-		
-		return new FrameVars(headIdx, prototypes, frameMatches, params);
+		assert false : "stop using this";
+		return null;
 	}
 	
 }

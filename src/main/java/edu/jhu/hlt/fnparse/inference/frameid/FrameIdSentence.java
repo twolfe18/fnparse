@@ -30,12 +30,12 @@ import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 
 	public FrameIdSentence(Sentence s, ParserParams params) {
-		super(s, params, params.factorsForFrameId);
+		super(s, params, null);
 		initHypotheses();
 	}
 
 	public FrameIdSentence(Sentence s, ParserParams params, FNTagging gold) {
-		super(s, params, params.factorsForFrameId, gold);
+		super(s, params, null, gold);
 		initHypotheses();
 		setGold(gold);
 	}
@@ -66,7 +66,7 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 		return new FIDDecodable(fg.getFgLatPred(), infFactory, sentence, hypotheses, params);
 	}
 
-	private static class FIDDecodable extends ParsingSentenceDecodable {
+	public static class FIDDecodable extends ParsingSentenceDecodable {
 		
 		private Sentence sent;
 		private List<FrameVars> hypotheses;
@@ -81,7 +81,10 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 
 		@Override
 		public FNParse decode() {
-			FgInferencer inf = this.getMargins();
+			return decode(getMargins());
+		}
+		
+		public FNParse decode(FgInferencer inf) {
 			List<FrameInstance> fis = new ArrayList<FrameInstance>();
 			for(FrameVars fvars : this.hypotheses) {
 				final int T = fvars.numFrames();
@@ -93,7 +96,9 @@ public class FrameIdSentence extends ParsingSentence<FrameVars, FNTagging> {
 				params.normalize(beliefs);
 
 				final int nullFrameIdx = fvars.getNullFrameIdx();
-				int tHat = params.frameDecoder.decode(beliefs, nullFrameIdx);
+//				int tHat = params.frameDecoder.decode(beliefs, nullFrameIdx);
+				int tHat = -1;
+				assert false : "stop using FrameIdSentence";
 				Frame fHat = fvars.getFrame(tHat);
 				if(fHat != Frame.nullFrame)
 					fis.add(FrameInstance.frameMention(fHat, Span.widthOne(fvars.getTargetHeadIdx()), sent));

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 
 public class BasicEvaluation {
 
@@ -91,7 +92,7 @@ public class BasicEvaluation {
 		}
 	}
 
-	public static List<SentenceEval> zip(List<FNParse> gold, List<FNParse> hyp) {
+	public static List<SentenceEval> zip(List<? extends FNTagging> gold, List<? extends FNTagging> hyp) {
 
 		if(gold.size() != hyp.size())
 			throw new IllegalArgumentException();
