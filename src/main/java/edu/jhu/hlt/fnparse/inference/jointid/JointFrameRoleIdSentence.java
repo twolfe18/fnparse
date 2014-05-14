@@ -57,7 +57,9 @@ public class JointFrameRoleIdSentence extends ParsingSentence<FrameInstanceHypot
 	}
 
 	private JointFrameRoleIdSentence(boolean hasGold, Sentence s, ParserParams params, FNParse gold) {
-		super(s, params, params.factorsForJointId, gold);
+		//super(s, params, params.factorsForJointId, gold);
+		super(s, params, null, gold);
+		assert false : "stop using this";
 		
 		if(hasGold && gold == null)
 			throw new IllegalArgumentException();

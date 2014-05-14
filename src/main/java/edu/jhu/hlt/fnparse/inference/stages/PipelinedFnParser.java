@@ -12,17 +12,28 @@ import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 public class PipelinedFnParser {
+	
+	// TODO need to not regularize (at all!) the features from the previous stage
+	// (the reason I say "at all" is that the current impl of dontRegularize multiplies by 1000, but not infinity)
+	
+	static enum Mode {
+		FRAME_ID,
+		ARG_HEADS,
+		ARG_SPANS
+	}
 
 	private ParserParams params;
-
 	private FrameIdStage frameId;
-	private AbstractStage<FNTagging, FNParse> argId;
+	private RoleIdStage argId;
 	private AbstractStage<FNParse, FNParse> argExpansion;
 	
-	public PipelinedFnParser() {
+	public PipelinedFnParser(Mode mode) {
 		Parser p = new Parser();
 		params = p.params;
 		frameId = new FrameIdStage(params);
+		if(mode != Mode.FRAME_ID) {
+			argId = new RoleIdStage(p.params);
+		}
 	}
 	
 	public void computeAlphabet(List<FNParse> examples) {
@@ -53,10 +64,10 @@ public class PipelinedFnParser {
 		params.weights = new FgModel(numParams);
 
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
-		frameId.train(sentences, examples);
+		frameId.train(examples);
 
 		if(argId == null) return;
-		List<? extends FNTagging> frames = examples;
+		List<FNTagging> frames = (List<FNTagging>) (Object) examples;
 		if(params.usePredictedFramesToTrainRoleId)
 			frames = frameId.predict(sentences);
 		argId.train(frames, examples);

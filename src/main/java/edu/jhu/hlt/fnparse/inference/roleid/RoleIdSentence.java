@@ -2,10 +2,8 @@ package edu.jhu.hlt.fnparse.inference.roleid;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
@@ -14,6 +12,7 @@ import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -39,44 +38,17 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 	public boolean debugDecode = true;
 
 	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params) {
-		super(s, params, params.factorsForRoleId);
+//		super(s, params, params.factorsForRoleId);
+		super(s, params, null);
 		initHypotheses(frames, null, false);
 	}
 
 	public RoleIdSentence(Sentence s, FNTagging frames, ParserParams params, FNParse gold) {
-		super(s, params, params.factorsForRoleId, gold);
+//		super(s, params, params.factorsForRoleId, gold);
+		super(s, params, null, gold);
 		initHypotheses(frames, gold, true);
 	}
 	
-
-	/**
-	 * In the FN data, there are some parses which have two different FrameInstances
-	 * with the same target. Every instance of this I've seen has just been a mistake
-	 * (the same Frame, just double tagged). My code is really pedantic and throws an
-	 * exception if I produce a parse that has two FrameInstances with the same target,
-	 * and this will happen if I use gold frameId through no fault of my own code.
-	 * This method selects a FNTagging that doesn't violate this constraint.
-	 */
-	public static FNTagging filterOutTargetCollisions(FNTagging input) {
-		Map<Span, FrameInstance> keep = new HashMap<Span, FrameInstance>();
-		boolean someViolation = false;
-		for(FrameInstance fi : input.getFrameInstances()) {
-			FrameInstance collision = keep.put(fi.getTarget(), fi);
-			if(collision != null) {
-				someViolation = true;
-				// choose the FI with more realized arguments
-				if(collision.numRealizedArguments() > fi.numRealizedArguments())
-					keep.put(fi.getTarget(), fi);
-			}
-		}
-		if(!someViolation)
-			return input;
-		else {
-			List<FrameInstance> fis = new ArrayList<FrameInstance>(keep.values());
-			return new FNTagging(input.getSentence(), fis);
-		}
-	}
-
 	
 	/**
 	 * Creates the needed variables and puts them in super.hypotheses.
@@ -93,12 +65,12 @@ public class RoleIdSentence extends ParsingSentence<RoleVars, FNParse> {
 		timer.start("initHypotheses");
 		
 		// make sure that we don't have overlapping targets
-		frames = filterOutTargetCollisions(frames);
+		frames = DataUtil.filterOutTargetCollisions(frames);
 		
 		// build an index keying off of the target head index
 		FrameInstance[] fiByTarget = null;
 		if(hasGold)
-			fiByTarget = getFrameInstancesIndexByHeadword(gold.getFrameInstances(), sentence, params.headFinder);
+			fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(gold.getFrameInstances(), sentence, params.headFinder);
 
 		hypotheses = new ArrayList<RoleVars>();
 		for(FrameInstance fi : frames.getFrameInstances()) {

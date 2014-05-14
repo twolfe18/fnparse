@@ -88,29 +88,28 @@ public interface Stage<Input, Output> {
 	/**
 	 * should include any tuning steps that are necessary (implementer of this method should split off dev/tune data)
 	 */
-	public void train(List<? extends Input> x, List<? extends Output> y);
+	public void train(List<Input> x, List<Output> y);
 	
 	/**
 	 * create the FactorGraph and other materials needed for prediction.
 	 * Technically, {@link Decodable} is lazy, so all that this is guaranteed to do is
 	 * instantiate variables and factors and compute features.
 	 * 
-	 * NOTE: you may want to make another version of this method that takes gold labels and
-	 * bundles them into the StageData.
+	 * @param input
+	 * @param output may be null, in which case "unlabeled" StageData should be returned (only capable of decoding),
+	 *        otherwise labeled StageData should be returned (which is suitable for training).
 	 */
-	public StageDatumExampleList<Input, Output> setupInference(List<? extends Input> input);
-
-	
+	public StageDatumExampleList<Input, Output> setupInference(List<? extends Input> input, List<? extends Output> output);
 
 
 	/**
 	 * Does one step in a pipeline.
 	 * An example would be the "frameId" stage:
-	 *   class FrameId extends Stage<Sentence, FrameVars, FNTagging>
-	 *   
-	 * Implementations of this class should be stateless.
+	 *   class FrameIdStageDatum extends StageDatum<Sentence, FNTagging>
 	 * 
-	 * Implementations of this should not memoize because caching and memory
+	 * Implementations of this interface should be stateless.
+	 * 
+	 * Implementations of this interface should not memoize because caching and memory
 	 * management will be done by classes that call this class.
 	 * 
 	 * @param <Input> type of the data required for this stage to start its job.
@@ -186,18 +185,6 @@ public interface Stage<Input, Output> {
 		public abstract Output decode();
 	}
 	
-	// this is a bad idea due to multiple inheritance
-//	public static abstract class LabeledDecodable<Output> extends Decodable<Output> {
-//		
-//		private final Output label;
-//		
-//		public LabeledDecodable(FactorGraph fg, FgInferencerFactory infFact, Output label) {
-//			super(fg, infFact);
-//			this.label = label;
-//		}
-//		
-//		public Output getLabel() { return label; }
-//	}
 	
 	
 }

@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -10,6 +11,8 @@ import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.train.CrfTrainer;
+import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
@@ -18,7 +21,20 @@ import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.optimize.AdaGrad;
+import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
+import edu.jhu.hlt.optimize.SGD;
+import edu.jhu.hlt.optimize.SGD.SGDPrm;
+import edu.jhu.util.Alphabet;
 
+/**
+ * Some helper code on top of Stage
+ * 
+ * @author travis
+ *
+ * @param <I>
+ * @param <O>
+ */
 public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O> {
 	
 	protected ParserParams globalParams;
@@ -65,7 +81,83 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 	
 	public List<O> predict(List<I> input) {
-		return decode(this.setupInference(input));
+		return decode(this.setupInference(input, null));
+	}
+
+
+	@Override
+	public void train(List<I> x, List<O> y) {
+		int batchSize = 4;
+		int passes = 2;
+		Double learningRate = null;	// null means auto select
+		train(x, y, learningRate, batchSize, passes);
+	}
+
+	public void train(List<I> x, List<O> y, Double learningRate, int batchSize, int passes) {
+		
+		if(globalParams.featIdx.size() == 0)
+			throw new IllegalArgumentException("run AlphabetComputer first!");
+		assert globalParams.verifyConsistency();
+		Timer t = globalParams.timer.get(this.getName() + "-train", true);
+		t.start();
+		
+		List<I> xTrain, xDev;
+		List<O> yTrain, yDev;
+		TuningData td = this.getTuningData();
+		if(td == null) {
+			xTrain = x;
+			yTrain = y;
+			xDev = Collections.emptyList();
+			yDev = Collections.emptyList();
+		}
+		else {
+			xTrain = new ArrayList<>();
+			yTrain = new ArrayList<>();
+			xDev = new ArrayList<>();
+			yDev = new ArrayList<>();
+			devTuneSplit(x, y, xTrain, yTrain, xDev, yDev, 0.15d, 50, globalParams.rand);
+		}
+		
+		CrfTrainerPrm trainerParams = new CrfTrainerPrm();
+		SGDPrm sgdParams = new SGDPrm();
+		AdaGradPrm adagParams = new AdaGradPrm();
+		if(learningRate == null)
+			sgdParams.autoSelectLr = true;
+		else {
+			sgdParams.autoSelectLr = false;
+			adagParams.eta = learningRate;
+		}
+		sgdParams.batchSize = batchSize;
+		sgdParams.numPasses = passes;
+		sgdParams.sched = new AdaGrad(adagParams);
+
+		trainerParams.maximizer = null;
+		trainerParams.batchMaximizer = new SGD(sgdParams);
+		trainerParams.infFactory = infFactory();
+		trainerParams.numThreads = globalParams.threads;
+
+		Alphabet<String> alph = globalParams.featIdx;
+		System.out.printf("[%s train] alphabet is frozen (size=%d), going straight into training\n", this.getName(), alph.size());
+		alph.stopGrowth();
+		
+		// get the data
+		StageDatumExampleList<I, O> exs = this.setupInference(x, y);
+		
+		// setup model and train
+		CrfTrainer trainer = new CrfTrainer(trainerParams);
+		try {
+			globalParams.weights = trainer.train(globalParams.weights, exs);
+		}
+		catch(cc.mallet.optimize.OptimizationException oe) {
+			oe.printStackTrace();
+		}
+		long timeTrain = t.stop();
+		System.out.printf("[%s train] done training on %d examples for %.1f minutes\n", this.getName(), exs.size(), timeTrain/(1000d*60d));
+		System.out.printf("[%s train] params.featIdx.size=%d\n", this.getName(), alph.size());
+
+		// tune
+		if(td != null)
+			tuneRecallBias(xDev, yDev, td);
 	}
 
 	
@@ -86,7 +178,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 		int examplesSeen = 0;
 		FgInferencerFactory infFact = this.infFactory();
-		for(StageDatum<I, O> d : this.setupInference(unlabeledExamples).getStageData()) {
+		for(StageDatum<I, O> d : this.setupInference(unlabeledExamples, null).getStageData()) {
 			fcount.observe(d.getDecodable(infFact).getFactorGraph());
 			examplesSeen++;
 
@@ -101,40 +193,63 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featIdx.size());
 	}
 	
+	
+	public static interface TuningData {
+
+		public ApproxF1MbrDecoder getDecoder();
+
+		/** this is maximized */
+		public EvalFunc getObjective();
+
+		public List<Double> getRecallBiasesToSweep();
+	}
 
 	
-	//public void tuneRecallBias(List<Decodable<O>> examples, List<O> labels,
-	public void tuneRecallBias(StageDatumExampleList<I, O> data,
-			ApproxF1MbrDecoder decoder, EvalFunc obj, List<Double> biases) {
+	/**
+	 * this is for specifying *how* to tune an {@link ApproxF1MbrDecoder}.
+	 * if you don't have one to tune, then return null (the default implementation).
+	 */
+	public TuningData getTuningData() {
+		return null;
+	}
+
+	
+	public void tuneRecallBias(List<I> x, List<O> y, TuningData td) {
+		
+		if(x == null || y == null || x.size() != y.size() || x.size() == 0)
+			throw new IllegalArgumentException();
+		if(td == null)
+			throw new IllegalArgumentException();
+
+		System.out.printf("[%s tuneRecallBias] tuning to maximize %s on %d examples over biases in %s\n",
+				this.getName(), td.getObjective().getName(), x.size(), td.getRecallBiasesToSweep());
 
 		// run inference and store the margins
 		long t = System.currentTimeMillis();
 		FgInferencerFactory infFact = this.infFactory();
+		
 		List<Decodable<O>> decodables = new ArrayList<>();
 		List<O> labels = new ArrayList<>();
-		for(StageDatum<I, O> x : data.getStageData()) {
-			Decodable<O> d = x.getDecodable(infFact);
+		for(StageDatum<I, O> sd : this.setupInference(x, null).getStageData()) {
+			Decodable<O> d = sd.getDecodable(infFact);
 			d.force();
 			decodables.add(d);
-			assert x.hasGold();
-			labels.add(x.getGold());
 		}
-		//for(Decodable<O> dec : examples) dec.force();
 		long tInf = System.currentTimeMillis() - t;
 		
 		// decode many times and store performance
 		t = System.currentTimeMillis();
-		double originalBias = decoder.getRecallBias();
+		double originalBias = td.getDecoder().getRecallBias();
 		double bestScore = Double.NEGATIVE_INFINITY;
 		List<Double> scores = new ArrayList<Double>();
-		for(double b : biases) {
-			decoder.setRecallBias(b);
+		for(double b : td.getRecallBiasesToSweep()) {
+			td.getDecoder().setRecallBias(b);
 			List<O> predicted = new ArrayList<>();
 			for(Decodable<O> m : decodables)
 				predicted.add(m.decode());
 			List<SentenceEval> instances = BasicEvaluation.zip(labels, predicted);
-			double score = obj.evaluate(instances);
-			System.out.printf("[tuneRecallBias %s] recallBias=%.2f %s=%.3f\n", globalParams.mode, b, obj.getName(), score);
+			double score = td.getObjective().evaluate(instances);
+			System.out.printf("[%s tuneRecallBias] recallBias=%.2f %s=%.3f\n", this.getName(), b, td.getObjective().getName(), score);
 			scores.add(score);
 			if(score > bestScore) bestScore = score;
 		}
@@ -147,16 +262,16 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		for(double r : regrets) weights.add(Math.exp(-r * 2));
 
 		double n = 0d, z = 0d;
-		for(int i=0; i<biases.size(); i++) {
-			double b = biases.get(i);
+		for(int i=0; i<td.getRecallBiasesToSweep().size(); i++) {
+			double b = td.getRecallBiasesToSweep().get(i);
 			double w = weights.get(i);
 			n += w * b;
 			z += w;
 		}
 		double bestBias = n / z;
-		System.out.printf("[tuneRecalBias %s] took %.1f sec for inference and %.1f sec for decoding, done. recallBias %.2f => %.2f\n",
-				globalParams.mode, tInf/1000d, tDec/1000d, originalBias, bestBias);
-		decoder.setRecallBias(bestBias);
+		System.out.printf("[%s tuneRecalBias] took %.1f sec for inference and %.1f sec for decoding, done. recallBias %.2f => %.2f\n",
+				this.getName(), tInf/1000d, tDec/1000d, originalBias, bestBias);
+		td.getDecoder().setRecallBias(bestBias);
 	}
 	
 

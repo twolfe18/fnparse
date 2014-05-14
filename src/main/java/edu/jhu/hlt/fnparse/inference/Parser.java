@@ -43,7 +43,6 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.DebuggingFrameFeatures;
 import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
@@ -53,14 +52,9 @@ import edu.jhu.hlt.fnparse.inference.ParsingSentence.ParsingSentenceDecodable;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdSentence;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
-import edu.jhu.hlt.fnparse.inference.jointid.FrameInstanceHypothesis;
-import edu.jhu.hlt.fnparse.inference.jointid.JointFactorFactory;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
-import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdSentence;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.SGD;
@@ -96,23 +90,14 @@ public class Parser {
 		public FgModel weights;
 		public Alphabet<String> featIdx;
 
+		public int threads = 1;
 		public Random rand;
 		public MultiTimer timer;
 		public HeadFinder headFinder;
-//		public ApproxF1MbrDecoder frameDecoder;
-		public ApproxF1MbrDecoder argDecoder;
-//		public TargetPruningData targetPruningData;
-		public IArgPruner argPruner;
-		public int maxTrainSentenceLength;
 		
 		public Features.F  fFeatures;
 		public Features.R  rFeatures;
 		public Features.RE reFeatures;
-
-		// these are additive (as in when doing jointId, you include factors from factorsForFrameId)
-//		public FactorFactory<FrameVars> factorsForFrameId;
-		public FactorFactory<RoleVars> factorsForRoleId;
-		public FactorFactory<FrameInstanceHypothesis> factorsForJointId;
 		
 		/** checks if they're log proportions from this.logDomain */
 		public void normalize(double[] proportions) {
@@ -151,7 +136,6 @@ public class Parser {
 			readIn = true;
 			//System.out.printf("[Parser] done reading model in %.1f seconds (%d known features, weights.l2=%.2f)\n",
 			//		(System.currentTimeMillis() - start)/1000d, params.featIdx.size(), params.model.l2Norm());
-			
 			assert params.verifyConsistency();
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
@@ -176,14 +160,6 @@ public class Parser {
 		params.timer = new MultiTimer();
 		params.headFinder = new SemaforicHeadFinder();
 		params.argDecoder = new ApproxF1MbrDecoder(params.logDomain, 0.6d);
-		params.argPruner = null;	//new ArgPruner(null, params.headFinder);
-		params.maxTrainSentenceLength = 50;	// <= 0 for no pruning
-		
-//		BinaryBinaryFactorHelper.Mode fDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-		BinaryBinaryFactorHelper.Mode rDepMode = latentDeps ? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-//		params.factorsForFrameId = new FrameFactorFactory(params, fDepMode);
-		params.factorsForRoleId = new RoleFactorFactory(params, rDepMode, false);
-		params.factorsForJointId = new JointFactorFactory(params);
 		
 		if(params.debug) {
 			params.fFeatures = new DebuggingFrameFeatures(params);
@@ -395,15 +371,15 @@ public class Parser {
 		Logger.getLogger(CrfTrainer.class).setLevel(Level.ALL);
 		long start = System.currentTimeMillis();
 		
-		if(params.mode != Mode.FRAME_ID && params.maxTrainSentenceLength > 0) {
-			List<FNParse> notHuge = new ArrayList<FNParse>();
-			for(FNParse p : examples)
-				if(p.getSentence().size() <= params.maxTrainSentenceLength)
-					notHuge.add(p);
-			System.out.printf("[Parser train] filtering out sentences longer than %d words, kept %d of %d examples\n",
-					params.maxTrainSentenceLength, notHuge.size(), examples.size());
-			examples = notHuge;
-		}
+//		if(params.mode != Mode.FRAME_ID && params.maxTrainSentenceLength > 0) {
+//			List<FNParse> notHuge = new ArrayList<FNParse>();
+//			for(FNParse p : examples)
+//				if(p.getSentence().size() <= params.maxTrainSentenceLength)
+//					notHuge.add(p);
+//			System.out.printf("[Parser train] filtering out sentences longer than %d words, kept %d of %d examples\n",
+//					params.maxTrainSentenceLength, notHuge.size(), examples.size());
+//			examples = notHuge;
+//		}
 		
 		CrfTrainer.CrfTrainerPrm trainerParams = new CrfTrainer.CrfTrainerPrm();
 		SGD.SGDPrm sgdParams = new SGD.SGDPrm();

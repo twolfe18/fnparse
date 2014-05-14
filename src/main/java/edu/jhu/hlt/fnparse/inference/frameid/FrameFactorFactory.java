@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -17,8 +18,6 @@ import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
  * Instantiates factors that touch f_it.
@@ -29,15 +28,12 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
 	private static final long serialVersionUID = 1L;
 	
-	public final ParserParams params;
+	public final Features.F features;
 	public final BinaryBinaryFactorHelper.Mode rootFactorMode;
 	
-	public FrameFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode rootFactorMode) {
-		this.params = params;
+	public FrameFactorFactory(Features.F features, BinaryBinaryFactorHelper.Mode rootFactorMode) {
+		this.features = features;
 		this.rootFactorMode = rootFactorMode;
-		
-		if(!params.useLatentDepenencies)
-			assert rootFactorMode == BinaryBinaryFactorHelper.Mode.NONE;
 	}
 	
 	@Override
@@ -48,11 +44,11 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	 * just implements partial application.
 	 */
 	private static class FrameDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
-		private ParserParams params;
+		private Features.F features;
 		private String refinement;
 		
-		public FrameDepObservedFeatures(ParserParams params, String refinement) {
-			this.params = params;
+		public FrameDepObservedFeatures(Features.F features, String refinement) {
+			this.features = features;
 			this.refinement = refinement;
 		}
 		
@@ -70,7 +66,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 		public FeatureVector getObservedFeatures(Refinements r) {
 			r = Refinements.product(r, this.refinement, 1d);
 			FeatureVector fv = new FeatureVector();
-			params.fFeatures.featurize(fv, r, i, t, sent);
+			features.featurize(fv, r, i, t, sent);
 			return fv;
 		}
 	}
@@ -81,7 +77,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
 
-		FrameDepObservedFeatures depFeats = new FrameDepObservedFeatures(params, "f_it~l_{root,i}");
+		FrameDepObservedFeatures depFeats = new FrameDepObservedFeatures(features, "f_it~l_{root,i}");
 		BinaryBinaryFactorHelper bbfh = new BinaryBinaryFactorHelper(this.rootFactorMode, depFeats);
 
 		final int n = s.size();
@@ -97,14 +93,14 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 				// unary factor on f_it
 				VarSet vs = new VarSet(fhyp.getVariable(tIdx));
 				FeatureVector fv = new FeatureVector();
-				params.fFeatures.featurize(fv, Refinements.noRefinements, i, t, s);
+				features.featurize(fv, Refinements.noRefinements, i, t, s);
 				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);
 				factors.add(phi);
 				
 				// binary factor f_it ~ l_{root,i}
-				if(params.useLatentDepenencies && rootFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
+				if(rootFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
 					depFeats.set(s, i, t);
 					LinkVar link = l.getLinkVar(-1, i);
 					assert link != null;
@@ -120,9 +116,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
 	@Override
 	public List<Features> getFeatures() {
-		List<Features> feats = new ArrayList<Features>();
-		feats.add(params.fFeatures);
-		return feats;
+		return Arrays.asList((Features) features);
 	}
 }
 

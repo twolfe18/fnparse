@@ -21,14 +21,35 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 
 public class DataUtil {
 
+	
 	public static List<Sentence> stripAnnotations(List<? extends FNTagging> tagged) {
 		List<Sentence> raw = new ArrayList<Sentence>();
 		for(FNTagging t : tagged)
 			raw.add(t.getSentence());
 		return raw;
+	}
+
+	
+	public static FrameInstance[] getFrameInstancesIndexByHeadword(List<FrameInstance> fis, Sentence s, HeadFinder hf) {
+		int n = s.size();
+		FrameInstance[] fiByTarget = new FrameInstance[n];
+		for(FrameInstance fi : fis) {
+			int targetHead = hf.head(fi.getTarget(), s);
+			//assert fiByTarget[targetHead] == null;
+			if(fiByTarget[targetHead] != null) {
+				System.err.println("[DataUtil getFrameInstancesIndexByHeadword] frame instance in " +
+						fi.getSentence().getId() + " has more than one frame-trigger per headword @ " + targetHead);
+				// keep the FI with more non-null arguments
+				if(fi.numRealizedArguments() < fiByTarget[targetHead].numRealizedArguments())
+					continue;
+			}
+			fiByTarget[targetHead] = fi;
+		}
+		return fiByTarget;
 	}
 	
 	/**
@@ -50,6 +71,36 @@ public class DataUtil {
 		return parses;
 	}
 	
+
+	/**
+	 * In the FN data, there are some parses which have two different FrameInstances
+	 * with the same target. Every instance of this I've seen has just been a mistake
+	 * (the same Frame, just double tagged). My code is really pedantic and throws an
+	 * exception if I produce a parse that has two FrameInstances with the same target,
+	 * and this will happen if I use gold frameId through no fault of my own code.
+	 * This method selects a FNTagging that doesn't violate this constraint.
+	 */
+	public static FNTagging filterOutTargetCollisions(FNTagging input) {
+		Map<Span, FrameInstance> keep = new HashMap<Span, FrameInstance>();
+		boolean someViolation = false;
+		for(FrameInstance fi : input.getFrameInstances()) {
+			FrameInstance collision = keep.put(fi.getTarget(), fi);
+			if(collision != null) {
+				someViolation = true;
+				// choose the FI with more realized arguments
+				if(collision.numRealizedArguments() > fi.numRealizedArguments())
+					keep.put(fi.getTarget(), fi);
+			}
+		}
+		if(!someViolation)
+			return input;
+		else {
+			List<FrameInstance> fis = new ArrayList<FrameInstance>(keep.values());
+			return new FNTagging(input.getSentence(), fis);
+		}
+	}
+	
+
 	public static Map<Sentence, List<FrameInstance>> groupBySentence(List<FrameInstance> fis) {
 		Map<Sentence, List<FrameInstance>> m = new HashMap<Sentence, List<FrameInstance>>();
 		for(FrameInstance fi : fis) {

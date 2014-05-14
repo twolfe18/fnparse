@@ -2,10 +2,7 @@ package edu.jhu.hlt.fnparse.inference;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 import edu.jhu.gm.data.FgExample;
 import edu.jhu.gm.data.LabeledFgExample;
@@ -19,19 +16,10 @@ import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
-import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.util.Counts;
-import edu.mit.jwi.IRAMDictionary;
-import edu.mit.jwi.item.POS;
-import edu.mit.jwi.morph.WordnetStemmer;
 
 /**
  * wraps the variables needed for training/predicting the factor graph
@@ -94,25 +82,6 @@ public abstract class ParsingSentence<Hypothesis extends FgRelated, Label> {
 	public Sentence getSentence() { return sentence; }
 	
 	public boolean hasGold() { return gold != null; }
-	
-	public static FrameInstance[] getFrameInstancesIndexByHeadword(List<FrameInstance> fis, Sentence s, HeadFinder hf) {
-		int n = s.size();
-		FrameInstance[] fiByTarget = new FrameInstance[n];
-		for(FrameInstance fi : fis) {
-			int targetHead = hf.head(fi.getTarget(), s);
-			//assert fiByTarget[targetHead] == null;
-			if(fiByTarget[targetHead] != null) {
-				System.err.println("[ParsingSentence getFrameInstancesIndexByHeadword] frame instance in " +
-						fi.getSentence().getId() + " has more than one frame-trigger per headword @ " + targetHead);
-				// keep the FI with more non-null arguments
-				if(fi.numRealizedArguments() < fiByTarget[targetHead].numRealizedArguments())
-					continue;
-			}
-			fiByTarget[targetHead] = fi;
-		}
-		return fiByTarget;
-	}
-	
 
 	/**
 	 * @param labeled will return a LabeledFgExample if true, otherwise a UnlabeledFgExample

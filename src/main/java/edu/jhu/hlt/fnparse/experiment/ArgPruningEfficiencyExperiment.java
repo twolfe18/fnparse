@@ -9,9 +9,11 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.jointid.JointFrameRoleIdSentence;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner.LexPruneMethod;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.Avg;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 
@@ -27,6 +29,8 @@ public class ArgPruningEfficiencyExperiment {
 	public static final boolean debug = false;	// for some reason EXACT and SYNSET get different pruning ratios, which is wrong
 	
 	public static void main(String[] args) {
+		
+		ArgPruner argPruner = new ArgPruner(TargetPruningData.getInstance(), new SemaforicHeadFinder());
 
 		MultiTimer t = new MultiTimer();
 		t.start("data");
@@ -37,7 +41,7 @@ public class ArgPruningEfficiencyExperiment {
 		for(LexPruneMethod lexPrune : Arrays.asList(LexPruneMethod.NONE, LexPruneMethod.EXACT, LexPruneMethod.SYNSET)) {
 			Parser parser = new Parser(Mode.JOINT_FRAME_ARG, false, true);
 			boolean pruneByPos = lexPrune == LexPruneMethod.NONE;
-			((ArgPruner) parser.params.argPruner).set(pruneByPos, lexPrune);
+			argPruner.set(pruneByPos, lexPrune);
 
 			Avg avgKeepRatio = new Avg();	// macro (tells you a little about the skew)
 			Avg keepRatio = new Avg();		// micro (what we care about)

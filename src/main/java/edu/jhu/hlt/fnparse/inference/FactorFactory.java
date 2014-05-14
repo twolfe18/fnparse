@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.features.Features;
 public interface FactorFactory<Hypothesis> extends Serializable {
 	
 	/**
-	 * Return the features used by the factors that this factory instanitates.
+	 * Return the features used by the factors that this factory instantiates.
 	 */
 	public List<Features> getFeatures();
 	

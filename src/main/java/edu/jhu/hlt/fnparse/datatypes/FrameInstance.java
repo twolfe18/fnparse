@@ -47,7 +47,7 @@ public class FrameInstance {
 		}
 	}
 	
-	private Frame frame; 
+	private Frame frame;
 	private Span target;		// index of the target word
 	private Sentence sentence;
 
@@ -105,6 +105,8 @@ public class FrameInstance {
 	public Span getArgument(int roleIdx) { return arguments[roleIdx]; }
 	
 	public int numArguments() { return arguments.length; }
+	
+	public Span[] getArguments() { return arguments; }
 	
 	public int numRealizedArguments() {
 		int c = 0;

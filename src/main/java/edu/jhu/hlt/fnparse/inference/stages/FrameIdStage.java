@@ -18,8 +18,6 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
-import edu.jhu.gm.train.CrfTrainer;
-import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -29,6 +27,7 @@ import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -38,14 +37,8 @@ import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.util.Timer;
-import edu.jhu.hlt.optimize.AdaGrad;
-import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
-import edu.jhu.hlt.optimize.SGD;
-import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
-import edu.jhu.util.Alphabet;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -64,22 +57,29 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
 		public FactorFactory<FrameVars> factorsTemplate;
-		public ParserParams globalParams;
+		public final ParserParams globalParams;
+		
+		public Params(ParserParams globalParams) {
+			this.globalParams = globalParams;
+			decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5);
+			targetPruningData = TargetPruningData.getInstance();
+			BinaryBinaryFactorHelper.Mode factorMode = globalParams.useLatentDepenencies
+					? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
+			factorsTemplate = new FrameFactorFactory(globalParams.fFeatures, factorMode);
+		}
 	}
 	
-	public Params params = new Params();
+
+	public Params params;
 	
+
 	public FrameIdStage(ParserParams globalParams) {
 		super(globalParams);
-		params.globalParams = globalParams;
-		params.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5);
-		params.targetPruningData = TargetPruningData.getInstance();
-		BinaryBinaryFactorHelper.Mode factorMode = globalParams.useLatentDepenencies
-				? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-		params.factorsTemplate = new FrameFactorFactory(globalParams, factorMode);
+		params = new Params(globalParams);
 	}
 	
-	public void train(List<FNTagging> examples) {
+
+	public void train(List<FNParse> examples) {
 		Collections.shuffle(examples, globalParams.rand);
 		List<Sentence> x = new ArrayList<>();
 		List<FNTagging> y = new ArrayList<>();
@@ -90,82 +90,24 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		train(x, y);
 	}
 
+	
 	@Override
-	public void train(List<? extends Sentence> x, List<? extends FNTagging> y) {
-		
-		if(globalParams.featIdx.size() == 0)
-			throw new IllegalArgumentException("run AlphabetComputer first!");
-		assert globalParams.verifyConsistency();
-		Timer t = globalParams.timer.get("frameId-train", true);
-		t.start();
-		
-		List<Sentence> xTrain = new ArrayList<>();
-		List<FNTagging> yTrain = new ArrayList<>();
-		List<Sentence> xDev = new ArrayList<>();
-		List<FNTagging> yDev = new ArrayList<>();
-		devTuneSplit(x, y, xTrain, yTrain, xDev, yDev, 0.15d, 50, globalParams.rand);
-		
-		CrfTrainerPrm trainerParams = new CrfTrainerPrm();
-		SGDPrm sgdParams = new SGDPrm();
-		AdaGradPrm adagParams = new AdaGradPrm();
-		if(params.learningRate == null)
-			sgdParams.autoSelectLr = true;
-		else {
-			sgdParams.autoSelectLr = false;
-			adagParams.eta = params.learningRate;
-		}
-		sgdParams.batchSize = params.batchSize;
-		sgdParams.numPasses = params.passes;
-		sgdParams.sched = new AdaGrad(adagParams);
+	public TuningData getTuningData() {
 
-		trainerParams.maximizer = null;
-		trainerParams.batchMaximizer = new SGD(sgdParams);
-		trainerParams.infFactory = infFactory();
-		trainerParams.numThreads = params.threads;
+		final List<Double> biases = new ArrayList<Double>();
+		for(double b=0.5d; b<8d; b *= 1.1d) biases.add(b);
 
-		Alphabet<String> alph = params.globalParams.featIdx;
-		System.out.printf("[FrameId train] alphabet is frozen (size=%d), going straight into training\n", alph.size());
-		alph.stopGrowth();
-		
-		// get the data
-		StageDatumExampleList<Sentence, FNTagging> exs = this.setupInference(xTrain, yTrain);
-		
-		// setup model and train
-		CrfTrainer trainer = new CrfTrainer(trainerParams);
-		try {
-			params.globalParams.weights = trainer.train(params.globalParams.weights, exs);
-		}
-		catch(cc.mallet.optimize.OptimizationException oe) {
-			oe.printStackTrace();
-		}
-		long timeTrain = t.stop();
-		System.out.printf("[FrameId train] done training on %d examples for %.1f minutes\n", exs.size(), timeTrain/(1000d*60d));
-		System.out.println("[FrameId train] params.featIdx.size = " + alph.size());
-
-		// tune
-		tune(xDev, yDev);
+		return new TuningData() {
+			@Override
+			public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
+			@Override
+			public EvalFunc getObjective() { return BasicEvaluation.targetMicroF1; }
+			@Override
+			public List<Double> getRecallBiasesToSweep() { return biases; }
+		};
 	}
-
-
-	private void tune(List<Sentence> x, List<FNTagging> y) {
-		Timer t = globalParams.timer.get("frameId-tune", true);
-		t.start();
-		List<Double> biases = new ArrayList<Double>();
-		for(double b = 0.5d; b < 8d; b *= 1.1d) biases.add(b);
-		StageDatumExampleList<Sentence, FNTagging> dec = setupInference(x);
-		tuneRecallBias(dec, params.decoder, BasicEvaluation.targetMicroF1, biases);
-		t.stop();
-	}
-
 
 	@Override
-	public StageDatumExampleList<Sentence, FNTagging> setupInference(List<? extends Sentence> input) {
-		return setupInference(input, null);
-	}
-
-	/**
-	 * if labels is not null, will create FrameIdData with labels
-	 */
 	public StageDatumExampleList<Sentence, FNTagging> setupInference(List<? extends Sentence> input, List<? extends FNTagging> labels) {
 		List<StageDatum<Sentence, FNTagging>> data = new ArrayList<>();
 		int n = input.size();

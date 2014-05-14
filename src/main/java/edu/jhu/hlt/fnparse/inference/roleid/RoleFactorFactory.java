@@ -9,11 +9,9 @@ import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
@@ -124,19 +122,19 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				factors.add(phi);
 				timer.stop("r_itjk ~ 1");
 
-				// r_itjk^e ~ 1
-				if(rvar.expansionVar != null && !params.predictHeadValuedArguments) {
-					timer.start("r_itjk^e ~ 1");
-					phi = new ExplicitExpFamFactor(new VarSet(rvar.expansionVar));
-					for(int ei=0; ei<rvar.expansionValues.size(); ei++) {
-						fv = new FeatureVector();
-						Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
-						params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
-						phi.setFeatures(ei, fv);
-					}
-					factors.add(phi);
-					timer.stop("r_itjk^e ~ 1");
-				}
+//				// r_itjk^e ~ 1
+//				if(rvar.expansionVar != null && !params.predictHeadValuedArguments) {
+//					timer.start("r_itjk^e ~ 1");
+//					phi = new ExplicitExpFamFactor(new VarSet(rvar.expansionVar));
+//					for(int ei=0; ei<rvar.expansionValues.size(); ei++) {
+//						fv = new FeatureVector();
+//						Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
+//						params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
+//						phi.setFeatures(ei, fv);
+//					}
+//					factors.add(phi);
+//					timer.stop("r_itjk^e ~ 1");
+//				}
 
 				// r_itjk ~ l_ij
 				// this is the only factor which introduces loops
@@ -155,30 +153,30 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 				}
 
 				// r_itjk ~ r_itjk^e
-				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor && !params.predictHeadValuedArguments) {
-					timer.start("r_itjk ~ r_itjk^e");
-					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
-					phi = new ExplicitExpFamFactor(vs);
-					int C = vs.calcNumConfigs();
-					for(int c=0; c<C; c++) {
-						VarConfig conf = vs.getVarConfig(c);
-						boolean argRealized = BinaryVarUtil.configToBool(conf.getState(rvar.roleVar));
-						if(argRealized) {
-							int ei = conf.getState(rvar.roleVar);
-							Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
-							fv = new FeatureVector();
-							params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
-							phi.setFeatures(c, fv);
-						}
-						else {
-							// i don't think we need to parameterize negative arg configs
-							phi.setFeatures(c, AbstractFeatures.emptyFeatures);
-						}
-						
-					}
-					factors.add(phi);
-					timer.start("r_itjk ~ r_itjk^e");
-				}
+//				if(rvar.expansionVar != null && this.includeExpansionBinaryFactor && !params.predictHeadValuedArguments) {
+//					timer.start("r_itjk ~ r_itjk^e");
+//					VarSet vs = new VarSet(rvar.roleVar, rvar.expansionVar);
+//					phi = new ExplicitExpFamFactor(vs);
+//					int C = vs.calcNumConfigs();
+//					for(int c=0; c<C; c++) {
+//						VarConfig conf = vs.getVarConfig(c);
+//						boolean argRealized = BinaryVarUtil.configToBool(conf.getState(rvar.roleVar));
+//						if(argRealized) {
+//							int ei = conf.getState(rvar.roleVar);
+//							Span arg = rvar.expansionValues.get(ei).upon(rvar.j);
+//							fv = new FeatureVector();
+//							params.reFeatures.featurize(fv, Refinements.noRefinements, i, t, rvar.j, rvar.k, arg, s);
+//							phi.setFeatures(c, fv);
+//						}
+//						else {
+//							// i don't think we need to parameterize negative arg configs
+//							phi.setFeatures(c, AbstractFeatures.emptyFeatures);
+//						}
+//						
+//					}
+//					factors.add(phi);
+//					timer.start("r_itjk ~ r_itjk^e");
+//				}
 				
 			}
 		}
