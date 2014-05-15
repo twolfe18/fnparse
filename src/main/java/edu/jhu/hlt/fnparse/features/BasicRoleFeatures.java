@@ -1,23 +1,23 @@
 package edu.jhu.hlt.fnparse.features;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.util.Alphabet;
 
 public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures> implements Features.R {
 
 	private static final long serialVersionUID = 1L;
-	
-	private static final String pathFeatKey = "BasicRoleFeatures:path-features";
-	private static final MultiTimer timer = new MultiTimer();
-	
-	public BasicRoleFeatures(ParserParams params) {
-		super(params);
+
+	public BasicRoleFeatures(Alphabet<String> featAlph) {
+		super(featAlph);
 	}
 	
 	@Override
@@ -33,7 +33,7 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		// ***but only if you're not using params.fastFeatNames!!!***
 		// (if you are, you will get an int, rather than a role name, which will not generalize across frames)
 		
-		String fs = "f" + (params.fastFeatNames ? f.getId() : f.getName());
+		String fs = "f" + (useFastFeaturenames ? f.getId() : f.getName());
 		String rs = "r" + f.getRoleSafe(roleIdx);	// use this instead of int because same role (string) may not have the same index across frames
 		String fsrs = fs + "-" + rs;
 		LexicalUnit tHead = sent.getLU(targetHead);
@@ -112,7 +112,7 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		}
 		
 		// dependency tree features
-		if(params.useSyntaxFeatures) {
+		if(useSyntaxFeatures) {
 
 			if(argRealized && sent.governor(argHead) == targetHead) {
 				b(fv, r, 3d, "trigger-arg-dep");

@@ -1,11 +1,14 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.util.Map.Entry;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.util.Alphabet;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 
@@ -16,8 +19,8 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 	private boolean inSpan = true;
 	private boolean betweenTargetAndHead = true;
 	
-	public BasicRoleSpanFeatures(ParserParams params) {
-		super(params);
+	public BasicRoleSpanFeatures(Alphabet<String> featAlph) {
+		super(featAlph);
 	}
 
 	// TODO with syntax, have features describing how similar the projection of the dependency tree from j down is to the actual expanded span
@@ -33,7 +36,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 				: f.getRole(roleIdx);
 		String rr = f == Frame.nullFrame
 				? "role-for-null-frame"
-				: (params.fastFeatNames
+				: (this.useFastFeaturenames
 						? f.getId() + "." + roleIdx
 						: f.getName() + "." + f.getRole(roleIdx));
 		
@@ -117,21 +120,34 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 
 		// features that count number of intermediate POS between arg and target
 		if(betweenTargetAndHead) {
+			Counts<String> posCounts = new Counts<>();
 			if(targetHeadIdx < argHeadIdx) {
 				for(int i=targetHeadIdx+1; i<argHeadIdx; i++) {
-					b(v, refs, r, "between-target-and-arg", sent.getPos(i));
-					b(v, refs, rr, "between-target-and-arg", sent.getPos(i));
+					String pos = sent.getPos(i);
+					posCounts.increment(pos);
+					b(v, refs, r, "between-target-and-arg", pos);
+					b(v, refs, rr, "between-target-and-arg", pos);
 					b(v, refs, 0.3d, r, "between-target-and-arg", sent.getLemma(i));
 					b(v, refs, 0.1d, rr, "between-target-and-arg", sent.getLemma(i));
 				}
 			}
 			else if(argHeadIdx < targetHeadIdx) {
 				for(int i=argHeadIdx+1; i<targetHeadIdx; i++) {
-					b(v, refs, r, "between-target-and-arg", sent.getPos(i));
-					b(v, refs, rr, "between-target-and-arg", sent.getPos(i));
+					String pos = sent.getPos(i);
+					posCounts.increment(pos);
+					b(v, refs, r, "between-target-and-arg", pos);
+					b(v, refs, rr, "between-target-and-arg", pos);
 					b(v, refs, 0.3d, r, "between-target-and-arg", sent.getLemma(i));
 					b(v, refs, 0.1d, rr, "between-target-and-arg", sent.getLemma(i));
 				}
+			}
+			for(Entry<String, Integer> x : posCounts.entrySet()) {
+				String c = intTrunc(x.getValue(), 5);
+				String c2 = intTrunc(x.getValue()/2, 5);
+				b(v, refs, r, "between-target-and-arg-count", x.getKey(), c);
+				b(v, refs, r, "between-target-and-arg-count/2", x.getKey(), c2);
+				b(v, refs, rr, "between-target-and-arg-count", x.getKey(), c);
+				b(v, refs, rr, "between-target-and-arg-count/2", x.getKey(), c2);
 			}
 		}
 
@@ -234,7 +250,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 		
-		if(params.useSyntaxFeatures) {
+		if(useSyntaxFeatures) {
 			
 			// how many external parents?
 			int externalParents = 0;

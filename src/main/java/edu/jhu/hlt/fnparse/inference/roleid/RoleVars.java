@@ -12,8 +12,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FgRelated;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
-import edu.jhu.hlt.fnparse.inference.stages.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 
 /**
  * Represents which roles are active for a given frame at a location
@@ -77,7 +76,6 @@ public class RoleVars implements FgRelated {
 //		r_kj_e = new Var[K][n];
 //		r_kj_e_values = new Expansion.Iter[K][n];
 		for(int k=0; k<K; k++) {
-			int inThisRow = 1;
 
 			Span jGoldSpan = null;
 			int jGold = -1;
@@ -86,6 +84,7 @@ public class RoleVars implements FgRelated {
 				jGold = jGoldSpan == Span.nullSpan ? n : globalParams.headFinder.head(jGoldSpan, gold.getSentence());
 			}
 
+			int inThisRow = 0;
 			for(int j=0; j<n; j++) {
 
 				boolean argRealized = (j == jGold);
@@ -188,7 +187,11 @@ public class RoleVars implements FgRelated {
 	
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
-		// i dont think i really need to add the variables to fg
+		
+		Iterator<RVar> iter = this.getVars();
+		while(iter.hasNext())
+			fg.addVar(iter.next().roleVar);
+		
 		if(hasLabels())
 			gold.put(this.goldConf);
 	}

@@ -56,7 +56,7 @@ public class DataUtil {
 	 * FNTaggings don't have arguments, this converts them to FNParses with all the
 	 * arguments set to nullSpan.
 	 */
-	public static List<FNParse> promoteTaggingsToParses(List<FNTagging> tags) {
+	public static List<FNParse> convertTaggingsToParses(List<FNTagging> tags) {
 		List<FNParse> parses = new ArrayList<>();
 		for(FNTagging t : tags) {
 			List<FrameInstance> fis = new ArrayList<>();
@@ -71,6 +71,48 @@ public class DataUtil {
 		return parses;
 	}
 	
+	/**
+	 * drops all arguments from FrameInstances
+	 */
+	public static List<FNTagging> convertParsesToTaggings(List<FNParse> parses) {
+		List<FNTagging> out = new ArrayList<>();
+		for(FNParse p : parses) {
+			Sentence s = p.getSentence();
+			List<FrameInstance> targets = new ArrayList<>();
+			for(FrameInstance fi : p.getFrameInstances())
+				targets.add(FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), s));
+			out.add(new FNTagging(s, targets));
+		}
+		return out;
+	}
+	
+	/**
+	 * takes parses with regular spans as arguments and converts them to arguments with
+	 * with-1 (head) spans.
+	 */
+	public static List<FNParse> convertArgumenSpansToHeads(List<FNParse> fullParses, HeadFinder hf) {
+		List<FNParse> out = new ArrayList<>();
+		for(FNParse p : fullParses) {
+			Sentence sent = p.getSentence();
+			List<FrameInstance> oldFis = p.getFrameInstances();
+			List<FrameInstance> newFis = new ArrayList<>(oldFis.size());
+			for(FrameInstance fi : oldFis) {
+				FrameInstance fic = fi.clone();
+				int K = fic.numArguments();
+				assert K == fic.getFrame().numRoles();
+				for(int k=0; k<K; k++) {
+					Span a = fic.getArgument(k);
+					if(a.width() > 1) {
+						int h = hf.head(a, sent);
+						fic.setArgument(k, Span.widthOne(h));
+					}
+				}
+				newFis.add(fic);
+			}
+			out.add(new FNParse(p.getSentence(), newFis));
+		}
+		return out;
+	}
 
 	/**
 	 * In the FN data, there are some parses which have two different FrameInstances

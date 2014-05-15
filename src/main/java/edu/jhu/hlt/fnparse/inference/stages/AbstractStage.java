@@ -11,6 +11,7 @@ import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -19,12 +20,13 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
+import edu.jhu.hlt.optimize.functions.L2;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -38,6 +40,7 @@ import edu.jhu.util.Alphabet;
 public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O> {
 	
 	protected ParserParams globalParams;
+	protected FgModel weights;
 	
 	public AbstractStage(ParserParams params) {
 		this.globalParams = params;
@@ -95,11 +98,15 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 	public void train(List<I> x, List<O> y, Double learningRate, int batchSize, int passes) {
 		
-		if(globalParams.featIdx.size() == 0)
+		int numParams = globalParams.featAlph.size();
+		if(numParams == 0)
 			throw new IllegalArgumentException("run AlphabetComputer first!");
+
 		assert globalParams.verifyConsistency();
 		Timer t = globalParams.timer.get(this.getName() + "-train", true);
 		t.start();
+		
+		weights = new FgModel(numParams + 1);
 		
 		List<I> xTrain, xDev;
 		List<O> yTrain, yDev;
@@ -135,8 +142,9 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
 		trainerParams.numThreads = globalParams.threads;
+		trainerParams.regularizer = new L2(1_000_000d);
 
-		Alphabet<String> alph = globalParams.featIdx;
+		Alphabet<String> alph = globalParams.featAlph;
 		System.out.printf("[%s train] alphabet is frozen (size=%d), going straight into training\n", this.getName(), alph.size());
 		alph.stopGrowth();
 		
@@ -146,7 +154,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		// setup model and train
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		try {
-			globalParams.weights = trainer.train(globalParams.weights, exs);
+			weights = trainer.train(weights, exs);
 		}
 		catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
@@ -190,7 +198,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 		t.stop();
 		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
-			examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featIdx.size());
+			examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featAlph.size());
 	}
 	
 	
@@ -216,10 +224,15 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	
 	public void tuneRecallBias(List<I> x, List<O> y, TuningData td) {
 		
-		if(x == null || y == null || x.size() != y.size() || x.size() == 0)
+		if(x == null || y == null || x.size() != y.size())
 			throw new IllegalArgumentException();
 		if(td == null)
 			throw new IllegalArgumentException();
+		
+		if(x.size() == 0) {
+			System.err.printf("[%s tuneRecallBias] WARNING: 0 examples were provided for tuning, skipping this.\n", this.getName());
+			return;
+		}
 
 		System.out.printf("[%s tuneRecallBias] tuning to maximize %s on %d examples over biases in %s\n",
 				this.getName(), td.getObjective().getName(), x.size(), td.getRecallBiasesToSweep());

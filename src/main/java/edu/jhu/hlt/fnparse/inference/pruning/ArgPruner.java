@@ -22,10 +22,9 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.Parser.Mode;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.stages.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IDictionary;
@@ -49,9 +48,9 @@ public class ArgPruner implements Serializable, IArgPruner {
 		boolean plain = true;	// just write out the data
 		
 		File parent = new File("toydata/arg-pruning");
-		Parser p = new Parser(Mode.FRAME_ID, false, true);
-		FrameIdStage fid = new FrameIdStage(p.params);
-		ArgPruner ap = new ArgPruner(fid.params.targetPruningData, p.params.headFinder);
+		ParserParams params = new ParserParams();
+		FrameIdStage fid = new FrameIdStage(params);
+		ArgPruner ap = new ArgPruner(fid.params.targetPruningData, params.headFinder);
 		
 		if(plain) {
 			ap.clearCachedFiles();

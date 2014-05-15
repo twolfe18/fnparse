@@ -1,17 +1,21 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
+ 
+import static org.junit.Assert.assertTrue;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.gm.train.CrfObjective;
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -19,16 +23,12 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 
 public class ParserTests {
 	
-	private static final boolean testLatentDeps = true;
-	private static final boolean testJoint = false;
-
 	public static FNParse makeDummyParse() {
 		boolean verbose = false;
 
@@ -66,114 +66,51 @@ public class ParserTests {
 		return new FNParse(s, instances);
 	}
 	
+	
 	@Before
-	public void ensureWorkingDirExists() {
-		new File("saved-models/testing").mkdirs();
+	public void setupLogs() {
+		Logger.getLogger(CrfObjective.class).setLevel(Level.INFO);
 	}
 	
 	@Test
-	public void frameId() {
-//		Parser p = new Parser(Mode.FRAME_ID, false, true);
-//		p.params.frameDecoder.setRecallBias(1d);
-//		overfitting(p, true, "FRAME_ID");
+	public void basic() {
+		PipelinedFnParser parser = canOverfitAnExample(makeDummyParse(), true, 1d, 1d);
+		ModelIO.writeHumanReadable(parser.getFrameIdParams(), parser.getAlphabet(), new File("saved-models/testing/weights.frameId.txt"));
+		ModelIO.writeHumanReadable(parser.getArgIdParams(), parser.getAlphabet(), new File("saved-models/testing/weights.argId.txt"));
+		ModelIO.writeHumanReadable(parser.getArgSpanParams(), parser.getAlphabet(), new File("saved-models/testing/weights.argSpan.txt"));
+	}
+	
+	@Test
+	public void zfuzz() {
+		List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+		parses = DataUtil.reservoirSample(parses, 30, new Random(9001));
+		for(FNParse p : parses) {
+			if(p.getFrameInstances().size() == 0)
+				continue;
+			canOverfitAnExample(p, true, 0.6d, 0.6d);
+		}
+	}
+	
+	public PipelinedFnParser canOverfitAnExample(FNParse p, boolean verbose, double targetF1Thresh, double fullF1Thresh) {
 		PipelinedFnParser parser = new PipelinedFnParser();
-		List<FNParse> dummy = Arrays.asList(makeDummyParse());
+		List<FNParse> dummy = Arrays.asList(p);	//makeDummyParse());
 		parser.computeAlphabet(dummy);
 		parser.train(dummy);
 		List<FNParse> predicted = parser.predict(DataUtil.stripAnnotations(dummy));
-		assertEquals(BasicEvaluation.targetMicroF1.evaluate(BasicEvaluation.zip(dummy, predicted)), 1d, 1e-8);
-	}
 
-	//@Test
-	public void frameIdWithLatentDeps() {
-		if(!testLatentDeps) assertTrue("not testing latent deps", false);
-		boolean useLatentDeps = true;
-		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
-		overfitting(p, true, "FRAME_ID_LATENT");
-	}
-
-	//@Test
-	public void joint() {
-		if(!testJoint) assertTrue("not testing joint", false);
-		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "JOINT");
-	}
-
-	
-	//@Test
-	public void pipeline() {
-		Parser p = getFrameIdTrainedOnDummy();
-		p.setMode(Mode.PIPELINE_FRAME_ARG, false);
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "PIPELINE");
-	}
-	
-	//@Test
-	public void pipelineWithLatentDeps() {
-		if(!testLatentDeps) assertTrue("not testing latent deps", false);
-		Parser p = getFrameIdTrainedOnDummy();
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "PIPELINE_LATENT");
-	}
-
-	// TODO joint with latent
-	
-	
-	//@Test
-	public void testDummyFrameIdModel() {
-		Parser p = getFrameIdTrainedOnDummy();
-		assertTrue(p.params.debug);
-		assertEquals(Mode.FRAME_ID, p.params.mode);
-		assertTrue(p.params.featIdx.size() > 0);
-		assertTrue(p.params.weights.l2Norm() > 0d);
-	}
-	
-	public static Parser getFrameIdTrainedOnDummy() {
-//		Parser p = new Parser(Mode.FRAME_ID, false, true);
-//		p.params.frameDecoder.setRecallBias(2d);
-//		p.train(Arrays.asList(makeDummyParse()));
-//		return p;
-		throw new RuntimeException("fixme");
-	}
-
-	
-	public static void overfitting(Parser p, boolean doTraining, String desc) {
-		// should be able to overfit the data
-		// give a simple sentence and make sure that we can predict it correctly when we train on it
-		List<FNParse> train = new ArrayList<>();
-		List<FNParse> test = new ArrayList<>();
-		FNParse dummyParse = makeDummyParse();
-		train.add(dummyParse);
-		test.add(dummyParse);
-
-		if(doTraining) {
-			System.out.println("====== Training " + desc + " ======");
-			p.train(train, 15, 1, null, 10000d, false);
-			p.writeWeights(new File("saved-models/testing/" + desc + ".txt"));
+		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(BasicEvaluation.zip(dummy, predicted));
+		double fullF1 = BasicEvaluation.fullMicroF1.evaluate(BasicEvaluation.zip(dummy, predicted));
+		if(verbose) {
+			System.out.println("gold = " + Describe.fnParse(dummy.get(0)));
+			System.out.println("hyp  = " + Describe.fnParse(predicted.get(0)));
+			System.out.println("targetF1 = " + targetF1);
+			System.out.println("fullF1   = " + fullF1);
 		}
+		
+		assertTrue(targetF1 >= targetF1Thresh);
+		assertTrue(fullF1 >= fullF1Thresh);
+		return parser;
+	}
 
-		System.out.println("====== Running Prediction " + desc + " ======");
-		List<FNParse> predicted = p.parse(test);
-		assertEquals(test.size(), predicted.size());
-		System.out.println("gold: " + Describe.fnParse(train.get(0)));
-		System.out.println("hyp:  " + Describe.fnParse(predicted.get(0)));
-		
-		SentenceEval sentEval = new SentenceEval(dummyParse, predicted.get(0));
-		
-		assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
-		assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
-		if(p.params.mode != Mode.FRAME_ID) {
-			assertSameParse(train.get(0), predicted.get(0));
-			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
-			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);
-		}
-		System.out.println("done with " + desc + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
-	}
-	
-	public static void assertSameParse(FNParse a, FNParse b) {
-		assertEquals(a.getSentence(), b.getSentence());
-		assertEquals(a.getFrameInstances(), b.getFrameInstances());
-	}
 	
 }

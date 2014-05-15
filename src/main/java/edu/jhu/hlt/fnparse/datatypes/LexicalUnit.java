@@ -8,6 +8,8 @@ import java.io.Serializable;
 
 public class LexicalUnit implements Serializable {
 
+	private static final long serialVersionUID = 1L;
+
 	public final String word;
 	public final String pos;
 	private transient String fullStr;

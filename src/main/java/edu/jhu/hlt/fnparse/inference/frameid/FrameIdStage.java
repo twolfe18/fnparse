@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.stages;
+package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -15,6 +15,7 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -28,17 +29,18 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
+import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameFactorFactory;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameVars;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.optimize.function.Regularizer;
-import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
+import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -52,20 +54,22 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		public int passes = 2;
 		public double propDev = 0.15d;
 		public int maxDev = 50;
-		public Regularizer regularizer = new L2(10000d);
+//		public Regularizer regularizer = new L2(10000d);
 		public Double learningRate = null;	// if null, auto select learning rate
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
+		public Features.F features;
 		public FactorFactory<FrameVars> factorsTemplate;
 		public final ParserParams globalParams;
 		
 		public Params(ParserParams globalParams) {
 			this.globalParams = globalParams;
-			decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5);
+			decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
 			targetPruningData = TargetPruningData.getInstance();
 			BinaryBinaryFactorHelper.Mode factorMode = globalParams.useLatentDepenencies
 					? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-			factorsTemplate = new FrameFactorFactory(globalParams.fFeatures, factorMode);
+			features = new BasicFrameFeatures(globalParams.featAlph);
+			factorsTemplate = new FrameFactorFactory(features, factorMode);
 		}
 	}
 	
@@ -115,9 +119,9 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		for(int i=0; i<n; i++) {
 			Sentence s = input.get(i);
 			if(labels == null)
-				data.add(new FrameIdDatum(s, params));
+				data.add(new FrameIdDatum(s, params, weights));
 			else
-				data.add(new FrameIdDatum(s, params, labels.get(i)));
+				data.add(new FrameIdDatum(s, params, weights, labels.get(i)));
 		}
 		return new StageDatumExampleList<Sentence, FNTagging>(data);
 	}
@@ -205,13 +209,15 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 	public static class FrameIdDatum implements StageDatum<Sentence, FNTagging> {
 		
 		private final Params params;
+		private final FgModel weights;
 		private final Sentence sentence;
 		private final boolean hasGold;
 		private final FNTagging gold;
 		private final List<FrameVars> possibleFrames;
 		
-		public FrameIdDatum(Sentence s, Params params) {
+		public FrameIdDatum(Sentence s, Params params, FgModel weights) {
 			this.params = params;
+			this.weights = weights;
 			this.sentence = s;
 			this.hasGold = false;
 			this.gold = null;
@@ -219,9 +225,10 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			initHypotheses();
 		}
 
-		public FrameIdDatum(Sentence s, Params params, FNTagging gold) {
+		public FrameIdDatum(Sentence s, Params params, FgModel weights, FNTagging gold) {
 			assert gold != null;
 			this.params = params;
+			this.weights = weights;
 			this.sentence = s;
 			this.hasGold = true;
 			this.gold = gold;
@@ -321,7 +328,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		@Override
 		public FrameIdDecodable getDecodable(FgInferencerFactory infFact) {
 			FactorGraph fg = this.getFactorGraph();
-			return new FrameIdDecodable(sentence, possibleFrames, fg, infFact, params);
+			return new FrameIdDecodable(sentence, possibleFrames, fg, infFact, weights, params);
 		}
 
 		@Override
@@ -344,9 +351,8 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		private final Sentence sentence;
 		private final List<FrameVars> possibleFrames;
 
-		public FrameIdDecodable(Sentence sent, List<FrameVars> possibleFrames,
-				FactorGraph fg, FgInferencerFactory infFact, Params params) {
-			super(fg, infFact);
+		public FrameIdDecodable(Sentence sent, List<FrameVars> possibleFrames, FactorGraph fg, FgInferencerFactory infFact, FgModel weights, Params params) {
+			super(fg, infFact, weights, params.globalParams.logDomain);
 			this.params = params;
 			this.sentence = sent;
 			this.possibleFrames = possibleFrames;

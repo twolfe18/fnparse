@@ -6,14 +6,12 @@ import java.io.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.Parser.Mode;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 
 public class ParserExperiment {
 
-	public static Mode parserMode;
+//	public static Mode parserMode;
 	private static File alphabetModelFile;	// input
 	
 	public static void main(String[] args) {

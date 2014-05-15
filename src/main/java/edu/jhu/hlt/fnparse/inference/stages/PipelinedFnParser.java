@@ -7,97 +7,84 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
 import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.util.Alphabet;
 
 public class PipelinedFnParser {
 	
 	// TODO need to not regularize (at all!) the features from the previous stage
 	// (the reason I say "at all" is that the current impl of dontRegularize multiplies by 1000, but not infinity)
+	// HeterogeneousL2.zeroMeanIgnoringIndices(dontRegularize, regularizerMult, numParams);
 	
-	static enum Mode {
-		FRAME_ID,
-		ARG_HEADS,
-		ARG_SPANS
-	}
+	private boolean skipExpansions = false;
 
 	private ParserParams params;
 	private FrameIdStage frameId;
 	private RoleIdStage argId;
 	private AbstractStage<FNParse, FNParse> argExpansion;
 	
-	public PipelinedFnParser(Mode mode) {
-		Parser p = new Parser();
-		params = p.params;
+	public PipelinedFnParser() {
+		params = new ParserParams();
 		frameId = new FrameIdStage(params);
-		if(mode != Mode.FRAME_ID) {
-			argId = new RoleIdStage(p.params);
-		}
+		argId = new RoleIdStage(params);
+		argExpansion = new RoleSpanStage(params);
 	}
 	
+	public FgModel getFrameIdParams() { return frameId.weights; }
+	public FgModel getArgIdParams() { return argId.weights; }
+	public FgModel getArgSpanParams() { return argExpansion.weights; }
+	
+	public Alphabet<String> getAlphabet() { return params.featAlph; }
+	
 	public void computeAlphabet(List<FNParse> examples) {
-		Timer t = params.timer.get("compute-alph", true);
+		Timer t = params.timer.get("computeAlphabet", true);
 		t.start();
-		params.featIdx.startGrowth();
+		params.featAlph.startGrowth();
 		
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 		frameId.scanFeatures(sentences, 5);
-		if(argId != null) {
-			// TODO: same issue here, compute features on predictions, not gold
-			argId.scanFeatures(examples, 5);
-			if(argExpansion != null) {
-				argExpansion.scanFeatures(examples, 5);
-			}
+
+		// TODO: same issue here, compute features on predictions, not gold
+		List<FNTagging> frames = DataUtil.convertParsesToTaggings(examples);
+		argId.scanFeatures(frames, 5);
+
+		if(!skipExpansions) {
+			List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
+			argExpansion.scanFeatures(onlyHeads, 5);
 		}
 		
-		params.featIdx.stopGrowth();
+		params.featAlph.stopGrowth();
 		t.stop();
 	}
 
 	public void train(List<FNParse> examples) {
 
-		// allocate the model
-		if(params.featIdx.isGrowing())
-			throw new RuntimeException();
-		int numParams = params.featIdx.size() + 1;
-		params.weights = new FgModel(numParams);
-
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 		frameId.train(examples);
-
-		if(argId == null) return;
-		List<FNTagging> frames = (List<FNTagging>) (Object) examples;
-		if(params.usePredictedFramesToTrainRoleId)
-			frames = frameId.predict(sentences);
+		
+		List<FNTagging> frames = params.usePredictedFramesToTrainArgId
+				? frameId.predict(sentences)
+				: DataUtil.convertParsesToTaggings(examples);
 		argId.train(frames, examples);
-
-		// if we predict the wrong head, there is no way to recover by predicting it's span
-		// so there is no reason not to train on gold heads+expansions
-		if(argExpansion == null) return;
-		argExpansion.train(examples, examples);
+		
+		if(!skipExpansions) {
+			// if we predict the wrong head, there is no way to recover by predicting it's span
+			// so there is no reason not to train on gold heads+expansions
+			List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
+			argExpansion.train(onlyHeads, examples);
+		}
 	}
 	
 	public List<FNParse> predict(List<Sentence> sentences) {
 		List<FNTagging> frames = frameId.predict(sentences);
-		
-		if(argId == null) return DataUtil.promoteTaggingsToParses(frames);
 		List<FNParse> argHeads = argId.predict(frames);
-		
-		if(argExpansion == null) return argHeads;
+		if(skipExpansions)
+			return argHeads;
 		List<FNParse> fullParses = argExpansion.predict(argHeads);
-
 		return fullParses;
 	}
 	
-	public void scanFeatures(List<FNParse> examples, double maxTimeInMinutes) {
-
-		frameId.scanFeatures(DataUtil.stripAnnotations(examples), maxTimeInMinutes);
-		
-		// TODO: these should take FNTaggings and FNParses produced by the
-		// stage that came before them, otherwise they'll be extracting
-		// features off of non-real examples.
-		argId.scanFeatures(examples, maxTimeInMinutes);
-		argExpansion.scanFeatures(examples, maxTimeInMinutes);
-	}
 }

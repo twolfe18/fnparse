@@ -5,7 +5,10 @@ import java.util.List;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.ExpFamFactor;
+import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.util.HasFactorGraph;
 
 /**
@@ -154,9 +157,18 @@ public interface Stage<Input, Output> {
 		public final FgInferencerFactory infFact;
 		private FgInferencer inf;
 		
-		public Decodable(FactorGraph fg, FgInferencerFactory infFact) {
+		public Decodable(FactorGraph fg, FgInferencerFactory infFact, FgModel weights, boolean logDomain) {
 			this.fg = fg;
 			this.infFact = infFact;
+			
+			// make sure the factors have their values computed before running inference
+			// (training seems to do this automatically)
+			if(weights != null) {
+				for(Factor f : fg.getFactors()) {
+					if(f instanceof ExpFamFactor)
+						((ExpFamFactor) f).updateFromModel(weights, logDomain);
+				}
+			}
 		}
 		
 		@Override

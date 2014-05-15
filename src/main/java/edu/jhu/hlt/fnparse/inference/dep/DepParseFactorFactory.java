@@ -14,7 +14,7 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.srl.CorpusStatistics;
 import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
 import edu.jhu.srl.DepParseFactorGraph.DepParseFactorTemplate;
@@ -85,7 +85,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		
 		// unary factors on edge variables
 		@SuppressWarnings("unchecked")
-		Alphabet<Object> alph = (Alphabet<Object>) (Object) params.featIdx;
+		Alphabet<Object> alph = (Alphabet<Object>) (Object) params.featAlph;
 		FeatureExtractor fe = new DepParseFeatureExtractor(fePrm, toPacayaSentence(s), corpusStats, alph);
 		final int n = s.size();
 		for(int i=-1; i<n; i++) {

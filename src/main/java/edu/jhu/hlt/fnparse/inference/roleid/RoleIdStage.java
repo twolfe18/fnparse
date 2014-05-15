@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.stages;
+package edu.jhu.hlt.fnparse.inference.roleid;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -13,6 +13,7 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -27,15 +28,15 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleFactorFactory;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleVars;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
+import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements Stage<FNTagging, FNParse> {
@@ -49,13 +50,14 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int maxSentenceLengthForTraining = 50;
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
-		public FactorFactory<RoleVars> factorTemplate;
+		public RoleFactorFactory factorTemplate;
 		
 		public Params(ParserParams globalParams) {
 			BinaryBinaryFactorHelper.Mode rDepMode = globalParams.useLatentDepenencies
 					? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
 			this.factorTemplate = new RoleFactorFactory(globalParams, rDepMode, false);
 			this.argPruner = new ArgPruner(TargetPruningData.getInstance(), globalParams.headFinder);
+			this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
 		}
 	}
 	
@@ -120,9 +122,9 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		for(int i=0; i<n; i++) {
 			FNTagging x = input.get(i);
 			if(output == null)
-				data.add(new RoleIdStageDatum(x, globalParams, params));
+				data.add(new RoleIdStageDatum(x, weights, globalParams, params));
 			else
-				data.add(new RoleIdStageDatum(x, output.get(i), globalParams, params));
+				data.add(new RoleIdStageDatum(x, output.get(i), weights, globalParams, params));
 		}
 		return new StageDatumExampleList<>(data);
 	}
@@ -140,10 +142,12 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		private final FNParse gold;
 		private final Params params;
 		private final ParserParams globalParams;
+		private final FgModel weights;
 
 		/** you don't know gold */
-		public RoleIdStageDatum(FNTagging frames, ParserParams globalParams, Params params) {
+		public RoleIdStageDatum(FNTagging frames, FgModel weights, ParserParams globalParams, Params params) {
 			this.roleVars = new  ArrayList<>();
+			this.weights = weights;
 			this.input = frames;
 			this.gold = null;
 			this.globalParams = globalParams;
@@ -152,10 +156,11 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		}
 
 		/** you know gold */
-		public RoleIdStageDatum(FNTagging frames, FNParse gold, ParserParams globalParams, Params params) {
+		public RoleIdStageDatum(FNTagging frames, FNParse gold, FgModel weights, ParserParams globalParams, Params params) {
 			if(gold == null)
 				throw new IllegalArgumentException();
 			this.roleVars = new  ArrayList<>();
+			this.weights = weights;
 			this.input = frames;
 			this.gold = gold;
 			this.globalParams = globalParams;
@@ -177,7 +182,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			if(hasGold && gold.getSentence() != frames.getSentence())
 				throw new IllegalArgumentException();
 
-			Timer t = globalParams.timer.get("argId-initHypotheses");
+			Timer t = globalParams.timer.get("argId-initHypotheses", true);
 			t.start();
 
 			// make sure that we don't have overlapping targets
@@ -220,6 +225,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		}
 		
 		protected FactorGraph getFactorGraph() {
+			
 			FactorGraph fg = new FactorGraph();
 
 			// create factors
@@ -254,7 +260,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 
 		@Override
 		public Decodable<FNParse> getDecodable(FgInferencerFactory infFact) {
-			return new RoleIdDecodable(getFactorGraph(), infFact, getSentence(), roleVars, globalParams, params);
+			return new RoleIdDecodable(getFactorGraph(), infFact, weights, getSentence(), roleVars, globalParams, params);
 		}
 	}
 	
@@ -265,18 +271,17 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 	 */
 	public static class RoleIdDecodable extends Decodable<FNParse> {
 
-		private Sentence sent;
-		private List<RoleVars> hypotheses;
-		private ApproxF1MbrDecoder decoder;
-//		private Params params;
-		private ParserParams globalParams;
+		private final Sentence sent;
+		private final List<RoleVars> hypotheses;
+		private final ApproxF1MbrDecoder decoder;
+		private final ParserParams globalParams;
 		
-		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<RoleVars> hypotheses, ParserParams globalParams, Params params) {
-			super(fg, infFact);
+		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, FgModel weights, Sentence sent, List<RoleVars> hypotheses, ParserParams globalParams, Params params) {
+			super(fg, infFact, weights, globalParams.logDomain);
 			this.sent = sent;
 			this.hypotheses = hypotheses;
 			this.globalParams = globalParams;
-//			this.params = params;
+			this.decoder = params.decoder;
 		}
 
 		@Override
@@ -304,27 +309,26 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 					Arrays.fill(beliefs[i], Double.NEGATIVE_INFINITY);
 			}
 
+			boolean[] considered = new boolean[K];
 			Iterator<RVar> iter = rv.getVars();
 			while(iter.hasNext()) {
 				RVar rvar = iter.next();
 				DenseFactor df = inf.getMarginals(rvar.roleVar);
 				beliefs[rvar.k][rvar.j] = df.getValue(BinaryVarUtil.boolToConfig(true));
+				considered[rvar.k] = true; 
+//				System.out.println(rvar.roleVar.getName() + "\t" + df);
 			}
 			for(int k=0; k<K; k++) {
+				
+				if(!considered[k]) continue;
+//				System.out.printf("%30s %30s %s\n", rv.t.getName(), rv.t.getRole(k), Arrays.toString(beliefs[k]));
 
 				// TODO add Exactly1 factor!
 				globalParams.normalize(beliefs[k]);
 
 				int jHat = decoder.decode(beliefs[k], n);
-				if(jHat < n) {
-					//				if(params.predictHeadValuedArguments)
+				if(jHat < n)
 					arguments[k] = Span.widthOne(jHat);
-					//				else {
-					//					Var expansionVar = rv.getExpansionVar(jHat, k);
-					//					DenseFactor df = inf.getMarginals(expansionVar);
-					//					arguments[k] = rv.getArgSpanFor(df.getArgmaxConfigId(), jHat, k);
-					//		globalParams}
-				}
 			}
 
 			if(t != null) t.stop();

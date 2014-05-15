@@ -7,7 +7,6 @@ import java.util.List;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -18,24 +17,27 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 
 	private static final long serialVersionUID = 1L;
 	
+	public static final FeatureVector emptyFeatures = new FeatureVector();
+
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
-	
+
 	public static LexicalUnit getLUSafe(int i, Sentence s) {
 		if(i < 0) return luStart;
 		if(i >= s.size()) return luEnd;
 		return s.getLU(i);
 	}
 	
-	public static final FeatureVector emptyFeatures = new FeatureVector();
 	
-	protected ParserParams params;
+	protected boolean useFastFeaturenames = false;
+	protected boolean useSyntaxFeatures = true;
+	protected boolean debug = false;
+	protected Alphabet<String> featAlph;
 	
-	public AbstractFeatures(ParserParams params) {
-		this.params = params;
+	public AbstractFeatures(Alphabet<String> featAlph) {
+		this.featAlph = featAlph;
 	}
-	
-	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
+
 	
 	/**
 	 * by default, nothing is excluded from regularization,
@@ -72,12 +74,15 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	}
 	 */
 
+	private String name = null;
 	/**
 	 * all feature names are prefixed with this string.
 	 * default implementation is class name.
 	 */
 	public String getName() {
-		return this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
+		if(name == null)
+			name = this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
+		return name;
 	}
 	
 	protected final void b(FeatureVector fv, Refinements refs, String... featureNamePieces) {
@@ -90,7 +95,6 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 */
 	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
 		
-		Alphabet<String> featIdx = params.featIdx;
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
@@ -104,15 +108,15 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 				sn.append(fns);
 			}
 			String s = sn.toString();
-			if(featIdx.isGrowing()) {
-				int sz = featIdx.size();
-				int idx = featIdx.lookupIndex(s, true);
+			if(featAlph.isGrowing()) {
+				int sz = featAlph.size();
+				int idx = featAlph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
 				fv.add(idx, weight * refs.getWeight(ri));
 			}
 			else {
-				int idx = featIdx.lookupIndex(s, false);
+				int idx = featAlph.lookupIndex(s, false);
 				if(idx >= 0) fv.add(idx, weight * refs.getWeight(ri));
 				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}

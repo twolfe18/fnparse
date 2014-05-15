@@ -93,6 +93,11 @@ public class FrameInstance {
 		Arrays.fill(args, Span.nullSpan);
 		return new FrameInstance(frame, target, args, sent);
 	}
+	
+	public FrameInstance clone() {
+		Span[] args = this.arguments.clone();
+		return new FrameInstance(this.frame, this.target, args, this.sentence);
+	}
 
 	public boolean onlyTargetLabeled() { return this.arguments == null; }
 	

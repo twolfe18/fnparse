@@ -30,6 +30,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	
 	public final Features.F features;
 	public final BinaryBinaryFactorHelper.Mode rootFactorMode;
+	public final Refinements f_it_unaryRef = new Refinements("f_it~1");
 	
 	public FrameFactorFactory(Features.F features, BinaryBinaryFactorHelper.Mode rootFactorMode) {
 		this.features = features;
@@ -93,7 +94,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 				// unary factor on f_it
 				VarSet vs = new VarSet(fhyp.getVariable(tIdx));
 				FeatureVector fv = new FeatureVector();
-				features.featurize(fv, Refinements.noRefinements, i, t, s);
+				features.featurize(fv, f_it_unaryRef, i, t, s);
 				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
 				phi.setFeatures(BinaryVarUtil.boolToConfig(false), AbstractFeatures.emptyFeatures);

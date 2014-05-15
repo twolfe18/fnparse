@@ -19,9 +19,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.util.Alphabet;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IPointer;
@@ -37,31 +36,25 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	
 	private static final String intercept = "intercept";
 	private static final String frameFeatPrefix = "frame=";
-	
-	public transient Timer full = Timer.noOp; //new Timer("all", 75000);
-	public transient Timer parentTimer = Timer.noOp; //new Timer("parent", 75000);
-	public transient Timer childTimer = Timer.noOp; //new Timer("children", 75000);
 
 	private TargetPruningData targetPruningData;
 	private boolean bowWithDirection = false;
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
-	public boolean debug = false;
 	
-	public BasicFrameFeatures(ParserParams params) {
-		super(params);
+	public BasicFrameFeatures(Alphabet<String> featAlph) {
+		super(featAlph);
 		targetPruningData = TargetPruningData.getInstance();
 	}
 	
 	@Override
 	public void featurize(FeatureVector v, Refinements refs, int head, Frame f, Sentence s) {
 		
-		if(full != null) full.start();
 		final int n = s.size();
 		Set<String> bag = new HashSet<String>();
 		
 		LexicalUnit headLU = s.getLU(head);
-		String fs = "f=" + (params.fastFeatNames ? f.getId() : f.getName());
+		String fs = "f=" + (this.useFastFeaturenames ? f.getId() : f.getName());
 		String fsc = f == Frame.nullFrame ? "nullFrame" : "nonNullFrame";
 		
 
@@ -108,10 +101,9 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		else b(v, refs, "no-LEX-prototypes");
 
 		
-		if(params.useSyntaxFeatures) {
+		if(useSyntaxFeatures) {
 		
 			// parent words
-			if(parentTimer != null) parentTimer.start();
 			int parentIdx = s.governor(head);
 			LexicalUnit parent = AbstractFeatures.getLUSafe(parentIdx, s);
 			b(v, refs, fs, "parent=", parent.getFullString());
@@ -120,10 +112,8 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 			b(v, refs, fsc, "parent=", parent.getFullString());
 			b(v, refs, fsc, "parent=", parent.word);
 			b(v, refs, fsc, "parent=", parent.pos);
-			if(parentTimer != null) parentTimer.stop();
 
 			// direct children and descendants
-			if(childTimer != null) childTimer.start();
 			for(int i : s.childrenOf(head)) {
 				LexicalUnit c = s.getLU(i);
 				b(v, refs, fs, "child=", c.getFullString());
@@ -135,7 +125,6 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 				//allChildren(fs, i, 1, seen, s, v, refs);
 				//allChildren(fsc, i, 1, seen, s, v, refs);
 			}
-			if(childTimer != null) childTimer.stop();
 			
 			// path to target head
 			List<String> pathFragments = new ArrayList<String>();
@@ -250,8 +239,6 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 		b(v, refs, fsc, "to-the-right=", rr.pos, r.word);
 		b(v, refs, fsc, "to-the-right=", rr.pos, r.pos);
 		b(v, refs, fsc, "to-the-right=", rr.word, r.pos);
-		
-		if(full != null) full.stop();
 	}
 	
 	private transient IRAMDictionary dict;

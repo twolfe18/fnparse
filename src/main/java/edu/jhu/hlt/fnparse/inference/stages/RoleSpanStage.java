@@ -2,27 +2,35 @@ package edu.jhu.hlt.fnparse.inference.stages;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.util.Alphabet;
 
 public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements Stage<FNParse, FNParse> {
 	
@@ -39,14 +47,20 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		public int maxArgRoleExpandLeft = 10;
 		public int maxArgRoleExpandRight = 5;
 		
-		public FactorFactory<ExpansionVar> factorTemplate = new RoleSpanFactorFactory();
+		public FactorFactory<ExpansionVar> factorTemplate;
+		public ParserParams globalParams;
+		
+		public Params(ParserParams params) {
+			factorTemplate = new RoleSpanFactorFactory(params.featAlph);
+			this.globalParams = params;
+		}
 	}
 	
 	public Params params;
 	
 	public RoleSpanStage(ParserParams globalParams) {
 		super(globalParams);
-		params = new Params();
+		params = new Params(globalParams);
 	}
 
 
@@ -58,9 +72,9 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		for(int i=0; i<n; i++) {
 			FNParse x = onlyHeads.get(i);
 			if(labels == null)
-				data.add(new RoleSpanStageDatum(x, params));
+				data.add(new RoleSpanStageDatum(x, params, weights));
 			else
-				data.add(new RoleSpanStageDatum(x, labels.get(i), params));
+				data.add(new RoleSpanStageDatum(x, labels.get(i), params, weights));
 		}
 		return new StageDatumExampleList<>(data);
 	}
@@ -75,15 +89,37 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 	public static class RoleSpanFactorFactory implements FactorFactory<ExpansionVar> {
 
 		private static final long serialVersionUID = 1L;
+		
+		private Features.RE features;
+		private Refinements refs;
+		
+		public RoleSpanFactorFactory(Alphabet<String> featAlph) {
+			features = new BasicRoleSpanFeatures(featAlph);
+			refs = new Refinements("r_itjk^e~1");
+		}
 
 		@Override
 		public List<Features> getFeatures() {
-			throw new RuntimeException("implement me");
+			return Arrays.asList((Features) features);
 		}
 
 		@Override
 		public List<Factor> initFactorsFor(Sentence s, List<ExpansionVar> inThisSentence, ProjDepTreeFactor l) {
-			throw new RuntimeException("implement me");
+			List<Factor> factors = new ArrayList<>();
+			for(ExpansionVar ev : inThisSentence) {
+				
+				// r_itjk^e ~ 1
+				int n = ev.values.size();
+				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(new VarSet(ev.var));
+				for(int i=0; i<n; i++) {
+					Span a = ev.getSpan(i);
+					FeatureVector fv = new FeatureVector();
+					features.featurize(fv, refs, ev.i, ev.getFrame(), ev.j, ev.k, a, s);
+					phi.setFeatures(i, fv);
+				}
+				factors.add(phi);
+			}
+			return factors;
 		}
 	}
 	
@@ -98,18 +134,20 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		private List<ExpansionVar> expansions;
 		private FNParse onlyHeads;
 		private FNParse gold;
-		private Params params;
+		private final Params params;
+		private final FgModel weights;
 
 		/** constructor for when you don't have the labels */
-		public RoleSpanStageDatum(FNParse onlyHeads, Params params) {
-			this(onlyHeads, null, params);
+		public RoleSpanStageDatum(FNParse onlyHeads, Params params, FgModel weights) {
+			this(onlyHeads, null, params, weights);
 		}
 
 		/** constructor for when you have the labels */
-		public RoleSpanStageDatum(FNParse onlyHeads, FNParse gold, Params params) {
+		public RoleSpanStageDatum(FNParse onlyHeads, FNParse gold, Params params, FgModel weights) {
 			this.params = params;
 			this.gold = gold;
 			this.onlyHeads = onlyHeads;
+			this.weights = weights;
 			this.expansions = new ArrayList<>();
 			int F = onlyHeads.getFrameInstances().size();
 			assert gold == null || F == gold.getFrameInstances().size();
@@ -117,8 +155,9 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 				FrameInstance fi = onlyHeads.getFrameInstance(fiIdx);
 				assert gold == null || fi.getFrame() == gold.getFrameInstance(fiIdx).getFrame();
 				assert gold == null || fi.getTarget() == gold.getFrameInstance(fiIdx).getTarget();
-				assert fi.getTarget().width() == 1;
-				int i = fi.getTarget().start;
+				//assert fi.getTarget().width() == 1;
+				//int i = fi.getTarget().start;
+				int i = params.globalParams.headFinder.head(fi.getTarget(), fi.getSentence());
 				int K = fi.getFrame().numRoles();
 				for(int k=0; k<K; k++) {
 					Span h = fi.getArgument(k);
@@ -184,7 +223,7 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		@Override
 		public Decodable<FNParse> getDecodable(FgInferencerFactory infFact) {
 			FactorGraph fg = this.getFactorGraph();
-			return new RoleSpanDecodable(fg, infFact, onlyHeads, expansions);
+			return new RoleSpanDecodable(fg, infFact, weights, params.globalParams.logDomain, onlyHeads, expansions);
 		}
 	}
 
@@ -252,6 +291,11 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 				i = values.indexOf(Expansion.headToSpan(j, Span.widthOne(j)));
 			goldConf.put(this.var, i);
 		}
+		
+		public Span getSpan(int configIdx) {
+			Expansion e = values.get(configIdx);
+			return e.upon(j);
+		}
 
 		public Span getGoldSpan() {
 			assert goldIdx >= 0;
@@ -261,8 +305,7 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		
 		public Span decodeSpan(FgInferencer hasMargins) {
 			DenseFactor df = hasMargins.getMarginals(var);
-			Expansion e = values.get(df.getArgmaxConfigId());
-			return e.upon(j);
+			return getSpan(df.getArgmaxConfigId());
 		}
 	}
 	
@@ -279,8 +322,8 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		private FNParse onlyHeads;
 		private List<ExpansionVar> vars;
 
-		public RoleSpanDecodable(FactorGraph fg, FgInferencerFactory infFact, FNParse onlyHeads, List<ExpansionVar> vars) {
-			super(fg, infFact);
+		public RoleSpanDecodable(FactorGraph fg, FgInferencerFactory infFact, FgModel weights, boolean logDomain, FNParse onlyHeads, List<ExpansionVar> vars) {
+			super(fg, infFact, weights, logDomain);
 			this.onlyHeads = onlyHeads;
 			this.vars = vars;
 		}
@@ -293,10 +336,9 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 			
 			// clone the FrameInstances
 			List<FrameInstance> fis = new ArrayList<>();
-			for(FrameInstance fi : onlyHeads.getFrameInstances()) {
-				Span[] args = fi.getArguments().clone();
-				fis.add(FrameInstance.newFrameInstance(fi.getFrame(), fi.getTarget(), args, fi.getSentence()));
-			}
+			for(FrameInstance fi : onlyHeads.getFrameInstances())
+				fis.add(fi.clone());
+
 			// update the width-1 arguments as necessary
 			for(ExpansionVar ev : this.vars) {
 				Span s = ev.decodeSpan(margins);
