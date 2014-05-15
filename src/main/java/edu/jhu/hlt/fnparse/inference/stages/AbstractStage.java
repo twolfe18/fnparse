@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -37,8 +38,10 @@ import edu.jhu.util.Alphabet;
  * @param <I>
  * @param <O>
  */
-public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O> {
+public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable {
 	
+	private static final long serialVersionUID = 1L;
+
 	protected ParserParams globalParams;
 	protected FgModel weights;
 	
@@ -103,7 +106,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			throw new IllegalArgumentException("run AlphabetComputer first!");
 
 		assert globalParams.verifyConsistency();
-		Timer t = globalParams.timer.get(this.getName() + "-train", true);
+		Timer t = globalParams.getTimer(this.getName() + "-train");
 		t.start();
 		
 		weights = new FgModel(numParams + 1);
@@ -175,7 +178,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	 */
 	public void scanFeatures(List<? extends I> unlabeledExamples, double maxTimeInMinutes) {
 
-		Timer t = globalParams.timer.get("scan-features", true);
+		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
 		t.start();
 		System.out.println("[scanFeatures] counting the number of parameters needed over " +
 				unlabeledExamples.size() + " examples");

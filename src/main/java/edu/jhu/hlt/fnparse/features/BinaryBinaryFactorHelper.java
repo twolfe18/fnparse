@@ -1,8 +1,9 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.io.Serializable;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
-import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 
@@ -18,8 +19,11 @@ import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
  * 
  * @author travis
  */
-public class BinaryBinaryFactorHelper {
+public class BinaryBinaryFactorHelper implements Serializable {
 	
+	private static final long serialVersionUID = 1L;
+
+
 	public static enum Mode {
 		FULLY_PARAMETERIZED,
 		ISING,
@@ -36,7 +40,7 @@ public class BinaryBinaryFactorHelper {
 	}
 
 
-	public static interface ObservedFeatures {
+	public static interface ObservedFeatures extends Serializable {
 		/**
 		 * partially apply all of the data needed to compute observed features
 		 * in order to implement this function (i.e. use a closure).

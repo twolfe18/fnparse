@@ -1,10 +1,13 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.io.Serializable;
 import java.util.Arrays;
 
 // TODO add this to the signature of AbstractFeatures.b
-public class Refinements {
+public class Refinements implements Serializable {
 	
+	private static final long serialVersionUID = 1L;
+
 	public static final Refinements noRefinements = new Refinements("default");
 
 	private double[] weights;

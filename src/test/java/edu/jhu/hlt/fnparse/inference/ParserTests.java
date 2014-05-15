@@ -1,12 +1,18 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import static org.junit.Assert.assertTrue;
+
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
- 
-import static org.junit.Assert.assertTrue;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -74,10 +80,13 @@ public class ParserTests {
 	
 	@Test
 	public void basic() {
-		PipelinedFnParser parser = canOverfitAnExample(makeDummyParse(), true, 1d, 1d);
+		FNParse p = makeDummyParse();
+		PipelinedFnParser parser = train(p);
+		checkGoodPerf(parser, p, 1d, 1d, true);
 		ModelIO.writeHumanReadable(parser.getFrameIdParams(), parser.getAlphabet(), new File("saved-models/testing/weights.frameId.txt"));
 		ModelIO.writeHumanReadable(parser.getArgIdParams(), parser.getAlphabet(), new File("saved-models/testing/weights.argId.txt"));
 		ModelIO.writeHumanReadable(parser.getArgSpanParams(), parser.getAlphabet(), new File("saved-models/testing/weights.argSpan.txt"));
+		checkGoodPerf(serializeAndDeserialize(parser), p, 1d, 1d, true);
 	}
 	
 	@Test
@@ -87,30 +96,48 @@ public class ParserTests {
 		for(FNParse p : parses) {
 			if(p.getFrameInstances().size() == 0)
 				continue;
-			canOverfitAnExample(p, true, 0.6d, 0.6d);
+			PipelinedFnParser parser = train(p);
+			checkGoodPerf(parser, p, 0.7, 0.7, true);
 		}
 	}
 	
-	public PipelinedFnParser canOverfitAnExample(FNParse p, boolean verbose, double targetF1Thresh, double fullF1Thresh) {
+	public PipelinedFnParser serializeAndDeserialize(PipelinedFnParser parser) {
+		try {
+			File f = File.createTempFile("foo", "bar");
+			ObjectOutputStream oos = new ObjectOutputStream(new GZIPOutputStream(new FileOutputStream(f)));
+			oos.writeObject(parser);
+			oos.close();
+			ObjectInputStream ois = new ObjectInputStream(new GZIPInputStream(new FileInputStream(f)));
+			PipelinedFnParser r = (PipelinedFnParser) ois.readObject();
+			ois.close();
+			return r;
+		}
+		catch(Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+	
+	public PipelinedFnParser train(FNParse e) {
 		PipelinedFnParser parser = new PipelinedFnParser();
-		List<FNParse> dummy = Arrays.asList(p);	//makeDummyParse());
-		parser.computeAlphabet(dummy);
+		List<FNParse> dummy = Arrays.asList(e);
+		parser.computeAlphabet(dummy, 5d);
 		parser.train(dummy);
-		List<FNParse> predicted = parser.predict(DataUtil.stripAnnotations(dummy));
-
-		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(BasicEvaluation.zip(dummy, predicted));
-		double fullF1 = BasicEvaluation.fullMicroF1.evaluate(BasicEvaluation.zip(dummy, predicted));
+		return parser;
+	}
+	
+	public void checkGoodPerf(PipelinedFnParser p, FNParse gold, double targetF1Thresh, double fullF1Thresh, boolean verbose) {
+		List<Sentence> s = DataUtil.stripAnnotations(Arrays.asList(gold));
+		FNParse hyp = p.predict(s).get(0);
+		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
+		double fullF1 = BasicEvaluation.fullMicroF1.evaluate(BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
 		if(verbose) {
-			System.out.println("gold = " + Describe.fnParse(dummy.get(0)));
-			System.out.println("hyp  = " + Describe.fnParse(predicted.get(0)));
+			System.out.println("gold = " + Describe.fnParse(gold));
+			System.out.println("hyp  = " + Describe.fnParse(hyp));
 			System.out.println("targetF1 = " + targetF1);
 			System.out.println("fullF1   = " + fullF1);
 		}
-		
 		assertTrue(targetF1 >= targetF1Thresh);
 		assertTrue(fullF1 >= fullF1Thresh);
-		return parser;
 	}
-
 	
 }

@@ -17,7 +17,6 @@ import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
-import edu.jhu.hlt.fnparse.features.DebuggingRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -41,6 +40,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 * @author travis
 	 */
 	private static class RoleDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
+
+		private static final long serialVersionUID = 1L;
+
 		private String refinement;
 		private Features.R rFeats;
 		private Features.F fFeats;

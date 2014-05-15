@@ -32,7 +32,7 @@ import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.util.Alphabet;
 
-public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements Stage<FNParse, FNParse> {
+public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements Stage<FNParse, FNParse>, Serializable {
 	
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -56,6 +56,7 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		}
 	}
 	
+	private static final long serialVersionUID = 1L;
 	public Params params;
 	
 	public RoleSpanStage(ParserParams globalParams) {

@@ -45,17 +45,17 @@ import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements Stage<Sentence, FNTagging> {
+public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements Stage<Sentence, FNTagging>, Serializable {
 	
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
-		public int threads = 2;
+
 		public int batchSize = 4;
 		public int passes = 2;
 		public double propDev = 0.15d;
 		public int maxDev = 50;
-//		public Regularizer regularizer = new L2(10000d);
 		public Double learningRate = null;	// if null, auto select learning rate
+
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
 		public Features.F features;
@@ -74,8 +74,8 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 	}
 	
 
+	private static final long serialVersionUID = 1L;
 	public Params params;
-	
 
 	public FrameIdStage(ParserParams globalParams) {
 		super(globalParams);
@@ -182,16 +182,6 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		if(frameMatches.size() == 0)
 			return null;
 		
-//		if(globalParams.debug) {
-//			int framesFromLexExamples = frameMatches.size();
-//			System.out.printf("[ParsingSentence makeFrameVar] #frames-from-LEX=%d #frames-from-LUs=%d\n",
-//					framesFromLexExamples, listedAsLUs.size());
-//			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s frames=%s\n",
-//					s.getLU(headIdx), frameMatches);
-//			System.out.printf("[ParsingSentence makeFrameVar] trigger=%s prototypes=%s\n",
-//					s.getLU(headIdx), prototypes);
-//		}
-		
 		return new FrameVars(headIdx, prototypes, frameMatches);
 	}
 	
@@ -241,7 +231,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			final int n = sentence.size();
 			if(n < 4) {
 				// TODO check more carefully, like 4 content words or has a verb
-				System.err.println("[FrameIdSentence] skipping short sentence: " + sentence);
+				System.err.printf("[FrameIdStage] skipping short sentence: " + sentence);
 				return;
 			}
 			for(int i=0; i<n; i++) {

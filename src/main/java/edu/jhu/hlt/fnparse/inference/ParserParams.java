@@ -6,6 +6,7 @@ import java.util.Random;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 
@@ -24,7 +25,6 @@ public class ParserParams implements Serializable {
 
 	public int threads = 1;
 	public Random rand = new Random(9001);
-	public MultiTimer timer = new MultiTimer();
 	public HeadFinder headFinder = new SemaforicHeadFinder();
 	
 //	public Features.F  fFeatures;
@@ -41,5 +41,13 @@ public class ParserParams implements Serializable {
 
 	public boolean verifyConsistency() {
 		return true;
+	}
+	
+	
+	private transient MultiTimer timer = new MultiTimer();
+	public Timer getTimer(String name) {
+		if(timer == null)
+			timer = new MultiTimer();
+		return timer.get(name, true);
 	}
 }

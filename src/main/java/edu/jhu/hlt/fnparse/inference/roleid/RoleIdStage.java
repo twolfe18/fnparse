@@ -39,7 +39,7 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Timer;
 
-public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements Stage<FNTagging, FNParse> {
+public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements Stage<FNTagging, FNParse>, Serializable {
 	
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -48,6 +48,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
+
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
 		public RoleFactorFactory factorTemplate;
@@ -61,6 +62,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		}
 	}
 	
+	private static final long serialVersionUID = 1L;
 	public Params params;
 	public ParserParams globalParams;
 
@@ -182,7 +184,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			if(hasGold && gold.getSentence() != frames.getSentence())
 				throw new IllegalArgumentException();
 
-			Timer t = globalParams.timer.get("argId-initHypotheses", true);
+			Timer t = globalParams.getTimer("argId-initHypotheses");
 			t.start();
 
 			// make sure that we don't have overlapping targets
@@ -295,7 +297,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		
 		public FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf) {
 
-			Timer t = globalParams.timer.get("argId-decode", true);
+			Timer t = globalParams.getTimer("argId-decode");
 			t.start();
 
 			// max over j for every role
