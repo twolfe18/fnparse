@@ -1,16 +1,24 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
 import java.io.Serializable;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
+import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.ParseSelector;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
 
@@ -47,20 +55,22 @@ public class PipelinedFnParser implements Serializable {
 	 * @param maxTimeInMinutes is the cutoff for each of the three stages,
 	 *        so its possible that it could take up to 3x longer than that
 	 */
-	public void computeAlphabet(List<FNParse> examples, double maxTimeInMinutes) {
+	public void computeAlphabet(List<FNParse> examples, double maxTimeInMinutes, int maxFeaturesAdded) {
 		Timer t = params.getTimer("computeAlphabet");
 		t.start();
+		
+		examples = ParseSelector.sort(examples);
+		
 		params.featAlph.startGrowth();
 		
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
-		frameId.scanFeatures(sentences, maxTimeInMinutes);
+		frameId.scanFeatures(sentences, examples, maxTimeInMinutes, maxFeaturesAdded);
 
-		// TODO: same issue here, compute features on predictions, not gold
 		List<FNTagging> frames = DataUtil.convertParsesToTaggings(examples);
-		argId.scanFeatures(frames, maxTimeInMinutes);
+		argId.scanFeatures(frames, examples, maxTimeInMinutes, maxFeaturesAdded);
 
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
-		argExpansion.scanFeatures(onlyHeads, maxTimeInMinutes);
+		argExpansion.scanFeatures(onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
 		
 		params.featAlph.stopGrowth();
 		t.stop();
@@ -82,6 +92,7 @@ public class PipelinedFnParser implements Serializable {
 		argExpansion.train(onlyHeads, examples);
 	}
 	
+
 	public List<FNParse> predict(List<Sentence> sentences) {
 		List<FNTagging> frames = frameId.predict(sentences);
 		List<FNParse> argHeads = argId.predict(frames);

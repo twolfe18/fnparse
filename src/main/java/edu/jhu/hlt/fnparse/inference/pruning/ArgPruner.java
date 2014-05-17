@@ -119,7 +119,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 	private int argsPrunedPos = 0;
 	private int argsPrunedLex = 0;
 	private int argsFalsePruned = 0;
-	private int argsPruningInterval = 2500;	// <=0 for no reporting
+	private int argsPruningInterval = 125000;	// <=0 for no reporting
 	
 	@Override
 	public double pruneRatio() {

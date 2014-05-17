@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.util;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +27,24 @@ public class Counts<T> {
 	
 	public int numNonZero() {
 		return counts.size();
+	}
+	
+	public List<T> getKeysSorted(final boolean descending) {
+		List<T> items = new ArrayList<>();
+		items.addAll(counts.keySet());
+		Collections.sort(items, new Comparator<T>() {
+			@Override
+			public int compare(T arg0, T arg1) {
+				int c0 = getCount(arg0);
+				int c1 = getCount(arg1);
+				if(c0 == c1) return 0;
+				if(c1 > c0 ^ descending)
+					return 1;
+				else
+					return -1;
+			}
+		});
+		return items;
 	}
 	
 	public List<T> countIsAtLeast(int minCount) {

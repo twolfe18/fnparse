@@ -3,8 +3,10 @@ package edu.jhu.hlt.fnparse.inference.stages;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
@@ -16,6 +18,9 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
@@ -175,33 +180,78 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	/**
 	 * forces the factor graphs to be created and the features to be computed,
 	 * which has the side effect of populating the feature alphabet in this.params.
+	 * @param labels may be null
 	 */
-	public void scanFeatures(List<? extends I> unlabeledExamples, double maxTimeInMinutes) {
+	public void scanFeatures(List<? extends I> unlabeledExamples, List<? extends O> labels, double maxTimeInMinutes, int maxFeaturesAdded) {
+		
+		if(labels != null && unlabeledExamples.size() != labels.size())
+			throw new IllegalArgumentException();
 
 		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
-		t.start();
-		System.out.println("[scanFeatures] counting the number of parameters needed over " +
+		t.printIterval = 25;
+		System.out.println("[scanFeatures " + this.getName() + "] counting the number of parameters needed over " +
 				unlabeledExamples.size() + " examples");
 
 		// this stores counts in an array
 		// it gets the indices from the feature vectors, w/o knowing which alphabet they came from
 		FeatureCountFilter fcount = new FeatureCountFilter();
+		
+		// keep track of what parses we added so we can get a sense of our frame/role coverage
+		List<FNTagging> seen = new ArrayList<>();
 
+		final int alphSizeStart = globalParams.featAlph.size();
 		int examplesSeen = 0;
 		FgInferencerFactory infFact = this.infFactory();
-		for(StageDatum<I, O> d : this.setupInference(unlabeledExamples, null).getStageData()) {
+		StageDatumExampleList<I, O> data = this.setupInference(unlabeledExamples, null);
+		int n = data.size();
+		for(int i=0; i<n; i++) {
+			t.start();
+			StageDatum<I, O> d = data.getStageDatum(i);
 			fcount.observe(d.getDecodable(infFact).getFactorGraph());
 			examplesSeen++;
+			t.stop();
+			
+			if(labels != null)
+				seen.add(labels.get(i));
 
 			if(t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
-				System.out.println("[scanFeatures] stopping because we used the max time (in minutes): " + maxTimeInMinutes);
+				System.out.println("[scanFeatures " + this.getName() + "] stopping because we used the max time (in minutes): " + maxTimeInMinutes);
+				break;
+			}
+			int featuresAdded = globalParams.featAlph.size() - alphSizeStart;
+			if(featuresAdded > maxFeaturesAdded) {
+				System.out.println("[scanFeatures " + this.getName() + "] stopping because we added the max allowed features: " + featuresAdded);
 				break;
 			}
 		}
+		
+		if(seen.size() == 0)
+			System.err.println("[scanFeatures " + this.getName() + "] WARNING: no labels were provided, so I can't compute frame/role recall");
+		else {
+			Set<Frame> fSeen = new HashSet<>();
+			Set<String> rSeen = new HashSet<>();
+			Set<String> frSeen = new HashSet<>();
+			for(FNTagging tag : seen) {
+				for(FrameInstance fi : tag.getFrameInstances()) {
+					Frame f = fi.getFrame();
+					fSeen.add(f);
+					int K = f.numRoles();
+					for(int k=0; k<K; k++) {
+						Span a = fi.getArgument(k);
+						if(a == Span.nullSpan) continue;
+						String r = f.getRole(k);
+						String fr = f.getName() + "." + r;
+						rSeen.add(r);
+						frSeen.add(fr);
+					}
+				}
+			}
+			System.out.printf("[scanFeatures %s] saw %d frames, %d frame-roles, and %d roles (ignoring frame)\n",
+					this.getName(), fSeen.size(), frSeen.size(), rSeen.size());
+		}
 
-		t.stop();
-		System.out.printf("[scanFeatures] done, scanned %d examples in %.1f minutes, alphabet size is %d\n",
-			examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featAlph.size());
+		System.out.printf("[scanFeatures %s] done, scanned %d examples in %.1f minutes, alphabet size is %d, added %d\n",
+			this.getName(), examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featAlph.size(), globalParams.featAlph.size()-alphSizeStart);
 	}
 	
 	

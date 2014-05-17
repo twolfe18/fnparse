@@ -15,6 +15,9 @@ import edu.jhu.util.Alphabet;
 public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures> implements Features.R {
 
 	private static final long serialVersionUID = 1L;
+	
+	private boolean useFullString = false;
+	private boolean useLemmasInsteadOfWords = false;
 
 	public BasicRoleFeatures(Alphabet<String> featAlph) {
 		super(featAlph);
@@ -36,9 +39,11 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		String fs = "f" + (useFastFeaturenames ? f.getId() : f.getName());
 		String rs = "r" + f.getRoleSafe(roleIdx);	// use this instead of int because same role (string) may not have the same index across frames
 		String fsrs = fs + "-" + rs;
-		LexicalUnit tHead = sent.getLU(targetHead);
+		LexicalUnit tHead = useLemmasInsteadOfWords ? sent.getLemmaLU(targetHead) : sent.getLU(targetHead);
 		boolean argRealized = argHead < sent.size();
-		LexicalUnit aHead = !argRealized ? AbstractFeatures.luEnd : sent.getLU(argHead);
+		LexicalUnit aHead = !argRealized
+				? AbstractFeatures.luEnd
+				: (useLemmasInsteadOfWords ? sent.getLemmaLU(argHead) : sent.getLU(argHead));
 		
 		b(fv, r, 5d, rs, "intercept");
 		b(fv, r, 5d, fsrs, "intercept");
@@ -59,34 +64,43 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 		
 		b(fv, r, 1d, rs, "roleHead", aHead.word);
 		b(fv, r, 2d, rs, "roleHead", aHead.pos);
-		b(fv, r, 1d, rs, "roleHead", aHead.getFullString());
 		b(fv, r, 1d, fsrs, "roleHead", aHead.word);
 		b(fv, r, 2d, fsrs, "roleHead", aHead.pos);
-		b(fv, r, 1d, fsrs, "roleHead", aHead.getFullString());
+		if(useFullString) {
+			b(fv, r, 1d, rs, "roleHead", aHead.getFullString());
+			b(fv, r, 1d, fsrs, "roleHead", aHead.getFullString());
+		}
 		
 		b(fv, r, 1d, rs, "targetHead", tHead.word);
 		b(fv, r, 2d, rs, "targetHead", tHead.pos);
-		b(fv, r, 1d, rs, "targetHead", tHead.getFullString());
 		b(fv, r, 1d, fsrs, "targetHead", tHead.word);
 		b(fv, r, 2d, fsrs, "targetHead", tHead.pos);
-		b(fv, r, 1d, fsrs, "targetHead", tHead.getFullString());
+		if(useFullString) {
+			b(fv, r, 1d, rs, "targetHead", tHead.getFullString());
+			b(fv, r, 1d, fsrs, "targetHead", tHead.getFullString());
+		}
 		
-		b(fv, r, 0.25d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
-		b(fv, r, 0.5d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
-		b(fv, r, 1d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
-		b(fv, r, 0.75d, rs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+		if(useFullString) {
+			b(fv, r, 0.25d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
+			b(fv, r, 0.5d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
+			b(fv, r, 1d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
+			b(fv, r, 0.75d, rs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+		}
 		b(fv, r, 1d, rs, "argHead", aHead.word, "targetHead", tHead.word);
 		b(fv, r, 2d, rs, "argHead", aHead.word, "targetHead", tHead.pos);
-		b(fv, r, 1d, rs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
+		if(useFullString)
+			b(fv, r, 1d, rs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
 		b(fv, r, 2d, rs, "argHead", aHead.pos, "targetHead", tHead.word);
 		b(fv, r, 4d, rs, "argHead", aHead.pos, "targetHead", tHead.pos);
-		b(fv, r, 0.25d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
-		b(fv, r, 0.5d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
-		b(fv, r, 1d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
-		b(fv, r, 0.75d, fsrs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+		if(useFullString) {
+			b(fv, r, 0.25d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
+			b(fv, r, 0.5d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.word);
+			b(fv, r, 1d, fsrs, "argHead", aHead.getFullString(), "targetHead", tHead.pos);
+			b(fv, r, 0.75d, fsrs, "argHead", aHead.word, "targetHead", tHead.getFullString());
+			b(fv, r, 1d, fsrs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
+		}
 		b(fv, r, 1d, fsrs, "argHead", aHead.word, "targetHead", tHead.word);
 		b(fv, r, 2d, fsrs, "argHead", aHead.word, "targetHead", tHead.pos);
-		b(fv, r, 1d, fsrs, "argHead", aHead.pos, "targetHead", tHead.getFullString());
 		b(fv, r, 2d, fsrs, "argHead", aHead.pos, "targetHead", tHead.word);
 		b(fv, r, 4d, fsrs, "argHead", aHead.pos, "targetHead", tHead.pos);
 		
@@ -124,10 +138,11 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 			//timer.start(pathFeatKey);
 			List<String> addTo = new ArrayList<String>();
 			for(Path p : Arrays.asList(
-					new Path(sent, targetHead, argHead, NodeType.POS, EdgeType.DEP),
-					new Path(sent, targetHead, argHead, NodeType.LEMMA, EdgeType.DIRECTION),
-					new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DEP),
-					new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DIRECTION))) {
+					new Path(sent, targetHead, argHead, NodeType.POS, EdgeType.DEP)
+					, new Path(sent, targetHead, argHead, NodeType.LEMMA, EdgeType.DIRECTION)
+					//new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DEP)
+					//new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DIRECTION)
+					)) {
 
 				String ps = p.getPath();
 				b(fv, r, rs, "path", ps);
