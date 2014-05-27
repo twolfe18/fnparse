@@ -51,8 +51,8 @@ public class ParseSelector {
 	
 	public FNParse next() {
 		
-		Timer t = timer.get("next", true);
-		t.printIterval = 10;
+		Timer t = timer.get("Parseselector.next", true);
+		t.printIterval = 1000;
 		t.start();
 		
 		// sort FNParses by their cumulative value
@@ -62,8 +62,6 @@ public class ParseSelector {
 			ps.add(new ParseWithValue(parses.get(i), i));
 		Collections.sort(ps);
 		ParseWithValue r = ps.get(0);
-		if(ps.size() > 1)
-			assert ps.get(0).value > ps.get(1).value;
 		
 		// update frame values
 		for(Frame f : r.getFrames()) {

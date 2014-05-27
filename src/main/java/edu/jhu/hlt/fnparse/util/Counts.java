@@ -68,4 +68,22 @@ public class Counts<T> {
 	}
 	
 	public void clear() { counts.clear(); }
+	
+	public Comparator<T> ascendingComparator() {
+		return new Comparator<T>() {
+			@Override
+			public int compare(T arg0, T arg1) {
+				return getCount(arg1) - getCount(arg0);
+			}
+		};
+	}
+
+	public Comparator<T> desendingComparator() {
+		return new Comparator<T>() {
+			@Override
+			public int compare(T arg0, T arg1) {
+				return getCount(arg0) - getCount(arg1);
+			}
+		};
+	}
 }

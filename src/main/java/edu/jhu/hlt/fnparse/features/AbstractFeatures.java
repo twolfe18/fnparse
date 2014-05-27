@@ -7,13 +7,14 @@ import java.util.List;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.util.Alphabet;
 
 /**
  * let T be the class that is extending this class.
  * @author travis
  */
-public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements Serializable {
+public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements Serializable, HasFeatureAlphabet {
 
 	private static final long serialVersionUID = 1L;
 	
@@ -32,12 +33,16 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	protected boolean useFastFeaturenames = false;
 	protected boolean useSyntaxFeatures = true;
 	protected boolean debug = false;
-	protected Alphabet<String> featAlph;
+	protected final HasFeatureAlphabet featAlph;
 	
-	public AbstractFeatures(Alphabet<String> featAlph) {
+	public AbstractFeatures(HasFeatureAlphabet featAlph) {
 		this.featAlph = featAlph;
 	}
 
+	@Override
+	public Alphabet<String> getFeatureAlphabet() {
+		return featAlph.getFeatureAlphabet();
+	}
 	
 	/**
 	 * by default, nothing is excluded from regularization,
@@ -95,6 +100,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 */
 	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
 		
+		Alphabet<String> alph = featAlph.getFeatureAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
@@ -108,15 +114,15 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 				sn.append(fns);
 			}
 			String s = sn.toString();
-			if(featAlph.isGrowing()) {
-				int sz = featAlph.size();
-				int idx = featAlph.lookupIndex(s, true);
+			if(alph.isGrowing()) {
+				int sz = alph.size();
+				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
 				fv.add(idx, weight * refs.getWeight(ri));
 			}
 			else {
-				int idx = featAlph.lookupIndex(s, false);
+				int idx = alph.lookupIndex(s, false);
 				if(idx >= 0) fv.add(idx, weight * refs.getWeight(ri));
 				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}

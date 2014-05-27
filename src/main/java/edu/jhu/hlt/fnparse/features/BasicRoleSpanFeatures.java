@@ -8,7 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Counts;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 
@@ -19,7 +19,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 	private boolean inSpan = true;
 	private boolean betweenTargetAndHead = true;
 	
-	public BasicRoleSpanFeatures(Alphabet<String> featAlph) {
+	public BasicRoleSpanFeatures(HasFeatureAlphabet featAlph) {
 		super(featAlph);
 	}
 

@@ -10,6 +10,7 @@ import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.util.HasFactorGraph;
+import edu.jhu.hlt.fnparse.util.HasFgModel;
 
 /**
  * For big factor graphs, the bottleneck is often feature extraction.
@@ -29,7 +30,7 @@ import edu.jhu.hlt.fnparse.util.HasFactorGraph;
  *   
  * @author travis
  */
-public interface Stage<Input, Output> {
+public interface Stage<Input, Output> extends HasFgModel {
 	
 	public String getName();
 	
@@ -74,7 +75,7 @@ public interface Stage<Input, Output> {
 		 * if true, then can call getExample() and getGold(),
 		 * otherwise only getDecodable() should be called.
 		 */
-		public abstract boolean hasGold();
+		public boolean hasGold();
 		
 		/**
 		 * should return null if !hasGold() and a non-null value otherwise.
@@ -82,10 +83,10 @@ public interface Stage<Input, Output> {
 		public Output getGold();
 
 		/** for training */
-		public abstract LabeledFgExample getExample();
+		public LabeledFgExample getExample();
 
 		/** for prediction */
-		public abstract Decodable<Output> getDecodable(FgInferencerFactory infFact);
+		public Decodable<Output> getDecodable(FgInferencerFactory infFact);
 		
 	}
 	
@@ -100,20 +101,13 @@ public interface Stage<Input, Output> {
 		
 		public final FactorGraph fg;
 		public final FgInferencerFactory infFact;
+		public final HasFgModel hasModel;
 		private FgInferencer inf;
 		
-		public Decodable(FactorGraph fg, FgInferencerFactory infFact, FgModel weights, boolean logDomain) {
+		public Decodable(FactorGraph fg, FgInferencerFactory infFact, HasFgModel weights) {
 			this.fg = fg;
 			this.infFact = infFact;
-			
-			// make sure the factors have their values computed before running inference
-			// (training seems to do this automatically)
-			if(weights != null) {
-				for(Factor f : fg.getFactors()) {
-					if(f instanceof ExpFamFactor)
-						((ExpFamFactor) f).updateFromModel(weights, logDomain);
-				}
-			}
+			this.hasModel = weights;
 		}
 		
 		@Override
@@ -125,6 +119,8 @@ public interface Stage<Input, Output> {
 		public void force() {
 			getMargins();
 		}
+		
+		public FgModel getWeights() { return hasModel.getWeights(); }
 
 		/**
 		 * forces inference to be run, but will only do so once
@@ -132,6 +128,16 @@ public interface Stage<Input, Output> {
 		 */
 		public FgInferencer getMargins() {
 			if(inf == null) {
+				
+				// we need to compute the scores for ExpFamFactors at some point,
+				// and way I can think to choose where that should happen is that it
+				// should happen as late as possible, which is here.
+				for(Factor f : fg.getFactors()) {
+					if(f instanceof ExpFamFactor) {
+						((ExpFamFactor) f).updateFromModel(hasModel.getWeights(), hasModel.logDomain());
+					}
+				}
+				
 				inf = infFact.getInferencer(fg);
 				inf.run();
 			}

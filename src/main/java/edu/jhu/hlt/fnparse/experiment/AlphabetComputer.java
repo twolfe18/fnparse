@@ -1,22 +1,16 @@
 package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.DataSplitter;
-import edu.jhu.hlt.fnparse.util.ParseSelector;
 
 /**
  * Contains methods that are meant to be run offline and compute the alphabet of feature names.
@@ -54,8 +48,8 @@ public class AlphabetComputer {
 		
 		PipelinedFnParser parser = new PipelinedFnParser();
 		parser.getParams().useSyntaxFeatures = !noSyntaxFeatures;
-		
-		System.err.println("\n\n\nWARNING: ignoring latentSyntax because I need to hook that back up\n\n\n");
+		parser.getParams().useLatentDepenencies = latentSyntax;
+		parser.getParams().useLatentConstituencies = latentSyntax;
 
 		// get the data
 		DataSplitter ds = new DataSplitter();
@@ -72,12 +66,15 @@ public class AlphabetComputer {
 		
 		// write model to disk
 		long time = System.currentTimeMillis();
+		/*
 		OutputStream os = new FileOutputStream(saveModelTo);
 		if(saveModelTo.getName().toLowerCase().endsWith(".gz"))
 			os = new GZIPOutputStream(os);
 		ObjectOutputStream oos = new ObjectOutputStream(os);
 		oos.writeObject(parser);
 		oos.close();
+		*/
+		parser.getParams().writeFeatAlphTo(saveModelTo);
 		System.out.printf("saved model in %.1f seconds\n", (System.currentTimeMillis()-time)/(1000d*60d));
 	}
 

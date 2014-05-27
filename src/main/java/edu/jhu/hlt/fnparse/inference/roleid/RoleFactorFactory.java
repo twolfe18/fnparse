@@ -19,15 +19,13 @@ import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.Refinements;
+import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper.Mode;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 /**
- * all features that look at a role variable should be housed here.
- * instantiate factors that concatenate features rather than have multiple
- * factors because this is more efficient for BP.
  * 
  * @author travis
  */
@@ -49,8 +47,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 		
 		public RoleDepObservedFeatures(ParserParams params, String ref) {
 			this.refinement = ref;
-			this.rFeats = new BasicRoleFeatures(params.featAlph);
-			this.fFeats = new BasicFrameFeatures(params.featAlph);
+			this.rFeats = new BasicRoleFeatures(params);
+			this.fFeats = new BasicFrameFeatures(params);
 		}
 		
 		private Sentence sent;
@@ -71,41 +69,33 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			FeatureVector fv = new FeatureVector();
 			rFeats.featurize(fv, r, i, t, j, k, sent);
 			fFeats.featurize(fv, r, i, t, sent);
+			assert fv.getNumImplicitEntries() > 0 : "did you use the right alphabet?";
 			return fv;
 		}
 	}
 	
 	
+	public static interface FactorMode {
+		public BinaryBinaryFactorHelper.Mode depFactorMode();
+		public BinaryBinaryFactorHelper.Mode govFactorMode();
+	}
 	
-	public final boolean includeExpansionBinaryFactor;
-	public final BinaryBinaryFactorHelper.Mode depFactorMode;
+	
 	public Features.R rFeats;
 	public RoleDepObservedFeatures feats;
 	public BinaryBinaryFactorHelper bbfh;
 	public Refinements r_itjk_unaryRef = new Refinements("r_itjk~1");
-	
 	public FgModel weights;
-	public ParserParams params;
+	public final ParserParams params;
 	
 	/**
 	 * @param params
-	 * @param includeDepFactors include binary r_itjk ~ l_jm factors
-	 * @param includeGovFactors include binary r_itjk ~ l_mj factors
+	 * @param factorMode says how the (r_itjk ~ l_ij) factor should be parameterized
 	 */
-	public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode depFactorMode, boolean includeExpansionBinaryFactor) {
-		this.depFactorMode = depFactorMode;
-		this.includeExpansionBinaryFactor = includeExpansionBinaryFactor;
-		this.rFeats = new BasicRoleFeatures(params.featAlph);
-
-		if(!params.useLatentDepenencies)
-			assert depFactorMode == BinaryBinaryFactorHelper.Mode.NONE;
-
+	public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode factorMode) {
+		this.rFeats = new BasicRoleFeatures(params);
 		feats = new RoleDepObservedFeatures(params, "r_itjk~l_ij");
-		bbfh = new BinaryBinaryFactorHelper(depFactorMode, feats);
-	}
-	
-	public void update(FgModel weights, ParserParams params) {
-		this.weights = weights;
+		bbfh = new BinaryBinaryFactorHelper(factorMode, feats);
 		this.params = params;
 	}
 	
@@ -115,8 +105,6 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 * r_itjk^e ~ 1
 	 * r_itjk ~ l_ij
 	 * r_itjk ~ r_itjk^e
-	 * 
-	 * TODO create an Exactly1 factor for r_{i,t,j=*,k}
 	 */
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l) {
@@ -155,8 +143,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 //				}
 
 				// r_itjk ~ l_ij
-				// this is the only factor which introduces loops
-				if(depFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
+				if(params.useLatentDepenencies && bbfh.getMode() != Mode.NONE) {
 					feats.set(s, i, t, rvar.j, rvar.k);
 					if(rvar.j < s.size() && rvar.j != i) {	// j==sent.size means "not realized argument"
 						LinkVar link = l.getLinkVar(i, rvar.j);

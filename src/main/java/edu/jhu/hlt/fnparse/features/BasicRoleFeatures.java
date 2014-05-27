@@ -10,7 +10,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 
 public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures> implements Features.R {
 
@@ -19,7 +19,7 @@ public final class BasicRoleFeatures extends AbstractFeatures<BasicRoleFeatures>
 	private boolean useFullString = false;
 	private boolean useLemmasInsteadOfWords = false;
 
-	public BasicRoleFeatures(Alphabet<String> featAlph) {
+	public BasicRoleFeatures(HasFeatureAlphabet featAlph) {
 		super(featAlph);
 	}
 	

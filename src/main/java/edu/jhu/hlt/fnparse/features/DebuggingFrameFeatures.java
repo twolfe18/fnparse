@@ -3,13 +3,13 @@ package edu.jhu.hlt.fnparse.features;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 
 public class DebuggingFrameFeatures extends AbstractFeatures<DebuggingFrameFeatures> implements edu.jhu.hlt.fnparse.features.Features.F {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingFrameFeatures(Alphabet<String> featAlph) {
+	public DebuggingFrameFeatures(HasFeatureAlphabet featAlph) {
 		super(featAlph);
 	}
 	

@@ -14,9 +14,6 @@ import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
  * 2) Ising model: only let observed features fire for both vars set to 1
  * 3) modified Ising model: make observed features fire with weights * -1 for the (0,0) configuration
  * 
- * TODO i just noticed that my code is not really conducive to factoring this code out, i'm going to
- * have to hack this out (int FrameFactorFactory and RoleFactorFactory).
- * 
  * @author travis
  */
 public class BinaryBinaryFactorHelper implements Serializable {
@@ -31,14 +28,14 @@ public class BinaryBinaryFactorHelper implements Serializable {
 		NONE
 	}
 	
-	private Mode mode;
-	private ObservedFeatures features;
+	private final Mode mode;
+	private final ObservedFeatures features;
+	private final Refinements isingRefs = new Refinements("bothOn");
 	
 	public BinaryBinaryFactorHelper(Mode m, ObservedFeatures features) {
 		this.mode = m;
 		this.features = features;
 	}
-
 
 	public static interface ObservedFeatures extends Serializable {
 		/**
@@ -48,6 +45,7 @@ public class BinaryBinaryFactorHelper implements Serializable {
 		public abstract FeatureVector getObservedFeatures(Refinements r);
 	}
 
+	public Mode getMode() { return mode; }
 	
 	/**
 	 * @return null if mode is NONE.
@@ -66,7 +64,7 @@ public class BinaryBinaryFactorHelper implements Serializable {
 		// compute the diagonals ahead of time
 		FeatureVector bothOn = null, bothOff = null;
 		if(mode != Mode.FULLY_PARAMETERIZED) {
-			bothOn = features.getObservedFeatures(Refinements.noRefinements);
+			bothOn = features.getObservedFeatures(isingRefs);
 			bothOff = new FeatureVector(bothOn);
 			bothOff.scale(-1d);
 		}

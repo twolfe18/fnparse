@@ -13,7 +13,6 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -48,15 +47,13 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
-
+		
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
 		public RoleFactorFactory factorTemplate;
 		
 		public Params(ParserParams globalParams) {
-			BinaryBinaryFactorHelper.Mode rDepMode = globalParams.useLatentDepenencies
-					? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
-			this.factorTemplate = new RoleFactorFactory(globalParams, rDepMode, false);
+			this.factorTemplate = new RoleFactorFactory(globalParams, BinaryBinaryFactorHelper.Mode.ISING);
 			this.argPruner = new ArgPruner(TargetPruningData.getInstance(), globalParams.headFinder);
 			this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
 		}
@@ -116,6 +113,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 	}
 
 
+	/** must have initialized weights before calling this */
 	@Override
 	public StageDatumExampleList<FNTagging, FNParse> setupInference(List<? extends FNTagging> input, List<? extends FNParse> output) {
 		List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
@@ -124,9 +122,9 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		for(int i=0; i<n; i++) {
 			FNTagging x = input.get(i);
 			if(output == null)
-				data.add(new RoleIdStageDatum(x, weights, globalParams, params));
+				data.add(new RoleIdStageDatum(x, this));	//weights, globalParams, params));
 			else
-				data.add(new RoleIdStageDatum(x, output.get(i), weights, globalParams, params));
+				data.add(new RoleIdStageDatum(x, output.get(i), this));	//, weights, globalParams, params));
 		}
 		return new StageDatumExampleList<>(data);
 	}
@@ -142,31 +140,25 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		private final List<RoleVars> roleVars;	// TODO this needs to have modes for roleId, roleExpansion, and joint
 		private final FNTagging input;
 		private final FNParse gold;
-		private final Params params;
-		private final ParserParams globalParams;
-		private final FgModel weights;
+		private final RoleIdStage parent;
 
 		/** you don't know gold */
-		public RoleIdStageDatum(FNTagging frames, FgModel weights, ParserParams globalParams, Params params) {
+		public RoleIdStageDatum(FNTagging frames, RoleIdStage parent) {//FgModel weights, ParserParams globalParams, Params params) {
 			this.roleVars = new  ArrayList<>();
-			this.weights = weights;
 			this.input = frames;
 			this.gold = null;
-			this.globalParams = globalParams;
-			this.params = params;
+			this.parent = parent;
 			initHypotheses(frames, null, false);
 		}
 
 		/** you know gold */
-		public RoleIdStageDatum(FNTagging frames, FNParse gold, FgModel weights, ParserParams globalParams, Params params) {
+		public RoleIdStageDatum(FNTagging frames, FNParse gold, RoleIdStage parent) {//FgModel weights, ParserParams globalParams, Params params) {
 			if(gold == null)
 				throw new IllegalArgumentException();
 			this.roleVars = new  ArrayList<>();
-			this.weights = weights;
 			this.input = frames;
 			this.gold = gold;
-			this.globalParams = globalParams;
-			this.params = params;
+			this.parent = parent;
 			initHypotheses(frames, gold, true);
 		}
 		
@@ -184,7 +176,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			if(hasGold && gold.getSentence() != frames.getSentence())
 				throw new IllegalArgumentException();
 
-			Timer t = globalParams.getTimer("argId-initHypotheses");
+			Timer t = parent.globalParams.getTimer("argId-initHypotheses");
 			t.start();
 
 			// make sure that we don't have overlapping targets
@@ -193,19 +185,19 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			// build an index keying off of the target head index
 			FrameInstance[] fiByTarget = null;
 			if(hasGold)
-				fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(gold.getFrameInstances(), getSentence(), globalParams.headFinder);
+				fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(gold.getFrameInstances(), getSentence(), parent.globalParams.headFinder);
 
 			for(FrameInstance fi : frames.getFrameInstances()) {
 				Span target = fi.getTarget();
-				int targetHead = globalParams.headFinder.head(target, fi.getSentence());
+				int targetHead = parent.globalParams.headFinder.head(target, fi.getSentence());
 
 				RoleVars rv;
 				if(hasGold) {	// train mode
 					FrameInstance goldFI = fiByTarget[targetHead];
-					rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), globalParams, params);
+					rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), parent.globalParams, parent.params);
 				}
 				else			// predict/decode mode
-					rv = new RoleVars(targetHead, fi.getFrame(), fi.getSentence(), globalParams, params);
+					rv = new RoleVars(targetHead, fi.getFrame(), fi.getSentence(), parent.globalParams, parent.params);
 
 				this.roleVars.add(rv);
 			}
@@ -233,12 +225,12 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			// create factors
 			List<Factor> factors = new ArrayList<>();
 			ProjDepTreeFactor depTree = null;
-			if(globalParams.useLatentDepenencies) {
+			if(parent.globalParams.useLatentDepenencies) {
 				depTree = new ProjDepTreeFactor(getSentence().size(), VarType.LATENT);
-				DepParseFactorFactory depParseFactorTemplate = new DepParseFactorFactory(globalParams);
+				DepParseFactorFactory depParseFactorTemplate = new DepParseFactorFactory(parent.globalParams);
 				factors.addAll(depParseFactorTemplate.initFactorsFor(getSentence(), Collections.emptyList(), depTree));
 			}
-			factors.addAll(params.factorTemplate.initFactorsFor(getSentence(), roleVars, depTree));
+			factors.addAll(parent.params.factorTemplate.initFactorsFor(getSentence(), roleVars, depTree));
 
 			// add factors to the factor graph
 			for(Factor f : factors)
@@ -262,7 +254,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 
 		@Override
 		public Decodable<FNParse> getDecodable(FgInferencerFactory infFact) {
-			return new RoleIdDecodable(getFactorGraph(), infFact, weights, getSentence(), roleVars, globalParams, params);
+			return new RoleIdDecodable(getFactorGraph(), infFact, getSentence(), roleVars, parent);
 		}
 	}
 	
@@ -276,14 +268,14 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		private final Sentence sent;
 		private final List<RoleVars> hypotheses;
 		private final ApproxF1MbrDecoder decoder;
-		private final ParserParams globalParams;
+		private final RoleIdStage parent;
 		
-		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, FgModel weights, Sentence sent, List<RoleVars> hypotheses, ParserParams globalParams, Params params) {
-			super(fg, infFact, weights, globalParams.logDomain);
+		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<RoleVars> hypotheses, RoleIdStage parent) {
+			super(fg, infFact, parent);
 			this.sent = sent;
 			this.hypotheses = hypotheses;
-			this.globalParams = globalParams;
-			this.decoder = params.decoder;
+			this.decoder = parent.params.decoder;
+			this.parent = parent;
 		}
 
 		@Override
@@ -297,7 +289,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		
 		public FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf) {
 
-			Timer t = globalParams.getTimer("argId-decode");
+			Timer t = parent.globalParams.getTimer("argId-decode");
 			t.start();
 
 			// max over j for every role
@@ -306,7 +298,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			Span[] arguments = new Span[K];
 			Arrays.fill(arguments, Span.nullSpan);
 			double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
-			if(globalParams.logDomain) {
+			if(parent.globalParams.logDomain) {
 				for(int i=0; i<beliefs.length; i++)	// otherwise default is 0
 					Arrays.fill(beliefs[i], Double.NEGATIVE_INFINITY);
 			}
@@ -326,7 +318,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 //				System.out.printf("%30s %30s %s\n", rv.t.getName(), rv.t.getRole(k), Arrays.toString(beliefs[k]));
 
 				// TODO add Exactly1 factor!
-				globalParams.normalize(beliefs[k]);
+				parent.globalParams.normalize(beliefs[k]);
 
 				int jHat = decoder.decode(beliefs[k], n);
 				if(jHat < n)

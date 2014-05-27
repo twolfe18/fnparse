@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IPointer;
@@ -42,7 +42,7 @@ public final class BasicFrameFeatures extends AbstractFeatures<BasicFrameFeature
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
 	
-	public BasicFrameFeatures(Alphabet<String> featAlph) {
+	public BasicFrameFeatures(HasFeatureAlphabet featAlph) {
 		super(featAlph);
 		targetPruningData = TargetPruningData.getInstance();
 	}

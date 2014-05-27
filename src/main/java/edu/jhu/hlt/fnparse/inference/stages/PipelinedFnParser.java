@@ -1,23 +1,16 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
 import java.io.Serializable;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
@@ -43,7 +36,7 @@ public class PipelinedFnParser implements Serializable {
 	public FgModel getFrameIdParams() { return frameId.weights; }
 	public FgModel getArgIdParams() { return argId.weights; }
 	public FgModel getArgSpanParams() { return argExpansion.weights; }
-	public Alphabet<String> getAlphabet() { return params.featAlph; }
+	public Alphabet<String> getAlphabet() { return params.getFeatureAlphabet(); }
 	public ParserParams getParams() { return params; }
 	
 	/**
@@ -61,7 +54,7 @@ public class PipelinedFnParser implements Serializable {
 		
 		examples = ParseSelector.sort(examples);
 		
-		params.featAlph.startGrowth();
+		params.getFeatureAlphabet().startGrowth();
 		
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 		frameId.scanFeatures(sentences, examples, maxTimeInMinutes, maxFeaturesAdded);
@@ -72,7 +65,7 @@ public class PipelinedFnParser implements Serializable {
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
 		argExpansion.scanFeatures(onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
 		
-		params.featAlph.stopGrowth();
+		params.getFeatureAlphabet().stopGrowth();
 		t.stop();
 	}
 

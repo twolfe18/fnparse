@@ -27,12 +27,14 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -43,20 +45,37 @@ import edu.jhu.util.Alphabet;
  * @param <I>
  * @param <O>
  */
-public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable {
+public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable, HasFeatureAlphabet {
 	
 	private static final long serialVersionUID = 1L;
 
-	protected ParserParams globalParams;
+	protected final ParserParams globalParams;
 	protected FgModel weights;
 	
 	public AbstractStage(ParserParams params) {
 		this.globalParams = params;
 	}
 	
+	@Override
+	public Alphabet<String> getFeatureAlphabet() {
+		return globalParams.getFeatureAlphabet();
+	}
+	
 	public String getName() {
 		String[] ar = this.getClass().getName().split("\\.");
 		return ar[ar.length-1];
+	}
+	
+	@Override
+	public FgModel getWeights() {
+		if(weights == null)
+			throw new IllegalStateException("you never initialized the weights");
+		return weights;
+	}
+	
+	@Override
+	public boolean logDomain() {
+		return globalParams.logDomain;
 	}
 
 	public FgInferencerFactory infFactory() {
@@ -103,18 +122,33 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		Double learningRate = null;	// null means auto select
 		train(x, y, learningRate, batchSize, passes);
 	}
+	
+	public void initWeights() {
+		int numParams = getFeatureAlphabet().size();
+		if(numParams == 0)
+			throw new IllegalArgumentException("run AlphabetComputer first!");
+		assert globalParams.verifyConsistency();
+		weights = new FgModel(numParams + 1);
+	}
+	
+	/** initializes to a 0 mean Gaussian with diagnonal variance (provided) */
+	public void randomlyInitWeights(final double variance, final Random r) {
+		initWeights();
+		weights.apply(new FnIntDoubleToDouble() {
+			@Override
+			public double call(int idx, double val) {
+				return r.nextGaussian() * variance;
+			}
+		});
+	}
 
 	public void train(List<I> x, List<O> y, Double learningRate, int batchSize, int passes) {
 		
-		int numParams = globalParams.featAlph.size();
-		if(numParams == 0)
-			throw new IllegalArgumentException("run AlphabetComputer first!");
-
 		assert globalParams.verifyConsistency();
 		Timer t = globalParams.getTimer(this.getName() + "-train");
 		t.start();
 		
-		weights = new FgModel(numParams + 1);
+		initWeights();
 		
 		List<I> xTrain, xDev;
 		List<O> yTrain, yDev;
@@ -152,7 +186,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		trainerParams.numThreads = globalParams.threads;
 		trainerParams.regularizer = new L2(1_000_000d);
 
-		Alphabet<String> alph = globalParams.featAlph;
+		Alphabet<String> alph = this.getFeatureAlphabet();
 		System.out.printf("[%s train] alphabet is frozen (size=%d), going straight into training\n", this.getName(), alph.size());
 		alph.stopGrowth();
 		
@@ -199,7 +233,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		// keep track of what parses we added so we can get a sense of our frame/role coverage
 		List<FNTagging> seen = new ArrayList<>();
 
-		final int alphSizeStart = globalParams.featAlph.size();
+		final int alphSizeStart = getFeatureAlphabet().size();
 		int examplesSeen = 0;
 		FgInferencerFactory infFact = this.infFactory();
 		StageDatumExampleList<I, O> data = this.setupInference(unlabeledExamples, null);
@@ -218,7 +252,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 				System.out.println("[scanFeatures " + this.getName() + "] stopping because we used the max time (in minutes): " + maxTimeInMinutes);
 				break;
 			}
-			int featuresAdded = globalParams.featAlph.size() - alphSizeStart;
+			int featuresAdded = getFeatureAlphabet().size() - alphSizeStart;
 			if(featuresAdded > maxFeaturesAdded) {
 				System.out.println("[scanFeatures " + this.getName() + "] stopping because we added the max allowed features: " + featuresAdded);
 				break;
@@ -251,7 +285,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		}
 
 		System.out.printf("[scanFeatures %s] done, scanned %d examples in %.1f minutes, alphabet size is %d, added %d\n",
-			this.getName(), examplesSeen, t.totalTimeInSeconds() / 60d, globalParams.featAlph.size(), globalParams.featAlph.size()-alphSizeStart);
+			this.getName(), examplesSeen, t.totalTimeInSeconds() / 60d, getFeatureAlphabet().size(), getFeatureAlphabet().size()-alphSizeStart);
 	}
 	
 	
