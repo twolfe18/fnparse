@@ -1,6 +1,10 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -39,11 +43,26 @@ public class Describe {
 		}
 		return sb.toString();
 	}
-	
+
+	// sort by frame and position in sentence
+	public static final Comparator<FrameInstance> fiComparator = new Comparator<FrameInstance>() {
+		@Override
+		public int compare(FrameInstance arg0, FrameInstance arg1) {
+			int f = arg0.getFrame().getId() - arg1.getFrame().getId();
+			if (f != 0) return f;
+			int k = 1000;	// should be longer than a sentence
+			return (k * arg0.getTarget().end + arg0.getTarget().start)
+					- (k * arg1.getTarget().end + arg1.getTarget().start);
+		}
+	};
+
 	public static String fnParse(FNParse p) {
 		StringBuilder sb = new StringBuilder("FNParse: ");
 		sb.append(sentence(p.getSentence()) + "\n");
-		for(FrameInstance fi : p.getFrameInstances())
+		List<FrameInstance> fis = new ArrayList<>();
+		fis.addAll(p.getFrameInstances());
+		Collections.sort(fis, fiComparator);
+		for(FrameInstance fi : fis)
 			sb.append(frameInstance(fi) + "\n");
 		return sb.toString();
 	}
@@ -51,7 +70,10 @@ public class Describe {
 	public static String fnTagging(FNTagging p) {
 		StringBuilder sb = new StringBuilder("FNTagging: ");
 		sb.append(sentence(p.getSentence()) + "\n");
-		for(FrameInstance fi : p.getFrameInstances())
+		List<FrameInstance> fis = new ArrayList<>();
+		fis.addAll(p.getFrameInstances());
+		Collections.sort(fis, fiComparator);
+		for(FrameInstance fi : fis)
 			sb.append(frameInstance(fi) + "\n");
 		return sb.toString();
 	}
