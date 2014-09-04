@@ -8,7 +8,7 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.util.Alphabet;
 
 public class ModelIO {
-	
+
 	public static boolean preventOverwrites = false;
 
 	public static void writeHumanReadable(FgModel model, Alphabet<String> featIdx, File f, boolean outputZeroFeatures) {
@@ -34,44 +34,53 @@ public class ModelIO {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	public static void writeBinary(FgModel model, File f) {
 		if(preventOverwrites && f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is already a file");
 		try {
-			int n = model.getNumParams();
-			double[] values = new double[n];
-			model.updateDoublesFromModel(values);
 			DataOutputStream dos = new DataOutputStream(new FileOutputStream(f));
-			dos.writeInt(n);
-			for(int i=0; i<n; i++)
-				dos.writeDouble(values[i]);
+			writeBinary(model, dos);
 			dos.close();
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
+	public static void writeBinary(FgModel model, DataOutputStream dos) throws IOException {
+		int n = model.getNumParams();
+		double[] values = new double[n];
+		model.updateDoublesFromModel(values);
+        dos.writeInt(n);
+        for(int i=0; i<n; i++)
+        	dos.writeDouble(values[i]);
+	}
+
 	public static FgModel readBinary(File f) {
 		if(!f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is not a file");
 		try {
 			DataInputStream dis = new DataInputStream(new FileInputStream(f));
-			int dimension = dis.readInt();
-			FgModel model = new FgModel(dimension);
-			double[] values = new double[dimension];
-			for(int i=0; i<dimension; i++)
-				values[i] = dis.readDouble();
+			FgModel model = readBinary(dis);
 			dis.close();
-			model.updateModelFromDoubles(values);
 			return model;
 		}
 		catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
+	public static FgModel readBinary(DataInputStream dis) throws IOException {
+		int dimension = dis.readInt();
+		FgModel model = new FgModel(dimension);
+		double[] values = new double[dimension];
+		for(int i=0; i<dimension; i++)
+			values[i] = dis.readDouble();
+		model.updateModelFromDoubles(values);
+		return model;
+	}
+
 	/**
 	 * @return an alphabet from a file which is guaranteed to not be growing.
 	 */
@@ -99,7 +108,7 @@ public class ModelIO {
 			throw new RuntimeException(e1);
 		}
 	}
-	
+
 	public static void writeAlphabet(Alphabet<String> alph, File f) {
 		if(preventOverwrites && f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is already a file");

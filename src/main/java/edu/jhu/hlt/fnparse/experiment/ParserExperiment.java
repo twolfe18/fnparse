@@ -6,73 +6,87 @@ import java.io.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
+import edu.jhu.hlt.optimize.functions.L2;
 
+/**
+ * This class runs experiments where ther are two types of options:
+ * 1) run-specific options like whether to do frameId or argId which are specified as command line
+ *    options
+ * 2) grid-job-specific options like whether the regularizer should be 1e-3 or 1e-4, which serve as
+ *    the parameters to be swept.
+ * 
+ * See ParserExperimentWrapper.qsub for how this class interacts with the grid engine.
+ * 
+ * @author travis
+ */
 public class ParserExperiment {
 
-//public static Mode parserMode;
-	private static File alphabetModelFile;	// input
-
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 
 		if(args.length != 5) {
-			System.out.println("please provide:");
-			System.out.println("1) a mode (e.g. \"frameId\" or \"argId\")");
-			System.out.println("2) a job index (run with -1 to see options)");
-			System.out.println("3) a working directory (for output files");
-			System.out.println("4) an alphabet model that specifies which features to use (use AlphabetComputer)");
-			System.out.println("5) a syntax mode (either \"regular\", \"none\", or \"latent\")");
+			System.out.println("Please provide:");
+			System.out.println("1) A mode. Possible values:");
+			System.out.println("     \"frameId\" will train and test just the frame identification stage");
+			System.out.println("     \"argId\" will use gold frames and train and test the argId stage(s)");
+			System.out.println("2) A job index for sweep parameters (run with -1 to see options)");
+			System.out.println("3) A working directory (for output files)");
+			System.out.println("4) An alphabet of pre-computed feature names (use AlphabetComputer)");
+			System.out.println("   This may be the string \"none\" if you want one to be computed (slow)");
+			System.out.println("5) A syntax mode. Possible values:");
+			System.out.println("     \"none\" means that features have no access to syntax information");
+			System.out.println("     \"regular\" means that 1-best parses are used for features");
+			System.out.println("     \"latent\" means that latent syntax is jointly reasoned about with prediction");
 			return;
 		}
 		System.out.println("[main] args=" + Arrays.toString(args));
-		
-		// mode
-		String m = args[0];
-		if(m.equalsIgnoreCase("frameid"))
-			parserMode = Mode.FRAME_ID;
-		else if(m.equalsIgnoreCase("argId") || m.equalsIgnoreCase("roleId"))
-			parserMode = Mode.PIPELINE_FRAME_ARG;
-		else throw new RuntimeException("unknown mode: " + m);
-		
-		// working directory
-		File workingDir = new File(args[2]);
-		if(!workingDir.isDirectory())
-			workingDir.mkdirs();
-		System.out.println("[main] workingDir = " + workingDir.getPath());
-		
-		// job index
+
+		final String mode = args[0];
+		final int jobIdx = Integer.parseInt(args[1]);
+		final File workingDir = new File(args[2]);
+		//final File alphabetModelFile = new File(args[3]);
+		final String featureAlphabet = args[3];
+		final String syntaxMode = args[4];
+		if(!workingDir.isDirectory()) workingDir.mkdirs();
+
+		// Validation
+		if (!Arrays.asList("frameId", "argId").contains(mode))
+			throw new IllegalArgumentException("illegal mode: " + mode);
+		if(!Arrays.asList("regular", "none", "latent").contains(syntaxMode))
+			throw new IllegalStateException("unknown syntax mode: " + syntaxMode);
+		if(!"none".equals(featureAlphabet) && !new File(featureAlphabet).isFile()) {
+			throw new RuntimeException(featureAlphabet + " is not valid\n"
+					+ "Use AlphabetComputer to make an alphabet model");
+		}
+
 		long start = System.currentTimeMillis();
+		System.out.println("[main] workingDir = " + workingDir.getPath());
+
+		// Set up array job configurations
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 400, 999999));
-		List<Integer> possiblePasses = parserMode == Mode.FRAME_ID
+		List<Integer> possiblePasses = "frameId".equals(mode)
 				? Arrays.asList(2, 6)
 				: Arrays.asList(1, 3);
 		Option<Integer> passes = ajh.addOption("passes", possiblePasses);
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(4, 40));
 		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1000d, 10000d, 100000d));
-		Option<Boolean> useGoldFrames = null;
-		if(parserMode == Mode.PIPELINE_FRAME_ARG)
-			useGoldFrames = ajh.addOption("useGoldFrames", Arrays.asList(true, false));
-		int jobIdx = Integer.parseInt(args[1]);
+
+		// TODO add back the part of the experiment where we predict frames and
+		// args (argId mode right now just takes gold frames).
+		//Option<Boolean> useGoldFrames = ajh.addOption("useGoldFrames", Arrays.asList(true, false));
+
+		// Choose an array job configuration
 		if(jobIdx < 0) {
-			System.out.println(ajh.helpString(999999));
+			System.out.println(ajh.helpString(999));
 			return;
 		}
 		else ajh.setConfig(jobIdx);
 		System.out.println("config = " + ajh.getStoredConfig());
 
-		// alphabet model
-		alphabetModelFile = new File(args[3]);
-		if(!alphabetModelFile.isFile())
-			throw new RuntimeException(alphabetModelFile.getPath() + " is not a file\n  use AlphabetComputer to make an alphabet model");
-
-		// syntax mode
-		String syntaxMode = args[4];
-		if(!Arrays.asList("regular", "none", "latent").contains(syntaxMode))
-			throw new IllegalStateException("unknown syntax mode: " + syntaxMode);
-
-		// get the data
+		// Get the data
 		DataSplitter ds = new DataSplitter();
 		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> trainTune = new ArrayList<FNParse>();
@@ -80,70 +94,74 @@ public class ParserExperiment {
 		List<FNParse> tune = new ArrayList<FNParse>();
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, trainTune, test, 0.2d, "fn15_train-test");
-		ds.split(trainTune, train, tune, Math.min(75, (int) (0.15d * trainTune.size())), "fn15_train-tune");
+		int nTest = Math.min(75, (int) (0.15d * trainTune.size()));
+		ds.split(trainTune, train, tune, nTest, "fn15_train-tune");
 
 		if(nTrainLimit.get() < train.size())
 			train = DataUtil.reservoirSample(train, nTrainLimit.get(), new Random(9001));
 
 		printMemUsage();
-		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
+		System.out.printf("[main] #train=%d #tune=%d #test=%d\n",
+				train.size(), tune.size(), test.size());
 
-		// create parser
+		// Create parser
 		boolean latentSyntax = "latent".equals(syntaxMode);
 		boolean noSyntaxFeatures = "none".equals(syntaxMode);
-		Parser parser = new Parser(alphabetModelFile);
-		parser.setMode(parserMode, latentSyntax);
-		parser.params.useSyntaxFeatures = !noSyntaxFeatures;
+		PipelinedFnParser parser = new PipelinedFnParser();
+		if ("none".equals(featureAlphabet)) {
+			int maxMinutes = 45;
+			int maxFeatures = 15_000_000;
+			parser.computeAlphabet(train, maxMinutes, maxFeatures);
+		} else {
+			parser.setAlphabet(ModelIO.readAlphabet(new File(featureAlphabet)));
+		}
+		parser.getParams().useSyntaxFeatures = !noSyntaxFeatures;
 		if(latentSyntax)
-			parser.params.useSyntaxFeatures = false;
+			parser.getParams().useSyntaxFeatures = false;
 		System.out.printf("[ParserExperiment] this model was read in from %s, "
-				+ "and i'm assuming that this model's alphabet (size=%d) already "
-				+ "includes all of the features needed to train in %s mode\n",
-				alphabetModelFile.getPath(), parser.params.featIdx.size(), parserMode);
-		
-		
-		
-		// DEBUGGING:
-		parser.params.predictHeadValuedArguments = false;
-		
-		
+				+ "and i'm assuming that this model's alphabet (size=%d) "
+				+ "already includes all of the features needed to train in %s "
+				+ "mode\n",
+				featureAlphabet, parser.getParams().getFeatureAlphabet(), mode);
 
-		// train
-		Double lrMult = parserMode == Mode.FRAME_ID ? null : 0.05d;	// null means do auto learning rate selection
+		// Train
+		// null means do auto learning rate selection
+		Double lrMult = "frameId".equals(mode) ? null : 0.05d;
 		System.out.println("[ParserExperiment] starting, lrMult=" + lrMult);
-		parser.train(train, passes.get(), batchSize.get(), lrMult, regularizer.get(), true);
-		System.out.printf("[ParserExperiment] after training, #features=%d\n", parser.params.featIdx.size());
+		if ("frameId".equals(mode)) {
+			parser.getFrameIdParams().batchSize = batchSize.get();
+			parser.getFrameIdParams().passes = passes.get();
+			parser.getFrameIdParams().regularizer = new L2(regularizer.get());
+		} else {
+			parser.getArgIdParams().batchSize = batchSize.get();
+			parser.getArgIdParams().passes = passes.get();
+			parser.getArgIdParams().regularizer = new L2(regularizer.get());
+		}
+		parser.train(train);
+		System.out.printf("[ParserExperiment] after training, #features=%d\n",
+				parser.getAlphabet().size());
 		printMemUsage();
 
-		// write parameters out as soon as possible
-		parser.writeWeights(new File(workingDir, parserMode + ".weights.txt"));
-		parser.writeModel(new File(workingDir, parserMode + ".model.gz"));
+		// Write parameters out as soon as possible
+		parser.writeModel(new File(workingDir, mode + ".model.gz"));
+		// TODO write out a human-readable version of the models
 
-		// this can take a while!
-		int maxTuneEval = parserMode == Mode.FRAME_ID ? 9999 : 30;
-		System.out.printf("[ParserExperiment] tuning on %d examples\n", Math.min(maxTuneEval, tune.size()));
-		parser.tune(tune, maxTuneEval);
-		printMemUsage();
-		
-		// write model again so that tuning parameters are updated
-		parser.writeModel(new File(workingDir, parserMode + ".model.gz"));
-
-		// evaluate (test data)
+		// Evaluate (test data)
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		int maxTestEval = 100;
-		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval, parser.params.rand) : test;
+		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval, parser.getParams().rand) : test;
 		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset.size());
-		predicted = parser.parse(testSubset);
+		predicted = parser.predictWithoutPeaking(testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		// evaluate (train data)
 		int maxTrainEval = 150;
-		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval, parser.params.rand) : train;
+		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
-		predicted = parser.parse(trainSubset);
+		predicted = parser.predictWithoutPeaking(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
 		printMemUsage();

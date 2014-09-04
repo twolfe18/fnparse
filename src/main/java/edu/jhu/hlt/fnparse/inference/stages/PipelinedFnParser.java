@@ -1,7 +1,13 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -11,6 +17,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
+import edu.jhu.hlt.fnparse.util.HasSentence;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
@@ -43,6 +51,21 @@ public class PipelinedFnParser implements Serializable {
 	public FrameIdStage.Params getFrameIdParams() { return frameId.params; }
 	public RoleIdStage.Params getArgIdParams() { return argId.params; }
 	public RoleSpanStage.Params getArgExpansionParams() { return argExpansion.params; }
+	
+	/**
+	 * Writes just the weight vectors to a compressed binary file.
+	 */
+	public void writeModel(File f) throws IOException {
+		DataOutputStream dos = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(f)));
+		ModelIO.writeBinary(getFrameIdWeights(), dos);
+		ModelIO.writeBinary(getArgIdWeights(), dos);
+		ModelIO.writeBinary(getArgSpanWeights(), dos);
+		dos.close();
+	}
+	
+	public void setAlphabet(Alphabet<String> featureIndices) {
+		params.setFeatureAlphabet(featureIndices);
+	}
 
 	/**
 	 * Builds an Alphabet of feature names and indices, freezes the Alphabet when done.
@@ -88,8 +111,10 @@ public class PipelinedFnParser implements Serializable {
 				: DataUtil.convertParsesToTaggings(examples);
 		argId.train(frames, examples);
 
-		// if we predict the wrong head, there is no way to recover by predicting it's span
+		// If we predict the wrong head, there is no way to recover by predicting it's span
 		// so there is no reason not to train on gold heads+expansions
+		// TODO The above comment is old and does not appear to make sense, consider alternative
+		// training regimes.
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
 		argExpansion.train(onlyHeads, examples);
 	}
@@ -99,6 +124,13 @@ public class PipelinedFnParser implements Serializable {
 		List<FNParse> argHeads = argId.predict(frames);
 		List<FNParse> fullParses = argExpansion.predict(argHeads);
 		return fullParses;
+	}
+	
+	public List<FNParse> predictWithoutPeaking(List<? extends HasSentence> hasSentences) {
+		List<Sentence> sentences = new ArrayList<>();
+		for (HasSentence hs : hasSentences)
+			sentences.add(hs.getSentence());
+		return predict(sentences);
 	}
 
 }

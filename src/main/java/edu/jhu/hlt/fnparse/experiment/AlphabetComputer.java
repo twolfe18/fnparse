@@ -18,13 +18,12 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  * @author travis
  */
 public class AlphabetComputer {
-	
+
 	public static int maxFeaturesAdded = 12_000_000;	// by any one stage
 	public static double scanFeaturesTimeInMinutes = 15;
 	public static boolean checkForPreExistingModelFile = false;
-	
+
 	public static void main(String[] args) throws IOException {
-		
 		if(args.length != 2 && args.length != 3) {
 			System.out.println("please provide:");
 			System.out.println("1) an file to save the model to");
@@ -32,10 +31,10 @@ public class AlphabetComputer {
 			System.out.println("3) [optional] how many minutes to run this for (default is 15 minutes)");
 			return;
 		}
-		
+
 		if(args.length == 3)
 			scanFeaturesTimeInMinutes = Double.parseDouble(args[args.length-1]);
-		
+
 		File saveModelTo = new File(args[0]);
 		if(checkForPreExistingModelFile && saveModelTo.isFile())
 			throw new RuntimeException("this file already exists: " + saveModelTo.getPath());
@@ -45,7 +44,7 @@ public class AlphabetComputer {
 			throw new RuntimeException("unknown syntax mode: " + syntaxMode);
 		boolean latentSyntax = syntaxMode.equals("latent");
 		boolean noSyntaxFeatures = syntaxMode.equals("none");
-		
+
 		PipelinedFnParser parser = new PipelinedFnParser();
 		parser.getParams().useSyntaxFeatures = !noSyntaxFeatures;
 		parser.getParams().useLatentDepenencies = latentSyntax;
@@ -58,12 +57,10 @@ public class AlphabetComputer {
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, train, test, 0.2d, "fn15_train-test");
 		test = null;	// don't need this
-	
 
 		// compute features and populate the alphabet
 		parser.computeAlphabet(train, scanFeaturesTimeInMinutes, maxFeaturesAdded);
-		
-		
+
 		// write model to disk
 		long time = System.currentTimeMillis();
 		/*

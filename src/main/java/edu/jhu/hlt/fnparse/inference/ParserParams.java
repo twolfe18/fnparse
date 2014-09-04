@@ -14,31 +14,26 @@ import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 
 public class ParserParams implements Serializable, HasFeatureAlphabet {
-	
 	private static final long serialVersionUID = 1L;
-	
+
 	public boolean logDomain = true;
 	public boolean useLatentDepenencies = false;
 	public boolean useLatentConstituencies = false;
 	public boolean useSyntaxFeatures = true;
 	public boolean usePredictedFramesToTrainArgId = false;	// otherwise use gold frames
-	
+
 	// store weights at the stage level
 	private Alphabet<String> featAlph = new Alphabet<>();
 
 	public int threads = 1;
 	public Random rand = new Random(9001);
 	public HeadFinder headFinder = new SemaforicHeadFinder();
-	
-//	public Features.F  fFeatures;
-//	public Features.R  rFeatures;
-//	public Features.RE reFeatures;
-	
+
 	@Override
 	public Alphabet<String> getFeatureAlphabet() {
 		return featAlph;
 	}
-	
+
 	/** checks if they're log proportions from this.logDomain */
 	public void normalize(double[] proportions) {
 		if(this.logDomain)

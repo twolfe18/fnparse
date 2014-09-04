@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.fnparse.util.HasSentence;
 
 /**
  * A Sentence with Frame targets tagged, but no arguments (necessarily) labeled.
@@ -16,7 +17,7 @@ import edu.jhu.hlt.fnparse.util.HasId;
  * 
  * @author travis
  */
-public class FNTagging implements HasId {
+public class FNTagging implements HasId, HasSentence {
 
 	protected Sentence sent;
 	protected List<FrameInstance> frameInstances;
@@ -51,6 +52,7 @@ public class FNTagging implements HasId {
 		return sb.toString();
 	}
 	
+	@Override
 	public Sentence getSentence() { return sent; }
 	
 	public List<FrameInstance> getFrameInstances() { return frameInstances; }

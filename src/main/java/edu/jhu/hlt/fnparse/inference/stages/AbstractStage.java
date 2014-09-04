@@ -33,6 +33,7 @@ import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
+import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -46,33 +47,32 @@ import edu.jhu.util.Alphabet;
  * @param <O> output of this stage
  */
 public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable, HasFeatureAlphabet {
-	
 	private static final long serialVersionUID = 1L;
 
-	protected final ParserParams globalParams;
+	protected final ParserParams globalParams;	// Not owned by this class
 	protected FgModel weights;
-	
+
 	public AbstractStage(ParserParams params) {
 		this.globalParams = params;
 	}
-	
+
 	@Override
 	public Alphabet<String> getFeatureAlphabet() {
 		return globalParams.getFeatureAlphabet();
 	}
-	
+
 	public String getName() {
 		String[] ar = this.getClass().getName().split("\\.");
 		return ar[ar.length-1];
 	}
-	
+
 	@Override
 	public FgModel getWeights() {
 		if(weights == null)
 			throw new IllegalStateException("you never initialized the weights");
 		return weights;
 	}
-	
+
 	@Override
 	public boolean logDomain() {
 		return globalParams.logDomain;
@@ -120,7 +120,8 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		int batchSize = 4;
 		int passes = 2;
 		Double learningRate = null;	// null means auto select
-		train(x, y, learningRate, batchSize, passes);
+		Regularizer regularizer = new L2(1_000_000d);
+		train(x, y, learningRate, regularizer, batchSize, passes);
 	}
 	
 	public void initWeights() {
@@ -142,7 +143,16 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		});
 	}
 
-	public void train(List<I> x, List<O> y, Double learningRate, int batchSize, int passes) {
+	/**
+	 * @param x
+	 * @param y
+	 * @param learningRate if null pacaya will try to auto-select a learning rate
+	 * @param regularizer
+	 * @param batchSize
+	 * @param passes is how many passes to make over the entire dataset
+	 */
+	public void train(List<I> x, List<O> y, Double learningRate,
+			Regularizer regularizer, int batchSize, int passes) {
 		assert globalParams.verifyConsistency();
 		if (x.size() != y.size())
 			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
@@ -168,16 +178,17 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 				yTrain = new ArrayList<>();
 				xDev = new ArrayList<>();
 				yDev = new ArrayList<>();
-				devTuneSplit(x, y, xTrain, yTrain, xDev, yDev, 0.15d, 50, globalParams.rand);
+				devTuneSplit(x, y, xTrain, yTrain, xDev, yDev,
+						0.15d, 50, globalParams.rand);
 			}
 		}
 
 		CrfTrainerPrm trainerParams = new CrfTrainerPrm();
 		SGDPrm sgdParams = new SGDPrm();
 		AdaGradPrm adagParams = new AdaGradPrm();
-		if(learningRate == null)
+		if(learningRate == null) {
 			sgdParams.autoSelectLr = true;
-		else {
+		} else {
 			sgdParams.autoSelectLr = false;
 			adagParams.eta = learningRate;
 		}
@@ -189,16 +200,17 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
 		trainerParams.numThreads = globalParams.threads;
-		trainerParams.regularizer = new L2(1_000_000d);
+		trainerParams.regularizer = regularizer; //new L2(1_000_000d);
 
 		Alphabet<String> alph = this.getFeatureAlphabet();
-		System.out.printf("[%s train] alphabet is frozen (size=%d), going straight into training\n", this.getName(), alph.size());
+		System.out.printf("[%s train] alphabet is frozen (size=%d), "
+				+ "going straight into training\n", getName(), alph.size());
 		alph.stopGrowth();
 
-		// get the data
+		// Get the data
 		StageDatumExampleList<I, O> exs = this.setupInference(x, y);
 	
-		// setup model and train
+		// Setup model and train
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		try {
 			weights = trainer.train(weights, exs);
@@ -207,10 +219,12 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			oe.printStackTrace();
 		}
 		long timeTrain = t.stop();
-		System.out.printf("[%s train] done training on %d examples for %.1f minutes\n", this.getName(), exs.size(), timeTrain/(1000d*60d));
-		System.out.printf("[%s train] params.featIdx.size=%d\n", this.getName(), alph.size());
+		System.out.printf("[%s train] done training on %d examples for %.1f minutes\n",
+				this.getName(), exs.size(), timeTrain/(1000d*60d));
+		System.out.printf("[%s train] params.featIdx.size=%d\n",
+				this.getName(), alph.size());
 
-		// tune
+		// Tune
 		if(td != null)
 			tuneRecallBias(xDev, yDev, td);
 	}

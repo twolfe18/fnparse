@@ -38,6 +38,8 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.optimize.functions.L2;
 
 public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements Stage<FNTagging, FNParse>, Serializable {
 	
@@ -48,7 +50,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
-
+		public Regularizer regularizer = new L2(1_000_000d);
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
 		public RoleFactorFactory factorTemplate;
@@ -101,7 +103,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			yUse = y;
 		}
 	
-		super.train(xUse, yUse, null, params.batchSize, params.passes);
+		super.train(xUse, yUse, null, params.regularizer, params.batchSize, params.passes);
 	}
 	
 	@Override

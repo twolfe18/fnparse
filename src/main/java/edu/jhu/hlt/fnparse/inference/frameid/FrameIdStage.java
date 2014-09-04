@@ -39,6 +39,8 @@ import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.optimize.functions.L2;
 
 public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements Stage<Sentence, FNTagging>, Serializable {
 	
@@ -50,7 +52,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		public double propDev = 0.15d;
 		public int maxDev = 50;
 		public Double learningRate = null;	// if null, auto select learning rate
-
+		public Regularizer regularizer = new L2(1_000_000d);
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
 		public Features.F features;
