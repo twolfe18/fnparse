@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
@@ -41,10 +42,12 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	public String toString() { return "<FrameFactorFactory>"; }
 
 	/**
-	 * needed to interact with BinaryBinaryFactorHelper,
-	 * just implements partial application.
+	 * needed to interact with BinaryBinaryFactorHelper, just implements partial application.
 	 */
 	private static class FrameDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
+
+		private static final long serialVersionUID = 1L;
+
 		private Features.F features;
 		private String refinement;
 		
@@ -76,7 +79,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 	// TODO need to add an Exactly1 factor to each FrameVars
 	// ^^^^ do i really need this if i'm not doing joint inference?
 	@Override
-	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l) {
+	public List<Factor> initFactorsFor(Sentence s, List<FrameVars> fr, ProjDepTreeFactor l, ConstituencyTreeFactor c) {
 
 		FrameDepObservedFeatures depFeats = new FrameDepObservedFeatures(features, "f_it~l_{root,i}");
 		BinaryBinaryFactorHelper bbfh = new BinaryBinaryFactorHelper(this.rootFactorMode, depFeats);

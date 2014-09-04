@@ -11,11 +11,11 @@ import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 
 public class ParserExperiment {
 
-//	public static Mode parserMode;
+//public static Mode parserMode;
 	private static File alphabetModelFile;	// input
-	
+
 	public static void main(String[] args) {
-		
+
 		if(args.length != 5) {
 			System.out.println("please provide:");
 			System.out.println("1) a mode (e.g. \"frameId\" or \"argId\")");
@@ -61,17 +61,17 @@ public class ParserExperiment {
 		}
 		else ajh.setConfig(jobIdx);
 		System.out.println("config = " + ajh.getStoredConfig());
-		
+
 		// alphabet model
 		alphabetModelFile = new File(args[3]);
 		if(!alphabetModelFile.isFile())
 			throw new RuntimeException(alphabetModelFile.getPath() + " is not a file\n  use AlphabetComputer to make an alphabet model");
-		
+
 		// syntax mode
 		String syntaxMode = args[4];
 		if(!Arrays.asList("regular", "none", "latent").contains(syntaxMode))
 			throw new IllegalStateException("unknown syntax mode: " + syntaxMode);
-		
+
 		// get the data
 		DataSplitter ds = new DataSplitter();
 		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
@@ -81,13 +81,13 @@ public class ParserExperiment {
 		List<FNParse> test = new ArrayList<FNParse>();
 		ds.split(all, trainTune, test, 0.2d, "fn15_train-test");
 		ds.split(trainTune, train, tune, Math.min(75, (int) (0.15d * trainTune.size())), "fn15_train-tune");
-		
+
 		if(nTrainLimit.get() < train.size())
 			train = DataUtil.reservoirSample(train, nTrainLimit.get(), new Random(9001));
 
 		printMemUsage();
 		System.out.printf("[main] #train=%d #tune=%d #test=%d\n", train.size(), tune.size(), test.size());
-		
+
 		// create parser
 		boolean latentSyntax = "latent".equals(syntaxMode);
 		boolean noSyntaxFeatures = "none".equals(syntaxMode);

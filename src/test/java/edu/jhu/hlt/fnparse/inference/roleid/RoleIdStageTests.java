@@ -206,10 +206,10 @@ public class RoleIdStageTests {
 		runTests(true);
 	}
 
-//	@Test
-//	public void runTestsUnPruned() {
-//		runTests(false);
-//	}
+	@Test
+	public void runTestsUnPruned() {
+		runTests(false);
+	}
 
 	public void runTests(boolean prune) {
 

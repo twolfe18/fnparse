@@ -10,6 +10,7 @@ import java.util.List;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
@@ -47,11 +48,15 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
-		
+
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
 		public RoleFactorFactory factorTemplate;
-		
+
+		// If true, tuning the decoder will be done on training data. Generally this is undesirable
+		// for risk of overfitting, but is good for debugging (e.g. an overfitting test).
+		public boolean tuneOnTrainingData = false;
+
 		public Params(ParserParams globalParams) {
 			this.factorTemplate = new RoleFactorFactory(globalParams, BinaryBinaryFactorHelper.Mode.ISING);
 			this.argPruner = new ArgPruner(TargetPruningData.getInstance(), globalParams.headFinder);
@@ -88,12 +93,14 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			}
 			System.out.printf("[%s train] filtering out sentences longer than %d words, kept %d of %d\n",
 					this.getName(), params.maxSentenceLengthForTraining, xUse.size(), x.size());
+			if (xUse.size() == 0)
+				System.err.println("[RoleIdStage train] WARNING: filtered out all training examples, not training!");
 		}
 		else {
 			xUse = x;
 			yUse = y;
 		}
-		
+	
 		super.train(xUse, yUse, null, params.batchSize, params.passes);
 	}
 	
@@ -109,6 +116,8 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			public EvalFunc getObjective() { return BasicEvaluation.targetMicroF1; }
 			@Override
 			public List<Double> getRecallBiasesToSweep() { return biases; }
+			@Override
+			public boolean tuneOnTrainingData() { return params.tuneOnTrainingData; }
 		};
 	}
 
@@ -225,12 +234,13 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 			// create factors
 			List<Factor> factors = new ArrayList<>();
 			ProjDepTreeFactor depTree = null;
+			ConstituencyTreeFactor consTree = null;	// used in RoleSpanStage, not here
 			if(parent.globalParams.useLatentDepenencies) {
 				depTree = new ProjDepTreeFactor(getSentence().size(), VarType.LATENT);
 				DepParseFactorFactory depParseFactorTemplate = new DepParseFactorFactory(parent.globalParams);
-				factors.addAll(depParseFactorTemplate.initFactorsFor(getSentence(), Collections.emptyList(), depTree));
+				factors.addAll(depParseFactorTemplate.initFactorsFor(getSentence(), Collections.emptyList(), depTree, consTree));
 			}
-			factors.addAll(parent.params.factorTemplate.initFactorsFor(getSentence(), roleVars, depTree));
+			factors.addAll(parent.params.factorTemplate.initFactorsFor(getSentence(), roleVars, depTree, consTree));
 
 			// add factors to the factor graph
 			for(Factor f : factors)

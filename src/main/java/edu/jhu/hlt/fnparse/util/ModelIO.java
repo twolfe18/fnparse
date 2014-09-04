@@ -11,7 +11,7 @@ public class ModelIO {
 	
 	public static boolean preventOverwrites = false;
 
-	public static void writeHumanReadable(FgModel model, Alphabet<String> featIdx, File f) {
+	public static void writeHumanReadable(FgModel model, Alphabet<String> featIdx, File f, boolean outputZeroFeatures) {
 		if(preventOverwrites && f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is already a file");
 		if(model == null || featIdx == null)
@@ -23,6 +23,8 @@ public class ModelIO {
 			model.updateDoublesFromModel(values);
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
 			for(int i=0; i<featIdx.size(); i++) {
+				if (!outputZeroFeatures && Math.abs(values[i]) < 1e-5)
+					continue;
 				String fName = featIdx.lookupObject(i);
 				w.write(String.format("%f\t%s\n", values[i], fName));
 			}

@@ -12,6 +12,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -44,43 +45,41 @@ public class ArgPruner implements Serializable, IArgPruner {
 	 * TODO update for roleSynsetMap
 	 */
 	public static void main(String[] args) throws IOException {
-		
 		boolean plain = true;	// just write out the data
-		
+
 		File parent = new File("toydata/arg-pruning");
 		ParserParams params = new ParserParams();
 		FrameIdStage fid = new FrameIdStage(params);
 		ArgPruner ap = new ArgPruner(fid.params.targetPruningData, params.headFinder);
-		
+
 		if(plain) {
 			ap.clearCachedFiles();
 			ap.serialize();
 			return;
 		}
-		
+
 		MultiTimer t = new MultiTimer();
-		
-		
+
 		t.start("data");
 		Set<LexicalUnit>[][] map = ap.getRoleWordMap();
 		t.stop("data");
-		
+
 		t.start("byHand");
 		writeLUTensor(new File(parent, "byHand.gz"), ap.getRoleWordMap());
 		t.stop("byHand");
-		
+
 		t.start("oosGz");
 		ObjectOutputStream oos = new ObjectOutputStream(new GZIPOutputStream(new FileOutputStream(new File(parent, "oos.gz"))));
 		oos.writeObject(map);
 		oos.close();
 		t.stop("oosGz");
-		
+
 		t.start("oosSer");
 		oos = new ObjectOutputStream(new FileOutputStream(new File(parent, "oos.ser")));
 		oos.writeObject(map);
 		oos.close();
 		t.stop("oosSer");
-		
+
 		/*
 		 * hand-rolled solution is 2x the speed and 1/2 the size
 		 * for about 40 lines of trivial code. 
@@ -138,25 +137,26 @@ public class ArgPruner implements Serializable, IArgPruner {
 	public int numFalsePrunes() {
 		return argsFalsePruned;
 	}
-	
+
 	// indexing is [frameId][roleId], null Sets mean this role was never seen in data
 	private transient Set<LexicalUnit>[][] roleWordMap;		// words that have appeared as the headword of [frame.id][roleIdx]
 	private transient Set<LexicalUnit>[][] roleSynsetMap;	// an expansion of roleWordMap by closure over WN synsets
 	private File persistRoleWordMapTo = new File("toydata/arg-pruning/roleWordMap.gz");
 	private File persistRoleSynsetMapTo = new File("toydata/arg-pruning/roleSynsetMap.gz");
-	
+	private Pattern year = Pattern.compile("[12]\\d\\d\\d" + "|[12]\\d\\d0'?s" + "|'?[1-9]0'?s");
+
 	public ArgPruner(TargetPruningData targetPruningData, HeadFinder headFinder) {
 		lexMethod = LexPruneMethod.SYNSET;
 		pruneByPOS = true;
 		this.targetPruningData = targetPruningData;
 		this.headFinder = headFinder;
-		
+
 		if(targetPruningData == null)
 			throw new IllegalArgumentException();
 		if(headFinder == null)
 			throw new IllegalArgumentException();
 	}
-	
+
 	public void set(boolean pos, LexPruneMethod lexMethod) {
 		this.pruneByPOS = pos;
 		this.lexMethod = lexMethod;
@@ -168,15 +168,18 @@ public class ArgPruner implements Serializable, IArgPruner {
 		if(persistRoleWordMapTo != null)
 			persistRoleWordMapTo.delete();
 	}
-	
+
 	public synchronized void serialize() {
 		writeLUTensor(persistRoleSynsetMapTo, getRoleSynsetMap());
 		writeLUTensor(persistRoleWordMapTo, getRoleWordMap());
 	}
-	
+
 	// this is the method we care about!
 	@Override
 	public boolean pruneArgHead(Frame f, int roleIdx, int headWordIdx, Sentence sentence) {
+		String word = sentence.getWord(headWordIdx);
+		if (year.matcher(word).matches())
+			return false;
 		String pos = sentence.getPos(headWordIdx);
 		if(pruneByPOS && (pos.endsWith("DT") || pennPunctuationPosTags.contains(pos) || pennOtherPrunePosTags.contains(pos))) {
 			argsPrunedPos++;
@@ -201,7 +204,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 			argsPrunedLex--;
 		}
 		argsKept++;
-		
+
 		if(argsPruningInterval > 0 && argsKept % argsPruningInterval == 0) {
 			System.out.printf("[ArgPruner] pruned %.1f %% of args seen, %d by POS, %d by lex, with %d false prunes\n",
 					pruneRatio()*100d, argsPrunedPos, argsPrunedLex, argsFalsePruned);
@@ -209,7 +212,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 
 		return false;
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	private synchronized void init() {
 		if(roleSynsetMap != null && roleWordMap != null)

@@ -51,7 +51,7 @@ public class TriggerPruning {
 		}
 		
 		public void writeout(File f) {
-			ModelIO.writeHumanReadable(model, featIdx, f);
+			ModelIO.writeHumanReadable(model, featIdx, f, true);
 		}
 	}
 

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference;
 import java.io.Serializable;
 import java.util.List;
 
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -24,6 +25,6 @@ public interface FactorFactory<Hypothesis> extends Serializable {
 	 * The variables given should correspond to a frame target head word,
 	 * such that r.parent == f.
 	 */
-	public List<Factor> initFactorsFor(Sentence s, List<Hypothesis> inThisSentence, ProjDepTreeFactor l);
+	public List<Factor> initFactorsFor(Sentence s, List<Hypothesis> inThisSentence, ProjDepTreeFactor d, ConstituencyTreeFactor c);
 	
 }

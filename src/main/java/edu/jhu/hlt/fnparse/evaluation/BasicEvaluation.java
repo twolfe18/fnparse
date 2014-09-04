@@ -95,7 +95,7 @@ public class BasicEvaluation {
 	public static List<SentenceEval> zip(List<? extends FNTagging> gold, List<? extends FNTagging> hyp) {
 
 		if(gold.size() != hyp.size())
-			throw new IllegalArgumentException();
+			throw new IllegalArgumentException("gold.size=" + gold.size() + ", hyp.size=" + hyp.size());
 
 		List<SentenceEval> se = new ArrayList<SentenceEval>();
 		for(int i=0; i<gold.size(); i++)

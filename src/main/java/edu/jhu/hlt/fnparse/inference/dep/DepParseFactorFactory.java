@@ -7,6 +7,7 @@ import java.util.List;
 
 import edu.jhu.data.simple.SimpleAnnoSentence;
 import edu.jhu.gm.feat.FeatureExtractor;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
@@ -72,7 +73,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 	}
 
 	@Override
-	public List<Factor> initFactorsFor(Sentence s, List<Object> inThisSentence, ProjDepTreeFactor l) {
+	public List<Factor> initFactorsFor(Sentence s, List<Object> inThisSentence, ProjDepTreeFactor d, ConstituencyTreeFactor c) {
 
 		List<Factor> factors = new ArrayList<Factor>();
 		
@@ -81,7 +82,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 			return factors;
 		}
 
-		factors.add(l);	// global factor
+		factors.add(d);	// global factor
 		
 		// unary factors on edge variables
 		@SuppressWarnings("unchecked")
@@ -91,7 +92,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		for(int i=-1; i<n; i++) {
 			for(int j=0; j<n; j++) {
 				if(i == j) continue;
-				Var ijVar = l.getLinkVar(i, j);
+				Var ijVar = d.getLinkVar(i, j);
 				if(ijVar == null) continue;
 
 				factors.add(new FeTypedFactor(new VarSet(ijVar), DepParseFactorTemplate.LINK_UNARY, fe));

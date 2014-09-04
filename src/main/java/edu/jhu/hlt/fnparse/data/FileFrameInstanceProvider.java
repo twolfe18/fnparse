@@ -225,6 +225,9 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 	
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
+
+	public static final FileFrameInstanceProvider debugFIP =
+		new FileFrameInstanceProvider(UsefulConstants.DebugFramesPath, UsefulConstants.DebugConllPath);
 	
 	public static final FileFrameInstanceProvider dipanjantrainFIP =
 		new FileFrameInstanceProvider(UsefulConstants.TrainDipanjanFramesPath, UsefulConstants.TrainDipanjanConllPath);

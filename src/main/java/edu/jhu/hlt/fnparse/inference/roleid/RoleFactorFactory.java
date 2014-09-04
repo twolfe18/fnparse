@@ -5,6 +5,7 @@ import java.util.Iterator;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FgModel;
@@ -26,6 +27,7 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 /**
+ * should really be called RoleIdFactorFactory (this is not a FactorFactory for RoleSpanStage)
  * 
  * @author travis
  */
@@ -34,6 +36,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	private static final long serialVersionUID = 1L;
 
 	/**
+	 * this is an adapter needed for BinaryBinaryFactorHelper
 	 * 
 	 * @author travis
 	 */
@@ -107,7 +110,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 * r_itjk ~ r_itjk^e
 	 */
 	@Override
-	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l) {
+	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l, ConstituencyTreeFactor c) {
 		
 		List<Factor> factors = new ArrayList<Factor>();
 		for(RoleVars rv : fr) {

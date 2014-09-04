@@ -42,7 +42,7 @@ public class Timer {
 		lastStart = System.currentTimeMillis();
 	}
 	
-	/** returns the time taken between the last start/stop pair */
+	/** returns the time taken between the last start/stop pair in milliseconds */
 	public long stop() {
 		long t = System.currentTimeMillis() - lastStart;
 		if(count == 0)

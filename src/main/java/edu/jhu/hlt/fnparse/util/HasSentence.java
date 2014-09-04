@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.stages;
+package edu.jhu.hlt.fnparse.util;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 

@@ -20,6 +20,9 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  * LTH:			F1=76.10	P=87.87		R=67.11
  * (reported on page 8 of http://www.ark.cs.cmu.edu/SEMAFOR/das+schneider+chen+smith.tr10.pdf)
  * 
+ * NOTE: I'm an idiot and started deleting words from the LTH list without looking at the above
+ * details. You can no longer rely on this being the list that they used, check the paper directly.
+ * 
  * @author travis
  */
 public class SpanPruningExperiment {
@@ -106,16 +109,27 @@ public class SpanPruningExperiment {
 	static {
 		lthSpecialWords = new ArrayList<String>();
 		lthSpecialWords.addAll(Arrays.asList("have", "be", "will"));
-		lthSpecialWords.addAll(Arrays.asList("above", "against", "at", "below", "beside", "in", "on", "over", "under"));
+		//lthSpecialWords.addAll(Arrays.asList("above", "against", "at", "below", "beside", "in", "on", "over", "under"));
 		lthSpecialWords.addAll(Arrays.asList("course", "particular"));
-		lthSpecialWords.addAll(Arrays.asList("after", "before"));
-		lthSpecialWords.addAll(Arrays.asList("into", "to", "through"));
+		//lthSpecialWords.addAll(Arrays.asList("after", "before"));
+		lthSpecialWords.addAll(Arrays.asList("into", "through"));
 		lthSpecialWords.addAll(Arrays.asList("as", "so", "for", "with"));
-		lthSpecialWords.add("of");
+		//lthSpecialWords.add("of");
+		//lthSpecialWords.add("to");
+		lthSpecialWords.add("will");
+		lthSpecialWords.addAll(Arrays.asList("is", "be", "are"));	// all have 0 frames in training
 	}
 	public static List<String> alsoOfIterest = Arrays.asList(
-			"make", "give", "was", "got", "kept", "is", "will",
-			"ought", "has", "had", "do", "can", "may", "must", "not");
+			"was", "got", "kept", "ought", "has", "had", "can", "may", "must", "not");
+	
+	// Surprisingly, Locative_relation is a significant frame:
+	// grep -c Locative_relation toydata/fn15-fulltext.frames
+	// 1235
+	// Which can be compared to the number of times "at" or "near" appear
+	// awk -F"\t" '$5 == "at" || $5 == "near"' <toydata/fn15-fulltext.conll | wc -l
+	// 380
+	// grep Locative_relation toydata/fn15-frameindexLU | awk -F"\t" '{print $NF}' | tr '\n' ' '
+	// above-ground.a above.prep abut.v abutting.a adjacent.a adjoin.v adjoining.a against.prep "all over.prep" along.prep amid.prep among.prep around.prep astride.prep at.prep athwart.prep atop.prep below.prep beneath.prep beside.prep between.prep beyond.prep border.v bracket.v by.prep contact.v distant.a down.prep east.prep elsewhere.adv everywhere.adv here.adv in.prep inland.a inside.prep mainland.n meet.v near.prep neighbor.v neighboring.a "next to.prep" north.prep northeast.prep off.prep offshore.a on.prep on_top_of.prep opposite.prep out.prep outlying.a outside.prep over.prep past.prep south.prep southeast.prep surrounding.a there.adv throughout.prep to.prep touch.v ubiquitous.a under.prep underground.a underground.adv underneath.prep up.prep upon.prep west.prep where.adv
 	
 	public static void checkLthFilteringRules(List<FNParse> examples) {
 		

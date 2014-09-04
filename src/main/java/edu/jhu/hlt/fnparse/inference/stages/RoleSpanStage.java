@@ -9,10 +9,12 @@ import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
@@ -26,7 +28,6 @@ import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.spans.ExpansionVar;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 
 public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements Stage<FNParse, FNParse>, Serializable {
@@ -43,23 +44,23 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		// (12,5) gives 93.2 % recall
 		public int maxArgRoleExpandLeft = 10;
 		public int maxArgRoleExpandRight = 5;
-		
+
 		public FactorFactory<ExpansionVar> factorTemplate;
 		public ParserParams globalParams;
-		
+
 		public Params(ParserParams params) {
 			factorTemplate = new RoleSpanFactorFactory(params);
 			this.globalParams = params;
 		}
 	}
-	
+
 	private static final long serialVersionUID = 1L;
 	public Params params;
-	
+
 	public RoleSpanStage(ParserParams globalParams) {
 		super(globalParams);
 		params = new Params(globalParams);
-		
+
 		if(globalParams.useLatentDepenencies || globalParams.useLatentConstituencies)
 			throw new RuntimeException("update code!");
 	}
@@ -90,12 +91,14 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 
 		private static final long serialVersionUID = 1L;
 		
-		private Features.RE features;
-		private Refinements refs;
+		private final Features.RE features;
+		private final Refinements refs;
+		private final ParserParams params;
 		
-		public RoleSpanFactorFactory(HasFeatureAlphabet featAlph) {
-			features = new BasicRoleSpanFeatures(featAlph);
+		public RoleSpanFactorFactory(ParserParams params) {
+			features = new BasicRoleSpanFeatures(params);
 			refs = new Refinements("r_itjk^e~1");
+			this.params = params;
 		}
 
 		@Override
@@ -104,10 +107,10 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		}
 
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, List<ExpansionVar> inThisSentence, ProjDepTreeFactor l) {
+		public List<Factor> initFactorsFor(Sentence s, List<ExpansionVar> inThisSentence, ProjDepTreeFactor d, ConstituencyTreeFactor c) {
 			List<Factor> factors = new ArrayList<>();
 			for(ExpansionVar ev : inThisSentence) {
-				
+
 				// r_itjk^e ~ 1
 				int n = ev.values.size();
 				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(new VarSet(ev.var));
@@ -118,14 +121,17 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 					phi.setFeatures(i, fv);
 				}
 				factors.add(phi);
-				
+
 				// r_itjk^e ~ l_mn
-				System.err.println("[RoleSpanStage initFactors] CHECK FOR LATENT CONSTITUENCIES");
+				if(params.useLatentConstituencies) {
+					assert c != null;
+					throw new RuntimeException("go get code from PairedExactly1");	// TODO
+				}
+
 			}
 			return factors;
 		}
 	}
-	
 	
 	
 	/**
@@ -215,9 +221,15 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 
 		private FactorGraph getFactorGraph() {
 			FactorGraph fg = new FactorGraph();
-			for(Factor f : parent.params.factorTemplate.initFactorsFor(getSentence(), expansions, null))
+			ProjDepTreeFactor depTree = null;
+			ConstituencyTreeFactor consTree = null;
+			if(parent.params.globalParams.useLatentConstituencies) {
+				consTree = new ConstituencyTreeFactor(getSentence().size(), VarType.LATENT);
+				fg.addFactor(consTree);
+				// TODO add unary factors on constituency vars
+			}
+			for(Factor f : parent.params.factorTemplate.initFactorsFor(getSentence(), expansions, depTree, consTree))
 				fg.addFactor(f);
-			// TODO constituency tree factors
 			return fg;
 		}
 

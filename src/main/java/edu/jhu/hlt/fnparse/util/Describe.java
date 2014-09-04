@@ -57,7 +57,10 @@ public class Describe {
 	};
 
 	public static String fnParse(FNParse p) {
-		StringBuilder sb = new StringBuilder("FNParse: ");
+		StringBuilder sb = new StringBuilder("FNParse");
+		if (p.getId() != null && p.getId().length() > 0)
+			sb.append(" " + p.getId());
+		sb.append(": ");
 		sb.append(sentence(p.getSentence()) + "\n");
 		List<FrameInstance> fis = new ArrayList<>();
 		fis.addAll(p.getFrameInstances());
@@ -68,7 +71,10 @@ public class Describe {
 	}
 	
 	public static String fnTagging(FNTagging p) {
-		StringBuilder sb = new StringBuilder("FNTagging: ");
+		StringBuilder sb = new StringBuilder("FNTagging ");
+		if (p.getId() != null && p.getId().length() > 0)
+			sb.append(" " + p.getId());
+		sb.append(": ");
 		sb.append(sentence(p.getSentence()) + "\n");
 		List<FrameInstance> fis = new ArrayList<>();
 		fis.addAll(p.getFrameInstances());

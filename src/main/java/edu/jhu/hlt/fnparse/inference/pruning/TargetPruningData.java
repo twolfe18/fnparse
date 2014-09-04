@@ -11,8 +11,6 @@ import edu.mit.jwi.data.ILoadPolicy;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-// TODO make an init() method that observes a single pass over lex examples
-// so that we only ever have to make one pass (rather than one per data-structure)
 public class TargetPruningData implements Serializable {
 
 	private static final long serialVersionUID = 1L;
@@ -54,7 +52,6 @@ public class TargetPruningData implements Serializable {
 			FNTagging p = iter.next();
 			Sentence s = p.getSentence();
 			for(FrameInstance fi : p.getFrameInstances()) {
-				
 				List<FrameInstance> prototypes = prototypesByFrame.get(fi.getFrame());
 				if(prototypes == null) {
 					prototypes = new ArrayList<FrameInstance>();
@@ -62,24 +59,30 @@ public class TargetPruningData implements Serializable {
 					prototypesByFrame.put(fi.getFrame(), prototypes);
 				}
 				else prototypes.add(fi);
-				
+
 				Span target = fi.getTarget();
 				if(target.width() != 1) continue;
 				assert target.width() == 1;
 				String word = s.getWord(target.start);
-				
+				POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
+
 				// TODO talk to pushpendre about why this is happening
 				if(word.length() == 0) {
 					System.err.println("length 0 word in: " + s.toString());
 					continue;
 				}
-				
-				POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
+
 				if(debug) {
 					System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s\n",
 							fi.getFrame().getName(), word, pos);
 				}
-				for(String stem : stemmer.findStems(word, pos)) {
+				List<String> stems = stemmer.findStems(word, pos);
+				if (stems.size() == 0) {
+					//System.err.printf("[TargetPruningData init] can't stem %s with pos %s\n",
+					//		word, s.getPos(target.start));
+					stems = Arrays.asList(word + "-UNSTEMMED");
+				}
+				for(String stem : stems) {
 					if(debug) {
 						System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s stem=%s\n",
 								fi.getFrame().getName(), word, pos, stem);
@@ -97,6 +100,28 @@ public class TargetPruningData implements Serializable {
 		System.out.printf("[TargetPruningData] done in %.1f seconds.\n", (System.currentTimeMillis()-start)/1000d);
 	}
 	
+	public List<FrameInstance> getPrototypesByStem(int headIdx, Sentence s) {
+		if (prototypesByStem == null)
+			init();
+		IRAMDictionary wnDict = getWordnetDict();
+		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
+		String word = s.getWord(headIdx).toLowerCase();
+		POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
+		List<String> stems = null;
+		try { stems = stemmer.findStems(word, pos); }
+		catch(IllegalArgumentException e) { return null; }	// words that normalized to an empty string throw an exception
+		if (stems.size() == 0) {
+			System.err.printf("[getPrototypesByStem] problem stemming: %s with pos %s\n", word, s.getPos(headIdx));
+			stems = Arrays.asList(word + "-UNSTEMMED");
+		}
+		List<FrameInstance> fis = new ArrayList<>();
+		for(String stem : stems) {
+			List<FrameInstance> protos = prototypesByStem.get(stem);
+			if(protos == null) continue;
+			fis.addAll(protos);
+		}
+		return fis;
+	}
 	
 	private transient Map<String, List<FrameInstance>> prototypesByStem;
 	public synchronized Map<String, List<FrameInstance>> getPrototypesByStem() {
@@ -120,51 +145,66 @@ public class TargetPruningData implements Serializable {
 		if(ret == null) ret = Collections.emptyList();
 		return ret;
 	}
-	
-	private transient Map<LexicalUnit, List<Frame>> lu2frames;
+
+	private transient Map<String, Map<String, List<Frame>>> word2pos2frames;
+	public List<Frame> getLUFramesByWord(String word) {
+		if (word2pos2frames == null)
+			initLexicalUnitData();
+		Map<String, List<Frame>> fsmap = word2pos2frames.get(word.toLowerCase());
+		if (fsmap == null) return Collections.<Frame>emptyList();
+		List<Frame> fs = new ArrayList<>();
+		for (List<Frame> fl : fsmap.values())
+			fs.addAll(fl);
+		return fs;
+	}
+
 	/**
 	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
-	public synchronized Map<LexicalUnit, List<Frame>> getLU2Frames() {
-		if(lu2frames == null) {
-			System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
-			lu2frames = new HashMap<LexicalUnit, List<Frame>>();
-			int numF = 0;
-			for(Frame f : FrameIndex.getInstance().allFrames()) {
-				int nLU = f.numLexicalUnits();
-				for(int i=0; i<nLU; i++) {
-					LexicalUnit lu = f.getLexicalUnit(i);
-					
-					// "protection_((entity)).n" -> "protection.n"
-					int j = lu.word.indexOf("_(");
-					if(j > 0)
-						lu = new LexicalUnit(lu.word.substring(0, j), lu.pos);
-					
-					List<Frame> lf = lu2frames.get(lu);
-					if(lf == null) {
-						lf = new ArrayList<Frame>();
-						lf.add(f);
-						lu2frames.put(lu, lf);
-					}
-					else lf.add(f);
-					numF += 1;
+	private synchronized void initLexicalUnitData() {
+		System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
+		word2pos2frames = new HashMap<String, Map<String, List<Frame>>>();
+		for(Frame f : FrameIndex.getInstance().allFrames()) {
+			int nLU = f.numLexicalUnits();
+			for(int i=0; i<nLU; i++) {
+				LexicalUnit lu = f.getLexicalUnit(i);
+
+				// "protection_((entity)).n" -> "protection.n"
+				int j = lu.word.indexOf("_(");
+				if(j > 0)
+					lu = new LexicalUnit(lu.word.substring(0, j), lu.pos);
+
+				if (lu.word.startsWith("terrorist"))
+					System.out.println("PAY ATTENTION lskllkdu");
+
+				Map<String, List<Frame>> pos2frames = word2pos2frames.get(lu.word);
+				if (pos2frames == null) {
+					pos2frames = new HashMap<>();
+					word2pos2frames.put(lu.word, pos2frames);
 				}
+				List<Frame> frames = pos2frames.get(lu.pos);
+				if (frames == null) {
+					frames = new ArrayList<>();
+					pos2frames.put(lu.pos, frames);
+				}
+				frames.add(f);
 			}
-			System.out.printf("[TargetPruningData] lu2frames contains %d keys and %.1f Frames/key\n",
-					lu2frames.size(), ((double)numF) / lu2frames.size());
 		}
-		return lu2frames;
 	}
+
 	/**
 	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
 	public List<Frame> getFramesFromLU(LexicalUnit lu) {
-		List<Frame> fs = getLU2Frames().get(lu);
-		if(fs == null) fs = Collections.emptyList();
+		if (word2pos2frames == null)
+			initLexicalUnitData();
+		Map<String, List<Frame>> fmap = word2pos2frames.get(lu.word.toLowerCase());
+		if (fmap == null) return Collections.emptyList();
+		List<Frame> fs = fmap.get(lu.pos);
+		if (fs == null) return Collections.emptyList();
 		return fs;
 	}
-	
-	
+
 	private transient Set<String> stopwordsForTargets;
 	public synchronized boolean isTargetStopword(String word) {
 		if(stopwordsForTargets == null) {
@@ -179,8 +219,17 @@ public class TargetPruningData implements Serializable {
 	
 	public boolean prune(int index, Sentence s) {
 		LexicalUnit lu = s.getLU(index);
-		if(isTargetStopword(lu.word)) return true;
-		if(lu.pos.endsWith("DT")) return true;	// DT and PDT, 0.4% of width1 targets in train data
+		if (isTargetStopword(lu.word)) return true;
+		if (lu.pos.endsWith("DT")) return true;	// DT and PDT, 0.4% of width1 targets in train data
+		if (".".equals(lu.word)
+				|| ",".equals(lu.word)
+				|| ":".equals(lu.word)
+				|| "--".equals(lu.word)
+				|| "``".equals(lu.word)
+				|| "\"".equals(lu.word)
+				|| "(".equals(lu.word)
+				|| ")".equals(lu.word))
+			return true;
 		return false;
 	}
 

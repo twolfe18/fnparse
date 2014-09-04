@@ -16,29 +16,34 @@ import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
 
 public class PipelinedFnParser implements Serializable {
-	
+
 	// weight are stored in each stage, feature alphabet is global
 
 	private static final long serialVersionUID = 1L;
-	
+
 	private ParserParams params;
 	private FrameIdStage frameId;
 	private RoleIdStage argId;
 	private RoleSpanStage argExpansion;
-	
+
 	public PipelinedFnParser() {
 		params = new ParserParams();
 		frameId = new FrameIdStage(params);
 		argId = new RoleIdStage(params);
 		argExpansion = new RoleSpanStage(params);
 	}
-	
-	public FgModel getFrameIdParams() { return frameId.weights; }
-	public FgModel getArgIdParams() { return argId.weights; }
-	public FgModel getArgSpanParams() { return argExpansion.weights; }
+
+	public FgModel getFrameIdWeights() { return frameId.weights; }
+	public FgModel getArgIdWeights() { return argId.weights; }
+	public FgModel getArgSpanWeights() { return argExpansion.weights; }
+
 	public Alphabet<String> getAlphabet() { return params.getFeatureAlphabet(); }
+
 	public ParserParams getParams() { return params; }
-	
+	public FrameIdStage.Params getFrameIdParams() { return frameId.params; }
+	public RoleIdStage.Params getArgIdParams() { return argId.params; }
+	public RoleSpanStage.Params getArgExpansionParams() { return argExpansion.params; }
+
 	/**
 	 * Builds an Alphabet of feature names and indices, freezes the Alphabet when done.
 	 * This is additive, so you can call it and not lose the features already in the
@@ -51,11 +56,11 @@ public class PipelinedFnParser implements Serializable {
 	public void computeAlphabet(List<FNParse> examples, double maxTimeInMinutes, int maxFeaturesAdded) {
 		Timer t = params.getTimer("computeAlphabet");
 		t.start();
-		
+
 		examples = ParseSelector.sort(examples);
-		
+
 		params.getFeatureAlphabet().startGrowth();
-		
+	
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 		frameId.scanFeatures(sentences, examples, maxTimeInMinutes, maxFeaturesAdded);
 
@@ -64,27 +69,30 @@ public class PipelinedFnParser implements Serializable {
 
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
 		argExpansion.scanFeatures(onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
-		
+
 		params.getFeatureAlphabet().stopGrowth();
-		t.stop();
+		long time = t.stop();
+		System.out.printf("[computeAlphabet] %d parses with %d features in %.1f seconds\n",
+				examples.size(), params.getFeatureAlphabet().size(), time / 1000d);
 	}
 
 	public void train(List<FNParse> examples) {
+		if (examples.size() == 0)
+			throw new IllegalArgumentException();
 
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 		frameId.train(examples);
-		
+
 		List<FNTagging> frames = params.usePredictedFramesToTrainArgId
 				? frameId.predict(sentences)
 				: DataUtil.convertParsesToTaggings(examples);
 		argId.train(frames, examples);
-		
+
 		// if we predict the wrong head, there is no way to recover by predicting it's span
 		// so there is no reason not to train on gold heads+expansions
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(examples, params.headFinder);
 		argExpansion.train(onlyHeads, examples);
 	}
-	
 
 	public List<FNParse> predict(List<Sentence> sentences) {
 		List<FNTagging> frames = frameId.predict(sentences);
@@ -92,5 +100,5 @@ public class PipelinedFnParser implements Serializable {
 		List<FNParse> fullParses = argExpansion.predict(argHeads);
 		return fullParses;
 	}
-	
+
 }

@@ -42,8 +42,8 @@ import edu.jhu.util.Alphabet;
  * 
  * @author travis
  *
- * @param <I>
- * @param <O>
+ * @param <I> input to this stage
+ * @param <O> output of this stage
  */
 public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable, HasFeatureAlphabet {
 	
@@ -143,13 +143,14 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	}
 
 	public void train(List<I> x, List<O> y, Double learningRate, int batchSize, int passes) {
-		
 		assert globalParams.verifyConsistency();
+		if (x.size() != y.size())
+			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
 		Timer t = globalParams.getTimer(this.getName() + "-train");
 		t.start();
-		
+
 		initWeights();
-		
+
 		List<I> xTrain, xDev;
 		List<O> yTrain, yDev;
 		TuningData td = this.getTuningData();
@@ -158,15 +159,19 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			yTrain = y;
 			xDev = Collections.emptyList();
 			yDev = Collections.emptyList();
+		} else {
+			if (td.tuneOnTrainingData()) {
+				xDev = xTrain = x;
+				yDev = yTrain = y;
+			} else {
+				xTrain = new ArrayList<>();
+				yTrain = new ArrayList<>();
+				xDev = new ArrayList<>();
+				yDev = new ArrayList<>();
+				devTuneSplit(x, y, xTrain, yTrain, xDev, yDev, 0.15d, 50, globalParams.rand);
+			}
 		}
-		else {
-			xTrain = new ArrayList<>();
-			yTrain = new ArrayList<>();
-			xDev = new ArrayList<>();
-			yDev = new ArrayList<>();
-			devTuneSplit(x, y, xTrain, yTrain, xDev, yDev, 0.15d, 50, globalParams.rand);
-		}
-		
+
 		CrfTrainerPrm trainerParams = new CrfTrainerPrm();
 		SGDPrm sgdParams = new SGDPrm();
 		AdaGradPrm adagParams = new AdaGradPrm();
@@ -189,10 +194,10 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		Alphabet<String> alph = this.getFeatureAlphabet();
 		System.out.printf("[%s train] alphabet is frozen (size=%d), going straight into training\n", this.getName(), alph.size());
 		alph.stopGrowth();
-		
+
 		// get the data
 		StageDatumExampleList<I, O> exs = this.setupInference(x, y);
-		
+	
 		// setup model and train
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		try {
@@ -293,10 +298,13 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 		public ApproxF1MbrDecoder getDecoder();
 
-		/** this is maximized */
+		/** Function to be maximized */
 		public EvalFunc getObjective();
 
 		public List<Double> getRecallBiasesToSweep();
+
+		/** Return true if it is not necessary to split train and dev data */
+		public boolean tuneOnTrainingData();
 	}
 
 	
@@ -310,12 +318,11 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 	
 	public void tuneRecallBias(List<I> x, List<O> y, TuningData td) {
-		
 		if(x == null || y == null || x.size() != y.size())
 			throw new IllegalArgumentException();
 		if(td == null)
 			throw new IllegalArgumentException();
-		
+
 		if(x.size() == 0) {
 			System.err.printf("[%s tuneRecallBias] WARNING: 0 examples were provided for tuning, skipping this.\n", this.getName());
 			return;
@@ -327,16 +334,15 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		// run inference and store the margins
 		long t = System.currentTimeMillis();
 		FgInferencerFactory infFact = this.infFactory();
-		
+
 		List<Decodable<O>> decodables = new ArrayList<>();
-		List<O> labels = new ArrayList<>();
 		for(StageDatum<I, O> sd : this.setupInference(x, null).getStageData()) {
 			Decodable<O> d = sd.getDecodable(infFact);
 			d.force();
 			decodables.add(d);
 		}
 		long tInf = System.currentTimeMillis() - t;
-		
+
 		// decode many times and store performance
 		t = System.currentTimeMillis();
 		double originalBias = td.getDecoder().getRecallBias();
@@ -347,7 +353,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			List<O> predicted = new ArrayList<>();
 			for(Decodable<O> m : decodables)
 				predicted.add(m.decode());
-			List<SentenceEval> instances = BasicEvaluation.zip(labels, predicted);
+			List<SentenceEval> instances = BasicEvaluation.zip(y, predicted);
 			double score = td.getObjective().evaluate(instances);
 			System.out.printf("[%s tuneRecallBias] recallBias=%.2f %s=%.3f\n", this.getName(), b, td.getObjective().getName(), score);
 			scores.add(score);
@@ -380,12 +386,14 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 			List<A> xTrain,      List<B> yTrain,
 			List<A> xDev,        List<B> yDev,
 			double propDev, int maxDev, Random r) {
-		
-		if(x.size() != y.size() || x.size() == 0)
+
+		if (x.size() != y.size())
+			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
+		if (xTrain.size() + yTrain.size() + xDev.size() + yDev.size() > 0)
 			throw new IllegalArgumentException();
-		if(xTrain.size() + yTrain.size() + xDev.size() + yDev.size() > 0)
-			throw new IllegalArgumentException();
-		
+		if (x.size() == 0)
+			return;
+
 		final int n = x.size();
 		for(int i=0; i<n; i++) {
 			boolean train = r.nextDouble() > propDev;
@@ -398,14 +406,13 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 				yDev.add(y.get(i));
 			}
 		}
-		
+
 		while(xDev.size() > maxDev) {
 			xTrain.add(xDev.remove(xDev.size()-1));
 			yTrain.add(yDev.remove(yDev.size()-1));
 		}
 	}
-	
-	
+
 	public static <T extends FNTagging> List<T> filterBySentenceLength(List<T> all, int maxLength) {
 		List<T> list = new ArrayList<>();
 		for(T t : all)
