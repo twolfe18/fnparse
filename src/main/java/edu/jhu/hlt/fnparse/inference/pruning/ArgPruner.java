@@ -198,7 +198,8 @@ public class ArgPruner implements Serializable, IArgPruner {
 			argsPrunedLex++;
 			if(possibleLUs == null)
 				return true;
-			LexicalUnit lu = sentence.getFNStyleLUUnsafe(headWordIdx, targetPruningData.getWordnetDict());
+			LexicalUnit lu = sentence.getFNStyleLUUnsafe(
+					headWordIdx, targetPruningData.getWordnetDict(), true);
 			if(lu == null || possibleLUs.contains(lu))
 				return true;
 			argsPrunedLex--;
@@ -245,8 +246,10 @@ public class ArgPruner implements Serializable, IArgPruner {
 						if(s.width() > 1)
 							argHead = headFinder.head(s, frameInst.getSentence());
 						LexicalUnit lu;
-						try { lu = frameInst.getSentence().getFNStyleLUUnsafe(argHead, dict); }
-						catch(Exception e) {
+						try {
+							lu = frameInst.getSentence().getFNStyleLUUnsafe(
+									argHead, dict, true);
+						} catch(Exception e) {
 							e.printStackTrace();
 							continue;
 						}

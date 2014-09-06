@@ -46,7 +46,8 @@ import edu.jhu.util.Alphabet;
  * @param <I> input to this stage
  * @param <O> output of this stage
  */
-public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, O>, Serializable, HasFeatureAlphabet {
+public abstract class AbstractStage<I, O extends FNTagging>
+		implements Stage<I, O>, Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
 
 	protected final ParserParams globalParams;	// Not owned by this class
@@ -68,8 +69,10 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 	@Override
 	public FgModel getWeights() {
-		if(weights == null)
-			throw new IllegalStateException("you never initialized the weights");
+		if(weights == null) {
+			throw new IllegalStateException(
+					"you never initialized the weights");
+		}
 		return weights;
 	}
 
@@ -77,7 +80,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	public boolean logDomain() {
 		return globalParams.logDomain;
 	}
-
+	
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = false;
@@ -101,29 +104,21 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	 * the output of that inference and decodes an answer.
 	 */
 	public List<O> decode(StageDatumExampleList<I, O> decodables) {
-		FgInferencerFactory infFact = this.infFactory();
 		List<O> decoded = new ArrayList<>();
 		int n = decodables.size();
-		for(int i=0; i<n; i++)
-			decoded.add(decodables.getStageDatum(i).getDecodable(infFact).decode());
+		for(int i=0; i<n; i++) {
+			decoded.add(decodables
+					.getStageDatum(i)
+					.getDecodable()
+					.decode());
+		}
 		return decoded;
 	}
 
-	
 	public List<O> predict(List<I> input) {
-		return decode(this.setupInference(input, null));
+		return decode(setupInference(input, null));
 	}
 
-
-	@Override
-	public void train(List<I> x, List<O> y) {
-		int batchSize = 4;
-		int passes = 2;
-		Double learningRate = null;	// null means auto select
-		Regularizer regularizer = new L2(1_000_000d);
-		train(x, y, learningRate, regularizer, batchSize, passes);
-	}
-	
 	public void initWeights() {
 		int numParams = getFeatureAlphabet().size();
 		if(numParams == 0)
@@ -131,7 +126,7 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		assert globalParams.verifyConsistency();
 		weights = new FgModel(numParams + 1);
 	}
-	
+
 	/** initializes to a 0 mean Gaussian with diagnonal variance (provided) */
 	public void randomlyInitWeights(final double variance, final Random r) {
 		initWeights();
@@ -141,6 +136,15 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 				return r.nextGaussian() * variance;
 			}
 		});
+	}
+
+	@Override
+	public void train(List<I> x, List<O> y) {
+		int batchSize = 4;
+		int passes = 2;
+		Double learningRate = null;	// null means auto select
+		Regularizer regularizer = new L2(1_000_000d);
+		train(x, y, learningRate, regularizer, batchSize, passes);
 	}
 
 	/**
@@ -235,7 +239,11 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 	 * which has the side effect of populating the feature alphabet in this.params.
 	 * @param labels may be null
 	 */
-	public void scanFeatures(List<? extends I> unlabeledExamples, List<? extends O> labels, double maxTimeInMinutes, int maxFeaturesAdded) {
+	public void scanFeatures(
+			List<? extends I> unlabeledExamples,
+			List<? extends O> labels,
+			double maxTimeInMinutes,
+			int maxFeaturesAdded) {
 		
 		if(labels != null && unlabeledExamples.size() != labels.size())
 			throw new IllegalArgumentException();
@@ -254,13 +262,17 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 
 		final int alphSizeStart = getFeatureAlphabet().size();
 		int examplesSeen = 0;
-		FgInferencerFactory infFact = this.infFactory();
+		int examplesWithNoFactorGraph = 0;
 		StageDatumExampleList<I, O> data = this.setupInference(unlabeledExamples, null);
 		int n = data.size();
 		for(int i=0; i<n; i++) {
 			t.start();
 			StageDatum<I, O> d = data.getStageDatum(i);
-			fcount.observe(d.getDecodable(infFact).getFactorGraph());
+			IDecodable<O> dec = d.getDecodable();
+			if (dec instanceof Decodable)
+				fcount.observe(((Decodable<O>) dec).getFactorGraph());
+			else
+				examplesWithNoFactorGraph++;
 			examplesSeen++;
 			t.stop();
 			
@@ -268,19 +280,30 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 				seen.add(labels.get(i));
 
 			if(t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
-				System.out.println("[scanFeatures " + this.getName() + "] stopping because we used the max time (in minutes): " + maxTimeInMinutes);
+				System.out.println("[scanFeatures " + this.getName()
+						+ "] stopping because we used the max time (in minutes): "
+						+ maxTimeInMinutes);
 				break;
 			}
 			int featuresAdded = getFeatureAlphabet().size() - alphSizeStart;
 			if(featuresAdded > maxFeaturesAdded) {
-				System.out.println("[scanFeatures " + this.getName() + "] stopping because we added the max allowed features: " + featuresAdded);
+				System.out.println("[scanFeatures " + this.getName() +
+						"] stopping because we added the max allowed features: "
+						+ featuresAdded);
 				break;
 			}
 		}
-		
-		if(seen.size() == 0)
-			System.err.println("[scanFeatures " + this.getName() + "] WARNING: no labels were provided, so I can't compute frame/role recall");
-		else {
+
+		if (examplesWithNoFactorGraph > 0) {
+			System.err.println("[scanFeatures " + getName() +
+					"] WARNING: some examples didn't have any FactorGraph "
+					+ "associated with them: " + examplesWithNoFactorGraph);
+		}
+
+		if(seen.size() == 0) {
+			System.err.println("[scanFeatures " + getName() + "] WARNING: no "
+					+ "labels were provided, so I can't compute frame/role recall");
+		} else {
 			Set<Frame> fSeen = new HashSet<>();
 			Set<String> rSeen = new HashSet<>();
 			Set<String> frSeen = new HashSet<>();
@@ -330,7 +353,6 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		return null;
 	}
 
-	
 	public void tuneRecallBias(List<I> x, List<O> y, TuningData td) {
 		if(x == null || y == null || x.size() != y.size())
 			throw new IllegalArgumentException();
@@ -345,19 +367,18 @@ public abstract class AbstractStage<I, O extends FNTagging> implements Stage<I, 
 		System.out.printf("[%s tuneRecallBias] tuning to maximize %s on %d examples over biases in %s\n",
 				this.getName(), td.getObjective().getName(), x.size(), td.getRecallBiasesToSweep());
 
-		// run inference and store the margins
+		// Run inference and store the margins
 		long t = System.currentTimeMillis();
-		FgInferencerFactory infFact = this.infFactory();
 
 		List<Decodable<O>> decodables = new ArrayList<>();
 		for(StageDatum<I, O> sd : this.setupInference(x, null).getStageData()) {
-			Decodable<O> d = sd.getDecodable(infFact);
+			Decodable<O> d = (Decodable<O>) sd.getDecodable();
 			d.force();
 			decodables.add(d);
 		}
 		long tInf = System.currentTimeMillis() - t;
 
-		// decode many times and store performance
+		// Decode many times and store performance
 		t = System.currentTimeMillis();
 		double originalBias = td.getDecoder().getRecallBias();
 		double bestScore = Double.NEGATIVE_INFINITY;

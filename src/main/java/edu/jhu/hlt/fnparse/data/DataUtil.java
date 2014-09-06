@@ -58,34 +58,40 @@ public class DataUtil {
 	 */
 	public static List<FNParse> convertTaggingsToParses(List<FNTagging> tags) {
 		List<FNParse> parses = new ArrayList<>();
-		for(FNTagging t : tags) {
-			List<FrameInstance> fis = new ArrayList<>();
-			for(FrameInstance fi : t.getFrameInstances()) {
-				int K = fi.getFrame().numRoles();
-				Span[] args = new Span[K];
-				Arrays.fill(args, Span.nullSpan);
-				fis.add(FrameInstance.newFrameInstance(fi.getFrame(), fi.getTarget(), args, fi.getSentence()));
-			}
-			parses.add(new FNParse(t.getSentence(), fis));
-		}
+		for(FNTagging t : tags)
+			parses.add(convertTaggingToParse(t));
 		return parses;
 	}
 	
+	public static FNParse convertTaggingToParse(FNTagging t) {
+		List<FrameInstance> fis = new ArrayList<>();
+		for(FrameInstance fi : t.getFrameInstances()) {
+			int K = fi.getFrame().numRoles();
+			Span[] args = new Span[K];
+			Arrays.fill(args, Span.nullSpan);
+			fis.add(FrameInstance.newFrameInstance(fi.getFrame(), fi.getTarget(), args, fi.getSentence()));
+		}
+		return new FNParse(t.getSentence(), fis);
+	}
+
 	/**
-	 * drops all arguments from FrameInstances
+	 * Drops all arguments from FrameInstances
 	 */
 	public static List<FNTagging> convertParsesToTaggings(List<FNParse> parses) {
 		List<FNTagging> out = new ArrayList<>();
-		for(FNParse p : parses) {
-			Sentence s = p.getSentence();
-			List<FrameInstance> targets = new ArrayList<>();
-			for(FrameInstance fi : p.getFrameInstances())
-				targets.add(FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), s));
-			out.add(new FNTagging(s, targets));
-		}
+		for(FNParse p : parses)
+			out.add(convertParseToTagging(p));
 		return out;
 	}
-	
+
+	public static FNTagging convertParseToTagging(FNParse p) {
+		Sentence s = p.getSentence();
+		List<FrameInstance> targets = new ArrayList<>();
+		for(FrameInstance fi : p.getFrameInstances())
+			targets.add(FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), s));
+		return new FNTagging(s, targets);
+	}
+
 	/**
 	 * takes parses with regular spans as arguments and converts them to arguments with
 	 * with-1 (head) spans.

@@ -41,8 +41,10 @@ import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
-public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements Stage<FNTagging, FNParse>, Serializable {
-	
+public class RoleIdStage
+		extends AbstractStage<FNTagging, FNParse>
+		implements Stage<FNTagging, FNParse>, Serializable {
+
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
 
@@ -50,18 +52,21 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
-		public Regularizer regularizer = new L2(1_000_000d);
+		public transient Regularizer regularizer = new L2(1_000_000d);
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
 		public RoleFactorFactory factorTemplate;
 
-		// If true, tuning the decoder will be done on training data. Generally this is undesirable
-		// for risk of overfitting, but is good for debugging (e.g. an overfitting test).
+		// If true, tuning the decoder will be done on training data. Generally
+		// this is undesirable for risk of overfitting, but is good for
+		// debugging (e.g. an overfitting test).
 		public boolean tuneOnTrainingData = false;
 
 		public Params(ParserParams globalParams) {
-			this.factorTemplate = new RoleFactorFactory(globalParams, BinaryBinaryFactorHelper.Mode.ISING);
-			this.argPruner = new ArgPruner(TargetPruningData.getInstance(), globalParams.headFinder);
+			this.factorTemplate = new RoleFactorFactory(
+					globalParams, BinaryBinaryFactorHelper.Mode.ISING);
+			this.argPruner = new ArgPruner(
+					TargetPruningData.getInstance(), globalParams.headFinder);
 			this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
 		}
 	}
@@ -124,7 +129,7 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 	}
 
 
-	/** must have initialized weights before calling this */
+	/** Must have initialized weights before calling this */
 	@Override
 	public StageDatumExampleList<FNTagging, FNParse> setupInference(List<? extends FNTagging> input, List<? extends FNParse> output) {
 		List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
@@ -133,9 +138,9 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		for(int i=0; i<n; i++) {
 			FNTagging x = input.get(i);
 			if(output == null)
-				data.add(new RoleIdStageDatum(x, this));	//weights, globalParams, params));
+				data.add(new RoleIdStageDatum(x, this));
 			else
-				data.add(new RoleIdStageDatum(x, output.get(i), this));	//, weights, globalParams, params));
+				data.add(new RoleIdStageDatum(x, output.get(i), this));
 		}
 		return new StageDatumExampleList<>(data);
 	}
@@ -265,8 +270,10 @@ public class RoleIdStage extends AbstractStage<FNTagging, FNParse> implements St
 		}
 
 		@Override
-		public Decodable<FNParse> getDecodable(FgInferencerFactory infFact) {
-			return new RoleIdDecodable(getFactorGraph(), infFact, getSentence(), roleVars, parent);
+		public Decodable<FNParse> getDecodable() {
+			FgInferencerFactory infFact = parent.infFactory();
+			return new RoleIdDecodable(
+					getFactorGraph(), infFact, getSentence(), roleVars, parent);
 		}
 	}
 	

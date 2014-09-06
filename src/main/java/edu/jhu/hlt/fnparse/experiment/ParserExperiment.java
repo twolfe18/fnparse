@@ -6,6 +6,7 @@ import java.io.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.*;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
@@ -121,17 +122,18 @@ public class ParserExperiment {
 		System.out.printf("[ParserExperiment] this model was read in from %s, "
 				+ "and i'm assuming that this model's alphabet (size=%d) "
 				+ "already includes all of the features needed to train in %s "
-				+ "mode\n",
-				featureAlphabet, parser.getParams().getFeatureAlphabet(), mode);
+				+ "mode\n", featureAlphabet, 
+				parser.getParams().getFeatureAlphabet().size(), mode);
 
 		// Train
 		// null means do auto learning rate selection
 		Double lrMult = "frameId".equals(mode) ? null : 0.05d;
 		System.out.println("[ParserExperiment] starting, lrMult=" + lrMult);
 		if ("frameId".equals(mode)) {
-			parser.getFrameIdParams().batchSize = batchSize.get();
-			parser.getFrameIdParams().passes = passes.get();
-			parser.getFrameIdParams().regularizer = new L2(regularizer.get());
+			FrameIdStage fIdStage = (FrameIdStage) parser.getFrameIdStage();
+			fIdStage.params.batchSize = batchSize.get();
+			fIdStage.params.passes = passes.get();
+			fIdStage.params.regularizer = new L2(regularizer.get());
 		} else {
 			parser.getArgIdParams().batchSize = batchSize.get();
 			parser.getArgIdParams().passes = passes.get();

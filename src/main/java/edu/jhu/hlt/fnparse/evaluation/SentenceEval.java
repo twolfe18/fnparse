@@ -33,25 +33,42 @@ public class SentenceEval {
 	 */
 	private final int[][] targetConfusion;
 	private final int[][] fullConfusion;
-	private final int[][] argOnlyConfusion;	// like fullConfusion, but doesn't include frame-targets as a prediction, should only be used for argId evaluation (gold frameId)
-	private final int size;
 
+	// like fullConfusion, but doesn't include frame-targets as a prediction, should only be used for argId evaluation (gold frameId)
+	private final int[][] argOnlyConfusion;
+
+	// True if we are only evaluating the frames tagged and not the args
+	private final boolean onlyTagging;
+
+	private final int size;		// Length of sentence in gold and hyp examples
 	private final FNTagging gold, hyp;
+
+	// Not always populated
 	private List<Prediction> targetFalsePos, targetFalseNeg;
 	private List<Prediction> fullFalsePos, fullFalseNeg;
-	
-	public SentenceEval(FNTagging gold, FNTagging hyp) { this(gold, hyp, true); }
+
+	public SentenceEval(FNTagging gold, FNTagging hyp) {
+		this(gold, hyp, true);
+	}
 
 	public SentenceEval(FNTagging gold, FNTagging hyp, boolean storeDebugInfo) {
-		
 		if(!gold.getSentence().getId().equals(hyp.getSentence().getId()))
 			throw new IllegalArgumentException();
-		
-		if((gold instanceof FNParse) != (hyp instanceof FNParse))
-			throw new IllegalArgumentException();
-		
+
+		/*
+		if((gold instanceof FNParse) != (hyp instanceof FNParse)) {
+			throw new IllegalArgumentException("gold and hyp must have the same"
+					+ " type to appropriately dispatch the correct evaluation "
+					+ "code. gold.class=" + gold.getClass().getName()
+					+ " hyp.class=" + hyp.getClass().getName());
+		}
+		*/
+		onlyTagging = !(gold instanceof FNParse) || !(hyp instanceof FNParse);
+		if (hyp instanceof FNParse)
+			assert gold instanceof FNParse;
+
 		this.targetConfusion = new int[2][2];
-		if(gold instanceof FNParse) {
+		if (!onlyTagging) {
 			this.fullConfusion = new int[2][2];
 			this.argOnlyConfusion = new int[2][2];
 		}
@@ -62,47 +79,66 @@ public class SentenceEval {
 		this.size = gold.getSentence().size();
 		this.gold = gold;
 		this.hyp = hyp;
-		
+
 		if(storeDebugInfo) {
 			targetFalsePos = new ArrayList<Prediction>();
 			targetFalseNeg = new ArrayList<Prediction>();
-			if(gold instanceof FNParse) {
+			if (!onlyTagging) {
 				fullFalsePos = new ArrayList<Prediction>();
 				fullFalseNeg = new ArrayList<Prediction>();
 			}
 		}
-	
+
 		Set<Prediction> goldTargets = new HashSet<Prediction>();
 		Set<Prediction> hypTargets = new HashSet<Prediction>();
 
 		Set<Prediction> goldTargetRoles = null, hypTargetRoles = null;
 		Set<Prediction> goldRoles = null, hypRoles = null;
-		if(gold instanceof FNParse) {
+		if (!onlyTagging) {
 			goldTargetRoles = new HashSet<Prediction>();
 			hypTargetRoles = new HashSet<Prediction>();
 			goldRoles = new HashSet<Prediction>();
 			hypRoles = new HashSet<Prediction>();
 		}
 		
-		fillPredictions(gold.getFrameInstances(), goldTargets, goldTargetRoles, goldRoles);
-		fillPredictions(hyp.getFrameInstances(), hypTargets, hypTargetRoles, hypRoles);
+		fillPredictions(gold.getFrameInstances(),
+				goldTargets, goldTargetRoles, goldRoles);
+		fillPredictions(hyp.getFrameInstances(),
+				hypTargets, hypTargetRoles, hypRoles);
 		
 		fillConfusionTable(goldTargets, hypTargets, targetConfusion, targetFalsePos, targetFalseNeg);
-		fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion, fullFalsePos, targetFalseNeg);
-		fillConfusionTable(goldRoles, hypRoles, argOnlyConfusion, null, null);
+		if (goldTargetRoles != null) {
+			fillConfusionTable(goldTargetRoles, hypTargetRoles,
+					fullConfusion, fullFalsePos, targetFalseNeg);
+		}
+		if (goldRoles != null) {
+			fillConfusionTable(goldRoles, hypRoles,
+					argOnlyConfusion, null, null);
+		}
 	}
 	
-	public boolean isFNTagging() { return gold instanceof FNTagging; }
+	public boolean isFNTagging() {
+		return onlyTagging;
+	}
 	
 	// only work if storeDebugInfo was true
 	public FNTagging getGold() { return gold; }
 	public FNTagging getHypothesis() { return hyp; }
 	public FNParse getGoldParse() { return (FNParse) gold; }
-	public FNParse getHypothesisParse() { return (FNParse) hyp; }
+	public FNParse getHypothesisParse() {
+		assert !onlyTagging;
+		return (FNParse) hyp;
+	}
 	public List<Prediction> getTargetFalsePos() { return targetFalsePos; }
 	public List<Prediction> getTargetFalseNeg() { return targetFalseNeg; }
-	public List<Prediction> getFullFalsePos() { return fullFalsePos; }
-	public List<Prediction> getFullFalseNeg() { return fullFalseNeg; }
+	public List<Prediction> getFullFalsePos() {
+		assert !onlyTagging;
+		return fullFalsePos;
+	}
+	public List<Prediction> getFullFalseNeg() {
+		assert !onlyTagging;
+		return fullFalseNeg;
+	}
 	
 	@Override
 	public String toString() {
@@ -115,24 +151,36 @@ public class SentenceEval {
 	
 	public int size() { return size; }
 	
-	public void fillPredictions(List<FrameInstance> fis, Collection<Prediction> targetPreds, Collection<Prediction> targetRolePreds, Collection<Prediction> onlyArgPreds) {
+	public void fillPredictions(
+			List<FrameInstance> fis,
+			Collection<Prediction> targetPreds,
+			Collection<Prediction> targetRolePreds,
+			Collection<Prediction> onlyArgPreds) {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
 			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
-			targetRolePreds.add(new Prediction(fi.getTarget(), f, -1));
+			if (targetRolePreds != null)
+				targetRolePreds.add(new Prediction(fi.getTarget(), f, -1));
 			int n = fi.getFrame().numRoles();
 			for(int i=0; i<n; i++) {
 				Span arg = fi.getArgument(i);
 				if(arg != Span.nullSpan) {
 					Prediction p = new Prediction(arg, f, i);
-					targetRolePreds.add(p);
-					onlyArgPreds.add(p);
+                    if (targetRolePreds != null)
+                    	targetRolePreds.add(p);
+                    if (onlyArgPreds != null)
+                    	onlyArgPreds.add(p);
 				}
 			}
 		}
 	}
 	
-	public void fillConfusionTable(Collection<Prediction> gold, Collection<Prediction> hyp, int[][] confusion, List<Prediction> fpStore, List<Prediction> fnStore) {
+	public void fillConfusionTable(
+			Collection<Prediction> gold,
+			Collection<Prediction> hyp,
+			int[][] confusion,
+			List<Prediction> fpStore,
+			List<Prediction> fnStore) {
 		
 		Set<Prediction> s = new HashSet<Prediction>();
 		

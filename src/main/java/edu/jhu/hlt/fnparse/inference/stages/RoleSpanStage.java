@@ -234,9 +234,10 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		}
 
 		@Override
-		public Decodable<FNParse> getDecodable(FgInferencerFactory infFact) {
-			FactorGraph fg = this.getFactorGraph();
-			return new RoleSpanDecodable(fg, infFact, parent, onlyHeads, expansions);
+		public Decodable<FNParse> getDecodable() {
+			FgInferencerFactory infFact = parent.infFactory();
+			return new RoleSpanDecodable(
+					getFactorGraph(), infFact, parent, onlyHeads, expansions);
 		}
 	}
 

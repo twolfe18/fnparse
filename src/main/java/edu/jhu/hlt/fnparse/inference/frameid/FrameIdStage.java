@@ -8,6 +8,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
@@ -23,6 +25,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -42,7 +45,11 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
-public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements Stage<Sentence, FNTagging>, Serializable {
+public class FrameIdStage
+		extends AbstractStage<Sentence, FNTagging>
+		implements Stage<Sentence, FNTagging>, Serializable {
+	private static final long serialVersionUID = 1L;
+	public static final Logger LOG = Logger.getLogger(FrameIdStage.class);
 	
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -52,42 +59,51 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		public double propDev = 0.15d;
 		public int maxDev = 50;
 		public Double learningRate = null;	// if null, auto select learning rate
-		public Regularizer regularizer = new L2(1_000_000d);
+		public transient Regularizer regularizer = new L2(1_000_000d);
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
 		public Features.F features;
 		public FactorFactory<FrameVars> factorsTemplate;
 		public final ParserParams globalParams;
 
-		// If true, tuning the decoder will be done on training data. Generally this is undesirable
-		// for risk of overfitting, but is good for debugging (e.g. an overfitting test).
+		// If true, tuning the decoder will be done on training data. Generally
+		// this is undesirable for risk of overfitting, but is good for
+		// debugging (e.g. an overfitting test).
 		public boolean tuneOnTrainingData = false;
 
-		// If true, will add all frame to the set to be predicted from even if it has a different
-		// part of speech tag as a listed lexical unit (e.g. "terrorist.JJ" will match the Terrorism
-		// frame which lists "terrorist.n" but not "terrorist.a".
-		// The downside of setting this to false is that you will add some false positives.
+		// If true, will add all frame to the set to be predicted from even if
+		// it has a different part of speech tag as a listed lexical unit
+		// (e.g. "terrorist.JJ" will match the Terrorism  frame which lists
+		// "terrorist.n" but not "terrorist.a". The downside of setting this to
+		// false is that you will add some false positives.
 		public boolean useJustWordForPossibleFrames = true;
+
+		// If true, try lowercasing the target word before looking it up in the
+		// frame index.
+		public boolean lowercaseWordForPossibleFrames = true;
+
+		// If true, remove the "s" from words ending in "es" while looking up
+		// frames listed by lexical unit. E.g. "doses.NNS" => "dose.n"
+		public boolean useHackySingularSingularConversion = true;
 
 		public Params(ParserParams globalParams) {
 			this.globalParams = globalParams;
 			decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
 			targetPruningData = TargetPruningData.getInstance();
-			BinaryBinaryFactorHelper.Mode factorMode = globalParams.useLatentDepenencies
-					? BinaryBinaryFactorHelper.Mode.ISING : BinaryBinaryFactorHelper.Mode.NONE;
+			BinaryBinaryFactorHelper.Mode factorMode =
+					globalParams.useLatentDepenencies
+						? BinaryBinaryFactorHelper.Mode.ISING
+						: BinaryBinaryFactorHelper.Mode.NONE;
 			features = new BasicFrameFeatures(globalParams);
 			factorsTemplate = new FrameFactorFactory(features, factorMode);
 		}
 	}
 
-	private static final long serialVersionUID = 1L;
 	public Params params;
 
 	public FrameIdStage(ParserParams globalParams) {
 		super(globalParams);
 		params = new Params(globalParams);
-		if(globalParams.useLatentDepenencies || globalParams.useLatentConstituencies)
-			throw new RuntimeException("update code!");
 	}
 
 	public void train(List<FNParse> examples) {
@@ -103,9 +119,10 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 
 	@Override
 	public TuningData getTuningData() {
-
+		
 		final List<Double> biases = new ArrayList<Double>();
 		for(double b=0.5d; b<8d; b *= 1.1d) biases.add(b);
+		LOG.debug("called getTuningData, trying " + biases.size() + " biases");
 
 		return new TuningData() {
 			@Override
@@ -140,9 +157,6 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 	 * lemma(t) == lemma(f.target)
 	 */
 	public static FrameVars makeFrameVar(Sentence s, int headIdx, Params params) {
-		if ("FNFUTXT1274788".equals(s.getId()) && "know".equals(s.getWord(headIdx))) {
-			System.err.println("PAY ATTENTION");
-		}
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
 
@@ -150,16 +164,19 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		List<Frame> frameMatches = new ArrayList<Frame>();
 		List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
 
-		// get prototypes/frames from the LEX examples
-		for (FrameInstance fi : params.targetPruningData.getPrototypesByStem(headIdx, s)) {
+		// Get prototypes/frames from the LEX examples
+		List<FrameInstance> fromPrototypes =
+				params.targetPruningData.getPrototypesByStem(headIdx, s, true);
+		for (FrameInstance fi : fromPrototypes) {
 			if (uniqFrames.add(fi.getFrame())) {
 				frameMatches.add(fi.getFrame());
 				prototypes.add(fi);
 			}
 		}
 
-		// get frames that list this as an LU
-		LexicalUnit fnLU = s.getFNStyleLUUnsafe(headIdx, params.targetPruningData.getWordnetDict());
+		// Get frames that list this as an LU in the frame index
+		LexicalUnit fnLU = s.getFNStyleLUUnsafe(
+				headIdx, params.targetPruningData.getWordnetDict(), false);
 		List<Frame> listedAsLUs = (fnLU == null)
 				? Collections.<Frame>emptyList()
 				: params.targetPruningData.getFramesFromLU(fnLU);
@@ -170,23 +187,77 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			}
 		}
 
-		// Sometimes we'll have thing either mis-tagged or presented in a way that is no in the
-		// lexical unit examples (e.g. "terrorist.a" is not listed, while "terrorist.n" is).
-		// In this case, we want the option to take all words, ignoring POS.
+		// Sometimes we'll have thing either mis-tagged or presented in a way
+		// that is no in the lexical unit examples (e.g. "terrorist.a" is not
+		// listed, while "terrorist.n" is). In this case, we want the option to
+		// take all words, ignoring POS.
 		if (params.useJustWordForPossibleFrames) {
-			for (Frame f : params.targetPruningData.getLUFramesByWord(s.getWord(headIdx))) {
+			String w = s.getWord(headIdx);
+			for (Frame f : params.targetPruningData.getLUFramesByWord(w)) {
 				if (uniqFrames.add(f)) {
 					frameMatches.add(f);
 					//prototypes.add(???);
 				}
 			}
+			// For a lot of NPs like "National Guard", the first word will get
+			// tagged as NNP and framenet will list "national.a" as a LU.
+			// We can re-cover if we ignore the POS tag, but we also need to
+			// ensure that the case matches (which is typically lowercase for
+			// adjectives).
+			boolean alwaysLowercase = true;
+			if (alwaysLowercase || headIdx == 0) {
+				w = w.toLowerCase();
+				for (Frame f : params.targetPruningData.getLUFramesByWord(w)) {
+					if (uniqFrames.add(f)) {
+						frameMatches.add(f);
+						//prototypes.add(???);
+					}
+				}
+			}
 		}
 
-		// infrequently, stemming messes up, "means" is listed for the Means frame, but "mean" isn't
-		for(Frame f : params.targetPruningData.getFramesFromLU(s.getLU(headIdx))) {
+		// Infrequently, stemming messes up, "means" is listed for the Means
+		// frame, but "mean" isn't
+		for(Frame f :
+				params.targetPruningData.getFramesFromLU(s.getLU(headIdx))) {
 			if(uniqFrames.add(f)) {
 				frameMatches.add(f);
 				//prototypes.add(???);
+			}
+		}
+
+		// Sometimes the lemmatization/stemming is bad
+		// e.g. "doses.NNS" => "dos.n"
+		// try my own hair-brained plural-stripping
+		if (params.useHackySingularSingularConversion &&
+				s.getWord(headIdx).endsWith("es")) {
+			String p = PosUtil.getPennToFrameNetTags().get(s.getPos(headIdx));
+			if (p != null) {
+				String w = s.getWord(headIdx);
+				w = w.substring(0, w.length() - 1);
+				LexicalUnit fnLUsing = new LexicalUnit(w, p);
+				for(Frame f :
+					params.targetPruningData.getFramesFromLU(fnLUsing)) {
+					if(uniqFrames.add(f)) {
+						frameMatches.add(f);
+						//prototypes.add(???);
+					}
+				}
+			}
+		}
+
+		// "thursday.n" is not an LU, but "Thursday.n" is
+		if (params.lowercaseWordForPossibleFrames) {
+			LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(
+					headIdx, params.targetPruningData.getWordnetDict(), true);
+			if (fnLUlower != null) {
+				for(Frame f :
+					params.targetPruningData.getFramesFromLU(fnLUlower)) {
+					if(uniqFrames.add(f)) {
+						frameMatches.add(f);
+						//prototypes.add(???);
+					}
+				}
 			}
 		}
 
@@ -204,7 +275,8 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 	 * 
 	 * @author travis
 	 */
-	public static class FrameIdDatum implements StageDatum<Sentence, FNTagging> {
+	public static class FrameIdDatum
+			implements StageDatum<Sentence, FNTagging> {
 		private final Sentence sentence;
 		private final boolean hasGold;
 		private final FNTagging gold;
@@ -235,7 +307,8 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			final int n = sentence.size();
 			if(n < 4) {
 				// TODO check more carefully, like 4 content words or has a verb
-				System.err.println("[FrameIdStage] skipping short sentence: " + sentence);
+				System.err.println("[FrameIdStage] skipping short sentence: "
+						+ sentence);
 				return;
 			}
 			for(int i=0; i<n; i++) {
@@ -248,7 +321,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			if(p.getSentence() != sentence)
 				throw new IllegalArgumentException();
 	
-			// build an index from targetHeadIdx to FrameRoleVars
+			// Build an index from targetHeadIdx to FrameRoleVars
 			Set<FrameVars> haventSet = new HashSet<FrameVars>();
 			FrameVars[] byHead = new FrameVars[sentence.size()];
 			for(FrameVars fHyp : this.possibleFrames) {
@@ -257,7 +330,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 				haventSet.add(fHyp);
 			}
 
-			// match up each FI to a FIHypothesis by the head word in the target
+			// Match up each FI to a FIHypothesis by the head word in the target
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
 				int head = parent.params.globalParams.headFinder.head(target, sentence);
@@ -265,15 +338,18 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 				if(fHyp == null) continue;	// nothing you can do here
 				if(fHyp.goldIsSet()) {
 					System.err.println("WARNING: " + p.getId() +
-							" has at least two FrameInstances with the same target head word, choosing the first one");
+							" has at least two FrameInstances with the same "
+							+ "target head word, choosing the first one");
 					continue;
 				}
 				fHyp.setGold(fi);
 				boolean removed = haventSet.remove(fHyp);
-				assert removed : "two FrameInstances with same head? " + p.getSentence().getId();
+				assert removed : "two FrameInstances with same head? "
+						+ p.getSentence().getId();
 			}
 
-			// the remaining hypotheses must be null because they didn't correspond to a FI in the parse
+			// The remaining hypotheses must be null because they didn't
+			// correspond to a FI in the parse
 			for(FrameVars fHyp : haventSet)
 				fHyp.setGoldIsNull();
 		}
@@ -289,7 +365,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 			FactorGraph fg = getFactorGraph();
 			VarConfig gold = new VarConfig();
 	
-			// add the gold labels
+			// Add the gold labels
 			for(FrameVars hyp : possibleFrames) {
 				assert hyp.goldIsSet();
 				hyp.register(fg, gold);
@@ -301,22 +377,27 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		private FactorGraph getFactorGraph() {
 			FactorGraph fg = new FactorGraph();
 
-			// create factors
+			// Create factors
 			List<Factor> factors = new ArrayList<Factor>();
 			ProjDepTreeFactor depTree = null;
 			ConstituencyTreeFactor consTree = null;
 			if(parent.params.globalParams.useLatentConstituencies) {
-				consTree = new ConstituencyTreeFactor(sentence.size(), VarType.LATENT);
-				throw new RuntimeException("FIXME: I don't know how this is supposed to work");
+				consTree = new ConstituencyTreeFactor(
+						sentence.size(), VarType.LATENT);
+				throw new RuntimeException(
+						"FIXME: I don't know how this is supposed to work");
 			}
 			if(parent.params.globalParams.useLatentDepenencies) {
 				depTree = new ProjDepTreeFactor(sentence.size(), VarType.LATENT);
-				DepParseFactorFactory depParseFactorTemplate = new DepParseFactorFactory(parent.params.globalParams);
-				factors.addAll(depParseFactorTemplate.initFactorsFor(sentence, Collections.emptyList(), depTree, consTree));
+				DepParseFactorFactory depParseFactorTemplate =
+						new DepParseFactorFactory(parent.params.globalParams);
+				factors.addAll(depParseFactorTemplate.initFactorsFor(
+						sentence, Collections.emptyList(), depTree, consTree));
 			}
 			if(parent.params.globalParams.useLatentConstituencies)
 				throw new RuntimeException("implement me!");
-			factors.addAll(parent.params.factorsTemplate.initFactorsFor(sentence, possibleFrames, depTree, consTree));
+			factors.addAll(parent.params.factorsTemplate.initFactorsFor(
+					sentence, possibleFrames, depTree, consTree));
 
 			// add factors to the factor graph
 			for(Factor f : factors)
@@ -326,9 +407,11 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		}
 
 		@Override
-		public FrameIdDecodable getDecodable(FgInferencerFactory infFact) {
+		public FrameIdDecodable getDecodable() {
+			FgInferencerFactory infFact = parent.infFactory();
 			FactorGraph fg = this.getFactorGraph();
-			return new FrameIdDecodable(sentence, possibleFrames, fg, infFact, parent);
+			return new FrameIdDecodable(
+					sentence, possibleFrames, fg, infFact, parent);
 		}
 
 		@Override
@@ -340,17 +423,21 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 	}
 
 	/**
-	 * Stores beliefs about frameId variables (see {@link Decodable}) and implements the decoding step.
+	 * Stores beliefs about frameId variables (see {@link Decodable}) and
+	 * implements the decoding step.
 	 * 
 	 * @author travis
 	 */
-	public static class FrameIdDecodable extends Decodable<FNTagging> implements Iterable<FrameVars> {
+	public static class FrameIdDecodable
+			extends Decodable<FNTagging>
+			implements Iterable<FrameVars> {
 
 		private final FrameIdStage parent;
 		private final Sentence sentence;
 		private final List<FrameVars> possibleFrames;
 
-		public FrameIdDecodable(Sentence sent, List<FrameVars> possibleFrames, FactorGraph fg, FgInferencerFactory infFact, FrameIdStage fid) {
+		public FrameIdDecodable(Sentence sent, List<FrameVars> possibleFrames,
+				FactorGraph fg, FgInferencerFactory infFact, FrameIdStage fid) {
 			super(fg, infFact, fid);
 			this.parent = fid;
 			this.sentence = sent;
@@ -360,7 +447,9 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 		public Sentence getSentence() { return sentence; }
 
 		@Override
-		public Iterator<FrameVars> iterator() { return possibleFrames.iterator(); }
+		public Iterator<FrameVars> iterator() {
+			return possibleFrames.iterator();
+		}
 
 		@Override
 		public FNTagging decode() {
@@ -381,7 +470,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> implements 
 				if(fHat != Frame.nullFrame)
 					fis.add(FrameInstance.frameMention(fHat, Span.widthOne(fvars.getTargetHeadIdx()), sentence));
 			}
-			return new FNParse(sentence, fis);
+			return new FNTagging(sentence, fis);
 		}
 	}
 

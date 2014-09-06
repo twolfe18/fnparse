@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -46,6 +47,13 @@ public class StageDatumExampleList<I, O> implements FgExampleList {
 	
 	public StageDatum<I, O> getStageDatum(int index) {
 		return data.get(index);
+	}
+	
+	public List<O> decodeAll() {
+		List<O> out = new ArrayList<>();
+		for (StageDatum<I, O> d : data)
+			out.add(d.getDecodable().decode());
+		return out;
 	}
 	
 	public List<StageDatum<I, O>> getStageData() {

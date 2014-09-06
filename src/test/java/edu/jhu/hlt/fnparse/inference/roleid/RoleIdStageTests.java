@@ -263,10 +263,10 @@ public class RoleIdStageTests {
 			StageDatum<FNTagging, FNParse> dR = dataR.getStageDatum(i);
 
 			tL.start();
-			Decodable<FNParse> decL = dL.getDecodable(ridL.infFactory());
+			Decodable<FNParse> decL = (Decodable<FNParse>) dL.getDecodable();
 			tL.stop();
 			tR.start();
-			Decodable<FNParse> decR = dR.getDecodable(ridR.infFactory());
+			Decodable<FNParse> decR = (Decodable<FNParse>) dR.getDecodable();
 			tR.stop();
 			
 			for(Map.Entry<String, ChecksSomething> x : tests.entrySet()) {

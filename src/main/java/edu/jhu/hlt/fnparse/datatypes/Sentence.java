@@ -68,36 +68,42 @@ public final class Sentence implements HasId {
 	
 	public static final String fnStyleBadPOSstrPrefix = "couldn't convert Penn tag of ".toUpperCase();	// once in LU, this will be upcased anyway
 	/**
-	 * uses the lemma instead of the word, and converts POS to
+	 * Uses the lemma instead of the word, and converts POS to
 	 * a FrameNet style POS.
 	 */
-	public LexicalUnit getFNStyleLU(int i, IDictionary dict) {
-		LexicalUnit x = getFNStyleLUUnsafe(i, dict);
+	public LexicalUnit getFNStyleLU(
+			int i, IDictionary dict, boolean lowercase) {
+		LexicalUnit x = getFNStyleLUUnsafe(i, dict, lowercase);
 		if(x == null)
 			return new LexicalUnit(tokens[i], fnStyleBadPOSstrPrefix + pos[i]);
 		else
 			return x;
 	}
 	
-	public LexicalUnit getFNStyleLUUnsafe(int i, IDictionary dict) {
+	public LexicalUnit getFNStyleLUUnsafe(
+			int i, IDictionary dict, boolean lowercase) {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
 		if(fnTag == null) return null;
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		List<String> allStems = Collections.emptyList();
+		String w = null;
 		try {
-			allStems = stemmer.findStems(tokens[i], PosUtil.ptb2wordNet(pos[i]));
+			w = lowercase ? tokens[i].toLowerCase() : tokens[i];
+			allStems = stemmer.findStems(w, PosUtil.ptb2wordNet(pos[i]));
 		}
 		catch(java.lang.IllegalArgumentException e) {
 			//throw new RuntimeException("bad word? " + getLU(i), e);
 			System.err.println("bad word? " + getLU(i));
 		}
-		if(allStems.isEmpty()) return null;
+		if(allStems.isEmpty())
+			return new LexicalUnit(w, fnTag);
 		return new LexicalUnit(allStems.get(0), fnTag);
 	}
 	
 	/**
-	 * gives you a LexicalUnit using the lemma for this token rather than the actual word.
-	 * this method is safe (if you call with i=-1 or i=n, it will return "<S>" and "</S>" fields).
+	 * Gives you a LexicalUnit using the lemma for this token rather than the
+	 * word. this method is safe (if you call with i=-1 or i=n, it will return
+	 * "<S>" and "</S>" fields).
 	 */
 	public LexicalUnit getLemmaLU(int i) {
 		if(i == -1)
@@ -108,10 +114,12 @@ public final class Sentence implements HasId {
 	}
 	
 	/**
-	 * gives you the original word (no case change or anything),
-	 * along with the POS tag (your only guarantee is that this is upper case).
+	 * Gives you the original word (no case change or anything), along with the
+	 * POS tag (your only guarantee is that this is upper case).
 	 */
-	public LexicalUnit getLU(int i) { return new LexicalUnit(tokens[i], pos[i]); }
+	public LexicalUnit getLU(int i) {
+		return new LexicalUnit(tokens[i], pos[i]);
+	}
 	
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }

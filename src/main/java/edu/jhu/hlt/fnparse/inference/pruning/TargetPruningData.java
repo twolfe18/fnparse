@@ -97,21 +97,29 @@ public class TargetPruningData implements Serializable {
 				}
 			}
 		}
-		System.out.printf("[TargetPruningData] done in %.1f seconds.\n", (System.currentTimeMillis()-start)/1000d);
+		System.out.printf("[TargetPruningData] done in %.1f seconds.\n",
+				(System.currentTimeMillis()-start)/1000d);
 	}
 	
-	public List<FrameInstance> getPrototypesByStem(int headIdx, Sentence s) {
+	public List<FrameInstance> getPrototypesByStem(
+			int headIdx, Sentence s, boolean lowercase) {
 		if (prototypesByStem == null)
 			init();
 		IRAMDictionary wnDict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(wnDict);
-		String word = s.getWord(headIdx).toLowerCase();
+		String word = s.getWord(headIdx);
+		if (lowercase)
+			word = word.toLowerCase();
 		POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
 		List<String> stems = null;
 		try { stems = stemmer.findStems(word, pos); }
-		catch(IllegalArgumentException e) { return null; }	// words that normalized to an empty string throw an exception
+		catch(IllegalArgumentException e) {
+			// Words that normalized to an empty string throw an exception
+			return Collections.<FrameInstance>emptyList();
+		}
 		if (stems.size() == 0) {
-			System.err.printf("[getPrototypesByStem] problem stemming: %s with pos %s\n", word, s.getPos(headIdx));
+			//System.err.printf("[getPrototypesByStem] problem stemming: %s with "
+			//		+ "pos %s\n", word, s.getPos(headIdx));
 			stems = Arrays.asList(word + "-UNSTEMMED");
 		}
 		List<FrameInstance> fis = new ArrayList<>();
@@ -147,10 +155,17 @@ public class TargetPruningData implements Serializable {
 	}
 
 	private transient Map<String, Map<String, List<Frame>>> word2pos2frames;
+	/**
+	 * Gets frames that have this word listed as a lexical unit in the frame
+	 * index.
+	 * @param word is case-sensitive
+	 *             (e.g. "Thursday" is in there, "thursday" is not)
+	 * @return
+	 */
 	public List<Frame> getLUFramesByWord(String word) {
 		if (word2pos2frames == null)
 			initLexicalUnitData();
-		Map<String, List<Frame>> fsmap = word2pos2frames.get(word.toLowerCase());
+		Map<String, List<Frame>> fsmap = word2pos2frames.get(word);
 		if (fsmap == null) return Collections.<Frame>emptyList();
 		List<Frame> fs = new ArrayList<>();
 		for (List<Frame> fl : fsmap.values())
@@ -174,9 +189,6 @@ public class TargetPruningData implements Serializable {
 				if(j > 0)
 					lu = new LexicalUnit(lu.word.substring(0, j), lu.pos);
 
-				if (lu.word.startsWith("terrorist"))
-					System.out.println("PAY ATTENTION lskllkdu");
-
 				Map<String, List<Frame>> pos2frames = word2pos2frames.get(lu.word);
 				if (pos2frames == null) {
 					pos2frames = new HashMap<>();
@@ -198,7 +210,7 @@ public class TargetPruningData implements Serializable {
 	public List<Frame> getFramesFromLU(LexicalUnit lu) {
 		if (word2pos2frames == null)
 			initLexicalUnitData();
-		Map<String, List<Frame>> fmap = word2pos2frames.get(lu.word.toLowerCase());
+		Map<String, List<Frame>> fmap = word2pos2frames.get(lu.word);
 		if (fmap == null) return Collections.emptyList();
 		List<Frame> fs = fmap.get(lu.pos);
 		if (fs == null) return Collections.emptyList();
@@ -221,14 +233,14 @@ public class TargetPruningData implements Serializable {
 		LexicalUnit lu = s.getLU(index);
 		if (isTargetStopword(lu.word)) return true;
 		if (lu.pos.endsWith("DT")) return true;	// DT and PDT, 0.4% of width1 targets in train data
-		if (".".equals(lu.word)
-				|| ",".equals(lu.word)
-				|| ":".equals(lu.word)
-				|| "--".equals(lu.word)
-				|| "``".equals(lu.word)
-				|| "\"".equals(lu.word)
-				|| "(".equals(lu.word)
-				|| ")".equals(lu.word))
+		if (".".equals(lu.pos)
+				|| ",".equals(lu.pos)
+				|| ":".equals(lu.pos)
+				|| "--".equals(lu.pos)
+				|| "``".equals(lu.pos)
+				|| "\"".equals(lu.pos)
+				|| "(".equals(lu.pos)
+				|| ")".equals(lu.pos))
 			return true;
 		return false;
 	}

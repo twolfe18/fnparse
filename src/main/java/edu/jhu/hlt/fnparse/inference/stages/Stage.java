@@ -27,7 +27,7 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * ^^is a bad example, because we already have code that does these in a pipeline,
  *   the example i really need is [r_itjk before r_itjk^e]. if we choose r_itjk=0,
  *   then all the time spent extracting features for r_itjk^e was wasted.
- *   
+ * 
  * @author travis
  */
 public interface Stage<Input, Output> extends HasFgModel {
@@ -35,20 +35,23 @@ public interface Stage<Input, Output> extends HasFgModel {
 	public String getName();
 	
 	/**
-	 * should include any tuning steps that are necessary (implementer of this method should split off dev/tune data)
+	 * Should include any tuning steps that are necessary (implementer of this
+	 * method should split off dev/tune data)
 	 */
 	public void train(List<Input> x, List<Output> y);
 	
 	/**
-	 * create the FactorGraph and other materials needed for prediction.
-	 * Technically, {@link Decodable} is lazy, so all that this is guaranteed to do is
-	 * instantiate variables and factors and compute features.
+	 * Create the FactorGraph and other materials needed for prediction.
+	 * Technically, {@link Decodable} is lazy, so all that this is guaranteed to
+	 * do is instantiate variables and factors and compute features.
 	 * 
 	 * @param input
-	 * @param output may be null, in which case "unlabeled" StageData should be returned (only capable of decoding),
-	 *        otherwise labeled StageData should be returned (which is suitable for training).
+	 * @param output may be null, in which case "unlabeled" StageData should be
+	 *        returned (only capable of decoding), otherwise labeled StageData
+	 *        should be returned (which is suitable for training).
 	 */
-	public StageDatumExampleList<Input, Output> setupInference(List<? extends Input> input, List<? extends Output> output);
+	public StageDatumExampleList<Input, Output> setupInference(
+			List<? extends Input> input, List<? extends Output> output);
 
 
 	/**
@@ -56,98 +59,106 @@ public interface Stage<Input, Output> extends HasFgModel {
 	 * An example would be the "frameId" stage:
 	 *   class FrameIdStageDatum extends StageDatum<Sentence, FNTagging>
 	 * 
-	 * Implementations of this interface should be stateless.
+	 * Implementations of this interface should not include a large state (which
+	 * may not fit in memory). For example, it is OK for this to store a
+	 * FgInferencerFactory, but not the FactorGraph itself that would be
+	 * generated. That FactorGraph should be stored in the IDecodable upon
+	 * calling getDecodable().
 	 * 
-	 * Implementations of this interface should not memoize because caching and memory
-	 * management will be done by classes that call this class.
+	 * Implementations of this interface should not memoize because caching and
+	 * memory management will be done by classes that call this class.
 	 * 
 	 * @param <Input> type of the data required for this stage to start its job.
 	 * @param <Intermediate> type of variables used for decoding.
-	 * @param <Output> type of the data produced by running inference and then decoding this stage.
-	 * 
-	 * @author travis
+	 * @param <Output> type of the data produced by running inference and then
+	 *                 decoding this stage.
 	 */
 	public static interface StageDatum<Input, Output> {
-		
+
 		public Input getInput();
-		
+
 		/**
-		 * if true, then can call getExample() and getGold(),
+		 * If true, then can call getExample() and getGold(),
 		 * otherwise only getDecodable() should be called.
 		 */
 		public boolean hasGold();
-		
+
 		/**
-		 * should return null if !hasGold() and a non-null value otherwise.
+		 * Should return null if !hasGold() and a non-null value otherwise.
 		 */
 		public Output getGold();
 
-		/** for training */
+		/** For training */
 		public LabeledFgExample getExample();
 
-		/** for prediction */
-		public Decodable<Output> getDecodable(FgInferencerFactory infFact);
-		
+		/** For prediction */
+		//public IDecodable<Output> getDecodable(FgInferencerFactory infFact);
+		public IDecodable<Output> getDecodable();
 	}
-	
+
+	/**
+	 * Basically a Future<Output>
+	 */
+	public static interface IDecodable<Output> {
+		public Output decode();
+	}
 
 	/**
 	 * Basically a Future<Output>, but stores marginals, so you can
 	 * decode many times without running inference more than once.
-	 * 
-	 * @author travis
 	 */
-	public static abstract class Decodable<Output> implements HasFactorGraph {
-		
+	public static abstract class Decodable<Output>
+			implements IDecodable<Output>, HasFactorGraph {
 		public final FactorGraph fg;
 		public final FgInferencerFactory infFact;
 		public final HasFgModel hasModel;
 		private FgInferencer inf;
-		
-		public Decodable(FactorGraph fg, FgInferencerFactory infFact, HasFgModel weights) {
+
+		public Decodable(
+				FactorGraph fg,
+				FgInferencerFactory infFact,
+				HasFgModel weights) {
 			this.fg = fg;
 			this.infFact = infFact;
 			this.hasModel = weights;
 		}
-		
+
 		@Override
 		public FactorGraph getFactorGraph() { return fg; }
-		
+
 		/**
-		 * ensures that inference has been run and the result has been cached.
+		 * Ensures that inference has been run and the result has been cached.
 		 */
 		public void force() {
 			getMargins();
 		}
-		
+
 		public FgModel getWeights() { return hasModel.getWeights(); }
 
 		/**
-		 * forces inference to be run, but will only do so once
+		 * Forces inference to be run, but will only do so once
 		 * (future calls are just returned from cache).
 		 */
 		public FgInferencer getMargins() {
 			if(inf == null) {
-				
-				// we need to compute the scores for ExpFamFactors at some point,
-				// and way I can think to choose where that should happen is that it
-				// should happen as late as possible, which is here.
+				// We need to compute the scores for ExpFamFactors at some point
+				// and way I can think to choose where that should happen is
+				// that it should happen as late as possible, which is here.
 				for(Factor f : fg.getFactors()) {
 					if(f instanceof ExpFamFactor) {
-						((ExpFamFactor) f).updateFromModel(hasModel.getWeights(), hasModel.logDomain());
+						((ExpFamFactor) f).updateFromModel(
+								hasModel.getWeights(), hasModel.logDomain());
 					}
 				}
-				
 				inf = infFact.getInferencer(fg);
 				inf.run();
 			}
 			return inf;
 		}
-		
-		/** should call getMargins() */
+
+		/** Should call getMargins() */
+		@Override
 		public abstract Output decode();
 	}
-	
-	
-	
+
 }

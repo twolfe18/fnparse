@@ -10,16 +10,12 @@ import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Random;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
 import org.junit.Before;
 import org.junit.Test;
 
-import edu.jhu.gm.train.CrfObjective;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -30,6 +26,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 
@@ -74,7 +71,7 @@ public class ParserTests {
 
 	@Before
 	public void setupLogs() {
-		Logger.getLogger(CrfObjective.class).setLevel(Level.INFO);
+		Util.silenceLogs();
 	}
 
 	/**
@@ -83,31 +80,45 @@ public class ParserTests {
 	@Test
 	public void basic() {
 		FNParse p = makeDummyParse();
+
 		// made by toydata/make-debug-data-from-sentence-id.sh
 		//FNParse p = new FileFrameInstanceProvider(
 		//				new File("toydata/fn15-fulltext.frames.train.dipanjan.debug"),
 		//				new File("toydata/fn15-fulltext.conll.train.dipanjan.debug"))
 		//	.getParsedSentences().next();
+		
+		//FNParse p = FNIterFilters.findBySentenceId(
+		//		FileFrameInstanceProvider.debugFIP.getParsedSentences(),
+		//		"FNFUTXT1274826");
+		
 		PipelinedFnParser parser = train(p);
 		checkGoodPerf(parser, p, 1d, 1d, true);
 		serializeWeights(parser, new File("saved-models/testing"), "basic");
 		checkGoodPerf(serializeAndDeserialize(parser), p, 1d, 1d, true);
 	}
 	
-	public static void serializeWeights(PipelinedFnParser parser, File directory, String tag) {
+	public static void serializeWeights(
+			PipelinedFnParser parser, File directory, String tag) {
 		System.out.printf("[serializeWeights] saving a model tagged as %s in %s\n", tag, directory.getPath());
 		boolean outputZeroFeatures = false;
-		ModelIO.writeHumanReadable(parser.getFrameIdWeights(), parser.getAlphabet(),
-				new File(directory, "weights.frameId." + tag + ".txt"), outputZeroFeatures);
-		ModelIO.writeHumanReadable(parser.getArgIdWeights(), parser.getAlphabet(),
-				new File(directory, "weights.argId." + tag + ".txt"), outputZeroFeatures);
-		ModelIO.writeHumanReadable(parser.getArgSpanWeights(), parser.getAlphabet(),
-				new File(directory, "weights.argSpan." + tag + ".txt"), outputZeroFeatures);
+		ModelIO.writeHumanReadable(
+				parser.getFrameIdWeights(), parser.getAlphabet(),
+				new File(directory, "weights.frameId." + tag + ".txt"),
+				outputZeroFeatures);
+		ModelIO.writeHumanReadable(
+				parser.getArgIdWeights(), parser.getAlphabet(),
+				new File(directory, "weights.argId." + tag + ".txt"),
+				outputZeroFeatures);
+		ModelIO.writeHumanReadable(
+				parser.getArgSpanWeights(), parser.getAlphabet(),
+				new File(directory, "weights.argSpan." + tag + ".txt"),
+				outputZeroFeatures);
 	}
 
 	/**
-	 * For every sentence, we should be able to train and predict with perfect accuracy on that
-	 * sentence. This ensures that our model can (over)fit all of the data.
+	 * For every sentence, we should be able to train and predict with perfect
+	 * accuracy on that sentence. This ensures that our model can (over)fit all
+	 * of the data.
 	 */
 	@Test
 	public void zfuzz() {
@@ -115,27 +126,9 @@ public class ParserTests {
 		//      FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> parses = DataUtil.iter2list(
 				FileFrameInstanceProvider.debugFIP.getParsedSentences());
-		parses = DataUtil.reservoirSample(parses, 30, new Random(9001));
-		examples:
+		parses = Util.filterOutExamplesThatCantBeFit(parses);
+		//parses = DataUtil.reservoirSample(parses, 30, new Random(9001));
 		for(FNParse p : parses) {
-			if(p.getFrameInstances().size() == 0)
-				continue;
-			if (p.getSentence().size() >= 50)
-				continue;
-			if ("FNFUTXT1274797".equals(p.getSentence().getId()))
-				continue;	// this contains an instance of "there be".v for Existence, which we filter out
-			for (FrameInstance fi : p.getFrameInstances()) {
-
-				// TODO handle length > 1 targets!
-				if (fi.getTarget().width() > 1)
-					continue examples;
-
-				// This frame is very poorly annotated. In principle it should be deterministically
-				// read off from a CD pos-tag, but a small proportion of numbers are tagged with
-				// the Cardinal_numbers frame.
-				if ("Cardinal_numbers".equals(fi.getFrame().getName()))
-					continue examples;
-			}
 			System.out.println("[zfuzz] working on example " + p.getId());
 			PipelinedFnParser parser = train(p);
 			checkGoodPerf(parser, p, 0.99d, 0.0d, true);
@@ -162,7 +155,7 @@ public class ParserTests {
 	
 	public PipelinedFnParser train(FNParse e) {
 		PipelinedFnParser parser = new PipelinedFnParser();
-		parser.getFrameIdParams().tuneOnTrainingData = true;
+		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
 		List<FNParse> dummy = Arrays.asList(e);
 		parser.computeAlphabet(dummy, 5d, 99_000_000);
 		parser.train(dummy);
@@ -174,8 +167,6 @@ public class ParserTests {
 		List<Sentence> s = DataUtil.stripAnnotations(Arrays.asList(gold));
 		if(verbose)
 			System.out.println("gold = " + Describe.fnParse(gold));
-		//if ("FNFUTXT1274782".equals(gold.getId()))
-		//	System.out.println("PAY ATTENTION");
 		FNParse hyp = p.predict(s).get(0);
 		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(
 				BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
