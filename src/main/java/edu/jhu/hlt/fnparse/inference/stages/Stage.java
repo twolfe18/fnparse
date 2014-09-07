@@ -145,10 +145,9 @@ public interface Stage<Input, Output> extends HasFgModel {
 				// and way I can think to choose where that should happen is
 				// that it should happen as late as possible, which is here.
 				for(Factor f : fg.getFactors()) {
-					if(f instanceof ExpFamFactor) {
-						((ExpFamFactor) f).updateFromModel(
-								hasModel.getWeights(), hasModel.logDomain());
-					}
+					f.updateFromModel(
+							hasModel.getWeights(),
+							hasModel.logDomain());
 				}
 				inf = infFact.getInferencer(fg);
 				inf.run();
