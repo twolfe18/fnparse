@@ -17,7 +17,7 @@ import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.srl.CorpusStatistics;
 import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
-import edu.jhu.srl.DepParseFactorGraph.DepParseFactorTemplate;
+import edu.jhu.srl.DepParseFactorGraphBuilder.DepParseFactorTemplate;
 import edu.jhu.srl.DepParseFeatureExtractor;
 import edu.jhu.srl.DepParseFeatureExtractor.DepParseFeatureExtractorPrm;
 import edu.jhu.srl.FeTypedFactor;

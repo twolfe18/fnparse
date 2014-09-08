@@ -53,6 +53,11 @@ frameIdTrainJob:
 		./ParserExperimentWrapper.qsub frameId saved-models/alphabets/frameId-latent.model.gz latent
 
 
+# Added Sept. 8, lowered ambitions
+frameIdTrainNew: jar
+	qsub -N frameId-latent-simpleBinary -q text.q ParserExperimentWrapper.qsub frameId none latent
+
+
 #############################################################################################################
 
 

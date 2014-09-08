@@ -9,6 +9,7 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.DataSplitter;
 
@@ -45,7 +46,8 @@ public class AlphabetComputer {
 		boolean latentSyntax = syntaxMode.equals("latent");
 		boolean noSyntaxFeatures = syntaxMode.equals("none");
 
-		PipelinedFnParser parser = new PipelinedFnParser();
+		ParserParams parserParams = new ParserParams();
+		PipelinedFnParser parser = new PipelinedFnParser(parserParams);
 		parser.getParams().useSyntaxFeatures = !noSyntaxFeatures;
 		parser.getParams().useLatentDepenencies = latentSyntax;
 		parser.getParams().useLatentConstituencies = latentSyntax;

@@ -10,10 +10,16 @@
 
 set -e
 
+if [[ $# != 3 ]]; then
+	echo "usage: $0 mode alphabet syntax-mode"
+	exit 1
+fi
+
 mode=$1
 alphabetModel=$2
 syntaxMode=$3
-workingDir=experiments/$mode/$SGE_TASK_ID
+
+workingDir=experiments/${mode}-${syntaxMode}/$SGE_TASK_ID
 
 cp="target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar"
 jvmOpts="-ea -Xmx14G -XX:ParallelGCThreads=2"
