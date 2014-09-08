@@ -36,21 +36,19 @@ public class PipelinedFnParser implements Serializable {
 	private Stage<Sentence, FNTagging> frameId;
 	private Stage<FNTagging, FNParse> argId;
 	private Stage<FNParse, FNParse> argExpansion;
-
-	public PipelinedFnParser() {
-		params = new ParserParams();
+	
+	public PipelinedFnParser(ParserParams params) {
+		this.params = params;
 		frameId = new FrameIdStage(params);
 		argId = new RoleIdStage(params);
 		argExpansion = new RoleSpanStage(params);
 	}
 	
 	// TODO replace this with setters for each stage
-	/*
 	public void disableArgId() {
 		argId = new IdentityStage<>();
 		argExpansion = new IdentityStage<>();
 	}
-	*/
 
 	public FgModel getFrameIdWeights() { return frameId.getWeights(); }
 	public FgModel getArgIdWeights() { return argId.getWeights(); }
@@ -167,6 +165,11 @@ public class PipelinedFnParser implements Serializable {
 		} else {
 			LOG.info("not training frameId model because its not a FrameIdModel");
 		}
+		
+		if (argId instanceof IdentityStage) {
+			LOG.info("skipping argId/argSpan training");
+			return;
+		}
 
 		List<FNTagging> frames;
 		if (params.usePredictedFramesToTrainArgId) {
@@ -193,6 +196,10 @@ public class PipelinedFnParser implements Serializable {
 	public List<FNParse> predict(List<Sentence> sentences) {
 		List<FNTagging> frames =
 				frameId.setupInference(sentences, null).decodeAll();
+		if (argId instanceof IdentityStage) {
+			LOG.info("skipping argId/argSpan step in prediction");
+			return DataUtil.convertTaggingsToParses(frames);
+		}
 		List<FNParse> argHeads =
 				argId.setupInference(frames, null).decodeAll();
 		List<FNParse> fullParses =

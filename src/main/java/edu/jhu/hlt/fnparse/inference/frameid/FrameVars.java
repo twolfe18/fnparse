@@ -82,6 +82,23 @@ public class FrameVars implements FgRelated {
 		return String.format("f_{i=%d,t=1:%d}", i, f_it.length);
 	}
 	
+	/** Longer than toString */
+	public String debugString() {
+		StringBuilder sb = new StringBuilder();
+		sb.append("<FrameVars @ " + i);
+		if (this.goldSet)
+			sb.append(" goldFrame=" + (gold == null ? "null" : gold.getName()));
+		else
+			sb.append(" noGoldFrame");
+		sb.append(" ");
+		for (int i = 0; i < f_it_values.length; i++) {
+			sb.append(i == 0 ? "[" : ", ");
+			sb.append(f_it_values[i].getName());
+		}
+		sb.append("]>");
+		return sb.toString();
+	}
+	
 	public boolean goldIsSet() { return goldSet; }
 	
 	public void setGoldIsNull() {

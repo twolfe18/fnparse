@@ -4,8 +4,13 @@ import java.io.Serializable;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
+import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
+import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
+import edu.jhu.util.Alphabet;
 
 /**
  * Implements feature extraction related to a binary factor connected to
@@ -88,6 +93,41 @@ public class BinaryBinaryFactorHelper implements Serializable {
 				else fv = AbstractFeatures.emptyFeatures;
 			}
 			phi.setFeatures(i, fv);
+		}
+		return phi;
+	}
+	
+	/**
+	 * This returns a factor with just N features, where N is the number of
+	 * configurations that f_it can take on. If l_ij is off, this factor has a
+	 * score of 0, and otherwise has the score of the feature corresponding to
+	 * "l_ij=true and f_it=Some_Frame".
+	 * I am worried that the factors above, which are parameterized on all kinds
+	 * of observed features of f_it have way too many features (even though
+	 * Matt said this was successful for his SRL code).
+	 */
+	public static ExplicitExpFamFactor simpleBinaryFactor(
+			LinkVar l_ij,
+			Var f_it,
+			Frame t,
+			Alphabet<String> featureNames) {
+		ExplicitExpFamFactor phi = new ExplicitExpFamFactor(
+				new VarSet(l_ij, f_it));
+		final FeatureVector empty = new FeatureVector();
+		int n = phi.getVars().calcNumConfigs();
+		assert n == 2 * f_it.getNumStates();
+		for (int c = 0; c < n; c++) {
+			VarConfig conf = phi.getVars().getVarConfig(c);
+			if (conf.getState(l_ij) == LinkVar.TRUE &&
+					conf.getState(f_it) == BinaryVarUtil.boolToConfig(true)) {
+				FeatureVector fv = new FeatureVector();
+				String fn = "l_{root,i}=true_f_{i," + t.getName() + "}=true";
+				int idx = featureNames.lookupIndex(fn, true);
+				fv.add(idx, 1d);
+				phi.setFeatures(c, fv);
+			} else {
+				phi.setFeatures(c, empty);
+			}
 		}
 		return phi;
 	}

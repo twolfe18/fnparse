@@ -6,6 +6,7 @@ import java.io.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.*;
@@ -24,6 +25,10 @@ import edu.jhu.hlt.optimize.functions.L2;
  * @author travis
  */
 public class ParserExperiment {
+	
+	// In real experiments, this should be false. This gives the parser access
+	// to both 1-best dep syntax + latent syntax.
+	public static boolean useSyntaxFeaturesForLatentParser = true;
 
 	public static void main(String[] args) throws IOException {
 
@@ -47,7 +52,6 @@ public class ParserExperiment {
 		final String mode = args[0];
 		final int jobIdx = Integer.parseInt(args[1]);
 		final File workingDir = new File(args[2]);
-		//final File alphabetModelFile = new File(args[3]);
 		final String featureAlphabet = args[3];
 		final String syntaxMode = args[4];
 		if(!workingDir.isDirectory()) workingDir.mkdirs();
@@ -106,9 +110,34 @@ public class ParserExperiment {
 				train.size(), tune.size(), test.size());
 
 		// Create parser
-		boolean latentSyntax = "latent".equals(syntaxMode);
-		boolean noSyntaxFeatures = "none".equals(syntaxMode);
-		PipelinedFnParser parser = new PipelinedFnParser();
+		ParserParams parserParams = new ParserParams();
+		// Syntax mode (e.g. latent vs regular vs none)
+		if ("latent".equals(syntaxMode)) {
+			parserParams.useLatentDepenencies = true;
+			parserParams.useSyntaxFeatures =
+					useSyntaxFeaturesForLatentParser;
+		} else if ("regular".equals(syntaxMode)) {
+			parserParams.useLatentDepenencies = false;
+			parserParams.useSyntaxFeatures = true;
+		} else if ("none".equals(syntaxMode)) {
+			parserParams.useLatentDepenencies = false;
+			parserParams.useSyntaxFeatures = false;
+		} else {
+			throw new RuntimeException("illegal mode: " + syntaxMode);
+		}
+		PipelinedFnParser parser = new PipelinedFnParser(parserParams);
+		// Mode (e.g. frameId vs argId)
+		if ("frameId".equals(mode)) {
+			FrameIdStage fIdStage = (FrameIdStage) parser.getFrameIdStage();
+			fIdStage.params.batchSize = batchSize.get();
+			fIdStage.params.passes = passes.get();
+			fIdStage.params.regularizer = new L2(regularizer.get());
+			parser.disableArgId();
+		} else {
+			parser.getArgIdParams().batchSize = batchSize.get();
+			parser.getArgIdParams().passes = passes.get();
+			parser.getArgIdParams().regularizer = new L2(regularizer.get());
+		}
 		if ("none".equals(featureAlphabet)) {
 			int maxMinutes = 45;
 			int maxFeatures = 15_000_000;
@@ -116,9 +145,6 @@ public class ParserExperiment {
 		} else {
 			parser.setAlphabet(ModelIO.readAlphabet(new File(featureAlphabet)));
 		}
-		parser.getParams().useSyntaxFeatures = !noSyntaxFeatures;
-		if(latentSyntax)
-			parser.getParams().useSyntaxFeatures = false;
 		System.out.printf("[ParserExperiment] this model was read in from %s, "
 				+ "and i'm assuming that this model's alphabet (size=%d) "
 				+ "already includes all of the features needed to train in %s "
@@ -127,18 +153,9 @@ public class ParserExperiment {
 
 		// Train
 		// null means do auto learning rate selection
-		Double lrMult = "frameId".equals(mode) ? null : 0.05d;
+		//Double lrMult = "frameId".equals(mode) ? null : 0.05d;
+		Double lrMult = 0.05d;
 		System.out.println("[ParserExperiment] starting, lrMult=" + lrMult);
-		if ("frameId".equals(mode)) {
-			FrameIdStage fIdStage = (FrameIdStage) parser.getFrameIdStage();
-			fIdStage.params.batchSize = batchSize.get();
-			fIdStage.params.passes = passes.get();
-			fIdStage.params.regularizer = new L2(regularizer.get());
-		} else {
-			parser.getArgIdParams().batchSize = batchSize.get();
-			parser.getArgIdParams().passes = passes.get();
-			parser.getArgIdParams().regularizer = new L2(regularizer.get());
-		}
 		parser.train(train);
 		System.out.printf("[ParserExperiment] after training, #features=%d\n",
 				parser.getAlphabet().size());
@@ -146,7 +163,6 @@ public class ParserExperiment {
 
 		// Write parameters out as soon as possible
 		parser.writeModel(new File(workingDir, mode + ".model.gz"));
-		// TODO write out a human-readable version of the models
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -159,7 +175,7 @@ public class ParserExperiment {
 		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
-		// evaluate (train data)
+		// Evaluate (train data)
 		int maxTrainEval = 150;
 		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand) : train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
@@ -169,6 +185,12 @@ public class ParserExperiment {
 		printMemUsage();
 
 		System.out.printf("[ParserExperiment] done, took %.1f minutes\n", (System.currentTimeMillis() - start) / (1000d * 60));
+
+		ModelIO.writeHumanReadable(
+				parser.getFrameIdWeights(),
+				parser.getAlphabet(),
+				new File("saved-models/ParserExperiment.model.txt"),
+				true);
 	}
 
 	

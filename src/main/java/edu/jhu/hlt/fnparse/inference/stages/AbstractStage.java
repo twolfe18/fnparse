@@ -140,6 +140,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	@Override
 	public void train(List<I> x, List<O> y) {
+		System.err.println("[AbstractStage " + this.getName() + "] WARNING: "
+				+ "applying default training params because one wasn't provided");
+		assert this.getClass().equals(RoleSpanStage.class);
 		int batchSize = 4;
 		int passes = 2;
 		Double learningRate = null;	// null means auto select
@@ -163,7 +166,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		Timer t = globalParams.getTimer(this.getName() + "-train");
 		t.start();
 
-		initWeights();
+		//initWeights();
+		randomlyInitWeights(0.1d, new Random(9001));
 
 		List<I> xTrain, xDev;
 		List<O> yTrain, yDev;
@@ -204,7 +208,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
 		trainerParams.numThreads = globalParams.threads;
-		trainerParams.regularizer = regularizer; //new L2(1_000_000d);
+		trainerParams.regularizer = regularizer;
 
 		Alphabet<String> alph = this.getFeatureAlphabet();
 		System.out.printf("[%s train] alphabet is frozen (size=%d), "
@@ -236,7 +240,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	
 	/**
 	 * forces the factor graphs to be created and the features to be computed,
-	 * which has the side effect of populating the feature alphabet in this.params.
+	 * which has the side effect of populating the feature alphabet in params.
 	 * @param labels may be null
 	 */
 	public void scanFeatures(
@@ -244,26 +248,33 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			List<? extends O> labels,
 			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
-		
-		if(labels != null && unlabeledExamples.size() != labels.size())
+		if (labels != null && unlabeledExamples.size() != labels.size())
 			throw new IllegalArgumentException();
+		if (!getFeatureAlphabet().isGrowing()) {
+			throw new IllegalStateException("there is no reason to run this "
+					+ "unless you've set the alphabet to be growing");
+		}
 
 		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
 		t.printIterval = 25;
-		System.out.println("[scanFeatures " + this.getName() + "] counting the number of parameters needed over " +
-				unlabeledExamples.size() + " examples");
+		System.out.println("[scanFeatures " + getName()
+				+ "] counting the number of parameters needed over "
+				+ unlabeledExamples.size() + " examples");
 
-		// this stores counts in an array
-		// it gets the indices from the feature vectors, w/o knowing which alphabet they came from
+		// This stores counts in an array.
+		// It gets the indices from the feature vectors, w/o knowing which
+		// alphabet they came from.
 		FeatureCountFilter fcount = new FeatureCountFilter();
-		
-		// keep track of what parses we added so we can get a sense of our frame/role coverage
+
+		// Keep track of what parses we added so we can get a sense of our
+		// frame/role coverage.
 		List<FNTagging> seen = new ArrayList<>();
 
 		final int alphSizeStart = getFeatureAlphabet().size();
 		int examplesSeen = 0;
 		int examplesWithNoFactorGraph = 0;
-		StageDatumExampleList<I, O> data = this.setupInference(unlabeledExamples, null);
+		StageDatumExampleList<I, O> data = this.setupInference(
+				unlabeledExamples, null);
 		int n = data.size();
 		for(int i=0; i<n; i++) {
 			t.start();
@@ -275,12 +286,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				examplesWithNoFactorGraph++;
 			examplesSeen++;
 			t.stop();
-			
+	
 			if(labels != null)
 				seen.add(labels.get(i));
 
 			if(t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
-				System.out.println("[scanFeatures " + this.getName()
+				System.out.println("[scanFeatures " + getName()
 						+ "] stopping because we used the max time (in minutes): "
 						+ maxTimeInMinutes);
 				break;
@@ -322,15 +333,18 @@ public abstract class AbstractStage<I, O extends FNTagging>
 					}
 				}
 			}
-			System.out.printf("[scanFeatures %s] saw %d frames, %d frame-roles, and %d roles (ignoring frame)\n",
-					this.getName(), fSeen.size(), frSeen.size(), rSeen.size());
+			System.out.printf("[scanFeatures %s] saw %d frames, %d frame-roles,"
+					+ " and %d roles (ignoring frame)\n",
+					getName(), fSeen.size(), frSeen.size(), rSeen.size());
 		}
 
-		System.out.printf("[scanFeatures %s] done, scanned %d examples in %.1f minutes, alphabet size is %d, added %d\n",
-			this.getName(), examplesSeen, t.totalTimeInSeconds() / 60d, getFeatureAlphabet().size(), getFeatureAlphabet().size()-alphSizeStart);
+		System.out.printf("[scanFeatures %s] done, scanned %d examples in %.1f "
+				+ "minutes, alphabet size is %d, added %d\n",
+				getName(), examplesSeen, t.totalTimeInSeconds() / 60d,
+				getFeatureAlphabet().size(),
+				getFeatureAlphabet().size()-alphSizeStart);
 	}
-	
-	
+
 	public static interface TuningData {
 
 		public ApproxF1MbrDecoder getDecoder();
@@ -344,7 +358,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		public boolean tuneOnTrainingData();
 	}
 
-	
 	/**
 	 * this is for specifying *how* to tune an {@link ApproxF1MbrDecoder}.
 	 * if you don't have one to tune, then return null (the default implementation).

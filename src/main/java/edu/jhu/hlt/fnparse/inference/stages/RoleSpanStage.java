@@ -30,7 +30,9 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.spans.ExpansionVar;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 
-public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements Stage<FNParse, FNParse>, Serializable {
+public class RoleSpanStage
+		extends AbstractStage<FNParse, FNParse>
+		implements Stage<FNParse, FNParse>, Serializable {
 	
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -60,14 +62,18 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 	public RoleSpanStage(ParserParams globalParams) {
 		super(globalParams);
 		params = new Params(globalParams);
-
-		if(globalParams.useLatentDepenencies || globalParams.useLatentConstituencies)
-			throw new RuntimeException("update code!");
+		if(globalParams.useLatentDepenencies
+				|| globalParams.useLatentConstituencies) {
+			System.err.println("[RoleSpanStage] WARNING: this code does not "
+					+ "implement latent syntax yet");
+		}
 	}
 
 
 	@Override
-	public StageDatumExampleList<FNParse, FNParse> setupInference(List<? extends FNParse> onlyHeads, List<? extends FNParse> labels) {
+	public StageDatumExampleList<FNParse, FNParse> setupInference(
+			List<? extends FNParse> onlyHeads,
+			List<? extends FNParse> labels) {
 		List<StageDatum<FNParse, FNParse>> data = new ArrayList<>();
 		int n = onlyHeads.size();
 		assert labels == null || labels.size() == n;
@@ -81,20 +87,19 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		return new StageDatumExampleList<>(data);
 	}
 
-	
-
 	/**
 	 * 
 	 * @author travis
 	 */
-	public static class RoleSpanFactorFactory implements FactorFactory<ExpansionVar> {
+	public static class RoleSpanFactorFactory
+			implements FactorFactory<ExpansionVar> {
 
 		private static final long serialVersionUID = 1L;
-		
+
 		private final Features.RE features;
 		private final Refinements refs;
 		private final ParserParams params;
-		
+
 		public RoleSpanFactorFactory(ParserParams params) {
 			features = new BasicRoleSpanFeatures(params);
 			refs = new Refinements("r_itjk^e~1");
@@ -107,17 +112,23 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		}
 
 		@Override
-		public List<Factor> initFactorsFor(Sentence s, List<ExpansionVar> inThisSentence, ProjDepTreeFactor d, ConstituencyTreeFactor c) {
+		public List<Factor> initFactorsFor(
+				Sentence s,
+				List<ExpansionVar> inThisSentence,
+				ProjDepTreeFactor d,
+				ConstituencyTreeFactor c) {
 			List<Factor> factors = new ArrayList<>();
 			for(ExpansionVar ev : inThisSentence) {
 
 				// r_itjk^e ~ 1
 				int n = ev.values.size();
-				ExplicitExpFamFactor phi = new ExplicitExpFamFactor(new VarSet(ev.var));
+				ExplicitExpFamFactor phi =
+						new ExplicitExpFamFactor(new VarSet(ev.var));
 				for(int i=0; i<n; i++) {
 					Span a = ev.getSpan(i);
 					FeatureVector fv = new FeatureVector();
-					features.featurize(fv, refs, ev.i, ev.getFrame(), ev.j, ev.k, a, s);
+					features.featurize(
+							fv, refs, ev.i, ev.getFrame(), ev.j, ev.k, a, s);
 					phi.setFeatures(i, fv);
 				}
 				factors.add(phi);
@@ -125,7 +136,8 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 				// r_itjk^e ~ l_mn
 				if(params.useLatentConstituencies) {
 					assert c != null;
-					throw new RuntimeException("go get code from PairedExactly1");	// TODO
+					throw new RuntimeException(
+							"go get code from PairedExactly1");	// TODO
 				}
 
 			}
@@ -138,8 +150,9 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 	 * 
 	 * @author travis
 	 */
-	public static class RoleSpanStageDatum implements StageDatum<FNParse, FNParse> {
-		
+	public static class RoleSpanStageDatum
+			implements StageDatum<FNParse, FNParse> {
+
 		private final List<ExpansionVar> expansions;
 		private final FNParse onlyHeads;
 		private final FNParse gold;
@@ -151,7 +164,10 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 		}
 
 		/** constructor for when you have the labels */
-		public RoleSpanStageDatum(FNParse onlyHeads, FNParse gold, RoleSpanStage rss) {
+		public RoleSpanStageDatum(
+				FNParse onlyHeads,
+				FNParse gold,
+				RoleSpanStage rss) {
 			this.parent = rss;
 			this.gold = gold;
 			this.onlyHeads = onlyHeads;
@@ -171,13 +187,20 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 					if(h == Span.nullSpan) continue;
 					assert h.width() == 1;
 					int j = h.start;
-					Span goldSpan = gold == null ? null : gold.getFrameInstance(fiIdx).getArgument(k);
+					Span goldSpan = gold == null
+							? null
+							: gold.getFrameInstance(fiIdx).getArgument(k);
 					addExpansionVar(i, fiIdx, j, k, goldSpan);
 				}
 			}
 		}
 
-		private void addExpansionVar(int i, int fiIdx, int j, int k, Span goldSpan) {
+		private void addExpansionVar(
+				int i,
+				int fiIdx,
+				int j,
+				int k,
+				Span goldSpan) {
 
 			// make sure expanding right/left wouldn't overlap the target
 			int maxLeft = parent.params.maxArgRoleExpandLeft;
@@ -192,7 +215,6 @@ public class RoleSpanStage extends AbstractStage<FNParse, FNParse> implements St
 			ExpansionVar ev = new ExpansionVar(i, fiIdx, j, k, this.onlyHeads, ei, goldSpan);
 			this.expansions.add(ev);
 		}
-
 
 		@Override
 		public FNParse getInput() { return onlyHeads; }

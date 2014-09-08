@@ -5,7 +5,6 @@ import java.util.List;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.ExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;

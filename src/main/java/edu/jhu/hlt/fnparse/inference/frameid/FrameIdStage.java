@@ -48,17 +48,19 @@ import edu.jhu.hlt.optimize.functions.L2;
 public class FrameIdStage
 		extends AbstractStage<Sentence, FNTagging>
 		implements Stage<Sentence, FNTagging>, Serializable {
+
 	private static final long serialVersionUID = 1L;
 	public static final Logger LOG = Logger.getLogger(FrameIdStage.class);
-	
+
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
 
+		// If null, auto select learning rate
+		public Double learningRate = 0.05d;
 		public int batchSize = 4;
 		public int passes = 2;
 		public double propDev = 0.15d;
 		public int maxDev = 50;
-		public Double learningRate = null;	// if null, auto select learning rate
 		public transient Regularizer regularizer = new L2(1_000_000d);
 		public ApproxF1MbrDecoder decoder;
 		public TargetPruningData targetPruningData;
@@ -104,6 +106,8 @@ public class FrameIdStage
 	public FrameIdStage(ParserParams globalParams) {
 		super(globalParams);
 		params = new Params(globalParams);
+		((FrameFactorFactory) params.factorsTemplate)
+			.setAlphabet(globalParams.getFeatureAlphabet());
 	}
 
 	public void train(List<FNParse> examples) {
@@ -114,12 +118,12 @@ public class FrameIdStage
 			x.add(t.getSentence());
 			y.add(t);
 		}
-		train(x, y);
+		train(x, y, params.learningRate,
+				params.regularizer, params.batchSize, params.passes);
 	}
 
 	@Override
 	public TuningData getTuningData() {
-		
 		final List<Double> biases = new ArrayList<Double>();
 		for(double b=0.5d; b<8d; b *= 1.1d) biases.add(b);
 		LOG.debug("called getTuningData, trying " + biases.size() + " biases");
@@ -137,7 +141,9 @@ public class FrameIdStage
 	}
 
 	@Override
-	public StageDatumExampleList<Sentence, FNTagging> setupInference(List<? extends Sentence> input, List<? extends FNTagging> labels) {
+	public StageDatumExampleList<Sentence, FNTagging> setupInference(
+			List<? extends Sentence> input,
+			List<? extends FNTagging> labels) {
 		List<StageDatum<Sentence, FNTagging>> data = new ArrayList<>();
 		int n = input.size();
 		assert labels == null || labels.size() == n;
@@ -156,7 +162,10 @@ public class FrameIdStage
 	 * Basic idea: given a target with head word t, include any frame f s.t.
 	 * lemma(t) == lemma(f.target)
 	 */
-	public static FrameVars makeFrameVar(Sentence s, int headIdx, Params params) {
+	public static FrameVars makeFrameVar(
+			Sentence s,
+			int headIdx,
+			Params params) {
 		if(params.targetPruningData.prune(headIdx, s))
 			return null;
 
@@ -333,7 +342,8 @@ public class FrameIdStage
 			// Match up each FI to a FIHypothesis by the head word in the target
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
-				int head = parent.params.globalParams.headFinder.head(target, sentence);
+				int head = parent.params.globalParams.headFinder.head(
+						target, sentence);
 				FrameVars fHyp = byHead[head];
 				if(fHyp == null) continue;	// nothing you can do here
 				if(fHyp.goldIsSet()) {
@@ -388,7 +398,8 @@ public class FrameIdStage
 						"FIXME: I don't know how this is supposed to work");
 			}
 			if(parent.params.globalParams.useLatentDepenencies) {
-				depTree = new ProjDepTreeFactor(sentence.size(), VarType.LATENT);
+				depTree = new ProjDepTreeFactor(
+						sentence.size(), VarType.LATENT);
 				DepParseFactorFactory depParseFactorTemplate =
 						new DepParseFactorFactory(parent.params.globalParams);
 				factors.addAll(depParseFactorTemplate.initFactorsFor(
@@ -399,7 +410,7 @@ public class FrameIdStage
 			factors.addAll(parent.params.factorsTemplate.initFactorsFor(
 					sentence, possibleFrames, depTree, consTree));
 
-			// add factors to the factor graph
+			// Add factors to the factor graph
 			for(Factor f : factors)
 				fg.addFactor(f);
 
@@ -459,7 +470,8 @@ public class FrameIdStage
 				final int T = fvars.numFrames();
 				double[] beliefs = new double[T];
 				for(int t=0; t<T; t++) {
-					DenseFactor df = hasMargins.getMarginals(fvars.getVariable(t));
+					DenseFactor df =
+							hasMargins.getMarginals(fvars.getVariable(t));
 					beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
 				}
 				parent.globalParams.normalize(beliefs);
@@ -468,7 +480,8 @@ public class FrameIdStage
 				int tHat = parent.params.decoder.decode(beliefs, nullFrameIdx);
 				Frame fHat = fvars.getFrame(tHat);
 				if(fHat != Frame.nullFrame)
-					fis.add(FrameInstance.frameMention(fHat, Span.widthOne(fvars.getTargetHeadIdx()), sentence));
+					fis.add(FrameInstance.frameMention(fHat,
+							Span.widthOne(fvars.getTargetHeadIdx()), sentence));
 			}
 			return new FNTagging(sentence, fis);
 		}

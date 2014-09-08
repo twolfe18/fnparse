@@ -71,7 +71,7 @@ public class ParserTests {
 
 	@Before
 	public void setupLogs() {
-		Util.silenceLogs();
+		TestingUtil.silenceLogs();
 	}
 
 	/**
@@ -86,17 +86,17 @@ public class ParserTests {
 		//				new File("toydata/fn15-fulltext.frames.train.dipanjan.debug"),
 		//				new File("toydata/fn15-fulltext.conll.train.dipanjan.debug"))
 		//	.getParsedSentences().next();
-		
+
 		//FNParse p = FNIterFilters.findBySentenceId(
 		//		FileFrameInstanceProvider.debugFIP.getParsedSentences(),
 		//		"FNFUTXT1274826");
-		
+
 		PipelinedFnParser parser = train(p);
 		checkGoodPerf(parser, p, 1d, 1d, true);
 		serializeWeights(parser, new File("saved-models/testing"), "basic");
 		checkGoodPerf(serializeAndDeserialize(parser), p, 1d, 1d, true);
 	}
-	
+
 	public static void serializeWeights(
 			PipelinedFnParser parser, File directory, String tag) {
 		System.out.printf("[serializeWeights] saving a model tagged as %s in %s\n", tag, directory.getPath());
@@ -126,7 +126,7 @@ public class ParserTests {
 		//      FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> parses = DataUtil.iter2list(
 				FileFrameInstanceProvider.debugFIP.getParsedSentences());
-		parses = Util.filterOutExamplesThatCantBeFit(parses);
+		parses = TestingUtil.filterOutExamplesThatCantBeFit(parses);
 		//parses = DataUtil.reservoirSample(parses, 30, new Random(9001));
 		for(FNParse p : parses) {
 			System.out.println("[zfuzz] working on example " + p.getId());
@@ -154,7 +154,7 @@ public class ParserTests {
 	}
 	
 	public PipelinedFnParser train(FNParse e) {
-		PipelinedFnParser parser = new PipelinedFnParser();
+		PipelinedFnParser parser = new PipelinedFnParser(new ParserParams());
 		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
 		List<FNParse> dummy = Arrays.asList(e);
 		parser.computeAlphabet(dummy, 5d, 99_000_000);

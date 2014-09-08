@@ -73,6 +73,13 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			rFeats.featurize(fv, r, i, t, j, k, sent);
 			fFeats.featurize(fv, r, i, t, sent);
 			assert fv.getNumImplicitEntries() > 0 : "did you use the right alphabet?";
+			/*
+			if (fv.getNumImplicitEntries() == 0) {
+				System.err.println("WARNING: there were no observed features, "
+						+ "meanining that you probably either used the wrong "
+						+ "alphabet or forgot to call scanFeatures/computeAlphabet");
+			}
+			*/
 			return fv;
 		}
 	}

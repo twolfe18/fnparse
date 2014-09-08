@@ -6,7 +6,6 @@ import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.data.simple.SimpleAnnoSentence;
-import edu.jhu.gm.feat.FeatureExtractor;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
@@ -52,7 +51,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		// TODO: corpusStats.init(simpleAnnoSentenceIterable);
 	}
 
-	private static SimpleAnnoSentence toPacayaSentence(Sentence s) {
+	public static SimpleAnnoSentence toPacayaSentence(Sentence s) {
 		SimpleAnnoSentence sas = new SimpleAnnoSentence();
 		sas.setWords(Arrays.asList(s.getWords()));
 		sas.setPosTags(Arrays.asList(s.getPos()));
@@ -61,7 +60,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		// For some reason one of the feature templates is asking for
 		// morphological features I'm going to create a bunch of empty feature
 		// lists because I have no way to generate these
-		ArrayList<List<String>> feats = new ArrayList<List<String>>();
+		ArrayList<List<String>> feats = new ArrayList<>();
 		for(int i=0; i<s.size(); i++)
 			feats.add(Collections.<String>emptyList());
 		sas.setFeats(feats);
@@ -78,10 +77,9 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<Object> inThisSentence,
 			ProjDepTreeFactor d, ConstituencyTreeFactor c) {
-
 		List<Factor> factors = new ArrayList<Factor>();
 
-		// 3 words + 1 puncutation is about as short as you might ever see as a
+		// 3 words + 1 punctuation is about as short as you might ever see as a
 		// legitimate sentence
 		if(s.size() < 4) {
 			System.err.println("[DepParseFactorFactory] really short sentence "
@@ -89,13 +87,14 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 			return factors;
 		}
 
-		factors.add(d);	// Global factor
+		// Global/tree factor
+		factors.add(d);
 
 		// Unary factors on edge variables
 		@SuppressWarnings("unchecked")
 		Alphabet<Object> alph =
 			(Alphabet<Object>) (Object) params.getFeatureAlphabet();
-		FeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
+		DepParseFeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
 				toPacayaSentence(s), corpusStats, alph);
 		final int n = s.size();
 		for(int i=-1; i<n; i++) { 			// Head
@@ -104,8 +103,9 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 				Var ijVar = d.getLinkVar(i, j);
 				if(ijVar == null) continue;
 
-				factors.add(new FeTypedFactor(new VarSet(ijVar),
-						DepParseFactorTemplate.LINK_UNARY, fe));
+				FeTypedFactor phi = new FeTypedFactor(new VarSet(ijVar),
+						DepParseFactorTemplate.LINK_UNARY, fe);
+				factors.add(phi);
 				// TODO grandparent and sibling links
 			}
 		}

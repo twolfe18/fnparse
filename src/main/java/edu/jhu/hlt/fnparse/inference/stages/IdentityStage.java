@@ -17,15 +17,17 @@ import edu.jhu.gm.model.FgModel;
  * @param <O>
  */
 public class IdentityStage<I, O extends I> implements Stage<I, O> {
+	
+	private FgModel model = new FgModel(0);
 
 	@Override
 	public FgModel getWeights() {
-		throw new RuntimeException();
+		return model;
 	}
 
 	@Override
 	public boolean logDomain() {
-		throw new RuntimeException();
+		return true;
 	}
 
 	@Override
@@ -47,34 +49,28 @@ public class IdentityStage<I, O extends I> implements Stage<I, O> {
 			data.add(new StageDatum<I, O>() {
 				@Override
 				public I getInput() {
-					// TODO Auto-generated method stub
-					return null;
+					throw new RuntimeException("implement me");
 				}
 
 				@Override
 				public boolean hasGold() {
-					// TODO Auto-generated method stub
-					return false;
+					throw new RuntimeException("implement me");
 				}
 
 				@Override
 				public O getGold() {
-					// TODO Auto-generated method stub
-					return null;
+					throw new RuntimeException("implement me");
 				}
 
 				@Override
 				public LabeledFgExample getExample() {
-					// TODO Auto-generated method stub
-					return null;
+					throw new RuntimeException("implement me");
 				}
 
 				@Override
 				public edu.jhu.hlt.fnparse.inference.stages.Stage.IDecodable<O> getDecodable() {
-					// TODO Auto-generated method stub
-					return null;
+					throw new RuntimeException("implement me");
 				}
-				
 			});
 		}
 		return new StageDatumExampleList<>(data);

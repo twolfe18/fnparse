@@ -23,10 +23,12 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.Util;
+import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.TaggingDiff;
 import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
+import edu.jhu.util.Alphabet;
 
 /**
  * The purpose of these tests are to take a small number of examples, train a
@@ -40,6 +42,8 @@ import edu.jhu.hlt.fnparse.util.Timer;
  * @author travis
  */
 public class FrameIdLatentTest {
+	
+	public static boolean printFeatures = false;
 	
 	@Before
 	public void setupLogging() {
@@ -63,6 +67,7 @@ public class FrameIdLatentTest {
 		latentParams.useLatentDepenencies = true;
 		FrameIdStage latent = new FrameIdStage(latentParams);
 		latent.params.tuneOnTrainingData = true;
+		//latent.params.passes = 100;
 
 		Timer tReg = new Timer("regular-frameId", 1, false);
 		Timer tLat = new Timer("latent-frameId", 1, false);
@@ -71,10 +76,12 @@ public class FrameIdLatentTest {
 			System.out.println("\n###########################################");
 			System.out.println("parsing " + p.getId());
 
+			System.out.println("### REGULAR ##################################");
 			tReg.start();
 			FNTagging yhatRegular = trainAndThenPredictFrames(regular, p);
 			tReg.stop();
 
+			System.out.println("### LATENT ##################################");
 			tLat.start();
 			FNTagging yhatLatent = trainAndThenPredictFrames(latent, p);
 			tLat.stop();
@@ -85,6 +92,7 @@ public class FrameIdLatentTest {
 			FNTagging yt = DataUtil.convertParseToTagging(p);
 			checkNonNullFrameInstances(yt);
 
+			System.out.println("### EVALUATION ##################################");
 			System.out.println("gold     = " + Describe.fnTagging(yt));
 			System.out.println("regular  = " + Describe.fnTagging(yhatRegular));
 			System.out.println("latent   = " + Describe.fnTagging(yhatLatent));
@@ -99,14 +107,14 @@ public class FrameIdLatentTest {
 			// I didn't realize this initially, but I am doing an overfitting
 			// test, and they should basically both be able to get perfect
 			// performance...
-			assertTrue(regF1 > 0.99999999d);
+			//assertTrue(regF1 > 0.99999999d);
 
 			// Check perf(latent) >= perf(regular)
-			if (regF1 > latentF1) {
-				System.err.println("latentF1=" + latentF1);
-				System.err.println("regF1=" + regF1);
-				assertTrue("you have a bug", false);
-			}
+			System.out.println("latentF1=" + latentF1);
+			System.out.println("regF1=" + regF1);
+			if (regF1 > latentF1)
+				System.out.println("pay attention");
+			assertTrue("you have a bug!", latentF1 >= regF1);
 		}
 	}
 	
@@ -120,19 +128,41 @@ public class FrameIdLatentTest {
 			FNParse p) {
 		List<Sentence> x = Arrays.asList(p.getSentence());
 		List<FNParse> y = Arrays.asList(p);
+		frameId.getFeatureAlphabet().startGrowth();
 		frameId.scanFeatures(x, y, 999, 99_999_999);
 		frameId.train(Arrays.asList(p));
+		frameId.getFeatureAlphabet().stopGrowth();
+
+		// Try to figure out if we have 0 weights for the f_it ~ l_ij factors
+		if (printFeatures) {
+			final Alphabet<String> featAlph = frameId.getFeatureAlphabet();
+			frameId.getWeights().apply(new FnIntDoubleToDouble() {
+				@Override
+				public double call(int idx, double val) {
+					if (idx < featAlph.size()) {
+						String feat = (String) featAlph.lookupObject(idx);
+						System.out.printf("%-25s %.2f\n", feat, val);
+					} else {
+						System.out.println(idx + " is not in the alphabet");
+					}
+					return val;
+				}
+			});
+		}
+		
 		return frameId.setupInference(x, null).decodeAll().get(0);
 	}
 	
 	public static List<FNParse> parseToEvaluateOn() {
-		boolean debug = true;
+		boolean debug = false;
 		if (debug) {
 			return Arrays.asList(FNIterFilters.findBySentenceId(
 				FileFrameInstanceProvider.debugFIP.getParsedSentences(),
-				"FNFUTXT1274783"));
+				"FNFUTXT1274796"));
+				//"FNFUTXT1274795"));
+				//"FNFUTXT1274783"));
 		} else {
-			return Util.filterOutExamplesThatCantBeFit(DataUtil.iter2list(
+			return TestingUtil.filterOutExamplesThatCantBeFit(DataUtil.iter2list(
 				FileFrameInstanceProvider.debugFIP.getParsedSentences()));
 		}
 	}
