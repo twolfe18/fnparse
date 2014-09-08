@@ -92,7 +92,6 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 		}
 	}
 
-
 	// TODO need to add an Exactly1 factor to each FrameVars
 	// ^^^^ do i really need this if i'm not doing joint inference?
 	@Override

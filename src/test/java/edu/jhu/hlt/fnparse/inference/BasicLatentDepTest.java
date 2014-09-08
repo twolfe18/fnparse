@@ -38,7 +38,7 @@ import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.srl.CorpusStatistics;
 import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
-import edu.jhu.srl.DepParseFactorGraph.DepParseFactorTemplate;
+import edu.jhu.srl.DepParseFactorGraphBuilder.DepParseFactorTemplate;
 import edu.jhu.srl.DepParseFeatureExtractor;
 import edu.jhu.srl.DepParseFeatureExtractor.DepParseFeatureExtractorPrm;
 import edu.jhu.srl.FeTypedFactor;

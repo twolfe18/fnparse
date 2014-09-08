@@ -14,7 +14,7 @@ import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.optimize.functions.L2;
 
 /**
- * This class runs experiments where ther are two types of options:
+ * This class runs experiments where there are two types of options:
  * 1) run-specific options like whether to do frameId or argId which are specified as command line
  *    options
  * 2) grid-job-specific options like whether the regularizer should be 1e-3 or 1e-4, which serve as

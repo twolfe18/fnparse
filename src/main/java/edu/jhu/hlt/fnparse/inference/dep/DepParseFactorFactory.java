@@ -28,6 +28,9 @@ import edu.jhu.util.Alphabet;
  * 1) Unary factors on link variables
  * 2) The global factor for the tree
  * 
+ * This factory does NOT add:
+ * 1) Binary factors between f_it and l_ij (see FrameFactorFactory)
+ * 
  * Implements FactorFactory<Object> because it doesn't keep any hypotheses about
  * the sentence other than the tree itself, which is passed in through the
  * initFactorsFor() method.
