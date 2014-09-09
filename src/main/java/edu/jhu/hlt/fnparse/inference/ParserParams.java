@@ -13,14 +13,19 @@ import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 
-public class ParserParams implements Serializable, HasFeatureAlphabet {
+public class ParserParams
+		implements Serializable, HasFeatureAlphabet, HasParserParams {
 	private static final long serialVersionUID = 1L;
-
+	
 	public boolean logDomain = true;
 	public boolean useLatentDepenencies = false;
 	public boolean useLatentConstituencies = false;
 	public boolean useSyntaxFeatures = true;
 	public boolean usePredictedFramesToTrainArgId = false;	// otherwise use gold frames
+	
+	// If true, use the largest feature set you have available. Useful for
+	// overfitting experiments.
+	public boolean useOverfittingFeatures = false;
 
 	// store weights at the stage level
 	private Alphabet<String> featAlph = new Alphabet<>();
@@ -32,6 +37,11 @@ public class ParserParams implements Serializable, HasFeatureAlphabet {
 	@Override
 	public Alphabet<String> getFeatureAlphabet() {
 		return featAlph;
+	}
+	
+	@Override
+	public ParserParams getParserParams() {
+		return this;
 	}
 
 	/** checks if they're log proportions from this.logDomain */

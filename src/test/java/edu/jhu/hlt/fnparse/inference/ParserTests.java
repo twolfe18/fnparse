@@ -154,7 +154,9 @@ public class ParserTests {
 	}
 	
 	public PipelinedFnParser train(FNParse e) {
-		PipelinedFnParser parser = new PipelinedFnParser(new ParserParams());
+		ParserParams params = new ParserParams();
+		params.useOverfittingFeatures = true;
+		PipelinedFnParser parser = new PipelinedFnParser(params);
 		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
 		List<FNParse> dummy = Arrays.asList(e);
 		parser.computeAlphabet(dummy, 5d, 99_000_000);

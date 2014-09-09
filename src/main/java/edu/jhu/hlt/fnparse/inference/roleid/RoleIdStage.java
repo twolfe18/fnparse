@@ -32,6 +32,7 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
+import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
@@ -52,6 +53,7 @@ public class RoleIdStage
 		public int passes = 1;
 		public int threads = 2;
 		public int maxSentenceLengthForTraining = 50;
+		public Double learningRate = 0.05;		// null means auto-select
 		public transient Regularizer regularizer = new L2(1_000_000d);
 		public IArgPruner argPruner;
 		public ApproxF1MbrDecoder decoder;
@@ -80,7 +82,11 @@ public class RoleIdStage
 		params = new Params(globalParams);
 		this.globalParams = globalParams;
 	}
-	
+
+	/** can't undo this for now */
+	public void disablePruning() {
+		params.argPruner = new NoArgPruner();
+	}
 
 	@Override
 	public void train(List<FNTagging> x, List<FNParse> y) {
@@ -107,20 +113,24 @@ public class RoleIdStage
 			xUse = x;
 			yUse = y;
 		}
-	
-		super.train(xUse, yUse, null, params.regularizer, params.batchSize, params.passes);
+
+		super.train(xUse, yUse, params.learningRate,
+				params.regularizer, params.batchSize, params.passes);
 	}
 	
 	@Override
 	public TuningData getTuningData() {
 		final List<Double> biases = new ArrayList<Double>();
 		for(double b=0.1d; b<1.5d; b *= 1.1d) biases.add(b);
-
 		return new TuningData() {
 			@Override
 			public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
 			@Override
-			public EvalFunc getObjective() { return BasicEvaluation.targetMicroF1; }
+			public EvalFunc getObjective() {
+				//return GenerousEvaluation.generousF1;
+				// TODO could use fullF1
+				return BasicEvaluation.argOnlyMicroF1;
+			}
 			@Override
 			public List<Double> getRecallBiasesToSweep() { return biases; }
 			@Override
@@ -283,12 +293,13 @@ public class RoleIdStage
 	 * @author travis
 	 */
 	public static class RoleIdDecodable extends Decodable<FNParse> {
+		public static boolean debug = false;
 
 		private final Sentence sent;
 		private final List<RoleVars> hypotheses;
 		private final ApproxF1MbrDecoder decoder;
 		private final RoleIdStage parent;
-		
+	
 		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<RoleVars> hypotheses, RoleIdStage parent) {
 			super(fg, infFact, parent);
 			this.sent = sent;
@@ -305,47 +316,59 @@ public class RoleIdStage
 				fis.add(decodeRoleVars(rv, inf));
 			return new FNParse(sent, fis);
 		}
-		
+
 		public FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf) {
 
 			Timer t = parent.globalParams.getTimer("argId-decode");
 			t.start();
 
-			// max over j for every role
+			// Max over j for every role
 			final int n = sent.size();
 			final int K = rv.getFrame().numRoles();
 			Span[] arguments = new Span[K];
 			Arrays.fill(arguments, Span.nullSpan);
 			double[][] beliefs = new double[K][n+1];	// last inner index is "not realized"
-			if(parent.globalParams.logDomain) {
+			if (parent.globalParams.logDomain) {
 				for(int i=0; i<beliefs.length; i++)	// otherwise default is 0
 					Arrays.fill(beliefs[i], Double.NEGATIVE_INFINITY);
 			}
 
 			boolean[] considered = new boolean[K];
 			Iterator<RVar> iter = rv.getVars();
-			while(iter.hasNext()) {
+			while (iter.hasNext()) {
 				RVar rvar = iter.next();
 				DenseFactor df = inf.getMarginals(rvar.roleVar);
-				beliefs[rvar.k][rvar.j] = df.getValue(BinaryVarUtil.boolToConfig(true));
+				beliefs[rvar.k][rvar.j] = df.getValue(
+						BinaryVarUtil.boolToConfig(true));
 				considered[rvar.k] = true; 
-//				System.out.println(rvar.roleVar.getName() + "\t" + df);
+				if (debug)
+					System.out.println(rvar.roleVar.getName() + "\t" + df);
 			}
-			for(int k=0; k<K; k++) {
-				
-				if(!considered[k]) continue;
-//				System.out.printf("%30s %30s %s\n", rv.t.getName(), rv.t.getRole(k), Arrays.toString(beliefs[k]));
+
+			for (int k=0; k<K; k++) {
+				if (!considered[k]) continue;
+				if (debug) {
+					System.out.println();
+					for (int i = 0; i < beliefs[k].length; i++) {
+						System.out.printf("%-15s %-15s % 5d %-15s %.3f\n",
+								rv.t.getName() + "@" + rv.i,
+								rv.t.getRole(k) + "/" + k,
+								i,
+								i < sent.size() ? sent.getWord(i) : "NONE",
+								beliefs[k][i]);
+					}
+				}
 
 				// TODO add Exactly1 factor!
 				parent.globalParams.normalize(beliefs[k]);
 
 				int jHat = decoder.decode(beliefs[k], n);
-				if(jHat < n)
+				if (jHat < n)
 					arguments[k] = Span.widthOne(jHat);
 			}
-
-			if(t != null) t.stop();
-			return FrameInstance.newFrameInstance(rv.getFrame(), Span.widthOne(rv.getTargetHead()), arguments, sent);
+			if (t != null) t.stop();
+			return FrameInstance.newFrameInstance(rv.getFrame(),
+					Span.widthOne(rv.getTargetHead()), arguments, sent);
 		}
 	}
 

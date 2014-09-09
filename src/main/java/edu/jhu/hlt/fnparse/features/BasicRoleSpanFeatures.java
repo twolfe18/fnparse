@@ -7,8 +7,8 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 
@@ -19,8 +19,8 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 	private boolean inSpan = true;
 	private boolean betweenTargetAndHead = true;
 	
-	public BasicRoleSpanFeatures(HasFeatureAlphabet featAlph) {
-		super(featAlph);
+	public BasicRoleSpanFeatures(HasParserParams globalParams) {
+		super(globalParams);
 	}
 
 	// TODO with syntax, have features describing how similar the projection of the dependency tree from j down is to the actual expanded span
@@ -250,7 +250,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 		
-		if(useSyntaxFeatures) {
+		if(globalParams.getParserParams().useSyntaxFeatures) {
 			
 			// how many external parents?
 			int externalParents = 0;

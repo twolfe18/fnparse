@@ -25,7 +25,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.TaggingDiff;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -97,9 +97,9 @@ public class FrameIdLatentTest {
 			System.out.println("regular  = " + Describe.fnTagging(yhatRegular));
 			System.out.println("latent   = " + Describe.fnTagging(yhatLatent));
 			System.out.println("diff gold regular:\n"
-					+ TaggingDiff.diff(yt, yhatRegular, false));
+					+ FNDiff.diffFrames(yt, yhatRegular, false));
 			System.out.println("diff gold latent:\n"
-					+ TaggingDiff.diff(yt, yhatLatent, false));
+					+ FNDiff.diffFrames(yt, yhatLatent, false));
 
 			double regF1 = eval.evaluate(new SentenceEval(yt, yhatRegular));
 			double latentF1 = eval.evaluate(new SentenceEval(yt, yhatLatent));

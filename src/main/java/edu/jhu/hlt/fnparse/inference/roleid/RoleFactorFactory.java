@@ -83,14 +83,12 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			return fv;
 		}
 	}
-	
-	
+
 	public static interface FactorMode {
 		public BinaryBinaryFactorHelper.Mode depFactorMode();
 		public BinaryBinaryFactorHelper.Mode govFactorMode();
 	}
-	
-	
+
 	public Features.R rFeats;
 	public RoleDepObservedFeatures feats;
 	public BinaryBinaryFactorHelper bbfh;
@@ -103,7 +101,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 * @param factorMode says how the (r_itjk ~ l_ij) factor should be parameterized
 	 */
 	public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode factorMode) {
-		this.rFeats = new BasicRoleFeatures(params);
+		rFeats = new BasicRoleFeatures(params);
 		feats = new RoleDepObservedFeatures(params, "r_itjk~l_ij");
 		bbfh = new BinaryBinaryFactorHelper(factorMode, feats);
 		this.params = params;

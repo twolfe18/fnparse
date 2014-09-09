@@ -5,14 +5,14 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
+import edu.jhu.hlt.fnparse.inference.HasParserParams;
 
 public class DebuggingRoleSpanFeatures extends AbstractFeatures<DebuggingRoleSpanFeatures> implements Features.RE {
 
 	private static final long serialVersionUID = 1L;
 
-	public DebuggingRoleSpanFeatures(HasFeatureAlphabet featAlph) {
-		super(featAlph);
+	public DebuggingRoleSpanFeatures(HasParserParams globalParams) {
+		super(globalParams);
 	}
 
 	@Override

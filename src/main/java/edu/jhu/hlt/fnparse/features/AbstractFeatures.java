@@ -4,20 +4,25 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.math3.util.FastMath;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.util.Alphabet;
 
 /**
- * let T be the class that is extending this class.
+ * Parent class of all features, includes some useful code to be shared.
+ * Let T be the class that is extending this class.
  * @author travis
  */
-public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements Serializable, HasFeatureAlphabet {
+public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
+		implements Serializable, HasFeatureAlphabet {
 
 	private static final long serialVersionUID = 1L;
-	
+
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
@@ -28,20 +33,44 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 		if(i >= s.size()) return luEnd;
 		return s.getLU(i);
 	}
-	
-	
+
+	// If true, use frame id instead of frame name so feature names are shorter
+	// NOTE: DO NOT use role id instead of role name because role name is
+	// consistent across frames, and need not be conjoined with the frame (always).
 	protected boolean useFastFeaturenames = false;
-	protected boolean useSyntaxFeatures = true;
-	protected boolean debug = false;
-	protected final HasFeatureAlphabet featAlph;
 	
-	public AbstractFeatures(HasFeatureAlphabet featAlph) {
-		this.featAlph = featAlph;
+	// Often features are given with a certain weight, which mimics the effect
+	// of a non-uniformly regularized model. For example I may not want to
+	// regularize the intercept at all, which can be (in-exactly) accomplished
+	// by giving it a much larger weight. This can go awry though, and I've seen
+	// so in my tests. There are a few factors that go into play with this:
+	// 1) How strong the regularizer is
+	// 2) How common the feature is
+	// 3) How large the weight on the feature is
+	// 4) The discrepancy between training loss (log-loss) and test loss (e.g. F1)
+	// I'm not going to go into careful detail about how this can occur, but
+	// I've tried removing the weights completely and this fixed a problem I was
+	// having, so I will just assume that this is a potential problem.
+	// 
+	// This parameter is basically an annealing paramter to use or ignore the
+	// weights that are added at callsite. This is a global hammer, which may or
+	// may not be a good thing, but I added it late.
+	// 0 => features have uniform weight
+	// 1 => features have the weight given at callsite
+	// i.e. weight_final = pow(weight_callsite, weightingPower)
+	protected double weightingPower = 1d;
+
+	protected boolean debug = false;
+
+	protected final HasParserParams globalParams;
+	
+	public AbstractFeatures(HasParserParams globalParams) {
+		this.globalParams = globalParams;
 	}
 
 	@Override
 	public Alphabet<String> getFeatureAlphabet() {
-		return featAlph.getFeatureAlphabet();
+		return globalParams.getParserParams().getFeatureAlphabet();
 	}
 	
 	/**
@@ -99,8 +128,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 	 * if there are refinements, those indices will not be returned.
 	 */
 	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
-		
-		Alphabet<String> alph = featAlph.getFeatureAlphabet();
+		Alphabet<String> alph = getFeatureAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
@@ -119,11 +147,12 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
-				fv.add(idx, weight * refs.getWeight(ri));
+				fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
 			}
 			else {
 				int idx = alph.lookupIndex(s, false);
-				if(idx >= 0) fv.add(idx, weight * refs.getWeight(ri));
+				if(idx >= 0)
+					fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
 				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}
 		}
