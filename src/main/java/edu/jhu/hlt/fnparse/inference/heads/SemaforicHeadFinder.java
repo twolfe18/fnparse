@@ -15,40 +15,52 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 public class SemaforicHeadFinder implements HeadFinder {
 
 	private static final long serialVersionUID = 1L;
+	
+	private static boolean isQuote(int i, Sentence sent) {
+		if ("''".equals(sent.getPos(i)))
+			return true;
+		return false;
+	}
 
 	@Override
 	public int head(Span s, Sentence sent) {
-		
-		assert s != Span.nullSpan;
-
+		if (s == Span.nullSpan)
+			throw new IllegalArgumentException();
+		if (s.width() == 0)
+			throw new IllegalArgumentException();
 		if(s.width() == 1)
 			return s.start;
-		
+
+		// Not in their paper
+		// Strip off quotations if they're present
+		if (isQuote(s.start, sent) && isQuote(s.end-1, sent))
+			return head(Span.getSpan(s.start + 1, s.end - 1), sent);
+
 		if(sent.getPos(s.start).startsWith("V"))
 			return s.start;
-		
+
 		if(sent.getPos(s.start).startsWith("J"))
 			return s.end - 1;
-		
+
 		for(int i=s.start+1; i<s.end; i++)
 			if(sent.getWord(i).equalsIgnoreCase("of") && sent.getPos(i-1).startsWith("N"))
 				return i-1;
-		
+
 		for(int i=s.end-1; i>=s.start; i--) {
 			int p = sent.governor(i);
 			if(p < s.start || p >= s.end)
 				return i;
 		}
-		
+
 		// BELOW NOT IN THEIR PAPER:
 		// collapsed dependencies might lead to "incest" (no parent outside this span)
-		
+
 		// choose the first verb
 		for(int i=s.start; i<s.end; i++) {
 			if(sent.getPos(i).startsWith("V"))
 				return i;
 		}
-		
+
 		// choose the last word in the first sequence of nouns?
 		boolean inNP = false;
 		for(int i=s.start; i<s.end; i++) {
