@@ -20,6 +20,9 @@ import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
+import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -37,7 +40,7 @@ public class RoleIdStageTests {
 
 	List<FNTagging> input;
 	List<FNParse> output;
-	
+
 	private static List<FNParse> getExamples() {
 		List<FNParse> l = new ArrayList<>();
 		int i = 0;
@@ -62,12 +65,12 @@ public class RoleIdStageTests {
 	static interface ChecksSomething {
 		public void check(FNTagging input, FNParse output, Decodable<FNParse> decodableRegular, Decodable<FNParse> decodableLatent);
 	}
-	
+
 	private Map<String, ChecksSomething> tests;
-	
+
 	@Before
 	public void addTests() {
-		
+
 		tests = new HashMap<>();
 
 		tests.put("count-num-vars-and-factors", new ChecksSomething() {
@@ -123,14 +126,15 @@ public class RoleIdStageTests {
 				assertTrue("values = " + Arrays.toString(values), false);
 			}
 		});
-		
+
 		tests.put("latent-has-diff-probs", new ChecksSomething() {
 			@Override
 			public void check(FNTagging input, FNParse output,
 					Decodable<FNParse> decR, Decodable<FNParse> decL) {
 				FactorGraph fgR = decR.getFactorGraph();
 				FactorGraph fgL = decL.getFactorGraph();
-				Map<String, Double> regularProbs = new HashMap<String, Double>();	// key=name
+				Map<String, Double> regularProbs =
+						new HashMap<String, Double>();	// key=name
 				for(Var v : fgR.getVars()) {
 					DenseFactor vm = decR.getMargins().getMarginals(v);
 					double p = vm.getValue(BinaryVarUtil.boolToConfig(true));
@@ -141,25 +145,26 @@ public class RoleIdStageTests {
 					double pL = vm.getValue(BinaryVarUtil.boolToConfig(true));
 					Double pR = regularProbs.get(v.getName());
 					if(pR == null) {
-						System.out.println("skipping " + v.getName());
+						assertEquals(v.getType(), VarType.LATENT);
 						continue;
 					}
 					assertEquals(2, v.getNumStates());
 					System.out.printf("%s %.5f %.5f\n", v.getName(), pR, pL);
-					if(Math.abs(pR - pL) < 1e-2) {
-						if(decR.getWeights().l2Norm() + decL.getWeights().l2Norm() < 1e-3) {
-							// nbd, just trivially the same because all the weights are 0, i.e. there are no factors
-						}
-						else {		// why would these probabilities be the same?
+					double eps = 1e-4;
+					if(Math.abs(pR - pL) < eps) {
+						if(decR.getWeights().l2Norm()
+								+ decL.getWeights().l2Norm() < eps) {
+							// NBD, just trivially the same because all the
+							// weights are 0, i.e. there are no factors
+						} else {
+							// Why would these probabilities be the same?
 							List<Factor> touchingL = touching(v, fgL);
 							List<Factor> touchingR = touching(v, fgR);
 							if(touchingL.size() != 1 || touchingR.size() != 1) {
-								System.out.println("touching in L : " + touchingL);
 								System.out.println("touching in R : " + touchingR);
-								
 								System.out.println("touching L:");
 								for(Factor f : touchingL) {
-									System.out.println();
+									System.out.println("#####################");
 									System.out.println(f);
 									int i = 0;
 									for(Var vl : f.getVars()) {
@@ -167,21 +172,47 @@ public class RoleIdStageTests {
 											System.out.println((++i) + ": " + decL.getMargins().getMarginals(vl));
 									}
 								}
-								
-								// gah....
-								// this works, but to write the correct test code, i basically have to rewrite BP
-								// what is happening is that there is a very small prob on l_ij=1
-								// so even if the factor value for (r_itjk=1,l_ij=1) is not that small,
-								// there will be very little different in the r_itjk beliefs because the l_ij
-								// beliefs are so skewed towards l_ij=0
-								
-								assertTrue(false);
+
+								// Lets try to see if the effect of this factor
+								// *should* be significant.
+								assertEquals(touchingL.size(), 2);
+								Factor binaryPhi = touchingL.get(0).getVars().size() == 1
+										? touchingL.get(1) : touchingL.get(0);
+								assertEquals(binaryPhi.getVars().size(), 2);
+								// l_ij
+								Var l_ij, r_itjk;
+								if (binaryPhi.getVars().get(0) instanceof LinkVar) {
+									l_ij = binaryPhi.getVars().get(0);
+									r_itjk = binaryPhi.getVars().get(1);
+								} else {
+									l_ij = binaryPhi.getVars().get(1);
+									r_itjk = binaryPhi.getVars().get(0);
+								}
+								// the unary factor will be present in R
+								// just compute the message from the binary phi
+								double[] mu = new double[2];
+								DenseFactor b_l_ij = decL.getMargins().getMarginals(l_ij);
+								b_l_ij.convertLogToReal();
+								b_l_ij.normalize();
+								for (int c = 0; c < binaryPhi.getVars().calcNumConfigs(); c++) {
+									VarConfig conf = binaryPhi.getVars().getVarConfig(c);
+									mu[conf.getState(r_itjk)] +=
+											binaryPhi.getUnormalizedScore(c)
+											* b_l_ij.getValue(conf.getState(l_ij));
+								}
+								double delta = 0d;
+								for (double m : mu) delta += Math.abs(m);
+								assertTrue(delta < 1e-2);
 							}
 						}
 					}
 				}
 			}
-			/** uses var names, so will work even if you give a var in another factor graph (but has same name/naming convention */
+
+			/**
+			 * Uses var names, so will work even if you give a var in another
+			 * factor graph (but has same name/naming convention
+			 */
 			public List<Factor> touching(Var v, FactorGraph fg) {
 				List<Factor> fs = new ArrayList<>();
 				for(Factor f : fg.getFactors()) {
@@ -216,80 +247,78 @@ public class RoleIdStageTests {
 		System.out.println("[RoleIdStageTest checkPartition] starting test.");
 		File alphFile = new File("saved-models/testing/latent.alph.gz");
 		assertTrue(alphFile.isFile());
-		
-		// latent
+
+		// Latent
 		ParserParams paramsL = new ParserParams();
 		paramsL.useLatentDepenencies = true;
 		RoleIdStage ridL = new RoleIdStage(paramsL);
 		ridL.globalParams.readFeatAlphFrom(alphFile);
-		if(prune)
-			configureRid(ridL);
-		StageDatumExampleList<FNTagging, FNParse> dataL = ridL.setupInference(input, output);
+		if(prune) configureRid(ridL);
+		StageDatumExampleList<FNTagging, FNParse> dataL =
+				ridL.setupInference(input, output);
 		assertEquals(output.size(), dataL.size());
-		
-		// regular
+
+		// Regular
 		ParserParams paramsR = new ParserParams();
 		paramsR.useLatentDepenencies = false;
 		RoleIdStage ridR = new RoleIdStage(paramsR);
 		//ridR.globalParams.readFeatAlphFrom(alphFile);
 		paramsR.setFeatureAlphabet(paramsL.getFeatureAlphabet());
-		if(prune)
-			configureRid(ridR);
-		StageDatumExampleList<FNTagging, FNParse> dataR = ridR.setupInference(input, output);
+		if(prune) configureRid(ridR);
+		StageDatumExampleList<FNTagging, FNParse> dataR =
+				ridR.setupInference(input, output);
 		assertEquals(output.size(), dataR.size());
-			
+
 		assertEquals(paramsL.logDomain, paramsR.logDomain);
 		assertFalse(paramsL.getFeatureAlphabet().isGrowing());
-		assertTrue(paramsL.getFeatureAlphabet() == paramsR.getFeatureAlphabet());
+		assertTrue(paramsL.getFeatureAlphabet()
+				== paramsR.getFeatureAlphabet());
 
 		ridL.initWeights();
 		ridR.initWeights();
-		
+
 		Timer tL = new Timer("getDecodable-latent");
 		Timer tR = new Timer("getDecodable-regular");
 		tL.printIterval = 1;
 		tR.printIterval = 1;
-		
+
 		int origAlphSize = paramsL.getFeatureAlphabet().size();
 		assertEquals(origAlphSize, paramsR.getFeatureAlphabet().size());
 		assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsL.getFeatureAlphabet());
 		assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsR.getFeatureAlphabet());
 		assertTrue(ridL.globalParams.getFeatureAlphabet() == ridR.globalParams.getFeatureAlphabet());
 		assertFalse(ridL.globalParams.getFeatureAlphabet().isGrowing());
-		
+
 		for(int i=0; i<output.size(); i++) {
-			
 			StageDatum<FNTagging, FNParse> dL = dataL.getStageDatum(i);
 			StageDatum<FNTagging, FNParse> dR = dataR.getStageDatum(i);
 
 			tL.start();
 			Decodable<FNParse> decL = (Decodable<FNParse>) dL.getDecodable();
 			tL.stop();
+
 			tR.start();
 			Decodable<FNParse> decR = (Decodable<FNParse>) dR.getDecodable();
 			tR.stop();
-			
+
 			for(Map.Entry<String, ChecksSomething> x : tests.entrySet()) {
 				System.out.printf("running %s on example %d...\n", x.getKey(), i+1);
 				x.getValue().check(input.get(i), output.get(i), decR, decL);
 			}
-			
-			// check that the alphabet hasn't grown or changed
+
+			// Check that the alphabet hasn't grown or changed
 			assertEquals(origAlphSize, paramsL.getFeatureAlphabet().size());
 			assertEquals(origAlphSize, paramsR.getFeatureAlphabet().size());
 			assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsL.getFeatureAlphabet());
 			assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsR.getFeatureAlphabet());
 			assertTrue(ridL.globalParams.getFeatureAlphabet() == ridR.globalParams.getFeatureAlphabet());
 			assertFalse(ridL.globalParams.getFeatureAlphabet().isGrowing());
-			
-			// try some random weights and try again
+
+			// Try some random weights and try again
 			int seed = 9001;
 			double sigma = 0.02d;
 			ridL.randomlyInitWeights(sigma, new Random(seed));
 			ridR.randomlyInitWeights(sigma, new Random(seed));
 		}
-
-
 	}
-
 }
