@@ -93,7 +93,8 @@ public class ParserExperiment {
 
 		// Get the data
 		DataSplitter ds = new DataSplitter();
-		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+		List<FNParse> all = DataUtil.iter2list(
+				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
 		List<FNParse> trainTune = new ArrayList<FNParse>();
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> tune = new ArrayList<FNParse>();
@@ -102,8 +103,10 @@ public class ParserExperiment {
 		int nTest = Math.min(75, (int) (0.15d * trainTune.size()));
 		ds.split(trainTune, train, tune, nTest, "fn15_train-tune");
 
-		if(nTrainLimit.get() < train.size())
-			train = DataUtil.reservoirSample(train, nTrainLimit.get(), new Random(9001));
+		if(nTrainLimit.get() < train.size()) {
+			train = DataUtil.reservoirSample(
+					train, nTrainLimit.get(), new Random(9001));
+		}
 
 		printMemUsage();
 		System.out.printf("[main] #train=%d #tune=%d #test=%d\n",
@@ -168,23 +171,32 @@ public class ParserExperiment {
 		List<FNParse> predicted;
 		Map<String, Double> results;
 		int maxTestEval = 100;
-		List<FNParse> testSubset = test.size() > maxTestEval ? DataUtil.reservoirSample(test, maxTestEval, parser.getParams().rand) : test;
-		System.out.printf("[ParserExperiment] predicting on %d test examples...\n", testSubset.size());
+		List<FNParse> testSubset = test.size() > maxTestEval
+				? DataUtil.reservoirSample(test, maxTestEval, parser.getParams().rand)
+				: test;
+		System.out.printf(
+				"[ParserExperiment] predicting on %d test examples...\n",
+				testSubset.size());
 		predicted = parser.predictWithoutPeaking(testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
-		BasicEvaluation.showResults("[test] after " + passes.get() + " passes", results);
+		BasicEvaluation.showResults(
+				"[test] after " + passes.get() + " passes", results);
 		printMemUsage();
 
 		// Evaluate (train data)
 		int maxTrainEval = 150;
-		List<FNParse> trainSubset = train.size() > maxTrainEval ? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand) : train;
+		List<FNParse> trainSubset = train.size() > maxTrainEval
+				? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand)
+				: train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
 		predicted = parser.predictWithoutPeaking(trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
-		BasicEvaluation.showResults("[train] after " + passes.get() + " passes", results);
+		BasicEvaluation.showResults(
+				"[train] after " + passes.get() + " passes", results);
 		printMemUsage();
 
-		System.out.printf("[ParserExperiment] done, took %.1f minutes\n", (System.currentTimeMillis() - start) / (1000d * 60));
+		System.out.printf("[ParserExperiment] done, took %.1f minutes\n",
+				(System.currentTimeMillis() - start) / (1000d * 60));
 
 		ModelIO.writeHumanReadable(
 				parser.getFrameIdWeights(),
@@ -200,7 +212,8 @@ public class ParserExperiment {
 		double free = Runtime.getRuntime().maxMemory();
 		free /= 1024d * 1024d * 1024d;
 		free -= used;
-		System.out.printf("[ParserExperiment] using %.2f GB, %.2f GB free\n", used, free);
+		System.out.printf(
+				"[ParserExperiment] using %.2f GB, %.2f GB free\n", used, free);
 	}
 	
 }

@@ -44,7 +44,7 @@ public final class Sentence implements HasId {
 			throw new IllegalArgumentException();
 		if(depType != null && depType.length != n)
 			throw new IllegalArgumentException();
-		
+
 		this.dataset = dataset;
 		this.id = id;
 		this.tokens = tokens;
@@ -52,7 +52,7 @@ public final class Sentence implements HasId {
 		this.lemmas = lemmas;
 		this.gov = gov;
 		this.depType = depType;
-		
+
 		// upcase the POS tags for consistency (e.g. with LexicalUnit)
 		for(int i=0; i<pos.length; i++)
 			this.pos[i] = this.pos[i].toUpperCase().intern();
@@ -64,8 +64,7 @@ public final class Sentence implements HasId {
 
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }
-	
-	
+
 	public static final String fnStyleBadPOSstrPrefix = "couldn't convert Penn tag of ".toUpperCase();	// once in LU, this will be upcased anyway
 	/**
 	 * Uses the lemma instead of the word, and converts POS to
@@ -79,7 +78,7 @@ public final class Sentence implements HasId {
 		else
 			return x;
 	}
-	
+
 	public LexicalUnit getFNStyleLUUnsafe(
 			int i, IDictionary dict, boolean lowercase) {
 		String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
@@ -99,7 +98,7 @@ public final class Sentence implements HasId {
 			return new LexicalUnit(w, fnTag);
 		return new LexicalUnit(allStems.get(0), fnTag);
 	}
-	
+
 	/**
 	 * Gives you a LexicalUnit using the lemma for this token rather than the
 	 * word. this method is safe (if you call with i=-1 or i=n, it will return
@@ -112,7 +111,7 @@ public final class Sentence implements HasId {
 			return AbstractFeatures.luEnd;
 		return new LexicalUnit(lemmas[i], pos[i]);
 	}
-	
+
 	/**
 	 * Gives you the original word (no case change or anything), along with the
 	 * POS tag (your only guarantee is that this is upper case).
@@ -120,18 +119,18 @@ public final class Sentence implements HasId {
 	public LexicalUnit getLU(int i) {
 		return new LexicalUnit(tokens[i], pos[i]);
 	}
-	
+
 	public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
 	public String getWord(int i) { return tokens[i]; }
 	public String[] getPos() { return pos; }
 	public String getPos(int i) { return pos[i]; }
 	public String[] getLemmas() { return lemmas; }
 	public String getLemma(int i){return lemmas[i];}
-	
+
 	public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
 	public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
 	public String[] getLemmasFor(Span s) { return Arrays.copyOfRange(lemmas, s.start, s.end); }
-	
+
 	private transient int[][] children;	// opposite of gov
 	public int[] childrenOf(int wordIdx) {
 		if(children == null) {
@@ -149,32 +148,31 @@ public final class Sentence implements HasId {
 		}
 		return children[wordIdx];
 	}
-	
-	
+
 	public int governor(int i) {
 		return gov[i];
 	}
-	
+
 	public String dependencyType(int childIdx) {
 		return depType[childIdx];
 	}
-	
+
 	public List<String> wordsIn(Span s) {
 		List<String> l = new ArrayList<String>();
 		for(int i=s.start; i<s.end; i++)
 			l.add(tokens[i]);
 		return l;
 	}
-	
+
 	public List<String> posIn(Span s) {
 		List<String> l = new ArrayList<String>();
 		for(int i=s.start; i<s.end; i++)
 			l.add(pos[i]);
 		return l;
 	}
-	
+
 	public int size() { return tokens.length; }
-	
+
 	@Override
 	public String toString() {
 		StringBuilder sb = new StringBuilder("<Sentence");
@@ -187,10 +185,10 @@ public final class Sentence implements HasId {
 		sb.append(">");
 		return sb.toString();
 	}
-	
+
 	@Override
 	public int hashCode() { return id.hashCode(); }
-	
+
 	@Override
 	public boolean equals(Object o) {
 		if(o instanceof Sentence) {

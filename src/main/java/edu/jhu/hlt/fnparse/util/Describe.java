@@ -34,8 +34,11 @@ public class Describe {
 	
 	public static String frameInstance(FrameInstance fi) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("FrameInstance of " + fi.getFrame().getName());
-		sb.append(" triggered by " + Arrays.toString(fi.getSentence().getWordFor(fi.getTarget())) + ":");
+		sb.append(String.format("FrameInstance of %s triggered by %s @ %d-%d:",
+				fi.getFrame().getName(),
+				Arrays.toString(fi.getSentence().getWordFor(fi.getTarget())),
+				fi.getTarget().start,
+				fi.getTarget().end));
 		for(int i=0; i<fi.numArguments(); i++) {
 			Span extent = fi.getArgument(i);
 			if(extent == Span.nullSpan) continue;
