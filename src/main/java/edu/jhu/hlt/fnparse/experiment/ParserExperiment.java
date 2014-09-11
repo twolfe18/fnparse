@@ -3,6 +3,8 @@ package edu.jhu.hlt.fnparse.experiment;
 import java.util.*;
 import java.io.*;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -26,9 +28,11 @@ import edu.jhu.hlt.optimize.functions.L2;
  */
 public class ParserExperiment {
 	
+	public static final Logger LOG = Logger.getLogger(ParserExperiment.class);
+	
 	// In real experiments, this should be false. This gives the parser access
 	// to both 1-best dep syntax + latent syntax.
-	public static boolean useSyntaxFeaturesForLatentParser = true;
+	public static boolean useSyntaxFeaturesForLatentParser = false;
 
 	public static void main(String[] args) throws IOException {
 
@@ -47,7 +51,7 @@ public class ParserExperiment {
 			System.out.println("     \"latent\" means that latent syntax is jointly reasoned about with prediction");
 			return;
 		}
-		System.out.println("[main] args=" + Arrays.toString(args));
+		LOG.debug("[main] args=" + Arrays.toString(args));
 
 		final String mode = args[0];
 		final int jobIdx = Integer.parseInt(args[1]);
@@ -67,17 +71,20 @@ public class ParserExperiment {
 		}
 
 		long start = System.currentTimeMillis();
-		System.out.println("[main] workingDir = " + workingDir.getPath());
+		LOG.info("[main] workingDir = " + workingDir.getPath());
 
 		// Set up array job configurations
 		ArrayJobHelper ajh = new ArrayJobHelper();
-		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit", Arrays.asList(50, 400, 999999));
+		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit",
+				"frameId".equals(mode)
+				? Arrays.asList(50, 400, 999999)
+				: Arrays.asList(10, 100, 999999));
 		List<Integer> possiblePasses = "frameId".equals(mode)
 				? Arrays.asList(2, 6)
 				: Arrays.asList(1, 3);
 		Option<Integer> passes = ajh.addOption("passes", possiblePasses);
 		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(4, 40));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(1000d, 10000d, 100000d));
+		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(100d, 1000d, 10000d));
 
 		// TODO add back the part of the experiment where we predict frames and
 		// args (argId mode right now just takes gold frames).
@@ -89,7 +96,7 @@ public class ParserExperiment {
 			return;
 		}
 		else ajh.setConfig(jobIdx);
-		System.out.println("config = " + ajh.getStoredConfig());
+		LOG.info("config = " + ajh.getStoredConfig());
 
 		// Get the data
 		DataSplitter ds = new DataSplitter();
@@ -109,8 +116,9 @@ public class ParserExperiment {
 		}
 
 		printMemUsage();
-		System.out.printf("[main] #train=%d #tune=%d #test=%d\n",
-				train.size(), tune.size(), test.size());
+		LOG.info("#train=" + train.size()
+				+ " #tune=" + tune.size()
+				+ " #test=" + test.size());
 
 		// Create parser
 		ParserParams parserParams = new ParserParams();
@@ -129,7 +137,8 @@ public class ParserExperiment {
 			throw new RuntimeException("illegal mode: " + syntaxMode);
 		}
 		PipelinedFnParser parser = new PipelinedFnParser(parserParams);
-		// Mode (e.g. frameId vs argId)
+
+		// Set the mode (e.g. frameId vs argId)
 		if ("frameId".equals(mode)) {
 			FrameIdStage fIdStage = (FrameIdStage) parser.getFrameIdStage();
 			fIdStage.params.batchSize = batchSize.get();
@@ -140,7 +149,10 @@ public class ParserExperiment {
 			parser.getArgIdParams().batchSize = batchSize.get();
 			parser.getArgIdParams().passes = passes.get();
 			parser.getArgIdParams().regularizer = new L2(regularizer.get());
+			parser.useGoldFrameId();
 		}
+
+		// Either load a feature alphabet or compute one
 		if ("none".equals(featureAlphabet)) {
 			int maxMinutes = 45;
 			int maxFeatures = 15_000_000;
@@ -148,11 +160,13 @@ public class ParserExperiment {
 		} else {
 			parser.setAlphabet(ModelIO.readAlphabet(new File(featureAlphabet)));
 		}
-		System.out.printf("[ParserExperiment] this model was read in from %s, "
-				+ "and i'm assuming that this model's alphabet (size=%d) "
-				+ "already includes all of the features needed to train in %s "
-				+ "mode\n", featureAlphabet, 
-				parser.getParams().getFeatureAlphabet().size(), mode);
+		LOG.info(String.format(
+				"[ParserExperiment] this model was read in from %s, and we're"
+				+ "assuming that this model's alphabet (size=%d) already "
+				+ "includes all of the features needed to train in %s mode\n",
+				featureAlphabet, 
+				parser.getParams().getFeatureAlphabet().size(),
+				mode));
 
 		// Train
 		// null means do auto learning rate selection
@@ -177,7 +191,8 @@ public class ParserExperiment {
 		System.out.printf(
 				"[ParserExperiment] predicting on %d test examples...\n",
 				testSubset.size());
-		predicted = parser.predictWithoutPeaking(testSubset);
+		predicted = parser.predict(
+				DataUtil.stripAnnotations(testSubset), testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults(
 				"[test] after " + passes.get() + " passes", results);
@@ -189,7 +204,8 @@ public class ParserExperiment {
 				? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand)
 				: train;
 		System.out.println("[ParserExperiment] predicting on train (sub)set...");
-		predicted = parser.predictWithoutPeaking(trainSubset);
+		predicted = parser.predict(
+				DataUtil.stripAnnotations(trainSubset), trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults(
 				"[train] after " + passes.get() + " passes", results);

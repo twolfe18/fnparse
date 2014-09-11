@@ -8,6 +8,8 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
@@ -52,6 +54,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	protected final ParserParams globalParams;	// Not owned by this class
 	protected FgModel weights;
+	protected Logger log = Logger.getLogger(this.getClass());
 
 	public AbstractStage(ParserParams params) {
 		this.globalParams = params;
@@ -137,17 +140,30 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			}
 		});
 	}
+	
+	/** null means auto-select */
+	public Double getLearningRate() {
+		return null;
+	}
+	
+	public Regularizer getRegularizer() {
+		return new L2(1_000_000d);
+	}
+	
+	public int getBatchSize() {
+		return 4;
+	}
+	
+	public int getNumTrainingPasses() {
+		return 2;
+	}
 
 	@Override
 	public void train(List<I> x, List<O> y) {
-		System.err.println("[AbstractStage " + this.getName() + "] WARNING: "
-				+ "applying default training params because one wasn't provided");
+		log.warn("Applying default training params because one wasn't provided");
 		assert this.getClass().equals(RoleSpanStage.class);
-		int batchSize = 4;
-		int passes = 2;
-		Double learningRate = null;	// null means auto select
-		Regularizer regularizer = new L2(1_000_000d);
-		train(x, y, learningRate, regularizer, batchSize, passes);
+		train(x, y, getLearningRate(),
+				getRegularizer(), getBatchSize(), getNumTrainingPasses());
 	}
 
 	/**
@@ -211,8 +227,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.regularizer = regularizer;
 
 		Alphabet<String> alph = this.getFeatureAlphabet();
-		System.out.printf("[%s train] alphabet is frozen (size=%d), "
-				+ "going straight into training\n", getName(), alph.size());
+		log.info("Feature alphabet is frozen (size=" + alph.size() + "),"
+				+ "going straight into training");
 		alph.stopGrowth();
 
 		// Get the data
@@ -227,10 +243,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			oe.printStackTrace();
 		}
 		long timeTrain = t.stop();
-		System.out.printf("[%s train] done training on %d examples for %.1f minutes\n",
-				this.getName(), exs.size(), timeTrain/(1000d*60d));
-		System.out.printf("[%s train] params.featIdx.size=%d\n",
-				this.getName(), alph.size());
+		log.info(String.format(
+				"Done training on %d examples for %.1f minutes, using %d features",
+				exs.size(), timeTrain/(1000d*60d), alph.size()));
 
 		// Tune
 		if(td != null)
@@ -251,14 +266,13 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		if (labels != null && unlabeledExamples.size() != labels.size())
 			throw new IllegalArgumentException();
 		if (!getFeatureAlphabet().isGrowing()) {
-			throw new IllegalStateException("there is no reason to run this "
+			throw new IllegalStateException("There is no reason to run this "
 					+ "unless you've set the alphabet to be growing");
 		}
 
 		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
 		t.printIterval = 25;
-		System.out.println("[scanFeatures " + getName()
-				+ "] counting the number of parameters needed over "
+		log.info("[scanFeatures] Counting the number of parameters needed over "
 				+ unlabeledExamples.size() + " examples");
 
 		// This stores counts in an array.
@@ -291,29 +305,26 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				seen.add(labels.get(i));
 
 			if(t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
-				System.out.println("[scanFeatures " + getName()
-						+ "] stopping because we used the max time (in minutes): "
-						+ maxTimeInMinutes);
+				log.info("[scanFeatures] Stopping because we used the max time "
+						+ "(in minutes): " + maxTimeInMinutes);
 				break;
 			}
 			int featuresAdded = getFeatureAlphabet().size() - alphSizeStart;
 			if(featuresAdded > maxFeaturesAdded) {
-				System.out.println("[scanFeatures " + this.getName() +
-						"] stopping because we added the max allowed features: "
-						+ featuresAdded);
+				log.info("[scanFeatures] Stopping because we added the max "
+						+ "allowed features: " + featuresAdded);
 				break;
 			}
 		}
 
 		if (examplesWithNoFactorGraph > 0) {
-			System.err.println("[scanFeatures " + getName() +
-					"] WARNING: some examples didn't have any FactorGraph "
+			log.warn("[scanFeatures] Some examples didn't have any FactorGraph "
 					+ "associated with them: " + examplesWithNoFactorGraph);
 		}
 
 		if(seen.size() == 0) {
-			System.err.println("[scanFeatures " + getName() + "] WARNING: no "
-					+ "labels were provided, so I can't compute frame/role recall");
+			log.info("[scanFeatures] Labels were provided, so we can't compute "
+					+ "frame/role recall");
 		} else {
 			Set<Frame> fSeen = new HashSet<>();
 			Set<String> rSeen = new HashSet<>();
@@ -333,16 +344,15 @@ public abstract class AbstractStage<I, O extends FNTagging>
 					}
 				}
 			}
-			System.out.printf("[scanFeatures %s] saw %d frames, %d frame-roles,"
-					+ " and %d roles (ignoring frame)\n",
-					getName(), fSeen.size(), frSeen.size(), rSeen.size());
+			log.info(String.format("[scanFeatures] Saw %d frames, "
+					+ "%d frame-roles, and %d roles (ignoring frame)",
+					fSeen.size(), frSeen.size(), rSeen.size()));
 		}
-
-		System.out.printf("[scanFeatures %s] done, scanned %d examples in %.1f "
-				+ "minutes, alphabet size is %d, added %d\n",
-				getName(), examplesSeen, t.totalTimeInSeconds() / 60d,
+		log.info(String.format("[scanFeatures] Done, scanned %d examples in "
+				+ "%.1f minutes, alphabet size is %d, added %d",
+				examplesSeen, t.totalTimeInSeconds() / 60d,
 				getFeatureAlphabet().size(),
-				getFeatureAlphabet().size()-alphSizeStart);
+				getFeatureAlphabet().size()-alphSizeStart));
 	}
 
 	public static interface TuningData {
@@ -373,12 +383,14 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			throw new IllegalArgumentException();
 
 		if(x.size() == 0) {
-			System.err.printf("[%s tuneRecallBias] WARNING: 0 examples were provided for tuning, skipping this.\n", this.getName());
+			log.warn("[tuneRecallBias] 0 examples were provided for tuning, skipping this");
 			return;
 		}
 
-		System.out.printf("[%s tuneRecallBias] tuning to maximize %s on %d examples over biases in %s\n",
-				this.getName(), td.getObjective().getName(), x.size(), td.getRecallBiasesToSweep());
+		log.info(String.format("[tuneRecallBias] Tuning to maximize %s on "
+				+ "%d examples over biases in %s",
+				td.getObjective().getName(), x.size(),
+				td.getRecallBiasesToSweep()));
 
 		// Run inference and store the margins
 		long t = System.currentTimeMillis();
@@ -403,14 +415,16 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				predicted.add(m.decode());
 			List<SentenceEval> instances = BasicEvaluation.zip(y, predicted);
 			double score = td.getObjective().evaluate(instances);
-			System.out.printf("[%s tuneRecallBias] recallBias=%.2f %s=%.3f\n", this.getName(), b, td.getObjective().getName(), score);
+			log.info(String.format("[tuneRecallBias] recallBias=%.2f %s=%.3f",
+					b, td.getObjective().getName(), score));
 			scores.add(score);
 			if(score > bestScore) bestScore = score;
 		}
 		long tDec = System.currentTimeMillis() - t;
 
 		List<Double> regrets = new ArrayList<Double>();
-		for(double s : scores) regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
+		for(double s : scores)
+			regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
 
 		List<Double> weights = new ArrayList<Double>();
 		for(double r : regrets) weights.add(Math.exp(-r * 2));
@@ -423,8 +437,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			z += w;
 		}
 		double bestBias = n / z;
-		System.out.printf("[%s tuneRecalBias] took %.1f sec for inference and %.1f sec for decoding, done. recallBias %.2f => %.2f\n",
-				this.getName(), tInf/1000d, tDec/1000d, originalBias, bestBias);
+		log.info(String.format("[tuneRecalBias] Took %.1f sec for inference and"
+				+ "%.1f sec for decoding, done. recallBias %.2f => %.2f",
+				tInf/1000d, tDec/1000d, originalBias, bestBias));
 		td.getDecoder().setRecallBias(bestBias);
 	}
 	
@@ -435,8 +450,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			List<A> xDev,        List<B> yDev,
 			double propDev, int maxDev, Random r) {
 
-		if (x.size() != y.size())
-			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
+		if (x.size() != y.size()) {
+			throw new IllegalArgumentException(
+					"x.size=" + x.size() + ", y.size=" + y.size());
+		}
 		if (xTrain.size() + yTrain.size() + xDev.size() + yDev.size() > 0)
 			throw new IllegalArgumentException();
 		if (x.size() == 0)

@@ -1,8 +1,11 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -35,8 +38,11 @@ public class FNDiff {
 		bNotA.addAll(broles);
 		bNotA.removeAll(aroles);
 
+		List<String> allrolesSorted = new ArrayList<>();
+		allrolesSorted.addAll(allroles);
+		Collections.sort(allrolesSorted);	// Lexicographically
 		StringBuilder sb = new StringBuilder();
-		for (String s : allroles) {
+		for (String s : allrolesSorted) {
 			if (aNotB.contains(s)) {
 				sb.append("- ");
 			} else if (bNotA.contains(s)) {

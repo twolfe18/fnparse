@@ -52,17 +52,11 @@ public class SentenceEval {
 	}
 
 	public SentenceEval(FNTagging gold, FNTagging hyp, boolean storeDebugInfo) {
-		if(!gold.getSentence().getId().equals(hyp.getSentence().getId()))
-			throw new IllegalArgumentException();
-
-		/*
-		if((gold instanceof FNParse) != (hyp instanceof FNParse)) {
-			throw new IllegalArgumentException("gold and hyp must have the same"
-					+ " type to appropriately dispatch the correct evaluation "
-					+ "code. gold.class=" + gold.getClass().getName()
-					+ " hyp.class=" + hyp.getClass().getName());
+		if(!gold.getSentence().getId().equals(hyp.getSentence().getId())) {
+			String msg = "goldSent=" + gold.getSentence().getId()
+					+ " hypSent=" + hyp.getSentence().getId();
+			throw new IllegalArgumentException(msg);
 		}
-		*/
 		onlyTagging = !(gold instanceof FNParse) || !(hyp instanceof FNParse);
 		if (hyp instanceof FNParse)
 			assert gold instanceof FNParse;

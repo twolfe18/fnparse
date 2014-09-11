@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.data.simple.SimpleAnnoSentence;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
@@ -40,7 +42,9 @@ import edu.jhu.util.Alphabet;
 public class DepParseFactorFactory implements FactorFactory<Object> {
 
 	private static final long serialVersionUID = 1L;
-	
+	public static final Logger LOG =
+			Logger.getLogger(DepParseFactorFactory.class);
+
 	private DepParseFeatureExtractorPrm fePrm;
 	private CorpusStatistics corpusStats;
 	private ParserParams params;
@@ -85,7 +89,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		// 3 words + 1 punctuation is about as short as you might ever see as a
 		// legitimate sentence
 		if(s.size() < 4) {
-			System.err.println("[DepParseFactorFactory] really short sentence "
+			LOG.debug("[DepParseFactorFactory] really short sentence "
 					+ "(skipping): " + s);
 			return factors;
 		}

@@ -111,7 +111,7 @@ public class GenerousEvaluation {
 	}
 	
 	public double precision(FNParse gold, FNParse hyp) {
-		
+
 		// build index of valid roles (from gold)
 		Map<Role, Integer> roleHeads = new HashMap<Role, Integer>();
 		for(FrameInstance fi : gold.getFrameInstances()) {
@@ -121,13 +121,12 @@ public class GenerousEvaluation {
 				Span s = fi.getArgument(k);
 				if(s == Span.nullSpan)
 					continue;
-				
 				int head = hf.head(s, fi.getSentence());
 				Role role = new Role(f, fi.getTarget().start, k);
 				Integer old = roleHeads.put(role, head);
 				assert old == null;
 			}
-			
+
 			if(includeTarget) {
 				int head = hf.head(fi.getTarget(), fi.getSentence());
 				Role role = new Role(f, fi.getTarget().start, -1);
@@ -135,7 +134,7 @@ public class GenerousEvaluation {
 				//assert old == null;
 			}
 		}
-		
+
 		// scan over each prediction
 		int hits = 0, predictions = 0;
 		for(FrameInstance fi : hyp.getFrameInstances()) {
@@ -162,7 +161,7 @@ public class GenerousEvaluation {
 				predictions++;
 			}
 		}
-		
+
 		if(predictions == 0)
 			return 1d;
 		return ((double) hits) / predictions;
@@ -192,7 +191,7 @@ public class GenerousEvaluation {
 				assert added;
 			}
 		}
-		
+
 		// scan over every gold label and see if we predicted it
 		int hits = 0, labels = 0;
 		for(FrameInstance fi : gold.getFrameInstances()) {

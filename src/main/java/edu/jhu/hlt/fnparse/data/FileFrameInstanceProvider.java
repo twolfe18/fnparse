@@ -5,19 +5,21 @@ import java.util.*;
 
 import org.apache.commons.io.LineIterator;
 import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.*;
 
 public class FileFrameInstanceProvider implements FrameInstanceProvider {
 	
 	public static final class FIIterator implements Iterator<FNTagging> {
-		
+		public static final Logger LOG = Logger.getLogger(FIIterator.class);
+
 		private LineIterator litrFrames;
 		private LineIterator litrConll;
 
 		private String curLineFramesFile;
 		private String curSentIdFrames;
-		
+
 		// The following 2 only occur in frames file so need to add Frames suffix
 		private String curAnnoSetId;
 		private String prevAnnoSetId;
@@ -31,20 +33,12 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 		private String prevSentIdConll;
 		private String prevSentIdFrames;
-		
-		
+
 		private Map<String, Frame> frameByName;
-		
+
 		public FIIterator(File frameFile, File conllFile) {
-			
-			// I need to print who is calling this iterator function so I can figure out why I'm using so much memory
-			System.err.println("[FIIterator] iterating over " +
-					frameFile.getPath() + " and " + conllFile.getPath());
-//			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-//			int n = Math.min(stack.length, 15);
-//			for(int i=0; i<n; i++)
-//				System.err.println("\t" + stack[i]);
-			
+			LOG.debug("iterating over " + frameFile.getPath() + " and "
+					+ conllFile.getPath());
 			try {
 				litrFrames = new LineIterator(new FileReader(frameFile));
 				litrConll = new LineIterator(new FileReader(conllFile));
