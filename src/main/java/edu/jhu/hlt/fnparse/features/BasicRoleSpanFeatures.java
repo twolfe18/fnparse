@@ -11,26 +11,28 @@ import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.util.Counts;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
-
 	private static final long serialVersionUID = 1L;
-	
+	public static boolean OVERFITTING_DEBUG = false;
+
 	private boolean aroundSpan = true;
 	private boolean fromHead = true;
 	private boolean inSpan = true;
 	private boolean betweenTargetAndHead = true;
-	
+
 	public BasicRoleSpanFeatures(HasParserParams globalParams) {
 		super(globalParams);
+		weightingPower = 0.5d;
 	}
 
 	// TODO with syntax, have features describing how similar the projection of the dependency tree from j down is to the actual expanded span
 
+	// TODO regular expressions over POS tags
+
 	@Override
 	public void featurize(FeatureVector v, Refinements refs, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
-
-		if(argSpan == Span.nullSpan)
+		if (argSpan == Span.nullSpan)
 			return;
-		
+
 		String r = f == Frame.nullFrame
 				? "role-for-null-frame"
 				: f.getRole(roleIdx);
@@ -39,18 +41,36 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 				: (this.useFastFeaturenames
 						? f.getId() + "." + roleIdx
 						: f.getName() + "." + f.getRole(roleIdx));
-		
+
 		b(v, refs, 5d, "intercept");
 		b(v, refs, 3d, r, "intercept");
 		b(v, refs, 3d, rr, "intercept");
-		
-		if(argHeadIdx < targetHeadIdx)
+
+		if (OVERFITTING_DEBUG) {
+			String desc = "target=" + sent.getWord(targetHeadIdx)
+					+ ",frame=" + f.getName()
+					+ ",head=" + sent.getWord(argHeadIdx)
+					+ ",role=" + f.getRole(roleIdx)
+					+ ",width=" + argSpan.width();
+			b(v, refs, 10d, desc);
+			for (int i = 0; i < argSpan.start; i++) {
+				int l = argSpan.start - i;
+				b(v, refs, 10d, desc + ",arg-" + l + "=" + sent.getWord(i));
+			}
+			for (int i = argSpan.end; i < sent.size(); i++) {
+				int _r = (i - argSpan.end) + 1;
+				b(v, refs, 10d, desc + ",arg+" + _r + "=" + sent.getWord(i));
+			}
+			//return;
+		}
+
+		if (argHeadIdx < targetHeadIdx)
 			b(v, refs, 3d, "arg-is-left-of-target");
-		if(argHeadIdx > targetHeadIdx)
+		if (argHeadIdx > targetHeadIdx)
 			b(v, refs, 3d, "arg-is-right-of-target");
-		if(argHeadIdx == targetHeadIdx)
+		if (argHeadIdx == targetHeadIdx)
 			b(v, refs, 3d, "arg-is-target");
-		
+
 		int cutoff = 5;
 		b(v, refs, 2d, "width=", intTrunc(argSpan.width(), cutoff));
 		b(v, refs, 2d, "width/2=", intTrunc(argSpan.width()/2, cutoff));
@@ -64,12 +84,11 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 		b(v, refs, rr, "width/2=", intTrunc(argSpan.width()/2, cutoff));
 		b(v, refs, rr, "width/3=", intTrunc(argSpan.width()/3, cutoff));
 		b(v, refs, rr, "width/4=", intTrunc(argSpan.width()/4, cutoff));
-		
+
 		long p = Math.round((10d * argSpan.width()) / sent.size());
 		b(v, refs, 2d, "propWidth=" + p);
 		b(v, refs, 2d, r, "propWidth=" + p);
 		b(v, refs, 2d, rr, "propWidth=" + p);
-		
 
 		int expLeft = argHeadIdx - argSpan.start;
 		assert expLeft >= 0;
@@ -111,18 +130,17 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 //		b(v, refs, w, headLemmaLU.pos, rr, "expandRight/2", er2);
 //		b(v, refs, w, headLemmaLU.pos, rr, "expandLeft/2", el2);
 
-		
-		if(argSpan.includes(targetHeadIdx)) {
+		if (argSpan.includes(targetHeadIdx)) {
 			b(v, refs, 3d, "arg-overlaps-targetHead");
 			b(v, refs, 2d, r, "arg-overlaps-targetHead");
 			b(v, refs, 2d, rr, "arg-overlaps-targetHead");
 		}
 
 		// features that count number of intermediate POS between arg and target
-		if(betweenTargetAndHead) {
+		if (betweenTargetAndHead) {
 			Counts<String> posCounts = new Counts<>();
-			if(targetHeadIdx < argHeadIdx) {
-				for(int i=targetHeadIdx+1; i<argHeadIdx; i++) {
+			if (targetHeadIdx < argHeadIdx) {
+				for (int i=targetHeadIdx+1; i<argHeadIdx; i++) {
 					String pos = sent.getPos(i);
 					posCounts.increment(pos);
 					b(v, refs, r, "between-target-and-arg", pos);
@@ -131,8 +149,8 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 					b(v, refs, 0.1d, rr, "between-target-and-arg", sent.getLemma(i));
 				}
 			}
-			else if(argHeadIdx < targetHeadIdx) {
-				for(int i=argHeadIdx+1; i<targetHeadIdx; i++) {
+			else if (argHeadIdx < targetHeadIdx) {
+				for (int i=argHeadIdx+1; i<targetHeadIdx; i++) {
 					String pos = sent.getPos(i);
 					posCounts.increment(pos);
 					b(v, refs, r, "between-target-and-arg", pos);
@@ -141,7 +159,7 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 					b(v, refs, 0.1d, rr, "between-target-and-arg", sent.getLemma(i));
 				}
 			}
-			for(Entry<String, Integer> x : posCounts.entrySet()) {
+			for (Entry<String, Integer> x : posCounts.entrySet()) {
 				String c = intTrunc(x.getValue(), 5);
 				String c2 = intTrunc(x.getValue()/2, 5);
 				b(v, refs, r, "between-target-and-arg-count", x.getKey(), c);
@@ -151,9 +169,8 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			}
 		}
 
-		
-		// words on either side of the expansion
-		if(aroundSpan) {
+		// Words on either side of the expansion
+		if (aroundSpan) {
 			double sml = 0.25d;
 			double med = 0.5d;
 			double reg = 0.75d;
@@ -191,9 +208,9 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			b(v, refs, sml, rr, "twoRight", ee.word);
 			b(v, refs, med, rr, "twoRight", ee.pos);
 		}
-		
-		// words included in the expansion left and right (from the head word)
-		if(fromHead) {
+
+		// Words included in the expansion left and right (from the head word)
+		if (fromHead) {
 			for(int i=argHeadIdx; i>=argSpan.start; i--) {
 				LexicalUnit x = sent.getLemmaLU(i);
 				String sh = "head<-" + intTrunc(argHeadIdx - i, 3);
@@ -215,14 +232,14 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 				b(v, refs, rr, sh, x.pos);
 			}
 		}
-		
-		// words in the span (measured from left and right)
-		if(inSpan) {
+
+		// Words in the span (measured from left and right)
+		if (inSpan) {
 			double sml = 0.2d;
 			double med = 0.6d;
 			double reg = 1d;
 			double lrg = 1.3d;
-			for(int i=argSpan.start; i<argSpan.end; i++) {
+			for (int i=argSpan.start; i<argSpan.end; i++) {
 
 				LexicalUnit x = sent.getLemmaLU(i);
 				String si = intTrunc(i - argSpan.start, 3) + "->";
@@ -249,54 +266,51 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 				b(v, refs, lrg, rr, "contains", x.pos);
 			}
 		}
-		
-		if(globalParams.getParserParams().useSyntaxFeatures) {
-			
-			// how many external parents?
+
+		if (globalParams.getParserParams().useSyntaxFeatures) {
+			// How many external parents?
 			int externalParents = 0;
-			for(int i=argSpan.start; i<argSpan.end; i++)
-				if(!argSpan.includes(sent.governor(i)))
+			for (int i=argSpan.start; i<argSpan.end; i++)
+				if (!argSpan.includes(sent.governor(i)))
 					externalParents++;
-			if(externalParents > 0) {
+			if (externalParents > 0) {
 				String externalParentsStr = intTrunc(externalParents, 5);
 				b(v, refs, 3d, "externalParents", externalParentsStr);
 				b(v, refs, 2d, r, "externalParents", externalParentsStr);
 				b(v, refs, 1d, rr, "externalParents", externalParentsStr);
 			}
-			
-			// headword has external parent?
-			if(argSpan.includes(sent.governor(argHeadIdx))) {
+
+			// Headword has external parent?
+			if (argSpan.includes(sent.governor(argHeadIdx))) {
 				b(v, refs, 3d, "no-head-external-parent");
 				b(v, refs, 2d, r, "no-head-external-parent");
 				b(v, refs, 1d, rr, "no-head-external-parent");
 			}
-			
-			// num children who are external to this span?
+
+			// Num children who are external to this span?
 			int externalChildren = 0;
-			for(int i=argSpan.start; i<argSpan.end; i++)
-				for(int j : sent.childrenOf(i))
-					if(!argSpan.includes(j))
+			for (int i=argSpan.start; i<argSpan.end; i++)
+				for (int j : sent.childrenOf(i))
+					if (!argSpan.includes(j))
 						externalChildren++;
-			if(externalChildren > 0) {
+			if (externalChildren > 0) {
 				String externalChildrensStr = intTrunc(externalChildren, 5);
 				b(v, refs, 3d, "externalChildren", externalChildrensStr);
 				b(v, refs, 2d, r, "externalChildren", externalChildrensStr);
 				b(v, refs, 1d, rr, "externalChildren", externalChildrensStr);
 			}
-			
-			// headword's external children
+
+			// Headword's external children
 			int headExternalChildren = 0;
-			for(int i : sent.childrenOf(argHeadIdx))
-				if(!argSpan.includes(i))
+			for (int i : sent.childrenOf(argHeadIdx))
+				if (!argSpan.includes(i))
 					headExternalChildren++;
-			if(headExternalChildren > 0) {
+			if (headExternalChildren > 0) {
 				String headExternalChildrenStr = intTrunc(headExternalChildren, 5);
 				b(v, refs, 3d, "headExternalChildren", headExternalChildrenStr);
 				b(v, refs, 2d, r, "headExternalChildren", headExternalChildrenStr);
 				b(v, refs, 1d, rr, "headExternalChildren", headExternalChildrenStr);
 			}
 		}
-		
 	}
-	
 }

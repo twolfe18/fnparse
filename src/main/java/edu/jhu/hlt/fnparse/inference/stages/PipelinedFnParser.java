@@ -49,6 +49,10 @@ public class PipelinedFnParser implements Serializable {
 		argId = new IdentityStage<>();
 		argExpansion = new IdentityStage<>();
 	}
+	
+	public void useGoldFrameId() {
+		frameId = new IdentityStage<>();
+	}
 
 	public FgModel getFrameIdWeights() { return frameId.getWeights(); }
 	public FgModel getArgIdWeights() { return argId.getWeights(); }
@@ -160,16 +164,8 @@ public class PipelinedFnParser implements Serializable {
 
 		LOG.info("[PipelinedFnParser train] training frameId model...");
 		List<Sentence> sentences = DataUtil.stripAnnotations(examples);
-		if (frameId instanceof FrameIdStage) {
-			((FrameIdStage) frameId).train(examples);
-		} else {
-			LOG.info("not training frameId model because its not a FrameIdModel");
-		}
-		
-		if (argId instanceof IdentityStage) {
-			LOG.info("skipping argId/argSpan training");
-			return;
-		}
+		List<FNTagging> goldTags = DataUtil.convertParsesToTaggings(examples);
+		frameId.train(sentences, goldTags);
 
 		List<FNTagging> frames;
 		if (params.usePredictedFramesToTrainArgId) {
@@ -194,16 +190,26 @@ public class PipelinedFnParser implements Serializable {
 	}
 
 	public List<FNParse> predict(List<Sentence> sentences) {
+		return predict(sentences, null);
+	}
+
+	/**
+	 * Use this method if any of the stages are oracles (i.e. need to look at
+	 * the answer at prediction time).
+	 */
+	public List<FNParse> predict(List<Sentence> sentences, List<FNParse> labels) {
+		if (labels != null && labels.size() != sentences.size())
+			throw new IllegalArgumentException();
 		List<FNTagging> frames =
-				frameId.setupInference(sentences, null).decodeAll();
+				frameId.setupInference(sentences, labels).decodeAll();
 		if (argId instanceof IdentityStage) {
 			LOG.info("skipping argId/argSpan step in prediction");
 			return DataUtil.convertTaggingsToParses(frames);
 		}
 		List<FNParse> argHeads =
-				argId.setupInference(frames, null).decodeAll();
+				argId.setupInference(frames, labels).decodeAll();
 		List<FNParse> fullParses =
-				argExpansion.setupInference(argHeads, null).decodeAll();
+				argExpansion.setupInference(argHeads, labels).decodeAll();
 		return fullParses;
 	}
 

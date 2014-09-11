@@ -104,10 +104,12 @@ public class RoleIdStage
 					yUse.add(y.get(i));
 				}
 			}
-			System.out.printf("[%s train] filtering out sentences longer than %d words, kept %d of %d\n",
-					this.getName(), params.maxSentenceLengthForTraining, xUse.size(), x.size());
+			log.info(String.format("[train] Filtering out sentences longer than"
+					+ " %d words, kept %d of %d",
+					params.maxSentenceLengthForTraining,
+					xUse.size(), x.size()));
 			if (xUse.size() == 0)
-				System.err.println("[RoleIdStage train] WARNING: filtered out all training examples, not training!");
+				log.warn("[train] Filtered out all training examples, not training!");
 		}
 		else {
 			xUse = x;
@@ -187,7 +189,7 @@ public class RoleIdStage
 			this.parent = parent;
 			initHypotheses(frames, gold, true);
 		}
-		
+
 		public Sentence getSentence() { return input.getSentence(); }
 
 		/**
@@ -198,32 +200,42 @@ public class RoleIdStage
 		 * @param hasGold
 		 */
 		private void initHypotheses(FNTagging frames, FNParse gold, boolean hasGold) {
-
 			if(hasGold && gold.getSentence() != frames.getSentence())
 				throw new IllegalArgumentException();
 
 			Timer t = parent.globalParams.getTimer("argId-initHypotheses");
 			t.start();
 
-			// make sure that we don't have overlapping targets
+			// Make sure that we don't have overlapping targets (see next step)
 			frames = DataUtil.filterOutTargetCollisions(frames);
 
-			// build an index keying off of the target head index
+			// Build an index keying off of the target head index.
+			// This assumes that:
+			// 1) We are using a headword to describe a target
+			// 2) A given headword can evoke at most 1 frame.
 			FrameInstance[] fiByTarget = null;
-			if(hasGold)
-				fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(gold.getFrameInstances(), getSentence(), parent.globalParams.headFinder);
+			if(hasGold) {
+				fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(
+						gold.getFrameInstances(), getSentence(),
+						parent.globalParams.headFinder);
+			}
 
 			for(FrameInstance fi : frames.getFrameInstances()) {
 				Span target = fi.getTarget();
-				int targetHead = parent.globalParams.headFinder.head(target, fi.getSentence());
+				int targetHead = parent.globalParams.headFinder.head(
+						target, fi.getSentence());
 
 				RoleVars rv;
-				if(hasGold) {	// train mode
+				if (hasGold) {	// Train mode
+					// goldFI may be null, meaning that we predicted a frame
+					// that was not actually present in the sentence.
 					FrameInstance goldFI = fiByTarget[targetHead];
-					rv = new RoleVars(goldFI, targetHead, fi.getFrame(), fi.getSentence(), parent.globalParams, parent.params);
+					rv = new RoleVars(goldFI, targetHead, fi.getFrame(),
+						fi.getSentence(), parent.globalParams, parent.params);
+				} else {		// Predict/decode mode
+					rv = new RoleVars(targetHead, fi.getFrame(),
+						fi.getSentence(), parent.globalParams, parent.params);
 				}
-				else			// predict/decode mode
-					rv = new RoleVars(targetHead, fi.getFrame(), fi.getSentence(), parent.globalParams, parent.params);
 
 				this.roleVars.add(rv);
 			}
@@ -243,9 +255,8 @@ public class RoleIdStage
 			assert hasGold();
 			return gold;
 		}
-		
+
 		protected FactorGraph getFactorGraph() {
-			
 			FactorGraph fg = new FactorGraph();
 
 			// create factors
@@ -262,7 +273,7 @@ public class RoleIdStage
 			// add factors to the factor graph
 			for(Factor f : factors)
 				fg.addFactor(f);
-			
+
 			return fg;
 		}
 
@@ -270,7 +281,7 @@ public class RoleIdStage
 		public LabeledFgExample getExample() {
 			FactorGraph fg = getFactorGraph();
 			VarConfig goldConf = new VarConfig();
-			
+
 			// add the gold labels
 			for(RoleVars hyp : roleVars) {
 				hyp.register(fg, goldConf);
