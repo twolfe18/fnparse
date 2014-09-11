@@ -3,6 +3,8 @@ package edu.jhu.hlt.fnparse.inference.stages;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
 
@@ -16,7 +18,8 @@ import edu.jhu.gm.model.FgModel;
  * @param <I>
  * @param <O>
  */
-public class IdentityStage<I, O extends I> implements Stage<I, O> {
+public class IdentityStage<I, O> implements Stage<I, O> {
+	private final Logger LOG = Logger.getLogger(IdentityStage.class);
 	
 	private FgModel model = new FgModel(0);
 
@@ -37,86 +40,58 @@ public class IdentityStage<I, O extends I> implements Stage<I, O> {
 
 	@Override
 	public void train(List<I> x, List<O> y) {
-		System.out.println("[IdentityStage train] not doing anything!");
+		LOG.info("[train] not doing anything!");
 	}
 
 	@Override
 	public StageDatumExampleList<I, O> setupInference(
 			List<? extends I> input,
 			List<? extends O> output) {
-		List<StageDatum<I, O>> data = new ArrayList<>();
-		for (I i : input) {
-			data.add(new StageDatum<I, O>() {
-				@Override
-				public I getInput() {
-					throw new RuntimeException("implement me");
-				}
-
-				@Override
-				public boolean hasGold() {
-					throw new RuntimeException("implement me");
-				}
-
-				@Override
-				public O getGold() {
-					throw new RuntimeException("implement me");
-				}
-
-				@Override
-				public LabeledFgExample getExample() {
-					throw new RuntimeException("implement me");
-				}
-
-				@Override
-				public edu.jhu.hlt.fnparse.inference.stages.Stage.IDecodable<O> getDecodable() {
-					throw new RuntimeException("implement me");
-				}
-			});
+		if (output == null) {
+			throw new IllegalArgumentException("You must provide the labels to "
+					+ "an identity stage because it doesn't know how to do "
+					+ "inference and doesn't support casting the input as the "
+					+ "output type (yet).");
 		}
+		List<StageDatum<I, O>> data = new ArrayList<>();
+		for (int i = 0; i < input.size(); i++)
+			data.add(new IdentityStageDatum<I, O>(input.get(i), output.get(i)));
 		return new StageDatumExampleList<>(data);
 	}
 	
-	static class IdentityStageDatum<I, O extends I>
-			implements StageDatum<I, O> {
+	static class IdentityStageDatum<I, O> implements StageDatum<I, O> {
 		private final I input;
-		private O output;
-
-		public IdentityStageDatum(I input) {
-			this.input = input;
-		}
-
+		private final O output;
+		/**
+		 * You have to provide an output, which will be used in place of
+		 * inference.
+		 */
 		public IdentityStageDatum(I input, O output) {
 			this.input = input;
 			this.output = output;
 		}
-
 		@Override
 		public I getInput() {
 			return input;
 		}
-
 		@Override
 		public boolean hasGold() {
-			return output != null;
+			return true;
 		}
-
 		@Override
 		public O getGold() {
-			assert hasGold();
 			return output;
 		}
-
 		@Override
 		public LabeledFgExample getExample() {
 			throw new UnsupportedOperationException();
 		}
-
 		@Override
 		public IDecodable<O> getDecodable() {
 			return new IDecodable<O>() {
 				@Override
 				public O decode() {
-					return (O) input;
+					return output;
 				}
 			};
 		}
