@@ -43,7 +43,7 @@ public class ParserExperiment {
 			System.out.println("     \"argId\" will use gold frames and train and test the argId stage(s)");
 			System.out.println("2) A job index for sweep parameters (run with -1 to see options)");
 			System.out.println("3) A working directory (for output files)");
-			System.out.println("4) An alphabet of pre-computed feature names (use AlphabetComputer)");
+			System.out.println("4) An alphabet of pre-computed feature names (use AlphabetComputer or an earlier stage in the pipeline)");
 			System.out.println("   This may be the string \"none\" if you want one to be computed (slow)");
 			System.out.println("5) A syntax mode. Possible values:");
 			System.out.println("     \"none\" means that features have no access to syntax information");
@@ -112,6 +112,11 @@ public class ParserExperiment {
 					train, nTrainLimit.get(), new Random(9001));
 		}
 
+
+		// TODO I need to write out the train/dev/test split to a text file
+		// the evaluation experiment code will read this in and know what to test on
+
+
 		printMemUsage();
 		LOG.info("#train=" + train.size()
 				+ " #tune=" + tune.size()
@@ -153,6 +158,7 @@ public class ParserExperiment {
 		if ("none".equals(featureAlphabet)) {
 			int maxMinutes = 45;
 			int maxFeatures = 15_000_000;
+			// TODO this needs to be stage-aware
 			parser.computeAlphabet(train, maxMinutes, maxFeatures);
 		} else {
 			parser.setAlphabet(ModelIO.readAlphabet(new File(featureAlphabet)));

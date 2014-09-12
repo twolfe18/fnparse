@@ -36,20 +36,20 @@ public class PipelinedFnParser implements Serializable {
 	private Stage<Sentence, FNTagging> frameId;
 	private Stage<FNTagging, FNParse> argId;
 	private Stage<FNParse, FNParse> argExpansion;
-	
+
 	public PipelinedFnParser(ParserParams params) {
 		this.params = params;
 		frameId = new FrameIdStage(params);
 		argId = new RoleIdStage(params);
 		argExpansion = new RoleSpanStage(params);
 	}
-	
+
 	// TODO replace this with setters for each stage
 	public void disableArgId() {
 		argId = new IdentityStage<>();
 		argExpansion = new IdentityStage<>();
 	}
-	
+
 	public void useGoldFrameId() {
 		frameId = new IdentityStage<>();
 	}
