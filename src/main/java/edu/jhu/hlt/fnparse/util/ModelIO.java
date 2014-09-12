@@ -17,12 +17,11 @@ public class ModelIO {
 		if(model == null || featIdx == null)
 			throw new IllegalArgumentException();
 		try {
-			int n = model.getNumParams();
-			assert n >= featIdx.size();
-			double[] values = new double[n];
+			double[] values = new double[model.getNumParams()];
 			model.updateDoublesFromModel(values);
 			BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
-			for(int i=0; i<featIdx.size(); i++) {
+			int n = Math.min(model.getNumParams(), featIdx.size());
+			for (int i = 0; i < n; i++) {
 				if (!outputZeroFeatures && Math.abs(values[i]) < 1e-5)
 					continue;
 				String fName = featIdx.lookupObject(i);

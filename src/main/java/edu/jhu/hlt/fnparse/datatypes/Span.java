@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-public final class Span {
+public final class Span implements Comparable<Span> {
 
 	public int start;	// inclusive
 	public int end;		// non-inclusive
@@ -99,6 +99,13 @@ public final class Span {
 	
 	public static Span widthOne(int wordIdx) {
 		return getSpan(wordIdx, wordIdx+1);
+	}
+
+	@Override
+	public int compareTo(Span o) {
+		int c1 = end - o.end;
+		if (c1 != 0) return c1;
+		return start - o.start;
 	}
 }
 

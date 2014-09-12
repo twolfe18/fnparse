@@ -437,7 +437,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			z += w;
 		}
 		double bestBias = n / z;
-		log.info(String.format("[tuneRecalBias] Took %.1f sec for inference and"
+		log.info(String.format("[tuneRecallBias] Took %.1f sec for inference and"
 				+ "%.1f sec for decoding, done. recallBias %.2f => %.2f",
 				tInf/1000d, tDec/1000d, originalBias, bestBias));
 		td.getDecoder().setRecallBias(bestBias);

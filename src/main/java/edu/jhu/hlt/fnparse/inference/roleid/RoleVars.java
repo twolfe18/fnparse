@@ -103,7 +103,7 @@ public class RoleVars implements FgRelated {
 						params.argPruner.falsePrune();
 						if(verbose) {
 							LOG.warn(String.format(
-									"Pruned %s.%s for head \"%s\"\n",
+									"Pruned %s.%s for head \"%s\"",
 									gold.getFrame().getName(),
 									gold.getFrame().getRole(k),
 									sent.getWord(j)));

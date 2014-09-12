@@ -248,14 +248,17 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 		this.conllFile = conllFile;
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public Iterator<FNParse> getParsedSentences() {
-		return new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
+		return (Iterator<FNParse>) (Object)
+				new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getTaggedSentences() {
-		return new FNIterFilters.OnlyTaggings(getParsedOrTaggedSentences());
+		return new FNIterFilters.OnlyTaggings<FNTagging>(
+				getParsedOrTaggedSentences());
 	}
 
 	@Override
