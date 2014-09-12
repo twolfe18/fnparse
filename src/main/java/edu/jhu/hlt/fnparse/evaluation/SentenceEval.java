@@ -9,13 +9,12 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * Holds the data needed to evaluate parses.
- * 
- * TODO this class is FUBAR, write a subclass which has FNParse for gold, hyp
  * 
  * @author travis
  */
@@ -44,8 +43,8 @@ public class SentenceEval {
 	private final FNTagging gold, hyp;
 
 	// Not always populated
-	private List<Prediction> targetFalsePos, targetFalseNeg;
-	private List<Prediction> fullFalsePos, fullFalseNeg;
+	private List<FrameArgInstance> targetFalsePos, targetFalseNeg;
+	private List<FrameArgInstance> fullFalsePos, fullFalseNeg;
 
 	public SentenceEval(FNTagging gold, FNTagging hyp) {
 		this(gold, hyp, true);
@@ -75,32 +74,33 @@ public class SentenceEval {
 		this.hyp = hyp;
 
 		if(storeDebugInfo) {
-			targetFalsePos = new ArrayList<Prediction>();
-			targetFalseNeg = new ArrayList<Prediction>();
+			targetFalsePos = new ArrayList<>();
+			targetFalseNeg = new ArrayList<>();
 			if (!onlyTagging) {
-				fullFalsePos = new ArrayList<Prediction>();
-				fullFalseNeg = new ArrayList<Prediction>();
+				fullFalsePos = new ArrayList<>();
+				fullFalseNeg = new ArrayList<>();
 			}
 		}
 
-		Set<Prediction> goldTargets = new HashSet<Prediction>();
-		Set<Prediction> hypTargets = new HashSet<Prediction>();
+		Set<FrameArgInstance> goldTargets = new HashSet<>();
+		Set<FrameArgInstance> hypTargets = new HashSet<>();
 
-		Set<Prediction> goldTargetRoles = null, hypTargetRoles = null;
-		Set<Prediction> goldRoles = null, hypRoles = null;
+		Set<FrameArgInstance> goldTargetRoles = null, hypTargetRoles = null;
+		Set<FrameArgInstance> goldRoles = null, hypRoles = null;
 		if (!onlyTagging) {
-			goldTargetRoles = new HashSet<Prediction>();
-			hypTargetRoles = new HashSet<Prediction>();
-			goldRoles = new HashSet<Prediction>();
-			hypRoles = new HashSet<Prediction>();
+			goldTargetRoles = new HashSet<>();
+			hypTargetRoles = new HashSet<>();
+			goldRoles = new HashSet<>();
+			hypRoles = new HashSet<>();
 		}
-		
+
 		fillPredictions(gold.getFrameInstances(),
 				goldTargets, goldTargetRoles, goldRoles);
 		fillPredictions(hyp.getFrameInstances(),
 				hypTargets, hypTargetRoles, hypRoles);
-		
-		fillConfusionTable(goldTargets, hypTargets, targetConfusion, targetFalsePos, targetFalseNeg);
+
+		fillConfusionTable(goldTargets, hypTargets,
+				targetConfusion, targetFalsePos, targetFalseNeg);
 		if (goldTargetRoles != null) {
 			fillConfusionTable(goldTargetRoles, hypTargetRoles,
 					fullConfusion, fullFalsePos, targetFalseNeg);
@@ -110,11 +110,11 @@ public class SentenceEval {
 					argOnlyConfusion, null, null);
 		}
 	}
-	
+
 	public boolean isFNTagging() {
 		return onlyTagging;
 	}
-	
+
 	// only work if storeDebugInfo was true
 	public FNTagging getGold() { return gold; }
 	public FNTagging getHypothesis() { return hyp; }
@@ -123,13 +123,13 @@ public class SentenceEval {
 		assert !onlyTagging;
 		return (FNParse) hyp;
 	}
-	public List<Prediction> getTargetFalsePos() { return targetFalsePos; }
-	public List<Prediction> getTargetFalseNeg() { return targetFalseNeg; }
-	public List<Prediction> getFullFalsePos() {
+	public List<FrameArgInstance> getTargetFalsePos() { return targetFalsePos; }
+	public List<FrameArgInstance> getTargetFalseNeg() { return targetFalseNeg; }
+	public List<FrameArgInstance> getFullFalsePos() {
 		assert !onlyTagging;
 		return fullFalsePos;
 	}
-	public List<Prediction> getFullFalseNeg() {
+	public List<FrameArgInstance> getFullFalseNeg() {
 		assert !onlyTagging;
 		return fullFalseNeg;
 	}
@@ -145,21 +145,22 @@ public class SentenceEval {
 	
 	public int size() { return size; }
 	
-	public void fillPredictions(
+	public static void fillPredictions(
 			List<FrameInstance> fis,
-			Collection<Prediction> targetPreds,
-			Collection<Prediction> targetRolePreds,
-			Collection<Prediction> onlyArgPreds) {
+			Collection<FrameArgInstance> targetPreds,
+			Collection<FrameArgInstance> targetRolePreds,
+			Collection<FrameArgInstance> onlyArgPreds) {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
-			targetPreds.add(new Prediction(fi.getTarget(), f, -1));
+			Span t = fi.getTarget();
+			targetPreds.add(new FrameArgInstance(f, t, -1, null));
 			if (targetRolePreds != null)
-				targetRolePreds.add(new Prediction(fi.getTarget(), f, -1));
+				targetRolePreds.add(new FrameArgInstance(f, t, -1, null));
 			int n = fi.getFrame().numRoles();
 			for(int i=0; i<n; i++) {
 				Span arg = fi.getArgument(i);
 				if(arg != Span.nullSpan) {
-					Prediction p = new Prediction(arg, f, i);
+					FrameArgInstance p = new FrameArgInstance(f, t, i, arg);
                     if (targetRolePreds != null)
                     	targetRolePreds.add(p);
                     if (onlyArgPreds != null)
@@ -170,20 +171,19 @@ public class SentenceEval {
 	}
 	
 	public void fillConfusionTable(
-			Collection<Prediction> gold,
-			Collection<Prediction> hyp,
+			Collection<FrameArgInstance> gold,
+			Collection<FrameArgInstance> hyp,
 			int[][] confusion,
-			List<Prediction> fpStore,
-			List<Prediction> fnStore) {
-		
-		Set<Prediction> s = new HashSet<Prediction>();
-		
+			List<FrameArgInstance> fpStore,
+			List<FrameArgInstance> fnStore) {
+		Set<FrameArgInstance> s = new HashSet<>();
+
 		// TP = G & H
 		s.clear();
 		s.addAll(gold);
 		s.retainAll(hyp);
 		confusion[1][1] = s.size();
-		
+
 		// FP = H -- G
 		s.clear();
 		s.addAll(hyp);
@@ -191,7 +191,7 @@ public class SentenceEval {
 		confusion[0][1] = s.size();
 		if(fpStore != null)
 			fpStore.addAll(s);
-		
+
 		// FN = G -- H
 		s.clear();
 		s.addAll(gold);
@@ -199,27 +199,27 @@ public class SentenceEval {
 		confusion[1][0] = s.size();
 		if(fnStore != null)
 			fnStore.addAll(s);
-		
+
 		// TN
 		s.clear();
 		s.addAll(gold);
 		s.addAll(hyp);
 		confusion[0][0] = s.size() - (confusion[1][1] + confusion[0][1] + confusion[1][0]);
-		
+
 		assert confusion[1][1] >= 0;
 		assert confusion[0][1] >= 0;
 		assert confusion[1][0] >= 0;
 		assert confusion[0][0] >= 0;
 	}
-	
+
 	public int targetTP() { return targetConfusion[1][1]; }
 	public int targetFP() { return targetConfusion[0][1]; }
 	public int targetFN() { return targetConfusion[1][0]; }
-	
+
 	public int fullTP() { return fullConfusion[1][1]; }
 	public int fullFP() { return fullConfusion[0][1]; }
 	public int fullFN() { return fullConfusion[1][0]; }
-	
+
 	public int argOnlyTP() { return argOnlyConfusion[1][1]; }
 	public int argOnlyFP() { return argOnlyConfusion[0][1]; }
 	public int argOnlyFN() { return argOnlyConfusion[1][0]; }
