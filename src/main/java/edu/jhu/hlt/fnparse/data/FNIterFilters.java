@@ -1,13 +1,16 @@
 package edu.jhu.hlt.fnparse.data;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 
 public class FNIterFilters {
-	
+
 	/**
 	 * Find a particular FNTagging (or more generally HasSentence) by a sentence
 	 * id.
@@ -25,31 +28,63 @@ public class FNIterFilters {
 		return null;
 	}
 
-	public static final class OnlyParses implements Iterator<FNParse> {
-		
-		private Iterator<FNTagging> iter;
-		private FNParse next;
-		
-		public OnlyParses(Iterator<FNTagging> iter) {
-			this.iter = iter;
-			this.next = findNext();
+	public static class SkipSentences<T extends FNTagging>
+			extends CustomPredicate<T> {
+		private Set<String> skipSentenceIds = new HashSet<>();
+		public SkipSentences(
+				Iterator<T> iter,
+				Collection<String> skipSentenceIds) {
+			super(iter);
+			this.skipSentenceIds.addAll(skipSentenceIds);
 		}
+		@Override
+		public boolean keep(T cur) {
+			if (cur == null) {
+				throw new RuntimeException();
+			}
+			return !skipSentenceIds.contains(cur.getSentence().getId());
+		}
+	}
+
+	public static abstract class CustomPredicate<T extends FNTagging>
+			implements Iterator<T> {
+		private Iterator<T> iter;
+		private T next;
+		private boolean init = false;
+
+		public CustomPredicate(Iterator<T> iter) {
+			this.iter = iter;
+			//this.next = findNext();
+		}
+
+		/** Return true if this FNTagging should appear in output */
+		public abstract boolean keep(T cur);
 		
-		private FNParse findNext() {
-			while(iter.hasNext()) {
-				FNTagging n = iter.next();
-				if(n instanceof FNParse)
-					return (FNParse) n;
+		private void init() {
+			assert !init;
+			assert next == null;
+			this.next = findNext();
+			init = true;
+		}
+
+		private T findNext() {
+			while (iter.hasNext()) {
+				T n = iter.next();
+				if (keep(n))
+					return n;
 			}
 			return null;
 		}
 
 		@Override
-		public boolean hasNext() { return next != null; }
+		public boolean hasNext() {
+			if (!init) init();
+			return next != null;
+		}
 
 		@Override
-		public FNParse next() {
-			FNParse ret = next;
+		public T next() {
+			T ret = next;
 			next = findNext();
 			return ret;
 		}
@@ -58,36 +93,26 @@ public class FNIterFilters {
 		public void remove() { throw new UnsupportedOperationException(); }
 	}
 
-	public static final class OnlyTaggings implements Iterator<FNTagging> {
-		private Iterator<FNTagging> iter;
-		private FNTagging next;
-
-		public OnlyTaggings(Iterator<FNTagging> iter) {
-			this.iter = iter;
-			this.next = findNext();
+	public static final class OnlyParses<T extends FNTagging>
+			extends CustomPredicate<T> {
+		public OnlyParses(Iterator<T> iter) {
+			super(iter);
 		}
-
-		private FNTagging findNext() {
-			while(iter.hasNext()) {
-				FNTagging n = iter.next();
-				if(!(n instanceof FNParse))
-					return n;
-			}
-			return null;
+		@Override
+		public boolean keep(T cur) {
+			return cur instanceof FNParse;
 		}
+	}
 
-		@Override
-		public boolean hasNext() { return next != null; }
-
-		@Override
-		public FNTagging next() {
-			FNTagging ret = next;
-			next = findNext();
-			return ret;
+	public static final class OnlyTaggings<T extends FNTagging>
+			extends CustomPredicate<T> {
+		public OnlyTaggings(Iterator<T> iter) {
+			super(iter);
 		}
-
 		@Override
-		public void remove() { throw new UnsupportedOperationException(); }
+		public boolean keep(T cur) {
+			return !(cur instanceof FNParse);
+		}
 	}
 
 	public static final class SkipExceptions implements Iterator<FNTagging> {
