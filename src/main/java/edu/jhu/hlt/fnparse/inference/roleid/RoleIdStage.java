@@ -23,8 +23,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -129,9 +129,7 @@ public class RoleIdStage
 			public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
 			@Override
 			public EvalFunc getObjective() {
-				//return GenerousEvaluation.generousF1;
-				// TODO could use fullF1
-				return BasicEvaluation.argOnlyMicroF1;
+				return GenerousEvaluation.generousF1;
 			}
 			@Override
 			public List<Double> getRecallBiasesToSweep() { return biases; }

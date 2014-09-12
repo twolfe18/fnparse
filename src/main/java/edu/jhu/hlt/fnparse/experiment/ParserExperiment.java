@@ -76,32 +76,29 @@ public class ParserExperiment {
 		// Set up array job configurations
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit",
-				"frameId".equals(mode)
-				? Arrays.asList(50, 400, 999999)
-				: Arrays.asList(10, 100, 999999));
-		List<Integer> possiblePasses = "frameId".equals(mode)
-				? Arrays.asList(2, 6)
-				: Arrays.asList(1, 3);
-		Option<Integer> passes = ajh.addOption("passes", possiblePasses);
-		Option<Integer> batchSize = ajh.addOption("batchSize", Arrays.asList(4, 40));
-		Option<Double> regularizer = ajh.addOption("regularizer", Arrays.asList(100d, 1000d, 10000d));
-
-		// TODO add back the part of the experiment where we predict frames and
-		// args (argId mode right now just takes gold frames).
-		//Option<Boolean> useGoldFrames = ajh.addOption("useGoldFrames", Arrays.asList(true, false));
+				Arrays.asList(50, 400, 999999));
+		Option<Integer> passes = ajh.addOption("passes",
+				Arrays.asList(2, 5));
+		Option<Integer> batchSize = ajh.addOption("batchSize",
+				Arrays.asList(5, 50));
+		Option<Double> regularizer = ajh.addOption("regularizer",
+				Arrays.asList(100d, 1000d, 10000d));
 
 		// Choose an array job configuration
 		if(jobIdx < 0) {
 			System.out.println(ajh.helpString(999));
 			return;
+		} else {
+			ajh.setConfig(jobIdx);
 		}
-		else ajh.setConfig(jobIdx);
 		LOG.info("config = " + ajh.getStoredConfig());
 
 		// Get the data
 		DataSplitter ds = new DataSplitter();
 		List<FNParse> all = DataUtil.iter2list(
-				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+				new FNIterFilters.SkipSentences<FNParse>(
+				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
+				Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
 		List<FNParse> trainTune = new ArrayList<FNParse>();
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> tune = new ArrayList<FNParse>();
@@ -169,10 +166,6 @@ public class ParserExperiment {
 				mode));
 
 		// Train
-		// null means do auto learning rate selection
-		//Double lrMult = "frameId".equals(mode) ? null : 0.05d;
-		Double lrMult = 0.05d;
-		System.out.println("[ParserExperiment] starting, lrMult=" + lrMult);
 		parser.train(train);
 		System.out.printf("[ParserExperiment] after training, #features=%d\n",
 				parser.getAlphabet().size());
@@ -203,7 +196,8 @@ public class ParserExperiment {
 		List<FNParse> trainSubset = train.size() > maxTrainEval
 				? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand)
 				: train;
-		System.out.println("[ParserExperiment] predicting on train (sub)set...");
+		System.out.println("[ParserExperiment] predicting on train (sub)set "
+				+ "of size " + trainSubset.size() + "...");
 		predicted = parser.predict(
 				DataUtil.stripAnnotations(trainSubset), trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);

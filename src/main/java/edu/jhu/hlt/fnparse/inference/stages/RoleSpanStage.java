@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
@@ -57,7 +58,7 @@ public class RoleSpanStage
 		public int maxArgRoleExpandRight = 5;
 
 		public Double learningRate = 0.05;	// null means auto-select
-		public Regularizer regularizer = new L2(1000d);
+		public Regularizer regularizer = new L2(1_000_000d);
 		public int batchSize = 4;
 		public int passes = 2;
 
@@ -306,35 +307,6 @@ public class RoleSpanStage
 					if (!makeExpansionVar) continue;
 					addExpansionVar(ti, fiIdx, j, k, goldArg);
 				}
-			}
-		}
-
-		private static class FrameRoleInstance {
-			public final Frame frame;
-			public final Span target;
-			public final int role;
-			public FrameRoleInstance(Frame frame, Span target, int role) {
-				if (role >= frame.numRoles())
-					throw new IllegalArgumentException();
-				this.frame = frame;
-				this.target = target;
-				this.role = role;
-			}
-			@Override
-			public int hashCode() {
-				return 197 * frame.hashCode()
-						+ 199 * target.hashCode()
-						+ 211 * role;
-			}
-			@Override
-			public boolean equals(Object other) {
-				if (other instanceof FrameRoleInstance) {
-					FrameRoleInstance fri = (FrameRoleInstance) other;
-					return role == fri.role
-							&& target.equals(fri.target)
-							&& frame.equals(fri.frame);
-				}
-				return false;
 			}
 		}
 

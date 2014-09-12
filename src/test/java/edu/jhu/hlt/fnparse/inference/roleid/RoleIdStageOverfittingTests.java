@@ -57,8 +57,6 @@ public class RoleIdStageOverfittingTests {
 			StageDatumExampleList<FNTagging, FNParse> data =
 					rid.setupInference(x, y);
 
-			// Only want this turned on until after train/tune has been done
-			//RoleIdDecodable.debug = "FNFUTXT1274783".equals(p.getSentence().getId());
 			FNParse yhat = data.decodeAll().get(0);
 			double f1 = eval.evaluate(new SentenceEval(p, yhat));
 
@@ -80,14 +78,17 @@ public class RoleIdStageOverfittingTests {
 	}
 
 	public static List<FNParse> parseToEvaluateOn() {
-		boolean debug = false;
+		boolean debug = true;
 		if (debug) {
 			return Arrays.asList(FNIterFilters.findBySentenceId(
-					FileFrameInstanceProvider.debugFIP.getParsedSentences(),
-					"FNFUTXT1274783"));
+					//FileFrameInstanceProvider.debugFIP.getParsedSentences(),
+					FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
+					"FNFUTXT1274943"));
+					//"FNFUTXT1274783"));
 		} else {
 			return TestingUtil.filterOutExamplesThatCantBeFit(DataUtil.iter2list(
-					FileFrameInstanceProvider.debugFIP.getParsedSentences()));
+					FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+					//FileFrameInstanceProvider.debugFIP.getParsedSentences()));
 		}
 	}
 }
