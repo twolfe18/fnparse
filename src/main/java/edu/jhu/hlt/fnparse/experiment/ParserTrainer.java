@@ -163,7 +163,8 @@ public class ParserTrainer {
 			assert "argSpans".equals(mode);
 			parser.getArgExpansionParams().batchSize = batchSize.get();
 			parser.getArgExpansionParams().passes = passes.get();
-			parser.getArgExpansionParams().regularizer = new L2(regularizer.get());
+			parser.getArgExpansionParams().regularizer =
+					new L2(regularizer.get());
 			parser.useGoldArgId();
 		}
 

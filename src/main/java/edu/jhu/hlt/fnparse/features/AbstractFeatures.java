@@ -22,8 +22,8 @@ import edu.jhu.util.Alphabet;
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
-	
-	private Logger log = Logger.getLogger(getClass());
+
+	protected Logger log = Logger.getLogger(getClass());
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 
