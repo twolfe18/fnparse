@@ -87,6 +87,26 @@ public class RoleIdStage
 	public void disablePruning() {
 		params.argPruner = new NoArgPruner();
 	}
+	
+	@Override
+	public Double getLearningRate() {
+		return params.learningRate;
+	}
+	
+	@Override
+	public Regularizer getRegularizer() {
+		return params.regularizer;
+	}
+	
+	@Override
+	public int getBatchSize() {
+		return params.batchSize;
+	}
+	
+	@Override
+	public int getNumTrainingPasses() {
+		return params.passes;
+	}
 
 	@Override
 	public void train(List<FNTagging> x, List<FNParse> y) {

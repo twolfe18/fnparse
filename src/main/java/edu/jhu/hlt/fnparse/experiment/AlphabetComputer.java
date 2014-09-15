@@ -61,7 +61,7 @@ public class AlphabetComputer {
 		test = null;	// don't need this
 
 		// compute features and populate the alphabet
-		parser.computeAlphabet(train, scanFeaturesTimeInMinutes, maxFeaturesAdded);
+		parser.scanFeatures(train, scanFeaturesTimeInMinutes, maxFeaturesAdded);
 
 		// write model to disk
 		long time = System.currentTimeMillis();

@@ -9,23 +9,27 @@ import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
 
 /**
- * TODO finish this
- * i want to use it for making the pipelined parser skip the later stages
- * (just pass through a FNTagging as a FNParse).
+ * Passes the gold answer as output. Assumes that the gold answer is always
+ * given during setupInference. Does no training.
  * 
  * @author travis
  *
  * @param <I>
  * @param <O>
  */
-public class IdentityStage<I, O> implements Stage<I, O> {
-	private final Logger LOG = Logger.getLogger(IdentityStage.class);
-	
+public class OracleStage<I, O> implements Stage<I, O> {
+	private final Logger LOG = Logger.getLogger(OracleStage.class);
+
 	private FgModel model = new FgModel(0);
 
 	@Override
 	public FgModel getWeights() {
 		return model;
+	}
+
+	@Override
+	public void setWeights(FgModel weights) {
+		throw new RuntimeException("don't call this!");
 	}
 
 	@Override
@@ -55,18 +59,18 @@ public class IdentityStage<I, O> implements Stage<I, O> {
 		}
 		List<StageDatum<I, O>> data = new ArrayList<>();
 		for (int i = 0; i < input.size(); i++)
-			data.add(new IdentityStageDatum<I, O>(input.get(i), output.get(i)));
+			data.add(new OracleStageDatum<I, O>(input.get(i), output.get(i)));
 		return new StageDatumExampleList<>(data);
 	}
 	
-	static class IdentityStageDatum<I, O> implements StageDatum<I, O> {
+	static class OracleStageDatum<I, O> implements StageDatum<I, O> {
 		private final I input;
 		private final O output;
 		/**
 		 * You have to provide an output, which will be used in place of
 		 * inference.
 		 */
-		public IdentityStageDatum(I input, O output) {
+		public OracleStageDatum(I input, O output) {
 			this.input = input;
 			this.output = output;
 		}

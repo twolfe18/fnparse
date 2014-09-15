@@ -16,6 +16,8 @@ import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -36,8 +38,8 @@ import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class ArgPruner implements Serializable, IArgPruner {
-
 	private static final long serialVersionUID = 1L;
+	public static final Logger LOG = Logger.getLogger(ArgPruner.class);
 
 	/**
 	 * just creates an arg pruner and memoizes the results on disk
@@ -94,32 +96,32 @@ public class ArgPruner implements Serializable, IArgPruner {
 		 * 1.4M	toydata/arg-pruning/oos.gz
 		 * 4.2M	toydata/arg-pruning/oos.ser
 		 */
-		System.out.println(t);
+		LOG.info(t);
 	}
-	
+
 	public static final Set<String> pennPunctuationPosTags =
 			new HashSet<String>(Arrays.asList(":", ".", "--", ",", "(", ")", "$", "``", "\"", "''"));
 	public static final Set<String> pennOtherPrunePosTags =
 			new HashSet<String>(Arrays.asList("#", "$", "FW", "EX", "POS", "LS"));
-	
+
 	public static enum LexPruneMethod {
 		NONE,
 		SYNSET,
 		EXACT
 	}
-	
+
 	//private ParserParams params;
 	private TargetPruningData targetPruningData;
 	private HeadFinder headFinder;
 	private boolean pruneByPOS;
 	private LexPruneMethod lexMethod;
-	
+
 	private int argsKept = 0;
 	private int argsPrunedPos = 0;
 	private int argsPrunedLex = 0;
 	private int argsFalsePruned = 0;
 	private int argsPruningInterval = 125000;	// <=0 for no reporting
-	
+
 	@Override
 	public double pruneRatio() {
 		int pruned = argsPrunedLex + argsPrunedPos;
@@ -127,12 +129,12 @@ public class ArgPruner implements Serializable, IArgPruner {
 		if(total == 0) return 0d;
 		return ((double) pruned) / total;
 	}
-	
+
 	@Override
 	public void falsePrune() {
 		argsFalsePruned++;
 	}
-	
+
 	@Override
 	public int numFalsePrunes() {
 		return argsFalsePruned;
@@ -207,8 +209,12 @@ public class ArgPruner implements Serializable, IArgPruner {
 		argsKept++;
 
 		if(argsPruningInterval > 0 && argsKept % argsPruningInterval == 0) {
-			System.out.printf("[ArgPruner] pruned %.1f %% of args seen, %d by POS, %d by lex, with %d false prunes\n",
-					pruneRatio()*100d, argsPrunedPos, argsPrunedLex, argsFalsePruned);
+			LOG.info(String.format("[ArgPruner] pruned %.1f %% of args seen, %d "
+					+ "by POS, %d by lex, with %d false prunes",
+					pruneRatio()*100d,
+					argsPrunedPos,
+					argsPrunedLex,
+					argsFalsePruned));
 		}
 
 		return false;
@@ -226,7 +232,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 		else {
 			// compute the word lists
 			Timer t = Timer.start("[ArgPruner]");
-			System.out.println("[ArgPruner] building role word and synset maps...");
+			LOG.info("[ArgPruner] building role word and synset maps...");
 			roleWordMap = new Set[FrameIndex.framesInFrameNet+1][];
 			roleSynsetMap = new Set[FrameIndex.framesInFrameNet+1][];
 			FrameIndex fi = FrameIndex.getInstance();
@@ -253,12 +259,12 @@ public class ArgPruner implements Serializable, IArgPruner {
 							e.printStackTrace();
 							continue;
 						}
-						
+
 						// don't want to recover for cases where we can't do the proper
 						// FN POS tag conversion or if we can't figure out the lemma
 						if(lu == null)
 							continue;
-						
+
 						// ======= EXACT WORD MATCH ==================
 						Set<LexicalUnit> ws = roleWords[k];
 						if(ws == null) {
@@ -266,7 +272,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 							roleWords[k] = ws;
 						}
 						ws.add(lu);
-						
+
 						// ======= SYNSET MATCH ======================
 						ws = roleSynset[k];
 						if(ws == null) {
@@ -294,7 +300,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 				roleSynsetMap[f.getId()] = roleSynset;
 			}
 			t.stop();
-		
+
 			// save this data for later
 			if(persistRoleWordMapTo != null)
 				writeLUTensor(persistRoleWordMapTo, roleWordMap);
@@ -302,21 +308,21 @@ public class ArgPruner implements Serializable, IArgPruner {
 				writeLUTensor(persistRoleSynsetMapTo, roleSynsetMap);
 		}
 	}
-	
+
 	public Set<LexicalUnit>[][] getRoleWordMap() {
 		if(roleWordMap == null)
 			init();
 		return roleWordMap;
 	}
-	
+
 	public Set<LexicalUnit>[][] getRoleSynsetMap() {
 		if(roleSynsetMap == null)
 			init();
 		return roleSynsetMap;
 	}
-	
+
 	private static void writeLUTensor(File f, Set<LexicalUnit>[][] saa) {
-		System.out.println("[ArgPruner writeLUTensor] writing to " + f.getPath());
+		LOG.info("[ArgPruner writeLUTensor] writing to " + f.getPath());
 		try {
 			// write out (frame.id, role.id, numWords, word*)
 			DataOutputStream dos = new DataOutputStream(new GZIPOutputStream(new FileOutputStream(f)));
@@ -337,16 +343,16 @@ public class ArgPruner implements Serializable, IArgPruner {
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
-	
+
 	@SuppressWarnings("unchecked")
 	public static Set<LexicalUnit>[][] readLUTensor(File f) {
-		System.out.println("[ArgPruner readLUTensor] reading from " + f.getPath());
+		LOG.info("[ArgPruner readLUTensor] reading from " + f.getPath());
 		try {
 			Set<LexicalUnit>[][] saa = new Set[FrameIndex.framesInFrameNet+1][];
 			FrameIndex fi = FrameIndex.getInstance();
 			for(Frame fr : fi.allFrames())
 				saa[fr.getId()] = new Set[fr.numRoles()];
-			
+
 			DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(f)));
 			while(true) {
 				int frameId = dis.readInt();
@@ -363,6 +369,4 @@ public class ArgPruner implements Serializable, IArgPruner {
 		}
 		catch(Exception e) { throw new RuntimeException(e); }
 	}
-	
-
 }

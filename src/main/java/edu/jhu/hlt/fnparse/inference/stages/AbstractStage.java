@@ -80,6 +80,16 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	@Override
+	public void setWeights(FgModel weights) {
+		if (weights == null)
+			throw new IllegalArgumentException();
+		if (this.weights == null)
+			this.weights = weights;
+		else
+			this.weights.setParams(weights.getParams());
+	}
+
+	@Override
 	public boolean logDomain() {
 		return globalParams.logDomain;
 	}
@@ -160,8 +170,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	@Override
 	public void train(List<I> x, List<O> y) {
-		log.warn("Applying default training params because one wasn't provided");
-		assert this.getClass().equals(RoleSpanStage.class);
 		train(x, y, getLearningRate(),
 				getRegularizer(), getBatchSize(), getNumTrainingPasses());
 	}
@@ -233,7 +241,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 		// Get the data
 		StageDatumExampleList<I, O> exs = this.setupInference(x, y);
-	
+
 		// Setup model and train
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		try {

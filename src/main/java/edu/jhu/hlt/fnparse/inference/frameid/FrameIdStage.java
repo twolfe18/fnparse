@@ -109,6 +109,26 @@ public class FrameIdStage
 		((FrameFactorFactory) params.factorsTemplate)
 			.setAlphabet(globalParams.getFeatureAlphabet());
 	}
+	
+	@Override
+	public Double getLearningRate() {
+		return params.learningRate;
+	}
+	
+	@Override
+	public Regularizer getRegularizer() {
+		return params.regularizer;
+	}
+	
+	@Override
+	public int getBatchSize() {
+		return params.batchSize;
+	}
+	
+	@Override
+	public int getNumTrainingPasses() {
+		return params.passes;
+	}
 
 	public void train(List<FNParse> examples) {
 		Collections.shuffle(examples, globalParams.rand);
@@ -316,8 +336,7 @@ public class FrameIdStage
 			final int n = sentence.size();
 			if(n < 4) {
 				// TODO check more carefully, like 4 content words or has a verb
-				System.err.println("[FrameIdStage] skipping short sentence: "
-						+ sentence);
+				LOG.warn("skipping short sentence: " + sentence);
 				return;
 			}
 			for(int i=0; i<n; i++) {

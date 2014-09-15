@@ -1,50 +1,72 @@
 package edu.jhu.hlt.fnparse.experiment;
 
-import java.util.*;
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.fnparse.data.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FNIterFilters;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
-import edu.jhu.hlt.fnparse.util.*;
+import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
+import edu.jhu.hlt.fnparse.util.DataSplitReader;
+import edu.jhu.hlt.fnparse.util.ModelIO;
+import edu.jhu.hlt.fnparse.util.ModelMerger;
 import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.util.Alphabet;
 
 /**
- * This class runs experiments where there are two types of options:
- * 1) run-specific options like whether to do frameId or argId which are specified as command line
- *    options
- * 2) grid-job-specific options like whether the regularizer should be 1e-3 or 1e-4, which serve as
- *    the parameters to be swept.
+ * This class trains PipelinedFnParsers where there are two types of options:
+ * 1) run-specific options like whether to do frameId or argId which are
+ *    specified as command line options.
+ * 2) grid-job-specific options like whether the regularizer should be 1e-3 or
+ *    1e-4, which serve as the parameters to be swept.
  * 
- * See ParserExperimentWrapper.qsub for how this class interacts with the grid engine.
+ * Concerning Training:
+ * - we always use the gold output from stage (N-1) to train stage N.
+ * 
+ * See ParserExperimentWrapper.qsub for how this class interacts with the
+ * grid engine.
  * 
  * @author travis
  */
-public class ParserExperiment {
-	
-	public static final Logger LOG = Logger.getLogger(ParserExperiment.class);
-	
-	// In real experiments, this should be false. This gives the parser access
-	// to both 1-best dep syntax + latent syntax.
-	public static boolean useSyntaxFeaturesForLatentParser = false;
+public class ParserTrainer {
+
+	public static final Logger LOG = Logger.getLogger(ParserTrainer.class);
+
+	// These specify the names of the files that are expected to be in the
+	// previous stage's model directory.
+	public static final String ALPHABET_NAME = "features.alphabet.txt";
+	public static final String MODEL_NAME = "model.gz";
+
+	public static final File SENTENCE_ID_SPLITS =
+				new File("toydata/development-split.dipanjan-train.txt");
 
 	public static void main(String[] args) throws IOException {
 
 		if(args.length != 5) {
 			System.out.println("Please provide:");
 			System.out.println("1) A mode. Possible values:");
-			System.out.println("     \"frameId\" will train and test just the frame identification stage");
-			System.out.println("     \"argId\" will use gold frames and train and test the argId stage(s)");
+			System.out.println("     \"frameId\" trains a model to identity frame targets in a sentence");
+			System.out.println("     \"argId\" trains a model to find the heads of the arguments of frames realized in a sentence");
+			System.out.println("     \"argSpans\" trains a model to determine the constituency boundaries of arguments");
 			System.out.println("2) A job index for sweep parameters (run with -1 to see options)");
 			System.out.println("3) A working directory (for output files)");
-			System.out.println("4) An alphabet of pre-computed feature names (use AlphabetComputer or an earlier stage in the pipeline)");
-			System.out.println("   This may be the string \"none\" if you want one to be computed (slow)");
+			//System.out.println("4) A model directory which contains the alphabet and model weights.");
+			//System.out.println("     This should be the working directory from the training run of the previous stage");
+			//System.out.println("     or \"none\" for frameId");
+			System.out.println("4) NOTHING -- this is a placeholder for missing functionality");
 			System.out.println("5) A syntax mode. Possible values:");
 			System.out.println("     \"none\" means that features have no access to syntax information");
 			System.out.println("     \"regular\" means that 1-best parses are used for features");
@@ -56,19 +78,15 @@ public class ParserExperiment {
 		final String mode = args[0];
 		final int jobIdx = Integer.parseInt(args[1]);
 		final File workingDir = new File(args[2]);
-		final String featureAlphabet = args[3];
+		//final String prevModelDirName = args[3];
 		final String syntaxMode = args[4];
 		if(!workingDir.isDirectory()) workingDir.mkdirs();
 
 		// Validation
-		if (!Arrays.asList("frameId", "argId").contains(mode))
+		if (!Arrays.asList("frameId", "argId", "argSpans").contains(mode))
 			throw new IllegalArgumentException("illegal mode: " + mode);
 		if(!Arrays.asList("regular", "none", "latent").contains(syntaxMode))
 			throw new IllegalStateException("unknown syntax mode: " + syntaxMode);
-		if(!"none".equals(featureAlphabet) && !new File(featureAlphabet).isFile()) {
-			throw new RuntimeException(featureAlphabet + " is not valid\n"
-					+ "Use AlphabetComputer to make an alphabet model");
-		}
 
 		long start = System.currentTimeMillis();
 		LOG.info("[main] workingDir = " + workingDir.getPath());
@@ -94,41 +112,29 @@ public class ParserExperiment {
 		LOG.info("config = " + ajh.getStoredConfig());
 
 		// Get the data
-		DataSplitter ds = new DataSplitter();
 		List<FNParse> all = DataUtil.iter2list(
 				new FNIterFilters.SkipSentences<FNParse>(
 				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
 				Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
-		List<FNParse> trainTune = new ArrayList<FNParse>();
-		List<FNParse> train = new ArrayList<FNParse>();
-		List<FNParse> tune = new ArrayList<FNParse>();
-		List<FNParse> test = new ArrayList<FNParse>();
-		ds.split(all, trainTune, test, 0.2d, "fn15_train-test");
-		int nTest = Math.min(75, (int) (0.15d * trainTune.size()));
-		ds.split(trainTune, train, tune, nTest, "fn15_train-tune");
-
+		DataSplitReader dsr = new DataSplitReader(SENTENCE_ID_SPLITS);
+		List<FNParse> train = dsr.getSection(all, "train", false);
+		List<FNParse> tune = dsr.getSection(all, "tune", false);
+		List<FNParse> test = dsr.getSection(all, "test", false);
 		if(nTrainLimit.get() < train.size()) {
 			train = DataUtil.reservoirSample(
 					train, nTrainLimit.get(), new Random(9001));
 		}
-
-
-		// TODO I need to write out the train/dev/test split to a text file
-		// the evaluation experiment code will read this in and know what to test on
-
-
-		printMemUsage();
 		LOG.info("#train=" + train.size()
 				+ " #tune=" + tune.size()
 				+ " #test=" + test.size());
+		printMemUsage();
 
 		// Create parser
 		ParserParams parserParams = new ParserParams();
 		// Syntax mode (e.g. latent vs regular vs none)
 		if ("latent".equals(syntaxMode)) {
 			parserParams.useLatentDepenencies = true;
-			parserParams.useSyntaxFeatures =
-					useSyntaxFeaturesForLatentParser;
+			parserParams.useSyntaxFeatures = false;
 		} else if ("regular".equals(syntaxMode)) {
 			parserParams.useLatentDepenencies = false;
 			parserParams.useSyntaxFeatures = true;
@@ -147,29 +153,44 @@ public class ParserExperiment {
 			fIdStage.params.passes = passes.get();
 			fIdStage.params.regularizer = new L2(regularizer.get());
 			parser.disableArgId();
-		} else {
+		} else if ("argId".equals(mode)) {
 			parser.getArgIdParams().batchSize = batchSize.get();
 			parser.getArgIdParams().passes = passes.get();
 			parser.getArgIdParams().regularizer = new L2(regularizer.get());
 			parser.useGoldFrameId();
+			parser.disableArgSpans();
+		} else {
+			assert "argSpans".equals(mode);
+			parser.getArgExpansionParams().batchSize = batchSize.get();
+			parser.getArgExpansionParams().passes = passes.get();
+			parser.getArgExpansionParams().regularizer = new L2(regularizer.get());
+			parser.useGoldArgId();
 		}
 
-		// Either load a feature alphabet or compute one
-		if ("none".equals(featureAlphabet)) {
-			int maxMinutes = 45;
-			int maxFeatures = 15_000_000;
-			// TODO this needs to be stage-aware
-			parser.computeAlphabet(train, maxMinutes, maxFeatures);
-		} else {
-			parser.setAlphabet(ModelIO.readAlphabet(new File(featureAlphabet)));
-		}
-		LOG.info(String.format(
-				"[ParserExperiment] this model was read in from %s, and we're"
-				+ "assuming that this model's alphabet (size=%d) already "
-				+ "includes all of the features needed to train in %s mode\n",
-				featureAlphabet, 
-				parser.getParams().getFeatureAlphabet().size(),
-				mode));
+		/* THIS IS NOT NEEDED, we're using gold output from previous stage
+		// Read in previous model and alphabet
+		if (!"none".equals(prevModelDirName)) {
+			File prevModel = new File(prevModelDirName);
+			if (!prevModel.isDirectory()) {
+				throw new RuntimeException(
+						prevModelDirName + " is not a directory");
+			}
+			// Alphabet
+			File alphFile = new File(prevModel, ALPHABET_NAME);
+			if (!alphFile.isFile()) throw new RuntimeException();
+			LOG.info("reading alphabet from " + alphFile.getPath());
+			parser.setAlphabet(ModelIO.readAlphabet(alphFile));
+			// We don't need to read in the previous model because we are
+			// training on oracle output from the previous stage.
+			// We shouldn't even copy it over because we're going to let the
+			// evaluation experiment choose which model to take from each stage
+			// and stitch them together into a full pipeline model.
+		} */
+
+		// Compute the feature alphabet
+		int maxTimeInMinutes = 45;
+		int maxFeaturesAdded = 10_000_000;
+		parser.scanFeatures(train, maxTimeInMinutes, maxFeaturesAdded);
 
 		// Train
 		parser.train(train);
@@ -178,7 +199,12 @@ public class ParserExperiment {
 		printMemUsage();
 
 		// Write parameters out as soon as possible
-		parser.writeModel(new File(workingDir, mode + ".model.gz"));
+		//parser.writeModel(new File(workingDir, MODEL_NAME));
+		//parser.writeAlphabet(new File(workingDir, ALPHABET_NAME));
+		writeMergedModel(
+				new File(workingDir, ALPHABET_NAME),
+				new File(workingDir, MODEL_NAME),
+				parser);
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -221,16 +247,35 @@ public class ParserExperiment {
 				true);
 	}
 
-	
+	public static void writeMergedModel(
+			File alphabetDest, File modelDest, PipelinedFnParser parser) {
+		Alphabet<String> alph = parser.getAlphabet();
+		ModelIO.writeAlphabet(alph, alphabetDest);
+		FgModel wf = parser.getFrameIdStage().getWeights();
+		FgModel wa = parser.getArgIdStage().getWeights();
+		FgModel ws = parser.getArgSpanStage().getWeights();
+		ModelMerger.Model<String> merged = ModelMerger.merge(
+				new ModelMerger.Model<>(alph, wf),
+				new ModelMerger.Model<>(alph, wa),
+				new ModelMerger.Model<>(alph, ws));
+		assert alph.size() == merged.alphabet.size();
+		ModelIO.writeBinary(merged.getFgModel(), modelDest);
+	}
+
+	public static ModelMerger.Model<String> readMergedModel(
+			File alphabetSrc, File modelSrc) {
+		return new ModelMerger.Model<String>(
+				ModelIO.readAlphabet(alphabetSrc),
+				ModelIO.readBinary(modelSrc));
+	}
+
 	public static void printMemUsage() {
 		double used = Runtime.getRuntime().totalMemory();
 		used /= 1024d * 1024d * 1024d;
 		double free = Runtime.getRuntime().maxMemory();
 		free /= 1024d * 1024d * 1024d;
 		free -= used;
-		System.out.printf(
-				"[ParserExperiment] using %.2f GB, %.2f GB free\n", used, free);
+		LOG.info(String.format("using %.2f GB, %.2f GB free", used, free));
 	}
-	
 }
 

@@ -30,15 +30,17 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * @author travis
  */
 public interface Stage<Input, Output> extends HasFgModel {
-	
+
 	public String getName();
 	
+	//public void scanFeatures(List<Input> x, List<Output> y);
+
 	/**
 	 * Should include any tuning steps that are necessary (implementer of this
 	 * method should split off dev/tune data)
 	 */
 	public void train(List<Input> x, List<Output> y);
-	
+
 	/**
 	 * Create the FactorGraph and other materials needed for prediction.
 	 * Technically, {@link Decodable} is lazy, so all that this is guaranteed to

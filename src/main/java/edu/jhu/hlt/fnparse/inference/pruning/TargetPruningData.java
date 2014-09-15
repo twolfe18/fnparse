@@ -3,6 +3,8 @@ package edu.jhu.hlt.fnparse.inference.pruning;
 import java.io.*;
 import java.util.*;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
@@ -12,10 +14,9 @@ import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class TargetPruningData implements Serializable {
-
 	private static final long serialVersionUID = 1L;
-	
-	public static final boolean debug = false;
+	public static final Logger LOG = Logger.getLogger(TargetPruningData.class);
+	public static final boolean DEBUG = false;
 
 	private TargetPruningData() {}	// singleton
 	private static final TargetPruningData singleton = new TargetPruningData();
@@ -33,7 +34,8 @@ public class TargetPruningData implements Serializable {
 				throw new RuntimeException(e);
 			}
 			long time = System.currentTimeMillis() - start;
-			System.out.printf("loaded wordnet in %.1f seconds\n", time/1000d);
+			LOG.info(String.format(
+					"loaded wordnet in %.1f seconds", time/1000d));
 		}
 		return dict;
 	}
@@ -42,7 +44,7 @@ public class TargetPruningData implements Serializable {
 	/** only use this if you want to gaurantee when the data is loaded (it calls the automatically otherwise */
 	public synchronized void init() {
 		long start = System.currentTimeMillis();
-		System.out.println("[TargetPruningData] init starting...");
+		LOG.info("[TargetPruningData] init starting...");
 		IRAMDictionary dict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
 		prototypesByStem = new HashMap<String, List<FrameInstance>>();
@@ -68,11 +70,11 @@ public class TargetPruningData implements Serializable {
 
 				// TODO talk to pushpendre about why this is happening
 				if(word.length() == 0) {
-					System.err.println("length 0 word in: " + s.toString());
+					LOG.warn("length 0 word in: " + s.toString());
 					continue;
 				}
 
-				if(debug) {
+				if(DEBUG) {
 					System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s\n",
 							fi.getFrame().getName(), word, pos);
 				}
@@ -83,7 +85,7 @@ public class TargetPruningData implements Serializable {
 					stems = Arrays.asList(word + "-UNSTEMMED");
 				}
 				for(String stem : stems) {
-					if(debug) {
+					if(DEBUG) {
 						System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s stem=%s\n",
 								fi.getFrame().getName(), word, pos, stem);
 					}
@@ -97,8 +99,8 @@ public class TargetPruningData implements Serializable {
 				}
 			}
 		}
-		System.out.printf("[TargetPruningData] done in %.1f seconds.\n",
-				(System.currentTimeMillis()-start)/1000d);
+		LOG.info(String.format("[TargetPruningData] done in %.1f seconds.",
+				(System.currentTimeMillis()-start)/1000d));
 	}
 	
 	public List<FrameInstance> getPrototypesByStem(
@@ -130,16 +132,15 @@ public class TargetPruningData implements Serializable {
 		}
 		return fis;
 	}
-	
+
 	private transient Map<String, List<FrameInstance>> prototypesByStem;
 	public synchronized Map<String, List<FrameInstance>> getPrototypesByStem() {
 		if(prototypesByStem == null)
 			init();
 		return prototypesByStem;
 	}
-	
-	
-	// what i want is the same Frame -> List[Prototype] mapping that i would
+
+	// What i want is the same Frame -> List[Prototype] mapping that I would
 	// have built for prototype vars anyway
 	private transient Map<Frame, List<FrameInstance>> prototypesByFrame;
 	public synchronized Map<Frame, List<FrameInstance>> getPrototypesByFrame() {
@@ -177,7 +178,7 @@ public class TargetPruningData implements Serializable {
 	 * keys are LU's from FrameNet (note that POS tag set is not PTB)
 	 */
 	private synchronized void initLexicalUnitData() {
-		System.out.println("[TriggerPruningParams] building LU => List<Frame> index...");
+		LOG.info("[TriggerPruningParams] building LU => List<Frame> index...");
 		word2pos2frames = new HashMap<String, Map<String, List<Frame>>>();
 		for(Frame f : FrameIndex.getInstance().allFrames()) {
 			int nLU = f.numLexicalUnits();

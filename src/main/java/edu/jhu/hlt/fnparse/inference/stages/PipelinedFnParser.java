@@ -1,12 +1,15 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
@@ -45,13 +48,24 @@ public class PipelinedFnParser implements Serializable {
 	}
 
 	// TODO replace this with setters for each stage
+
 	public void disableArgId() {
-		argId = new IdentityStage<>();
+		argId = new OracleStage<>();
+		argExpansion = new OracleStage<>();
+	}
+
+	public void disableArgSpans() {
 		argExpansion = new IdentityStage<>();
 	}
 
 	public void useGoldFrameId() {
-		frameId = new IdentityStage<>();
+		frameId = new OracleStage<>();
+	}
+
+	/** Implies useGoldFrameId */
+	public void useGoldArgId() {
+		useGoldFrameId();
+		argId = new OracleStage<>();
 	}
 
 	public FgModel getFrameIdWeights() { return frameId.getWeights(); }
@@ -65,18 +79,21 @@ public class PipelinedFnParser implements Serializable {
 	public ParserParams getParams() {
 		return params;
 	}
+
 	public FrameIdStage.Params getFrameIdParams() {
 		if (frameId instanceof FrameIdStage)
 			return ((FrameIdStage) frameId).params;
 		throw new RuntimeException("you can't get params for this type of "
 				+ "frameId stage: " + frameId.getClass().getName());
 	}
+
 	public RoleIdStage.Params getArgIdParams() {
 		if (argId instanceof RoleIdStage)
 			return ((RoleIdStage) argId).params;
 		throw new RuntimeException("you can't get params for this type of "
 				+ "argId stage: " + argId.getClass().getName());
 	}
+
 	public RoleSpanStage.Params getArgExpansionParams() {
 		if (argExpansion instanceof RoleSpanStage)
 			return ((RoleSpanStage) argExpansion).params;
@@ -87,20 +104,76 @@ public class PipelinedFnParser implements Serializable {
 	public Stage<Sentence, FNTagging> getFrameIdStage() {
 		return frameId;
 	}
-	// TODO other stages
+	
+	public Stage<FNTagging, FNParse> getArgIdStage() {
+		return argId;
+	}
+	
+	public Stage<FNParse, FNParse> getArgSpanStage() {
+		return argExpansion;
+	}
 
 	/**
 	 * Writes just the weight vectors to a compressed binary file.
 	 */
 	public void writeModel(File f) throws IOException {
+		LOG.info("writing model to " + f.getPath());
 		DataOutputStream dos = new DataOutputStream(
 				new GZIPOutputStream(new FileOutputStream(f)));
 		ModelIO.writeBinary(getFrameIdWeights(), dos);
 		ModelIO.writeBinary(getArgIdWeights(), dos);
 		ModelIO.writeBinary(getArgSpanWeights(), dos);
 		dos.close();
+		LOG.info("done writing model");
 	}
-	
+
+	/**
+	 * This does not play well with others (one opaque file with 3 models in it)
+	 * ParserEvaluator needs more flexibility in stitching different models together
+	 */
+	public void readModel(File f) throws IOException {
+		LOG.info("reading model from " + f.getPath());
+		DataInputStream dis = new DataInputStream(
+				new GZIPInputStream(new FileInputStream(f)));
+		frameId.setWeights(ModelIO.readBinary(dis));
+		argId.setWeights(ModelIO.readBinary(dis));
+		argExpansion.setWeights(ModelIO.readBinary(dis));
+		dis.close();
+		LOG.info("done reading model");
+	}
+
+	/* this makes too much work for ParserEvaluator
+	public void writeModel(
+			File frameIdWeights,
+			File argIdWeights,
+			File argSpanWeights) throws IOException {
+		if (frameIdWeights != null)
+			ModelIO.writeBinary(getFrameIdWeights(), frameIdWeights);
+		if (argIdWeights != null)
+			ModelIO.writeBinary(getArgIdWeights(), argIdWeights);
+		if (argSpanWeights != null)
+			ModelIO.writeBinary(getArgSpanWeights(), argSpanWeights);
+	}
+
+	public void readModel(
+			File frameIdWeights,
+			File argIdWeights,
+			File argSpanWeights) throws IOException {
+		if (frameIdWeights != null)
+			frameId.setWeights(ModelIO.readBinary(frameIdWeights));
+		if (argIdWeights != null)
+			argId.setWeights(ModelIO.readBinary(argIdWeights));
+		if (argSpanWeights != null)
+			argExpansion.setWeights(ModelIO.readBinary(argSpanWeights));
+	}
+	*/
+
+	public void writeAlphabet(File f) {
+		LOG.info("writing alphabet to " + f.getPath());
+		ModelIO.writeAlphabet(getAlphabet(), f);
+		LOG.info("done writing alphabet");
+	}
+
 	public void setAlphabet(Alphabet<String> featureIndices) {
 		params.setFeatureAlphabet(featureIndices);
 	}
@@ -114,7 +187,9 @@ public class PipelinedFnParser implements Serializable {
 	 * @param maxTimeInMinutes is the cutoff for each of the three stages,
 	 *        so its possible that it could take up to 3x longer than that
 	 */
-	public void computeAlphabet(List<FNParse> examples, double maxTimeInMinutes,
+	public void scanFeatures(
+			List<FNParse> examples,
+			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
 		Timer t = params.getTimer("computeAlphabet");
 		t.start();
@@ -122,7 +197,10 @@ public class PipelinedFnParser implements Serializable {
 		examples = ParseSelector.sort(examples);
 
 		params.getFeatureAlphabet().startGrowth();
-	
+
+		// TODO add scanFeatures to interface Stage
+		// and remove all these type checks
+
 		if (frameId instanceof FrameIdStage) {
 			List<Sentence> sentences = DataUtil.stripAnnotations(examples);
 			((FrameIdStage) frameId).scanFeatures(
@@ -170,7 +248,7 @@ public class PipelinedFnParser implements Serializable {
 		List<FNTagging> frames;
 		if (params.usePredictedFramesToTrainArgId) {
 			LOG.info("[PipelinedFnParser train] predicting frames before training argId model...");
-			frames = ((FrameIdStage) frameId).predict(sentences);
+			frames = frameId.setupInference(sentences, null).decodeAll();
 		} else {
 			LOG.info("[PipelinedFnParser train] using gold frames to train argId model...");
 			frames = DataUtil.convertParsesToTaggings(examples);
@@ -189,6 +267,14 @@ public class PipelinedFnParser implements Serializable {
 		argExpansion.train(onlyHeads, examples);
 	}
 
+	public List<FNParse> predictWithoutPeaking(
+			List<? extends HasSentence> hasSentences) {
+		List<Sentence> sentences = new ArrayList<>();
+		for (HasSentence hs : hasSentences)
+			sentences.add(hs.getSentence());
+		return predict(sentences);
+	}
+
 	public List<FNParse> predict(List<Sentence> sentences) {
 		return predict(sentences, null);
 	}
@@ -200,25 +286,28 @@ public class PipelinedFnParser implements Serializable {
 	public List<FNParse> predict(List<Sentence> sentences, List<FNParse> labels) {
 		if (labels != null && labels.size() != sentences.size())
 			throw new IllegalArgumentException();
-		List<FNTagging> frames =
-				frameId.setupInference(sentences, labels).decodeAll();
-		if (argId instanceof IdentityStage) {
-			LOG.info("skipping argId/argSpan step in prediction");
-			return DataUtil.convertTaggingsToParses(frames);
-		}
-		List<FNParse> argHeads =
-				argId.setupInference(frames, labels).decodeAll();
-		List<FNParse> fullParses =
-				argExpansion.setupInference(argHeads, labels).decodeAll();
-		return fullParses;
-	}
 
-	public List<FNParse> predictWithoutPeaking(
-			List<? extends HasSentence> hasSentences) {
-		List<Sentence> sentences = new ArrayList<>();
-		for (HasSentence hs : hasSentences)
-			sentences.add(hs.getSentence());
-		return predict(sentences);
+		// Frame id
+		List<FNTagging> goldFrames = labels == null
+				? null : DataUtil.convertParsesToTaggings(labels);
+		List<FNTagging> frames = frameId
+				.setupInference(sentences, goldFrames)
+				.decodeAll();
+
+		// Arg id
+		List<FNParse> goldArgHeads = labels == null
+				? null : DataUtil.convertArgumenSpansToHeads(
+						labels, params.headFinder);
+		List<FNParse> argHeads = argId
+				.setupInference(frames, goldArgHeads)
+				.decodeAll();
+
+		// Arg spans
+		List<FNParse> fullParses = argExpansion
+				.setupInference(argHeads, labels)
+				.decodeAll();
+
+		return fullParses;
 	}
 
 }

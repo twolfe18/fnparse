@@ -5,6 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.commons.math3.util.FastMath;
+import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
@@ -20,8 +21,9 @@ import edu.jhu.util.Alphabet;
  */
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
-
 	private static final long serialVersionUID = 1L;
+	
+	private Logger log = Logger.getLogger(getClass());
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 
@@ -146,7 +148,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 				int sz = alph.size();
 				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
-					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
+					log.info("[AbstractFeatures b] alph just grew to " + sz);
 				fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
 			}
 			else {

@@ -4,6 +4,12 @@ import java.io.*;
 import java.util.*;
 import java.util.regex.Pattern;
 
+// TODO
+// create a different version where you hand it a bunch of examples that have ids
+// you construct a split by calling something like
+//   addSplit(String name, double proportionOfRemainingData, int maxExamplesInThisSplit)
+// upon construction, this class will save a (id -> split) mapping text file
+
 public class DataSplitter {
 
 	private Random rand;

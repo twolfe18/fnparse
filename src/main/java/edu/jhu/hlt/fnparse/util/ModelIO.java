@@ -4,14 +4,23 @@ import java.io.*;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.util.Alphabet;
 
 public class ModelIO {
 
+	public static Logger LOG = Logger.getLogger(ModelIO.class);
+
 	public static boolean preventOverwrites = false;
 
-	public static void writeHumanReadable(FgModel model, Alphabet<String> featIdx, File f, boolean outputZeroFeatures) {
+	public static void writeHumanReadable(
+			FgModel model,
+			Alphabet<String> featIdx,
+			File f,
+			boolean outputZeroFeatures) {
+		LOG.info("writing human readable model to " + f.getPath());
 		if(preventOverwrites && f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is already a file");
 		if(model == null || featIdx == null)
@@ -28,26 +37,26 @@ public class ModelIO {
 				w.write(String.format("%f\t%s\n", values[i], fName));
 			}
 			w.close();
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	public static void writeBinary(FgModel model, File f) {
+		LOG.info("writing model to " + f.getPath());
 		if(preventOverwrites && f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is already a file");
 		try {
 			DataOutputStream dos = new DataOutputStream(new FileOutputStream(f));
 			writeBinary(model, dos);
 			dos.close();
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	public static void writeBinary(FgModel model, DataOutputStream dos) throws IOException {
+	public static void writeBinary(FgModel model, DataOutputStream dos)
+			throws IOException {
 		int n = model.getNumParams();
 		double[] values = new double[n];
 		model.updateDoublesFromModel(values);
@@ -57,6 +66,7 @@ public class ModelIO {
 	}
 
 	public static FgModel readBinary(File f) {
+		LOG.info("reading binary model from " + f.getPath());
 		if(!f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is not a file");
 		try {
@@ -64,14 +74,14 @@ public class ModelIO {
 			FgModel model = readBinary(dis);
 			dis.close();
 			return model;
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
 
 	public static FgModel readBinary(DataInputStream dis) throws IOException {
 		int dimension = dis.readInt();
+		LOG.debug("[readBinary] dimension=" + dimension);
 		FgModel model = new FgModel(dimension);
 		double[] values = new double[dimension];
 		for(int i=0; i<dimension; i++)
@@ -84,6 +94,7 @@ public class ModelIO {
 	 * @return an alphabet from a file which is guaranteed to not be growing.
 	 */
 	public static Alphabet<String> readAlphabet(File f) {
+		LOG.info("reading alphabet from " + f.getPath());
 		if(!f.isFile())
 			throw new IllegalArgumentException(f.getPath() + " is not a file");
 		try {
@@ -100,8 +111,8 @@ public class ModelIO {
 			r.close();
 			alph.stopGrowth();
 			t.stop();
-			System.out.printf("[ModelIO.readAlphabet] read %d entries from %s in %.1f seconds\n",
-					alph.size(), f.getPath(), t.totalTimeInSeconds());
+			LOG.info(String.format("read %d entries from %s in %.1f seconds",
+				alph.size(), f.getPath(), t.totalTimeInSeconds()));
 			return alph;
 		} catch (Exception e1) {
 			throw new RuntimeException(e1);
@@ -127,10 +138,10 @@ public class ModelIO {
 			}
 			w.close();
 			t.stop();
-			System.out.printf("[ModelIO.writeAlphabet] wrote %d entries to %s in %.1f seconds\n",
-					alph.size(), f.getPath(), t.totalTimeInSeconds());
-		}
-		catch (Exception e) {
+			LOG.info(String.format(
+                "[ModelIO.writeAlphabet] wrote %d entries to %s in %.1f seconds",
+                alph.size(), f.getPath(), t.totalTimeInSeconds()));
+		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
 	}
