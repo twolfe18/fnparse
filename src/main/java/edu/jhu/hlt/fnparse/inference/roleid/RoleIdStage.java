@@ -72,7 +72,7 @@ public class RoleIdStage
 			this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
 		}
 	}
-	
+
 	private static final long serialVersionUID = 1L;
 	public Params params;
 	public ParserParams globalParams;

@@ -51,7 +51,7 @@ public class DataUtil {
 		}
 		return fiByTarget;
 	}
-	
+
 	/**
 	 * FNTaggings don't have arguments, this converts them to FNParses with all the
 	 * arguments set to nullSpan.
@@ -62,7 +62,8 @@ public class DataUtil {
 			parses.add(convertTaggingToParse(t));
 		return parses;
 	}
-	
+
+	/** Makes a parse with no arguments */
 	public static FNParse convertTaggingToParse(FNTagging t) {
 		List<FrameInstance> fis = new ArrayList<>();
 		for(FrameInstance fi : t.getFrameInstances()) {

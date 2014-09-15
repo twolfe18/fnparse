@@ -21,6 +21,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.roleid.NoRoleIdStage;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
@@ -50,8 +51,8 @@ public class PipelinedFnParser implements Serializable {
 	// TODO replace this with setters for each stage
 
 	public void disableArgId() {
-		argId = new OracleStage<>();
-		argExpansion = new OracleStage<>();
+		argId = new NoRoleIdStage();
+		argExpansion = new IdentityStage<>();
 	}
 
 	public void disableArgSpans() {
