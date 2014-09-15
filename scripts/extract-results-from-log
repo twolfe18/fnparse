@@ -4,7 +4,8 @@ output_keys = True
 
 class LogResults:
 
-	keys_to_print = ['test.FullMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames', 'total_time']
+	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'total_time']
+	#keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'train.FullMicroF1', 'test.FullMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames', 'total_time']
 
 	def __init__(self, filename):
 
