@@ -477,12 +477,4 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			yTrain.add(yDev.remove(yDev.size()-1));
 		}
 	}
-
-	public static <T extends FNTagging> List<T> filterBySentenceLength(List<T> all, int maxLength) {
-		List<T> list = new ArrayList<>();
-		for(T t : all)
-			if(t.getSentence().size() <= maxLength)
-				list.add(t);
-		return list;
-	}
 }

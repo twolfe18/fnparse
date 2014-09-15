@@ -203,4 +203,14 @@ public class DataUtil {
 		while(iter.hasNext()) list.add(iter.next());
 		return list;
 	}
+
+
+	public static <T extends FNTagging> List<T> filterBySentenceLength(
+			List<T> all, int maxLength) {
+		List<T> list = new ArrayList<>();
+		for(T t : all)
+			if(t.getSentence().size() <= maxLength)
+				list.add(t);
+		return list;
+	}
 }
