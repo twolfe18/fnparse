@@ -4,8 +4,10 @@ output_keys = True
 
 class LogResults:
 
-	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'total_time']
-	#keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'train.FullMicroF1', 'test.FullMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames', 'total_time']
+	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1']
+	keys_to_print += ['train.GenerousMacroF1', 'test.GenerousMacroF1']
+	keys_to_print += ['syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer']
+	keys_to_print += ['total_time']
 
 	def __init__(self, filename):
 
@@ -31,14 +33,21 @@ class LogResults:
 					ar = line.split()
 					if ar[-2] == '=':
 						self.train_perf[ar[-3]] = ar[-1]
-				if line.startswith('config = {'):
-					line = line[10:-2]
+
+				s = 'config = {'
+				i = line.find(s)
+				if i >= 0:
+					line = line[i+len(s):-2]
 					for chunk in line.replace(',', '').split():
 						ar = chunk.split('=')
 						assert len(ar) == 2
 						self.config[ar[0]] = ar[1]
-				if line.startswith('[main] args=['):
-					line = line[13:-2].replace(',', '')
+
+				s = '[main] args=['
+				i = line.find(s)
+				if i >= 0:
+					line = line[i+len(s):-2].replace(',', '')
+					#print 'main line:', line
 					ar = line.split()
 					self.mode = ar[0]
 					self.syntax_mode = ar[4]
