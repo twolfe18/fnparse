@@ -4,8 +4,10 @@ output_keys = True
 
 class LogResults:
 
-	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'total_time']
-	#keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1', 'train.FullMicroF1', 'test.FullMicroF1', 'syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer', 'useGoldFrames', 'total_time']
+	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1']
+	keys_to_print += ['train.GenerousMacroF1', 'test.GenerousMacroF1']
+	keys_to_print += ['syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer']
+	keys_to_print += ['total_time']
 
 	def __init__(self, filename):
 
@@ -31,20 +33,34 @@ class LogResults:
 					ar = line.split()
 					if ar[-2] == '=':
 						self.train_perf[ar[-3]] = ar[-1]
-				if line.startswith('config = {'):
-					line = line[10:-2]
+
+				s = 'config = {'
+				i = line.find(s)
+				if i >= 0:
+					line = line[i+len(s):-2]
 					for chunk in line.replace(',', '').split():
 						ar = chunk.split('=')
 						assert len(ar) == 2
 						self.config[ar[0]] = ar[1]
-				if line.startswith('[main] args=['):
-					line = line[13:-2].replace(',', '')
+
+				s = '[main] args=['
+				i = line.find(s)
+				if i >= 0:
+					line = line[i+len(s):-2].replace(',', '')
+					#print 'main line:', line
 					ar = line.split()
 					self.mode = ar[0]
 					self.syntax_mode = ar[4]
 					self.alphabet_model = ar[3]
-				if line.startswith('[ParserExperiment] done, took'):
-					self.total_time = line.split()[3]
+
+				try:
+					# Logging will dump the number of ms since starting
+					# as the first token on every line
+					self.total_time = int(line.split()[0])
+				except:
+					pass
+				#if line.startswith('[ParserExperiment] done, took'):
+				#	self.total_time = line.split()[3]
 
 		self.all_values = {}
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
@@ -53,7 +69,7 @@ class LogResults:
 		self.all_values['mode'] = self.mode
 		self.all_values['syntax_mode'] = self.syntax_mode
 		self.all_values['alphabet_model'] = self.alphabet_model
-		self.all_values['total_time'] = self.total_time
+		self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
 
 	def result_string(self, show_keys=True):
 		toks = []
