@@ -17,15 +17,35 @@ public class PosPatternGenerator {
 	public static final String LEFT_BOUNDARY = "B_start";
 	public static final String RIGHT_BOUNDARY = "B_end";
 
-	private boolean takeFirstLetter = true;
+	public static enum Mode {
+		FULL_POS,
+		COARSE_POS,  // first letter of POS
+		WORD_SHAPE   // see shapeNormalize
+	}
+
 	private int tagsLeft = 1;
 	private int tagsRight = 1;
-	
-	public PosPatternGenerator(int tagsLeft, int tagsRight) {
+	private Mode mode;
+
+	private static String shapeNormalize(String s) {
+		return s.replaceAll("[A-Z]", "X")
+				.replaceAll("[a-z]", "x")
+				.replaceAll("\\d", "0")
+				.replaceAll("X{4,}", "X+")
+				.replaceAll("X{3}", "X3")
+				.replaceAll("X{2}", "X2")
+				.replaceAll("x{4,}", "x+")
+				.replaceAll("x{3}", "x3")
+				.replaceAll("x{2}", "x2")
+				.replaceAll("0{5,}", "0+");
+	}
+
+	public PosPatternGenerator(int tagsLeft, int tagsRight, Mode mode) {
 		this.tagsLeft = tagsLeft;
 		this.tagsRight = tagsRight;
+		this.mode = mode;
 	}
-	
+
 	public String extract(Span span, Sentence s) {
 		return extract(span.start, span.end, s);
 	}
@@ -93,14 +113,17 @@ public class PosPatternGenerator {
 	}
 
 	private String getTag(int i, Sentence s) {
-		String t;
 		if (i < 0)
-			t = LEFT_BOUNDARY;
-		else if (i >= s.size())
-			t = RIGHT_BOUNDARY;
-		else
-			t = s.getPos(i);
-		return takeFirstLetter ? t.substring(0, 1) : t;
+			return LEFT_BOUNDARY;
+		if (i >= s.size())
+			return RIGHT_BOUNDARY;
+		if (mode == Mode.FULL_POS)
+			return s.getPos(i);
+		if (mode == Mode.COARSE_POS)
+			return s.getPos(i).substring(0, 1);
+		if (mode == Mode.WORD_SHAPE)
+			return shapeNormalize(s.getWord(i));
+		throw new RuntimeException();
 	}
 
 	/**

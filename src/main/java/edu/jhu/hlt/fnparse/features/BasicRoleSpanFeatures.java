@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator.Mode;
 
 public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanFeatures> implements Features.RE {
 	private static final long serialVersionUID = 1L;
@@ -171,7 +172,8 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 			// How many tags to the left and right of the argSpan
 			int left = 1;
 			int right = 1;
-			PosPatternGenerator tags = new PosPatternGenerator(left, right);
+			PosPatternGenerator tags =
+					new PosPatternGenerator(left, right, Mode.COARSE_POS);
 			String tagSeq = tags.extract(argSpan, sent);
 			// Give small weight to very long pos tag sequences
 			int l = tagSeq.length() - 2*left - 2*right;
