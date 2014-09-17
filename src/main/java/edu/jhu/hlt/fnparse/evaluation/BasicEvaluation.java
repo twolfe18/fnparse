@@ -15,38 +15,38 @@ public class BasicEvaluation {
 		public String getName();
 		public double evaluate(List<SentenceEval> instances);
 	}
-	
+
 	public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, false, true, FPR.Mode.PRECISION);
 	public static final StdEvalFunc targetMacroRecall =    new StdEvalFunc(true, false, true, FPR.Mode.RECALL);
 	public static final StdEvalFunc targetMacroF1 =        new StdEvalFunc(true, false, true, FPR.Mode.F1);
-	
+
 	public static final StdEvalFunc targetMicroPrecision = new StdEvalFunc(true, false, false, FPR.Mode.PRECISION);
 	public static final StdEvalFunc targetMicroRecall =    new StdEvalFunc(true, false, false, FPR.Mode.RECALL);
 	public static final StdEvalFunc targetMicroF1 =        new StdEvalFunc(true, false, false, FPR.Mode.F1);
-	
+
 	public static final StdEvalFunc fullMacroPrecision = new StdEvalFunc(true, true, true, FPR.Mode.PRECISION);
 	public static final StdEvalFunc fullMacroRecall =    new StdEvalFunc(true, true, true, FPR.Mode.RECALL);
 	public static final StdEvalFunc fullMacroF1 =        new StdEvalFunc(true, true, true, FPR.Mode.F1);
-	
+
 	public static final StdEvalFunc fullMicroPrecision = new StdEvalFunc(true, true, false, FPR.Mode.PRECISION);
 	public static final StdEvalFunc fullMicroRecall =    new StdEvalFunc(true, true, false, FPR.Mode.RECALL);
 	public static final StdEvalFunc fullMicroF1 =        new StdEvalFunc(true, true, false, FPR.Mode.F1);
-	
+
 	public static final StdEvalFunc argOnlyMacroPrecision = new StdEvalFunc(false, true, true, FPR.Mode.PRECISION);
 	public static final StdEvalFunc argOnlyMacroRecall =    new StdEvalFunc(false, true, true, FPR.Mode.RECALL);
 	public static final StdEvalFunc argOnlyMacroF1 =        new StdEvalFunc(false, true, true, FPR.Mode.F1);
-	
+
 	public static final StdEvalFunc argOnlyMicroPrecision = new StdEvalFunc(false, true, false, FPR.Mode.PRECISION);
 	public static final StdEvalFunc argOnlyMicroRecall =    new StdEvalFunc(false, true, false, FPR.Mode.RECALL);
 	public static final StdEvalFunc argOnlyMicroF1 =        new StdEvalFunc(false, true, false, FPR.Mode.F1);
-	
+
 	public static class StdEvalFunc implements EvalFunc {
-		
+
 		private boolean macro;
 		private boolean includeTargets;
 		private boolean includeArguments;
 		private FPR.Mode mode;
-		
+
 		public StdEvalFunc(
 				boolean includeTargets,
 				boolean includeArguments,
@@ -59,7 +59,7 @@ public class BasicEvaluation {
 			this.includeTargets = includeTargets;
 			this.includeArguments = includeArguments;
 		}
-		
+
 		public String getName() {
 			StringBuilder sb = new StringBuilder();
 			if (includeTargets && includeArguments)
@@ -76,18 +76,18 @@ public class BasicEvaluation {
 		public double evaluate(List<SentenceEval> instances) {
 			return evaluateAll(instances).get(mode);
 		}
-		
+
 		public FPR evaluateAll(List<SentenceEval> instances) {
 			FPR fpr = new FPR(macro);
 			for(SentenceEval se : instances)
 				fpr.accum(evaluateAll(se));
 			return fpr;
 		}
-		
+
 		public double evaluate(SentenceEval inst) {
 			return evaluateAll(inst).get(mode);
 		}
-		
+
 		public FPR evaluateAll(SentenceEval inst) {
 			FPR fpr = new FPR(macro);
 			if (includeTargets && includeArguments)
@@ -106,10 +106,8 @@ public class BasicEvaluation {
 		List<SentenceEval> se = new ArrayList<SentenceEval>();
 		for(int i=0; i<gold.size(); i++)
 			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
-
 		return se;
 	}
-
 
 	public static final EvalFunc[] evaluationFunctions = new EvalFunc[] {
 			targetMacroF1, targetMacroPrecision, targetMacroRecall,

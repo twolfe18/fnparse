@@ -133,18 +133,18 @@ public class SentenceEval {
 		assert !onlyTagging;
 		return fullFalseNeg;
 	}
-	
+
 	@Override
 	public String toString() {
 		return gold.toString() + "\n" + hyp.toString();
 	}
-	
+
 	public String longString() {
 		throw new RuntimeException("implement me");
 	}
-	
+
 	public int size() { return size; }
-	
+
 	public static void fillPredictions(
 			List<FrameInstance> fis,
 			Collection<FrameArgInstance> targetPreds,

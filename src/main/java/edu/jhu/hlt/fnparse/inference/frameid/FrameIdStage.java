@@ -348,7 +348,7 @@ public class FrameIdStage
 		private void setGold(FNTagging p) {
 			if(p.getSentence() != sentence)
 				throw new IllegalArgumentException();
-	
+
 			// Build an index from targetHeadIdx to FrameRoleVars
 			Set<FrameVars> haventSet = new HashSet<FrameVars>();
 			FrameVars[] byHead = new FrameVars[sentence.size()];
@@ -393,7 +393,7 @@ public class FrameIdStage
 		public LabeledFgExample getExample() {
 			FactorGraph fg = getFactorGraph();
 			VarConfig gold = new VarConfig();
-	
+
 			// Add the gold labels
 			for(FrameVars hyp : possibleFrames) {
 				assert hyp.goldIsSet();
