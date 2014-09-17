@@ -9,19 +9,19 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class Path {
-	
+
 	enum NodeType {
 		CFG,		// requires a constituency parse, not yet supported
 		LEMMA,
 		POS,
 		NONE		// puts in a "*" for every head/phrase
 	}
-	
+
 	enum EdgeType {
 		DIRECTION,		// either "<" for up or ">" for down
 		DEP				// typed dependency label
 	}
-	
+
 	private final int start, end;
 	private final Sentence sent;
 	private final int n;
@@ -33,7 +33,7 @@ public class Path {
 	private List<String> upEdges, downEdges;
 	private boolean connected;
 	private boolean toRoot;		// if true, end and down don't mean anything
-	
+
 	/** path from root to head */
 	public Path(Sentence s, int head, NodeType nodeType, EdgeType edgeType) {
 		this(s, head, -1, nodeType, edgeType, true);
@@ -45,12 +45,11 @@ public class Path {
 	}
 
 	private Path(Sentence s, int start, int end, NodeType nodeType, EdgeType edgeType, boolean toRoot) {
-		
 		if(start < 0)
 			throw new IllegalArgumentException();
 		if(!toRoot && end < 0)
 			throw new IllegalArgumentException();
-		
+
 		this.sent = s;
 		this.start = start;
 		this.end = end;
@@ -58,17 +57,17 @@ public class Path {
 		this.nodeType = nodeType;
 		this.edgeType = edgeType;
 		this.toRoot = toRoot;
-		
+
 		if(nodeType == NodeType.CFG)
 			throw new RuntimeException("not supported yet");
 
 		// used to detect loops
 		boolean[] seen = new boolean[n];
-	
+
 		// the path from start to root, counting up from 0
 		int[] upIndices = new int[n];
 		Arrays.fill(upIndices, -1);
-		
+
 		// start from start and work your way up to root
 		upNodes = new ArrayList<String>();
 		upEdges = new ArrayList<String>();
@@ -80,7 +79,7 @@ public class Path {
 			upEdges.add(getEdgeNameFor(ptr, true));
 			ptr = sent.governor(ptr);
 		}
-		
+
 		// the order down starts out backwards
 		if(!toRoot) {
 			Arrays.fill(seen, false);
@@ -109,14 +108,24 @@ public class Path {
 			top = "ROOT";
 		}
 	}
-	
+
+	/** Returns the total length of the path in number of edges */
+	public int size() {
+		return upEdges.size() + downEdges.size();
+	}
+
+	/** Returns (# up edges) - (# down edges) */
+	public int deltaDepth() {
+		return upEdges.size() - downEdges.size();
+	}
+
 	private String getNodeNameFor(int i) {
 		if(nodeType == NodeType.LEMMA) return sent.getLemma(i);
 		else if(nodeType == NodeType.POS) return sent.getPos(i);
 		else if(nodeType == NodeType.NONE) return "*";
 		else throw new RuntimeException();
 	}
-	
+
 	private String getEdgeNameFor(int i, boolean goingUp) {
 		if(edgeType == EdgeType.DEP)
 			return sent.dependencyType(i) + (goingUp ? "<" : ">");
@@ -124,7 +133,7 @@ public class Path {
 			return goingUp ? "<" : ">";
 		else throw new RuntimeException();
 	}
-	
+
 	/** returns true if represents a path from a token to the root of the sentence */
 	public boolean toRoot() { return toRoot; }
 
@@ -135,20 +144,22 @@ public class Path {
 		}
 		return connected;
 	}
-	
+
 	public NodeType getNodeType() { return nodeType; }
-	
+
 	public EdgeType getEdgeType() { return edgeType; }
-	
+
 	public int getStart() { return start; }
-	
+
 	public int getEnd() {
 		if(toRoot)
 			throw new RuntimeException("not defined");
 		return end;
 	}
-	
+
 	private String path;
+
+	/** memoizes the string so you can call more than once cheaply */
 	public String getPath() {
 		if(path == null) {
 			StringBuilder sb = new StringBuilder();
@@ -167,7 +178,7 @@ public class Path {
 		}
 		return path;
 	}
-	
+
 	/** prefix may be null */
 	public void pathNGrams(int length, Collection<String> addTo, String prefix) {
 		int U = 2*upNodes.size() + 1;
@@ -199,7 +210,7 @@ public class Path {
 			else return downEdges.get(j / 2);
 		}
 	}
-	
+
 	@Override
 	public String toString() { return getPath(); }
 }
