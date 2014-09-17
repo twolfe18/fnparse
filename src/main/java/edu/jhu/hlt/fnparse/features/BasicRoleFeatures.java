@@ -21,7 +21,7 @@ public final class BasicRoleFeatures
 	// If true, will implement a larger feature set that will add products of
 	// words with their POS as pieces of features.
 	private static boolean useFullString = false;
-	
+
 	// If true, use the lemma of a target/arg headword instead of the word
 	// itself in the feature templates.
 	private static boolean useLemmasInsteadOfWords = false;
@@ -72,7 +72,7 @@ public final class BasicRoleFeatures
 			b(fv, r, dirWeight, rs, "arg==target");
 			b(fv, r, dirWeight, fsrs, "arg==target");
 		}
-		
+
 		b(fv, r, 1d, rs, "roleHead", aHead.word);
 		b(fv, r, 2d, rs, "roleHead", aHead.pos);
 		b(fv, r, 1d, fsrs, "roleHead", aHead.word);
@@ -81,7 +81,7 @@ public final class BasicRoleFeatures
 			b(fv, r, 1d, rs, "roleHead", aHead.getFullString());
 			b(fv, r, 1d, fsrs, "roleHead", aHead.getFullString());
 		}
-		
+
 		b(fv, r, 1d, rs, "targetHead", tHead.word);
 		b(fv, r, 2d, rs, "targetHead", tHead.pos);
 		b(fv, r, 1d, fsrs, "targetHead", tHead.word);
@@ -90,7 +90,7 @@ public final class BasicRoleFeatures
 			b(fv, r, 1d, rs, "targetHead", tHead.getFullString());
 			b(fv, r, 1d, fsrs, "targetHead", tHead.getFullString());
 		}
-		
+
 		if(useFullString) {
 			b(fv, r, 0.25d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.getFullString());
 			b(fv, r, 0.5d, rs, "argHead", aHead.getFullString(), "targetHead", tHead.word);

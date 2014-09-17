@@ -40,7 +40,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	// NOTE: DO NOT use role id instead of role name because role name is
 	// consistent across frames, and need not be conjoined with the frame (always).
 	protected boolean useFastFeaturenames = false;
-	
+
 	// Often features are given with a certain weight, which mimics the effect
 	// of a non-uniformly regularized model. For example I may not want to
 	// regularize the intercept at all, which can be (in-exactly) accomplished
@@ -129,7 +129,11 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	 * returns the index of the feature being added.
 	 * if there are refinements, those indices will not be returned.
 	 */
-	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
+	protected final void b(
+			FeatureVector fv,
+			Refinements refs,
+			double weight,
+			String... featureNamePieces) {
 		Alphabet<String> alph = getFeatureAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {

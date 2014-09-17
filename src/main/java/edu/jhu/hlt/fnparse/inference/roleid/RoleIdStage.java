@@ -139,11 +139,11 @@ public class RoleIdStage
 		super.train(xUse, yUse, params.learningRate,
 				params.regularizer, params.batchSize, params.passes);
 	}
-	
+
 	@Override
 	public TuningData getTuningData() {
 		final List<Double> biases = new ArrayList<Double>();
-		for(double b=0.1d; b<1.5d; b *= 1.1d) biases.add(b);
+		for(double b=0.1d; b<3d; b *= 1.1d) biases.add(b);
 		return new TuningData() {
 			@Override
 			public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
@@ -157,7 +157,6 @@ public class RoleIdStage
 			public boolean tuneOnTrainingData() { return params.tuneOnTrainingData; }
 		};
 	}
-
 
 	/** Must have initialized weights before calling this */
 	@Override
@@ -175,14 +174,11 @@ public class RoleIdStage
 		return new StageDatumExampleList<>(data);
 	}
 
-
-
 	/**
 	 * 
 	 * @author travis
 	 */
 	public static class RoleIdStageDatum implements StageDatum<FNTagging, FNParse> {
-		
 		private final List<RoleVars> roleVars;	// TODO this needs to have modes for roleId, roleExpansion, and joint
 		private final FNTagging input;
 		private final FNParse gold;
