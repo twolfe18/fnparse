@@ -484,6 +484,7 @@ public class FrameIdStage
 		@Override
 		public FNTagging decode() {
 			FgInferencer hasMargins = this.getMargins();
+			final boolean logDomain = this.getMargins().isLogDomain();
 			List<FrameInstance> fis = new ArrayList<FrameInstance>();
 			for(FrameVars fvars : possibleFrames) {
 				final int T = fvars.numFrames();
@@ -491,6 +492,9 @@ public class FrameIdStage
 				for(int t=0; t<T; t++) {
 					DenseFactor df =
 							hasMargins.getMarginals(fvars.getVariable(t));
+					// TODO Exactly1 factor removes the need for this
+					if (logDomain) df.logNormalize();
+					else df.normalize();
 					beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
 				}
 				parent.globalParams.normalize(beliefs);
