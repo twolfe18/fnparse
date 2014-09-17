@@ -52,8 +52,15 @@ class LogResults:
 					self.mode = ar[0]
 					self.syntax_mode = ar[4]
 					self.alphabet_model = ar[3]
-				if line.startswith('[ParserExperiment] done, took'):
-					self.total_time = line.split()[3]
+
+				try:
+					# Logging will dump the number of ms since starting
+					# as the first token on every line
+					self.total_time = int(line.split()[0])
+				except:
+					pass
+				#if line.startswith('[ParserExperiment] done, took'):
+				#	self.total_time = line.split()[3]
 
 		self.all_values = {}
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
@@ -62,7 +69,7 @@ class LogResults:
 		self.all_values['mode'] = self.mode
 		self.all_values['syntax_mode'] = self.syntax_mode
 		self.all_values['alphabet_model'] = self.alphabet_model
-		self.all_values['total_time'] = self.total_time
+		self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
 
 	def result_string(self, show_keys=True):
 		toks = []
