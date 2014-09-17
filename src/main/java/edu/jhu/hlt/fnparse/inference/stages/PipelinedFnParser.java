@@ -59,6 +59,10 @@ public class PipelinedFnParser implements Serializable {
 		argExpansion = new IdentityStage<>();
 	}
 
+	public void useGoldArgSpans() {
+		argExpansion = new OracleStage<>();
+	}
+
 	public void useGoldFrameId() {
 		frameId = new OracleStage<>();
 	}

@@ -23,6 +23,19 @@ public class Describe {
 		return sb.toString();
 	}
 	
+	public static String spanWithDeps(Span s, Sentence sent) {
+		StringBuilder sb = new StringBuilder();
+		for (int i = s.start; i < s.end; i++) {
+			sb.append(String.format("% 3d %-20s %-20s %-20s %-20s\n",
+					i,
+					sent.getWord(i),
+					sent.getPos(i),
+					sent.dependencyType(i),
+					sent.isRoot(i) ? "ROOT" : sent.getWord(sent.governor(i))));
+		}
+		return sb.toString();
+	}
+
 	public static String sentence(Sentence s) {
 		StringBuilder sb = new StringBuilder();
 		for(int i=0; i<s.size(); i++) {
@@ -31,7 +44,7 @@ public class Describe {
 		}
 		return sb.toString();
 	}
-	
+
 	public static String frameInstance(FrameInstance fi) {
 		StringBuilder sb = new StringBuilder();
 		sb.append(String.format("FrameInstance of %s triggered by %s @ %d-%d:",
@@ -72,7 +85,7 @@ public class Describe {
 			sb.append(frameInstance(fi) + "\n");
 		return sb.toString();
 	}
-	
+
 	public static String fnTagging(FNTagging p) {
 		StringBuilder sb = new StringBuilder("FNTagging ");
 		if (p.getId() != null && p.getId().length() > 0)

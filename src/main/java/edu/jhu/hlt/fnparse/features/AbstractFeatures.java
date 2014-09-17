@@ -153,12 +153,27 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					log.info("[AbstractFeatures b] alph just grew to " + sz);
-				fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
+				if (weightingPower == 0d) {
+					weight = 1d;
+				} else {
+					weight *= refs.getWeight(ri);
+					if (weightingPower != 1d)
+						weight = FastMath.pow(weight, weightingPower);
+				}
+				fv.add(idx, weight);
 			}
 			else {
 				int idx = alph.lookupIndex(s, false);
-				if(idx >= 0)
-					fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
+				if(idx >= 0) {
+					if (weightingPower == 0d) {
+						weight = 1d;
+					} else {
+						weight *= refs.getWeight(ri);
+						if (weightingPower != 1d)
+							weight = FastMath.pow(weight, weightingPower);
+					}
+					fv.add(idx, weight);
+				}
 				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}
 		}

@@ -14,13 +14,18 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNIterFilters;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelMerger;
 import edu.jhu.hlt.optimize.functions.L2;
@@ -158,6 +163,7 @@ public class ParserTrainer {
 			parser.getArgIdParams().passes = passes.get();
 			parser.getArgIdParams().regularizer = new L2(regularizer.get());
 			parser.useGoldFrameId();
+			//parser.useGoldArgSpans();	// takes gold spans regardless of head
 			parser.disableArgSpans();
 		} else {
 			assert "argSpans".equals(mode);
@@ -195,8 +201,7 @@ public class ParserTrainer {
 
 		// Train
 		parser.train(train);
-		System.out.printf("[ParserExperiment] after training, #features=%d\n",
-				parser.getAlphabet().size());
+		LOG.info("After training, #features=" + parser.getAlphabet().size());
 		printMemUsage();
 
 		// Write parameters out as soon as possible
@@ -214,23 +219,22 @@ public class ParserTrainer {
 		List<FNParse> testSubset = test.size() > maxTestEval
 				? DataUtil.reservoirSample(test, maxTestEval, parser.getParams().rand)
 				: test;
-		System.out.printf(
-				"[ParserExperiment] predicting on %d test examples...\n",
-				testSubset.size());
+		LOG.info("Predicting on " + testSubset.size() + " test examples");
 		predicted = parser.predict(
 				DataUtil.stripAnnotations(testSubset), testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults(
 				"[test] after " + passes.get() + " passes", results);
 		printMemUsage();
+		if ("argId".equals(mode))
+			printMistakenArgHeads(testSubset, predicted);
 
 		// Evaluate (train data)
 		int maxTrainEval = 150;
 		List<FNParse> trainSubset = train.size() > maxTrainEval
 				? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand)
 				: train;
-		System.out.println("[ParserExperiment] predicting on train (sub)set "
-				+ "of size " + trainSubset.size() + "...");
+		LOG.info("Predicting on train (sub)set of size " + trainSubset.size());
 		predicted = parser.predict(
 				DataUtil.stripAnnotations(trainSubset), trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
@@ -238,14 +242,9 @@ public class ParserTrainer {
 				"[train] after " + passes.get() + " passes", results);
 		printMemUsage();
 
-		System.out.printf("[ParserExperiment] done, took %.1f minutes\n",
-				(System.currentTimeMillis() - start) / (1000d * 60));
-
-		ModelIO.writeHumanReadable(
-				parser.getFrameIdWeights(),
-				parser.getAlphabet(),
-				new File("saved-models/ParserExperiment.model.txt"),
-				true);
+		LOG.info("done, took "
+				+ (System.currentTimeMillis() - start) / (1000d * 60)
+				+ " minutes");
 	}
 
 	public static void writeMergedModel(
@@ -259,8 +258,50 @@ public class ParserTrainer {
 				new ModelMerger.Model<>(alph, wf),
 				new ModelMerger.Model<>(alph, wa),
 				new ModelMerger.Model<>(alph, ws));
-		assert alph.size() == merged.alphabet.size();
+		if (alph.size() != merged.alphabet.size()) {
+			LOG.warn("writing merged model caused discrepancy in alphabet size."
+					+ " alph.size=" + alph.size()
+					+ ", merged.size=" + merged.alphabet.size());
+		}
 		ModelIO.writeBinary(merged.getFgModel(), modelDest);
+
+		// For debugging
+		ModelIO.writeHumanReadable(
+				merged.getFgModel(),
+				merged.alphabet,
+				new File("saved-models/ParserExperiment.model.txt"),
+				true);
+	}
+
+	public static void printMistakenArgHeads(
+			List<FNParse> gold,
+			List<FNParse> hyp) {
+		assert gold != null && hyp != null && gold.size() == hyp.size();
+		for (int i = 0; i < gold.size(); i++)
+			printMistakenArgHeads(gold.get(i), hyp.get(i));
+	}
+	public static void printMistakenArgHeads(FNParse gold, FNParse hyp) {
+		List<SentenceEval> se = Arrays.asList(new SentenceEval(gold, hyp));
+		double f1 = GenerousEvaluation.generousF1.evaluate(se);
+		if (f1 < 0.8d) {
+			if ("FNFUTXT1228804".equals(gold.getId()))
+				LOG.info("debug this");
+			double p = GenerousEvaluation.generousPrecision.evaluate(se);
+			double r = GenerousEvaluation.generousRecall.evaluate(se);
+			Sentence s = gold.getSentence();
+			LOG.info(s.getId() + " has F1=" + f1
+					+ " precision=" + p + " recall=" + r);
+			for (int i = 0; i < s.size(); i++) {
+				String parent = "ROOT";
+				if (s.governor(i) < s.size() && s.governor(i) >= 0)
+					parent = s.getWord(s.governor(i));
+				LOG.info(String.format("% 3d %-15s %-15s %-15s %-15s",
+					i, s.getWord(i), s.getPos(i), s.dependencyType(i), parent));
+			}
+			LOG.info("gold:\n" + Describe.fnParse(gold));
+			LOG.info("hyp:\n" + Describe.fnParse(hyp));
+			LOG.info("errors:\n" + FNDiff.diffArgs(gold, hyp, false));
+		}
 	}
 
 	public static ModelMerger.Model<String> readMergedModel(

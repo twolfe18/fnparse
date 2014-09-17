@@ -15,10 +15,10 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
 import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper.Mode;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -32,7 +32,6 @@ import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
  * @author travis
  */
 public final class RoleFactorFactory implements FactorFactory<RoleVars> {
-	
 	private static final long serialVersionUID = 1L;
 
 	/**
@@ -40,24 +39,31 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 * 
 	 * @author travis
 	 */
-	private static class RoleDepObservedFeatures implements BinaryBinaryFactorHelper.ObservedFeatures {
+	private static class RoleDepObservedFeatures
+			implements BinaryBinaryFactorHelper.ObservedFeatures {
 
 		private static final long serialVersionUID = 1L;
 
 		private String refinement;
 		private Features.R rFeats;
 		private Features.F fFeats;
-		
-		public RoleDepObservedFeatures(ParserParams params, String ref) {
+
+		public RoleDepObservedFeatures(
+				ParserParams params,
+				Features.R rFeats,
+				Features.F fFeats,
+				String ref) {
+			if (rFeats == null)
+				throw new IllegalArgumentException();
 			this.refinement = ref;
-			this.rFeats = new BasicRoleFeatures(params);
-			this.fFeats = new BasicFrameFeatures(params);
+			this.rFeats = rFeats;
+			this.fFeats = fFeats;
 		}
-		
+
 		private Sentence sent;
 		private int i, j, k;
 		private Frame t;
-		
+
 		public void set(Sentence sent, int i, Frame t, int j, int k) {
 			this.sent = sent;
 			this.i = i;
@@ -71,15 +77,15 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			r = Refinements.product(r, this.refinement, 1d);
 			FeatureVector fv = new FeatureVector();
 			rFeats.featurize(fv, r, i, t, j, k, sent);
-			fFeats.featurize(fv, r, i, t, sent);
+			if (fFeats != null)
+				fFeats.featurize(fv, r, i, t, sent);
 			assert fv.getNumImplicitEntries() > 0 : "did you use the right alphabet?";
-			/*
 			if (fv.getNumImplicitEntries() == 0) {
-				System.err.println("WARNING: there were no observed features, "
+				String msg = "WARNING: there were no observed features, "
 						+ "meanining that you probably either used the wrong "
-						+ "alphabet or forgot to call scanFeatures/computeAlphabet");
+						+ "alphabet or forgot to call scanFeatures/computeAlphabet";
+				throw new RuntimeException(msg);
 			}
-			*/
 			return fv;
 		}
 	}
@@ -95,18 +101,23 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	public Refinements r_itjk_unaryRef = new Refinements("r_itjk~1");
 	public FgModel weights;
 	public final ParserParams params;
-	
+
 	/**
 	 * @param params
 	 * @param factorMode says how the (r_itjk ~ l_ij) factor should be parameterized
 	 */
 	public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode factorMode) {
-		rFeats = new BasicRoleFeatures(params);
-		feats = new RoleDepObservedFeatures(params, "r_itjk~l_ij");
+		//rFeats = new BasicRoleFeatures(params);
+		rFeats = new MinimalRoleFeatures(params);
+		feats = new RoleDepObservedFeatures(
+				params,
+				this.rFeats,
+				null,
+				"r_itjk~l_ij");
 		bbfh = new BinaryBinaryFactorHelper(factorMode, feats);
 		this.params = params;
 	}
-	
+
 	/**
 	 * instantiates the following factors:
 	 * r_itjk ~ 1
@@ -116,7 +127,6 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 	 */
 	@Override
 	public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l, ConstituencyTreeFactor c) {
-		
 		List<Factor> factors = new ArrayList<Factor>();
 		for(RoleVars rv : fr) {
 
@@ -127,7 +137,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			Iterator<RVar> it = rv.getVars();
 			while(it.hasNext()) {
 				RVar rvar = it.next();
-				
+
 				// r_itjk ~ 1
 				FeatureVector fv = new FeatureVector();
 				rFeats.featurize(fv, r_itjk_unaryRef, i, t, rvar.j, rvar.k, s);
@@ -186,7 +196,6 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 //					}
 //					factors.add(phi);
 //				}
-				
 			}
 		}
 		return factors;
