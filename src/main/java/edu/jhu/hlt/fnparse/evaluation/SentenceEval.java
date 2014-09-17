@@ -153,6 +153,8 @@ public class SentenceEval {
 		for(FrameInstance fi : fis) {
 			Frame f = fi.getFrame();
 			Span t = fi.getTarget();
+			if (targetPreds != null)
+				targetPreds.add(new FrameArgInstance(f, t, -1, null));
 			if (targetRolePreds != null)
 				targetRolePreds.add(new FrameArgInstance(f, t, -1, null));
 			int n = fi.getFrame().numRoles();
