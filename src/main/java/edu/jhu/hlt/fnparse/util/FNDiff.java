@@ -18,9 +18,9 @@ public class FNDiff {
 		if (!a.getSentence().getId().equals(b.getSentence().getId()))
 			throw new IllegalArgumentException();
 		Set<FrameArgInstance> aroles = new HashSet<>();
-		SentenceEval.fillPredictions(a.getFrameInstances(), null, aroles, null);
+		SentenceEval.fillPredictions(a.getFrameInstances(), null, null, aroles);
 		Set<FrameArgInstance> broles = new HashSet<>();
-		SentenceEval.fillPredictions(b.getFrameInstances(), null, aroles, null);
+		SentenceEval.fillPredictions(b.getFrameInstances(), null, null, broles);
 		Set<FrameArgInstance> allroles = new HashSet<>();
 		allroles.addAll(aroles);
 		allroles.addAll(broles);
@@ -53,7 +53,7 @@ public class FNDiff {
 		}
 		return sb.toString();
 	}
-	
+
 	public static String diffFrames(
 			FNTagging a, FNTagging b, boolean printSame) {
 		Set<FrameArgInstance> aroles = new HashSet<>();
