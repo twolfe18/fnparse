@@ -2,6 +2,8 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.util.*;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.model.*;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.*;
@@ -14,11 +16,12 @@ import edu.jhu.hlt.fnparse.inference.FgRelated;
  * @author travis
  */
 public class FrameVars implements FgRelated {
+	public static final Logger LOG = Logger.getLogger(FrameVars.class);
 
 	public static FrameInstance nullFrameInstance(Sentence s, int head) {
 		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
-	
+
 	// these arrays are indexed by t (frame), and i is implicit information in the instance
 	public Frame[] f_it_values;		// first value is nullFrame
 	public Var[] f_it;
@@ -47,12 +50,12 @@ public class FrameVars implements FgRelated {
 			this.f_it_values[i] = f;
 		}
 	}
-	
+
 	public Frame getGold() {
 		assert goldSet;
 		return gold;
 	}
-	
+
 	public int getNullFrameIdx() {
 		final int i = 0;
 		assert f_it_values[i] == Frame.nullFrame;
@@ -62,11 +65,11 @@ public class FrameVars implements FgRelated {
 	public int getTargetHeadIdx() { return i; }
 
 	public Frame getFrame(int t) { return f_it_values[t]; }
-	
+
 	public Var getVariable(int t) { return f_it[t]; }
 
 	public int numFrames() { return f_it_values.length; }
-	
+
 	private int maxRoles = -1;
 	public int getMaxRoles() {
 		if(maxRoles < 0) {
@@ -81,7 +84,7 @@ public class FrameVars implements FgRelated {
 	public String toString() {
 		return String.format("f_{i=%d,t=1:%d}", i, f_it.length);
 	}
-	
+
 	/** Longer than toString */
 	public String debugString() {
 		StringBuilder sb = new StringBuilder();
@@ -98,9 +101,9 @@ public class FrameVars implements FgRelated {
 		sb.append("]>");
 		return sb.toString();
 	}
-	
+
 	public boolean goldIsSet() { return goldSet; }
-	
+
 	public void setGoldIsNull() {
 		this.gold = Frame.nullFrame;
 		this.goldSet = true;
@@ -117,8 +120,9 @@ public class FrameVars implements FgRelated {
 
 		this.goldSet = true;
 		if(!Arrays.asList(f_it_values).contains(gold.getFrame())) {
-			System.err.printf("WARNING: frame filtering heuristic didn't extract %s for %s\n",
-					gold.getFrame(), gold.getSentence().getLU(getTargetHeadIdx()));
+			LOG.warn("frame filtering heuristic didn't extract "
+					+ gold.getFrame().getName() + " for "
+					+ gold.getSentence().getLU(getTargetHeadIdx()));
 			this.gold = Frame.nullFrame;
 		}
 		else this.gold = gold.getFrame();
@@ -140,5 +144,4 @@ public class FrameVars implements FgRelated {
 				assert false;
 		}
 	}
-
 }

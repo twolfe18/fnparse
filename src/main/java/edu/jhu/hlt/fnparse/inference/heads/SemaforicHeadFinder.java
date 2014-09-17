@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.heads;
 
+import java.util.Arrays;
+
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -36,20 +38,44 @@ public class SemaforicHeadFinder implements HeadFinder {
 		if (isQuote(s.start, sent) && isQuote(s.end-1, sent))
 			return head(Span.getSpan(s.start + 1, s.end - 1), sent);
 
+		// Removes ambiguity
+		if (s.width() > 1 && Arrays.asList("IN", "TO").contains(sent.getPos(s.start)))
+			return head(Span.getSpan(s.start+1, s.end), sent);
+
 		if(sent.getPos(s.start).startsWith("V"))
 			return s.start;
+		if (s.start+1 < s.end
+				&& "TO".equals(sent.getPos(s.start))
+				&& sent.getPos(s.start+1).startsWith("V"))
+			return s.start+1;
 
 		if(sent.getPos(s.start).startsWith("J"))
 			return s.end - 1;
+
+		// NOT IN THEIR PAPER: Recurse to the left of a possesive marker
+		/*
+		for (int i = s.start; i < s.end; i++) {
+			if ("POS".equals(sent.getPos(i)))
+				return head(Span.getSpan(s.start, i), sent);
+		}
+		*/
 
 		for(int i=s.start+1; i<s.end; i++)
 			if(sent.getWord(i).equalsIgnoreCase("of") && sent.getPos(i-1).startsWith("N"))
 				return i-1;
 
-		for(int i=s.end-1; i>=s.start; i--) {
+		// Scan for external dependency
+		for (int i = s.end - 1; i >= s.start; i--) {
 			int p = sent.governor(i);
-			if(p < s.start || p >= s.end)
-				return i;
+			if (!s.includes(p)) {
+				if (i > s.start
+						&& Arrays.asList("CC", "POS", "WDT", "TO", "IN")
+						.contains(sent.getPos(i))) {
+					return head(Span.getSpan(s.start, i), sent);
+				} else {
+					return i;
+				}
+			}
 		}
 
 		// BELOW NOT IN THEIR PAPER:

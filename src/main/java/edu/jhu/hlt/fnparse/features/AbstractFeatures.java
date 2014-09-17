@@ -22,8 +22,8 @@ import edu.jhu.util.Alphabet;
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
-	
-	private Logger log = Logger.getLogger(getClass());
+
+	protected Logger log = Logger.getLogger(getClass());
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 
@@ -40,7 +40,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	// NOTE: DO NOT use role id instead of role name because role name is
 	// consistent across frames, and need not be conjoined with the frame (always).
 	protected boolean useFastFeaturenames = false;
-	
+
 	// Often features are given with a certain weight, which mimics the effect
 	// of a non-uniformly regularized model. For example I may not want to
 	// regularize the intercept at all, which can be (in-exactly) accomplished
@@ -129,7 +129,11 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	 * returns the index of the feature being added.
 	 * if there are refinements, those indices will not be returned.
 	 */
-	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
+	protected final void b(
+			FeatureVector fv,
+			Refinements refs,
+			double weight,
+			String... featureNamePieces) {
 		Alphabet<String> alph = getFeatureAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
@@ -149,12 +153,27 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					log.info("[AbstractFeatures b] alph just grew to " + sz);
-				fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
+				if (weightingPower == 0d) {
+					weight = 1d;
+				} else {
+					weight *= refs.getWeight(ri);
+					if (weightingPower != 1d)
+						weight = FastMath.pow(weight, weightingPower);
+				}
+				fv.add(idx, weight);
 			}
 			else {
 				int idx = alph.lookupIndex(s, false);
-				if(idx >= 0)
-					fv.add(idx, FastMath.pow(weight * refs.getWeight(ri), weightingPower));
+				if(idx >= 0) {
+					if (weightingPower == 0d) {
+						weight = 1d;
+					} else {
+						weight *= refs.getWeight(ri);
+						if (weightingPower != 1d)
+							weight = FastMath.pow(weight, weightingPower);
+					}
+					fv.add(idx, weight);
+				}
 				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}
 		}

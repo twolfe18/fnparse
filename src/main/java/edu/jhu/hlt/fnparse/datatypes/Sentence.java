@@ -2,13 +2,15 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.*;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public final class Sentence implements HasId {
-	
+	public static final Logger LOG = Logger.getLogger(Sentence.class);
 	public static final Sentence nullSentence =
 			new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
 
@@ -23,18 +25,17 @@ public final class Sentence implements HasId {
 	 * redundant with id, a convenience
 	 */
 	private String dataset;
-	
+
 	private String[] tokens;
 	private String[] pos;
 	private String[] lemmas;
-	
+
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
-	
+
 	public Sentence(String dataset, String id, String[] tokens, String[] pos, String[] lemmas, int[] gov, String[] depType) {
 		if(id == null || tokens == null)
 			throw new IllegalArgumentException();
-		
 		final int n = tokens.length;
 		if(pos != null && pos.length != n)
 			throw new IllegalArgumentException();
@@ -91,8 +92,7 @@ public final class Sentence implements HasId {
 			allStems = stemmer.findStems(w, PosUtil.ptb2wordNet(pos[i]));
 		}
 		catch(java.lang.IllegalArgumentException e) {
-			//throw new RuntimeException("bad word? " + getLU(i), e);
-			System.err.println("bad word? " + getLU(i));
+			LOG.warn("bad word? " + getLU(i));
 		}
 		if(allStems.isEmpty())
 			return new LexicalUnit(w, fnTag);
@@ -149,8 +149,64 @@ public final class Sentence implements HasId {
 		return children[wordIdx];
 	}
 
+	public boolean isRoot(int i) {
+		return gov[i] < 0 || gov[i] >= gov.length;
+	}
+
+	/** returns 0 if it hits a loop */
+	public int depth(int i) {
+		int cur = i;
+		int depth = 0;
+		boolean[] seen = new boolean[gov.length];
+		seen[cur] = true;
+		while (cur >= 0 && cur < gov.length) {
+			depth++;
+			cur = gov[cur];
+			if (cur >= 0 && cur < seen.length && !seen[cur])
+				seen[cur] = true;
+			else
+				return 0;
+		}
+		return depth;
+	}
+
 	public int governor(int i) {
 		return gov[i];
+	}
+
+	/**
+	 * Returns true if token i is a verb and is part of a passive construction
+	 */
+	public boolean passive(int i) {
+		if (!pos[i].startsWith("V"))
+			return false;
+		// Look for auxpass or nsubjpass while skipping over verb-like things
+		for (int idx = i - 1, searched = 0; idx > 0; idx--, searched++) {
+			if ("auxpass".equals(depType[idx])
+					|| "nsubjpass".equals(depType[idx]))
+				return true;
+			if (pos[idx].startsWith("N")) break;
+			if (searched > 5) return false;
+		}
+		return false;
+	}
+
+	/**
+	 * Returns the index of a verb to the right of token i. Skips over aux verbs
+	 * and returns -1 if no verb is found.
+	 */
+	public int nextHeadVerb(int i) {
+		int lastVerb = -1;
+		for (int j = i + 1; j < size(); j++) {
+			boolean v = pos[i].startsWith("V");
+			if (v && lastVerb >= 0)
+				lastVerb++;
+			if (!v && lastVerb >= 0)
+				return lastVerb;
+			if (v && lastVerb < 0)
+				lastVerb = j;
+		}
+		return lastVerb;
 	}
 
 	public String dependencyType(int childIdx) {
