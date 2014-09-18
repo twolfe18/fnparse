@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.Serializable;
 import java.util.List;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -29,7 +30,7 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * 
  * @author travis
  */
-public interface Stage<Input, Output> extends HasFgModel {
+public interface Stage<Input, Output> extends HasFgModel, Serializable {
 
 	public String getName();
 	

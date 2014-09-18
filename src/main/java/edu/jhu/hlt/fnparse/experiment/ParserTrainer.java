@@ -1,11 +1,14 @@
 package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -54,6 +57,7 @@ public class ParserTrainer {
 	// previous stage's model directory.
 	public static final String ALPHABET_NAME = "features.alphabet.txt";
 	public static final String MODEL_NAME = "model.gz";
+	public static final String SER_MODEL_NAME = "model.ser.gz";
 
 	public static final File SENTENCE_ID_SPLITS =
 				new File("toydata/development-split.dipanjan-train.txt");
@@ -204,13 +208,20 @@ public class ParserTrainer {
 		LOG.info("After training, #features=" + parser.getAlphabet().size());
 		printMemUsage();
 
-		// Write parameters out as soon as possible
-		//parser.writeModel(new File(workingDir, MODEL_NAME));
-		//parser.writeAlphabet(new File(workingDir, ALPHABET_NAME));
+		/* Write parameters out as soon as possible
 		writeMergedModel(
 				new File(workingDir, ALPHABET_NAME),
 				new File(workingDir, MODEL_NAME),
 				parser);
+		*/
+		// Serialize the model using Java serialization
+		File f = new File(workingDir, SER_MODEL_NAME);
+		LOG.info("serializing model to " + f.getPath());
+		ObjectOutputStream oos = new ObjectOutputStream(
+				new GZIPOutputStream(new FileOutputStream(f)));
+		oos.writeObject(parser);
+		oos.close();
+
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -247,6 +258,10 @@ public class ParserTrainer {
 				+ " minutes");
 	}
 
+	/**
+	 * Don't use this, this forgets about other parameters like the thresholds
+	 * in the decoders.
+	 */
 	public static void writeMergedModel(
 			File alphabetDest, File modelDest, PipelinedFnParser parser) {
 		Alphabet<String> alph = parser.getAlphabet();

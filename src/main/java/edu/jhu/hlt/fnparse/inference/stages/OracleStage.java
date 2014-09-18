@@ -18,7 +18,8 @@ import edu.jhu.gm.model.FgModel;
  * @param <O>
  */
 public class OracleStage<I, O> implements Stage<I, O> {
-	private final Logger LOG = Logger.getLogger(OracleStage.class);
+	private static final long serialVersionUID = 1L;
+	private static final Logger LOG = Logger.getLogger(OracleStage.class);
 
 	private FgModel model = new FgModel(0);
 

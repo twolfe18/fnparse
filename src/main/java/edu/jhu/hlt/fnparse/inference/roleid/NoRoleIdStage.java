@@ -21,6 +21,7 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
  * @author travis
  */
 public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
+	private static final long serialVersionUID = 1L;
 	public static final Logger LOG = Logger.getLogger(NoRoleIdStage.class);
 	private FgModel model = new FgModel(0);
 
@@ -31,7 +32,7 @@ public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
 
 	@Override
 	public void setWeights(FgModel weights) {
-		throw new UnsupportedOperationException();
+		LOG.warn("not actually setting weights");
 	}
 
 	@Override

@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.util;
 
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class ModelMerger {
@@ -50,13 +52,64 @@ public class ModelMerger {
 		return merged;
 	}
 
+	/** This method will modify the first model argument */
+	@SafeVarargs
+	public static PipelinedFnParser merge(PipelinedFnParser... models) {
+		if (models.length <= 2) throw new IllegalArgumentException();
+		PipelinedFnParser merged = models[0];
+		for (int i = 1; i < models.length; i++)
+			merge(merged, models[i]);
+		return merged;
+	}
+
 	public static <T> Model<T> merge(Model<T> a, Model<T> b) {
 		Model<T> m = new Model<>(a.weights.length + b.weights.length);
 		addFeaturesAndWeights(a, m);
 		addFeaturesAndWeights(b, m);
 		return m;
 	}
+
+	/**
+	 * Merges the alphabets and weights of a and b, and then sets them in a.
+	 */
+	public static void merge(PipelinedFnParser a, PipelinedFnParser b) {
+		Model<String> ma = mergePipelinedFnParserModel(a);
+		Model<String> mb = mergePipelinedFnParserModel(b);
+		Model<String> mm = merge(ma, mb);
+		a.setAlphabet(mm.alphabet);
+		FgModel mmm = mm.getFgModel();
+		a.getFrameIdStage().setWeights(mmm);
+		a.getArgIdStage().setWeights(mmm);
+		a.getArgSpanStage().setWeights(mmm);
+	}
 	
+	/**
+	 * Merges the frameId, argId, etc models contained within a PipelinedFnParser
+	 * into one Model<String>
+	 */
+	private static Model<String> mergePipelinedFnParserModel(PipelinedFnParser p) {
+		// The alphabet is already global to the parser, so the models just need
+		// to be extended to all overlap in the global namespace.
+		Alphabet<String> alph = p.getAlphabet();
+		final double[] weights = new double[alph.size()];
+		FnIntDoubleToDouble lambda = new FnIntDoubleToDouble() {
+			@Override
+			public double call(int arg0, double arg1) {
+				if (arg0 >= weights.length) {
+					throw new RuntimeException("index is too high! "
+							+ arg0 + " vs " + weights.length);
+				}
+				assert weights[arg0] == 0d;
+				weights[arg0] = arg1;
+				return arg1;
+			}
+		};
+		p.getFrameIdWeights().apply(lambda);
+		p.getArgIdWeights().apply(lambda);
+		p.getArgSpanWeights().apply(lambda);
+		return new Model<>(alph, weights);
+	}
+
 	private static <T> void addFeaturesAndWeights(Model<T> from, Model<T> to) {
 		for (int i = 0; i < from.numValidWeights(); i++) {
 			double v = from.weights[i];
