@@ -23,7 +23,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
 
-	protected Logger log = Logger.getLogger(getClass());
+	protected transient Logger log = Logger.getLogger(getClass());
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
 

@@ -58,7 +58,7 @@ public class RoleSpanStage
 		public int maxArgRoleExpandRight = 5;
 
 		public Double learningRate = 0.05;	// null means auto-select
-		public Regularizer regularizer = new L2(1_000_000d);
+		public transient Regularizer regularizer = new L2(1_000_000d);
 		public int batchSize = 4;
 		public int passes = 2;
 
@@ -77,7 +77,7 @@ public class RoleSpanStage
 		// has no effect one way or the other because every target will be in
 		// the gold label.
 		//public boolean useNullSpanForArgumentsToIncorrectTarget = false;
-		
+
 		public FactorFactory<ExpansionVar> factorTemplate;
 		public ParserParams globalParams;
 
@@ -103,17 +103,17 @@ public class RoleSpanStage
 	public Double getLearningRate() {
 		return params.learningRate;
 	}
-	
+
 	@Override
 	public Regularizer getRegularizer() {
 		return params.regularizer;
 	}
-	
+
 	@Override
 	public int getBatchSize() {
 		return params.batchSize;
 	}
-	
+
 	@Override
 	public int getNumTrainingPasses() {
 		return params.passes;
@@ -347,7 +347,7 @@ public class RoleSpanStage
 			assert hasGold();
 			return gold;
 		}
-		
+
 		public Sentence getSentence() { return onlyHeads.getSentence(); }
 
 		@Override

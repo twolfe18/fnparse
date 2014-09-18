@@ -1,9 +1,13 @@
 package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 
 import org.apache.log4j.Logger;
 
@@ -12,7 +16,6 @@ import edu.jhu.hlt.fnparse.data.FNIterFilters;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.ModelMerger;
@@ -28,7 +31,7 @@ public class ParserEvaluator {
 	
 	public static final Logger LOG = Logger.getLogger(ParserEvaluator.class);
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		if (args.length != 4) {
 			System.out.println("please provide:");
 			System.out.println("1) A directory containing a frameId model and alphabet");
@@ -42,6 +45,7 @@ public class ParserEvaluator {
 		String argSpansDir = args[2];
 		//String workingDir = args[3];
 
+		/*
 		// Merge the models into one model.
 		ModelMerger.Model<String> model = ModelMerger.merge(
 			getModel(frameIdDir), getModel(argIdDir), getModel(argSpansDir));
@@ -55,6 +59,11 @@ public class ParserEvaluator {
 		parser.getArgIdStage().setWeights(model.getFgModel());
 		parser.getArgSpanStage().setWeights(model.getFgModel());
 		parser.getAlphabet().stopGrowth();
+		*/
+		PipelinedFnParser parser = ModelMerger.merge(
+				getModelAlt(frameIdDir),
+				getModelAlt(argIdDir),
+				getModelAlt(argSpansDir));
 
 		// Get the evaluation data
 		LOG.info("getting the evaluation data from "
@@ -73,7 +82,24 @@ public class ParserEvaluator {
 		BasicEvaluation.showResults("[test]", results);
 		LOG.info("done");
 	}
-	
+
+	private static PipelinedFnParser getModelAlt(String dir) throws Exception {
+		File f = new File(dir, ParserTrainer.SER_MODEL_NAME);
+		LOG.info("deserializing model from " + f.getPath());
+		ObjectInputStream ois = new ObjectInputStream(new GZIPInputStream(
+				new FileInputStream(f)));
+		PipelinedFnParser p = (PipelinedFnParser) ois.readObject();
+		ois.close();
+		LOG.info(String.format("parser has alph.size=%d and fid.weights.size=%d"
+				+ " aid.weights.size=%d as.weights.size=%d",
+				p.getAlphabet().size(),
+				p.getFrameIdWeights().getNumParams(),
+				p.getArgIdWeights().getNumParams(),
+				p.getArgSpanWeights().getNumParams()));
+		return p;
+	}
+
+	@SuppressWarnings("unused")
 	private static ModelMerger.Model<String> getModel(String dir) {
 		LOG.info("reading model from " + dir);
 		/*ModelMerger.Model<String> model = new ModelMerger.Model<>(

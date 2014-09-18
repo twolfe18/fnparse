@@ -9,7 +9,8 @@ import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
 
 public class IdentityStage<T> implements Stage<T, T> {
-	private final Logger LOG = Logger.getLogger(OracleStage.class);
+	private static final long serialVersionUID = 1L;
+	private static final Logger LOG = Logger.getLogger(IdentityStage.class);
 
 	private FgModel model = new FgModel(0);
 
@@ -20,7 +21,7 @@ public class IdentityStage<T> implements Stage<T, T> {
 
 	@Override
 	public void setWeights(FgModel weights) {
-		throw new RuntimeException("don't call this!");
+		LOG.warn("not actually setting weights");
 	}
 
 	@Override

@@ -54,7 +54,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	protected final ParserParams globalParams;	// Not owned by this class
 	protected FgModel weights;
-	protected Logger log = Logger.getLogger(this.getClass());
+	protected transient Logger log = Logger.getLogger(this.getClass());
 
 	public AbstractStage(ParserParams params) {
 		this.globalParams = params;
@@ -93,7 +93,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	public boolean logDomain() {
 		return globalParams.logDomain;
 	}
-	
+
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = false;
@@ -137,7 +137,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		if(numParams == 0)
 			throw new IllegalArgumentException("run AlphabetComputer first!");
 		assert globalParams.verifyConsistency();
-		weights = new FgModel(numParams + 1);
+		weights = new FgModel(numParams);
 	}
 
 	/** initializes to a 0 mean Gaussian with diagnonal variance (provided) */
@@ -150,20 +150,20 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			}
 		});
 	}
-	
+
 	/** null means auto-select */
 	public Double getLearningRate() {
 		return null;
 	}
-	
+
 	public Regularizer getRegularizer() {
 		return new L2(1_000_000d);
 	}
-	
+
 	public int getBatchSize() {
 		return 4;
 	}
-	
+
 	public int getNumTrainingPasses() {
 		return 2;
 	}
@@ -260,7 +260,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			tuneRecallBias(xDev, yDev, td);
 	}
 
-	
 	/**
 	 * forces the factor graphs to be created and the features to be computed,
 	 * which has the side effect of populating the feature alphabet in params.
