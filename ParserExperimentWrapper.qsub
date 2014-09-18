@@ -5,6 +5,7 @@
 #$ -l mem_free=8G               # expected amount of mem
 #$ -l num_proc=2                # how many processors to use
 #$ -o logging                   # where to do logging
+#$ -S /bin/bash
 # -M twolfe18@gmail.com
 # -m as                         # a=aborted b=begining e=end s=suspended
 
