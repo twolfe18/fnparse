@@ -14,8 +14,8 @@ frameIdTrain:
 
 argIdTrain:
 	qsub -N argId-regular -t 1-36 -q $(argIdQ) ParserExperimentWrapper.qsub argId regular
-	qsub -N argId-latent -t 1-36 -q $(qargIdQ) ParserExperimentWrapper.qsub argId latent
-	qsub -N argId-none -t 1-36 -q $(qargIdQ) ParserExperimentWrapper.qsub argId none
+	qsub -N argId-latent -t 1-36 -q $(argIdQ) ParserExperimentWrapper.qsub argId latent
+	qsub -N argId-none -t 1-36 -q $(argIdQ) ParserExperimentWrapper.qsub argId none
 
 argSpansTrain:
 	qsub -N argSpans-regular -t 1-36 -q $(argSpansQ) ParserExperimentWrapper.qsub argSpans regular

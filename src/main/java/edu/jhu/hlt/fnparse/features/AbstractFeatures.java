@@ -151,7 +151,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 			if(alph.isGrowing()) {
 				int sz = alph.size();
 				int idx = alph.lookupIndex(s, true);
-				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
+				if(log != null && sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
 					log.info("[AbstractFeatures b] alph just grew to " + sz);
 				if (weightingPower == 0d) {
 					weight = 1d;
