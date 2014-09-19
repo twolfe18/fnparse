@@ -82,7 +82,7 @@ public class ModelMerger {
 		a.getArgIdStage().setWeights(mmm);
 		a.getArgSpanStage().setWeights(mmm);
 	}
-	
+
 	/**
 	 * Merges the frameId, argId, etc models contained within a PipelinedFnParser
 	 * into one Model<String>
