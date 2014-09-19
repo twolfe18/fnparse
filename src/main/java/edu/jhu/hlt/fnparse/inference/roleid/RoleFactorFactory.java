@@ -15,7 +15,6 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
@@ -60,9 +59,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
 			this.fFeats = fFeats;
 		}
 
-		private Sentence sent;
-		private int i, j, k;
-		private Frame t;
+		private transient Sentence sent;
+		private transient int i, j, k;
+		private transient Frame t;
 
 		public void set(Sentence sent, int i, Frame t, int j, int k) {
 			this.sent = sent;
