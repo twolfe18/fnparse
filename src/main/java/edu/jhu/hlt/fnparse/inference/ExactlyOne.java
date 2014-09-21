@@ -19,71 +19,60 @@ public class ExactlyOne {
 	private double[] beliefs;
 	private boolean logDomain;
 	private boolean normalize;
-	
+
 	public ExactlyOne(double[] bel, boolean log, boolean normalize) {
 		this.beliefs = bel;
 		this.logDomain = log;
 		this.normalize = normalize;
-		
-		for(int i=0; i<bel.length; i++) {
+		for (int i=0; i<bel.length; i++) {
 			if(log) assert bel[i] <= 0d;
 			else assert 0d <= bel[i]; // && bel[i] <= 1d;
 		}
 	}
-	
+
 	public double[] computeMarginals() {
-		
 		int n = beliefs.length;
 		double[] margins = new double[n];
-		
-		if(!logDomain) {
-			
+
+		if (!logDomain) {
 			double pi = 1d;
 			for(int i=0; i<n; i++)
 				pi *= (1d - beliefs[i]);
-		
-			for(int i=0; i<n; i++) {
+			for (int i=0; i<n; i++) {
 				double qbar = beliefs[i] / (1d - beliefs[i]);
 				margins[i] = pi * qbar;
 			}
-			
-			if(normalize) {
+			if (normalize) {
 				double sum = 0d;
-				for(int i=0; i<n; i++) sum += margins[i];
-				for(int i=0; i<n; i++) margins[i] /= sum;
+				for (int i=0; i<n; i++) sum += margins[i];
+				for (int i=0; i<n; i++) margins[i] /= sum;
 			}
 		}
 		else throw new RuntimeException("implement me");
-		
 		return margins;
 	}
-	
+
 	private double[] computeMarginalsBruteForce() {
-		
 		int n = beliefs.length;
 		double[] margins = new double[n];
-		
-		if(!logDomain) {
+		if (!logDomain) {
 			ConfigIter iter = new ConfigIter(n);
-			while(iter.hasNext()) {
+			while (iter.hasNext()) {
 				boolean[] config = iter.next();
-				
 				double p = 1d;
 				int hot = 0;
-				for(int i=0; i<n; i++) {
+				for (int i=0; i<n; i++) {
 					if(config[i]) {
 						hot++;
 						p *= beliefs[i];
 					}
 					else p *= 1d - beliefs[i];
 				}
-				if(hot != 1) p = 0d;
-				
-				for(int i=0; i<n; i++)
+				if (hot != 1) p = 0d;
+				for (int i=0; i<n; i++)
 					if(config[i])
 						margins[i] += p;
 			}
-			
 			if(normalize) {
 				double sum = 0d;
 				for(int i=0; i<n; i++) sum += margins[i];
@@ -91,10 +80,9 @@ public class ExactlyOne {
 			}
 		}
 		else throw new RuntimeException("implement me");
-		
 		return margins;
 	}
-	
+
 	/** loops over 2^n configurations */
 	private static class ConfigIter implements Iterator<boolean[]> {
 

@@ -109,11 +109,11 @@ public class PipelinedFnParser implements Serializable {
 	public Stage<Sentence, FNTagging> getFrameIdStage() {
 		return frameId;
 	}
-	
+
 	public Stage<FNTagging, FNParse> getArgIdStage() {
 		return argId;
 	}
-	
+
 	public Stage<FNParse, FNParse> getArgSpanStage() {
 		return argExpansion;
 	}

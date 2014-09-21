@@ -449,7 +449,6 @@ public class FrameIdStage
 			assert hasGold();
 			return gold;
 		}
-
 	}
 
 	/**

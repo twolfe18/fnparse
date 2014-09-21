@@ -42,7 +42,15 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 	// TODO regular expressions over POS tags
 
 	@Override
-	public void featurize(FeatureVector v, Refinements refs, int targetHeadIdx, Frame f, int argHeadIdx, int roleIdx, Span argSpan, Sentence sent) {
+	public void featurize(
+			FeatureVector v,
+			Refinements refs,
+			int targetHeadIdx,
+			Frame f,
+			int argHeadIdx,
+			int roleIdx,
+			Span argSpan,
+			Sentence sent) {
 		if (argSpan == Span.nullSpan)
 			return;
 

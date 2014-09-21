@@ -21,7 +21,7 @@ public class FNTagging implements HasId, HasSentence {
 
 	protected Sentence sent;
 	protected List<FrameInstance> frameInstances;
-	
+
 	public FNTagging(Sentence s, List<FrameInstance> frameMentions) {
 		if(frameMentions == null || s == null)
 			throw new IllegalArgumentException();
@@ -35,7 +35,7 @@ public class FNTagging implements HasId, HasSentence {
 			}
 		}
 	}
-	
+
 	@Override
 	public String toString() {
 		String className = this.getClass().getName().replace("edu.jhu.hlt.fnparse.datatypes.", "");

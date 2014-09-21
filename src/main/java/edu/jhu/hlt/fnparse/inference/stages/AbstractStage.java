@@ -235,7 +235,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.regularizer = regularizer;
 
 		Alphabet<String> alph = this.getFeatureAlphabet();
-		log.info("Feature alphabet is frozen (size=" + alph.size() + "),"
+		log.info("Feature alphabet is frozen (size=" + alph.size() + "), "
 				+ "going straight into training");
 		alph.stopGrowth();
 
@@ -265,6 +265,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	 * which has the side effect of populating the feature alphabet in params.
 	 * @param labels may be null
 	 */
+	@Override
 	public void scanFeatures(
 			List<? extends I> unlabeledExamples,
 			List<? extends O> labels,
