@@ -109,4 +109,13 @@ public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
 			};
 		}
 	}
+
+	@Override
+	public void scanFeatures(
+			List<? extends FNTagging> unlabeledExamples,
+			List<? extends FNParse> labels,
+			double maxTimeInMinutes,
+			int maxFeaturesAdded) {
+		LOG.info("not actually scanning features");
+	}
 }

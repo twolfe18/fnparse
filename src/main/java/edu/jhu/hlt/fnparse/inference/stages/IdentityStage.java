@@ -93,4 +93,13 @@ public class IdentityStage<T> implements Stage<T, T> {
 			};
 		}
 	}
+
+	@Override
+	public void scanFeatures(
+			List<? extends T> unlabeledExamples,
+			List<? extends T> labels,
+			double maxTimeInMinutes,
+			int maxFeaturesAdded) {
+		LOG.info("not really scanning features");
+	}
 }

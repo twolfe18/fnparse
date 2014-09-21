@@ -33,8 +33,12 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
 public interface Stage<Input, Output> extends HasFgModel, Serializable {
 
 	public String getName();
-	
-	//public void scanFeatures(List<Input> x, List<Output> y);
+
+	public void scanFeatures(
+			List<? extends Input> unlabeledExamples,
+			List<? extends Output> labels,
+			double maxTimeInMinutes,
+			int maxFeaturesAdded);
 
 	/**
 	 * Should include any tuning steps that are necessary (implementer of this

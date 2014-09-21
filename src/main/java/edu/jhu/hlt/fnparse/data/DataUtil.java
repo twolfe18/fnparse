@@ -4,10 +4,12 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -22,10 +24,10 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.util.Describe;
 
 public class DataUtil {
 
-	
 	public static List<Sentence> stripAnnotations(List<? extends FNTagging> tagged) {
 		List<Sentence> raw = new ArrayList<Sentence>();
 		for(FNTagging t : tagged)
@@ -33,7 +35,29 @@ public class DataUtil {
 		return raw;
 	}
 
-	
+	public static Set<Span> getAllArgSpans(FrameInstance fi) {
+		Set<Span> s = new HashSet<>();
+		for (int k = 0; k < fi.getFrame().numRoles(); k++)
+			s.add(fi.getArgument(k));
+		s.remove(Span.nullSpan);
+		return s;
+	}
+
+	public static Map<Span, FrameInstance> getFrameInstanceByTarget(FNTagging t) {
+		Map<Span, FrameInstance> m = new HashMap<>();
+		for (FrameInstance fi : t.getFrameInstances()) {
+			FrameInstance old = m.put(fi.getTarget(), fi);
+			if (old != null) {
+				throw new RuntimeException(String.format(
+						"%s has two FrameInstances at %s:\n%s",
+						t.getId(),
+						fi.getTarget(),
+						Describe.fnTagging(t)));
+			}
+		}
+		return m;
+	}
+
 	public static FrameInstance[] getFrameInstancesIndexByHeadword(List<FrameInstance> fis, Sentence s, HeadFinder hf) {
 		int n = s.size();
 		FrameInstance[] fiByTarget = new FrameInstance[n];

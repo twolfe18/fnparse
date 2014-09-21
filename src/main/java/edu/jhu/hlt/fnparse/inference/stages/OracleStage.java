@@ -102,4 +102,13 @@ public class OracleStage<I, O> implements Stage<I, O> {
 		}
 	}
 
+	@Override
+	public void scanFeatures(
+			List<? extends I> unlabeledExamples,
+			List<? extends O> labels,
+			double maxTimeInMinutes,
+			int maxFeaturesAdded) {
+		LOG.info("not actually scanning features");
+	}
+
 }
