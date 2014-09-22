@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
@@ -41,8 +42,26 @@ public class AlmostFNParse extends FNTagging {
 		}
 	}
 
-	public int numFrameInstance() {
-		return numFrameInstances();
+	/** Returns the number of span variables that are permitted by this mask */
+	public int numPossibleArgs() {
+		int numPossibleArgs = 0;
+		for (Map.Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+			Frame f = x.getKey().getFrame();
+			List<Span> l = x.getValue();
+			numPossibleArgs += f.numRoles() * l.size();
+		}
+		return numPossibleArgs;
+	}
+
+	/** Returns the number of span variables possible without any pruning */
+	public int numPossibleArgsNaive() {
+		int n = sent.size();
+		int numPossibleSpans = (n*(n-1))/2 + n + 1;
+		int numPossibleRoles = 0;
+		for (FrameInstance fi : this.frameInstances)
+			numPossibleRoles += fi.getFrame().numRoles();
+		int numPossibleArgs = numPossibleRoles * numPossibleSpans;
+		return numPossibleArgs;
 	}
 
 	public Frame getFrame(int frameInstanceIndex) {
@@ -85,7 +104,7 @@ public class AlmostFNParse extends FNTagging {
 		StringBuilder sb = new StringBuilder("<AlmostFNParse of ");
 		sb.append(sent.getId());
 		sb.append("\n");
-		for (int i = 0; i < numFrameInstance(); i++) {
+		for (int i = 0; i < numFrameInstances(); i++) {
 			FrameInstance fi = getFrameTarget(i);
 			sb.append(Describe.frameInstance(fi));
 			Collection<Span> keep = possibleArgs.get(fi);
@@ -100,6 +119,33 @@ public class AlmostFNParse extends FNTagging {
 			}
 		}
 		return sb.toString();
+	}
+
+	/**
+	 * @return The recall attainable by this pruning mask if it were applied
+	 * during inference on the gold (frame,target)s in the given parse.
+	 */
+	public FPR recall(FNParse p) {
+		boolean macro = false;
+		FPR fpr = new FPR(macro);
+		for (FrameInstance fi : p.getFrameInstances()) {
+			FrameInstance key = FrameInstance.frameMention(
+					fi.getFrame(), fi.getTarget(), fi.getSentence());
+			Set<Span> possibleS = new HashSet<>();
+			List<Span> possible = possibleArgs.get(key);
+			if (possible != null) possibleS.addAll(possible);
+			Frame f = fi.getFrame();
+			for (int k = 0; k < f.numRoles(); k++) {
+				Span s = fi.getArgument(k);
+				if (s == Span.nullSpan)
+					continue;
+				else if (possibleS.contains(s))
+					fpr.accumTP();
+				else
+					fpr.accumFN();
+			}
+		}
+		return fpr;
 	}
 
 	/**

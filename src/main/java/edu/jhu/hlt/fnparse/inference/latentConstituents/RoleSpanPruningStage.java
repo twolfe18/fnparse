@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.latentConstituents;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -9,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -30,6 +32,9 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
+import edu.jhu.hlt.fnparse.features.Path;
+import edu.jhu.hlt.fnparse.features.Path.EdgeType;
+import edu.jhu.hlt.fnparse.features.Path.NodeType;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -37,7 +42,12 @@ import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator.Mode;
+import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.optimize.functions.L2;
 
 /**
  * This identifies roles (span-valued) given some frames. It has two kinds of
@@ -108,20 +118,28 @@ public class RoleSpanPruningStage
 	// Takes a bunch of JointRoleSpanStageDatum and decides which to prune
 	private ApproxF1MbrDecoder decoder;
 
+	private transient Regularizer regularizer;
+
 	public RoleSpanPruningStage(ParserParams params) {
 		super(params);
 		features = new FrameSpanRolePruningFeatures(params);
-		decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
+		decoder = new ApproxF1MbrDecoder(params.logDomain, Math.exp(-8d));
+		regularizer = new L2(1_000_000d);
 	}
 
 	@Override
 	public Double getLearningRate() {
-		return 1d;
+		return null;
 	}
 
 	@Override
 	public int getNumTrainingPasses() {
-		return 10;
+		return 4;
+	}
+
+	@Override
+	public Regularizer getRegularizer() {
+		return regularizer;
 	}
 
 	@Override
@@ -412,7 +430,7 @@ public class RoleSpanPruningStage
 
 		// TODO remove this and make sure that the recallBias in the decoder
 		// is working in the correct direction
-		boolean debugOverfit = true;
+		boolean debugOverfit = false;
 
 		public FrameSpanRolePruningFeatures(HasParserParams globalParams) {
 			super(globalParams);
@@ -440,12 +458,113 @@ public class RoleSpanPruningStage
 			if (debugOverfit) {
 				b(v, r, d, s.getId(), p.arg.toString(), p.frame.getName(), p.target.toString());
 			} else {
-				b(v, r, d);
-				b(v, r, d, "width=" + p.arg.width());
-				// TODO weight by distance of p.target to p.arg
-				// TODO add feature for role
-				b(v, r, d, "width=" + p.arg.width(), "frame=" + p.frame.getName());
+				String width = "width=" + discretizeDist(p.arg.width());
+				String frame = "frame=" + p.frame.getName();
+				final int tHead = globalParams
+						.getParserParams()
+						.headFinder.head(p.target, s);
+				final int aHead = globalParams
+						.getParserParams()
+						.headFinder.head(p.arg, s);
+
+				b(v, r, 10d, d);
+				b(v, r, d, width);
+				b(v, r, d, width, frame);
+
+				String lPos = "lPos=" + AbstractFeatures.getLUSafe(p.arg.start-1, s).pos;
+				String rPos = "rPos=" + AbstractFeatures.getLUSafe(p.arg.end, s).pos;
+				String sPos = "sPos=" + s.getPos(p.arg.start);
+				String ePos = "sPos=" + s.getPos(p.arg.end - 1);
+				String hPos = "hPos=" + s.getPos(globalParams.getParserParams().headFinder.head(p.arg, s));
+				List<String> allPos = Arrays.asList(lPos, rPos, sPos, ePos, hPos);
+				for (int i = 0; i < allPos.size() - 1; i++) {
+					b(v, r, d, allPos.get(i), frame);
+					for (int j = i + 1; j < allPos.size(); j++)
+						b(v, r, d, allPos.get(i), allPos.get(j), frame);
+				}
+
+				if (p.arg.equals(p.target)) {
+					String w = p.arg.width() <= 4 ? ("w=" + p.arg.width()) : "w>4";
+					b(v, r, d, "equals");
+					b(v, r, d, "equals", w);
+					b(v, r, d, "equals", frame);
+					b(v, r, d, "equals", frame, w);
+				}
+
+				String dist = "overlap";
+				if (p.arg.after(p.target)) {
+					dist = "afterBy" + discretizeDist(p.arg.start - p.target.end);
+					b(v, r, d, dist);
+					b(v, r, d, dist, frame);
+					dist = "hh-afterBy" + discretizeDist(aHead - tHead);
+					b(v, r, d, dist);
+					b(v, r, d, dist, frame);
+				} else if (p.arg.before(p.target)) {
+					dist = "beforeBy" + discretizeDist(p.target.start - p.arg.end);
+					b(v, r, d, dist);
+					b(v, r, d, dist, frame);
+					dist = "hh-beforeBy" + discretizeDist(tHead - aHead);
+					b(v, r, d, dist);
+					b(v, r, d, dist, frame);
+				}
+				b(v, r, d, dist);
+				b(v, r, d, dist, frame);
+
+				// Counts of POS between arg and target
+				Counts<String> between = null;
+				if (p.arg.end <= p.target.start) {
+					between = between(p.arg.end, p.target.start, s);
+				} else if (p.target.end <= p.arg.start) {
+					between = between(p.target.end, p.arg.start, s);
+				}
+				if (between != null) {
+					for (Map.Entry<String, Integer> x : between.entrySet()) {
+						String f = "count(" + x.getKey() + ")=" + x.getValue();
+						b(v, r, d, f);
+						b(v, r, d, f, frame);
+					}
+				}
+
+				// POS pattern and word shapes for the arguments
+				String posPat = new PosPatternGenerator(1, 1, Mode.COARSE_POS).extract(p.arg, s);
+				b(v, r, d, posPat);
+				b(v, r, d, posPat, frame);
+				String shapePat = new PosPatternGenerator(0, 0, Mode.WORD_SHAPE).extract(p.arg, s);
+				b(v, r, d, shapePat);
+				b(v, r, d, shapePat, frame);
+
+				for (Path taPath : Arrays.asList(
+						new Path(s, tHead, aHead, NodeType.POS, EdgeType.DIRECTION),
+						new Path(s, tHead, aHead, NodeType.NONE, EdgeType.DEP))) {
+					String l1 = "len(taPath)=" + (taPath.size() < 10 ? taPath.size() : "long");
+					String l2 = "deltaLen(taPath)=" + (Math.abs(taPath.deltaDepth()) <= 5
+							? taPath.deltaDepth() : (taPath.deltaDepth() < 0 ? "-long" : "+long"));
+					b(v, r, d, l1);
+					b(v, r, d, l1, frame);
+					b(v, r, d, l2);
+					b(v, r, d, l2, frame);
+					if (taPath.size() <= 6) {
+						b(v, r, d, "taPath=" + taPath.getPath());
+						b(v, r, d, "taPath=" + taPath.getPath(), frame);
+					}
+				}
 			}
+		}
+
+		private static Counts<String> between(int i, int j, Sentence s) {
+			Counts<String> c = new Counts<>();
+			for (int idx = i; idx <= j; idx++) {
+				String pos = s.getPos(idx);
+				c.increment(pos);
+				c.increment(pos.substring(0, 1));
+			}
+			return c;
+		}
+
+		private static String discretizeDist(int w) {
+			if (w > 100)
+				return ">100";
+			return String.valueOf((int) FastMath.pow(w, 0.6f));
 		}
 	}
 }

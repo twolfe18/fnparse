@@ -8,7 +8,6 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.prim.util.math.FastMath;
 
 public class ApproxF1MbrDecoder implements Serializable {
-
 	private static final long serialVersionUID = 1L;
 
 	private boolean logSpace;
@@ -33,22 +32,20 @@ public class ApproxF1MbrDecoder implements Serializable {
 	 * loss.
 	 */
 	public void setRecallBias(double recallBias) {
-		if(recallBias < 1e-3 || recallBias > 1e3)
-			throw new IllegalArgumentException();		
 		this.recallBias = recallBias;
 		double rb = Math.sqrt(recallBias);
 		this.falseNegPenalty = rb;
 		this.falsePosPenalty = 1d / rb;
 	}
-	
+
 	public double getRecallBias() {
 		return recallBias;
 	}
-	
+
 	public double getFalsePosPenalty() {
 		return falsePosPenalty;
 	}
-	
+
 	public double getFalseNegPenalty() {
 		return falseNegPenalty;
 	}

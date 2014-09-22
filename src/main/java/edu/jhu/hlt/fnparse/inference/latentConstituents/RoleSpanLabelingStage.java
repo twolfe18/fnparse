@@ -116,7 +116,7 @@ public class RoleSpanLabelingStage
 				Collection<ArgVar> vars) {
 			FeatureVector zero = new FeatureVector();
 			Sentence s = input.getSentence();
-			for (int i = 0; i < input.numFrameInstance(); i++) {
+			for (int i = 0; i < input.numFrameInstances(); i++) {
 				Frame f = input.getFrame(i);
 				Span target = input.getTarget(i);
 				int targetHeadIdx = parent.globalParams.headFinder.head(
