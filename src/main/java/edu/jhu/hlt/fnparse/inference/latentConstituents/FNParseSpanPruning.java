@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -19,14 +20,16 @@ import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
  * This specifies a set of frames marked in text (FNTagging) as well as a pruned
- * set of spans that are allowable for every 
+ * set of spans that are allowable for every frame.
  * 
  * @author travis
  */
-public class AlmostFNParse extends FNTagging {
-	private Map<FrameInstance, List<Span>> possibleArgs; // irrespective of role
+public class FNParseSpanPruning extends FNTagging {
+	// Irrespective of role.
+	// Every key should be a FrameInstance.frameMention
+	private Map<FrameInstance, List<Span>> possibleArgs;
 
-	public AlmostFNParse(
+	public FNParseSpanPruning(
 			Sentence s,
 			List<FrameInstance> frameMentions,
 			Map<FrameInstance, List<Span>> possibleArgs) {
@@ -93,13 +96,6 @@ public class AlmostFNParse extends FNTagging {
 		return frameInstances.get(i);
 	}
 
-	public static List<AlmostFNParse> optimalPrune(List<FNParse> ps) {
-		List<AlmostFNParse> prunes = new ArrayList<>();
-		for (FNParse p : ps)
-			prunes.add(optimalPrune(p));
-		return prunes;
-	}
-
 	public String describe() {
 		StringBuilder sb = new StringBuilder("<AlmostFNParse of ");
 		sb.append(sent.getId());
@@ -148,29 +144,78 @@ public class AlmostFNParse extends FNTagging {
 		return fpr;
 	}
 
+	public static List<FNParseSpanPruning> noisyPruningOf(
+			List<FNParse> parses,
+			double pIncludeNegativeSpan,
+			Random r) {
+		List<FNParseSpanPruning> out = new ArrayList<>();
+		for (FNParse p : parses)
+			out.add(noisyPruningOf(p, pIncludeNegativeSpan, r));
+		return out;
+	}
+
 	/**
-	 * @return an AlmostParse that represents the minimal set of arguments
-	 * required to cover all of the arguments for each frame instance in the
-	 * given parse. The set of possible argument spans for each (frame,target,role)
-	 * will contain Span.nullSpan.
+	 * Creates a pruning that includes all of the spans in the given parse, plus
+	 * some randomly included others. Every span that is not used in the given
+	 * parse is included with probability pIncludeNegativeSpan. Span.nullSpan is
+	 * also always included as an allowable span in the pruning.
 	 */
-	public static AlmostFNParse optimalPrune(FNParse p) {
+	public static FNParseSpanPruning noisyPruningOf(
+			FNParse p,
+			double pIncludeNegativeSpan,
+			Random r) {
 		Map<FrameInstance, List<Span>> possibleArgs = new HashMap<>();
+		int n = p.getSentence().size();
 		for (FrameInstance fi : p.getFrameInstances()) {
 			Set<Span> args = new HashSet<>();
 			for (int k = 0; k < fi.getFrame().numRoles(); k++)
 				args.add(fi.getArgument(k));
-			args.remove(Span.nullSpan);
+			args.add(Span.nullSpan);
+			for (int start = 0; start < n; start++)
+				for (int end = start + 1; end <= n; end++)
+					if (r.nextDouble() < pIncludeNegativeSpan)
+						args.add(Span.getSpan(start, end));
 			List<Span> argsList = new ArrayList<>();
 			argsList.addAll(args);
-			argsList.add(Span.nullSpan);
 			FrameInstance key = FrameInstance.frameMention(
 					fi.getFrame(), fi.getTarget(), fi.getSentence());
 			List<Span> old = possibleArgs.put(key, argsList);
 			if (old != null)
 				throw new RuntimeException();
 		}
-		return new AlmostFNParse(
+		return new FNParseSpanPruning(
+				p.getSentence(), p.getFrameInstances(), possibleArgs);
+	}
+
+	public static List<FNParseSpanPruning> optimalPrune(List<FNParse> ps) {
+		List<FNParseSpanPruning> prunes = new ArrayList<>();
+		for (FNParse p : ps)
+			prunes.add(optimalPrune(p));
+		return prunes;
+	}
+
+	/**
+	 * @return an AlmostParse that represents the minimal set of arguments
+	 * required to cover all of the arguments for each frame instance in the
+	 * given parse. The set of possible argument spans for each (frame,target,role)
+	 * will contain Span.nullSpan.
+	 */
+	public static FNParseSpanPruning optimalPrune(FNParse p) {
+		Map<FrameInstance, List<Span>> possibleArgs = new HashMap<>();
+		for (FrameInstance fi : p.getFrameInstances()) {
+			Set<Span> args = new HashSet<>();
+			for (int k = 0; k < fi.getFrame().numRoles(); k++)
+				args.add(fi.getArgument(k));
+			args.add(Span.nullSpan);
+			List<Span> argsList = new ArrayList<>();
+			argsList.addAll(args);
+			FrameInstance key = FrameInstance.frameMention(
+					fi.getFrame(), fi.getTarget(), fi.getSentence());
+			List<Span> old = possibleArgs.put(key, argsList);
+			if (old != null)
+				throw new RuntimeException();
+		}
+		return new FNParseSpanPruning(
 				p.getSentence(), p.getFrameInstances(), possibleArgs);
 	}
 }

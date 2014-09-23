@@ -47,32 +47,54 @@ public class LatentConstituencyPipelinedParser {
 	public void scanFeatures(List<FNParse> parses) {
 		LOG.info("setting up inference for " + parses.size() + " parses");
 		params.getFeatureAlphabet().startGrowth();
+
 		List<Sentence> sentences = DataUtil.stripAnnotations(parses);
 		List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
-		List<AlmostFNParse> prunes = AlmostFNParse.optimalPrune(parses);
 		frameId.scanFeatures(sentences, frames, 45, 10_000_000);
-		rolePruning.scanFeatures(frames, prunes, 45, 10_000_000);
-		roleLabeling.scanFeatures(prunes, parses, 45, 10_000_000);
+
+		List<FNParseSpanPruning> goldPrunes =
+				FNParseSpanPruning.optimalPrune(parses);
+		rolePruning.scanFeatures(frames, goldPrunes, 45, 10_000_000);
+
+		// Here we have not trained a role pruning model yet, so we can't really
+		// take scan the features of all of the decisions we will see at train
+		// time. It would be problematic if we only scanned features on the
+		// correct roles, possibly with the nullSpan as an option, because we
+		// would lose most of the negative features. Instead we opt to take a
+		// random sample of the negative decisions.
+		double pIncludeNegativeSpan = 0.1d;
+		List<FNParseSpanPruning> noisyPrunes =
+				FNParseSpanPruning.noisyPruningOf(
+						parses, pIncludeNegativeSpan, params.rand);
+		roleLabeling.scanFeatures(noisyPrunes, parses, 45, 10_000_000);
+
 		params.getFeatureAlphabet().stopGrowth();
 	}
 
 	public void train(List<FNParse> parses) {
 		LOG.info("training");
+
 		List<Sentence> sentences = DataUtil.stripAnnotations(parses);
 		List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
-		List<AlmostFNParse> prunes = AlmostFNParse.optimalPrune(parses);
 		frameId.train(sentences, frames);
-		rolePruning.train(frames, prunes);
-		roleLabeling.train(prunes, parses);
+
+		List<FNParseSpanPruning> goldPrunes =
+				FNParseSpanPruning.optimalPrune(parses);
+		rolePruning.train(frames, goldPrunes);
+
+		// Here we really need to train the last stage of our pipeline to expect
+		// the type of pruning that the previous stage will emit.
+		List<FNParseSpanPruning> hypPrunes = rolePruning.predict(frames);
+		roleLabeling.train(hypPrunes, parses);
 	}
 
 	public List<FNParse> predict(List<Sentence> sentences, List<FNParse> gold) {
 		List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
-		List<AlmostFNParse> goldPrune = null;
+		List<FNParseSpanPruning> goldPrune = null;
 		if (gold != null)
-			goldPrune = AlmostFNParse.optimalPrune(gold);
-		List<AlmostFNParse> prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
-		for (AlmostFNParse pr : prunes)
+			goldPrune = FNParseSpanPruning.optimalPrune(gold);
+		List<FNParseSpanPruning> prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
+		for (FNParseSpanPruning pr : prunes)
 			LOG.info("[predict] pruning predicted AlmostFNParse: " + pr.describe());
 		List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 		return parses;
@@ -103,8 +125,9 @@ public class LatentConstituencyPipelinedParser {
 			train = DataUtil.reservoirSample(
 					train, nTrainLimit, new Random(9001));
 		}
-		if (test.size() > 200) {
-			test = DataUtil.reservoirSample(test, 200, new Random(9002));
+		int nTestLimit = nTrainLimit;
+		if (test.size() > nTestLimit) {
+			test = DataUtil.reservoirSample(test, nTestLimit, new Random(9002));
 		}
 		LOG.info("#train=" + train.size()
 				+ " #tune=" + tune.size()
@@ -123,7 +146,6 @@ public class LatentConstituencyPipelinedParser {
 				true);
 		checkPruning(p, train);
 		checkPruning(p, test);
-		System.exit(-1);
 
 		// Eval on test
 		List<Sentence> sentences = DataUtil.stripAnnotations(test);
@@ -145,7 +167,7 @@ public class LatentConstituencyPipelinedParser {
 		FPR micro = new FPR(false);
 		for (FNParse p : examples) {
 			FNTagging in = DataUtil.convertParseToTagging(p);
-			AlmostFNParse out = parser.rolePruning
+			FNParseSpanPruning out = parser.rolePruning
 					.setupInference(Arrays.asList(in), null)
 					.decodeAll().get(0);
 			kept += out.numPossibleArgs();

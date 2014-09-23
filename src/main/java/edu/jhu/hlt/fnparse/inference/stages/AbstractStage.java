@@ -72,7 +72,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	@Override
 	public FgModel getWeights() {
-		if(weights == null) {
+		if (weights == null) {
 			throw new IllegalStateException(
 					"you never initialized the weights");
 		}
@@ -142,6 +142,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	/** initializes to a 0 mean Gaussian with diagnonal variance (provided) */
 	public void randomlyInitWeights(final double variance, final Random r) {
+		log.info("randomly initializing weights with a variance of " + variance);
 		initWeights();
 		weights.apply(new FnIntDoubleToDouble() {
 			@Override
@@ -196,7 +197,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		List<I> xTrain, xDev;
 		List<O> yTrain, yDev;
 		TuningData td = this.getTuningData();
-		if(td == null) {
+		if (td == null) {
 			xTrain = x;
 			yTrain = y;
 			xDev = Collections.emptyList();
@@ -214,11 +215,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 						0.15d, 50, globalParams.rand);
 			}
 		}
+		log.info("[train] #train=" + xTrain.size() + " #tune=" + xDev.size());
 
 		CrfTrainerPrm trainerParams = new CrfTrainerPrm();
 		SGDPrm sgdParams = new SGDPrm();
 		AdaGradPrm adagParams = new AdaGradPrm();
-		if(learningRate == null) {
+		if (learningRate == null) {
 			sgdParams.autoSelectLr = true;
 		} else {
 			sgdParams.autoSelectLr = false;
@@ -246,8 +248,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		CrfTrainer trainer = new CrfTrainer(trainerParams);
 		try {
 			weights = trainer.train(weights, exs);
-		}
-		catch(cc.mallet.optimize.OptimizationException oe) {
+		} catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
 		long timeTrain = t.stop();
@@ -298,7 +299,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		StageDatumExampleList<I, O> data = this.setupInference(
 				unlabeledExamples, null);
 		int n = data.size();
-		for(int i=0; i<n; i++) {
+		for (int i=0; i<n; i++) {
 			t.start();
 			StageDatum<I, O> d = data.getStageDatum(i);
 			IDecodable<O> dec = d.getDecodable();
@@ -308,17 +309,17 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				examplesWithNoFactorGraph++;
 			examplesSeen++;
 			t.stop();
-	
-			if(labels != null)
+
+			if (labels != null)
 				seen.add(labels.get(i));
 
-			if(t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
+			if (t.totalTimeInSeconds() / 60d > maxTimeInMinutes) {
 				log.info("[scanFeatures] Stopping because we used the max time "
 						+ "(in minutes): " + maxTimeInMinutes);
 				break;
 			}
 			int featuresAdded = getFeatureAlphabet().size() - alphSizeStart;
-			if(featuresAdded > maxFeaturesAdded) {
+			if (featuresAdded > maxFeaturesAdded) {
 				log.info("[scanFeatures] Stopping because we added the max "
 						+ "allowed features: " + featuresAdded);
 				break;
@@ -330,7 +331,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 					+ "associated with them: " + examplesWithNoFactorGraph);
 		}
 
-		if(seen.size() == 0) {
+		if (seen.size() == 0) {
 			log.info("[scanFeatures] Labels were provided, so we can't compute "
 					+ "frame/role recall");
 		} else {
@@ -385,12 +386,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	public void tuneRecallBias(List<I> x, List<O> y, TuningData td) {
-		if(x == null || y == null || x.size() != y.size())
+		if (x == null || y == null || x.size() != y.size())
 			throw new IllegalArgumentException();
-		if(td == null)
+		if (td == null)
 			throw new IllegalArgumentException();
 
-		if(x.size() == 0) {
+		if (x.size() == 0) {
 			log.warn("[tuneRecallBias] 0 examples were provided for tuning, skipping this");
 			return;
 		}
@@ -404,7 +405,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		long t = System.currentTimeMillis();
 
 		List<Decodable<O>> decodables = new ArrayList<>();
-		for(StageDatum<I, O> sd : this.setupInference(x, null).getStageData()) {
+		for (StageDatum<I, O> sd : this.setupInference(x, null).getStageData()) {
 			Decodable<O> d = (Decodable<O>) sd.getDecodable();
 			d.force();
 			decodables.add(d);
@@ -416,17 +417,17 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		double originalBias = td.getDecoder().getRecallBias();
 		double bestScore = Double.NEGATIVE_INFINITY;
 		List<Double> scores = new ArrayList<Double>();
-		for(double b : td.getRecallBiasesToSweep()) {
+		for (double b : td.getRecallBiasesToSweep()) {
 			td.getDecoder().setRecallBias(b);
 			List<O> predicted = new ArrayList<>();
-			for(Decodable<O> m : decodables)
+			for (Decodable<O> m : decodables)
 				predicted.add(m.decode());
 			List<SentenceEval> instances = BasicEvaluation.zip(y, predicted);
 			double score = td.getObjective().evaluate(instances);
 			log.info(String.format("[tuneRecallBias] recallBias=%.2f %s=%.3f",
 					b, td.getObjective().getName(), score));
 			scores.add(score);
-			if(score > bestScore) bestScore = score;
+			if (score > bestScore) bestScore = score;
 		}
 		long tDec = System.currentTimeMillis() - t;
 
@@ -438,7 +439,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		for(double r : regrets) weights.add(Math.exp(-r * 2));
 
 		double n = 0d, z = 0d;
-		for(int i=0; i<td.getRecallBiasesToSweep().size(); i++) {
+		for (int i=0; i<td.getRecallBiasesToSweep().size(); i++) {
 			double b = td.getRecallBiasesToSweep().get(i);
 			double w = weights.get(i);
 			n += w * b;
@@ -450,7 +451,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				tInf/1000d, tDec/1000d, originalBias, bestBias));
 		td.getDecoder().setRecallBias(bestBias);
 	}
-	
 
 	public static <A, B> void devTuneSplit(
 			List<? extends A> x, List<? extends B> y,
@@ -468,19 +468,18 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			return;
 
 		final int n = x.size();
-		for(int i=0; i<n; i++) {
+		for (int i=0; i<n; i++) {
 			boolean train = r.nextDouble() > propDev;
-			if(train) {
+			if (train) {
 				xTrain.add(x.get(i));
 				yTrain.add(y.get(i));
-			}
-			else {
+			} else {
 				xDev.add(x.get(i));
 				yDev.add(y.get(i));
 			}
 		}
 
-		while(xDev.size() > maxDev) {
+		while (xDev.size() > maxDev) {
 			xTrain.add(xDev.remove(xDev.size()-1));
 			yTrain.add(yDev.remove(yDev.size()-1));
 		}

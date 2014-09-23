@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.latentConstituents;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -23,13 +24,19 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.Refinements;
+import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
+import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.prim.arrays.Multinomials;
 
 /**
  * This stage takes a list of frame instances, each of which has a pruned set of
@@ -39,23 +46,66 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * @author travis
  */
 public class RoleSpanLabelingStage
-		extends AbstractStage<AlmostFNParse, FNParse> {
+		extends AbstractStage<FNParseSpanPruning, FNParse> {
 	private static final long serialVersionUID = 1L;
 	public static final Logger LOG =
 			Logger.getLogger(RoleSpanLabelingStage.class);
 
 	private BasicRoleSpanFeatures features;
+	private ApproxF1MbrDecoder decoder;
+	private transient Regularizer regularizer = new L2(1_000_000d);
 
 	public RoleSpanLabelingStage(ParserParams params) {
 		super(params);
 		features = new BasicRoleSpanFeatures(params);
+		decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
 	}
 
 	@Override
-	public StageDatumExampleList<AlmostFNParse, FNParse> setupInference(
-			List<? extends AlmostFNParse> input,
+	public Double getLearningRate() {
+		return 0.1d;
+	}
+
+	@Override
+	public int getNumTrainingPasses() {
+		return 2;
+	}
+
+	@Override
+	public Regularizer getRegularizer() {
+		return regularizer;
+	}
+
+	@Override
+	public TuningData getTuningData() {
+		return new TuningData() {
+			@Override
+			public ApproxF1MbrDecoder getDecoder() {
+				return decoder;
+			}
+			@Override
+			public EvalFunc getObjective() {
+				return BasicEvaluation.fullMicroF1;
+			}
+			@Override
+			public List<Double> getRecallBiasesToSweep() {
+				List<Double> biases = new ArrayList<>();
+				for (double b = 0.5d; b < 5d; b *= 1.1d)
+					biases.add(b);
+				return biases;
+			}
+			@Override
+			public boolean tuneOnTrainingData() {
+				return false;
+			}
+		};
+	}
+
+	@Override
+	public StageDatumExampleList<FNParseSpanPruning, FNParse> setupInference(
+			List<? extends FNParseSpanPruning> input,
 			List<? extends FNParse> output) {
-		List<StageDatum<AlmostFNParse, FNParse>> data = new ArrayList<>();
+		List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
 		for (int i = 0; i < input.size(); i++) {
 			FNParse gold = output == null ? null : output.get(i);
 			data.add(new RoleSpanLabellingStageDatum(input.get(i), gold, this));
@@ -64,29 +114,26 @@ public class RoleSpanLabelingStage
 	}
 
 	/**
-	 * FOR NOW: no latent syntax, just have one binary var for every
-	 * (frame, role, span)
+	 * Represents all of the variables needed to choose from a pruned set of
+	 * spans for every role. In cases where we've pruned the gold span, we do
+	 * not add a training variable/instance for that role.
+	 *
+	 * TODO: Implement latent syntax version of this factor. Right now it only
+	 * adds a binary factor for the labels.
+	 *
 	 * NOTE: do not be tempted to make a k-ary variable for every (frame,role)
 	 * because then i wont be able to hook up latent syntax binary factors later.
-	 * NOTE: don't bother with an Exactly1 factor on (frame,role,*) because the
-	 * decoder will enforce this.
-	 * 
+	 *
 	 * @author travis
 	 */
-	// This is a conditional model, so we really should train this on the
-	// pruned set of arg span options instead of the full set.
-	// This means that if we prune the gold answer, we should not train on that
-	// example.
-	// DON'T DO THIS: ANOTHER OPTION: take all of the remaining negative spans
-	// and still train with them as negative instances.
 	static class RoleSpanLabellingStageDatum
-			implements StageDatum<AlmostFNParse, FNParse> {
-		private final AlmostFNParse input;
+			implements StageDatum<FNParseSpanPruning, FNParse> {
+		private final FNParseSpanPruning input;
 		private final FNParse gold;
 		private final RoleSpanLabelingStage parent;
 
 		public RoleSpanLabellingStageDatum(
-				AlmostFNParse input,
+				FNParseSpanPruning input,
 				FNParse gold,
 				RoleSpanLabelingStage parent) {
 			this.input = input;
@@ -95,7 +142,7 @@ public class RoleSpanLabelingStage
 		}
 
 		@Override
-		public AlmostFNParse getInput() {
+		public FNParseSpanPruning getInput() {
 			return input;
 		}
 
@@ -110,10 +157,11 @@ public class RoleSpanLabelingStage
 			return gold;
 		}
 
-		private void getFactorGraph(
+		private void build(
 				FactorGraph fg,
 				VarConfig goldConf,
-				Collection<ArgVar> vars) {
+				Collection<ArgSpanLabelVar> vars) {
+			int prunedGold = 0, total = 0;
 			FeatureVector zero = new FeatureVector();
 			Sentence s = input.getSentence();
 			for (int i = 0; i < input.numFrameInstances(); i++) {
@@ -136,13 +184,15 @@ public class RoleSpanLabelingStage
 							LOG.warn("pruned the gold label for "
 									+ f.getName() + "." + f.getRole(k));
 							LOG.warn("not including this as a training example");
+							prunedGold++;
 							continue;
 						}
 					}
+					total++;
 					for (Span arg : input.getPossibleArgs(i)) {
-						ArgVar argVar = new ArgVar(arg, f, target, k);
-						if (vars != null)
-							vars.add(argVar);
+						ArgSpanLabelVar argVar = new ArgSpanLabelVar(arg, f, target, k);
+						if (vars != null) vars.add(argVar);
+						// Make a binary factor
 						ExplicitExpFamFactor phi =
 								new ExplicitExpFamFactor(new VarSet(argVar));
 						FeatureVector fv = new FeatureVector();
@@ -168,23 +218,34 @@ public class RoleSpanLabelingStage
 					}
 				}
 			}
+			if (gold != null) {
+				LOG.info(String.format(
+						"[build] pruned the gold span in %d of %d cases",
+						prunedGold, total));
+			} else {
+				LOG.info("[build] setup " + total
+						+ " arg-span label variables for prediction");
+			}
 		}
 
 		@Override
 		public LabeledFgExample getExample() {
 			VarConfig gold = new VarConfig();
 			FactorGraph fg = new FactorGraph();
-			getFactorGraph(fg, gold, null);
+			build(fg, gold, null);
 			return new LabeledFgExample(fg, gold);
 		}
 
 		@Override
 		public IDecodable<FNParse> getDecodable() {
-			Collection<ArgVar> vars = new ArrayList<>();
+			Collection<ArgSpanLabelVar> vars = new ArrayList<>();
 			FactorGraph fg = new FactorGraph();
-			getFactorGraph(fg, null, vars);
+			build(fg, null, vars);
 			return new Decoder(
-					fg, parent.infFactory(), parent, vars, input.getSentence());
+					fg, parent.infFactory(),
+					parent,
+					vars, input.getSentence(),
+					parent);
 		}
 	}
 
@@ -194,11 +255,12 @@ public class RoleSpanLabelingStage
 	 * 
 	 * @author travis
 	 */
-	static class ArgVar extends RoleSpanPruningStage.RolePruningVar {
+	static class ArgSpanLabelVar
+			extends RoleSpanPruningStage.ArgSpanPruningVar {
 		private static final long serialVersionUID = 1L;
 		public final int role;
 		public final Span arg;
-		public ArgVar(Span arg, Frame frame, Span target, int role) {
+		public ArgSpanLabelVar(Span arg, Frame frame, Span target, int role) {
 			super(arg, frame, target);
 			this.role = role;
 			this.arg = arg;
@@ -206,24 +268,26 @@ public class RoleSpanLabelingStage
 	}
 
 	static class Decoder extends Decodable<FNParse> {
-		private Map<FrameRoleInstance, List<ArgVar>> vars;
+		private Map<FrameRoleInstance, List<ArgSpanLabelVar>> vars;
 		private Sentence sentence;
-
+		private RoleSpanLabelingStage parent;
 		public Decoder(
 				FactorGraph fg,
 				FgInferencerFactory infFact,
 				HasFgModel weights,
-				Collection<ArgVar> vars,
-				Sentence sentence) {
+				Collection<ArgSpanLabelVar> vars,
+				Sentence sentence,
+				RoleSpanLabelingStage parent) {
 			super(fg, infFact, weights);
 			this.sentence = sentence;
+			this.parent = parent;
 
 			// Index span variables by (frame,target,role)
 			this.vars = new HashMap<>();
-			for (ArgVar a : vars) {
+			for (ArgSpanLabelVar a : vars) {
 				FrameRoleInstance key =
 						new FrameRoleInstance(a.frame, a.target, a.role);
-				List<ArgVar> x = this.vars.get(key);
+				List<ArgSpanLabelVar> x = this.vars.get(key);
 				if (x == null) {
 					x = new ArrayList<>();
 					this.vars.put(key, x);
@@ -236,13 +300,14 @@ public class RoleSpanLabelingStage
 		public FNParse decode() {
 			// Decode the best argument for every (frame,target,role)
 			Map<FrameInstance, Span[]> bestArgs = new HashMap<>();
-			for (Map.Entry<FrameRoleInstance, List<ArgVar>> x : vars.entrySet()) {
+			for (Map.Entry<FrameRoleInstance, List<ArgSpanLabelVar>> x : vars.entrySet()) {
 				FrameRoleInstance ftr = x.getKey();
 				FrameInstance key = FrameInstance.frameMention(
 						ftr.frame, ftr.target, sentence);
 				Span[] all = bestArgs.get(key);
 				if (all == null) {
 					all = new Span[ftr.frame.numRoles()];
+					Arrays.fill(all, Span.nullSpan);
 					bestArgs.put(key, all);
 				} else {
 					assert ftr.frame.numRoles() == all.length;
@@ -259,20 +324,29 @@ public class RoleSpanLabelingStage
 			return new FNParse(sentence, fis);
 		}
 
-		private Span argmax(Collection<ArgVar> vars) {
+		private Span argmax(List<ArgSpanLabelVar> vars) {
 			FgInferencer inf = this.getMargins();
-			Span best = null;
-			double bestB = 0d;
-			for (ArgVar a : vars) {
-				DenseFactor df = inf.getMarginals(a);
-				df.logNormalize();
-				double b = df.getValue(BinaryVarUtil.boolToConfig(true));
-				if (best == null || b > bestB) {
-					best = a.arg;
-					bestB = b;
+			double[] posterior = new double[vars.size()];
+			int nullSpanIdx = -1;
+			for (int i = 0; i < posterior.length; i++) {
+				if (vars.get(i).arg == Span.nullSpan) {
+					assert nullSpanIdx < 0;
+					nullSpanIdx = i;
 				}
+				DenseFactor df = inf.getMarginals(vars.get(i));
+				if (parent.globalParams.logDomain)
+					df.logNormalize();
+				else
+					df.normalize();
+				posterior[i] = df.getValue(BinaryVarUtil.boolToConfig(true));
 			}
-			return best;
+			assert nullSpanIdx >= 0;
+			if (parent.globalParams.logDomain)
+				Multinomials.normalizeLogProps(posterior);
+			else
+				Multinomials.normalizeProps(posterior);
+			int y = parent.decoder.decode(posterior, nullSpanIdx);
+			return vars.get(y).arg;
 		}
 	}
 }
