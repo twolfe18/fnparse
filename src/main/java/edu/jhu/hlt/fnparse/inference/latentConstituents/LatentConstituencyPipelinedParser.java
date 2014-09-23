@@ -34,7 +34,8 @@ public class LatentConstituencyPipelinedParser {
 
 	private ParserParams params;
 	private Stage<Sentence, FNTagging> frameId;
-	private RoleSpanPruningStage rolePruning;
+	//private RoleSpanPruningStage rolePruning;
+	private Stage<FNTagging, FNParseSpanPruning> rolePruning;
 	private RoleSpanLabelingStage roleLabeling;
 
 	public LatentConstituencyPipelinedParser() {
@@ -42,6 +43,16 @@ public class LatentConstituencyPipelinedParser {
 		frameId = new OracleStage<>();
 		rolePruning = new RoleSpanPruningStage(params);
 		roleLabeling = new RoleSpanLabelingStage(params);
+	}
+
+	public void dontDoAnyPruning() {
+		if (!(rolePruning instanceof RoleSpanPruningStage))
+			rolePruning = new RoleSpanPruningStage(params);
+		((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
+	}
+
+	public void useStanfordConstituenciesForPruning() {
+		rolePruning = new StanfordParserRolePruning();
 	}
 
 	public void scanFeatures(List<FNParse> parses) {
@@ -84,7 +95,8 @@ public class LatentConstituencyPipelinedParser {
 
 		// Here we really need to train the last stage of our pipeline to expect
 		// the type of pruning that the previous stage will emit.
-		List<FNParseSpanPruning> hypPrunes = rolePruning.predict(frames);
+		List<FNParseSpanPruning> hypPrunes = rolePruning
+				.setupInference(frames, null).decodeAll();
 		roleLabeling.train(hypPrunes, parses);
 	}
 
@@ -94,14 +106,14 @@ public class LatentConstituencyPipelinedParser {
 		if (gold != null)
 			goldPrune = FNParseSpanPruning.optimalPrune(gold);
 		List<FNParseSpanPruning> prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
-		for (FNParseSpanPruning pr : prunes)
-			LOG.info("[predict] pruning predicted AlmostFNParse: " + pr.describe());
+		//for (FNParseSpanPruning pr : prunes)
+		//	LOG.info("[predict] pruning predicted AlmostFNParse: " + pr.describe());
 		List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 		return parses;
 	}
 
 	public static void main(String[] args) {
-		int nTrainLimit = 50;
+		int nTrainLimit = 200;
 
 		Logger.getLogger(SGD.class).setLevel(Level.ERROR);
 		Logger.getLogger(Threads.class).setLevel(Level.ERROR);
@@ -111,6 +123,8 @@ public class LatentConstituencyPipelinedParser {
 		//BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
 		LatentConstituencyPipelinedParser p = new LatentConstituencyPipelinedParser();
+		//p.useStanfordConstituenciesForPruning();
+		//p.dontDoAnyPruning();
 
 		// Get the data
 		List<FNParse> all = DataUtil.iter2list(

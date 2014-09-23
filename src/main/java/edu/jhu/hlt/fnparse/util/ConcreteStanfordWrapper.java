@@ -42,7 +42,6 @@ public class ConcreteStanfordWrapper {
 	public Map<Span, String> parse(Sentence s) {
 		Communication communication = sentenceToConcrete(s);
 		anno.annotateWithStanfordNlp(communication);
-		System.out.println(communication.toString());
 		SectionSegmentation sectionSeg =
 				communication.getSectionSegmentationList().get(0);
 		Map<Span, String> constiuents = new HashMap<>();
@@ -57,8 +56,16 @@ public class ConcreteStanfordWrapper {
 				Parse parse = tokenization.getParseList().get(0);
 				for (Constituent c : parse.getConstituentList()) {
 					Span mySpan = constituentToSpan(c);
-					String oldTag = constiuents.put(mySpan, c.getTag());
-					assert oldTag == null;
+					String tag = c.getTag();
+					String oldTag = constiuents.put(mySpan, tag);
+					if (oldTag != null) {
+						if (tag.compareTo(oldTag) < 0) {
+							String temp = oldTag;
+							oldTag = tag;
+							tag = temp;
+						}
+						constiuents.put(mySpan, oldTag + "-" + tag);
+					}
 				}
 			}
 		}
@@ -76,20 +83,33 @@ public class ConcreteStanfordWrapper {
 		return Span.getSpan(start, end + 1);
 	}
 
+	public static String normalizeToken(String token) {
+		if (token.contains("(")) {
+			assert token.length() == 1;
+			return "RLB";
+		} else if (token.contains(")")) {
+			assert token.length() == 1;
+			return "RRB";
+		} else {
+			return token;
+		}
+	}
+
 	public Communication sentenceToConcrete(Sentence s) {
 		TokenList tokList = new TokenList();
 		StringBuilder docText = new StringBuilder();
 		for (int i = 0; i < s.size(); i++) {
+			String w = normalizeToken(s.getWord(i));
 			Token t = new Token();
 			t.setTokenIndex(i);
-			t.setText(s.getWord(i));
+			t.setText(w);
 			TextSpan span = new TextSpan();
 			span.setStart(docText.toString().length());
-			span.setEnding(span.getStart() + s.getWord(i).length());
+			span.setEnding(span.getStart() + w.length());
 			t.setTextSpan(span);
 			tokList.addToTokenList(t);
 			if (i > 0) docText.append(" ");
-			docText.append(s.getWord(i));
+			docText.append(w);
 		}
 		Tokenization tokenization = new Tokenization();
 		tokenization.setUuid(aUUID);

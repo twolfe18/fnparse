@@ -119,6 +119,10 @@ public class RoleSpanPruningStage
 	// Takes a bunch of JointRoleSpanStageDatum and decides which to prune
 	//private ApproxF1MbrDecoder decoder;
 
+	// If true, do not prune anything, produce FNParseSpanPrunings that have
+	// 100% recall.
+	private boolean keepEverything = false;
+
 	private transient Regularizer regularizer;
 
 	public RoleSpanPruningStage(ParserParams params) {
@@ -128,6 +132,10 @@ public class RoleSpanPruningStage
 		regularizer = new L2(100_000d);
 	}
 
+	public void dontDoAnyPruning() {
+		keepEverything = true;
+	}
+
 	@Override
 	public Double getLearningRate() {
 		return 1d;
@@ -135,7 +143,7 @@ public class RoleSpanPruningStage
 
 	@Override
 	public int getNumTrainingPasses() {
-		return 2;
+		return 3;
 	}
 
 	@Override
@@ -346,8 +354,14 @@ public class RoleSpanPruningStage
 			} else {
 				//return new ThresholdDecodable(fg, parent.infFactory(),
 				//		parent, input, roleVars, parent.decoder);
-				return new RankDecodable(fg, parent.infFactory(),
-						parent, input, roleVars);
+				if (parent.keepEverything) {
+					ApproxF1MbrDecoder decoder = null;
+					return new ThresholdDecodable(fg, parent.infFactory(),
+							parent, input, roleVars, decoder);
+				} else {
+					return new RankDecodable(fg, parent.infFactory(),
+							parent, input, roleVars);
+				}
 			}
 		}
 	}
@@ -449,8 +463,13 @@ public class RoleSpanPruningStage
 		// Each variable says whether to prune a particular span for a given
 		// (frame,target).
 		private List<ArgSpanPruningVar> roleVars;
+
 		private FNTagging input;
+
+		// If null, keep everything. Produce FNParseSpanPrunings that have
+		// 100% recall.
 		private ApproxF1MbrDecoder decoder;
+
 		public ThresholdDecodable(
 				FactorGraph fg,
 				FgInferencerFactory infFact,
@@ -472,8 +491,11 @@ public class RoleSpanPruningStage
 			int pruned = 0, considered = 0;
 			for (ArgSpanPruningVar rpv : roleVars) {
 				DenseFactor df = inf.getMarginals(rpv);
-				int y = decoder.decode(
-						df.getValues(), BinaryVarUtil.boolToConfig(false));
+				int y = BinaryVarUtil.boolToConfig(false);
+				if (decoder != null) {
+					y = decoder.decode(
+							df.getValues(), BinaryVarUtil.boolToConfig(false));
+				}
 				//LOG.debug("[decode] " + rpv + " has beliefs " + df
 				//		+ " and was decoded as " + y);
 				considered++;

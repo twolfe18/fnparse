@@ -63,7 +63,7 @@ public class RoleSpanLabelingStage
 
 	@Override
 	public Double getLearningRate() {
-		return 0.1d;
+		return 1d;
 	}
 
 	@Override
@@ -90,7 +90,7 @@ public class RoleSpanLabelingStage
 			@Override
 			public List<Double> getRecallBiasesToSweep() {
 				List<Double> biases = new ArrayList<>();
-				for (double b = 0.5d; b < 5d; b *= 1.1d)
+				for (double b = 0.5d; b < 12d; b *= 1.25d)
 					biases.add(b);
 				return biases;
 			}
@@ -122,12 +122,13 @@ public class RoleSpanLabelingStage
 	 * adds a binary factor for the labels.
 	 *
 	 * NOTE: do not be tempted to make a k-ary variable for every (frame,role)
-	 * because then i wont be able to hook up latent syntax binary factors later.
+	 * because then i wont be able to hook up latent syntax binary factors later
 	 *
 	 * @author travis
 	 */
 	static class RoleSpanLabellingStageDatum
 			implements StageDatum<FNParseSpanPruning, FNParse> {
+		private static final FeatureVector zero = new FeatureVector();
 		private final FNParseSpanPruning input;
 		private final FNParse gold;
 		private final RoleSpanLabelingStage parent;
@@ -162,13 +163,9 @@ public class RoleSpanLabelingStage
 				VarConfig goldConf,
 				Collection<ArgSpanLabelVar> vars) {
 			int prunedGold = 0, total = 0;
-			FeatureVector zero = new FeatureVector();
-			Sentence s = input.getSentence();
 			for (int i = 0; i < input.numFrameInstances(); i++) {
 				Frame f = input.getFrame(i);
 				Span target = input.getTarget(i);
-				int targetHeadIdx = parent.globalParams.headFinder.head(
-						target, input.getSentence());
 				FrameInstance goldFi = null;
 				if (gold != null) {
 					goldFi = gold.getFrameInstance(i);
@@ -184,47 +181,79 @@ public class RoleSpanLabelingStage
 							LOG.warn("pruned the gold label for "
 									+ f.getName() + "." + f.getRole(k));
 							LOG.warn("not including this as a training example");
+							assert goldArg != Span.nullSpan;
 							prunedGold++;
 							continue;
 						}
 					}
 					total++;
+					boolean foundNullSpan = false;
 					for (Span arg : input.getPossibleArgs(i)) {
-						ArgSpanLabelVar argVar = new ArgSpanLabelVar(arg, f, target, k);
-						if (vars != null) vars.add(argVar);
-						// Make a binary factor
-						ExplicitExpFamFactor phi =
-								new ExplicitExpFamFactor(new VarSet(argVar));
-						FeatureVector fv = new FeatureVector();
-						int argHeadIdx = -1;
-						if (arg != Span.nullSpan) {
-							argHeadIdx =
-									parent.globalParams.headFinder.head(arg, s);
-						}
-						parent.features.featurize(fv,
-								Refinements.noRefinements,
-								targetHeadIdx, f, argHeadIdx, k, arg, s);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
-						phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);
-						fg.addFactor(phi);
-						if (goldArg != null) {
-							boolean g = goldArg.equals(argVar.arg);
-							argVar.setGold(g);
-							if (goldConf != null) {
-								goldConf.put(argVar,
-										BinaryVarUtil.boolToConfig(g));
-							}
+						// Non-null span variables
+						Boolean spanIsGold = null;
+						if (goldArg != null)
+							spanIsGold = (goldArg == arg);
+						buildSpanVar(f, target, k, arg, spanIsGold,
+								fg, goldConf, vars);
+						if (arg == Span.nullSpan) {
+							assert !foundNullSpan;
+							foundNullSpan = true;
 						}
 					}
+					assert foundNullSpan;
 				}
 			}
 			if (gold != null) {
 				LOG.info(String.format(
-						"[build] pruned the gold span in %d of %d cases",
-						prunedGold, total));
+						"[build] pruned the gold span in %d of %d cases in %s",
+						prunedGold, total, input.getSentence().getId()));
 			} else {
 				LOG.info("[build] setup " + total
-						+ " arg-span label variables for prediction");
+						+ " arg-span label variables for prediction in "
+						+ input.getSentence().getId());
+			}
+		}
+
+		private void buildSpanVar(
+				Frame frame,
+				Span target,
+				int role,
+				Span arg,
+				Boolean isGold,
+				FactorGraph fg,
+				VarConfig goldConf,
+				Collection<ArgSpanLabelVar> vars) {
+			// Make the variable
+			ArgSpanLabelVar argVar = new ArgSpanLabelVar(
+					arg, frame, target, role);
+			if (vars != null) vars.add(argVar);
+
+			// Make a binary factor
+			ExplicitExpFamFactor phi =
+					new ExplicitExpFamFactor(new VarSet(argVar));
+
+			Sentence s = input.getSentence();
+			int argHeadIdx = -1;
+			if (arg != Span.nullSpan)
+				argHeadIdx = parent.globalParams.headFinder.head(arg, s);
+			int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
+
+			// Compute features for the binary factor
+			FeatureVector fv = new FeatureVector();
+			parent.features.featurize(
+					fv, Refinements.noRefinements,
+					targetHeadIdx, frame, argHeadIdx, role, arg, s);
+			phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
+			phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);
+
+			// Add the factor to the graph (this adds the var too)
+			fg.addFactor(phi);
+
+			// Set the gold if it is known
+			if (isGold != null) {
+				argVar.setGold(isGold);
+				if (goldConf != null)
+					goldConf.put(argVar, BinaryVarUtil.boolToConfig(isGold));
 			}
 		}
 
@@ -339,6 +368,7 @@ public class RoleSpanLabelingStage
 				else
 					df.normalize();
 				posterior[i] = df.getValue(BinaryVarUtil.boolToConfig(true));
+				//LOG.debug("[labeling argmax] " + posterior[i] + "\t" + vars.get(i));
 			}
 			assert nullSpanIdx >= 0;
 			if (parent.globalParams.logDomain)
