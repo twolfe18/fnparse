@@ -85,11 +85,21 @@ public class ConcreteStanfordWrapper {
 
 	public static String normalizeToken(String token) {
 		if (token.contains("(")) {
-			assert token.length() == 1;
-			return "RLB";
+			if (token.length() == 1) {
+				return "RLB";
+			} else {
+				assert token.startsWith("(");
+				// e.g. "(Hong"
+				return token.substring(1, token.length());
+			}
 		} else if (token.contains(")")) {
-			assert token.length() == 1;
-			return "RRB";
+			if (token.length() == 1) {
+				return "RRB";
+			} else {
+				assert token.endsWith(")");
+				// e.g. "Kong)"
+				return token.substring(0, token.length() - 1);
+			}
 		} else {
 			return token;
 		}
