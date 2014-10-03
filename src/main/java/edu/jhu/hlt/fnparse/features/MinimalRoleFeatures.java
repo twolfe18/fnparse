@@ -21,6 +21,8 @@ public class MinimalRoleFeatures
 		implements Features.R {
 	private static final long serialVersionUID = 1L;
 
+	public static boolean OVERFITTING_DEBUG = false;
+
 	// Appears to help very little if at all with 400 training examples
 	public boolean useLRcontext = false;
 
@@ -47,6 +49,11 @@ public class MinimalRoleFeatures
 			role += "-notRealized";
 		String frameRole = t.getName() + "." + role;
 		String passive = s.passive(i) ? "passive" : "active";
+
+		if (OVERFITTING_DEBUG) {
+			b(v, r, frameRole, "sent=" + s.getId(), "target=" + i, "arg=" + j);
+			return;
+		}
 
 		b(v, r, "intercept");
 		b(v, r, role);

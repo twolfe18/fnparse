@@ -15,8 +15,8 @@ import edu.jhu.hlt.fnparse.inference.HasParserParams;
 public final class BasicRoleFeatures
 		extends AbstractFeatures<BasicRoleFeatures>
 		implements Features.R {
-
 	private static final long serialVersionUID = 1L;
+	public static boolean OVERFITTING_DEBUG = false;
 
 	// If true, will implement a larger feature set that will add products of
 	// words with their POS as pieces of features.
@@ -55,6 +55,11 @@ public final class BasicRoleFeatures
 		LexicalUnit aHead = !argRealized
 				? AbstractFeatures.luEnd
 				: (useLemmasInsteadOfWords ? sent.getLemmaLU(argHead) : sent.getLU(argHead));
+
+		if (OVERFITTING_DEBUG) {
+			b(fv, r, fsrs, "sent=" + sent.getId(), "target=" + targetHead, "arg=" + argHead);
+			return;
+		}
 
 		b(fv, r, 5d, rs, "intercept");
 		b(fv, r, 5d, fsrs, "intercept");

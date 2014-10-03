@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IDictionary;
@@ -51,8 +52,10 @@ public class ArgPruner implements Serializable, IArgPruner {
 
 		File parent = new File("toydata/arg-pruning");
 		ParserParams params = new ParserParams();
-		FrameIdStage fid = new FrameIdStage(params);
-		ArgPruner ap = new ArgPruner(fid.params.targetPruningData, params.headFinder);
+		HasFeatureAlphabet featureNames = null;
+		FrameIdStage fid = new FrameIdStage(params, featureNames);
+		ArgPruner ap = new ArgPruner(
+				fid.params.getTargetPruningData(), params.headFinder);
 
 		if(plain) {
 			ap.clearCachedFiles();

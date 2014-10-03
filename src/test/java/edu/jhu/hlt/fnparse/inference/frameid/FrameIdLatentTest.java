@@ -58,14 +58,14 @@ public class FrameIdLatentTest {
 		regParams.useSyntaxFeatures = true;
 		regParams.useLatentConstituencies = false;
 		regParams.useLatentDepenencies = false;
-		FrameIdStage regular = new FrameIdStage(regParams);
+		FrameIdStage regular = new FrameIdStage(regParams, regParams);
 		regular.params.tuneOnTrainingData = true;
 
 		ParserParams latentParams = new ParserParams();
 		latentParams.useSyntaxFeatures = true;
 		latentParams.useLatentConstituencies = false;
 		latentParams.useLatentDepenencies = true;
-		FrameIdStage latent = new FrameIdStage(latentParams);
+		FrameIdStage latent = new FrameIdStage(latentParams, latentParams);
 		latent.params.tuneOnTrainingData = true;
 		//latent.params.passes = 100;
 
@@ -122,25 +122,25 @@ public class FrameIdLatentTest {
 		for (FrameInstance fi : t.getFrameInstances()) 
 			assertNotNull(fi);
 	}
-	
+
 	private static FNTagging trainAndThenPredictFrames(
 			FrameIdStage frameId,
 			FNParse p) {
 		List<Sentence> x = Arrays.asList(p.getSentence());
 		List<FNParse> y = Arrays.asList(p);
-		frameId.getFeatureAlphabet().startGrowth();
+		final Alphabet<String> alph = frameId.getGlobalParams().getAlphabet();
+		alph.startGrowth();
 		frameId.scanFeatures(x, y, 999, 99_999_999);
 		frameId.train(Arrays.asList(p));
-		frameId.getFeatureAlphabet().stopGrowth();
+		alph.stopGrowth();
 
 		// Try to figure out if we have 0 weights for the f_it ~ l_ij factors
 		if (printFeatures) {
-			final Alphabet<String> featAlph = frameId.getFeatureAlphabet();
 			frameId.getWeights().apply(new FnIntDoubleToDouble() {
 				@Override
 				public double call(int idx, double val) {
-					if (idx < featAlph.size()) {
-						String feat = (String) featAlph.lookupObject(idx);
+					if (idx < alph.size()) {
+						String feat = (String) alph.lookupObject(idx);
 						System.out.printf("%-25s %.2f\n", feat, val);
 					} else {
 						System.out.println(idx + " is not in the alphabet");
@@ -149,10 +149,9 @@ public class FrameIdLatentTest {
 				}
 			});
 		}
-		
 		return frameId.setupInference(x, null).decodeAll().get(0);
 	}
-	
+
 	public static List<FNParse> parseToEvaluateOn() {
 		boolean debug = false;
 		if (debug) {

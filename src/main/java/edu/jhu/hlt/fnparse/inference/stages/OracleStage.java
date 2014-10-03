@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -7,6 +8,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.util.Alphabet;
 
 /**
  * Passes the gold answer as output. Assumes that the gold answer is always
@@ -21,7 +23,7 @@ public class OracleStage<I, O> implements Stage<I, O> {
 	private static final long serialVersionUID = 1L;
 	private static final Logger LOG = Logger.getLogger(OracleStage.class);
 
-	private FgModel model = new FgModel(0);
+	private final FgModel model = new FgModel(0);
 
 	@Override
 	public FgModel getWeights() {
@@ -63,7 +65,7 @@ public class OracleStage<I, O> implements Stage<I, O> {
 			data.add(new OracleStageDatum<I, O>(input.get(i), output.get(i)));
 		return new StageDatumExampleList<>(data);
 	}
-	
+
 	static class OracleStageDatum<I, O> implements StageDatum<I, O> {
 		private final I input;
 		private final O output;
@@ -109,6 +111,16 @@ public class OracleStage<I, O> implements Stage<I, O> {
 			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
 		LOG.info("not actually scanning features");
+	}
+
+	@Override
+	public void saveModel(File file) {
+		LOG.info("not actually saving model");
+	}
+
+	@Override
+	public void loadModel(File file) {
+		LOG.info("not actually loading model");
 	}
 
 }

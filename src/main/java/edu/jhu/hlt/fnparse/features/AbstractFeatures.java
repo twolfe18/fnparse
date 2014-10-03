@@ -22,6 +22,7 @@ import edu.jhu.util.Alphabet;
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
+	public static final Logger LOG = Logger.getLogger(AbstractFeatures.class);
 
 	protected transient Logger log = Logger.getLogger(getClass());
 
@@ -31,8 +32,10 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
 
 	public static LexicalUnit getLUSafe(int i, Sentence s) {
-		if(i < 0) return luStart;
-		if(i >= s.size()) return luEnd;
+		if (i < 0)
+			return luStart;
+		if (i >= s.size())
+			return luEnd;
 		return s.getLU(i);
 	}
 
@@ -65,16 +68,16 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 	protected boolean debug = false;
 
 	protected final HasParserParams globalParams;
-	
+
 	public AbstractFeatures(HasParserParams globalParams) {
 		this.globalParams = globalParams;
 	}
 
 	@Override
-	public Alphabet<String> getFeatureAlphabet() {
-		return globalParams.getParserParams().getFeatureAlphabet();
+	public Alphabet<String> getAlphabet() {
+		return globalParams.getParserParams().getAlphabet();
 	}
-	
+
 	/**
 	 * by default, nothing is excluded from regularization,
 	 * but you are free to override this.
@@ -93,23 +96,6 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 			return String.valueOf(value);
 	}
 
-	
-	/*
-	 * adds a refinement to this feature function.
-	 * returns itself for syntactic convenience
-	 * e.g. "new FooFeatures().withRefinement("bar", 0.5);"
-	@SuppressWarnings("unchecked")
-	public T withRefinement(String name, double weight) {
-		if(this.refinements == null) {
-			this.refinements = new ArrayList<String>();
-			this.weights = new ArrayList<Double>();
-		}
-		this.refinements.add(name);
-		this.weights.add(weight);
-		return (T) this;
-	}
-	 */
-
 	private String name = null;
 	/**
 	 * all feature names are prefixed with this string.
@@ -120,11 +106,11 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 			name = this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
 		return name;
 	}
-	
+
 	protected final void b(FeatureVector fv, Refinements refs, String... featureNamePieces) {
 		b(fv, refs, 1d, featureNamePieces);
 	}
-	
+
 	/**
 	 * returns the index of the feature being added.
 	 * if there are refinements, those indices will not be returned.
@@ -134,7 +120,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 			Refinements refs,
 			double weight,
 			String... featureNamePieces) {
-		Alphabet<String> alph = getFeatureAlphabet();
+		Alphabet<String> alph = getAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
@@ -173,25 +159,10 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 							weight = FastMath.pow(weight, weightingPower);
 					}
 					fv.add(idx, weight);
+				} else {
+					LOG.debug("[b] unseen feature: " + s);
 				}
-				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
 			}
 		}
 	}
-
-	/* take a feature vector and conjoin each of its features with a string like "f=0,r=1" or "r=0,l=1" or "r=1,e=1:3"
-	public static FeatureVector conjoin(final FeatureVector base, final String specific, final Alphabet<String> featureNames) {
-		final FeatureVector fv = new FeatureVector();
-		base.apply(new FnIntDoubleToDouble() {
-			@Override
-			public double call(int idx, double val) {
-				String fullFeatName = specific + ":" + featureNames.lookupObject(idx);
-				int newIdx = featureNames.lookupIndex(fullFeatName, true);
-				fv.add(newIdx, val);
-				return val;
-			}
-		});
-		return fv;
-	}
-	*/
 }

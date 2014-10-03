@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.List;
 
@@ -33,6 +34,17 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
 public interface Stage<Input, Output> extends HasFgModel, Serializable {
 
 	public String getName();
+
+	/**
+	 * Write out a model as pairs of feature names and weights. Do not write out
+	 * anything using integer feature indexes or alphabets.
+	 */
+	public void saveModel(File file);
+
+	/**
+	 * Read in the same format that is written out by saveModel.
+	 */
+	public void loadModel(File file);
 
 	public void scanFeatures(
 			List<? extends Input> unlabeledExamples,

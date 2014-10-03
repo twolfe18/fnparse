@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -222,13 +224,22 @@ public class DataUtil {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	public static <T> List<T> iter2list(Iterator<T> iter) {
 		List<T> list = new ArrayList<T>();
-		while(iter.hasNext()) list.add(iter.next());
+		while (iter.hasNext())
+			list.add(iter.next());
 		return list;
 	}
 
+	public static <T> Stream<T> iter2stream(Iterator<T> iter) {
+		return StreamSupport.stream(new Iterable<T>() {
+			@Override
+			public Iterator<T> iterator() {
+				return iter;
+			}
+		}.spliterator(), false);
+	}
 
 	public static <T extends FNTagging> List<T> filterBySentenceLength(
 			List<T> all, int maxLength) {

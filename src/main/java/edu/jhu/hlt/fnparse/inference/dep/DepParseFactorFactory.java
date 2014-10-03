@@ -100,7 +100,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 		// Unary factors on edge variables
 		@SuppressWarnings("unchecked")
 		Alphabet<Object> alph =
-			(Alphabet<Object>) (Object) params.getFeatureAlphabet();
+			(Alphabet<Object>) (Object) params.getAlphabet();
 		DepParseFeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
 				toPacayaSentence(s), corpusStats, alph);
 		final int n = s.size();

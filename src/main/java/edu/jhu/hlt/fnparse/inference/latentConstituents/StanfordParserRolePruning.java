@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.latentConstituents;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -25,6 +26,31 @@ public class StanfordParserRolePruning
 			Logger.getLogger(StanfordParserRolePruning.class);
 	private final FgModel weights = new FgModel(0);
 	private ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
+
+	public static enum Mode {
+		// Take all constituents in Stanford's constituency parse
+		STANFORD_CONSTITUENTS,
+
+		// Constituency tree version is described in the section
+		// "Pruning Algorithm" in
+		// http://www.cs.brandeis.edu/~xuen/publications/emnlp04.pdf
+		XUE_PALRMER,
+
+		// Based on XUE_PALMER, but first converting dep tree to constituent tree
+		// TODO def dep2Cons:
+		// For a dep node rooted at i, project to its left and rightmost
+		// children l and r.
+		// Make a constituent (l,r).
+		// For each child of i, ask for their constituents from this same
+		// projection step.
+		// Attach each of these children to the (l,r) constituent
+		XUE_PALMER_DEP,
+
+		// Described in the section "Argument Candidates" in
+		// http://www.dipanjandas.com/files/acl2014frames.pdf
+		XUE_PALMER_DEP_HERMANN,
+	}
+	private static final Mode MODE = Mode.STANFORD_CONSTITUENTS;
 
 	@Override
 	public FgModel getWeights() {
@@ -112,23 +138,39 @@ public class StanfordParserRolePruning
 		@Override
 		public FNParseSpanPruning decode() {
 			if (output == null) {
-				Map<Span, String> cons = parser.parse(input.getSentence());
-				List<Span> consSpans = new ArrayList<>();
-				consSpans.addAll(cons.keySet());
-				consSpans.add(Span.nullSpan);
-				Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
-				for (FrameInstance fi : input.getFrameInstances()) {
-					FrameInstance key = FrameInstance.frameMention(
-							fi.getFrame(), fi.getTarget(), fi.getSentence());
-					List<Span> old = possibleSpans.put(key, consSpans);
-					assert old == null;
+				if (StanfordParserRolePruning.MODE
+						== Mode.STANFORD_CONSTITUENTS) {
+					Map<Span, String> cons = parser.parse(input.getSentence());
+					List<Span> consSpans = new ArrayList<>();
+					consSpans.addAll(cons.keySet());
+					consSpans.add(Span.nullSpan);
+					Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
+					for (FrameInstance fi : input.getFrameInstances()) {
+						FrameInstance key = FrameInstance.frameMention(
+								fi.getFrame(), fi.getTarget(), fi.getSentence());
+						List<Span> old = possibleSpans.put(key, consSpans);
+						assert old == null;
+					}
+					output = new FNParseSpanPruning(
+							input.getSentence(),
+							input.getFrameInstances(),
+							possibleSpans);
+				} else {
+					throw new RuntimeException("unknown mode: "
+							+ StanfordParserRolePruning.MODE);
 				}
-				output = new FNParseSpanPruning(
-						input.getSentence(),
-						input.getFrameInstances(),
-						possibleSpans);
 			}
 			return output;
 		}
+	}
+
+	@Override
+	public void saveModel(File file) {
+		LOG.info("not actually saving anything");
+	}
+
+	@Override
+	public void loadModel(File file) {
+		LOG.info("not actually loading anything");
 	}
 }

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.roleid;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,7 +24,7 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
 	private static final long serialVersionUID = 1L;
 	public static final Logger LOG = Logger.getLogger(NoRoleIdStage.class);
-	private FgModel model = new FgModel(0);
+	private final FgModel model = new FgModel(0);
 
 	@Override
 	public FgModel getWeights() {
@@ -117,5 +118,15 @@ public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
 			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
 		LOG.info("not actually scanning features");
+	}
+
+	@Override
+	public void saveModel(File file) {
+		LOG.info("not actually saving model");
+	}
+
+	@Override
+	public void loadModel(File file) {
+		LOG.info("not actually loading model");
 	}
 }

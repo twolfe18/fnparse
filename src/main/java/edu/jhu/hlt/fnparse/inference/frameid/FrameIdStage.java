@@ -42,6 +42,7 @@ import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
@@ -63,10 +64,13 @@ public class FrameIdStage
 		public int maxDev = 50;
 		public transient Regularizer regularizer = new L2(1_000_000d);
 		public ApproxF1MbrDecoder decoder;
-		public TargetPruningData targetPruningData;
 		public Features.F features;
 		public FactorFactory<FrameVars> factorsTemplate;
-		public final ParserParams globalParams;
+		//public final ParserParams globalParams;
+
+		public TargetPruningData getTargetPruningData() {
+			return TargetPruningData.getInstance();
+		}
 
 		// If true, tuning the decoder will be done on training data. Generally
 		// this is undesirable for risk of overfitting, but is good for
@@ -89,9 +93,8 @@ public class FrameIdStage
 		public boolean useHackySingularSingularConversion = true;
 
 		public Params(ParserParams globalParams) {
-			this.globalParams = globalParams;
 			decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
-			targetPruningData = TargetPruningData.getInstance();
+			//getTargetPruningData() = TargetPruningData.getInstance();
 			BinaryBinaryFactorHelper.Mode factorMode =
 					globalParams.useLatentDepenencies
 						? BinaryBinaryFactorHelper.Mode.ISING
@@ -103,28 +106,40 @@ public class FrameIdStage
 
 	public Params params;
 
-	public FrameIdStage(ParserParams globalParams) {
-		super(globalParams);
+	public FrameIdStage(
+			ParserParams globalParams,
+			HasFeatureAlphabet featureAlphabet) {
+		super(globalParams, featureAlphabet);
 		params = new Params(globalParams);
 		((FrameFactorFactory) params.factorsTemplate)
-			.setAlphabet(globalParams.getFeatureAlphabet());
+			.setAlphabet(globalParams.getAlphabet());
 	}
-	
+
+	@Override
+	public Serializable getParamters() {
+		return params;
+	}
+
+	@Override
+	public void setPameters(Serializable params) {
+		this.params = (Params) params;
+	}
+
 	@Override
 	public Double getLearningRate() {
 		return params.learningRate;
 	}
-	
+
 	@Override
 	public Regularizer getRegularizer() {
 		return params.regularizer;
 	}
-	
+
 	@Override
 	public int getBatchSize() {
 		return params.batchSize;
 	}
-	
+
 	@Override
 	public int getNumTrainingPasses() {
 		return params.passes;
@@ -134,7 +149,7 @@ public class FrameIdStage
 		Collections.shuffle(examples, globalParams.rand);
 		List<Sentence> x = new ArrayList<>();
 		List<FNTagging> y = new ArrayList<>();
-		for(FNTagging t : examples) {
+		for (FNTagging t : examples) {
 			x.add(t.getSentence());
 			y.add(t);
 		}
@@ -167,7 +182,7 @@ public class FrameIdStage
 		List<StageDatum<Sentence, FNTagging>> data = new ArrayList<>();
 		int n = input.size();
 		assert labels == null || labels.size() == n;
-		for(int i=0; i<n; i++) {
+		for (int i = 0; i < n; i++) {
 			Sentence s = input.get(i);
 			if(labels == null)
 				data.add(new FrameIdDatum(s, this));
@@ -186,7 +201,7 @@ public class FrameIdStage
 			Sentence s,
 			int headIdx,
 			Params params) {
-		if(params.targetPruningData.prune(headIdx, s))
+		if(params.getTargetPruningData().prune(headIdx, s))
 			return null;
 
 		Set<Frame> uniqFrames = new HashSet<Frame>();
@@ -195,7 +210,8 @@ public class FrameIdStage
 
 		// Get prototypes/frames from the LEX examples
 		List<FrameInstance> fromPrototypes =
-				params.targetPruningData.getPrototypesByStem(headIdx, s, true);
+				params.getTargetPruningData()
+				.getPrototypesByStem(headIdx, s, true);
 		for (FrameInstance fi : fromPrototypes) {
 			if (uniqFrames.add(fi.getFrame())) {
 				frameMatches.add(fi.getFrame());
@@ -205,10 +221,10 @@ public class FrameIdStage
 
 		// Get frames that list this as an LU in the frame index
 		LexicalUnit fnLU = s.getFNStyleLUUnsafe(
-				headIdx, params.targetPruningData.getWordnetDict(), false);
+				headIdx, params.getTargetPruningData().getWordnetDict(), false);
 		List<Frame> listedAsLUs = (fnLU == null)
 				? Collections.<Frame>emptyList()
-				: params.targetPruningData.getFramesFromLU(fnLU);
+				: params.getTargetPruningData().getFramesFromLU(fnLU);
 		for(Frame f : listedAsLUs) {
 			if(uniqFrames.add(f)) {
 				frameMatches.add(f);
@@ -222,7 +238,7 @@ public class FrameIdStage
 		// take all words, ignoring POS.
 		if (params.useJustWordForPossibleFrames) {
 			String w = s.getWord(headIdx);
-			for (Frame f : params.targetPruningData.getLUFramesByWord(w)) {
+			for (Frame f : params.getTargetPruningData().getLUFramesByWord(w)) {
 				if (uniqFrames.add(f)) {
 					frameMatches.add(f);
 					//prototypes.add(???);
@@ -236,7 +252,8 @@ public class FrameIdStage
 			boolean alwaysLowercase = true;
 			if (alwaysLowercase || headIdx == 0) {
 				w = w.toLowerCase();
-				for (Frame f : params.targetPruningData.getLUFramesByWord(w)) {
+				for (Frame f : params.getTargetPruningData()
+						.getLUFramesByWord(w)) {
 					if (uniqFrames.add(f)) {
 						frameMatches.add(f);
 						//prototypes.add(???);
@@ -247,8 +264,8 @@ public class FrameIdStage
 
 		// Infrequently, stemming messes up, "means" is listed for the Means
 		// frame, but "mean" isn't
-		for(Frame f :
-				params.targetPruningData.getFramesFromLU(s.getLU(headIdx))) {
+		for(Frame f : params.getTargetPruningData()
+				.getFramesFromLU(s.getLU(headIdx))) {
 			if(uniqFrames.add(f)) {
 				frameMatches.add(f);
 				//prototypes.add(???);
@@ -266,7 +283,7 @@ public class FrameIdStage
 				w = w.substring(0, w.length() - 1);
 				LexicalUnit fnLUsing = new LexicalUnit(w, p);
 				for(Frame f :
-					params.targetPruningData.getFramesFromLU(fnLUsing)) {
+					params.getTargetPruningData().getFramesFromLU(fnLUsing)) {
 					if(uniqFrames.add(f)) {
 						frameMatches.add(f);
 						//prototypes.add(???);
@@ -277,11 +294,11 @@ public class FrameIdStage
 
 		// "thursday.n" is not an LU, but "Thursday.n" is
 		if (params.lowercaseWordForPossibleFrames) {
-			LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(
-					headIdx, params.targetPruningData.getWordnetDict(), true);
+			LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(headIdx,
+					params.getTargetPruningData().getWordnetDict(), true);
 			if (fnLUlower != null) {
 				for(Frame f :
-					params.targetPruningData.getFramesFromLU(fnLUlower)) {
+					params.getTargetPruningData().getFramesFromLU(fnLUlower)) {
 					if(uniqFrames.add(f)) {
 						frameMatches.add(f);
 						//prototypes.add(???);
@@ -361,7 +378,7 @@ public class FrameIdStage
 			// Match up each FI to a FIHypothesis by the head word in the target
 			for(FrameInstance fi : p.getFrameInstances()) {
 				Span target = fi.getTarget();
-				int head = parent.params.globalParams.headFinder.head(
+				int head = parent.getGlobalParams().headFinder.head(
 						target, sentence);
 				FrameVars fHyp = byHead[head];
 				if(fHyp == null) continue;	// nothing you can do here
@@ -410,21 +427,21 @@ public class FrameIdStage
 			List<Factor> factors = new ArrayList<Factor>();
 			ProjDepTreeFactor depTree = null;
 			ConstituencyTreeFactor consTree = null;
-			if(parent.params.globalParams.useLatentConstituencies) {
+			if (parent.getGlobalParams().useLatentConstituencies) {
 				consTree = new ConstituencyTreeFactor(
 						sentence.size(), VarType.LATENT);
 				throw new RuntimeException(
 						"FIXME: I don't know how this is supposed to work");
 			}
-			if(parent.params.globalParams.useLatentDepenencies) {
+			if (parent.getGlobalParams().useLatentDepenencies) {
 				depTree = new ProjDepTreeFactor(
 						sentence.size(), VarType.LATENT);
 				DepParseFactorFactory depParseFactorTemplate =
-						new DepParseFactorFactory(parent.params.globalParams);
+						new DepParseFactorFactory(parent.getGlobalParams());
 				factors.addAll(depParseFactorTemplate.initFactorsFor(
 						sentence, Collections.emptyList(), depTree, consTree));
 			}
-			if(parent.params.globalParams.useLatentConstituencies)
+			if (parent.getGlobalParams().useLatentConstituencies)
 				throw new RuntimeException("implement me!");
 			factors.addAll(parent.params.factorsTemplate.initFactorsFor(
 					sentence, possibleFrames, depTree, consTree));
@@ -508,5 +525,4 @@ public class FrameIdStage
 			return new FNTagging(sentence, fis);
 		}
 	}
-
 }

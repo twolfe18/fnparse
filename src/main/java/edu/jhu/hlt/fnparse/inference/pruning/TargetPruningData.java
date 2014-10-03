@@ -21,7 +21,6 @@ public class TargetPruningData implements Serializable {
 	private TargetPruningData() {}	// singleton
 	private static final TargetPruningData singleton = new TargetPruningData();
 	public static TargetPruningData getInstance() { return singleton; }
-	
 
 	private transient IRAMDictionary dict;
 	public synchronized IRAMDictionary getWordnetDict() {
@@ -40,17 +39,24 @@ public class TargetPruningData implements Serializable {
 		return dict;
 	}
 
-	
-	/** only use this if you want to gaurantee when the data is loaded (it calls the automatically otherwise */
-	public synchronized void init() {
+	private static int initCalls = 0;
+	/**
+	 * Only use this if you want to guarantee when the data is loaded
+	 * (it calls the automatically otherwise)
+	 */
+	private synchronized void init() {
 		long start = System.currentTimeMillis();
-		LOG.info("[TargetPruningData] init starting...");
+		LOG.info("init starting... " + (++initCalls));
+		if (initCalls > 1)
+			throw new RuntimeException();
 		IRAMDictionary dict = getWordnetDict();
 		WordnetStemmer stemmer = new WordnetStemmer(dict);
-		prototypesByStem = new HashMap<String, List<FrameInstance>>();
-		prototypesByFrame = new HashMap<Frame, List<FrameInstance>>();
+		assert prototypesByStem == null;
+		assert prototypesByFrame == null;
+		prototypesByStem = new HashMap<>();
+		prototypesByFrame = new HashMap<>();
 		Iterator<FNTagging> iter = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
-		while(iter.hasNext()) {
+		while (iter.hasNext()) {
 			FNTagging p = iter.next();
 			Sentence s = p.getSentence();
 			for(FrameInstance fi : p.getFrameInstances()) {
@@ -63,8 +69,8 @@ public class TargetPruningData implements Serializable {
 				else prototypes.add(fi);
 
 				Span target = fi.getTarget();
-				if(target.width() != 1) continue;
-				assert target.width() == 1;
+				if(target.width() != 1)
+					continue;
 				String word = s.getWord(target.start);
 				POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
 
@@ -75,7 +81,7 @@ public class TargetPruningData implements Serializable {
 				}
 
 				if(DEBUG) {
-					System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s\n",
+					System.out.printf("[init] frame=%s word=%s pos=%s\n",
 							fi.getFrame().getName(), word, pos);
 				}
 				List<String> stems = stemmer.findStems(word, pos);
@@ -86,7 +92,7 @@ public class TargetPruningData implements Serializable {
 				}
 				for(String stem : stems) {
 					if(DEBUG) {
-						System.out.printf("[TargetPruningData init] frame=%s word=%s pos=%s stem=%s\n",
+						System.out.printf("[init] frame=%s word=%s pos=%s stem=%s\n",
 								fi.getFrame().getName(), word, pos, stem);
 					}
 					List<FrameInstance> lfi = prototypesByStem.get(stem);
@@ -102,7 +108,7 @@ public class TargetPruningData implements Serializable {
 		LOG.info(String.format("[TargetPruningData] done in %.1f seconds.",
 				(System.currentTimeMillis()-start)/1000d));
 	}
-	
+
 	public List<FrameInstance> getPrototypesByStem(
 			int headIdx, Sentence s, boolean lowercase) {
 		if (prototypesByStem == null)
@@ -229,7 +235,7 @@ public class TargetPruningData implements Serializable {
 		}
 		return stopwordsForTargets.contains(word);
 	}
-	
+
 	public boolean prune(int index, Sentence s) {
 		LexicalUnit lu = s.getLU(index);
 		if (isTargetStopword(lu.word)) return true;
@@ -245,5 +251,4 @@ public class TargetPruningData implements Serializable {
 			return true;
 		return false;
 	}
-
 }

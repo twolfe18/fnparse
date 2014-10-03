@@ -12,7 +12,6 @@ import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNIterFilters;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -23,16 +22,15 @@ import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.inference.stages.RoleSpanStage;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
-import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.hlt.fnparse.util.ModelMerger;
 import edu.jhu.hlt.optimize.functions.L2;
-import edu.jhu.util.Alphabet;
 
 /**
  * This class trains PipelinedFnParsers where there are two types of options:
@@ -163,40 +161,21 @@ public class ParserTrainer {
 			fIdStage.params.regularizer = new L2(regularizer.get());
 			parser.disableArgId();
 		} else if ("argId".equals(mode)) {
-			parser.getArgIdParams().batchSize = batchSize.get();
-			parser.getArgIdParams().passes = passes.get();
-			parser.getArgIdParams().regularizer = new L2(regularizer.get());
+			RoleIdStage aid = (RoleIdStage) parser.getArgIdStage();
+			aid.params.batchSize = batchSize.get();
+			aid.params.passes = passes.get();
+			aid.params.regularizer = new L2(regularizer.get());
 			parser.useGoldFrameId();
 			//parser.useGoldArgSpans();	// takes gold spans regardless of head
 			parser.disableArgSpans();
 		} else {
 			assert "argSpans".equals(mode);
-			parser.getArgExpansionParams().batchSize = batchSize.get();
-			parser.getArgExpansionParams().passes = passes.get();
-			parser.getArgExpansionParams().regularizer =
-					new L2(regularizer.get());
+			RoleSpanStage rss = (RoleSpanStage) parser.getArgSpanStage();
+			rss.params.batchSize = batchSize.get();
+			rss.params.passes = passes.get();
+			rss.params.regularizer = new L2(regularizer.get());
 			parser.useGoldArgId();
 		}
-
-		/* THIS IS NOT NEEDED, we're using gold output from previous stage
-		// Read in previous model and alphabet
-		if (!"none".equals(prevModelDirName)) {
-			File prevModel = new File(prevModelDirName);
-			if (!prevModel.isDirectory()) {
-				throw new RuntimeException(
-						prevModelDirName + " is not a directory");
-			}
-			// Alphabet
-			File alphFile = new File(prevModel, ALPHABET_NAME);
-			if (!alphFile.isFile()) throw new RuntimeException();
-			LOG.info("reading alphabet from " + alphFile.getPath());
-			parser.setAlphabet(ModelIO.readAlphabet(alphFile));
-			// We don't need to read in the previous model because we are
-			// training on oracle output from the previous stage.
-			// We shouldn't even copy it over because we're going to let the
-			// evaluation experiment choose which model to take from each stage
-			// and stitch them together into a full pipeline model.
-		} */
 
 		// Compute the feature alphabet
 		int maxTimeInMinutes = 45;
@@ -208,12 +187,6 @@ public class ParserTrainer {
 		LOG.info("After training, #features=" + parser.getAlphabet().size());
 		printMemUsage();
 
-		/* Write parameters out as soon as possible
-		writeMergedModel(
-				new File(workingDir, ALPHABET_NAME),
-				new File(workingDir, MODEL_NAME),
-				parser);
-		*/
 		// Serialize the model using Java serialization
 		File f = new File(workingDir, SER_MODEL_NAME);
 		LOG.info("serializing model to " + f.getPath());
@@ -221,7 +194,6 @@ public class ParserTrainer {
 				new GZIPOutputStream(new FileOutputStream(f)));
 		oos.writeObject(parser);
 		oos.close();
-
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -231,7 +203,7 @@ public class ParserTrainer {
 				? DataUtil.reservoirSample(test, maxTestEval, parser.getParams().rand)
 				: test;
 		LOG.info("Predicting on " + testSubset.size() + " test examples");
-		predicted = parser.predict(
+		predicted = parser.parse(
 				DataUtil.stripAnnotations(testSubset), testSubset);
 		results = BasicEvaluation.evaluate(testSubset, predicted);
 		BasicEvaluation.showResults(
@@ -246,7 +218,7 @@ public class ParserTrainer {
 				? DataUtil.reservoirSample(train, maxTrainEval, parser.getParams().rand)
 				: train;
 		LOG.info("Predicting on train (sub)set of size " + trainSubset.size());
-		predicted = parser.predict(
+		predicted = parser.parse(
 				DataUtil.stripAnnotations(trainSubset), trainSubset);
 		results = BasicEvaluation.evaluate(trainSubset, predicted);
 		BasicEvaluation.showResults(
@@ -256,36 +228,6 @@ public class ParserTrainer {
 		LOG.info("done, took "
 				+ (System.currentTimeMillis() - start) / (1000d * 60)
 				+ " minutes");
-	}
-
-	/**
-	 * Don't use this, this forgets about other parameters like the thresholds
-	 * in the decoders.
-	 */
-	public static void writeMergedModel(
-			File alphabetDest, File modelDest, PipelinedFnParser parser) {
-		Alphabet<String> alph = parser.getAlphabet();
-		ModelIO.writeAlphabet(alph, alphabetDest);
-		FgModel wf = parser.getFrameIdStage().getWeights();
-		FgModel wa = parser.getArgIdStage().getWeights();
-		FgModel ws = parser.getArgSpanStage().getWeights();
-		ModelMerger.Model<String> merged = ModelMerger.merge(
-				new ModelMerger.Model<>(alph, wf),
-				new ModelMerger.Model<>(alph, wa),
-				new ModelMerger.Model<>(alph, ws));
-		if (alph.size() != merged.alphabet.size()) {
-			LOG.warn("writing merged model caused discrepancy in alphabet size."
-					+ " alph.size=" + alph.size()
-					+ ", merged.size=" + merged.alphabet.size());
-		}
-		ModelIO.writeBinary(merged.getFgModel(), modelDest);
-
-		// For debugging
-		ModelIO.writeHumanReadable(
-				merged.getFgModel(),
-				merged.alphabet,
-				new File("saved-models/ParserExperiment.model.txt"),
-				true);
 	}
 
 	public static void printMistakenArgHeads(
@@ -317,13 +259,6 @@ public class ParserTrainer {
 			LOG.info("hyp:\n" + Describe.fnParse(hyp));
 			LOG.info("errors:\n" + FNDiff.diffArgs(gold, hyp, false));
 		}
-	}
-
-	public static ModelMerger.Model<String> readMergedModel(
-			File alphabetSrc, File modelSrc) {
-		return new ModelMerger.Model<String>(
-				ModelIO.readAlphabet(alphabetSrc),
-				ModelIO.readBinary(modelSrc));
 	}
 
 	public static void printMemUsage() {

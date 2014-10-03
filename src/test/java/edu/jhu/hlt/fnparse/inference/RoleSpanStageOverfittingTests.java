@@ -30,13 +30,15 @@ public class RoleSpanStageOverfittingTests {
 
 	@Test
 	public void test() {
-		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 		StdEvalFunc eval = BasicEvaluation.fullMicroF1;
 		ParserParams params = new ParserParams();
-		RoleSpanStage rss = new RoleSpanStage(params);
+		RoleSpanStage rss = new RoleSpanStage(params, params);
 		rss.params.maxArgRoleExpandLeft = 99;
 		rss.params.maxArgRoleExpandRight = 99;
 		rss.params.regularizer = new L2(999_999_999d);
+		rss.params.passes = 10;
+		rss.params.learningRate = 1d;
+		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 		List<FNParse> y = parseToEvaluateOn();
 		List<FNParse> x = DataUtil.convertArgumenSpansToHeads(
 				y, params.headFinder);
@@ -45,7 +47,7 @@ public class RoleSpanStageOverfittingTests {
 			List<FNParse> xi = x.subList(i, i + 1);
 
 			params.setFeatureAlphabet(new Alphabet<String>());
-			params.getFeatureAlphabet().startGrowth();
+			params.getAlphabet().startGrowth();
 			rss.scanFeatures(xi, yi, 999, 999_999);
 			rss.train(xi, yi);
 
@@ -59,7 +61,7 @@ public class RoleSpanStageOverfittingTests {
 					f1, y.get(0).getFrameInstances().size(), y.get(0).getId()));
 			ModelIO.writeHumanReadable(
 					rss.getWeights(),
-					params.getFeatureAlphabet(),
+					params.getAlphabet(),
 					new File("saved-models/testing/argExpansion-weights."
 							+ yi_hat.getSentence().getId() + ".txt"),
 					true);

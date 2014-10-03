@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,7 +13,7 @@ public class IdentityStage<T> implements Stage<T, T> {
 	private static final long serialVersionUID = 1L;
 	private static final Logger LOG = Logger.getLogger(IdentityStage.class);
 
-	private FgModel model = new FgModel(0);
+	private final FgModel model = new FgModel(0);
 
 	@Override
 	public FgModel getWeights() {
@@ -101,5 +102,15 @@ public class IdentityStage<T> implements Stage<T, T> {
 			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
 		LOG.info("not really scanning features");
+	}
+
+	@Override
+	public void saveModel(File file) {
+		LOG.info("not really saving model");
+	}
+
+	@Override
+	public void loadModel(File file) {
+		LOG.info("not really loading model");
 	}
 }

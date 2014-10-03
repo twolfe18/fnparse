@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.latentConstituents;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -44,6 +45,7 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator.Mode;
@@ -117,6 +119,7 @@ public class RoleSpanPruningStage
 	private Features features;
 
 	// Takes a bunch of JointRoleSpanStageDatum and decides which to prune
+	// NOTE: Not used because RankDecoder is better.
 	//private ApproxF1MbrDecoder decoder;
 
 	// If true, do not prune anything, produce FNParseSpanPrunings that have
@@ -125,11 +128,22 @@ public class RoleSpanPruningStage
 
 	private transient Regularizer regularizer;
 
-	public RoleSpanPruningStage(ParserParams params) {
-		super(params);
+	public RoleSpanPruningStage(
+			ParserParams params, HasFeatureAlphabet featureNames) {
+		super(params, featureNames);
 		features = new Features(params);
 		//decoder = new ApproxF1MbrDecoder(params.logDomain, Math.exp(-8d));
 		regularizer = new L2(100_000d);
+	}
+
+	@Override
+	public Serializable getParamters() {
+		return keepEverything;
+	}
+
+	@Override
+	public void setPameters(Serializable params) {
+		keepEverything = (Boolean) params;
 	}
 
 	public void dontDoAnyPruning() {
@@ -545,10 +559,6 @@ public class RoleSpanPruningStage
 	static class Features extends AbstractFeatures<Features> {
 		private static final long serialVersionUID = 1L;
 
-		// TODO remove this and make sure that the recallBias in the decoder
-		// is working in the correct direction
-		boolean debugOverfit = false;
-
 		public Features(HasParserParams globalParams) {
 			super(globalParams);
 		}
@@ -572,95 +582,104 @@ public class RoleSpanPruningStage
 			else
 				d = "pruneNonConstituent";
 
-			if (debugOverfit) {
-				b(v, r, d, s.getId(), p.arg.toString(), p.frame.getName(), p.target.toString());
-			} else {
-				String width = "width=" + discretizeDist(p.arg.width());
-				String frame = "frame=" + p.frame.getName();
-				final int tHead = globalParams
-						.getParserParams()
-						.headFinder.head(p.target, s);
-				final int aHead = globalParams
-						.getParserParams()
-						.headFinder.head(p.arg, s);
+			String width = "width=" + discretizeDist(p.arg.width());
+			String frame = "frame=" + p.frame.getName();
+			final int tHead = globalParams
+					.getParserParams()
+					.headFinder.head(p.target, s);
+			final int aHead = globalParams
+					.getParserParams()
+					.headFinder.head(p.arg, s);
 
-				b(v, r, 10d, d);
-				b(v, r, d, width);
-				b(v, r, d, width, frame);
+			b(v, r, 10d, d);
+			b(v, r, d, width);
+			b(v, r, d, width, frame);
 
-				String lPos = "lPos=" + AbstractFeatures.getLUSafe(p.arg.start-1, s).pos;
-				String rPos = "rPos=" + AbstractFeatures.getLUSafe(p.arg.end, s).pos;
-				String sPos = "sPos=" + s.getPos(p.arg.start);
-				String ePos = "sPos=" + s.getPos(p.arg.end - 1);
-				String hPos = "hPos=" + s.getPos(globalParams.getParserParams().headFinder.head(p.arg, s));
-				List<String> allPos = Arrays.asList(lPos, rPos, sPos, ePos, hPos);
-				for (int i = 0; i < allPos.size() - 1; i++) {
-					b(v, r, d, allPos.get(i), frame);
-					for (int j = i + 1; j < allPos.size(); j++)
-						b(v, r, d, allPos.get(i), allPos.get(j), frame);
-				}
+			String lPos = "lPos=" + AbstractFeatures
+					.getLUSafe(p.arg.start-1, s).pos;
+			String rPos = "rPos=" + AbstractFeatures
+					.getLUSafe(p.arg.end, s).pos;
+			String sPos = "sPos=" + s.getPos(p.arg.start);
+			String ePos = "ePos=" + s.getPos(p.arg.end - 1);
+			String hPos = "hPos=" + s.getPos(
+					globalParams.getParserParams().headFinder.head(p.arg, s));
+			List<String> allPos = Arrays.asList(lPos, rPos, sPos, ePos, hPos);
+			for (int i = 0; i < allPos.size() - 1; i++) {
+				b(v, r, d, allPos.get(i), frame);
+				for (int j = i + 1; j < allPos.size(); j++)
+					b(v, r, d, allPos.get(i), allPos.get(j), frame);
+			}
 
-				if (p.arg.equals(p.target)) {
-					String w = p.arg.width() <= 4 ? ("w=" + p.arg.width()) : "w>4";
-					b(v, r, d, "equals");
-					b(v, r, d, "equals", w);
-					b(v, r, d, "equals", frame);
-					b(v, r, d, "equals", frame, w);
-				}
+			if (p.arg.equals(p.target)) {
+				String w = p.arg.width() <= 4 ? ("w=" + p.arg.width()) : "w>4";
+				b(v, r, d, "equals");
+				b(v, r, d, "equals", w);
+				b(v, r, d, "equals", frame);
+				b(v, r, d, "equals", frame, w);
+			}
 
-				String dist = "overlap";
-				if (p.arg.after(p.target)) {
-					dist = "afterBy" + discretizeDist(p.arg.start - p.target.end);
-					b(v, r, d, dist);
-					b(v, r, d, dist, frame);
-					dist = "hh-afterBy" + discretizeDist(aHead - tHead);
-					b(v, r, d, dist);
-					b(v, r, d, dist, frame);
-				} else if (p.arg.before(p.target)) {
-					dist = "beforeBy" + discretizeDist(p.target.start - p.arg.end);
-					b(v, r, d, dist);
-					b(v, r, d, dist, frame);
-					dist = "hh-beforeBy" + discretizeDist(tHead - aHead);
-					b(v, r, d, dist);
-					b(v, r, d, dist, frame);
-				}
+			String dist = "overlap";
+			if (p.arg.after(p.target)) {
+				dist = "afterBy" + discretizeDist(p.arg.start - p.target.end);
 				b(v, r, d, dist);
 				b(v, r, d, dist, frame);
+				dist = "hh-afterBy" + discretizeDist(aHead - tHead);
+				b(v, r, d, dist);
+				b(v, r, d, dist, frame);
+			} else if (p.arg.before(p.target)) {
+				dist = "beforeBy" + discretizeDist(p.target.start - p.arg.end);
+				b(v, r, d, dist);
+				b(v, r, d, dist, frame);
+				dist = "hh-beforeBy" + discretizeDist(tHead - aHead);
+				b(v, r, d, dist);
+				b(v, r, d, dist, frame);
+			}
+			b(v, r, d, dist);
+			b(v, r, d, dist, frame);
 
-				// Counts of POS between arg and target
-				Counts<String> between = null;
-				if (p.arg.end <= p.target.start) {
-					between = between(p.arg.end, p.target.start, s);
-				} else if (p.target.end <= p.arg.start) {
-					between = between(p.target.end, p.arg.start, s);
+			// Counts of POS between arg and target
+			Counts<String> between = null;
+			if (p.arg.end <= p.target.start) {
+				between = between(p.arg.end, p.target.start, s);
+			} else if (p.target.end <= p.arg.start) {
+				between = between(p.target.end, p.arg.start, s);
+			}
+			if (between != null) {
+				for (Map.Entry<String, Integer> x : between.entrySet()) {
+					String f = "count(" + x.getKey() + ")=" + x.getValue();
+					b(v, r, d, f);
+					b(v, r, d, f, frame);
 				}
-				if (between != null) {
-					for (Map.Entry<String, Integer> x : between.entrySet()) {
-						String f = "count(" + x.getKey() + ")=" + x.getValue();
-						b(v, r, d, f);
-						b(v, r, d, f, frame);
-					}
-				}
+			}
 
-				// POS pattern and word shapes for the arguments
-				if (p.arg.width() <= 6) {
-					String posPat = new PosPatternGenerator(1, 1, Mode.COARSE_POS).extract(p.arg, s);
-					b(v, r, d, posPat);
-					b(v, r, d, posPat, frame);
-					String shapePat = new PosPatternGenerator(0, 0, Mode.WORD_SHAPE).extract(p.arg, s);
-					b(v, r, d, shapePat);
-					b(v, r, d, shapePat, frame);
-				} else {
-					b(v, r, d, "posPatTooBig");
-					b(v, r, d, "posPatTooBig", frame);
-				}
+			// POS pattern and word shapes for the arguments
+			if (p.arg.width() <= 6) {
+				String posPat = new PosPatternGenerator(
+						1, 1, Mode.COARSE_POS).extract(p.arg, s);
+				b(v, r, d, posPat);
+				b(v, r, d, posPat, frame);
+				String shapePat = new PosPatternGenerator(
+						0, 0, Mode.WORD_SHAPE).extract(p.arg, s);
+				b(v, r, d, shapePat);
+				b(v, r, d, shapePat, frame);
+			} else {
+				b(v, r, d, "posPatTooBig");
+				b(v, r, d, "posPatTooBig", frame);
+			}
 
+			if (globalParams.getParserParams().useSyntaxFeatures) {
 				for (Path taPath : Arrays.asList(
-						new Path(s, tHead, aHead, NodeType.POS, EdgeType.DIRECTION),
-						new Path(s, tHead, aHead, NodeType.NONE, EdgeType.DEP))) {
-					String l1 = "len(taPath)=" + (taPath.size() < 10 ? taPath.size() : "long");
-					String l2 = "deltaLen(taPath)=" + (Math.abs(taPath.deltaDepth()) <= 5
-							? taPath.deltaDepth() : (taPath.deltaDepth() < 0 ? "-long" : "+long"));
+						new Path(s, tHead, aHead,
+								NodeType.POS, EdgeType.DIRECTION),
+						new Path(s, tHead, aHead,
+								NodeType.NONE, EdgeType.DEP))) {
+					String l1 = "len(taPath)=" + (taPath.size() < 10
+							? taPath.size() : "long");
+					String l2 = "deltaLen(taPath)="
+							+ (Math.abs(taPath.deltaDepth()) <= 5
+							? taPath.deltaDepth()
+									: (taPath.deltaDepth() < 0
+											? "-long" : "+long"));
 					b(v, r, d, l1);
 					b(v, r, d, l1, frame);
 					b(v, r, d, l2);

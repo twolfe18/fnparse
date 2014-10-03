@@ -1,5 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,6 +14,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -30,6 +39,7 @@ import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
@@ -49,25 +59,90 @@ import edu.jhu.util.Alphabet;
  * @param <O> output of this stage
  */
 public abstract class AbstractStage<I, O extends FNTagging>
-		implements Stage<I, O>, Serializable, HasFeatureAlphabet {
+		implements Stage<I, O>, Serializable {
 	private static final long serialVersionUID = 1L;
+
+	public static boolean DEBUG_SER = false;
 
 	protected final ParserParams globalParams;	// Not owned by this class
 	protected FgModel weights;
+	protected transient HasFeatureAlphabet featureNames;
 	protected transient Logger log = Logger.getLogger(this.getClass());
 
-	public AbstractStage(ParserParams params) {
+	public AbstractStage(ParserParams params, HasFeatureAlphabet featureNames) {
 		this.globalParams = params;
+		this.featureNames = featureNames;
 	}
 
-	@Override
-	public Alphabet<String> getFeatureAlphabet() {
-		return globalParams.getFeatureAlphabet();
+	public ParserParams getGlobalParams() {
+		return globalParams;
 	}
 
 	public String getName() {
 		String[] ar = this.getClass().getName().split("\\.");
 		return ar[ar.length-1];
+	}
+
+	/**
+	 * Return your parameters other than the weights
+	 * (this is used to implement saveModel)
+	 */
+	public abstract Serializable getParamters();
+
+	/**
+	 * Set the parameters that were returned by getParamters
+	 * (this is used to implement loadModel)
+	 */
+	public abstract void setPameters(Serializable params);
+
+	@Override
+	public void saveModel(File file) {
+		log.info("[saveModel] writing to " + file.getPath());
+		try {
+			DataOutputStream dos = new DataOutputStream(
+					new GZIPOutputStream(new FileOutputStream(file)));
+			ObjectOutputStream oos = new ObjectOutputStream(dos);
+			oos.writeObject(getParamters());
+			double[] ps = new double[weights.getNumParams()];
+			weights.updateDoublesFromModel(ps);
+			ModelIO.writeFeatureNameWeightsBinary(
+					ps, featureNames.getAlphabet(), dos);
+			oos.close();  // closes dos too
+
+			if (DEBUG_SER) {
+				for (int i = 0; i < ps.length; i++) {
+					String fn = featureNames.getAlphabet().lookupObject(i);
+					log.debug("[saveModel] " + fn + "\t" + ps[i]);
+				}
+			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Override
+	public void loadModel(File file) {
+		log.info("[loadModel] reading from " + file.getPath());
+		try {
+			DataInputStream dis = new DataInputStream(
+					new GZIPInputStream(new FileInputStream(file)));
+			ObjectInputStream ois = new ObjectInputStream(dis);
+			setPameters((Serializable) ois.readObject());
+			double[] ps = ModelIO.readFeatureNameWeightsBinary(
+					dis, featureNames.getAlphabet());
+			weights = new FgModel(ps.length);
+			weights.updateModelFromDoubles(ps);
+			ois.close();
+
+			if (DEBUG_SER) {
+				for (int i = 0; i < ps.length; i++) {
+					String fn = featureNames.getAlphabet().lookupObject(i);
+					log.debug("[loadModel] " + fn + "\t" + ps[i]);
+				}
+			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 
 	@Override
@@ -133,10 +208,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	public void initWeights() {
-		int numParams = getFeatureAlphabet().size();
+		int numParams = featureNames.getAlphabet().size();
 		if(numParams == 0)
 			throw new IllegalArgumentException("run AlphabetComputer first!");
 		assert globalParams.verifyConsistency();
+		if (weights != null && weights.getNumParams() > 0)
+			log.warn("re-initializing paramters!");
 		weights = new FgModel(numParams);
 	}
 
@@ -236,7 +313,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.numThreads = globalParams.threads;
 		trainerParams.regularizer = regularizer;
 
-		Alphabet<String> alph = this.getFeatureAlphabet();
+		Alphabet<String> alph = featureNames.getAlphabet();
 		log.info("Feature alphabet is frozen (size=" + alph.size() + "), "
 				+ "going straight into training");
 		alph.stopGrowth();
@@ -274,7 +351,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			int maxFeaturesAdded) {
 		if (labels != null && unlabeledExamples.size() != labels.size())
 			throw new IllegalArgumentException();
-		if (!getFeatureAlphabet().isGrowing()) {
+		if (!featureNames.getAlphabet().isGrowing()) {
 			throw new IllegalStateException("There is no reason to run this "
 					+ "unless you've set the alphabet to be growing");
 		}
@@ -293,7 +370,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		// frame/role coverage.
 		List<FNTagging> seen = new ArrayList<>();
 
-		final int alphSizeStart = getFeatureAlphabet().size();
+		final int alphSizeStart = featureNames.getAlphabet().size();
 		int examplesSeen = 0;
 		int examplesWithNoFactorGraph = 0;
 		StageDatumExampleList<I, O> data = this.setupInference(
@@ -318,7 +395,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 						+ "(in minutes): " + maxTimeInMinutes);
 				break;
 			}
-			int featuresAdded = getFeatureAlphabet().size() - alphSizeStart;
+			int featuresAdded = featureNames.getAlphabet().size()
+					- alphSizeStart;
 			if (featuresAdded > maxFeaturesAdded) {
 				log.info("[scanFeatures] Stopping because we added the max "
 						+ "allowed features: " + featuresAdded);
@@ -360,8 +438,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		log.info(String.format("[scanFeatures] Done, scanned %d examples in "
 				+ "%.1f minutes, alphabet size is %d, added %d",
 				examplesSeen, t.totalTimeInSeconds() / 60d,
-				getFeatureAlphabet().size(),
-				getFeatureAlphabet().size()-alphSizeStart));
+				featureNames.getAlphabet().size(),
+				featureNames.getAlphabet().size() - alphSizeStart));
 	}
 
 	public static interface TuningData {

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.latentConstituents;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -33,6 +34,7 @@ import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
@@ -55,10 +57,21 @@ public class RoleSpanLabelingStage
 	private ApproxF1MbrDecoder decoder;
 	private transient Regularizer regularizer = new L2(1_000_000d);
 
-	public RoleSpanLabelingStage(ParserParams params) {
-		super(params);
+	public RoleSpanLabelingStage(
+			ParserParams params, HasFeatureAlphabet featureNames) {
+		super(params, featureNames);
 		features = new BasicRoleSpanFeatures(params);
 		decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
+	}
+
+	@Override
+	public Serializable getParamters() {
+		return decoder;
+	}
+
+	@Override
+	public void setPameters(Serializable params) {
+		decoder = (ApproxF1MbrDecoder) params;
 	}
 
 	@Override

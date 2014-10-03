@@ -20,34 +20,40 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
+import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
+import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 
-public class LatentConstituencyPipelinedParser {
+public class LatentConstituencyPipelinedParser implements Parser {
 	public static final Logger LOG =
 			Logger.getLogger(LatentConstituencyPipelinedParser.class);
 
 	private ParserParams params;
 	private Stage<Sentence, FNTagging> frameId;
-	//private RoleSpanPruningStage rolePruning;
 	private Stage<FNTagging, FNParseSpanPruning> rolePruning;
 	private RoleSpanLabelingStage roleLabeling;
 
 	public LatentConstituencyPipelinedParser() {
 		params = new ParserParams();
 		frameId = new OracleStage<>();
-		rolePruning = new RoleSpanPruningStage(params);
-		roleLabeling = new RoleSpanLabelingStage(params);
+		rolePruning = new RoleSpanPruningStage(params, this);
+		roleLabeling = new RoleSpanLabelingStage(params, this);
+	}
+
+	@Override
+	public Alphabet<String> getAlphabet() {
+		return params.getAlphabet();
 	}
 
 	public void dontDoAnyPruning() {
 		if (!(rolePruning instanceof RoleSpanPruningStage))
-			rolePruning = new RoleSpanPruningStage(params);
+			rolePruning = new RoleSpanPruningStage(params, this);
 		((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
 	}
 
@@ -57,7 +63,7 @@ public class LatentConstituencyPipelinedParser {
 
 	public void scanFeatures(List<FNParse> parses) {
 		LOG.info("setting up inference for " + parses.size() + " parses");
-		params.getFeatureAlphabet().startGrowth();
+		params.getAlphabet().startGrowth();
 
 		List<Sentence> sentences = DataUtil.stripAnnotations(parses);
 		List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
@@ -79,7 +85,7 @@ public class LatentConstituencyPipelinedParser {
 						parses, pIncludeNegativeSpan, params.rand);
 		roleLabeling.scanFeatures(noisyPrunes, parses, 45, 10_000_000);
 
-		params.getFeatureAlphabet().stopGrowth();
+		params.getAlphabet().stopGrowth();
 	}
 
 	public void train(List<FNParse> parses) {
@@ -100,7 +106,8 @@ public class LatentConstituencyPipelinedParser {
 		roleLabeling.train(hypPrunes, parses);
 	}
 
-	public List<FNParse> predict(List<Sentence> sentences, List<FNParse> gold) {
+	@Override
+	public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold) {
 		List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
 		List<FNParseSpanPruning> goldPrune = null;
 		if (gold != null)
@@ -112,8 +119,55 @@ public class LatentConstituencyPipelinedParser {
 		return parses;
 	}
 
+	/*
+	@SuppressWarnings("unchecked")
+	@Override
+	public void loadModel(Map<String, String> params) throws Exception {
+		LOG.info("loading model: " + params);
+		String modelName;
+		ObjectInputStream ois;
+
+		// Frame id model
+		modelName = params.remove("frameId");
+		assert modelName != null;
+		if ("oracle".equals(modelName)) {
+			frameId = new OracleStage<>();
+		} else {
+			ois = new ObjectInputStream(new GZIPInputStream(
+					new FileInputStream(new File(modelName))));
+			frameId = (Stage<Sentence, FNTagging>) ois.readObject();
+			ois.close();
+		}
+
+		// Pruning model
+		modelName = params.remove("spanPruning");
+		assert modelName != null;
+		ois = new ObjectInputStream(new GZIPInputStream(
+				new FileInputStream(new File(modelName))));
+		rolePruning = (Stage<FNTagging, FNParseSpanPruning>) ois.readObject();
+		ois.close();
+
+		// Role labeling model
+		modelName = params.remove("spanLabeling");
+		assert modelName != null;
+		ois = new ObjectInputStream(new GZIPInputStream(
+				new FileInputStream(new File(modelName))));
+		roleLabeling = (RoleSpanLabelingStage) ois.readObject();
+		ois.close();
+
+		// Extra params?
+		assert params.size() == 0;
+		LOG.info("done loading model");
+	}
+
+	@Override
+	public void saveModel(Map<String, String> params) throws Exception {
+		throw new RuntimeException("implement me");
+	}
+	*/
+
 	public static void main(String[] args) {
-		int nTrainLimit = 200;
+		int nTrainLimit = 10000;
 
 		Logger.getLogger(SGD.class).setLevel(Level.ERROR);
 		Logger.getLogger(Threads.class).setLevel(Level.ERROR);
@@ -123,7 +177,7 @@ public class LatentConstituencyPipelinedParser {
 		//BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
 		LatentConstituencyPipelinedParser p = new LatentConstituencyPipelinedParser();
-		//p.useStanfordConstituenciesForPruning();
+		p.useStanfordConstituenciesForPruning();
 		//p.dontDoAnyPruning();
 
 		// Get the data
@@ -155,7 +209,7 @@ public class LatentConstituencyPipelinedParser {
 
 		ModelIO.writeHumanReadable(
 				p.rolePruning.getWeights(),
-				p.params.getFeatureAlphabet(),
+				p.params.getAlphabet(),
 				new File("saved-models/constit-pruning.txt"),
 				true);
 		checkPruning(p, train);
@@ -163,13 +217,13 @@ public class LatentConstituencyPipelinedParser {
 
 		// Eval on test
 		List<Sentence> sentences = DataUtil.stripAnnotations(test);
-		List<FNParse> predicted = p.predict(sentences, test);
+		List<FNParse> predicted = p.parse(sentences, test);
 		Map<String, Double> results = BasicEvaluation.evaluate(test, predicted);
 		BasicEvaluation.showResults("[test]", results);
 
 		// Eval on train
 		sentences = DataUtil.stripAnnotations(train);
-		predicted = p.predict(sentences, train);
+		predicted = p.parse(sentences, train);
 		results = BasicEvaluation.evaluate(train, predicted);
 		BasicEvaluation.showResults("[train]", results);
 	}

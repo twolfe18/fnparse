@@ -46,6 +46,17 @@ public class SentenceEval {
 	private List<FrameArgInstance> targetFalsePos, targetFalseNeg;
 	private List<FrameArgInstance> fullFalsePos, fullFalseNeg;
 
+	public static <T extends FNTagging> List<SentenceEval> zip(
+			List<T> gold,
+			List<T> hyp) {
+		if (gold == null || hyp == null || gold.size() != hyp.size())
+			throw new IllegalArgumentException();
+		List<SentenceEval> se = new ArrayList<>();
+		for (int i = 0; i < gold.size(); i++)
+			se.add(new SentenceEval(gold.get(i), hyp.get(i)));
+		return se;
+	}
+
 	public SentenceEval(FNTagging gold, FNTagging hyp) {
 		this(gold, hyp, true);
 	}

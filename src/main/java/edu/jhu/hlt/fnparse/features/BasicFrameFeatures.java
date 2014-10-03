@@ -34,19 +34,22 @@ public final class BasicFrameFeatures
 		extends AbstractFeatures<BasicFrameFeatures>
 		implements Features.F {
 	private static final long serialVersionUID = 1L;
+	public static boolean OVERFITTING_DEBUG = false;
 
 	private static final String intercept = "intercept";
 	private static final String frameFeatPrefix = "frame=";
 
-	private TargetPruningData targetPruningData;
 	private boolean bowWithDirection = false;
 	private boolean allowDifferentPosLU = false;
 	private boolean allowDifferentPosLEX = false;
 
 	public BasicFrameFeatures(HasParserParams globalParams) {
 		super(globalParams);
-		targetPruningData = TargetPruningData.getInstance();
 		weightingPower = 0.5d;
+	}
+
+	private TargetPruningData getTargetPruningData() {
+		return TargetPruningData.getInstance();
 	}
 
 	@Override
@@ -62,6 +65,11 @@ public final class BasicFrameFeatures
 		LexicalUnit headLU = s.getLU(head);
 		String fs = "f=" + (this.useFastFeaturenames ? f.getId() : f.getName());
 		String fsc = f == Frame.nullFrame ? "nullFrame" : "nonNullFrame";
+
+		if (OVERFITTING_DEBUG) {
+			b(v, refs, fs, "sent=" + s.getId(), "head=" + head);
+			return;
+		}
 
 		Map<String, Double> lexicalMatchVariants = new HashMap<>();
 		lexicalMatchVariants.put("vanilla", 2d);
@@ -93,7 +101,7 @@ public final class BasicFrameFeatures
 
 		// Match any of the prototypes from the LEX examples?
 		List<FrameInstance> prototypes =
-				targetPruningData.getPrototypesByFrame().get(f);
+				getTargetPruningData().getPrototypesByFrame().get(f);
 		if (prototypes != null) {
 			for(FrameInstance proto : prototypes) {
 				Span t = proto.getTarget();
@@ -246,11 +254,8 @@ public final class BasicFrameFeatures
 		b(v, refs, fsc, "to-the-right=", rr.word, r.pos);
 	}
 
-	private transient IRAMDictionary dict;
 	private IRAMDictionary getDict() {
-		if(dict == null)
-			dict = targetPruningData.getWordnetDict();
-		return dict;
+		return getTargetPruningData().getWordnetDict();
 	}
 
 	private transient WordnetStemmer stemmer;

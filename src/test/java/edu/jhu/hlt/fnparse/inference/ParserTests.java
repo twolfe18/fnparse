@@ -25,6 +25,10 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -91,6 +95,10 @@ public class ParserTests {
 		//		FileFrameInstanceProvider.debugFIP.getParsedSentences(),
 		//		"FNFUTXT1274826");
 
+		BasicFrameFeatures.OVERFITTING_DEBUG = true;
+		MinimalRoleFeatures.OVERFITTING_DEBUG = true;
+		BasicRoleFeatures.OVERFITTING_DEBUG = true;
+		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 		PipelinedFnParser parser = train(p);
 		checkGoodPerf(parser, p, 1d, 1d, true);
 		serializeWeights(parser, new File("saved-models/testing"), "basic");
@@ -102,15 +110,15 @@ public class ParserTests {
 		System.out.printf("[serializeWeights] saving a model tagged as %s in %s\n", tag, directory.getPath());
 		boolean outputZeroFeatures = false;
 		ModelIO.writeHumanReadable(
-				parser.getFrameIdWeights(), parser.getAlphabet(),
+				parser.getFrameIdStage().getWeights(), parser.getAlphabet(),
 				new File(directory, "weights.frameId." + tag + ".txt"),
 				outputZeroFeatures);
 		ModelIO.writeHumanReadable(
-				parser.getArgIdWeights(), parser.getAlphabet(),
+				parser.getArgIdStage().getWeights(), parser.getAlphabet(),
 				new File(directory, "weights.argId." + tag + ".txt"),
 				outputZeroFeatures);
 		ModelIO.writeHumanReadable(
-				parser.getArgSpanWeights(), parser.getAlphabet(),
+				parser.getArgSpanStage().getWeights(), parser.getAlphabet(),
 				new File(directory, "weights.argSpan." + tag + ".txt"),
 				outputZeroFeatures);
 	}
@@ -134,9 +142,11 @@ public class ParserTests {
 			checkGoodPerf(parser, p, 0.99d, 0.0d, true);
 		}
 	}
-	
+
 	public PipelinedFnParser serializeAndDeserialize(PipelinedFnParser parser) {
 		try {
+			// NOTE (2014-10-03) This is no longer the preferred way to do
+			// serialization. See DepPipelineParseSerTest for an example.
 			File f = File.createTempFile("foo", "bar");
 			ObjectOutputStream oos = new ObjectOutputStream(
 					new GZIPOutputStream(new FileOutputStream(f)));
@@ -152,7 +162,7 @@ public class ParserTests {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	public PipelinedFnParser train(FNParse e) {
 		ParserParams params = new ParserParams();
 		params.useOverfittingFeatures = true;
@@ -163,13 +173,13 @@ public class ParserTests {
 		parser.train(dummy);
 		return parser;
 	}
-	
+
 	public void checkGoodPerf(PipelinedFnParser p, FNParse gold, double targetF1Thresh,
 			double fullF1Thresh, boolean verbose) {
 		List<Sentence> s = DataUtil.stripAnnotations(Arrays.asList(gold));
 		if(verbose)
 			System.out.println("gold = " + Describe.fnParse(gold));
-		FNParse hyp = p.predict(s).get(0);
+		FNParse hyp = p.parse(s, null).get(0);
 		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(
 				BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
 		double fullF1 = BasicEvaluation.fullMicroF1.evaluate(
@@ -183,5 +193,4 @@ public class ParserTests {
 		assertTrue(targetF1 >= targetF1Thresh);
 		assertTrue(fullF1 >= fullF1Thresh);
 	}
-	
 }

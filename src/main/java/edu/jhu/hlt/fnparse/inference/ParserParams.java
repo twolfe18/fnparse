@@ -16,13 +16,13 @@ import edu.jhu.util.Alphabet;
 public class ParserParams
 		implements Serializable, HasFeatureAlphabet, HasParserParams {
 	private static final long serialVersionUID = 1L;
-	
+
 	public boolean logDomain = true;
 	public boolean useLatentDepenencies = false;
 	public boolean useLatentConstituencies = false;
 	public boolean useSyntaxFeatures = true;
 	public boolean usePredictedFramesToTrainArgId = false;	// otherwise use gold frames
-	
+
 	// If true, use the largest feature set you have available. Useful for
 	// overfitting experiments.
 	public boolean useOverfittingFeatures = false;
@@ -35,10 +35,10 @@ public class ParserParams
 	public HeadFinder headFinder = new SemaforicHeadFinder();
 
 	@Override
-	public Alphabet<String> getFeatureAlphabet() {
+	public Alphabet<String> getAlphabet() {
 		return featAlph;
 	}
-	
+
 	@Override
 	public ParserParams getParserParams() {
 		return this;
@@ -46,7 +46,7 @@ public class ParserParams
 
 	/** checks if they're log proportions from this.logDomain */
 	public void normalize(double[] proportions) {
-		if(this.logDomain)
+		if (this.logDomain)
 			Multinomials.normalizeLogProps(proportions);
 		else
 			Multinomials.normalizeProps(proportions);
@@ -55,11 +55,11 @@ public class ParserParams
 	public boolean verifyConsistency() {
 		return true;
 	}
-	
+
 	public void setFeatureAlphabet(Alphabet<String> featIdx) {
 		this.featAlph = featIdx;
 	}
-	
+
 	public void readFeatAlphFrom(File f) {
 		System.out.printf("[ParserParams readFeatAlphFrom] %s\n", f.getPath());
 		featAlph = ModelIO.readAlphabet(f);
@@ -69,10 +69,10 @@ public class ParserParams
 		System.out.printf("[ParserParams writeFeatAlphTo] %s\n", f.getPath());
 		ModelIO.writeAlphabet(featAlph, f);
 	}
-	
+
 	private transient MultiTimer timer = new MultiTimer();
 	public Timer getTimer(String name) {
-		if(timer == null)
+		if (timer == null)
 			timer = new MultiTimer();
 		return timer.get(name, true);
 	}

@@ -65,27 +65,20 @@ public final class BasicRoleSpanFeatures extends AbstractFeatures<BasicRoleSpanF
 						? f.getId() + "." + roleIdx
 						: f.getName() + "." + f.getRole(roleIdx));
 
+		if (OVERFITTING_DEBUG) {
+			b(v, refs,
+					"sent=" + sent.getId(),
+					"target=" + targetHeadIdx,
+					"frame=" + f.getName(),
+					"role=" + f.getRole(roleIdx),
+					"argHead=" + argHeadIdx,
+					"argSpan=" + argSpan);
+			return;
+		}
+
 		b(v, refs, 3d, "intercept");
 		b(v, refs, 3d, r, "intercept");
 		b(v, refs, 3d, rr, "intercept");
-
-		if (OVERFITTING_DEBUG) {
-			String desc = "target=" + sent.getWord(targetHeadIdx)
-					+ ",frame=" + f.getName()
-					+ ",head=" + sent.getWord(argHeadIdx)
-					+ ",role=" + f.getRole(roleIdx)
-					+ ",width=" + argSpan.width();
-			b(v, refs, 10d, desc);
-			for (int i = 0; i < argSpan.start; i++) {
-				int l = argSpan.start - i;
-				b(v, refs, 10d, desc + ",arg-" + l + "=" + sent.getWord(i));
-			}
-			for (int i = argSpan.end; i < sent.size(); i++) {
-				int _r = (i - argSpan.end) + 1;
-				b(v, refs, 10d, desc + ",arg+" + _r + "=" + sent.getWord(i));
-			}
-			//return;
-		}
 
 		if (argHeadIdx < targetHeadIdx) {
 			if (roleAgnosticFeatures)

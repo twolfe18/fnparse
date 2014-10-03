@@ -32,7 +32,7 @@ public class RoleIdStageOverfittingTests {
 		StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
 		ParserParams params = new ParserParams();
 		params.useSyntaxFeatures = true;
-		RoleIdStage rid = new RoleIdStage(params);
+		RoleIdStage rid = new RoleIdStage(params, params);
 		rid.params.passes = 20;
 		rid.params.tuneOnTrainingData = true;
 		rid.params.regularizer = new L2(999_999_999d);
@@ -50,7 +50,7 @@ public class RoleIdStageOverfittingTests {
 			System.out.println("gold: " + Describe.fnParse(p));
 
 			params.setFeatureAlphabet(new Alphabet<String>());
-			params.getFeatureAlphabet().startGrowth();
+			params.getAlphabet().startGrowth();
 			rid.scanFeatures(x, y, 999, 999_999);
 			rid.train(x, y);
 
@@ -62,7 +62,7 @@ public class RoleIdStageOverfittingTests {
 
 			ModelIO.writeHumanReadable(
 					rid.getWeights(),
-					params.getFeatureAlphabet(),
+					params.getAlphabet(),
 					new File("saved-models/testing/roleId-overfitting-" + p.getId() + ".txt"),
 					true);
 

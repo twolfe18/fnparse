@@ -52,6 +52,7 @@ public class ModelMerger {
 		return merged;
 	}
 
+	// TODO merge this into PipelinedFnParser
 	/** This method will modify the first model argument */
 	@SafeVarargs
 	public static PipelinedFnParser merge(PipelinedFnParser... models) {
@@ -104,9 +105,9 @@ public class ModelMerger {
 				return arg1;
 			}
 		};
-		p.getFrameIdWeights().apply(lambda);
-		p.getArgIdWeights().apply(lambda);
-		p.getArgSpanWeights().apply(lambda);
+		p.getFrameIdStage().getWeights().apply(lambda);
+		p.getArgIdStage().getWeights().apply(lambda);
+		p.getArgSpanStage().getWeights().apply(lambda);
 		return new Model<>(alph, weights);
 	}
 

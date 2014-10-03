@@ -251,8 +251,8 @@ public class RoleIdStageTests {
 		// Latent
 		ParserParams paramsL = new ParserParams();
 		paramsL.useLatentDepenencies = true;
-		RoleIdStage ridL = new RoleIdStage(paramsL);
-		ridL.globalParams.readFeatAlphFrom(alphFile);
+		RoleIdStage ridL = new RoleIdStage(paramsL, paramsL);
+		paramsL.readFeatAlphFrom(alphFile);
 		if(prune) configureRid(ridL);
 		StageDatumExampleList<FNTagging, FNParse> dataL =
 				ridL.setupInference(input, output);
@@ -261,18 +261,18 @@ public class RoleIdStageTests {
 		// Regular
 		ParserParams paramsR = new ParserParams();
 		paramsR.useLatentDepenencies = false;
-		RoleIdStage ridR = new RoleIdStage(paramsR);
+		RoleIdStage ridR = new RoleIdStage(paramsR, paramsR);
 		//ridR.globalParams.readFeatAlphFrom(alphFile);
-		paramsR.setFeatureAlphabet(paramsL.getFeatureAlphabet());
+		paramsR.setFeatureAlphabet(paramsL.getAlphabet());
 		if(prune) configureRid(ridR);
 		StageDatumExampleList<FNTagging, FNParse> dataR =
 				ridR.setupInference(input, output);
 		assertEquals(output.size(), dataR.size());
 
 		assertEquals(paramsL.logDomain, paramsR.logDomain);
-		assertFalse(paramsL.getFeatureAlphabet().isGrowing());
-		assertTrue(paramsL.getFeatureAlphabet()
-				== paramsR.getFeatureAlphabet());
+		assertFalse(paramsL.getAlphabet().isGrowing());
+		assertTrue(paramsL.getAlphabet()
+				== paramsR.getAlphabet());
 
 		ridL.initWeights();
 		ridR.initWeights();
@@ -282,12 +282,12 @@ public class RoleIdStageTests {
 		tL.printIterval = 1;
 		tR.printIterval = 1;
 
-		int origAlphSize = paramsL.getFeatureAlphabet().size();
-		assertEquals(origAlphSize, paramsR.getFeatureAlphabet().size());
-		assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsL.getFeatureAlphabet());
-		assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsR.getFeatureAlphabet());
-		assertTrue(ridL.globalParams.getFeatureAlphabet() == ridR.globalParams.getFeatureAlphabet());
-		assertFalse(ridL.globalParams.getFeatureAlphabet().isGrowing());
+		int origAlphSize = paramsL.getAlphabet().size();
+		assertEquals(origAlphSize, paramsR.getAlphabet().size());
+		assertTrue(ridL.getGlobalParams().getAlphabet() == paramsL.getAlphabet());
+		assertTrue(ridL.getGlobalParams().getAlphabet() == paramsR.getAlphabet());
+		assertTrue(ridL.getGlobalParams().getAlphabet() == ridR.getGlobalParams().getAlphabet());
+		assertFalse(ridL.getGlobalParams().getAlphabet().isGrowing());
 
 		for(int i=0; i<output.size(); i++) {
 			StageDatum<FNTagging, FNParse> dL = dataL.getStageDatum(i);
@@ -307,12 +307,12 @@ public class RoleIdStageTests {
 			}
 
 			// Check that the alphabet hasn't grown or changed
-			assertEquals(origAlphSize, paramsL.getFeatureAlphabet().size());
-			assertEquals(origAlphSize, paramsR.getFeatureAlphabet().size());
-			assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsL.getFeatureAlphabet());
-			assertTrue(ridL.globalParams.getFeatureAlphabet() == paramsR.getFeatureAlphabet());
-			assertTrue(ridL.globalParams.getFeatureAlphabet() == ridR.globalParams.getFeatureAlphabet());
-			assertFalse(ridL.globalParams.getFeatureAlphabet().isGrowing());
+			assertEquals(origAlphSize, paramsL.getAlphabet().size());
+			assertEquals(origAlphSize, paramsR.getAlphabet().size());
+			assertTrue(ridL.getGlobalParams().getAlphabet() == paramsL.getAlphabet());
+			assertTrue(ridL.getGlobalParams().getAlphabet() == paramsR.getAlphabet());
+			assertTrue(ridL.getGlobalParams().getAlphabet() == ridR.getGlobalParams().getAlphabet());
+			assertFalse(ridL.getGlobalParams().getAlphabet().isGrowing());
 
 			// Try some random weights and try again
 			int seed = 9001;

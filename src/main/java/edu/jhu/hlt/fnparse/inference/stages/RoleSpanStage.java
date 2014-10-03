@@ -36,6 +36,7 @@ import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.spans.ExpansionVar;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
@@ -43,7 +44,8 @@ import edu.jhu.hlt.optimize.functions.L2;
 public class RoleSpanStage
 		extends AbstractStage<FNParse, FNParse>
 		implements Stage<FNParse, FNParse>, Serializable {
-	
+	private static final long serialVersionUID = 1L;
+
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
 
@@ -58,7 +60,7 @@ public class RoleSpanStage
 		public int maxArgRoleExpandRight = 5;
 
 		public Double learningRate = 0.05;	// null means auto-select
-		public transient Regularizer regularizer = new L2(1_000_000d);
+		public transient Regularizer regularizer = new L2(10_000_000d);
 		public int batchSize = 4;
 		public int passes = 2;
 
@@ -79,24 +81,31 @@ public class RoleSpanStage
 		//public boolean useNullSpanForArgumentsToIncorrectTarget = false;
 
 		public FactorFactory<ExpansionVar> factorTemplate;
-		public ParserParams globalParams;
 
 		public Params(ParserParams params) {
 			factorTemplate = new RoleSpanFactorFactory(params);
-			this.globalParams = params;
 		}
 	}
 
-	private static final long serialVersionUID = 1L;
 	public Params params;
 
-	public RoleSpanStage(ParserParams globalParams) {
-		super(globalParams);
+	public RoleSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
+		super(globalParams, featureNames);
 		params = new Params(globalParams);
-		if(globalParams.useLatentDepenencies
+		if (globalParams.useLatentDepenencies
 				|| globalParams.useLatentConstituencies) {
 			log.warn("This code does not implement latent syntax yet");
 		}
+	}
+
+	@Override
+	public Serializable getParamters() {
+		return params;
+	}
+
+	@Override
+	public void setPameters(Serializable params) {
+		this.params = (Params) params;
 	}
 
 	@Override
@@ -167,13 +176,13 @@ public class RoleSpanStage
 				ProjDepTreeFactor d,
 				ConstituencyTreeFactor c) {
 			List<Factor> factors = new ArrayList<>();
-			for(ExpansionVar ev : inThisSentence) {
+			for (ExpansionVar ev : inThisSentence) {
 
 				// r_itjk^e ~ 1
 				int n = ev.values.size();
 				ExplicitExpFamFactor phi =
 						new ExplicitExpFamFactor(new VarSet(ev.var));
-				for(int i=0; i<n; i++) {
+				for (int i=0; i<n; i++) {
 					Span a = ev.getSpan(i);
 					FeatureVector fv = new FeatureVector();
 					features.featurize(
@@ -183,7 +192,7 @@ public class RoleSpanStage
 				factors.add(phi);
 
 				// r_itjk^e ~ l_mn
-				if(params.useLatentConstituencies) {
+				if (params.useLatentConstituencies) {
 					assert c != null;
 					throw new RuntimeException(
 							"go get code from PairedExactly1");	// TODO
@@ -193,8 +202,7 @@ public class RoleSpanStage
 			return factors;
 		}
 	}
-	
-	
+
 	/**
 	 * 
 	 * @author travis
@@ -256,8 +264,6 @@ public class RoleSpanStage
 			this.gold = gold;
 			this.onlyHeads = onlyHeads;
 			this.expansions = new ArrayList<>();
-			int F = onlyHeads.getFrameInstances().size();
-			assert gold == null || F == gold.getFrameInstances().size();
 
 			// Build a map of the correct expansions for all arguments that are
 			// present in the gold parse.
@@ -283,7 +289,7 @@ public class RoleSpanStage
 				LOG.debug("roles for " + Describe.frameInstance(fi));
 				Frame f = fi.getFrame();
 				Span t = fi.getTarget();
-				int ti = parent.params.globalParams.headFinder.head(
+				int ti = parent.getGlobalParams().headFinder.head(
 						t, fi.getSentence());
 				int K = fi.getFrame().numRoles();
 				for (int k = 0; k < K; k++) {
@@ -319,9 +325,9 @@ public class RoleSpanStage
 			// Make sure expanding right/left wouldn't overlap the target
 			int maxLeft = parent.params.maxArgRoleExpandLeft;
 			int maxRight = parent.params.maxArgRoleExpandRight;
-			if(j > i && j - parent.params.maxArgRoleExpandLeft >= i)
+			if (j > i && j - parent.params.maxArgRoleExpandLeft >= i)
 				maxLeft = j - i;
-			if(j < i && j + parent.params.maxArgRoleExpandRight > i)
+			if (j < i && j + parent.params.maxArgRoleExpandRight > i)
 				maxRight = i - j;
 			int n = this.onlyHeads.getSentence().size();
 			Expansion.Iter ei = new Expansion.Iter(j, n, maxLeft, maxRight);
@@ -365,12 +371,14 @@ public class RoleSpanStage
 			FactorGraph fg = new FactorGraph();
 			ProjDepTreeFactor depTree = null;
 			ConstituencyTreeFactor consTree = null;
-			if(parent.params.globalParams.useLatentConstituencies) {
-				consTree = new ConstituencyTreeFactor(getSentence().size(), VarType.LATENT);
+			if (parent.getGlobalParams().useLatentConstituencies) {
+				consTree = new ConstituencyTreeFactor(
+						getSentence().size(), VarType.LATENT);
 				fg.addFactor(consTree);
 				// TODO add unary factors on constituency vars
 			}
-			for(Factor f : parent.params.factorTemplate.initFactorsFor(getSentence(), expansions, depTree, consTree))
+			for (Factor f : parent.params.factorTemplate.initFactorsFor(
+					getSentence(), expansions, depTree, consTree))
 				fg.addFactor(f);
 			return fg;
 		}
@@ -420,6 +428,4 @@ public class RoleSpanStage
 			return new FNParse(onlyHeads.getSentence(), fis);
 		}
 	}
-
-
 }

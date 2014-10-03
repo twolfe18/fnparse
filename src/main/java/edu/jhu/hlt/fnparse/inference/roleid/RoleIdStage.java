@@ -7,6 +7,8 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
@@ -38,6 +40,7 @@ import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
@@ -45,6 +48,7 @@ import edu.jhu.hlt.optimize.functions.L2;
 public class RoleIdStage
 		extends AbstractStage<FNTagging, FNParse>
 		implements Stage<FNTagging, FNParse>, Serializable {
+	private static final long serialVersionUID = 1L;
 
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -52,7 +56,7 @@ public class RoleIdStage
 		public int batchSize = 4;
 		public int passes = 1;
 		public int threads = 2;
-		public int maxSentenceLengthForTraining = 50;
+		public int maxSentenceLengthForTraining = -1;
 		public Double learningRate = 0.05;		// null means auto-select
 		public transient Regularizer regularizer = new L2(1_000_000d);
 		public IArgPruner argPruner;
@@ -72,15 +76,22 @@ public class RoleIdStage
 			this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
 		}
 	}
-
-	private static final long serialVersionUID = 1L;
 	public Params params;
-	public ParserParams globalParams;
 
-	public RoleIdStage(ParserParams globalParams) {
-		super(globalParams);
+	public RoleIdStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
+		super(globalParams, featureNames);
 		params = new Params(globalParams);
-		this.globalParams = globalParams;
+	}
+
+
+	@Override
+	public Serializable getParamters() {
+		return params;
+	}
+
+	@Override
+	public void setPameters(Serializable params) {
+		this.params = (Params) params;
 	}
 
 	/** can't undo this for now */
@@ -110,14 +121,13 @@ public class RoleIdStage
 
 	@Override
 	public void train(List<FNTagging> x, List<FNParse> y) {
-
 		List<FNTagging> xUse;
 		List<FNParse> yUse;
-		if(params.maxSentenceLengthForTraining > 0) {
+		if (params.maxSentenceLengthForTraining > 0) {
 			xUse = new ArrayList<>();
 			yUse = new ArrayList<>();
 			int n = x.size();
-			for(int i=0; i<n; i++) {
+			for (int i=0; i<n; i++) {
 				FNTagging xi = x.get(i);
 				if(xi.getSentence().size() <= params.maxSentenceLengthForTraining) {
 					xUse.add(xi);
@@ -135,7 +145,6 @@ public class RoleIdStage
 			xUse = x;
 			yUse = y;
 		}
-
 		super.train(xUse, yUse, params.learningRate,
 				params.regularizer, params.batchSize, params.passes);
 	}
@@ -143,7 +152,7 @@ public class RoleIdStage
 	@Override
 	public TuningData getTuningData() {
 		final List<Double> biases = new ArrayList<Double>();
-		for(double b=0.1d; b<3d; b *= 1.1d) biases.add(b);
+		for (double b = 0.1d; b < 3d; b *= 1.1d) biases.add(b);
 		return new TuningData() {
 			@Override
 			public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
@@ -164,9 +173,9 @@ public class RoleIdStage
 		List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
 		int n = input.size();
 		assert output == null || output.size() == n;
-		for(int i=0; i<n; i++) {
+		for (int i=0; i<n; i++) {
 			FNTagging x = input.get(i);
-			if(output == null)
+			if (output == null)
 				data.add(new RoleIdStageDatum(x, this));
 			else
 				data.add(new RoleIdStageDatum(x, output.get(i), this));
@@ -228,13 +237,13 @@ public class RoleIdStage
 			// 1) We are using a headword to describe a target
 			// 2) A given headword can evoke at most 1 frame.
 			FrameInstance[] fiByTarget = null;
-			if(hasGold) {
+			if (hasGold) {
 				fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(
 						gold.getFrameInstances(), getSentence(),
 						parent.globalParams.headFinder);
 			}
 
-			for(FrameInstance fi : frames.getFrameInstances()) {
+			for (FrameInstance fi : frames.getFrameInstances()) {
 				Span target = fi.getTarget();
 				int targetHead = parent.globalParams.headFinder.head(
 						target, fi.getSentence());
@@ -318,13 +327,15 @@ public class RoleIdStage
 	 * @author travis
 	 */
 	public static class RoleIdDecodable extends Decodable<FNParse> {
+		public static final Logger LOG =
+				Logger.getLogger(RoleIdDecodable.class);
 		public static boolean debug = false;
 
 		private final Sentence sent;
 		private final List<RoleVars> hypotheses;
 		private final ApproxF1MbrDecoder decoder;
 		private final RoleIdStage parent;
-	
+
 		public RoleIdDecodable(FactorGraph fg, FgInferencerFactory infFact, Sentence sent, List<RoleVars> hypotheses, RoleIdStage parent) {
 			super(fg, infFact, parent);
 			this.sent = sent;
@@ -367,7 +378,7 @@ public class RoleIdStage
 						BinaryVarUtil.boolToConfig(true));
 				considered[rvar.k] = true; 
 				if (debug)
-					System.out.println(rvar.roleVar.getName() + "\t" + df);
+					LOG.debug(rvar.roleVar.getName() + "\t" + df);
 			}
 
 			for (int k=0; k<K; k++) {
@@ -375,12 +386,12 @@ public class RoleIdStage
 				if (debug) {
 					System.out.println();
 					for (int i = 0; i < beliefs[k].length; i++) {
-						System.out.printf("%-15s %-15s % 5d %-15s %.3f\n",
+						LOG.debug(String.format("%-15s %-15s % 5d %-15s %.3f",
 								rv.t.getName() + "@" + rv.i,
 								rv.t.getRole(k) + "/" + k,
 								i,
 								i < sent.size() ? sent.getWord(i) : "NONE",
-								beliefs[k][i]);
+								beliefs[k][i]));
 					}
 				}
 
@@ -396,5 +407,4 @@ public class RoleIdStage
 					Span.widthOne(rv.getTargetHead()), arguments, sent);
 		}
 	}
-
 }

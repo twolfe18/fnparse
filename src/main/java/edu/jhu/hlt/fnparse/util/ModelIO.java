@@ -15,6 +15,51 @@ public class ModelIO {
 
 	public static boolean preventOverwrites = false;
 
+	public static void writeFeatureNameWeightsBinary(
+			double[] weights,
+			Alphabet<String> featureNames,
+			DataOutputStream dos) throws IOException {
+		int nonzero = 0;
+		for (int i = 0; i < weights.length; i++)
+			if (weights[i] != 0d)
+				nonzero++;
+		dos.writeInt(nonzero);
+		final int n = Math.min(weights.length, featureNames.size());
+		for (int i = 0; i < n; i++) {
+			if (weights[i] == 0d)
+				continue;
+			String fn = featureNames.lookupObject(i);
+			dos.writeUTF(fn);
+			dos.writeDouble(weights[i]);
+		}
+	}
+
+	public static double[] readFeatureNameWeightsBinary(
+			DataInputStream dis,
+			Alphabet<String> featureNames)
+			throws IOException {
+		int nonzero = dis.readInt();
+		int[] idx = new int[nonzero];
+		double[] weights = new double[nonzero];
+		int maxIdx = 0;
+		for (int i = 0; i < nonzero; i++) {
+			String fn = dis.readUTF();
+			weights[i] = dis.readDouble();
+			idx[i] = featureNames.lookupIndex(fn, true);
+			if (idx[i] > maxIdx)
+				maxIdx = idx[i];
+		}
+		double[] ps = new double[maxIdx + 1];
+		for (int i = 0; i < nonzero; i++) {
+			if (idx[i] < 0)
+				continue;
+			if (ps[idx[i]] != 0d)
+				throw new RuntimeException();
+			ps[idx[i]] = weights[i];
+		}
+		return ps;
+	}
+
 	public static void writeHumanReadable(
 			FgModel model,
 			Alphabet<String> featIdx,
@@ -55,6 +100,7 @@ public class ModelIO {
 		}
 	}
 
+	/** writes a dense vector in binary */
 	public static void writeBinary(FgModel model, DataOutputStream dos)
 			throws IOException {
 		int n = model.getNumParams();
