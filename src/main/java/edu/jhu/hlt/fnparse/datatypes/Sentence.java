@@ -30,6 +30,8 @@ public final class Sentence implements HasId {
 	private String[] pos;
 	private String[] lemmas;
 
+	// As of now, these are collapsed dependencies
+	// Check with Pushpendre to figure out exactly where they came from
 	private int[] gov;			// values are 0-indexed, root is -1
 	private String[] depType;
 
@@ -62,6 +64,25 @@ public final class Sentence implements HasId {
 	public Sentence copy() {
 		return new Sentence(dataset, id, tokens.clone(), pos.clone(), lemmas.clone(), gov.clone(), depType.clone());
 	}
+
+	/* START BASIC DEP CODE ***************************************************/
+	private int[] govBasic;
+	private String[] depTypeBasic;
+	public void setBasicDeps(int[] heads, String[] depType) {
+		if (heads.length != depType.length)
+			throw new IllegalArgumentException();
+		if (heads.length != tokens.length)
+			throw new IllegalArgumentException();
+		this.govBasic = heads;
+		this.depTypeBasic = depType;
+	}
+	public int getBasicGov(int i) {
+		return govBasic[i];
+	}
+	public String getBasicDepType(int i) {
+		return depTypeBasic[i];
+	}
+	/* END BASIC DEP CODE *****************************************************/
 
 	public String getDataset() { return dataset; }
 	public String getId() { return id; }

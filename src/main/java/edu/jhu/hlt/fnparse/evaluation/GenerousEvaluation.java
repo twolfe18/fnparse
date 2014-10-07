@@ -29,11 +29,13 @@ public class GenerousEvaluation {
 	
 	public static GenerousEvaluation evaluator =
 			new GenerousEvaluation(
-					Mode.ExtractHead, new SemaforicHeadFinder(), false);
+					Mode.ExtractHead,
+					new SemaforicHeadFinder(),
+					false /* includeTarget */);
 
 	public static EvalFunc generousPrecision = new EvalFunc() {
 		@Override
-		public String getName() { return "GenerousMacroPrecision"; }
+		public String getName() { return "GenerousMacroPRECISION"; }
 		@Override
 		public double evaluate(List<SentenceEval> instances) {
 			double p = 0d;
@@ -47,7 +49,7 @@ public class GenerousEvaluation {
 
 	public static EvalFunc generousRecall = new EvalFunc() {
 		@Override
-		public String getName() { return "GenerousMacroRecall"; }
+		public String getName() { return "GenerousMacroRECALL"; }
 		@Override
 		public double evaluate(List<SentenceEval> instances) {
 			double r = 0d;
@@ -82,12 +84,12 @@ public class GenerousEvaluation {
 	private final Mode mode;
 	private final boolean includeTarget;
 
-	public GenerousEvaluation(Mode mode, HeadFinder hf, boolean includeHead) {
+	public GenerousEvaluation(Mode mode, HeadFinder hf, boolean includeTarget) {
 		if (mode == Mode.ExtractHead && hf == null)
 			throw new IllegalArgumentException();
 		this.mode = mode;
 		this.hf = hf;
-		this.includeTarget = includeHead;
+		this.includeTarget = includeTarget;
 	}
 
 	/**

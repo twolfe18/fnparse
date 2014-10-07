@@ -3,11 +3,13 @@ package edu.jhu.hlt.fnparse.util;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
-import edu.jhu.hlt.concrete.Parse;
+import edu.jhu.hlt.concrete.Dependency;
+import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.SectionSegmentation;
 import edu.jhu.hlt.concrete.SentenceSegmentation;
@@ -22,6 +24,7 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.stanford.AnnotateTokenizedConcrete;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -39,12 +42,11 @@ public class ConcreteStanfordWrapper {
 		anno = new AnnotateTokenizedConcrete();
 	}
 
-	public Map<Span, String> parse(Sentence s) {
+	public edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
 		Communication communication = sentenceToConcrete(s);
 		anno.annotateWithStanfordNlp(communication);
 		SectionSegmentation sectionSeg =
 				communication.getSectionSegmentationList().get(0);
-		Map<Span, String> constiuents = new HashMap<>();
 		for (Section section : sectionSeg.getSectionList()) {
 			SentenceSegmentation sentenceSeg =
 					section.getSentenceSegmentationList().get(0);
@@ -53,20 +55,48 @@ public class ConcreteStanfordWrapper {
 				Tokenization tokenization =
 						sentence.getTokenizationList().get(0);
 				assert tokenization.getParseList().size() == 1;
-				Parse parse = tokenization.getParseList().get(0);
-				for (Constituent c : parse.getConstituentList()) {
-					Span mySpan = constituentToSpan(c);
-					String tag = c.getTag();
-					String oldTag = constiuents.put(mySpan, tag);
-					if (oldTag != null) {
-						if (tag.compareTo(oldTag) < 0) {
-							String temp = oldTag;
-							oldTag = tag;
-							tag = temp;
+				if (storeBasicDeps) {
+					Optional<DependencyParse> deps =
+							tokenization.getDependencyParseList()
+							.stream()
+							.filter(dp ->
+								dp.getMetadata().getTool().contains("basic"))
+							.findFirst();
+					if (deps.isPresent()) {
+						int n = s.size();
+						int[] heads = new int[n];
+						Arrays.fill(heads, -1);
+						String[] labels = new String[n];
+						for (Dependency e : deps.get().getDependencyList()) {
+							assert heads[e.getDep()] == -1;
+							heads[e.getDep()] = e.getGov();
+							labels[e.getDep()] = e.getEdgeType();
 						}
-						constiuents.put(mySpan, oldTag + "-" + tag);
+						s.setBasicDeps(heads, labels);
+					} else {
+						throw new RuntimeException("couldn't get basic dep parse");
 					}
 				}
+				return tokenization.getParseList().get(0);
+			}
+		}
+		throw new RuntimeException();
+	}
+
+	public Map<Span, String> parseSpans(Sentence s) {
+		Map<Span, String> constiuents = new HashMap<>();
+		edu.jhu.hlt.concrete.Parse parse = parse(s, false);
+		for (Constituent c : parse.getConstituentList()) {
+			Span mySpan = constituentToSpan(c);
+			String tag = c.getTag();
+			String oldTag = constiuents.put(mySpan, tag);
+			if (oldTag != null) {
+				if (tag.compareTo(oldTag) < 0) {
+					String temp = oldTag;
+					oldTag = tag;
+					tag = temp;
+				}
+				constiuents.put(mySpan, oldTag + "-" + tag);
 			}
 		}
 		return constiuents;
@@ -164,14 +194,22 @@ public class ConcreteStanfordWrapper {
 
 	// Sanity check
 	public static void main(String[] args) {
-		Sentence s = DataUtil.iter2list(FileFrameInstanceProvider.debugFIP
-				.getParsedSentences()).get(0).getSentence();
 		ConcreteStanfordWrapper wrapper = new ConcreteStanfordWrapper();
-		System.out.println(s);
-		for (Map.Entry<Span, String> c : wrapper.parse(s).entrySet()) {
-			System.out.printf("%-6s %s\n",
-					c.getValue(),
-					Arrays.toString(s.getWordFor(c.getKey())));
+		for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
+			Sentence s = parse.getSentence();
+			System.out.println(s.getId() + "==============================================================");
+			System.out.println(s);
+			// Constituents
+			Map<Span, String> constituents = wrapper.parseSpans(s);
+			for (Map.Entry<Span, String> c : constituents.entrySet()) {
+				System.out.printf("%-6s %s\n",
+						c.getValue(),
+						Arrays.toString(s.getWordFor(c.getKey())));
+			}
+			// Dependencies
+			wrapper.parse(s, true);
+			System.out.println("collapsed deps:\n" + Describe.sentenceWithDeps(s, false));
+			System.out.println("basic deps:\n" + Describe.sentenceWithDeps(s, true));
 		}
 	}
 }

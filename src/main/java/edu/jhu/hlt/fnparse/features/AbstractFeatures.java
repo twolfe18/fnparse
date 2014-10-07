@@ -22,14 +22,15 @@ import edu.jhu.util.Alphabet;
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
-	public static final Logger LOG = Logger.getLogger(AbstractFeatures.class);
 
-	protected transient Logger log = Logger.getLogger(getClass());
+	// NOTE: This can produce a LOT of output, so only use for debugging
+	public static boolean PRINT_UNSEEN_FEATURES = false;
 
 	public static final FeatureVector emptyFeatures = new FeatureVector();
-
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
+
+	protected transient Logger log;
 
 	public static LexicalUnit getLUSafe(int i, Sentence s) {
 		if (i < 0)
@@ -137,8 +138,8 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 			if(alph.isGrowing()) {
 				int sz = alph.size();
 				int idx = alph.lookupIndex(s, true);
-				if(log != null && sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
-					log.info("[AbstractFeatures b] alph just grew to " + sz);
+				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
+					getLogger().info("[b] alph just grew to " + sz);
 				if (weightingPower == 0d) {
 					weight = 1d;
 				} else {
@@ -159,10 +160,16 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 							weight = FastMath.pow(weight, weightingPower);
 					}
 					fv.add(idx, weight);
-				} else {
-					LOG.debug("[b] unseen feature: " + s);
+				} else if (PRINT_UNSEEN_FEATURES) {
+					getLogger().debug("[b] unseen feature: " + s);
 				}
 			}
 		}
+	}
+
+	private Logger getLogger() {
+		if (log == null)
+			log = Logger.getLogger(getClass());
+		return log;
 	}
 }

@@ -22,16 +22,36 @@ public class Describe {
 		}
 		return sb.toString();
 	}
-	
+
+	public static String sentenceWithDeps(Sentence sent) {
+		return sentenceWithDeps(sent, false);
+	}
+	public static String sentenceWithDeps(Sentence sent, boolean basicDeps) {
+		return spanWithDeps(Span.getSpan(0, sent.size()), sent, basicDeps);
+	}
+
 	public static String spanWithDeps(Span s, Sentence sent) {
+		return spanWithDeps(s, sent, false);
+	}
+	public static String spanWithDeps(Span s, Sentence sent, boolean basicDeps) {
 		StringBuilder sb = new StringBuilder();
 		for (int i = s.start; i < s.end; i++) {
+			int head;
+			String label;
+			if (basicDeps) {
+				head = sent.getBasicGov(i);
+				label = sent.getBasicDepType(i);
+			} else {
+				head = sent.governor(i);
+				label = sent.dependencyType(i);
+			}
+			boolean root = head < 0 || head >= sent.size();
 			sb.append(String.format("% 3d %-20s %-20s %-20s %-20s\n",
 					i,
 					sent.getWord(i),
 					sent.getPos(i),
-					sent.dependencyType(i),
-					sent.isRoot(i) ? "ROOT" : sent.getWord(sent.governor(i))));
+					label,
+					root ? "ROOT" : sent.getWord(head)));
 		}
 		return sb.toString();
 	}
@@ -55,12 +75,14 @@ public class Describe {
 		for(int i=0; i<fi.numArguments(); i++) {
 			Span extent = fi.getArgument(i);
 			if(extent == Span.nullSpan) continue;
-			sb.append(String.format(" %s=\"%s\"", fi.getFrame().getRole(i), span(fi.getArgument(i), fi.getSentence())));
+			sb.append(String.format(" %s=\"%s\"",
+					fi.getFrame().getRole(i),
+					span(fi.getArgument(i), fi.getSentence())));
 		}
 		return sb.toString();
 	}
 
-	// sort by frame and position in sentence
+	// Sort by frame and position in sentence
 	public static final Comparator<FrameInstance> fiComparator = new Comparator<FrameInstance>() {
 		@Override
 		public int compare(FrameInstance arg0, FrameInstance arg1) {
@@ -99,5 +121,4 @@ public class Describe {
 			sb.append(frameInstance(fi) + "\n");
 		return sb.toString();
 	}
-
 }

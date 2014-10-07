@@ -22,7 +22,9 @@ import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.latentConstituents.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
+import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.ModelIO;
@@ -57,8 +59,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
 		((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
 	}
 
-	public void useStanfordConstituenciesForPruning() {
-		rolePruning = new StanfordParserRolePruning();
+	public void useDeterministicPruning(DeterministicRolePruning.Mode mode) {
+		rolePruning = new DeterministicRolePruning(mode);
 	}
 
 	public void scanFeatures(List<FNParse> parses) {
@@ -119,55 +121,21 @@ public class LatentConstituencyPipelinedParser implements Parser {
 		return parses;
 	}
 
-	/*
-	@SuppressWarnings("unchecked")
-	@Override
-	public void loadModel(Map<String, String> params) throws Exception {
-		LOG.info("loading model: " + params);
-		String modelName;
-		ObjectInputStream ois;
+	public static final String FRAME_ID_MODEL_NAME = PipelinedFnParser.FRAME_ID_MODEL_NAME;
+	public static final String ROLE_PRUNE_MODEL_NAME = "rolePrune.ser.gz";
+	public static final String ROLE_LABEL_MODEL_NAME = "roleLabel.ser.gz";
 
-		// Frame id model
-		modelName = params.remove("frameId");
-		assert modelName != null;
-		if ("oracle".equals(modelName)) {
-			frameId = new OracleStage<>();
-		} else {
-			ois = new ObjectInputStream(new GZIPInputStream(
-					new FileInputStream(new File(modelName))));
-			frameId = (Stage<Sentence, FNTagging>) ois.readObject();
-			ois.close();
-		}
-
-		// Pruning model
-		modelName = params.remove("spanPruning");
-		assert modelName != null;
-		ois = new ObjectInputStream(new GZIPInputStream(
-				new FileInputStream(new File(modelName))));
-		rolePruning = (Stage<FNTagging, FNParseSpanPruning>) ois.readObject();
-		ois.close();
-
-		// Role labeling model
-		modelName = params.remove("spanLabeling");
-		assert modelName != null;
-		ois = new ObjectInputStream(new GZIPInputStream(
-				new FileInputStream(new File(modelName))));
-		roleLabeling = (RoleSpanLabelingStage) ois.readObject();
-		ois.close();
-
-		// Extra params?
-		assert params.size() == 0;
-		LOG.info("done loading model");
+	public void saveModel(File directory) throws Exception {
+		LOG.info("saving model to " + directory.getPath());
+		if (!directory.isDirectory())
+			throw new IllegalArgumentException();
+		frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
+		rolePruning.saveModel(new File(directory, ROLE_PRUNE_MODEL_NAME));
+		roleLabeling.saveModel(new File(directory, ROLE_LABEL_MODEL_NAME));
 	}
 
-	@Override
-	public void saveModel(Map<String, String> params) throws Exception {
-		throw new RuntimeException("implement me");
-	}
-	*/
-
-	public static void main(String[] args) {
-		int nTrainLimit = 10000;
+	public static void main(String[] args) throws Exception {
+		int nTrainLimit = 100;
 
 		Logger.getLogger(SGD.class).setLevel(Level.ERROR);
 		Logger.getLogger(Threads.class).setLevel(Level.ERROR);
@@ -177,7 +145,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 		//BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
 		LatentConstituencyPipelinedParser p = new LatentConstituencyPipelinedParser();
-		p.useStanfordConstituenciesForPruning();
+		p.useDeterministicPruning(Mode.XUE_PALMER_DEP);
 		//p.dontDoAnyPruning();
 
 		// Get the data
@@ -207,6 +175,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
 		// TODO tune decoder thresholds
 
+		// Save model
+		p.saveModel(new File("experiments/testing/cons"));
 		ModelIO.writeHumanReadable(
 				p.rolePruning.getWeights(),
 				p.params.getAlphabet(),

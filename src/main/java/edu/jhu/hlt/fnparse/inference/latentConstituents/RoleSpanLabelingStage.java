@@ -194,7 +194,8 @@ public class RoleSpanLabelingStage
 							LOG.warn("pruned the gold label for "
 									+ f.getName() + "." + f.getRole(k));
 							LOG.warn("not including this as a training example");
-							assert goldArg != Span.nullSpan;
+							assert goldArg != Span.nullSpan :
+								"did you include nullSpan as an possible span?";
 							prunedGold++;
 							continue;
 						}

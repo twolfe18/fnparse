@@ -1,14 +1,11 @@
 package edu.jhu.hlt.fnparse.experiment;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -53,6 +50,7 @@ public class ParserTrainer {
 
 	// These specify the names of the files that are expected to be in the
 	// previous stage's model directory.
+	// NOTE: This is the old way of doing things, TODO remove this
 	public static final String ALPHABET_NAME = "features.alphabet.txt";
 	public static final String MODEL_NAME = "model.gz";
 	public static final String SER_MODEL_NAME = "model.ser.gz";
@@ -188,12 +186,7 @@ public class ParserTrainer {
 		printMemUsage();
 
 		// Serialize the model using Java serialization
-		File f = new File(workingDir, SER_MODEL_NAME);
-		LOG.info("serializing model to " + f.getPath());
-		ObjectOutputStream oos = new ObjectOutputStream(
-				new GZIPOutputStream(new FileOutputStream(f)));
-		oos.writeObject(parser);
-		oos.close();
+		parser.saveModel(workingDir);
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -237,6 +230,7 @@ public class ParserTrainer {
 		for (int i = 0; i < gold.size(); i++)
 			printMistakenArgHeads(gold.get(i), hyp.get(i));
 	}
+
 	public static void printMistakenArgHeads(FNParse gold, FNParse hyp) {
 		List<SentenceEval> se = Arrays.asList(new SentenceEval(gold, hyp));
 		double f1 = GenerousEvaluation.generousF1.evaluate(se);

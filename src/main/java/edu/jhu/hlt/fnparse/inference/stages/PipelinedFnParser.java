@@ -36,6 +36,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 	private static final long serialVersionUID = 1L;
 	private static final Logger LOG = Logger.getLogger(PipelinedFnParser.class);
 
+	// Names of the files that each stage will be serialized to when saveModel
+	// is called.
+	public static final String FRAME_ID_MODEL_NAME = "frameId.ser.gz";
+	public static final String ARG_ID_MODEL_NAME = "argId.ser.gz";
+	public static final String ARG_SPANS_MODEL_NAME = "argSpans.ser.gz";
+
 	private ParserParams params;
 	private Stage<Sentence, FNTagging> frameId;
 	private Stage<FNTagging, FNParse> argId;
@@ -260,9 +266,11 @@ public class PipelinedFnParser implements Serializable, Parser {
 	}
 
 	public void saveModel(File directory) {
-		// I think we do need a model that saves everything...
-		frameId.saveModel(new File(directory, "frameId.gz"));
-		argId.saveModel(new File(directory, "argId.gz"));
-		argExpansion.saveModel(new File(directory, "argSpans.gz"));
+		LOG.info("saving model to " + directory.getPath());
+		if (!directory.isDirectory())
+			throw new IllegalArgumentException();
+		frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
+		argId.saveModel(new File(directory, ARG_ID_MODEL_NAME));
+		argExpansion.saveModel(new File(directory, ARG_SPANS_MODEL_NAME));
 	}
 }
