@@ -8,20 +8,21 @@ import java.util.List;
  * @author travis
  */
 public class FNParse extends FNTagging {
-	
-	/**
-	 * @param s is the Sentence that has been parsed
-	 * @param frameInstances are the frames that appear in the Sentence (must have arguments)
-	 * @param isFullParse is true if an attempt has been made to annotate all Frames that might
-	 *        appear in this sentence. A case where this will be false is for lexical examples
-	 *        from Framenet (where only one Frame is annotated).
-	 */
-	public FNParse(Sentence s, List<FrameInstance> frameInstances) {
-		super(s, frameInstances);
-		for(FrameInstance fi : frameInstances) {
-			if(fi.onlyTargetLabeled())
-				throw new IllegalArgumentException();
-		}
-	}
-	
+
+  /**
+   * @param s is the Sentence that has been parsed
+   * @param frameInstances are the frames that appear in the Sentence
+   *        (must have arguments)
+   * @param isFullParse is true if an attempt has been made to annotate all
+   *        Frames that might appear in this sentence. A case where this will be
+   *        false is for lexical examples from FrameNet (where only one Frame is
+   *        annotated).
+   */
+  public FNParse(Sentence s, List<FrameInstance> frameInstances) {
+    super(s, frameInstances);
+    for(FrameInstance fi : frameInstances) {
+      if(fi.onlyTargetLabeled())
+        throw new IllegalArgumentException();
+    }
+  }
 }

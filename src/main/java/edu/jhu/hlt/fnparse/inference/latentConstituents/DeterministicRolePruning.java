@@ -177,7 +177,7 @@ public class DeterministicRolePruning
 					}
 				} else if (mode == Mode.XUE_PALMER) {
 					ConstituencyParse parse = new ConstituencyParse(
-							parser.parse(input.getSentence()));
+							parser.parse(input.getSentence(), false));
 					for (FrameInstance fi : input.getFrameInstances()) {
 						ConstituencyParse.Node pred =
 								parse.getConstituent(fi.getTarget());
