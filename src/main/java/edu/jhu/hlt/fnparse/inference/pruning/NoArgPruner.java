@@ -10,7 +10,11 @@ public class NoArgPruner implements IArgPruner, Serializable {
 	private static final long serialVersionUID = 1L;
 
 	@Override
-	public boolean pruneArgHead(Frame f, int roleIdx, int headWordIdx, Sentence sentence) {
+	public boolean pruneArgHead(
+	    Frame f,
+	    int roleIdx,
+	    int headWordIdx,
+	    Sentence sentence) {
 		return false;
 	}
 
@@ -26,5 +30,4 @@ public class NoArgPruner implements IArgPruner, Serializable {
 	public double pruneRatio() {
 		return 0;
 	}
-
 }

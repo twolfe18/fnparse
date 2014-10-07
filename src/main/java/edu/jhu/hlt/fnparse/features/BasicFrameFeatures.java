@@ -446,5 +446,4 @@ public final class BasicFrameFeatures
 			}
 		}
 	}
-
 }

@@ -14,9 +14,9 @@ import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
  */
 public interface Parser extends HasFeatureAlphabet {
 
-	/**
-	 * Parse some sentences. gold may be null, otherwise the elements in gold
-	 * should match up with the input sentences (same length lists).
-	 */
-	public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold);
+  /**
+   * Parse some sentences. gold may be null, otherwise the elements in gold
+   * should match up with the input sentences (same length lists).
+   */
+  public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold);
 }

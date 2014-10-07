@@ -25,40 +25,40 @@ import edu.jhu.hlt.fnparse.util.ParserLoader;
  * @author travis
  */
 public class ParserEvaluator {
-	public static final Logger LOG = Logger.getLogger(ParserEvaluator.class);
+  public static final Logger LOG = Logger.getLogger(ParserEvaluator.class);
 
-	public static void main(String[] args) throws Exception {
-		if (args.length % 2 == 1 || args.length == 0) {
-			System.out.println("please provide key value pairs");
-			return;
-		}
-		Map<String, String> options = new HashMap<>();
-		for (int i = 0; i < args.length; i += 2) {
-			String key = args[i].replaceFirst("--", "");
-			String oldValue = options.put(key, args[i + 1]);
-			assert oldValue == null;
-		}
+  public static void main(String[] args) throws Exception {
+    if (args.length % 2 == 1 || args.length == 0) {
+      System.out.println("please provide key value pairs");
+      return;
+    }
+    Map<String, String> options = new HashMap<>();
+    for (int i = 0; i < args.length; i += 2) {
+      String key = args[i].replaceFirst("--", "");
+      String oldValue = options.put(key, args[i + 1]);
+      assert oldValue == null;
+    }
 
-		// Get the parser
-		LOG.info("loading parser");
-		Parser parser = ParserLoader.loadParser(options);
+    // Get the parser
+    LOG.info("loading parser");
+    Parser parser = ParserLoader.loadParser(options);
 
-		// Get the evaluation data
-		LOG.info("loading evaluation data from "
-				+ ParserTrainer.SENTENCE_ID_SPLITS);
-		List<FNParse> all = DataUtil.iter2list(
-				new FNIterFilters.SkipSentences<FNParse>(
-				FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
-				Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
-		DataSplitReader dsr = new DataSplitReader(ParserTrainer.SENTENCE_ID_SPLITS);
-		List<FNParse> test = dsr.getSection(all, "test", false);	// TODO make this true!
-		LOG.info("read in " + test.size() + " test instances");
+    // Get the evaluation data
+    LOG.info("loading evaluation data from "
+        + ParserTrainer.SENTENCE_ID_SPLITS);
+    List<FNParse> all = DataUtil.iter2list(
+        new FNIterFilters.SkipSentences<FNParse>(
+            FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
+            Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
+    DataSplitReader dsr = new DataSplitReader(ParserTrainer.SENTENCE_ID_SPLITS);
+    List<FNParse> test = dsr.getSection(all, "test", false);	// TODO make this true!
+    LOG.info("read in " + test.size() + " test instances");
 
-		// Evaluate the parser
-		List<Sentence> sentences = DataUtil.stripAnnotations(test);
-		List<FNParse> predicted = parser.parse(sentences, test);
-		Map<String, Double> results = BasicEvaluation.evaluate(test, predicted);
-		BasicEvaluation.showResults("[test]", results);
-		LOG.info("done");
-	}
+    // Evaluate the parser
+    List<Sentence> sentences = DataUtil.stripAnnotations(test);
+    List<FNParse> predicted = parser.parse(sentences, test);
+    Map<String, Double> results = BasicEvaluation.evaluate(test, predicted);
+    BasicEvaluation.showResults("[test]", results);
+    LOG.info("done");
+  }
 }

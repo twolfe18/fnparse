@@ -144,4 +144,3 @@ public class ApproxF1MbrDecoder implements Serializable {
     	else return prob >= 0d && prob <= 1d;
     }
 }
-

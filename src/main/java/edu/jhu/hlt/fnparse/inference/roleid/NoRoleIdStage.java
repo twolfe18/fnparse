@@ -22,111 +22,111 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
  * @author travis
  */
 public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
-	private static final long serialVersionUID = 1L;
-	public static final Logger LOG = Logger.getLogger(NoRoleIdStage.class);
-	private final FgModel model = new FgModel(0);
+  private static final long serialVersionUID = 1L;
+  public static final Logger LOG = Logger.getLogger(NoRoleIdStage.class);
+  private final FgModel model = new FgModel(0);
 
-	@Override
-	public FgModel getWeights() {
-		return model;
-	}
+  @Override
+  public FgModel getWeights() {
+    return model;
+  }
 
-	@Override
-	public void setWeights(FgModel weights) {
-		LOG.warn("not actually setting weights");
-	}
+  @Override
+  public void setWeights(FgModel weights) {
+    LOG.warn("not actually setting weights");
+  }
 
-	@Override
-	public boolean logDomain() {
-		return true;
-	}
+  @Override
+  public boolean logDomain() {
+    return true;
+  }
 
-	@Override
-	public String getName() {
-		return getClass().getName();
-	}
+  @Override
+  public String getName() {
+    return getClass().getName();
+  }
 
-	@Override
-	public void train(List<FNTagging> x, List<FNParse> y) {
-		LOG.info("not doing any training");
-	}
+  @Override
+  public void train(List<FNTagging> x, List<FNParse> y) {
+    LOG.info("not doing any training");
+  }
 
-	@Override
-	public StageDatumExampleList<FNTagging, FNParse> setupInference(
-			List<? extends FNTagging> input,
-			List<? extends FNParse> output) {
-		List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
-		for (int i = 0; i < input.size(); i++) {
-			if (output == null)
-				data.add(new NoRoleIdStageDatum(input.get(i)));
-			else
-				data.add(new NoRoleIdStageDatum(input.get(i), output.get(i)));
-		}
-		return new StageDatumExampleList<FNTagging, FNParse>(data);
-	}
+  @Override
+  public StageDatumExampleList<FNTagging, FNParse> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParse> output) {
+    List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
+    for (int i = 0; i < input.size(); i++) {
+      if (output == null)
+        data.add(new NoRoleIdStageDatum(input.get(i)));
+      else
+        data.add(new NoRoleIdStageDatum(input.get(i), output.get(i)));
+    }
+    return new StageDatumExampleList<FNTagging, FNParse>(data);
+  }
 
-	static class NoRoleIdStageDatum implements StageDatum<FNTagging, FNParse> {
-		private final FNTagging input;
-		private final FNParse parseWithoutArgs;
-		private final FNParse gold;
+  static class NoRoleIdStageDatum implements StageDatum<FNTagging, FNParse> {
+    private final FNTagging input;
+    private final FNParse parseWithoutArgs;
+    private final FNParse gold;
 
-		public NoRoleIdStageDatum(FNTagging input) {
-			this(input, null);
-		}
+    public NoRoleIdStageDatum(FNTagging input) {
+      this(input, null);
+    }
 
-		public NoRoleIdStageDatum(FNTagging input, FNParse gold) {
-			this.gold = gold;
-			this.input = input;
-			this.parseWithoutArgs = DataUtil.convertTaggingToParse(input);
-		}
+    public NoRoleIdStageDatum(FNTagging input, FNParse gold) {
+      this.gold = gold;
+      this.input = input;
+      this.parseWithoutArgs = DataUtil.convertTaggingToParse(input);
+    }
 
-		@Override
-		public FNTagging getInput() {
-			return input;
-		}
+    @Override
+    public FNTagging getInput() {
+      return input;
+    }
 
-		@Override
-		public boolean hasGold() {
-			return gold != null;
-		}
+    @Override
+    public boolean hasGold() {
+      return gold != null;
+    }
 
-		@Override
-		public FNParse getGold() {
-			return gold;
-		}
+    @Override
+    public FNParse getGold() {
+      return gold;
+    }
 
-		@Override
-		public LabeledFgExample getExample() {
-			throw new UnsupportedOperationException();
-		}
+    @Override
+    public LabeledFgExample getExample() {
+      throw new UnsupportedOperationException();
+    }
 
-		@Override
-		public IDecodable<FNParse> getDecodable() {
-			return new IDecodable<FNParse>() {
-				@Override
-				public FNParse decode() {
-					return parseWithoutArgs;
-				}
-			};
-		}
-	}
+    @Override
+    public IDecodable<FNParse> getDecodable() {
+      return new IDecodable<FNParse>() {
+        @Override
+        public FNParse decode() {
+          return parseWithoutArgs;
+        }
+      };
+    }
+  }
 
-	@Override
-	public void scanFeatures(
-			List<? extends FNTagging> unlabeledExamples,
-			List<? extends FNParse> labels,
-			double maxTimeInMinutes,
-			int maxFeaturesAdded) {
-		LOG.info("not actually scanning features");
-	}
+  @Override
+  public void scanFeatures(
+      List<? extends FNTagging> unlabeledExamples,
+      List<? extends FNParse> labels,
+      double maxTimeInMinutes,
+      int maxFeaturesAdded) {
+    LOG.info("not actually scanning features");
+  }
 
-	@Override
-	public void saveModel(File file) {
-		LOG.info("not actually saving model");
-	}
+  @Override
+  public void saveModel(File file) {
+    LOG.info("not actually saving model");
+  }
 
-	@Override
-	public void loadModel(File file) {
-		LOG.info("not actually loading model");
-	}
+  @Override
+  public void loadModel(File file) {
+    LOG.info("not actually loading model");
+  }
 }

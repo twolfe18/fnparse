@@ -11,23 +11,23 @@ import edu.jhu.hlt.fnparse.features.Features;
 
 public interface FactorFactory<Hypothesis> extends Serializable {
 
-	/**
-	 * Return the features used by the factors that this factory instantiates.
-	 */
-	public List<Features> getFeatures();
+  /**
+   * Return the features used by the factors that this factory instantiates.
+   */
+  public List<Features> getFeatures();
 
-	/**
-	 * Make some factors.
-	 * 
-	 * You can build up a factor that is as costly as you want it to be
-	 * given these variables.
-	 * 
-	 * The variables given should correspond to a frame target head word,
-	 * such that r.parent == f.
-	 */
-	public List<Factor> initFactorsFor(
-			Sentence s,
-			List<Hypothesis> inThisSentence,
-			ProjDepTreeFactor d,
-			ConstituencyTreeFactor c);
+  /**
+   * Make some factors.
+   * 
+   * You can build up a factor that is as costly as you want it to be
+   * given these variables.
+   * 
+   * The variables given should correspond to a frame target head word,
+   * such that r.parent == f.
+   */
+  public List<Factor> initFactorsFor(
+      Sentence s,
+      List<Hypothesis> inThisSentence,
+      ProjDepTreeFactor d,
+      ConstituencyTreeFactor c);
 }

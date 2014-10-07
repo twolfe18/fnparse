@@ -16,8 +16,8 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  * (even though the expansion var for those f_i's might also be sparse).
  * 
  * For now I just want to verify that I can reproduce their target identification numbers:
- * Semafor:		F1=79.21	P=89.92		R=70.79
- * LTH:			F1=76.10	P=87.87		R=67.11
+ * Semafor: F1=79.21  P=89.92   R=70.79
+ * LTH:     F1=76.10  P=87.87   R=67.11
  * (reported on page 8 of http://www.ark.cs.cmu.edu/SEMAFOR/das+schneider+chen+smith.tr10.pdf)
  * 
  * NOTE: I'm an idiot and started deleting words from the LTH list without looking at the above
@@ -26,19 +26,8 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
  * @author travis
  */
 public class SpanPruningExperiment {
-	
-//	static class TrieElem<T> {
-//		public int size();
-//		public T get(int i);
-//	}
-//	
-//	static class Trie<N extends TrieElem<T>, T> {
-//		
-//	}
-	
 	// i want an efficient way to store all the (lemmatized) spans seen in the training data
 	// lets count the suckers to see if we can fit them in a hashmap
-	
 	public static void generateSpans(Iterable<FNParse> in, Collection<List<String>> out) {
 		int[] lengthHist = new int[10];
 		int c = 0;
@@ -59,32 +48,31 @@ public class SpanPruningExperiment {
 		for(int i=0; i<lengthHist.length; i++)
 			System.out.printf("%d \t %d\n", i, lengthHist[i]);
 	}
-	
+
 	public static void main(String[] args) {
-		
-		// split up the train data
+		// Split up the train data
 		System.out.println("[" + SpanPruningExperiment.class.getName() + "] getting the data...");
 		List<FNParse> all = DataUtil.iter2list(FileFrameInstanceProvider.fn15trainFIP.getParsedSentences());
 		List<FNParse> train = new ArrayList<FNParse>();
 		List<FNParse> dev = new ArrayList<FNParse>();
 		DataSplitter ds = new DataSplitter();
 		ds.split(all, train, dev, 0.25d, "span-pruning-exp");
-		
-		// use some train data and all the lex data for extracting target spans
+
+		// Use some train data and all the lex data for extracting target spans
 		List<FNParse> extractTargetsFrom = new ArrayList<FNParse>();
 		extractTargetsFrom.addAll(train);
 		extractTargetsFrom.addAll(DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedSentences()));
-		
+
 		System.out.println("[" + SpanPruningExperiment.class.getName() + "] extracting spans...");
 		Set<List<String>> allSpans = new HashSet<List<String>>();
 		generateSpans(extractTargetsFrom, allSpans);
 		System.out.println("#spans=" + allSpans.size());
-		
+
 		checkLthFilteringRules(train);
 		checkDeterminerPruning(train);
 	}
-	
-	// determiners should be a huge pruning speedup (they're common)
+
+	// Determiners should be a huge pruning speedup (they're common)
 	public static void checkDeterminerPruning(List<FNParse> examples) {
 		int totalTargets = 0;
 		int widthOneTargets = 0;
@@ -104,7 +92,7 @@ public class SpanPruningExperiment {
 				totalTargets-widthOneTargets, (100d*(totalTargets-widthOneTargets))/totalTargets);
 		System.out.printf("#determiner-targets=%d %.1f%%\n", detTargets, (100d*detTargets)/totalTargets);
 	}
-	
+
 	public static List<String> lthSpecialWords;
 	static {
 		lthSpecialWords = new ArrayList<String>();
@@ -121,7 +109,7 @@ public class SpanPruningExperiment {
 	}
 	public static List<String> alsoOfIterest = Arrays.asList(
 			"was", "got", "kept", "ought", "has", "had", "can", "may", "must", "not");
-	
+
 	// Surprisingly, Locative_relation is a significant frame:
 	// grep -c Locative_relation toydata/fn15-fulltext.frames
 	// 1235
@@ -130,12 +118,10 @@ public class SpanPruningExperiment {
 	// 380
 	// grep Locative_relation toydata/fn15-frameindexLU | awk -F"\t" '{print $NF}' | tr '\n' ' '
 	// above-ground.a above.prep abut.v abutting.a adjacent.a adjoin.v adjoining.a against.prep "all over.prep" along.prep amid.prep among.prep around.prep astride.prep at.prep athwart.prep atop.prep below.prep beneath.prep beside.prep between.prep beyond.prep border.v bracket.v by.prep contact.v distant.a down.prep east.prep elsewhere.adv everywhere.adv here.adv in.prep inland.a inside.prep mainland.n meet.v near.prep neighbor.v neighboring.a "next to.prep" north.prep northeast.prep off.prep offshore.a on.prep on_top_of.prep opposite.prep out.prep outlying.a outside.prep over.prep past.prep south.prep southeast.prep surrounding.a there.adv throughout.prep to.prep touch.v ubiquitous.a under.prep underground.a underground.adv underneath.prep up.prep upon.prep west.prep where.adv
-	
+
 	public static void checkLthFilteringRules(List<FNParse> examples) {
-		
 		System.out.println("[checkLthFilteringRules] LTH words   = " + lthSpecialWords);
 		System.out.println("[checkLthFilteringRules] other words = " + alsoOfIterest);
-		
 		final Map<String, Integer> countInTarget = new HashMap<String, Integer>();
 		final Map<String, Integer> countTotal = new HashMap<String, Integer>();
 		int totalWords = 0;
@@ -191,5 +177,4 @@ public class SpanPruningExperiment {
 		System.out.println(widthOneTargets + " of " + totalTargets + " targets were width one (" +
 			((100d*widthOneTargets)/totalTargets) + "%)");
 	}
-	
 }

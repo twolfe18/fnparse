@@ -19,11 +19,13 @@ public class FrameVars implements FgRelated {
 	public static final Logger LOG = Logger.getLogger(FrameVars.class);
 
 	public static FrameInstance nullFrameInstance(Sentence s, int head) {
-		return FrameInstance.newFrameInstance(Frame.nullFrame, Span.widthOne(head), new Span[0], s);
+		return FrameInstance.newFrameInstance(
+		    Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 
-	// these arrays are indexed by t (frame), and i is implicit information in the instance
-	public Frame[] f_it_values;		// first value is nullFrame
+	// these arrays are indexed by t (frame)
+	// and i is implicit information in the instance
+	public Frame[] f_it_values;  // first value is nullFrame
 	public Var[] f_it;
 	public int i;
 	public Frame gold;
@@ -32,17 +34,21 @@ public class FrameVars implements FgRelated {
 	/**
 	 * @param frames should not contain Frame.nullFrame
 	 */
-	public FrameVars(int headIdx, List<FrameInstance> prototypes, List<Frame> frames) {
+	public FrameVars(
+	    int headIdx,
+	    List<FrameInstance> prototypes,
+	    List<Frame> frames) {
 		this.i = headIdx;
 		int n = frames.size() + 1;
 		this.f_it = new Var[n];
 		this.f_it_values = new Frame[n];
 		Frame f;
-		for(int i=0; i<n; i++) {
-			if(i == 0) f = Frame.nullFrame;
-			else {
-				f = frames.get(i-1);
-				if(f == Frame.nullFrame)
+		for (int i=0; i<n; i++) {
+			if (i == 0) {
+			  f = Frame.nullFrame;
+			} else {
+				f = frames.get(i - 1);
+				if (f == Frame.nullFrame)
 					throw new IllegalArgumentException("don't include nullFrame");
 			}
 			String name = String.format("f_{i=%d,t=%s}", headIdx, f.getName());
@@ -110,7 +116,6 @@ public class FrameVars implements FgRelated {
 	}
 
 	public void setGold(FrameInstance gold) {
-
 		if(gold.getFrame() == Frame.nullFrame || gold.getFrame() == null)
 			throw new IllegalArgumentException();
 
@@ -131,16 +136,16 @@ public class FrameVars implements FgRelated {
 	@Override
 	public void register(FactorGraph fg, VarConfig gold) {
 		int n = f_it.length;
-		for(int i=0; i<n; i++)
+		for (int i = 0; i < n; i++)
 			fg.addVar(f_it[i]);
-		if(this.goldSet) {
+		if (this.goldSet) {
 			boolean foundGold = false;
-			for(int i=0; i<n; i++) {
+			for (int i = 0; i < n; i++) {
 				boolean v = f_it_values[i] == this.gold;
 				gold.put(f_it[i], BinaryVarUtil.boolToConfig(v));
 				foundGold |= v;
 			}
-			if(!foundGold)
+			if (!foundGold)
 				assert false;
 		}
 	}

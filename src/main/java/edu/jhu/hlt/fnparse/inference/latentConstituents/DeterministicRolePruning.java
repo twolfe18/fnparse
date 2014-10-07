@@ -28,174 +28,174 @@ import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 public class DeterministicRolePruning
-		implements Stage<FNTagging, FNParseSpanPruning> {
-	private static final long serialVersionUID = 1L;
-	public static final Logger LOG =
-			Logger.getLogger(DeterministicRolePruning.class);
+    implements Stage<FNTagging, FNParseSpanPruning> {
+  private static final long serialVersionUID = 1L;
+  public static final Logger LOG =
+      Logger.getLogger(DeterministicRolePruning.class);
 
-	public static enum Mode {
-		// Take all constituents in Stanford's constituency parse
-		// (regardless of frame/role)
-		STANFORD_CONSTITUENTS,
+  public static enum Mode {
+    // Take all constituents in Stanford's constituency parse
+    // (regardless of frame/role)
+    STANFORD_CONSTITUENTS,
 
-		// Take all spans created by projecting a dependency tree onto spans.
-		// (regardless of frame/role)
-		DEPENDENCY_SPANS,
+    // Take all spans created by projecting a dependency tree onto spans.
+    // (regardless of frame/role)
+    DEPENDENCY_SPANS,
 
-		// Constituency tree version is described in the section
-		// "Pruning Algorithm" in
-		// http://www.cs.brandeis.edu/~xuen/publications/emnlp04.pdf
-		// Uses the Stanford constituency parser.
-		XUE_PALMER,
+    // Constituency tree version is described in the section
+    // "Pruning Algorithm" in
+    // http://www.cs.brandeis.edu/~xuen/publications/emnlp04.pdf
+    // Uses the Stanford constituency parser.
+    XUE_PALMER,
 
-		// Based on XUE_PALMER, but first converting dep tree to constituent tree
-		// TODO def dep2Cons:
-		// For a dep node rooted at i, project to its left and rightmost
-		// children l and r.
-		// Make a constituent (l,r).
-		// For each child of i, ask for their constituents from this same
-		// projection step.
-		// Attach each of these children to the (l,r) constituent
-		XUE_PALMER_DEP,
+    // Based on XUE_PALMER, but first converting dep tree to constituent tree
+    // TODO def dep2Cons:
+    // For a dep node rooted at i, project to its left and rightmost
+    // children l and r.
+    // Make a constituent (l,r).
+    // For each child of i, ask for their constituents from this same
+    // projection step.
+    // Attach each of these children to the (l,r) constituent
+    XUE_PALMER_DEP,
 
-		// Described in the section "Argument Candidates" in
-		// http://www.dipanjandas.com/files/acl2014frames.pdf
-		XUE_PALMER_DEP_HERMANN,
-	}
+    // Described in the section "Argument Candidates" in
+    // http://www.dipanjandas.com/files/acl2014frames.pdf
+    XUE_PALMER_DEP_HERMANN,
+  }
 
-	private Mode mode = Mode.STANFORD_CONSTITUENTS;
-	private final FgModel weights = new FgModel(0);
-	private ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
+  private Mode mode = Mode.STANFORD_CONSTITUENTS;
+  private final FgModel weights = new FgModel(0);
+  private ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
 
-	public DeterministicRolePruning(Mode mode) {
-		this.mode = mode;
-	}
+  public DeterministicRolePruning(Mode mode) {
+    this.mode = mode;
+  }
 
-	@Override
-	public FgModel getWeights() {
-		return weights;
-	}
+  @Override
+  public FgModel getWeights() {
+    return weights;
+  }
 
-	@Override
-	public void setWeights(FgModel weights) {
-		LOG.info("[setWeights] not actually doing anything");
-	}
+  @Override
+  public void setWeights(FgModel weights) {
+    LOG.info("[setWeights] not actually doing anything");
+  }
 
-	@Override
-	public boolean logDomain() {
-		return false;
-	}
+  @Override
+  public boolean logDomain() {
+    return false;
+  }
 
-	@Override
-	public String getName() {
-		return this.getClass().getName();
-	}
+  @Override
+  public String getName() {
+    return this.getClass().getName();
+  }
 
-	@Override
-	public void scanFeatures(
-			List<? extends FNTagging> unlabeledExamples,
-			List<? extends FNParseSpanPruning> labels,
-			double maxTimeInMinutes,
-			int maxFeaturesAdded) {
-		LOG.info("[scanFeatures] not actually doing anything");
-	}
+  @Override
+  public void scanFeatures(
+      List<? extends FNTagging> unlabeledExamples,
+      List<? extends FNParseSpanPruning> labels,
+      double maxTimeInMinutes,
+      int maxFeaturesAdded) {
+    LOG.info("[scanFeatures] not actually doing anything");
+  }
 
-	@Override
-	public void train(List<FNTagging> x, List<FNParseSpanPruning> y) {
-		LOG.info("[train] not actually doing anything");
-	}
+  @Override
+  public void train(List<FNTagging> x, List<FNParseSpanPruning> y) {
+    LOG.info("[train] not actually doing anything");
+  }
 
-	@Override
-	public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
-			List<? extends FNTagging> input,
-			List<? extends FNParseSpanPruning> output) {
-		List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
-		for (int i = 0; i < input.size(); i++)
-			data.add(new SD(input.get(i), mode, parser));
-		return new StageDatumExampleList<>(data);
-	}
+  @Override
+  public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParseSpanPruning> output) {
+    List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
+    for (int i = 0; i < input.size(); i++)
+      data.add(new SD(input.get(i), mode, parser));
+    return new StageDatumExampleList<>(data);
+  }
 
-	static class SD implements StageDatum<FNTagging, FNParseSpanPruning> {
-		private FNTagging input;
-		private Mode mode;
-		private ConcreteStanfordWrapper parser;
-		public SD(FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
-			this.input = input;
-			this.mode = mode;
-			this.parser = parser;
-		}
-		@Override
-		public FNTagging getInput() {
-			return input;
-		}
-		@Override
-		public boolean hasGold() {
-			return false;
-		}
-		@Override
-		public FNParseSpanPruning getGold() {
-			throw new RuntimeException();
-		}
-		@Override
-		public LabeledFgExample getExample() {
-			FactorGraph fg = new FactorGraph();
-			VarConfig gold = new VarConfig();
-			return new LabeledFgExample(fg, gold);
-		}
-		@Override
-		public IDecodable<FNParseSpanPruning> getDecodable() {
-			return new Decodable(input, mode, parser);
-		}
-	}
+  static class SD implements StageDatum<FNTagging, FNParseSpanPruning> {
+    private FNTagging input;
+    private Mode mode;
+    private ConcreteStanfordWrapper parser;
+    public SD(FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
+      this.input = input;
+      this.mode = mode;
+      this.parser = parser;
+    }
+    @Override
+    public FNTagging getInput() {
+      return input;
+    }
+    @Override
+    public boolean hasGold() {
+      return false;
+    }
+    @Override
+    public FNParseSpanPruning getGold() {
+      throw new RuntimeException();
+    }
+    @Override
+    public LabeledFgExample getExample() {
+      FactorGraph fg = new FactorGraph();
+      VarConfig gold = new VarConfig();
+      return new LabeledFgExample(fg, gold);
+    }
+    @Override
+    public IDecodable<FNParseSpanPruning> getDecodable() {
+      return new Decodable(input, mode, parser);
+    }
+  }
 
-	static class Decodable implements IDecodable<FNParseSpanPruning> {
-		private ConcreteStanfordWrapper parser;
-		private Mode mode;
-		private FNTagging input;
-		private FNParseSpanPruning output;
-		public Decodable(
-				FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
-			this.input = input;
-			this.mode = mode;
-			this.parser = parser;
-		}
-		@Override
-		public FNParseSpanPruning decode() {
-			if (output == null) {
-				Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
-				if (mode == Mode.STANFORD_CONSTITUENTS) {
-					Map<Span, String> cons =
-							parser.parseSpans(input.getSentence());
-					List<Span> consSpans = new ArrayList<>();
-					consSpans.addAll(cons.keySet());
-					consSpans.add(Span.nullSpan);
-					for (FrameInstance fi : input.getFrameInstances()) {
-						FrameInstance key = FrameInstance.frameMention(
-								fi.getFrame(), fi.getTarget(), fi.getSentence());
-						List<Span> old = possibleSpans.put(key, consSpans);
-						assert old == null;
-					}
-				} else if (mode == Mode.XUE_PALMER) {
-					ConstituencyParse parse = new ConstituencyParse(
-							parser.parse(input.getSentence(), false));
-					for (FrameInstance fi : input.getFrameInstances()) {
-						ConstituencyParse.Node pred =
-								parse.getConstituent(fi.getTarget());
-						List<Span> spans = new ArrayList<>();
-						spans.add(Span.nullSpan);
-						if (pred == null) {
-							LOG.warn("target is not a span! "
-									+ fi.getSentence().getWordFor(fi.getTarget()));
-						} else {
-							xuePalmerHelper(pred, spans);
-						}
-						FrameInstance key = FrameInstance.frameMention(
-								fi.getFrame(), fi.getTarget(), fi.getSentence());
-						possibleSpans.put(key, spans);
-					}
-				} else if (mode == Mode.XUE_PALMER_DEP
-						|| mode == Mode.XUE_PALMER_DEP_HERMANN) {
-					/*
+  static class Decodable implements IDecodable<FNParseSpanPruning> {
+    private ConcreteStanfordWrapper parser;
+    private Mode mode;
+    private FNTagging input;
+    private FNParseSpanPruning output;
+    public Decodable(
+        FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
+      this.input = input;
+      this.mode = mode;
+      this.parser = parser;
+    }
+    @Override
+    public FNParseSpanPruning decode() {
+      if (output == null) {
+        Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
+        if (mode == Mode.STANFORD_CONSTITUENTS) {
+          Map<Span, String> cons =
+              parser.parseSpans(input.getSentence());
+          List<Span> consSpans = new ArrayList<>();
+          consSpans.addAll(cons.keySet());
+          consSpans.add(Span.nullSpan);
+          for (FrameInstance fi : input.getFrameInstances()) {
+            FrameInstance key = FrameInstance.frameMention(
+                fi.getFrame(), fi.getTarget(), fi.getSentence());
+            List<Span> old = possibleSpans.put(key, consSpans);
+            assert old == null;
+          }
+        } else if (mode == Mode.XUE_PALMER) {
+          ConstituencyParse parse = new ConstituencyParse(
+              parser.parse(input.getSentence(), false));
+          for (FrameInstance fi : input.getFrameInstances()) {
+            ConstituencyParse.Node pred =
+                parse.getConstituent(fi.getTarget());
+            List<Span> spans = new ArrayList<>();
+            spans.add(Span.nullSpan);
+            if (pred == null) {
+              LOG.warn("target is not a span! "
+                  + fi.getSentence().getWordFor(fi.getTarget()));
+            } else {
+              xuePalmerHelper(pred, spans);
+            }
+            FrameInstance key = FrameInstance.frameMention(
+                fi.getFrame(), fi.getTarget(), fi.getSentence());
+            possibleSpans.put(key, spans);
+          }
+        } else if (mode == Mode.XUE_PALMER_DEP
+            || mode == Mode.XUE_PALMER_DEP_HERMANN) {
+          /*
 					boolean ext = mode == Mode.XUE_PALMER_DEP_HERMANN;
 					for (FrameInstance fi : input.getFrameInstances()) {
 						int i = fi.getTarget().end - 1;
@@ -216,75 +216,75 @@ public class DeterministicRolePruning
 								fi.getFrame(), fi.getTarget(), fi.getSentence());
 						possibleSpans.put(key, spans);
 					}
-					*/
-					possibleSpans = DependencyBasedXuePalmerRolePruning
-							.getMask(input, mode);
-				} else if (mode == Mode.DEPENDENCY_SPANS) {
-					Map<Span, Integer> spanMap =
-							DependencyBasedXuePalmerRolePruning
-							.getAllSpansFromDeps(input.getSentence(), true);
-					List<Span> spans = new ArrayList<>();
-					spans.add(Span.nullSpan);
-					spans.addAll(spanMap.keySet());
-					for (FrameInstance fi : input.getFrameInstances()) {
-						FrameInstance key = FrameInstance.frameMention(
-								fi.getFrame(), fi.getTarget(), fi.getSentence());
-						possibleSpans.put(key, spans);
-					}
-				} else {
-					throw new RuntimeException("unknown mode: " + mode);
-				}
-				output = new FNParseSpanPruning(
-						input.getSentence(),
-						input.getFrameInstances(),
-						possibleSpans);
-			}
-			return output;
-		}
-	}
+           */
+          possibleSpans = DependencyBasedXuePalmerRolePruning
+              .getMask(input, mode);
+        } else if (mode == Mode.DEPENDENCY_SPANS) {
+          Map<Span, Integer> spanMap =
+              DependencyBasedXuePalmerRolePruning
+              .getAllSpansFromDeps(input.getSentence(), true);
+          List<Span> spans = new ArrayList<>();
+          spans.add(Span.nullSpan);
+          spans.addAll(spanMap.keySet());
+          for (FrameInstance fi : input.getFrameInstances()) {
+            FrameInstance key = FrameInstance.frameMention(
+                fi.getFrame(), fi.getTarget(), fi.getSentence());
+            possibleSpans.put(key, spans);
+          }
+        } else {
+          throw new RuntimeException("unknown mode: " + mode);
+        }
+        output = new FNParseSpanPruning(
+            input.getSentence(),
+            input.getFrameInstances(),
+            possibleSpans);
+      }
+      return output;
+    }
+  }
 
-	private static void xuePalmerHelper(
-			ConstituencyParse.Node node,
-			Collection<Span> spans) {
-		spans.add(node.getSpan());
-		for (ConstituencyParse.Node sib : node.getSiblings()) {
-			spans.add(sib.getSpan());
-			if ("PP".equals(sib.getTag())) {
-				for (ConstituencyParse.Node niece : sib.getChildren())
-					spans.add(niece.getSpan());
-			}
-		}
-		if (node.getParent() != null)
-			xuePalmerHelper(node.getParent(), spans);
-	}
+  private static void xuePalmerHelper(
+      ConstituencyParse.Node node,
+      Collection<Span> spans) {
+    spans.add(node.getSpan());
+    for (ConstituencyParse.Node sib : node.getSiblings()) {
+      spans.add(sib.getSpan());
+      if ("PP".equals(sib.getTag())) {
+        for (ConstituencyParse.Node niece : sib.getChildren())
+          spans.add(niece.getSpan());
+      }
+    }
+    if (node.getParent() != null)
+      xuePalmerHelper(node.getParent(), spans);
+  }
 
-	@Override
-	public void saveModel(File file) {
-		LOG.info("not actually saving anything");
-	}
+  @Override
+  public void saveModel(File file) {
+    LOG.info("not actually saving anything");
+  }
 
-	@Override
-	public void loadModel(File file) {
-		LOG.info("not actually loading anything");
-	}
+  @Override
+  public void loadModel(File file) {
+    LOG.info("not actually loading anything");
+  }
 
-	public static void main(String[] args) {
-		DeterministicRolePruning prune =
-				new DeterministicRolePruning(Mode.XUE_PALMER);
-		for (FNParse parse : DataUtil.iter2list(
-				FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
-			FNParseSpanPruning mask = prune.setupInference(
-					Arrays.asList(parse), null).decodeAll().get(0);
-			LOG.info(Describe.fnParse(parse));
-			for (int i = 0; i < mask.numFrameInstances(); i++) {
-				FrameInstance frame = mask.getFrameInstance(i);
-				LOG.info("possible args for " + Describe.frameInstance(frame));
-				for (Span s : mask.getPossibleArgs(i))
-					LOG.info("\t" + Describe.span(s, parse.getSentence()));
-				LOG.info("");
-			}
-			LOG.info("------------------------------------------------------");
-		}
-	}
+  public static void main(String[] args) {
+    DeterministicRolePruning prune =
+        new DeterministicRolePruning(Mode.XUE_PALMER);
+    for (FNParse parse : DataUtil.iter2list(
+        FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
+      FNParseSpanPruning mask = prune.setupInference(
+          Arrays.asList(parse), null).decodeAll().get(0);
+      LOG.info(Describe.fnParse(parse));
+      for (int i = 0; i < mask.numFrameInstances(); i++) {
+        FrameInstance frame = mask.getFrameInstance(i);
+        LOG.info("possible args for " + Describe.frameInstance(frame));
+        for (Span s : mask.getPossibleArgs(i))
+          LOG.info("\t" + Describe.span(s, parse.getSentence()));
+        LOG.info("");
+      }
+      LOG.info("------------------------------------------------------");
+    }
+  }
 }
 

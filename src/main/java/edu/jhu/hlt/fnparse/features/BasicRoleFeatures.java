@@ -190,10 +190,4 @@ public final class BasicRoleFeatures
 			//timer.stop(pathFeatKey);
 		}
 	}
-
 }
-
-
-
-
-

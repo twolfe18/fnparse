@@ -11,15 +11,15 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 public class Path {
 
 	public static enum NodeType {
-		CFG,		// requires a constituency parse, not yet supported
+		CFG,    // requires a constituency parse, not yet supported
 		LEMMA,
 		POS,
-		NONE		// puts in a "*" for every head/phrase
+		NONE    // puts in a "*" for every head/phrase
 	}
 
 	public static enum EdgeType {
-		DIRECTION,		// either "<" for up or ">" for down
-		DEP				// typed dependency label
+		DIRECTION,  // either "<" for up or ">" for down
+		DEP         // typed dependency label
 	}
 
 	private final int start, end;

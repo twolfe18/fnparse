@@ -18,10 +18,10 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 
 /**
- * I'm trying to decide if using just headwords to predict arguments/roles is reasonable,
- * or if I should be doing a flat prediction over (role,span) items. To inform this decision,
- * I want to look at the wider argument spans, were the headword may not well describe the
- * argument and see how many there are.
+ * I'm trying to decide if using just headwords to predict arguments/roles is
+ * reasonable, or if I should be doing a flat prediction over (role,span) items.
+ * To inform this decision, I want to look at the wider argument spans, were the
+ * headword may not well describe the argument and see how many there are.
  * 
  * TODO fix the headfinder, it is garbage
  * 
@@ -174,5 +174,4 @@ public class WideArguments {
 		}
 		System.out.println("total = " + total + ", wide = " + wide);
 	}
-
 }

@@ -6,7 +6,7 @@ import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class ModelMerger {
-	
+
 	public static class Model<T> {
 		public final double[] weights;
 		public final Alphabet<T> alphabet;
@@ -122,5 +122,4 @@ public class ModelMerger {
 			to.weights[idx] = v;
 		}
 	}
-
 }

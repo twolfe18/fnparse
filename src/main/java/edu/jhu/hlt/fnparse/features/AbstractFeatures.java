@@ -17,6 +17,7 @@ import edu.jhu.util.Alphabet;
 /**
  * Parent class of all features, includes some useful code to be shared.
  * Let T be the class that is extending this class.
+ * 
  * @author travis
  */
 public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
