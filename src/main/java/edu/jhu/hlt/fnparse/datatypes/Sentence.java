@@ -32,10 +32,19 @@ public final class Sentence implements HasId {
 
   // As of now, these are collapsed dependencies
   // Check with Pushpendre to figure out exactly where they came from
-  private int[] gov;			// values are 0-indexed, root is -1
-  private String[] depType;
+  //private int[] gov;          // values are 0-indexed, root is -1
+  //private String[] depType;
+  private DependencyParse collapsedDeps;
+  private DependencyParse basicDeps;
 
-  public Sentence(String dataset, String id, String[] tokens, String[] pos, String[] lemmas, int[] gov, String[] depType) {
+  public Sentence(
+      String dataset,
+      String id,
+      String[] tokens,
+      String[] pos,
+      String[] lemmas,
+      int[] gov,
+      String[] depType) {
     if(id == null || tokens == null)
       throw new IllegalArgumentException();
     final int n = tokens.length;
@@ -53,8 +62,9 @@ public final class Sentence implements HasId {
     this.tokens = tokens;
     this.pos = pos;
     this.lemmas = lemmas;
-    this.gov = gov;
-    this.depType = depType;
+    //this.gov = gov;
+    //this.depType = depType;
+    this.collapsedDeps = new DependencyParse(gov, depType);
 
     // upcase the POS tags for consistency (e.g. with LexicalUnit)
     for(int i=0; i<pos.length; i++)
@@ -62,27 +72,9 @@ public final class Sentence implements HasId {
   }
 
   public Sentence copy() {
-    return new Sentence(dataset, id, tokens.clone(), pos.clone(), lemmas.clone(), gov.clone(), depType.clone());
+    return new Sentence(dataset, id, tokens.clone(), pos.clone(),
+        lemmas.clone(), collapsedDeps.getHeads(), collapsedDeps.getLabels());
   }
-
-  /* START BASIC DEP CODE ***************************************************/
-  private int[] govBasic;
-  private String[] depTypeBasic;
-  public void setBasicDeps(int[] heads, String[] depType) {
-    if (heads.length != depType.length)
-      throw new IllegalArgumentException();
-    if (heads.length != tokens.length)
-      throw new IllegalArgumentException();
-    this.govBasic = heads;
-    this.depTypeBasic = depType;
-  }
-  public int getBasicGov(int i) {
-    return govBasic[i];
-  }
-  public String getBasicDepType(int i) {
-    return depTypeBasic[i];
-  }
-  /* END BASIC DEP CODE *****************************************************/
 
   public String getDataset() { return dataset; }
   public String getId() { return id; }
@@ -152,8 +144,9 @@ public final class Sentence implements HasId {
   public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
   public String[] getLemmasFor(Span s) { return Arrays.copyOfRange(lemmas, s.start, s.end); }
 
-  private transient int[][] children;	// opposite of gov
+  //private transient int[][] children;	// opposite of gov
   public int[] childrenOf(int wordIdx) {
+    /*
     if(children == null) {
       int n = gov.length;
       children = new int[n][];
@@ -168,14 +161,18 @@ public final class Sentence implements HasId {
       }
     }
     return children[wordIdx];
+    */
+    return collapsedDeps.getChildren(wordIdx);
   }
 
   public boolean isRoot(int i) {
-    return gov[i] < 0 || gov[i] >= gov.length;
+    //return gov[i] < 0 || gov[i] >= gov.length;
+    return collapsedDeps.isRoot(i);
   }
 
   /** returns 0 if it hits a loop */
   public int depth(int i) {
+    int[] gov = collapsedDeps.getHeads();
     int cur = i;
     int depth = 0;
     boolean[] seen = new boolean[gov.length];
@@ -192,7 +189,8 @@ public final class Sentence implements HasId {
   }
 
   public int governor(int i) {
-    return gov[i];
+    //return gov[i];
+    return collapsedDeps.getHead(i);
   }
 
   /**
@@ -203,8 +201,10 @@ public final class Sentence implements HasId {
       return false;
     // Look for auxpass or nsubjpass while skipping over verb-like things
     for (int idx = i - 1, searched = 0; idx > 0; idx--, searched++) {
-      if ("auxpass".equals(depType[idx])
-          || "nsubjpass".equals(depType[idx]))
+      //String label = depType[idx];
+      String label = collapsedDeps.getLabel(idx);
+      if ("auxpass".equals(label)
+          || "nsubjpass".equals(label))
         return true;
       if (pos[idx].startsWith("N")) break;
       if (searched > 5) return false;
@@ -231,7 +231,8 @@ public final class Sentence implements HasId {
   }
 
   public String dependencyType(int childIdx) {
-    return depType[childIdx];
+    //return depType[childIdx];
+    return collapsedDeps.getLabel(childIdx);
   }
 
   public List<String> wordsIn(Span s) {
@@ -270,10 +271,23 @@ public final class Sentence implements HasId {
   public boolean equals(Object o) {
     if(o instanceof Sentence) {
       Sentence other = (Sentence) o;
-      return id.equals(other.id) && Arrays.equals(tokens, other.tokens)
-          && Arrays.equals(pos, other.pos) && Arrays.equals(gov, other.gov)
-          && Arrays.equals(depType, other.depType);
+      return id.equals(other.id)
+          && Arrays.equals(tokens, other.tokens)
+          && Arrays.equals(pos, other.pos)
+          && collapsedDeps.equals(other.collapsedDeps);
     }
     else return false;
+  }
+
+  public DependencyParse getCollapsedDeps() {
+    return collapsedDeps;
+  }
+
+  public DependencyParse getBasicDeps() {
+    return basicDeps;
+  }
+
+  public void setBasicDeps(DependencyParse basicDeps) {
+    this.basicDeps = basicDeps;
   }
 }

@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -47,6 +49,9 @@ public class DeterministicRolePruning
     // http://www.cs.brandeis.edu/~xuen/publications/emnlp04.pdf
     // Uses the Stanford constituency parser.
     XUE_PALMER,
+
+    // Like XUE_PALMER_DEP_HERMAN, but on constituency trees
+    XUE_PALMER_HERMANN,
 
     // Based on XUE_PALMER, but first converting dep tree to constituent tree
     // TODO def dep2Cons:
@@ -175,48 +180,46 @@ public class DeterministicRolePruning
             List<Span> old = possibleSpans.put(key, consSpans);
             assert old == null;
           }
-        } else if (mode == Mode.XUE_PALMER) {
+        } else if (mode == Mode.XUE_PALMER
+            || mode == Mode.XUE_PALMER_HERMANN) {
           ConstituencyParse parse = new ConstituencyParse(
               parser.parse(input.getSentence(), false));
           for (FrameInstance fi : input.getFrameInstances()) {
             ConstituencyParse.Node pred =
                 parse.getConstituent(fi.getTarget());
+            Set<Span> spanSet = new HashSet<>();
+            if (pred == null) {
+              LOG.warn("[XUE_PALMER] target is not a span! "
+                  + Describe.span(fi.getTarget(), fi.getSentence()));
+            } else {
+              xuePalmerHelper(pred, spanSet);
+            }
+            if (mode == Mode.XUE_PALMER_HERMANN && pred != null) {
+              Span parent = pred.getParent().getSpan();
+              int s, e;
+              // 1)
+              spanSet.add(fi.getTarget());
+              // 2)
+              s = fi.getTarget().end;
+              e = parent.end;
+              if (s < e)
+                spanSet.add(Span.getSpan(s, e));
+              // 3)
+              s = parent.start;
+              e = fi.getTarget().start;
+              if (s < e)
+                spanSet.add(Span.getSpan(s, e));
+            }
             List<Span> spans = new ArrayList<>();
             spans.add(Span.nullSpan);
-            if (pred == null) {
-              LOG.warn("target is not a span! "
-                  + fi.getSentence().getWordFor(fi.getTarget()));
-            } else {
-              xuePalmerHelper(pred, spans);
-            }
+            spans.addAll(spanSet);
             FrameInstance key = FrameInstance.frameMention(
                 fi.getFrame(), fi.getTarget(), fi.getSentence());
             possibleSpans.put(key, spans);
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
-          /*
-					boolean ext = mode == Mode.XUE_PALMER_DEP_HERMANN;
-					for (FrameInstance fi : input.getFrameInstances()) {
-						int i = fi.getTarget().end - 1;
-						if (fi.getTarget().width() > 1) {
-							LOG.warn("[mode=" + mode + "] width="
-									+ fi.getTarget().width()
-									+ " target="
-									+ fi.getSentence()
-										.getWordFor(fi.getTarget()));
-						}
-						Map<Span, Integer> spanMap =
-								DependencyBasedXuePalmerRolePruning
-								.getSpansForTarget(fi.getSentence(), i, ext);
-						List<Span> spans = new ArrayList<>();
-						spans.add(Span.nullSpan);
-						spans.addAll(spanMap.keySet());
-						FrameInstance key = FrameInstance.frameMention(
-								fi.getFrame(), fi.getTarget(), fi.getSentence());
-						possibleSpans.put(key, spans);
-					}
-           */
+          parser.parse(input.getSentence(), true);
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {
@@ -270,7 +273,7 @@ public class DeterministicRolePruning
 
   public static void main(String[] args) {
     DeterministicRolePruning prune =
-        new DeterministicRolePruning(Mode.XUE_PALMER);
+        new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN);
     for (FNParse parse : DataUtil.iter2list(
         FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       FNParseSpanPruning mask = prune.setupInference(
@@ -278,6 +281,7 @@ public class DeterministicRolePruning
       LOG.info(Describe.fnParse(parse));
       for (int i = 0; i < mask.numFrameInstances(); i++) {
         FrameInstance frame = mask.getFrameInstance(i);
+        LOG.info("sentence:\n" + Describe.sentenceWithDeps(mask.getSentence(), true));
         LOG.info("possible args for " + Describe.frameInstance(frame));
         for (Span s : mask.getPossibleArgs(i))
           LOG.info("\t" + Describe.span(s, parse.getSentence()));

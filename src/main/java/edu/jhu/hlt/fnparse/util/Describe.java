@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -34,17 +35,12 @@ public class Describe {
     return spanWithDeps(s, sent, false);
   }
   public static String spanWithDeps(Span s, Sentence sent, boolean basicDeps) {
+    DependencyParse deps =
+        basicDeps ? sent.getBasicDeps() : sent.getCollapsedDeps();
     StringBuilder sb = new StringBuilder();
     for (int i = s.start; i < s.end; i++) {
-      int head;
-      String label;
-      if (basicDeps) {
-        head = sent.getBasicGov(i);
-        label = sent.getBasicDepType(i);
-      } else {
-        head = sent.governor(i);
-        label = sent.dependencyType(i);
-      }
+      int head = deps.getHead(i);
+      String label = deps.getLabel(i);
       boolean root = head < 0 || head >= sent.size();
       sb.append(String.format("% 3d %-20s %-20s %-20s %-20s\n",
           i,

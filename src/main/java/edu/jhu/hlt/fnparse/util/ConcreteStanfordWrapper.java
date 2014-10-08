@@ -9,7 +9,6 @@ import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Dependency;
-import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.SectionSegmentation;
 import edu.jhu.hlt.concrete.SentenceSegmentation;
@@ -24,6 +23,7 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.stanford.AnnotateTokenizedConcrete;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
@@ -56,7 +56,7 @@ public class ConcreteStanfordWrapper {
             sentence.getTokenizationList().get(0);
         assert tokenization.getParseList().size() == 1;
         if (storeBasicDeps) {
-          Optional<DependencyParse> deps =
+          Optional<edu.jhu.hlt.concrete.DependencyParse> deps =
               tokenization.getDependencyParseList()
               .stream()
               .filter(dp ->
@@ -65,14 +65,15 @@ public class ConcreteStanfordWrapper {
           if (deps.isPresent()) {
             int n = s.size();
             int[] heads = new int[n];
-            Arrays.fill(heads, -1);
+            Arrays.fill(heads, DependencyParse.PUNC);
             String[] labels = new String[n];
             for (Dependency e : deps.get().getDependencyList()) {
-              assert heads[e.getDep()] == -1;
-              heads[e.getDep()] = e.getGov();
+              assert heads[e.getDep()] == DependencyParse.PUNC;
+              heads[e.getDep()] = e.isSetGov()
+                  ? e.getGov() : DependencyParse.ROOT;
               labels[e.getDep()] = e.getEdgeType();
             }
-            s.setBasicDeps(heads, labels);
+            s.setBasicDeps(new DependencyParse(heads, labels));
           } else {
             throw new RuntimeException("couldn't get basic dep parse");
           }
