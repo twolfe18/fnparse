@@ -33,6 +33,12 @@ public class ParserParams
   public int threads = 1;
   public Random rand = new Random(9001);
   public HeadFinder headFinder = new SemaforicHeadFinder();
+ 
+  private String frameIdTemplateDescription =
+      "1 + headPos + frame * headWord + frame * headCollLabel + dep * headPos + frameDep + frameDep * frame";
+  public String getFrameIdTemplateDescription() {
+    return frameIdTemplateDescription;
+  }
 
   @Override
   public Alphabet<String> getAlphabet() {

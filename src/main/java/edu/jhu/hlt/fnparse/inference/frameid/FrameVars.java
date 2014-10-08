@@ -27,7 +27,7 @@ public class FrameVars implements FgRelated {
 	// and i is implicit information in the instance
 	public Frame[] f_it_values;  // first value is nullFrame
 	public Var[] f_it;
-	public int i;
+	public int i;  // TODO change to be Span-valued!
 	public Frame gold;
 	public boolean goldSet = false;
 
@@ -68,7 +68,13 @@ public class FrameVars implements FgRelated {
 		return i;
 	}
 
+	/**
+	 * @deprecated
+	 */
 	public int getTargetHeadIdx() { return i; }
+
+	// TODO replace with real span value (field)
+	public Span getTarget() { return Span.widthOne(i); }
 
 	public Frame getFrame(int t) { return f_it_values[t]; }
 

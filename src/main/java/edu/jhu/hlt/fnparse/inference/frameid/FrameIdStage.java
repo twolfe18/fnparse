@@ -63,7 +63,7 @@ public class FrameIdStage
     public int maxDev = 50;
     public transient Regularizer regularizer = new L2(1_000_000d);
     public ApproxF1MbrDecoder decoder;
-    public Features.F features;
+    //public Features.F features;
     public FactorFactory<FrameVars> factorsTemplate;
     //public final ParserParams globalParams;
 
@@ -93,13 +93,14 @@ public class FrameIdStage
 
     public Params(ParserParams globalParams) {
       decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
-      //getTargetPruningData() = TargetPruningData.getInstance();
+      /*
       BinaryBinaryFactorHelper.Mode factorMode =
           globalParams.useLatentDepenencies
           ? BinaryBinaryFactorHelper.Mode.ISING
               : BinaryBinaryFactorHelper.Mode.NONE;
-      features = new BasicFrameFeatures(globalParams);
-      factorsTemplate = new FrameFactorFactory(features, factorMode);
+       */
+      //features = new BasicFrameFeatures(globalParams);
+      factorsTemplate = new FrameFactorFactory(globalParams);
     }
   }
 
@@ -110,8 +111,8 @@ public class FrameIdStage
       HasFeatureAlphabet featureAlphabet) {
     super(globalParams, featureAlphabet);
     params = new Params(globalParams);
-    ((FrameFactorFactory) params.factorsTemplate)
-    .setAlphabet(globalParams.getAlphabet());
+    //((FrameFactorFactory) params.factorsTemplate)
+    //  .setAlphabet(globalParams.getAlphabet());
   }
 
   @Override
@@ -223,93 +224,93 @@ public class FrameIdStage
         headIdx, params.getTargetPruningData().getWordnetDict(), false);
     List<Frame> listedAsLUs = (fnLU == null)
         ? Collections.<Frame>emptyList()
-            : params.getTargetPruningData().getFramesFromLU(fnLU);
-        for(Frame f : listedAsLUs) {
+        : params.getTargetPruningData().getFramesFromLU(fnLU);
+    for(Frame f : listedAsLUs) {
+      if(uniqFrames.add(f)) {
+        frameMatches.add(f);
+        //prototypes.add(???);
+      }
+    }
+
+    // Sometimes we'll have thing either mis-tagged or presented in a way
+    // that is no in the lexical unit examples (e.g. "terrorist.a" is not
+    // listed, while "terrorist.n" is). In this case, we want the option to
+    // take all words, ignoring POS.
+    if (params.useJustWordForPossibleFrames) {
+      String w = s.getWord(headIdx);
+      for (Frame f : params.getTargetPruningData().getLUFramesByWord(w)) {
+        if (uniqFrames.add(f)) {
+          frameMatches.add(f);
+          //prototypes.add(???);
+        }
+      }
+      // For a lot of NPs like "National Guard", the first word will get
+      // tagged as NNP and framenet will list "national.a" as a LU.
+      // We can re-cover if we ignore the POS tag, but we also need to
+      // ensure that the case matches (which is typically lowercase for
+      // adjectives).
+      boolean alwaysLowercase = true;
+      if (alwaysLowercase || headIdx == 0) {
+        w = w.toLowerCase();
+        for (Frame f : params.getTargetPruningData()
+            .getLUFramesByWord(w)) {
+          if (uniqFrames.add(f)) {
+            frameMatches.add(f);
+            //prototypes.add(???);
+          }
+        }
+      }
+    }
+
+    // Infrequently, stemming messes up, "means" is listed for the Means
+    // frame, but "mean" isn't
+    for(Frame f : params.getTargetPruningData()
+        .getFramesFromLU(s.getLU(headIdx))) {
+      if(uniqFrames.add(f)) {
+        frameMatches.add(f);
+        //prototypes.add(???);
+      }
+    }
+
+    // Sometimes the lemmatization/stemming is bad
+    // e.g. "doses.NNS" => "dos.n"
+    // try my own hair-brained plural-stripping
+    if (params.useHackySingularSingularConversion &&
+        s.getWord(headIdx).endsWith("es")) {
+      String p = PosUtil.getPennToFrameNetTags().get(s.getPos(headIdx));
+      if (p != null) {
+        String w = s.getWord(headIdx);
+        w = w.substring(0, w.length() - 1);
+        LexicalUnit fnLUsing = new LexicalUnit(w, p);
+        for(Frame f :
+          params.getTargetPruningData().getFramesFromLU(fnLUsing)) {
           if(uniqFrames.add(f)) {
             frameMatches.add(f);
             //prototypes.add(???);
           }
         }
+      }
+    }
 
-        // Sometimes we'll have thing either mis-tagged or presented in a way
-        // that is no in the lexical unit examples (e.g. "terrorist.a" is not
-        // listed, while "terrorist.n" is). In this case, we want the option to
-        // take all words, ignoring POS.
-        if (params.useJustWordForPossibleFrames) {
-          String w = s.getWord(headIdx);
-          for (Frame f : params.getTargetPruningData().getLUFramesByWord(w)) {
-            if (uniqFrames.add(f)) {
-              frameMatches.add(f);
-              //prototypes.add(???);
-            }
-          }
-          // For a lot of NPs like "National Guard", the first word will get
-          // tagged as NNP and framenet will list "national.a" as a LU.
-          // We can re-cover if we ignore the POS tag, but we also need to
-          // ensure that the case matches (which is typically lowercase for
-          // adjectives).
-          boolean alwaysLowercase = true;
-          if (alwaysLowercase || headIdx == 0) {
-            w = w.toLowerCase();
-            for (Frame f : params.getTargetPruningData()
-                .getLUFramesByWord(w)) {
-              if (uniqFrames.add(f)) {
-                frameMatches.add(f);
-                //prototypes.add(???);
-              }
-            }
-          }
-        }
-
-        // Infrequently, stemming messes up, "means" is listed for the Means
-        // frame, but "mean" isn't
-        for(Frame f : params.getTargetPruningData()
-            .getFramesFromLU(s.getLU(headIdx))) {
+    // "thursday.n" is not an LU, but "Thursday.n" is
+    if (params.lowercaseWordForPossibleFrames) {
+      LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(headIdx,
+          params.getTargetPruningData().getWordnetDict(), true);
+      if (fnLUlower != null) {
+        for(Frame f :
+          params.getTargetPruningData().getFramesFromLU(fnLUlower)) {
           if(uniqFrames.add(f)) {
             frameMatches.add(f);
             //prototypes.add(???);
           }
         }
+      }
+    }
 
-        // Sometimes the lemmatization/stemming is bad
-        // e.g. "doses.NNS" => "dos.n"
-        // try my own hair-brained plural-stripping
-        if (params.useHackySingularSingularConversion &&
-            s.getWord(headIdx).endsWith("es")) {
-          String p = PosUtil.getPennToFrameNetTags().get(s.getPos(headIdx));
-          if (p != null) {
-            String w = s.getWord(headIdx);
-            w = w.substring(0, w.length() - 1);
-            LexicalUnit fnLUsing = new LexicalUnit(w, p);
-            for(Frame f :
-              params.getTargetPruningData().getFramesFromLU(fnLUsing)) {
-              if(uniqFrames.add(f)) {
-                frameMatches.add(f);
-                //prototypes.add(???);
-              }
-            }
-          }
-        }
+    if(frameMatches.size() == 0)
+      return null;
 
-        // "thursday.n" is not an LU, but "Thursday.n" is
-        if (params.lowercaseWordForPossibleFrames) {
-          LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(headIdx,
-              params.getTargetPruningData().getWordnetDict(), true);
-          if (fnLUlower != null) {
-            for(Frame f :
-              params.getTargetPruningData().getFramesFromLU(fnLUlower)) {
-              if(uniqFrames.add(f)) {
-                frameMatches.add(f);
-                //prototypes.add(???);
-              }
-            }
-          }
-        }
-
-        if(frameMatches.size() == 0)
-          return null;
-
-        return new FrameVars(headIdx, prototypes, frameMatches);
+    return new FrameVars(headIdx, prototypes, frameMatches);
   }
 
 
@@ -321,7 +322,7 @@ public class FrameIdStage
    * @author travis
    */
   public static class FrameIdDatum
-  implements StageDatum<Sentence, FNTagging> {
+      implements StageDatum<Sentence, FNTagging> {
     private final Sentence sentence;
     private final boolean hasGold;
     private final FNTagging gold;

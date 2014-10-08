@@ -4,23 +4,24 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.Var;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.features.Features;
-import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.inference.HasParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Context;
+import edu.jhu.hlt.fnparse.util.FeatureUtils;
 
 /**
  * Instantiates factors that touch f_it.
@@ -29,66 +30,16 @@ import edu.jhu.util.Alphabet;
  */
 public final class FrameFactorFactory implements FactorFactory<FrameVars> {
   private static final long serialVersionUID = 1L;
+  public static final Logger LOG = Logger.getLogger(FrameFactorFactory.class);
 
-  // If true, the f_it ~ l_ij factors will only have one binary feature,
-  // "l_{root,i}=true_f_{i,Some_Frame}=true"
-  // Otherwise, these binary factors will have all observed features of f_it.
-  public static boolean useSimpleBinaryFactors = false;
+  private TemplatedFeatures features;
+  private HasParserParams params;
 
-  public final Features.F features;
-  public final BinaryBinaryFactorHelper.Mode rootFactorMode;
-  public final Refinements f_it_unaryRef = new Refinements("f_it~1");
-
-  public FrameFactorFactory(
-      Features.F features,
-      BinaryBinaryFactorHelper.Mode rootFactorMode) {
-    this.features = features;
-    this.rootFactorMode = rootFactorMode;
-  }
-
-  private Alphabet<String> featureNames = null;
-  public void setAlphabet(Alphabet<String> featureNames) {
-    this.featureNames = featureNames;
-  }
-
-  @Override
-  public String toString() { return "<FrameFactorFactory>"; }
-
-  /**
-   * Needed to interact with BinaryBinaryFactorHelper,
-   * just implements partial application.
-   */
-  private static class FrameDepObservedFeatures
-      implements BinaryBinaryFactorHelper.ObservedFeatures {
-
-    private static final long serialVersionUID = 1L;
-
-    private Features.F features;
-    private String refinement;
-    private Sentence sent;
-    private int i;
-    private Frame t;
-
-    public FrameDepObservedFeatures(
-        Features.F features,
-        String refinement) {
-      this.features = features;
-      this.refinement = refinement;
-    }
-
-    public void set(Sentence s, int i, Frame t) {
-      this.sent = s;
-      this.i = i;
-      this.t = t;
-    }
-
-    @Override
-    public FeatureVector getObservedFeatures(Refinements r) {
-      r = Refinements.product(r, this.refinement, 1d);
-      FeatureVector fv = new FeatureVector();
-      features.featurize(fv, r, i, t, sent);
-      return fv;
-    }
+  public FrameFactorFactory(HasParserParams params) {
+    this.params = params;
+    this.features = new TemplatedFeatures("frameId",
+        params.getParserParams().getFrameIdTemplateDescription(),
+        params.getParserParams().getAlphabet());
   }
 
   // TODO need to add an Exactly1 factor to each FrameVars
@@ -100,49 +51,52 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
 
-    FrameDepObservedFeatures depFeats =
-        new FrameDepObservedFeatures(features, "f_it~l_{root,i}");
-    BinaryBinaryFactorHelper bbfh =
-        new BinaryBinaryFactorHelper(this.rootFactorMode, depFeats);
-
     final int n = s.size();
     assert n > 2 || fr.size() == 0;
     List<Factor> factors = new ArrayList<Factor>();
-    for(FrameVars fhyp : fr) {
+    for (FrameVars fhyp : fr) {
       final int T = fhyp.numFrames();
       final int i = fhyp.getTargetHeadIdx();
-      for(int tIdx=0; tIdx<T; tIdx++) {
+      for (int tIdx = 0; tIdx < T; tIdx++) {
         Frame t = fhyp.getFrame(tIdx);
-
-        // Unary factor on f_it
-        VarSet vs = new VarSet(fhyp.getVariable(tIdx));
-        FeatureVector fv = new FeatureVector();
-        features.featurize(fv, f_it_unaryRef, i, t, s);
-        ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
-        phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
-        phi.setFeatures(BinaryVarUtil.boolToConfig(false),
-            AbstractFeatures.emptyFeatures);
-        factors.add(phi);
-
-        // Binary factor f_it ~ l_{root,i}
-        assert (rootFactorMode != BinaryBinaryFactorHelper.Mode.NONE)
-        == (l != null);
-        if(rootFactorMode != BinaryBinaryFactorHelper.Mode.NONE) {
-          Var f_it = fhyp.getVariable(tIdx);
-          LinkVar l_ij = l.getLinkVar(-1, i);
-          assert l_ij != null;
-          if (useSimpleBinaryFactors) {
-            assert featureNames != null;
-            factors.add(BinaryBinaryFactorHelper.simpleBinaryFactor(
-                l_ij, f_it, t, featureNames));
-          } else {
-            depFeats.set(s, i, t);
-            vs = new VarSet(f_it, l_ij);
-            phi = bbfh.getFactor(vs);
-            assert phi != null;
-            factors.add(phi);
+        Var frameVar = fhyp.getVariable(tIdx);
+        features.setContext(s, t, fhyp.getTarget());
+        ExplicitExpFamFactor phi;
+        if (l != null) {  // Latent syntax
+          Var linkVar = l.getLinkVar(-1, i);
+          VarSet vs = new VarSet(linkVar, frameVar);
+          phi = new ExplicitExpFamFactor(vs);
+          //LOG.debug("instantiating binary factor (latent deps) for " + vs);
+          for (int config = 0; config < 4; config++) {
+            VarConfig vc = vs.getVarConfig(config);
+            boolean link = BinaryVarUtil.configToBool(vc.getState(linkVar));
+            boolean frame = BinaryVarUtil.configToBool(vc.getState(frameVar));
+            features.getContext().setHead(link ? -1 : Context.UNSET);
+            features.getContext().setFrame(frame ? t : null);
+            FeatureVector fv = new FeatureVector();
+            features.featurize(fv);
+            phi.setFeatures(config, fv);
           }
+        } else {          // No latent syntax
+          VarSet vs = new VarSet(frameVar);
+          phi = new ExplicitExpFamFactor(vs);
+          if (params.getParserParams().useSyntaxFeatures) {
+            //LOG.debug("instantiating unary factor using syntax for " + vs);
+            int head = s.getCollapsedDeps().getHead(i);
+            features.getContext().setHead(head);
+            features.getContext().setChild(Context.UNSET);
+          } else {
+            //LOG.debug("instantiating unary factor for " + vs);
+            features.getContext().setHead(Context.UNSET);
+            features.getContext().setChild(Context.UNSET);
+          }
+          FeatureVector fv = new FeatureVector();
+          features.featurize(fv);
+          phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
+          phi.setFeatures(BinaryVarUtil.boolToConfig(false),
+              FeatureUtils.emptyFeatures);
         }
+        factors.add(phi);
       }
     }
     return factors;

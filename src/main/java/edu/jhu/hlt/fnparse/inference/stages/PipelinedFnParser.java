@@ -171,26 +171,15 @@ public class PipelinedFnParser implements Serializable, Parser {
 					+ "not typical: " + frameId.getClass().getName());
 		}
 
-		if (argId instanceof RoleIdStage) {
-			List<FNTagging> frames = DataUtil.convertParsesToTaggings(examples);
-			((RoleIdStage) argId).scanFeatures(
-				frames, examples, maxTimeInMinutes, maxFeaturesAdded);
-		} else {
-			LOG.warn("not scanning argId features because argId stage is "
-					+ "not typical: " + argId.getClass().getName());
-		}
+		List<FNTagging> frames = DataUtil.convertParsesToTaggings(examples);
+		argId.scanFeatures(
+		    frames, examples, maxTimeInMinutes, maxFeaturesAdded);
 
-		if (argExpansion instanceof RoleSpanStage) {
-			// Scan features defined on gold head decisions
-			List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
-					examples, params.headFinder);
-			((RoleSpanStage) argExpansion).scanFeatures(
-				onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
-		} else {
-			LOG.warn("not scanning argExpansion features because argExpansion "
-					+ "stage is not typical: "
-					+ argExpansion.getClass().getName());
-		}
+		// Scan features defined on gold head decisions
+		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
+		    examples, params.headFinder);
+		argExpansion.scanFeatures(
+		    onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
 
 		params.getAlphabet().stopGrowth();
 		long time = t.stop();
