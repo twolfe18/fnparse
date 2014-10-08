@@ -8,27 +8,23 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.prim.util.math.FastMath;
 
 public class ApproxF1MbrDecoder implements Serializable {
-
 	private static final long serialVersionUID = 1L;
-	
+
 	private boolean logSpace;
 	private double falsePosPenalty;
 	private double falseNegPenalty;
 	private double recallBias;
-    
-    // TODO do decoding over (f_i, r_ijk)!
-    // if you're going to bother with joint training you better do joint decoding!
-	
+
 	public ApproxF1MbrDecoder(boolean logSpace) {
 		setRecallBias(1d);
 		this.logSpace = logSpace;
 	}
-	
+
 	public ApproxF1MbrDecoder(boolean logSpace, double recallBias) {
 		setRecallBias(recallBias);
 		this.logSpace = logSpace;
 	}
-	
+
 	/**
 	 * @param recallBias higher values will penalize false negatives
 	 * more than false positives, and thus increase recall. If you give
@@ -36,28 +32,26 @@ public class ApproxF1MbrDecoder implements Serializable {
 	 * loss.
 	 */
 	public void setRecallBias(double recallBias) {
-		if(recallBias < 1e-3 || recallBias > 1e3)
-			throw new IllegalArgumentException();		
 		this.recallBias = recallBias;
 		double rb = Math.sqrt(recallBias);
 		this.falseNegPenalty = rb;
 		this.falsePosPenalty = 1d / rb;
 	}
-	
+
 	public double getRecallBias() {
 		return recallBias;
 	}
-	
+
 	public double getFalsePosPenalty() {
 		return falsePosPenalty;
 	}
-	
+
 	public double getFalseNegPenalty() {
 		return falseNegPenalty;
 	}
-	
+
 	public boolean isLogSpace() { return logSpace; }
-	
+
 	public Map<Var, Integer> decode(Map<Var, DenseFactor> margins, int nullIndex) {
 		Map<Var, Integer> m = new HashMap<Var, Integer>();
 		for(Map.Entry<Var, DenseFactor> x : margins.entrySet()) {
@@ -66,7 +60,7 @@ public class ApproxF1MbrDecoder implements Serializable {
 		}
 		return m;
 	}
-    
+
 	/**
 	 * MBR:
 	 * argmin_{y.hat} E_{y ~ posterior} loss(y, y.hat)
@@ -125,30 +119,28 @@ public class ApproxF1MbrDecoder implements Serializable {
     public int decode(double[] posterior, int nullIndex) {
     	return decode(posterior, nullIndex, null);
     }
-    
+
     public double risk(double probA, double lossA, double probB, double lossB) {
     	if(this.logSpace) return Math.exp(probA) * lossA + Math.exp(probB) * lossB;
     	else return probA * lossA + probB * lossB;
     }
-    
+
     public double plus(double a, double b) {
     	if(this.logSpace) return FastMath.logAdd(a, b);
     	else return a + b;
     }
-    
+
     public double one() {
     	return this.logSpace ? 0d : 1d;
     }
-    
+
     public double zero() {
     	return this.logSpace ? Double.NEGATIVE_INFINITY : 0d;
     }
-    
+
     public boolean check(double prob) {
     	if(Double.isNaN(prob)) return false;
     	if(this.logSpace) return prob <= 1d;
     	else return prob >= 0d && prob <= 1d;
     }
-    
 }
-

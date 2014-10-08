@@ -1,23 +1,37 @@
 package edu.jhu.hlt.fnparse.data;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.commons.io.LineIterator;
 import org.apache.commons.lang.ArrayUtils;
+import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class FileFrameInstanceProvider implements FrameInstanceProvider {
-	
+
 	public static final class FIIterator implements Iterator<FNTagging> {
-		
+		public static final Logger LOG = Logger.getLogger(FIIterator.class);
+
 		private LineIterator litrFrames;
 		private LineIterator litrConll;
 
 		private String curLineFramesFile;
 		private String curSentIdFrames;
-		
+
 		// The following 2 only occur in frames file so need to add Frames suffix
 		private String curAnnoSetId;
 		private String prevAnnoSetId;
@@ -31,20 +45,12 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 		private String prevSentIdConll;
 		private String prevSentIdFrames;
-		
-		
+
 		private Map<String, Frame> frameByName;
-		
+
 		public FIIterator(File frameFile, File conllFile) {
-			
-			// I need to print who is calling this iterator function so I can figure out why I'm using so much memory
-			System.err.println("[FIIterator] iterating over " +
-					frameFile.getPath() + " and " + conllFile.getPath());
-//			StackTraceElement[] stack = Thread.currentThread().getStackTrace();
-//			int n = Math.min(stack.length, 15);
-//			for(int i=0; i<n; i++)
-//				System.err.println("\t" + stack[i]);
-			
+			LOG.debug("iterating over " + frameFile.getPath() + " and "
+					+ conllFile.getPath());
 			try {
 				litrFrames = new LineIterator(new FileReader(frameFile));
 				litrConll = new LineIterator(new FileReader(conllFile));
@@ -74,7 +80,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				throw new RuntimeException(e);
 			}
 		}
-		
+
 		@Override
 		public boolean hasNext() {
 			return (litrConll.hasNext() && litrFrames.hasNext());
@@ -125,7 +131,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 					lemmas.toArray(new String[0]),
 					ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
 					depType.toArray(new String[0]));
-			
+
 			List<FrameInstance> frameInstancesForFNTagging = new ArrayList<FrameInstance>();
 			if(prevSentIdConll.equals(curSentIdFrames)){
 				while(litrFrames.hasNext() && curSentIdFrames.equals(prevSentIdFrames)){
@@ -191,7 +197,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 				: new FNTagging(s, frameInstancesForFNTagging);
 			return ret;
 		}
-		
+
 		private boolean isFullParse(String sentId){
 			// isFullParse should be false for lexical examples 
 			// from Framenet, and true for the fulltext data
@@ -219,13 +225,16 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 
 	public static final FileFrameInstanceProvider fn15trainFIP =
 			new FileFrameInstanceProvider(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
-	
+
 	public static final FileFrameInstanceProvider fn15testFIP =
 			new FileFrameInstanceProvider(UsefulConstants.TestFN15FullTextFramesPath, UsefulConstants.TestFN15FullTextConllPath);
-	
+
 	public static final FileFrameInstanceProvider fn15lexFIP =
 			new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
-	
+
+	public static final FileFrameInstanceProvider debugFIP =
+		new FileFrameInstanceProvider(UsefulConstants.DebugFramesPath, UsefulConstants.DebugConllPath);
+
 	public static final FileFrameInstanceProvider dipanjantrainFIP =
 		new FileFrameInstanceProvider(UsefulConstants.TrainDipanjanFramesPath, UsefulConstants.TrainDipanjanConllPath);
 
@@ -236,29 +245,32 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 //			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);
 
 	private File frameFile, conllFile;
-	
+
 	@Override
 	public String getName() { return toString(); }
-	
+
 	@Override
 	public String toString() {
 		return String.format("<FrameInstanceProvider from %s %s>",
 				this.frameFile.getName(), this.conllFile.getName());
 	}
-	
+
 	public FileFrameInstanceProvider(File frameFile, File conllFile) {
 		this.frameFile = frameFile;
 		this.conllFile = conllFile;
 	}
 
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
 	public Iterator<FNParse> getParsedSentences() {
-		return new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
+		return (Iterator<FNParse>) (Object)
+				new FNIterFilters.OnlyParses(getParsedOrTaggedSentences());
 	}
 
 	@Override
 	public Iterator<FNTagging> getTaggedSentences() {
-		return new FNIterFilters.OnlyTaggings(getParsedOrTaggedSentences());
+		return new FNIterFilters.OnlyTaggings<FNTagging>(
+				getParsedOrTaggedSentences());
 	}
 
 	@Override
