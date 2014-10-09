@@ -2,24 +2,30 @@
 #$ -j y                         # join stderr to stdout
 #$ -V                           # job has the same environment variables as the submission shell
 #$ -l h_rt=48:00:00             # runtime limit
-#$ -l mem_free=15G              # expected amount of mem
+#$ -l mem_free=8G               # expected amount of mem
 #$ -l num_proc=2                # how many processors to use
 #$ -o logging                   # where to do logging
+#$ -S /bin/bash
 # -M twolfe18@gmail.com
 # -m as                         # a=aborted b=begining e=end s=suspended
 
 set -e
 
+if [[ $# != 2 ]]; then
+	echo "usage: $0 mode syntax-mode"
+	exit 1
+fi
+
 mode=$1
-alphabetModel=$2
-syntaxMode=$3
-workingDir=experiments/$mode/$SGE_TASK_ID
+syntaxMode=$2
 
-cp="target/fnparse-1.0.0.jar:target/fnparse-1.0.0-jar-with-dependencies.jar"
-jvmOpts="-ea -Xmx14G -XX:ParallelGCThreads=2"
+workingDir=experiments/${mode}-${syntaxMode}/$SGE_TASK_ID
 
-echo $HOSTNAME
+cp="target/fnparse-1.0.0-SNAPSHOT.jar:target/fnparse-1.0.0-SNAPSHOT-jar-with-dependencies.jar"
+jvmOpts="-ea -Xmx7G -XX:ParallelGCThreads=2"
+
+echo "${HOSTNAME}"
 java -version
-java -cp $cp $jvmOpts edu.jhu.hlt.fnparse.experiment.ParserExperiment \
-	$mode $SGE_TASK_ID $workingDir $alphabetModel $syntaxMode
+java -cp ${cp} ${jvmOpts} edu.jhu.hlt.fnparse.experiment.ParserTrainer \
+	${mode} ${SGE_TASK_ID} ${workingDir} NA ${syntaxMode}
 

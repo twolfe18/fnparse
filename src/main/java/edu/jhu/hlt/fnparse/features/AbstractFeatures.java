@@ -4,39 +4,82 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.commons.math3.util.FastMath;
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.Parser.ParserParams;
+import edu.jhu.hlt.fnparse.inference.HasParserParams;
+import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.util.Alphabet;
 
 /**
- * let T be the class that is extending this class.
+ * Parent class of all features, includes some useful code to be shared.
+ * Let T be the class that is extending this class.
+ * 
  * @author travis
  */
-public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements Serializable {
-
+public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
+		implements Serializable, HasFeatureAlphabet {
 	private static final long serialVersionUID = 1L;
-	
+
+	// NOTE: This can produce a LOT of output, so only use for debugging
+	public static boolean PRINT_UNSEEN_FEATURES = false;
+
+	public static final FeatureVector emptyFeatures = new FeatureVector();
 	public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
 	public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
-	
+
+	protected transient Logger log;
+
 	public static LexicalUnit getLUSafe(int i, Sentence s) {
-		if(i < 0) return luStart;
-		if(i >= s.size()) return luEnd;
+		if (i < 0)
+			return luStart;
+		if (i >= s.size())
+			return luEnd;
 		return s.getLU(i);
 	}
-	
-	public static final FeatureVector emptyFeatures = new FeatureVector();
-	
-	protected ParserParams params;
-	
-	public AbstractFeatures(ParserParams params) {
-		this.params = params;
+
+	// If true, use frame id instead of frame name so feature names are shorter
+	// NOTE: DO NOT use role id instead of role name because role name is
+	// consistent across frames, and need not be conjoined with the frame (always).
+	protected boolean useFastFeaturenames = false;
+
+	// Often features are given with a certain weight, which mimics the effect
+	// of a non-uniformly regularized model. For example I may not want to
+	// regularize the intercept at all, which can be (in-exactly) accomplished
+	// by giving it a much larger weight. This can go awry though, and I've seen
+	// so in my tests. There are a few factors that go into play with this:
+	// 1) How strong the regularizer is
+	// 2) How common the feature is
+	// 3) How large the weight on the feature is
+	// 4) The discrepancy between training loss (log-loss) and test loss (e.g. F1)
+	// I'm not going to go into careful detail about how this can occur, but
+	// I've tried removing the weights completely and this fixed a problem I was
+	// having, so I will just assume that this is a potential problem.
+	// 
+	// This parameter is basically an annealing paramter to use or ignore the
+	// weights that are added at callsite. This is a global hammer, which may or
+	// may not be a good thing, but I added it late.
+	// 0 => features have uniform weight
+	// 1 => features have the weight given at callsite
+	// i.e. weight_final = pow(weight_callsite, weightingPower)
+	protected double weightingPower = 1d;
+
+	protected boolean debug = false;
+
+	protected final HasParserParams globalParams;
+
+	public AbstractFeatures(HasParserParams globalParams) {
+		this.globalParams = globalParams;
 	}
-	
-	public Alphabet<String> getFeatureAlph() { return params.featIdx; }
-	
+
+	@Override
+	public Alphabet<String> getAlphabet() {
+		return globalParams.getParserParams().getAlphabet();
+	}
+
 	/**
 	 * by default, nothing is excluded from regularization,
 	 * but you are free to override this.
@@ -55,42 +98,31 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 			return String.valueOf(value);
 	}
 
-	
-	/*
-	 * adds a refinement to this feature function.
-	 * returns itself for syntactic convenience
-	 * e.g. "new FooFeatures().withRefinement("bar", 0.5);"
-	@SuppressWarnings("unchecked")
-	public T withRefinement(String name, double weight) {
-		if(this.refinements == null) {
-			this.refinements = new ArrayList<String>();
-			this.weights = new ArrayList<Double>();
-		}
-		this.refinements.add(name);
-		this.weights.add(weight);
-		return (T) this;
-	}
-	 */
-
+	private String name = null;
 	/**
 	 * all feature names are prefixed with this string.
 	 * default implementation is class name.
 	 */
 	public String getName() {
-		return this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
+		if(name == null)
+			name = this.getClass().getName().replace("edu.jhu.hlt.fnparse.features.", "");
+		return name;
 	}
-	
+
 	protected final void b(FeatureVector fv, Refinements refs, String... featureNamePieces) {
 		b(fv, refs, 1d, featureNamePieces);
 	}
-	
+
 	/**
 	 * returns the index of the feature being added.
 	 * if there are refinements, those indices will not be returned.
 	 */
-	protected final void b(FeatureVector fv, Refinements refs, double weight, String... featureNamePieces) {
-		
-		Alphabet<String> featIdx = params.featIdx;
+	protected final void b(
+			FeatureVector fv,
+			Refinements refs,
+			double weight,
+			String... featureNamePieces) {
+		Alphabet<String> alph = getAlphabet();
 		int rs = refs.size();
 		for(int ri=0; ri<rs; ri++) {
 			StringBuilder sn = new StringBuilder();
@@ -104,34 +136,41 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>> implements
 				sn.append(fns);
 			}
 			String s = sn.toString();
-			if(featIdx.isGrowing()) {
-				int sz = featIdx.size();
-				int idx = featIdx.lookupIndex(s, true);
+			if(alph.isGrowing()) {
+				int sz = alph.size();
+				int idx = alph.lookupIndex(s, true);
 				if(sz > 2 * 1000 * 1000 && idx == sz && sz % 200000 == 0)
-					System.out.println("[AbstractFeatures b] alph just grew to " + sz);
-				fv.add(idx, weight * refs.getWeight(ri));
+					getLogger().info("[b] alph just grew to " + sz);
+				if (weightingPower == 0d) {
+					weight = 1d;
+				} else {
+					weight *= refs.getWeight(ri);
+					if (weightingPower != 1d)
+						weight = FastMath.pow(weight, weightingPower);
+				}
+				fv.add(idx, weight);
 			}
 			else {
-				int idx = featIdx.lookupIndex(s, false);
-				if(idx >= 0) fv.add(idx, weight * refs.getWeight(ri));
-				//else System.out.println("[AbstractFeatures b] unseen feature: " + s);
+				int idx = alph.lookupIndex(s, false);
+				if(idx >= 0) {
+					if (weightingPower == 0d) {
+						weight = 1d;
+					} else {
+						weight *= refs.getWeight(ri);
+						if (weightingPower != 1d)
+							weight = FastMath.pow(weight, weightingPower);
+					}
+					fv.add(idx, weight);
+				} else if (PRINT_UNSEEN_FEATURES) {
+					getLogger().debug("[b] unseen feature: " + s);
+				}
 			}
 		}
 	}
 
-	/* take a feature vector and conjoin each of its features with a string like "f=0,r=1" or "r=0,l=1" or "r=1,e=1:3"
-	public static FeatureVector conjoin(final FeatureVector base, final String specific, final Alphabet<String> featureNames) {
-		final FeatureVector fv = new FeatureVector();
-		base.apply(new FnIntDoubleToDouble() {
-			@Override
-			public double call(int idx, double val) {
-				String fullFeatName = specific + ":" + featureNames.lookupObject(idx);
-				int newIdx = featureNames.lookupIndex(fullFeatName, true);
-				fv.add(newIdx, val);
-				return val;
-			}
-		});
-		return fv;
+	private Logger getLogger() {
+		if (log == null)
+			log = Logger.getLogger(getClass());
+		return log;
 	}
-	*/
 }

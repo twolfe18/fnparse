@@ -1,16 +1,23 @@
 package edu.jhu.hlt.fnparse.inference;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -18,14 +25,16 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.inference.Parser.Mode;
+import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
+import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
+import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
+import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 
 public class ParserTests {
-	
-	private static final boolean testLatentDeps = true;
-	private static final boolean testJoint = false;
 
 	public static FNParse makeDummyParse() {
 		boolean verbose = false;
@@ -39,7 +48,7 @@ public class ParserTests {
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
-		
+
 		Frame speed = frameIdx.getFrame("Speed");
 		//System.out.println("speedArgs: " + Arrays.toString(speed.getRoles()));
 		Span[] speedArgs = new Span[speed.numRoles()];
@@ -49,7 +58,7 @@ public class ParserTests {
 		instances.add(speedInst);
 		if(verbose)
 			System.out.println("[setupDummyParse] adding instance of " + speed);
-		
+
 		Frame jump = frameIdx.getFrame("Self_motion");
 		//System.out.println("speedArgs: " + Arrays.toString(jump.getRoles()));
 		Span[] jumpArgs = new Span[jump.numRoles()];
@@ -60,111 +69,128 @@ public class ParserTests {
 		instances.add(jumpInst);
 		if(verbose)
 			System.out.println("[setupDummyParse] adding instance of " + jump);
-		
+
 		return new FNParse(s, instances);
 	}
-	
+
 	@Before
-	public void ensureWorkingDirExists() {
-		new File("saved-models/testing").mkdirs();
-	}
-	
-	@Test
-	public void frameId() {
-		Parser p = new Parser(Mode.FRAME_ID, false, true);
-		p.params.frameDecoder.setRecallBias(1d);
-		overfitting(p, true, "FRAME_ID");
+	public void setupLogs() {
+		TestingUtil.silenceLogs();
 	}
 
+	/**
+	 * Make sure that we can (over)fit the dummy sentence.
+	 */
 	@Test
-	public void frameIdWithLatentDeps() {
-		if(!testLatentDeps) assertTrue("not testing latent deps", false);
-		boolean useLatentDeps = true;
-		Parser p = new Parser(Mode.FRAME_ID, useLatentDeps, true);
-		overfitting(p, true, "FRAME_ID_LATENT");
+	public void basic() {
+		FNParse p = makeDummyParse();
+
+		// made by toydata/make-debug-data-from-sentence-id.sh
+		//FNParse p = new FileFrameInstanceProvider(
+		//				new File("toydata/fn15-fulltext.frames.train.dipanjan.debug"),
+		//				new File("toydata/fn15-fulltext.conll.train.dipanjan.debug"))
+		//	.getParsedSentences().next();
+
+		//FNParse p = FNIterFilters.findBySentenceId(
+		//		FileFrameInstanceProvider.debugFIP.getParsedSentences(),
+		//		"FNFUTXT1274826");
+
+		BasicFrameFeatures.OVERFITTING_DEBUG = true;
+		MinimalRoleFeatures.OVERFITTING_DEBUG = true;
+		BasicRoleFeatures.OVERFITTING_DEBUG = true;
+		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
+		PipelinedFnParser parser = train(p);
+		checkGoodPerf(parser, p, 1d, 1d, true);
+		serializeWeights(parser, new File("saved-models/testing"), "basic");
+		checkGoodPerf(serializeAndDeserialize(parser), p, 1d, 1d, true);
 	}
 
-	@Test
-	public void joint() {
-		if(!testJoint) assertTrue("not testing joint", false);
-		Parser p = new Parser(Mode.JOINT_FRAME_ARG, false, true);
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "JOINT");
+	public static void serializeWeights(
+			PipelinedFnParser parser, File directory, String tag) {
+		System.out.printf("[serializeWeights] saving a model tagged as %s in %s\n", tag, directory.getPath());
+		boolean outputZeroFeatures = false;
+		ModelIO.writeHumanReadable(
+				parser.getFrameIdStage().getWeights(), parser.getAlphabet(),
+				new File(directory, "weights.frameId." + tag + ".txt"),
+				outputZeroFeatures);
+		ModelIO.writeHumanReadable(
+				parser.getArgIdStage().getWeights(), parser.getAlphabet(),
+				new File(directory, "weights.argId." + tag + ".txt"),
+				outputZeroFeatures);
+		ModelIO.writeHumanReadable(
+				parser.getArgSpanStage().getWeights(), parser.getAlphabet(),
+				new File(directory, "weights.argSpan." + tag + ".txt"),
+				outputZeroFeatures);
 	}
 
-	
+	/**
+	 * For every sentence, we should be able to train and predict with perfect
+	 * accuracy on that sentence. This ensures that our model can (over)fit all
+	 * of the data.
+	 */
 	@Test
-	public void pipeline() {
-		Parser p = getFrameIdTrainedOnDummy();
-		p.setMode(Mode.PIPELINE_FRAME_ARG, false);
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "PIPELINE");
-	}
-	
-	@Test
-	public void pipelineWithLatentDeps() {
-		if(!testLatentDeps) assertTrue("not testing latent deps", false);
-		Parser p = getFrameIdTrainedOnDummy();
-		p.params.argDecoder.setRecallBias(1d);
-		overfitting(p, true, "PIPELINE_LATENT");
-	}
-
-	// TODO joint with latent
-	
-	
-	@Test
-	public void testDummyFrameIdModel() {
-		Parser p = getFrameIdTrainedOnDummy();
-		assertTrue(p.params.debug);
-		assertEquals(Mode.FRAME_ID, p.params.mode);
-		assertTrue(p.params.featIdx.size() > 0);
-		assertTrue(p.params.weights.l2Norm() > 0d);
-	}
-	
-	public static Parser getFrameIdTrainedOnDummy() {
-		Parser p = new Parser(Mode.FRAME_ID, false, true);
-		p.params.frameDecoder.setRecallBias(2d);
-		p.train(Arrays.asList(makeDummyParse()));
-		return p;
-	}
-
-	
-	public static void overfitting(Parser p, boolean doTraining, String desc) {
-		// should be able to overfit the data
-		// give a simple sentence and make sure that we can predict it correctly when we train on it
-		List<FNParse> train = new ArrayList<FNParse>();
-		List<Sentence> test = new ArrayList<Sentence>();
-		FNParse dummyParse = makeDummyParse();
-		train.add(dummyParse);
-		test.add(dummyParse.getSentence());
-
-		if(doTraining) {
-			System.out.println("====== Training " + desc + " ======");
-			p.train(train, 15, 1, null, 10000d, false);
-			p.writeWeights(new File("saved-models/testing/" + desc + ".txt"));
+	public void zfuzz() {
+		//List<FNParse> parses = DataUtil.iter2list(
+		//      FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+		List<FNParse> parses = DataUtil.iter2list(
+				FileFrameInstanceProvider.debugFIP.getParsedSentences());
+		parses = TestingUtil.filterOutExamplesThatCantBeFit(parses);
+		//parses = DataUtil.reservoirSample(parses, 30, new Random(9001));
+		for(FNParse p : parses) {
+			System.out.println("[zfuzz] working on example " + p.getId());
+			PipelinedFnParser parser = train(p);
+			checkGoodPerf(parser, p, 0.99d, 0.0d, true);
 		}
+	}
 
-		System.out.println("====== Running Prediction " + desc + " ======");
-		List<FNParse> predicted = p.parse(test);
-		assertEquals(test.size(), predicted.size());
-		System.out.println("gold: " + Describe.fnParse(train.get(0)));
-		System.out.println("hyp:  " + Describe.fnParse(predicted.get(0)));
-		
-		SentenceEval sentEval = new SentenceEval(dummyParse, predicted.get(0));
-		
-		assertEquals(1d, BasicEvaluation.targetMicroF1.evaluate(sentEval), 1e-8);
-		assertEquals(1d, BasicEvaluation.targetMacroF1.evaluate(sentEval), 1e-8);
-		if(p.params.mode != Mode.FRAME_ID) {
-			assertSameParse(train.get(0), predicted.get(0));
-			assertEquals(1d, BasicEvaluation.fullMicroF1.evaluate(sentEval), 1e-8);
-			assertEquals(1d, BasicEvaluation.fullMacroF1.evaluate(sentEval), 1e-8);
+	public PipelinedFnParser serializeAndDeserialize(PipelinedFnParser parser) {
+		try {
+			// NOTE (2014-10-03) This is no longer the preferred way to do
+			// serialization. See DepPipelineParseSerTest for an example.
+			File f = File.createTempFile("foo", "bar");
+			ObjectOutputStream oos = new ObjectOutputStream(
+					new GZIPOutputStream(new FileOutputStream(f)));
+			oos.writeObject(parser);
+			oos.close();
+			ObjectInputStream ois = new ObjectInputStream(
+					new GZIPInputStream(new FileInputStream(f)));
+			PipelinedFnParser r = (PipelinedFnParser) ois.readObject();
+			ois.close();
+			return r;
 		}
-		System.out.println("done with " + desc + " >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+		catch(Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
-	
-	public static void assertSameParse(FNParse a, FNParse b) {
-		assertEquals(a.getSentence(), b.getSentence());
-		assertEquals(a.getFrameInstances(), b.getFrameInstances());
+
+	public PipelinedFnParser train(FNParse e) {
+		ParserParams params = new ParserParams();
+		params.useOverfittingFeatures = true;
+		PipelinedFnParser parser = new PipelinedFnParser(params);
+		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
+		List<FNParse> dummy = Arrays.asList(e);
+		parser.scanFeatures(dummy, 5d, 99_000_000);
+		parser.train(dummy);
+		return parser;
 	}
-	
+
+	public void checkGoodPerf(PipelinedFnParser p, FNParse gold, double targetF1Thresh,
+			double fullF1Thresh, boolean verbose) {
+		List<Sentence> s = DataUtil.stripAnnotations(Arrays.asList(gold));
+		if(verbose)
+			System.out.println("gold = " + Describe.fnParse(gold));
+		FNParse hyp = p.parse(s, null).get(0);
+		double targetF1 = BasicEvaluation.targetMicroF1.evaluate(
+				BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
+		double fullF1 = BasicEvaluation.fullMicroF1.evaluate(
+				BasicEvaluation.zip(Arrays.asList(gold), Arrays.asList(hyp)));
+		if(verbose) {
+			System.out.println("hyp  = " + Describe.fnParse(hyp));
+			System.out.println("targetF1 = " + targetF1);
+			System.out.println("fullF1   = " + fullF1);
+			serializeWeights(p, new File("saved-models/testing"), "checkGoodPerf@" + gold.getId());
+		}
+		assertTrue(targetF1 >= targetF1Thresh);
+		assertTrue(fullF1 >= fullF1Thresh);
+	}
 }

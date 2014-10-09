@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.roleid;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Iterator;
 
@@ -10,14 +11,15 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserTests;
 import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
 
 public class RoleVarsTests {
 
-	private Parser p = new Parser();
 	private FNParse parse = ParserTests.makeDummyParse();
+	private ParserParams params = new ParserParams();
+	private RoleIdStage.Params roleIdParams = new RoleIdStage.Params(params);
 	
 	@Test
 	public void testIterator() {
@@ -29,7 +31,7 @@ public class RoleVarsTests {
 		for(FrameInstance fi : parse.getFrameInstances()) {
 			System.out.println(fi);
 			int targetHead = fi.getTarget().start;
-			RoleVars rv = new RoleVars(targetHead, fi.getFrame(), parse.getSentence(), p.params);
+			RoleVars rv = new RoleVars(targetHead, fi.getFrame(), parse.getSentence(), params, roleIdParams);
 
 			Var[][] vars = rv.r_kj;
 			assertEquals(vars.length, fi.getFrame().numRoles());

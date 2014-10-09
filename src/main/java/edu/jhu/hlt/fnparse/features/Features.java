@@ -15,9 +15,9 @@ import edu.jhu.hlt.fnparse.datatypes.*;
  * @author travis
  */
 public interface Features {
-	
+
 	public List<Integer> dontRegularize();
-	
+
 	/*
 	 * these features say nothing about where they are applied (i.e. what factor they belong to).
 	 * the interface only specifies what information they featurize, and likely this will need
@@ -40,5 +40,4 @@ public interface Features {
 	public static interface RE extends Features {
 		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Span arg, Sentence s);
 	}
-
 }

@@ -6,7 +6,5 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public interface HeadFinder extends Serializable {
-	
-	public int head(Span s, Sentence sent);
-	
+  public int head(Span s, Sentence sent);
 }

@@ -1,0 +1,37 @@
+#!/usr/bin/env python
+
+import sys, time, random, redis
+
+# The purpose of this script is to be a mock version of the
+# java code which will run an experiment and compute a score.
+# This is used to test forward-selection.
+
+if __name__ == '__main__':
+  
+  # configuration
+  job_time = random.expovariate(0.25) # how long the job should take to run (in seconds)
+  #job_time = 1.0
+  redis_channel_name = 'forward-selection'
+  config = sys.argv[1]
+
+  # parse the templates (to determin scores -- for testing)
+  tmpls = [x.strip() for x in config.split('+')]
+  num_tmpl = len(tmpls)
+  max_tmpl_arity = max([len(x.split("*"))-1 for x in tmpls])
+
+  # run the job
+  time.sleep(job_time)
+  score = 5.0 * (4.0 + random.random())
+  score -= random.random() * max_tmpl_arity
+  score -= random.random() * pow(num_tmpl, 0.5)
+  if 'frame*headPos*headCollLabel' in tmpls:
+    score += random.random()
+
+  # phone home
+  message = "%f\t%s" % (score, config)
+  r = redis.StrictRedis(host='localhost', port=6379, db=0)
+  if not r.publish(redis_channel_name, message):
+    print 'no one listening!'
+  #else:
+  #  print 'message received!'
+
