@@ -1,12 +1,20 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.mit.jwi.IDictionary;
+import edu.mit.jwi.IRAMDictionary;
+import edu.mit.jwi.item.IIndexWord;
+import edu.mit.jwi.item.IWord;
+import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public final class Sentence implements HasId {
@@ -30,10 +38,6 @@ public final class Sentence implements HasId {
   private String[] pos;
   private String[] lemmas;
 
-  // As of now, these are collapsed dependencies
-  // Check with Pushpendre to figure out exactly where they came from
-  //private int[] gov;          // values are 0-indexed, root is -1
-  //private String[] depType;
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
 
@@ -62,8 +66,6 @@ public final class Sentence implements HasId {
     this.tokens = tokens;
     this.pos = pos;
     this.lemmas = lemmas;
-    //this.gov = gov;
-    //this.depType = depType;
     this.collapsedDeps = new DependencyParse(gov, depType);
 
     // upcase the POS tags for consistency (e.g. with LexicalUnit)
@@ -133,6 +135,26 @@ public final class Sentence implements HasId {
     return new LexicalUnit(tokens[i], pos[i]);
   }
 
+	public IWord getWnWord(int i) {
+	  TargetPruningData tpd = TargetPruningData.getInstance();
+	  IRAMDictionary dict = tpd.getWordnetDict();
+	  WordnetStemmer stemmer = tpd.getStemmer();
+	  edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(i));
+	  if (tag == null)
+	    return null;
+	  String w = getWord(i);
+	  if (w.length() == 0)
+	    return null;
+	  List<String> stems = stemmer.findStems(w, tag);
+	  if (stems == null || stems.size() == 0)
+	    return null;
+	  IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+	  if (ti == null || ti.getWordIDs().isEmpty())
+	    return null;
+	  IWordID t = ti.getWordIDs().get(0);
+	  return dict.getWord(t);
+	}
+
   public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
   public String getWord(int i) { return tokens[i]; }
   public String[] getPos() { return pos; }
@@ -144,29 +166,11 @@ public final class Sentence implements HasId {
   public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
   public String[] getLemmasFor(Span s) { return Arrays.copyOfRange(lemmas, s.start, s.end); }
 
-  //private transient int[][] children;	// opposite of gov
   public int[] childrenOf(int wordIdx) {
-    /*
-    if(children == null) {
-      int n = gov.length;
-      children = new int[n][];
-      List<Integer> kids = new ArrayList<Integer>();
-      for(int i=0; i<n; i++) {
-        kids.clear();
-        for(int j=0; j<n; j++)
-          if(gov[j] == i) kids.add(j);
-        children[i] = new int[kids.size()];
-        for(int j=0; j<kids.size(); j++)
-          children[i][j] = kids.get(j);
-      }
-    }
-    return children[wordIdx];
-    */
     return collapsedDeps.getChildren(wordIdx);
   }
 
   public boolean isRoot(int i) {
-    //return gov[i] < 0 || gov[i] >= gov.length;
     return collapsedDeps.isRoot(i);
   }
 
@@ -231,7 +235,6 @@ public final class Sentence implements HasId {
   }
 
   public String dependencyType(int childIdx) {
-    //return depType[childIdx];
     return collapsedDeps.getLabel(childIdx);
   }
 

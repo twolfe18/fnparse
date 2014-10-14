@@ -39,6 +39,13 @@ public class TargetPruningData implements Serializable {
     return dict;
   }
 
+	private transient WordnetStemmer stemmer;
+	public WordnetStemmer getStemmer() {
+		if(stemmer == null)
+			stemmer = new WordnetStemmer(getWordnetDict());
+		return stemmer;
+	}
+
   private static int initCalls = 0;
   /**
    * Only use this if you want to guarantee when the data is loaded

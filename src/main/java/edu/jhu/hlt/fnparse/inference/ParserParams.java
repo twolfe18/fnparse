@@ -4,6 +4,8 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.Random;
 
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
@@ -33,11 +35,26 @@ public class ParserParams
   public int threads = 1;
   public Random rand = new Random(9001);
   public HeadFinder headFinder = new SemaforicHeadFinder();
- 
-  private String frameIdTemplateDescription =
-      "1 + headPos + frame * headWord + frame * headCollLabel + dep * headPos + frameDep + frameDep * frame";
-  public String getFrameIdTemplateDescription() {
-    return frameIdTemplateDescription;
+
+  /**
+   * This encodes all of the features for the model.
+   * See {@link TemplatedFeatures}.
+   */
+  private String featureTemplateDescription =
+      "1 + headPos + frame * headWord + frame * headCollLabel"
+      + " + dep * headPos + frameDep + frameDep * frame";
+
+  public String getFeatureTemplateDescription() {
+    return featureTemplateDescription;
+  }
+
+  public void setFeatureTemplateDescription(String templates) {
+    try {
+      TemplatedFeatures.parseTemplates(templates);
+    } catch (TemplateDescriptionParsingException e) {
+      throw new RuntimeException(e);
+    }
+    featureTemplateDescription = templates;
   }
 
   @Override

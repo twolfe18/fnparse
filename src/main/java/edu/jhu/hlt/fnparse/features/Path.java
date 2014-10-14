@@ -6,12 +6,12 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 
 public class Path {
 
 	public static enum NodeType {
-		CFG,    // requires a constituency parse, not yet supported
 		LEMMA,
 		POS,
 		NONE    // puts in a "*" for every head/phrase
@@ -24,6 +24,7 @@ public class Path {
 
 	private final int start, end;
 	private final Sentence sent;
+	private final DependencyParse deps;
 	private final int n;
 	private final NodeType nodeType;
 	private final EdgeType edgeType;
@@ -35,31 +36,29 @@ public class Path {
 	private boolean toRoot;		// if true, end and down don't mean anything
 
 	/** path from root to head */
-	public Path(Sentence s, int head, NodeType nodeType, EdgeType edgeType) {
-		this(s, head, -1, nodeType, edgeType, true);
+	public Path(Sentence s, DependencyParse d, int head, NodeType nodeType, EdgeType edgeType) {
+		this(s, d, head, -1, nodeType, edgeType, true);
 	}
 
 	/** path between two tokens */
-	public Path(Sentence s, int start, int end, NodeType nodeType, EdgeType edgeType) {
-		this(s, start, end, nodeType, edgeType, false);
+	public Path(Sentence s, DependencyParse d, int start, int end, NodeType nodeType, EdgeType edgeType) {
+		this(s, d, start, end, nodeType, edgeType, false);
 	}
 
-	private Path(Sentence s, int start, int end, NodeType nodeType, EdgeType edgeType, boolean toRoot) {
+	private Path(Sentence s, DependencyParse d, int start, int end, NodeType nodeType, EdgeType edgeType, boolean toRoot) {
 		if(start < 0)
 			throw new IllegalArgumentException();
 		if(!toRoot && end < 0)
 			throw new IllegalArgumentException();
 
 		this.sent = s;
+		this.deps = d;
 		this.start = start;
 		this.end = end;
 		this.n = sent.size();
 		this.nodeType = nodeType;
 		this.edgeType = edgeType;
 		this.toRoot = toRoot;
-
-		if(nodeType == NodeType.CFG)
-			throw new RuntimeException("not supported yet");
 
 		// used to detect loops
 		boolean[] seen = new boolean[n];
@@ -128,7 +127,7 @@ public class Path {
 
 	private String getEdgeNameFor(int i, boolean goingUp) {
 		if(edgeType == EdgeType.DEP)
-			return sent.dependencyType(i) + (goingUp ? "<" : ">");
+		  return deps.getLabel(i) + (goingUp ? "<" : ">");
 		else if(edgeType == EdgeType.DIRECTION)
 			return goingUp ? "<" : ">";
 		else throw new RuntimeException();

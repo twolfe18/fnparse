@@ -205,7 +205,7 @@ public class MinimalRoleFeatures
 			}
 
 			// Path itself
-			Path posPath = new Path(s, i, j, NodeType.POS, EdgeType.DEP);
+			Path posPath = new Path(s, s.getCollapsedDeps(), i, j, NodeType.POS, EdgeType.DEP);
 			b(v, r, posPath.getPath());
 			//b(v, r, role, posPath.getPath());
 			//b(v, r, frameRole, posPath.getPath());
@@ -296,7 +296,10 @@ public class MinimalRoleFeatures
 		}
 	}
 
-	private static String parentRelTo(int pos, int i, int j, Sentence s) {
+	/**
+	 * Describes the position of the parent of pos w.r.t. i and j.
+	 */
+	public static String parentRelTo(int pos, int i, int j, Sentence s) {
 		if (pos < 0 || pos >= s.size())
 			return "none";
 		int lp = s.governor(pos);
@@ -384,7 +387,9 @@ public class MinimalRoleFeatures
 		else return "(40,inf)";
 	}
 
-	private static boolean canLexicalize(int i, Sentence s) {
+	public static boolean canLexicalize(int i, Sentence s) {
+	  if (i < 0 || i >= s.size())
+	    return true;
 		String pos = s.getPos(i);
 		if (pos.startsWith("PRP")) return true;
 		if (pos.equals("MD")) return true;

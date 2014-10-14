@@ -11,8 +11,11 @@ if __name__ == '__main__':
   # configuration
   job_time = random.expovariate(0.25) # how long the job should take to run (in seconds)
   #job_time = 1.0
-  redis_channel_name = 'forward-selection'
-  config = sys.argv[1]
+  redis_channel_name = sys.argv[1] # 'forward-selection'
+  redis_server = sys.argv[2]
+  redis_port = int(sys.argv[3])
+  working_dir = sys.argv[4]
+  config = sys.argv[5]
 
   # parse the templates (to determin scores -- for testing)
   tmpls = [x.strip() for x in config.split('+')]
