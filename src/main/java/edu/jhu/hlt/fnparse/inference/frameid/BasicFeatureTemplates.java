@@ -12,7 +12,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.math3.util.FastMath;
+
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
@@ -103,6 +108,15 @@ public class BasicFeatureTemplates {
           return null;
         String w = context.getSentence().getWord(h);
         return "targetHeadWord2=" + w;
+      }
+    });
+    basicTemplates.put("targetHeadWord3", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int h = context.getTarget().end - 1;
+        String w = context.getSentence().getWord(h);
+        if (w.length() > 4)
+          w = w.substring(0, 4);
+        return "targetHeadWord3=" + w;
       }
     });
     basicTemplates.put("targetHeadPos", new TemplateSS() {
@@ -392,12 +406,11 @@ public class BasicFeatureTemplates {
           return null;
       }
     });
-    basicTemplates.put("luMatch-WNSynSet", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
+    basicTemplates.put("luMatch-WNSynSet", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
         Span t = context.getTarget();
         if (t.width() != 1)
           return null;
-        List<String> ret = new ArrayList<>();
         TargetPruningData tpd = TargetPruningData.getInstance();
         IWord word = context.getSentence().getWnWord(t.start);
         if (word == null)
@@ -405,6 +418,7 @@ public class BasicFeatureTemplates {
         Set<IWord> synset = new HashSet<>();
         synset.addAll(word.getSynset().getWords());
         boolean hadAChance = false;
+        int c = 0;
         for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
           hadAChance = true;
           // see if syn-set match for (targetHead, prototype)
@@ -413,11 +427,12 @@ public class BasicFeatureTemplates {
             continue;
           IWord otherWord = p.getSentence().getWnWord(pt.start);
           if (synset.contains(otherWord))
-            ret.add("luMatch-WNSynSet");
+            c++;
         }
-        if (ret.size() == 0 && hadAChance)
-          ret.add("NO-luMatch-WNSynSet");
-        return ret;
+        if (c == 0 && hadAChance)
+          return "NO-luMatch-WNSynSet";
+        c = (int) FastMath.pow(c, 0.6d);
+        return "luMatch-WnSynSet=" + c;
       }
     });
     basicTemplates.put("luMatch-WNRelated", new Template() {
@@ -511,6 +526,21 @@ public class BasicFeatureTemplates {
         return words;
       }
     });
+    basicTemplates.put("sentenceWords3", new Template() {
+      public Iterable<String> extract(TemplateContext context) {
+        Sentence s = context.getSentence();
+        Set<String> words = new HashSet<String>();
+        for (int i = 0; i < s.size(); i++) {
+          String w = s.getWord(i);
+          if (w.length() > 4)
+            w = w.substring(0, 4);
+          words.add("sentContains3=" + w);
+        }
+        if (words.size() == 0)
+          words.add("sentContains3=NONE");
+        return words;
+      }
+    });
 
 
     /* LABELS *****************************************************************/
@@ -560,13 +590,34 @@ public class BasicFeatureTemplates {
     // TODO frameRole
   }
 
+  private static int estimateCardinality(
+      Template template,
+      List<FNParse> parses) {
+    TemplateContext ctx = new TemplateContext();
+    Set<String> uniq = new HashSet<>();
+    for (FNParse p : parses) {
+      ctx.setSentence(p.getSentence());
+      for (FrameInstance fi : p.getFrameInstances()) {
+        ctx.setTarget(fi.getTarget());
+        ctx.setFrame(fi.getFrame());
+        Iterable<String> t = template.extract(ctx);
+        if (t != null)
+          for (String s : t)
+            uniq.add(s);
+      }
+    }
+    return uniq.size() + 1;
+  }
+
   public static void main(String[] args) throws Exception {
+    List<FNParse> parses = DataUtil.iter2list(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
     File f = new File("experiments/forward-selection/basic-templates.txt");
     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), "UTF-8"));
     for (Map.Entry<String, Template> tmpl : basicTemplates.entrySet()) {
       System.out.println(tmpl.getKey());
-      w.write(tmpl.getKey());
-      w.newLine();
+      int cardinality = estimateCardinality(tmpl.getValue(), parses);
+      w.write(String.format("%s\t%d\n", tmpl.getKey(), cardinality));
     }
     System.out.println("there are " + basicTemplates.size() + " templates");
     w.close();

@@ -22,7 +22,11 @@ class CommonEqualityMixin(object):
   def __ne__(self, other):
     return not self.__eq__(other)
 
+# sorry, global
+template_info = None
+
 class Feature(CommonEqualityMixin):
+  ''' uses strings as templates '''
   def __init__(self, label, templates=[]):
     if type(templates) is str:
       templates = [templates]
@@ -32,32 +36,49 @@ class Feature(CommonEqualityMixin):
     self.templates = templates
     self.templates.sort()
 
-  # TODO probably want some way to estimate the cardinality of this product
-  # this will be useful in prioritizing the frontier
-
   def __str__(self):
     x = '*'.join(self.templates)
     return "%s*%s" % (self.label, x)
 
+  # TODO relies on a global variable
+  def estimate_cardinality(self):
+    c = template_info.label_cardinality[self.label]
+    assert c is not None
+    for t in self.templates:
+      ct = template_info.template_cardinality[t]
+      assert ct is not None
+      c *= ct
+    assert type(c) is int
+    return c
+
   def propose_modification(self, label_templates, basic_templates):
     # TODO prioritize whether you should be growing or shrinking this feature
-    r = random.random()
-    if r < 0.1 and len(label_templates) > 1:
+    p_change_label = 0.1
+    if len(label_templates) > 1 and random.random() < p_change_label:
       # change the label
       ys = [y for y in label_templates if y != self.label]
       return Feature(random.choice(ys), self.templates)
-    elif r < 0.6 or len(self.templates) < 2:
-      # add a new template
-      xs = [x for x in basic_templates if x not in self.templates]
-      if len(xs) > 0:
-        return Feature(self.label, self.templates + [random.choice(xs)])
-      else:
-        raise Exception('cant extend this Feature any further')
     else:
-      # remove a template
-      assert len(self.templates) >= 2
-      tmpl = random.sample(self.templates, len(self.templates) - 1)
-      return Feature(self.label, tmpl)
+      # the higher the estimated cardinality, the greater the chance of
+      # removing a template
+      # e.g. cardinality = 100  -> p(shrink) = 0.500
+      #      cardinality = 4    -> p(shrink) = 0.167
+      #      cardinality = 400  -> p(shrink) = 0.667
+      #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
+      card = pow(self.estimate_cardinality(), 0.5)
+      p_shrink = card / (card + 10.0)
+      if len(self.templates) > 1 and random.random() < p_shrink:
+        # add a new template
+        xs = [x for x in basic_templates if x not in self.templates]
+        if len(xs) > 0:
+          return Feature(self.label, self.templates + [random.choice(xs)])
+        else:
+          raise Exception('cant extend this Feature any further')
+      else:
+        # remove a template
+        assert len(self.templates) >= 2
+        tmpl = random.sample(self.templates, len(self.templates) - 1)
+        return Feature(self.label, tmpl)
   
 
 class FeatureSet(object):
@@ -71,14 +92,24 @@ class FeatureSet(object):
   def __ne__(self, other):
     return not self.__eq__(other)
 
+  def estimate_cardinality(self):
+    ''' assumes that features never overlap '''
+    c = 1
+    for f in self.features:
+      cf = f.estimate_cardinality()
+      assert cf is not None and type(cf) is int
+      c += cf
+    return c
+
   def propose_modification(self, label_templates, basic_templates):
     ''' returns a new FeatureSet derived from this feature set '''
-    #p_add_feature = pow(1.0 + len(self.features), -0.6)
-    p_add_feature = 0.6
+    card = self.estimate_cardinality()
+    p_add_feature = 100.0 / (100.0 + pow(card, 0.4))
     if random.random() < p_add_feature:
       f = self.new_feature(label_templates, basic_templates)
       return FeatureSet(self.features + [f], derived_from=self)
     else:
+      # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
         f = self.features[i].propose_modification(label_templates, basic_templates)
@@ -89,6 +120,7 @@ class FeatureSet(object):
   def new_feature(self, label_templates, basic_templates):
     ''' creates a feature that is not already in this feature set '''
     y = random.choice(label_templates)
+    # prefer adding features with small number of templates
     xn = 1
     while random.random() < 0.1 and xn < len(basic_templates):
       xn = xn + 1
@@ -130,6 +162,7 @@ class ConfigQueue(object):
 
     # a config -> FeatureSet mapping for all explored FeatureSets
     self.config2fs = {}
+    self.config2score = {}  # config -> float score
     self.beam = []  # tuples of (score, FeatureSet), like self.scores
     for x in basic_templates:
       for y in labels:
@@ -140,6 +173,7 @@ class ConfigQueue(object):
     assert len(self.beam) >= self.beam_size
 
   def pick(self, scored_feature_sets, greediness=1.0):
+    ''' makes a greedy but random selection from scored_feature_sets '''
     # find the max score
     m = max([x[0] for x in scored_feature_sets])
     weights = []
@@ -230,16 +264,34 @@ class ConfigQueue(object):
     print '[update_weights] intercept=', self.intercept, 'weights =', self.weights
 
 
+  # TODO support non-binary features (reutrn type must change to dict or list of tuples)
   def features(self, feature_set):
     meta = []
+    c = feature_set.estimate_cardinality()
+    c = math.floor(pow(c, 0.4) / 30)
+    meta.append('card_feats=' + str(c))
     meta.append('num_feats=' + str(len(feature_set.features)))
+    min_c = 999
+    max_c = 0
     for feat in feature_set.features:
+      c = feat.estimate_cardinality()
+      c = math.floor(pow(c, 0.5) / 100)
+      if c < min_c: min_c = c
+      if c > max_c: max_c = c
       meta.append('label=' + feat.label) # only use if more than one label
       meta.append('feat=' + str(feat))
       meta.append('template_arity=' + str(len(feat.templates)))
       for template in feat.templates:
         meta.append('template=' + template)
         meta.append('template=' + template + ',label=' + feat.label)
+    meta.append('template_min_card=' + str(min_c))
+    meta.append('template_max_card=' + str(max_c))
+    if feature_set.derived_from:
+      c = feature_set.derived_from.config_string()
+      s = self.config2score[c]
+      if s:
+        # don't know the scale, convert to scientific notation, take 2 significant digits
+        meta.append("derived_from_score=%.2g" % (s))
     return meta
 
   def score(self, feature_set):
@@ -258,6 +310,8 @@ class ConfigQueue(object):
     feature_set = self.config2fs[config]
     assert feature_set is not None
     assert type(feature_set) is FeatureSet
+    assert config not in self.config2score
+    self.config2score[config] = score
     # update weights
     self.scores.append((score, feature_set))
     self.update_weights()
@@ -295,11 +349,16 @@ class JobTracker(object):
     cmd = ['qsub', '-N', name] + args
     subprocess.Popen(cmd)
 
-class DummyJobTracker(object):
-  ''' mock job tracker which uses redis instead of qsub '''
-  def __init__(self):
+class LocalJobTracker(object):
+  '''
+  mock job tracker which uses redis instead of qsub
+  if debug is true, this will call scripts/dummy-forward-selection-job
+  else this will call the actual experiment
+  '''
+  def __init__(self, debug=False):
     self.key = 'dummy-job-tracker.jobs'
     self.redis = redis.StrictRedis(host='localhost', port=6379, db=0)
+    self.debug = debug
 
   def remove_all_jobs(self):
     ''' ensures that there are no jobs running (for testing) '''
@@ -318,31 +377,33 @@ class DummyJobTracker(object):
     return []
 
   def spawn(self, name, args):
-    #print '[DummyJobTracker spawn] name=' + name + ' args=' + str(args)
     self.redis.rpush(self.key, name)
-    #subprocess.Popen(['scripts/dummy-forward-selection-job'] + args)
+    if self.debug:
+      subprocess.Popen(['scripts/dummy-forward-selection-job'] + args)
+    else:
+      cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
+      cp = ':'.join([x.strip() for x in cp.split('\n')])
+      cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
+      cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
+      cmd += args
+      print 'about to spawn:', cmd
+      subprocess.Popen(cmd)
 
-    cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
-    cp = ':'.join([x.strip() for x in cp.split('\n')])
-    cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
-    cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
-    cmd += args
-    print 'about to spawn:', cmd
-    subprocess.Popen(cmd)
 
-
+# TODO rip out the config_q part of this, daemonize it, and release it as a robust
+# version of qsub (i.e. watches to make sure jobs finish, restarts them if not)
 class ForwardSelection:
   def __init__(self, name, working_dir, job_tracker, config_q, \
+      poll_interval=3.0, \
       redis_config={'channel':'forward-selection', 'host':'localhost', 'port':'6379', 'db':'0'}):
     self.name = name
     self.working_dir = working_dir  # where workers are allowed to dump results
     self.redis_config = redis_config
     self.job_tracker = job_tracker  # talks to qsub
-    #self.config_q = ConfigQueue(beam_size=10)   # stores FeatureSets
     self.config_q = config_q
     self.name2config = {}           # stores (job name -> config string)
     self.config2name = {}
-    self.poll_interval = 2.0
+    self.poll_interval = poll_interval
 
     self.dispatched = set()         # names of the jobs that (should be) running
     self.max_concurrent_jobs = 2
@@ -413,7 +474,7 @@ class ForwardSelection:
           perf_file.flush()
           self.config_q.observe_score(score, config)
           # remove this jobs from dispatched
-          if type(self.job_tracker) is DummyJobTracker: # for debugging
+          if type(self.job_tracker) is LocalJobTracker: # for debugging
             self.job_tracker.set_job_done(name)
           self.dispatched.remove(name)
         else:
@@ -428,18 +489,34 @@ class ForwardSelection:
             time.sleep(self.poll_interval)
     perf_file.close()
 
+class TemplateInfo(object):
+  def __init__(self, filename):
+    print '[TemplateInfo init] reading template information from', filename
+    self.filename = filename
+    self.template_cardinality = {} # string -> int
+    self.basic_templates = [] # list of strings (names)
+    f = open(filename, 'r')
+    for line in f:
+      toks = line.strip().split('\t')
+      template_name = toks[0]
+      template_card = int(toks[1])
+      assert template_name not in self.template_cardinality
+      self.template_cardinality[template_name] = template_card
+      self.basic_templates.append(template_name)
+    f.close()
+    self.label_cardinality = {'intercept':1, 'frame':1000}
+    print '[TemplateInfo init] done'
 
 if __name__ == '__main__':
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
-  #templates = open('experiments/forward-selection/basic-templates.txt', 'r').readlines()
-  templates = open('experiments/forward-selection/basic-templates.pruned.txt', 'r').readlines()
-  templates = [x.strip() for x in templates]
+  debug = True
+  template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
   beam_size = 10
-  q = ConfigQueue(beam_size, ['frame', 'intercept'], templates)
-  jt = DummyJobTracker()
+  q = ConfigQueue(beam_size, ['frame', 'intercept'], template_info.basic_templates)
+  jt = LocalJobTracker(debug=True)
   jt.remove_all_jobs()
   working_dir = 'experiments/forward-selection/frameId'
-  fs = ForwardSelection('test', working_dir, jt, q)
+  fs = ForwardSelection('test', working_dir, jt, q, poll_interval = 0.5 if debug else 2.0)
   fs.run()
 
 
