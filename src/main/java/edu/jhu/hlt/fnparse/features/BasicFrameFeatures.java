@@ -142,11 +142,11 @@ public final class BasicFrameFeatures
 			List<String> pathFragments = new ArrayList<String>();
 			for (Path p : Arrays.asList(
 					//new Path(s, head, NodeType.LEMMA, EdgeType.DEP),
-					new Path(s, head, NodeType.LEMMA, EdgeType.DIRECTION),
-					new Path(s, head, NodeType.POS, EdgeType.DEP),
-					new Path(s, head, NodeType.POS, EdgeType.DIRECTION),
-					new Path(s, head, NodeType.NONE, EdgeType.DEP),
-					new Path(s, head, NodeType.NONE, EdgeType.DIRECTION)
+					new Path(s, s.getCollapsedDeps(), head, NodeType.LEMMA, EdgeType.DIRECTION),
+					new Path(s, s.getCollapsedDeps(), head, NodeType.POS, EdgeType.DEP),
+					new Path(s, s.getCollapsedDeps(), head, NodeType.POS, EdgeType.DIRECTION),
+					new Path(s, s.getCollapsedDeps(), head, NodeType.NONE, EdgeType.DEP),
+					new Path(s, s.getCollapsedDeps(), head, NodeType.NONE, EdgeType.DIRECTION)
 				)) {
 
 				double w = 1d;

@@ -65,13 +65,13 @@ public class Timer {
       return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSeconds(), count, secPerCall());
   }
 
-  private double countsPerMSec() {
+  public double countsPerMSec() {
     if(count > 1)
       return (count - 1d) / (time - firstTime);
     return ((double) count) / time;
   }
 
-  private double secPerCall() {
+  public double secPerCall() {
     if(count > 1)
       return ((time - firstTime)/1000d) / (count-1);
     return (time/1000d) / count;

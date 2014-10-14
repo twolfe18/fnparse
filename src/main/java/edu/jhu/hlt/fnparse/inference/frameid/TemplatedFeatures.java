@@ -2,17 +2,13 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -20,55 +16,16 @@ import edu.jhu.util.Alphabet;
  * I would like this stage to work regardless of if we're doing latent syntax or
  * not...
  * 
- * e.g. "targetWord + targetLabel * targetPos"
+ * e.g. "1 + targetWord + targetLabel * targetPos"
+ * 
+ * labels = <none>, frame, role, frameRole
+ * templates = ... (a lot, see below)
  * 
  * @author travis
  */
 public class TemplatedFeatures implements Serializable {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(TemplatedFeatures.class);
-
-  /**
-   * All of the information needed for a template to make an extraction.
-   */
-  public static class Context {
-    public static final int UNSET = -3;
-    private Frame frame = null;
-    private Span target = null;
-    private int head = UNSET;
-    private int child = UNSET;
-    private Sentence sentence;
-    public Sentence getSentence() {
-      return sentence;
-    }
-    public void setSentence(Sentence sentence) {
-      this.sentence = sentence;
-    }
-    public Frame getFrame() {
-      return frame;
-    }
-    public void setFrame(Frame frame) {
-      this.frame = frame;
-    }
-    public Span getTarget() {
-      return target;
-    }
-    public void setTarget(Span target) {
-      this.target = target;
-    }
-    public int getHead() {
-      return head;
-    }
-    public void setHead(int head) {
-      this.head = head;
-    }
-    public int getChild() {
-      return child;
-    }
-    public void setChild(int child) {
-      this.child = child;
-    }
-  }
 
   /**
    * Templates have no arguments, just represent a piece of information like
@@ -80,85 +37,22 @@ public class TemplatedFeatures implements Serializable {
      * NOTE: If this method returns NULL, then the semantics are that any
      * template built off of conjunctions with this feature will NOT fire.
      */
-    String extract(Context context);
+    Iterable<String> extract(TemplateContext context);
   }
 
-  /** The basic templates */
-  private static Map<String, Template> basicTemplates;
-  static {
-    basicTemplates = new HashMap<>();
-    basicTemplates.put("1", new Template() {
-      @Override
-      public String extract(Context context) {
-        return "intercept";
-      }
-    });
-    basicTemplates.put("headWord", new Template() {
-      @Override
-      public String extract(Context context) {
-        int h = context.getTarget().end - 1;
-        String w = context.getSentence().getWord(h);
-        return "headWord=" + w;
-      }
-    });
-    basicTemplates.put("headPos", new Template() {
-      @Override
-      public String extract(Context context) {
-        int h = context.getTarget().end - 1;
-        String p = context.getSentence().getPos(h);
-        return "headPos=" + p;
-      }
-    });
-    basicTemplates.put("headCollLabel", new Template() {
-      @Override
-      public String extract(Context context) {
-        int h = context.getTarget().end - 1;
-        DependencyParse deps = context.getSentence().getCollapsedDeps();
-        return "headCollLabel=" + deps.getLabel(h);
-      }
-    });
-
-    // TODO write some more templates
-    
-    
-    
-    // These templates should ALWAYS come first in a product
-    basicTemplates.put("frame", new Template() {
-      /**
-       * fires whenever f_it=1 for some frame t.
-       */
-      @Override
-      public String extract(Context context) {
-        Frame f = context.getFrame();
-        return f == null ? null : "frame=" + f.getName();
-      }
-    });
-    basicTemplates.put("dep", new Template() {
-      /**
-       * fires whenever l_{root,i}=1 where i is the head of some FrameInstance
-       */
-      @Override
-      public String extract(Context context) {
-        if (context.getHead() == Context.UNSET)
-          return null;
-        else
-          return "dep";
-      }
-    });
-    basicTemplates.put("frameDep", new Template() {
-      /**
-       * fires whenever l_{root,i}=1 AND f_it=1 for some frame t.
-       */
-      @Override
-      public String extract(Context context) {
-        if (context.getHead() == Context.UNSET)
-          return null;
-        else if (context.getFrame() == null)
-          return null;
-        else
-          return "frameDep=" + context.getFrame().getName();
-      }
-    });
+  /**
+   * SS = "single string"
+   * Most templates only return one string and should extend this class
+   */
+  public static abstract class TemplateSS implements Template {
+    abstract String extractSS(TemplateContext context);
+    @Override
+    public Iterable<String> extract(TemplateContext context) {
+      String ss = extractSS(context);
+      if (ss == null)
+        return null;
+      return Arrays.asList(ss);
+    }
   }
 
   /** Conjoins two basic templates */
@@ -174,19 +68,32 @@ public class TemplatedFeatures implements Serializable {
     }
 
     @Override
-    public String extract(Context context) {
-      String l = left.extract(context);
+    public Iterable<String> extract(TemplateContext context) {
+      final Iterable<String> l = left.extract(context);
       if (l == null)
         return null;
-      String r = right.extract(context);
+      final Iterable<String> r = right.extract(context);
       if (r == null)
         return null;
-      return l + JOIN_STR + r;
+      return new Iterable<String>() {
+        private List<String> all;
+        @Override
+        public Iterator<String> iterator() {
+          if (all == null) {
+            all = new ArrayList<>();
+            for (String ls : l)
+              for (String rs : r)
+                all.add(ls + JOIN_STR + rs);
+          }
+          return all.iterator();
+        }
+      };
     }
   }
 
   /** Take a full template string and break it into independent templates */
-  private static List<String> tokenizeTemplates(String templateString) {
+  private static List<String> tokenizeTemplates(String templateString)
+      throws TemplateDescriptionParsingException {
     List<String> toks = new ArrayList<>();
     for (String s : templateString.split("\\+"))
       toks.add(s.trim());
@@ -194,66 +101,89 @@ public class TemplatedFeatures implements Serializable {
   }
 
   /** Take an independent template and build it up from basic templates */
-  private static Template parseTemplateToken(String templateToken) {
-    Template template = null;
-    for (String basicTemplateName : templateToken.split("\\*")) {
-      Template basicTemplate = basicTemplates.get(basicTemplateName.trim());
-      if (basicTemplate == null) {
-        throw new RuntimeException("could not parse basic template: "
-            + basicTemplateName);
-      }
-      if (template == null) {
-        template = basicTemplate;
-      } else {
-        template = new TemplateJoin(template, basicTemplate);
-      }
-    }
+  private static Template parseTemplateToken(String templateToken) 
+      throws TemplateDescriptionParsingException {
+    String[] tokens = templateToken.split("\\*");
+    for (int i = 0; i < tokens.length; i++)
+      tokens[i] = tokens[i].trim();
+    Template template = BasicFeatureTemplates.getLabel(tokens[0]);
     if (template == null) {
-      template = basicTemplates.get(templateToken);
-      if (template == null) {
-        throw new RuntimeException("could not parse basic template: "
-            + templateToken);
+        throw new TemplateDescriptionParsingException(
+            "could not parse label: " + tokens[0]);
+    }
+    for (int i = 1; i < tokens.length; i++) {
+      Template basicTemplate =
+          BasicFeatureTemplates.getBasicTemplate(tokens[i]);
+      if (basicTemplate == null) {
+        throw new TemplateDescriptionParsingException(
+            "could not parse basic template: " + tokens[i]);
       }
+      template = new TemplateJoin(template, basicTemplate);
     }
     return template;
+  }
+
+  public static class TemplateDescriptionParsingException extends Exception {
+    private static final long serialVersionUID = 1L;
+    public TemplateDescriptionParsingException(String message) {
+      super(message);
+    }
+  }
+
+  /**
+   * Will throw an exception if it can't parse it (which many contain a message)
+   */
+  public static List<Template> parseTemplates(String templateDescription)
+      throws TemplateDescriptionParsingException {
+    List<Template> templates = new ArrayList<>();
+    for (String tok : tokenizeTemplates(templateDescription))
+      templates.add(parseTemplateToken(tok));
+    return templates;
   }
 
   private String globalPrefix;
   private String templateString;
   private transient List<Template> templates;
   private transient Alphabet<String> featureAlphabet;
-  private transient Context context;
+  private transient TemplateContext context;
 
-  public TemplatedFeatures(String globalPrefix, String description, Alphabet<String> featureAlphabet) {
+  public TemplatedFeatures(
+      String globalPrefix,
+      String description,
+      Alphabet<String> featureAlphabet) {
     this.globalPrefix = globalPrefix;
     this.templateString = description;
     this.featureAlphabet = featureAlphabet;
-    this.context = new Context();
-    this.templates = new ArrayList<>();
-    for (String templateToken : tokenizeTemplates(description))
-      this.templates.add(parseTemplateToken(templateToken));
+    this.context = new TemplateContext();
+    try {
+      this.templates = parseTemplates(description);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public String getTemplateString() {
     return templateString;
   }
 
-  public void setContext(Sentence s, Frame f, Span t) {
-    context.setFrame(f);
-    context.setTarget(t);
-    context.setSentence(s);
+  public TemplateContext setContext(TemplateContext context) {
+    TemplateContext old = this.context;
+    this.context = context;
+    return old;
   }
 
-  public Context getContext() {
+  public TemplateContext getContext() {
     return context;
   }
 
   public void featurize(FeatureVector v) {
     boolean grow = featureAlphabet.isGrowing();
     for (Template t : templates) {
-      String te = t.extract(context);
-      if (te != null) {
-        String featName = te + "::" + globalPrefix;
+      Iterable<String> te = t.extract(context);
+      if (te == null)
+        continue;
+      for (String e : te) {
+        String featName = e + "::" + globalPrefix;
         int featIdx = featureAlphabet.lookupIndex(featName, grow);
         if (featIdx >= 0)
           v.add(featIdx, 1d);

@@ -9,10 +9,12 @@ import sys, time, random, redis
 if __name__ == '__main__':
   
   # configuration
-  job_time = random.expovariate(0.25) # how long the job should take to run (in seconds)
-  #job_time = 1.0
-  redis_channel_name = 'forward-selection'
-  config = sys.argv[1]
+  job_time = random.expovariate(2.0)  # how long the job should take to run (in seconds)
+  redis_channel_name = sys.argv[1]    # e.g. 'forward-selection'
+  redis_server = sys.argv[2]          # e.g. 'localhost'
+  redis_port = int(sys.argv[3])       # e.g. '6347'
+  working_dir = sys.argv[4]
+  config = sys.argv[5]
 
   # parse the templates (to determin scores -- for testing)
   tmpls = [x.strip() for x in config.split('+')]
@@ -26,6 +28,8 @@ if __name__ == '__main__':
   score -= random.random() * pow(num_tmpl, 0.5)
   if 'frame*headPos*headCollLabel' in tmpls:
     score += random.random()
+  if 'frame' not in config:
+    score -= 5.0 * random.random()
 
   # phone home
   message = "%f\t%s" % (score, config)

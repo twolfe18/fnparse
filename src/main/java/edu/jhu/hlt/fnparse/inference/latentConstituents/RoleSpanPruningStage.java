@@ -669,10 +669,10 @@ public class RoleSpanPruningStage
 
 			if (globalParams.getParserParams().useSyntaxFeatures) {
 				for (Path taPath : Arrays.asList(
-						new Path(s, tHead, aHead,
+						new Path(s, s.getCollapsedDeps(), tHead, aHead,
 								NodeType.POS, EdgeType.DIRECTION),
-						new Path(s, tHead, aHead,
-								NodeType.NONE, EdgeType.DEP))) {
+						new Path(s, s.getCollapsedDeps(), tHead, aHead,
+						    NodeType.NONE, EdgeType.DEP))) {
 					String l1 = "len(taPath)=" + (taPath.size() < 10
 							? taPath.size() : "long");
 					String l2 = "deltaLen(taPath)="

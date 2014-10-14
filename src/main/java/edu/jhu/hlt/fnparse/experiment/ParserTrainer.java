@@ -27,6 +27,7 @@ import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.functions.L2;
 
 /**
@@ -59,6 +60,11 @@ public class ParserTrainer {
 				new File("toydata/development-split.dipanjan-train.txt");
 
 	public static void main(String[] args) throws IOException {
+	  double perf = new ParserTrainer().run(args);
+	  System.out.println(perf);
+	}
+
+	public double run(String[] args) throws IOException {
 
 		if(args.length != 5) {
 			System.out.println("Please provide:");
@@ -68,22 +74,19 @@ public class ParserTrainer {
 			System.out.println("     \"argSpans\" trains a model to determine the constituency boundaries of arguments");
 			System.out.println("2) A job index for sweep parameters (run with -1 to see options)");
 			System.out.println("3) A working directory (for output files)");
-			//System.out.println("4) A model directory which contains the alphabet and model weights.");
-			//System.out.println("     This should be the working directory from the training run of the previous stage");
-			//System.out.println("     or \"none\" for frameId");
-			System.out.println("4) NOTHING -- this is a placeholder for missing functionality");
+			System.out.println("4) A feature set string description (template language)");
 			System.out.println("5) A syntax mode. Possible values:");
 			System.out.println("     \"none\" means that features have no access to syntax information");
 			System.out.println("     \"regular\" means that 1-best parses are used for features");
 			System.out.println("     \"latent\" means that latent syntax is jointly reasoned about with prediction");
-			return;
+			return -1d;
 		}
 		LOG.debug("[main] args=" + Arrays.toString(args));
 
 		final String mode = args[0];
 		final int jobIdx = Integer.parseInt(args[1]);
 		final File workingDir = new File(args[2]);
-		//final String prevModelDirName = args[3];
+		final String featureString = args[3];
 		final String syntaxMode = args[4];
 		if(!workingDir.isDirectory()) workingDir.mkdirs();
 
@@ -110,7 +113,7 @@ public class ParserTrainer {
 		// Choose an array job configuration
 		if(jobIdx < 0) {
 			System.out.println(ajh.helpString(999));
-			return;
+			return -2d;
 		} else {
 			ajh.setConfig(jobIdx);
 		}
@@ -136,6 +139,7 @@ public class ParserTrainer {
 
 		// Create parser
 		ParserParams parserParams = new ParserParams();
+		parserParams.setFeatureTemplateDescription(featureString);
 		// Syntax mode (e.g. latent vs regular vs none)
 		if ("latent".equals(syntaxMode)) {
 			parserParams.useLatentDepenencies = true;
@@ -187,6 +191,13 @@ public class ParserTrainer {
 
 		// Serialize the model using Java serialization
 		parser.saveModel(workingDir);
+		if ("frameId".equals(mode)) {
+		  ModelIO.writeHumanReadable(
+		      parser.getFrameIdStage().getWeights(),
+		      parser.getAlphabet(),
+		      new File(workingDir, "model.txt"),
+		      true);
+		}
 
 		// Evaluate (test data)
 		List<FNParse> predicted;
@@ -204,6 +215,9 @@ public class ParserTrainer {
 		printMemUsage();
 		if ("argId".equals(mode))
 			printMistakenArgHeads(testSubset, predicted);
+		double ret = "frameId".equals(mode)
+		    ? results.get("TargetMicroF1")
+		    : results.get("FullMicroF1");
 
 		// Evaluate (train data)
 		int maxTrainEval = 150;
@@ -221,6 +235,7 @@ public class ParserTrainer {
 		LOG.info("done, took "
 				+ (System.currentTimeMillis() - start) / (1000d * 60)
 				+ " minutes");
+		return ret;
 	}
 
 	public static void printMistakenArgHeads(

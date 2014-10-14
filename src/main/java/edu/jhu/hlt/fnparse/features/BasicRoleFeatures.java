@@ -157,8 +157,8 @@ public final class BasicRoleFeatures
 			//timer.start(pathFeatKey);
 			List<String> addTo = new ArrayList<String>();
 			for(Path p : Arrays.asList(
-					new Path(sent, targetHead, argHead, NodeType.POS, EdgeType.DEP)
-					, new Path(sent, targetHead, argHead, NodeType.LEMMA, EdgeType.DIRECTION)
+					new Path(sent, sent.getCollapsedDeps(), targetHead, argHead, NodeType.POS, EdgeType.DEP)
+					, new Path(sent, sent.getCollapsedDeps(), targetHead, argHead, NodeType.LEMMA, EdgeType.DIRECTION)
 					//new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DEP)
 					//new Path(sent, targetHead, argHead, NodeType.NONE, EdgeType.DIRECTION)
 					)) {

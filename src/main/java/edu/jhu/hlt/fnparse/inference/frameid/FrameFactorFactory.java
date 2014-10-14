@@ -20,7 +20,6 @@ import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.HasParserParams;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Context;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 
 /**
@@ -38,7 +37,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
   public FrameFactorFactory(HasParserParams params) {
     this.params = params;
     this.features = new TemplatedFeatures("frameId",
-        params.getParserParams().getFrameIdTemplateDescription(),
+        params.getParserParams().getFeatureTemplateDescription(),
         params.getParserParams().getAlphabet());
   }
 
@@ -60,7 +59,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
       for (int tIdx = 0; tIdx < T; tIdx++) {
         Frame t = fhyp.getFrame(tIdx);
         Var frameVar = fhyp.getVariable(tIdx);
-        features.setContext(s, t, fhyp.getTarget());
+        features.getContext().setSentence(s);
+        features.getContext().setFrame(t);
+        features.getContext().setTarget(fhyp.getTarget());
         ExplicitExpFamFactor phi;
         if (l != null) {  // Latent syntax
           Var linkVar = l.getLinkVar(-1, i);
@@ -71,7 +72,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
             VarConfig vc = vs.getVarConfig(config);
             boolean link = BinaryVarUtil.configToBool(vc.getState(linkVar));
             boolean frame = BinaryVarUtil.configToBool(vc.getState(frameVar));
-            features.getContext().setHead(link ? -1 : Context.UNSET);
+            features.getContext().setHead(link ? -1 : TemplateContext.UNSET);
             features.getContext().setFrame(frame ? t : null);
             FeatureVector fv = new FeatureVector();
             features.featurize(fv);
@@ -84,11 +85,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
             //LOG.debug("instantiating unary factor using syntax for " + vs);
             int head = s.getCollapsedDeps().getHead(i);
             features.getContext().setHead(head);
-            features.getContext().setChild(Context.UNSET);
           } else {
             //LOG.debug("instantiating unary factor for " + vs);
-            features.getContext().setHead(Context.UNSET);
-            features.getContext().setChild(Context.UNSET);
+            features.getContext().setHead(TemplateContext.UNSET);
           }
           FeatureVector fv = new FeatureVector();
           features.featurize(fv);
