@@ -108,7 +108,7 @@ public class ParserTrainer {
 		Option<Integer> batchSize = ajh.addOption("batchSize",
 				Arrays.asList(5, 50));
 		Option<Double> regularizer = ajh.addOption("regularizer",
-				Arrays.asList(100d, 1000d, 10000d));
+				Arrays.asList(10000d, 100000d, 1000000d));
 
 		// Choose an array job configuration
 		if(jobIdx < 0) {

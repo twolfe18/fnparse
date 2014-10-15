@@ -26,7 +26,7 @@ class CommonEqualityMixin(object):
 
 # sorry, global
 template_info = None
-FAILED_SCORE = -1.0
+FAILED_SCORE = 0.0
 
 class Feature(CommonEqualityMixin):
   ''' uses strings as templates '''
@@ -106,16 +106,27 @@ class FeatureSet(object):
 
   def propose_modification(self, label_templates, basic_templates):
     ''' returns a new FeatureSet derived from this feature set '''
+    debug = True
     card = self.estimate_cardinality()
-    p_add_feature = 100.0 / (100.0 + pow(card, 0.4))
+    l = 0.5
+    p_add_feature = l * 100.0 / (100.0 + pow(card, 0.4)) \
+      + (1.0 - l) * (2.0 / (2.0 + len(self.features)))
     if random.random() < p_add_feature:
       f = self.new_feature(label_templates, basic_templates)
+      if debug:
+        print '[propose_modification] len(self.features) =', \
+          len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
+        print '[propose_modification] new feature:', f
       return FeatureSet(self.features + [f], derived_from=self)
     else:
       # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
         f = self.features[i].propose_modification(label_templates, basic_templates)
+        if debug:
+          print '[propose_modification] len(self.features) =', \
+            len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
+          print '[propose_modification] modify existing feature:', self.features[i], '=>', f
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
         return self.propose_modification(label_templates, basic_templates)
@@ -176,7 +187,11 @@ class ConfigQueue(object):
     assert len(self.beam) >= self.beam_size
 
   def pick(self, scored_feature_sets, greediness=1.0):
-    ''' makes a greedy but random selection from scored_feature_sets '''
+    '''
+    makes a greedy but random selection from scored_feature_sets
+    scored_feature_sets should be a list of (score, FeatureSet)
+    '''
+    debug = False
     # find the max score
     m = max([x[0] for x in scored_feature_sets])
     weights = []
@@ -187,13 +202,19 @@ class ConfigQueue(object):
       weights.append(w)
       z += w
     t = random.random() * z
+    if debug:
+      print '[pick] z =', z, 't =', t
     c = 0.0
     for i in range(len(weights)):
       c += weights[i]
+      if debug:
+        print '[pick]', scored_feature_sets[i][1], 'has score', c
       if c >= t:
-        return scored_feature_sets[i][1]
-    print 'scored_feature_sets:', scored_feature_sets
-    print 'weights:', weights
+        fs = scored_feature_sets[i][1]
+        print '[pick] chose', fs
+        return fs
+    print '[pick] scored_feature_sets:', scored_feature_sets
+    print '[pick] weights:', weights
     assert False
 
   def ensure_full_beam(self, gen_from=None):
@@ -207,8 +228,7 @@ class ConfigQueue(object):
         fs_extend = gen_from
       else:
         assert len(self.scores) > 0
-        #fs_extend = random.sample(self.scores, 1)[0][1]
-        g = 5.0 * (max_tries - tries) / float(max_tries)
+        g = 1.0 * (max_tries - tries) / float(max_tries)
         fs_extend = self.pick(self.scores, greediness=g)
       fs = fs_extend.propose_modification(self.label_templates, self.basic_templates)
   
@@ -276,17 +296,20 @@ class ConfigQueue(object):
     meta.append('num_feats=' + str(len(feature_set.features)))
     min_c = 999
     max_c = 0
+    labels = set()
     for feat in feature_set.features:
       c = feat.estimate_cardinality()
       c = math.floor(pow(c, 0.5) / 100)
       if c < min_c: min_c = c
       if c > max_c: max_c = c
+      labels.add(feat.label)
       meta.append('label=' + feat.label) # only use if more than one label
       meta.append('feat=' + str(feat))
       meta.append('template_arity=' + str(len(feat.templates)))
       for template in feat.templates:
         meta.append('template=' + template)
         meta.append('template=' + template + ',label=' + feat.label)
+    meta.append('label_set=' + '_'.join(sorted(list(labels))))
     meta.append('template_min_card=' + str(min_c))
     meta.append('template_max_card=' + str(max_c))
     if feature_set.derived_from:
@@ -570,7 +593,9 @@ class TemplateInfo(object):
       self.template_cardinality[template_name] = template_card
       self.basic_templates.append(template_name)
     f.close()
-    self.label_cardinality = {'intercept':1, 'frame':1000}
+    # NOTE: the cardinality of frame is w.r.t. how many frames could possibly
+    # be evoked at a give target, which is much less than the number of total frames
+    self.label_cardinality = {'intercept':1, 'frame':10}
     print '[TemplateInfo init] done'
 
 if __name__ == '__main__':
