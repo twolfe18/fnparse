@@ -16,6 +16,9 @@ public class ForwardSelectionWorker {
     final int port = Integer.parseInt(args[2]);
     final String workingDir = args[3];
     final String config = args[4];
+	System.out.println("channel=" + channel);
+	System.out.println("server=" + server);
+	System.out.println("port=" + port);
 
     double perf = -1d;
     try {

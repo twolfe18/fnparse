@@ -11,10 +11,12 @@ import random
 import redis
 import scipy
 from sklearn.linear_model import Ridge
+import socket
 import subprocess
 import sys
 import time
 import uuid
+import xml.etree.ElementTree as ET
 
 class CommonEqualityMixin(object):
   def __eq__(self, other):
@@ -24,6 +26,7 @@ class CommonEqualityMixin(object):
 
 # sorry, global
 template_info = None
+FAILED_SCORE = -1.0
 
 class Feature(CommonEqualityMixin):
   ''' uses strings as templates '''
@@ -196,7 +199,7 @@ class ConfigQueue(object):
   def ensure_full_beam(self, gen_from=None):
     print '[ensure_full_beam] len(beam) =', len(self.beam), 'len(scores) =', len(self.scores)
     tries = 0
-    max_tries = 200
+    max_tries = 20 * self.beam_size
     while len(self.beam) < self.beam_size and tries < max_tries:
       tries += 1
       # generate a new feature set to put on the beam
@@ -261,7 +264,7 @@ class ConfigQueue(object):
     self.weights = collections.defaultdict(float)
     for i in range(len(w)):
       self.weights[i2s[i]] = w[i]
-    print '[update_weights] intercept=', self.intercept, 'weights =', self.weights
+    #print '[update_weights] intercept=', self.intercept, 'weights =', self.weights
 
 
   # TODO support non-binary features (reutrn type must change to dict or list of tuples)
@@ -304,13 +307,20 @@ class ConfigQueue(object):
 
   def observe_score(self, score, config):
     ''' updates the model and the beam given the results of an experiment '''
-    #print '[observe_score] score =', score, 'config =', config
+    print '[observe_score] score =', score, 'config =', config
     assert type(score) is float
     assert type(config) is str
     feature_set = self.config2fs[config]
-    assert feature_set is not None
     assert type(feature_set) is FeatureSet
-    assert config not in self.config2score
+    if config in self.config2score:
+      if self.config2score[config] == FAILED_SCORE:
+        print ("[observe_score] WARN: may need to sleep longer, " \
+          "%s was originally deemed failed but later reported a score of %f") \
+          % (config, score)
+      else:
+        raise Exception(config + ' had a score of ' \
+          + str(self.config2score[config]) \
+          + ' but you tried to observe the score ' + str(score))
     self.config2score[config] = score
     # update weights
     self.scores.append((score, feature_set))
@@ -331,23 +341,70 @@ class ConfigQueue(object):
     return heapq.heappop(self.beam)[1]
 
 
-class JobTracker(object):
+class SgeJobTracker(object):
+  '''
+  a job tracker that asks qstat for the jobs that are running
+  and spawns jobs with qsub
+  '''
+  def can_submit_more_jobs(self):
+    return len(self.jobs_queued()) < 30
+
+  def jobs(self):
+    '''
+    name_predicate should be a lambda that takes a string (name)
+    and returns true if the job should be kept.
+    This method skips over any jobs that are marked as QLOGIN,
+    so name_predicate need not filter those out.
+    Returns a list of job names.
+    '''
+    #r = subprocess.check_output(['qstat'])
+    #if not r:
+    #  return 0
+    #jobs = []
+    #for line in r.split('\n')[2:]:
+    #  toks = line.split()
+    #  name = toks[2]
+    #  if name == 'QLOGIN':
+    #    continue
+    #  if name_predicate(name):
+    #    jobs.append(name)
+    #return jobs
+
+    # need to do this with XML to get the full names
+    xml = subprocess.check_output(['qstat', '-u', 'twolfe', '-xml'])
+    #print '[sge jobs] xml=' + xml
+    xml = ET.fromstring(xml)
+    assert xml.tag == 'job_info'
+    # NOTE: wow this is really bad...
+    # SGE reports *running* jobs in a list called 'queue_info'
+    # and reports *queued* jobs in a list called 'job_info'
+    for info_name in ['job_info', 'queue_info']:
+      info = xml.find(info_name)
+      assert info is not None
+      # NOTE: each 'job_list' is actually a job
+      # not a list of jobs as the name would suggest
+      for j in info.findall('job_list'):
+        #print 'j.tag', j.tag
+        state = j.find('state').text    # e.g. 'r' or 'qw'
+        name = j.find('JB_name').text
+        #print '[sge jobs]', state, name
+        if name == 'QLOGIN':
+          continue
+        yield (state, name)
+
   def jobs_running(self):
-    ''' returns a set of job names '''
-    r = subprocess.check_output(['qstat'])
-    if not r:
-      return 0
-    jobs = []
-    for line in r.split('\n')[2:]:
-      toks = line.split()
-      name = toks[2]
-      if name != 'QLOGIN':  # TODO take a pattern as a param
-        jobs.append(name)
-    return jobs
+    ''' returns a list of job names '''
+    return [name for state, name in self.jobs() if state == 'r']
+
+  def jobs_queued(self):
+    ''' returns a list of job names '''
+    return [name for state, name in self.jobs() if state == 'qw']
 
   def spawn(self, name, args):
-    cmd = ['qsub', '-N', name] + args
+    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub'] + args
+    print '[sge spawn] cmd =', cmd
     subprocess.Popen(cmd)
+    time.sleep(0.2)
 
 class LocalJobTracker(object):
   '''
@@ -355,14 +412,18 @@ class LocalJobTracker(object):
   if debug is true, this will call scripts/dummy-forward-selection-job
   else this will call the actual experiment
   '''
-  def __init__(self, debug=False):
+  def __init__(self, debug=False, max_concurrent_jobs=2):
     self.key = 'dummy-job-tracker.jobs'
     self.redis = redis.StrictRedis(host='localhost', port=6379, db=0)
     self.debug = debug
+    self.max_concurrent_jobs = max_concurrent_jobs
 
   def remove_all_jobs(self):
     ''' ensures that there are no jobs running (for testing) '''
     self.redis.delete(self.key)
+
+  def can_submit_more_jobs(self):
+    return len(self.jobs_running) < self.max_concurrent_jobs
 
   def jobs_running(self):
     # TODO this won't work in cases where jobs die!
@@ -384,6 +445,7 @@ class LocalJobTracker(object):
       cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
       cp = ':'.join([x.strip() for x in cp.split('\n')])
       cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
+      cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
       cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
       cmd += args
       print 'about to spawn:', cmd
@@ -393,9 +455,9 @@ class LocalJobTracker(object):
 # TODO rip out the config_q part of this, daemonize it, and release it as a robust
 # version of qsub (i.e. watches to make sure jobs finish, restarts them if not)
 class ForwardSelection:
-  def __init__(self, name, working_dir, job_tracker, config_q, \
-      poll_interval=3.0, \
+  def __init__(self, name, working_dir, job_tracker, config_q, poll_interval=3.0, \
       redis_config={'channel':'forward-selection', 'host':'localhost', 'port':'6379', 'db':'0'}):
+    print '[ForwardSelection] attempting to use redis server at', redis_config
     self.name = name
     self.working_dir = working_dir  # where workers are allowed to dump results
     self.redis_config = redis_config
@@ -404,9 +466,7 @@ class ForwardSelection:
     self.name2config = {}           # stores (job name -> config string)
     self.config2name = {}
     self.poll_interval = poll_interval
-
     self.dispatched = set()         # names of the jobs that (should be) running
-    self.max_concurrent_jobs = 2
 
   def parse_message(self, data):
     '''
@@ -425,6 +485,9 @@ class ForwardSelection:
     if fs:
       name = "fs-%s-%d" % (self.name, len(self.name2config))
       config = fs.config_string()
+      print '[start_job] name =', name, 'config =', config
+      assert name not in self.name2config
+      assert config not in self.config2name
       self.name2config[name] = config
       self.config2name[config] = name
       print '[start_job] name=' + name + ' config=' + config
@@ -444,13 +507,7 @@ class ForwardSelection:
       return None
 
   def can_submit_more_jobs(self):
-    if len(self.dispatched) >= self.max_concurrent_jobs:
-      return False
-    if len(self.job_tracker.jobs_queued()) > 0:
-      return False
-    if len(self.config_q.beam) == 0:
-      return False
-    return True
+    return self.job_tracker.can_submit_more_jobs() and len(self.config_q.beam) > 0
 
   def run(self):
     r = redis.StrictRedis(host=self.redis_config['host'], port=self.redis_config['port'], db=self.redis_config['db'])
@@ -466,6 +523,7 @@ class ForwardSelection:
       else:
         # check for results
         message = p.get_message()
+        print 'received message:', message
         if message:
           (config, score) = self.parse_message(message['data'])
           name = self.config2name[config]
@@ -476,14 +534,22 @@ class ForwardSelection:
           # remove this jobs from dispatched
           if type(self.job_tracker) is LocalJobTracker: # for debugging
             self.job_tracker.set_job_done(name)
-          self.dispatched.remove(name)
+          try:
+            self.dispatched.remove(name)
+          except:
+            print name + ' was not in dispatched, we gave up on this job as failed previously'
         else:
           # check if any jobs died
-          r = set(self.job_tracker.jobs_running())
-          failed = [name for name in self.dispatched if name not in r]
+          r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
+          failed = set([name for name in self.dispatched if name not in r])
+          failed_configs = set()
           for name in failed:
-            print 'failed:', failed
-            self.config_q.push_config(name, -1.0)
+            config = self.name2config[name]
+            print 'failed:', name, config
+            assert config not in failed_configs
+            failed_configs.add(config)
+            self.config_q.observe_score(FAILED_SCORE, config)
+            self.dispatched.remove(name)
           else:
             print 'everything is running nicely:', len(r)
             time.sleep(self.poll_interval)
@@ -509,14 +575,30 @@ class TemplateInfo(object):
 
 if __name__ == '__main__':
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
-  debug = True
   template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
-  beam_size = 10
+  beam_size = 30
   q = ConfigQueue(beam_size, ['frame', 'intercept'], template_info.basic_templates)
-  jt = LocalJobTracker(debug=True)
-  jt.remove_all_jobs()
+
+  #jt = LocalJobTracker(debug=True, max_concurrent_jobs=2)
+  #jt.remove_all_jobs()
+  jt = SgeJobTracker()
+
   working_dir = 'experiments/forward-selection/frameId'
-  fs = ForwardSelection('test', working_dir, jt, q, poll_interval = 0.5 if debug else 2.0)
+  redis_config = {
+    'channel': 'forward-selection',
+    'host': socket.gethostname(),
+    'port': '6379',
+    'db': '0'
+  }
+  fs = ForwardSelection('test', working_dir, jt, q, \
+    redis_config=redis_config, poll_interval=0.1)
+
+  print 'cleanup...'
+  os.system('kill-all-jobs')
+  time.sleep(2)
+  os.system('rm logging/forward-selection/*')
+  time.sleep(1)
+  print 'starting...'
   fs.run()
 
 
