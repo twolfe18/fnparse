@@ -21,9 +21,9 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
  * 
  * @author travis
  */
-public class NoRoleIdStage implements Stage<FNTagging, FNParse> {
+public class NoRolesStage implements Stage<FNTagging, FNParse> {
   private static final long serialVersionUID = 1L;
-  public static final Logger LOG = Logger.getLogger(NoRoleIdStage.class);
+  public static final Logger LOG = Logger.getLogger(NoRolesStage.class);
   private final FgModel model = new FgModel(0);
 
   @Override

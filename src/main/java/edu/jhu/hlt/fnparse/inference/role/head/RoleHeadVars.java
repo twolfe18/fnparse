@@ -27,9 +27,9 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
  * 
  * @author travis
  */
-public class RoleVars implements FgRelated {
+public class RoleHeadVars implements FgRelated {
 
-  public static final Logger LOG = Logger.getLogger(RoleVars.class);
+  public static final Logger LOG = Logger.getLogger(RoleHeadVars.class);
 
   //// if you check the pareto frontier in ExpansionPruningExperiment:
   //// (6,0) gives 77.9 % recall
@@ -60,7 +60,7 @@ public class RoleVars implements FgRelated {
 
   public boolean hasLabels() { return goldConf != null; }
 
-  private RoleVars(
+  private RoleHeadVars(
       FrameInstance gold,
       boolean gotFramePredictionWrong,
       boolean hasGold,
@@ -68,7 +68,7 @@ public class RoleVars implements FgRelated {
       Frame evoked,
       Sentence sent,
       ParserParams globalParams,
-      RoleIdStage.Params params) {
+      RoleHeadStage.Params params) {
     if(evoked == Frame.nullFrame) {
       throw new IllegalArgumentException(
           "only create these for non-nullFrame f_it");
@@ -150,12 +150,12 @@ public class RoleVars implements FgRelated {
   }
 
   /** Constructor for prediction */
-  public RoleVars(
+  public RoleHeadVars(
       int targetHeadIdx,
       Frame evoked,
       Sentence s,
       ParserParams globalParams,
-      RoleIdStage.Params params) {
+      RoleHeadStage.Params params) {
     this(null, false, false, targetHeadIdx, evoked, s, globalParams, params);
   }
 
@@ -167,13 +167,13 @@ public class RoleVars implements FgRelated {
    * are set according to the arguments that actually appeared. If they are
    * different, then r_itjk are set to have a gold value of "not realized".
    */
-  public RoleVars(
+  public RoleHeadVars(
       FrameInstance gold,
       int targetHeadIdx,
       Frame evoked,
       Sentence s,
       ParserParams globalParams,
-      RoleIdStage.Params params) {
+      RoleHeadStage.Params params) {
     this(gold, gold == null || gold.getFrame() != evoked, true,
         targetHeadIdx, evoked, s, globalParams, params);
   }

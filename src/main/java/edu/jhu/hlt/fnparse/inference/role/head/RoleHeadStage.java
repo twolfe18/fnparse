@@ -36,7 +36,7 @@ import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
@@ -45,7 +45,14 @@ import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
-public class RoleIdStage
+/**
+ * Predicts the heads of roles for frames that appear in a sentence. Also serves
+ * as a pruning step for predicting spans (some roles will have no head
+ * predicted as being true).
+ * 
+ * @author travis
+ */
+public class RoleHeadStage
     extends AbstractStage<FNTagging, FNParse>
     implements Stage<FNTagging, FNParse>, Serializable {
   private static final long serialVersionUID = 1L;
@@ -79,7 +86,7 @@ public class RoleIdStage
 
   public Params params;
 
-  public RoleIdStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
+  public RoleHeadStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
     super(globalParams, featureNames);
     params = new Params(globalParams);
   }
@@ -169,7 +176,9 @@ public class RoleIdStage
 
   /** Must have initialized weights before calling this */
   @Override
-  public StageDatumExampleList<FNTagging, FNParse> setupInference(List<? extends FNTagging> input, List<? extends FNParse> output) {
+  public StageDatumExampleList<FNTagging, FNParse> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParse> output) {
     List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
     int n = input.size();
     assert output == null || output.size() == n;
@@ -188,13 +197,13 @@ public class RoleIdStage
    * @author travis
    */
   public static class RoleIdStageDatum implements StageDatum<FNTagging, FNParse> {
-    private final List<RoleVars> roleVars;	// TODO this needs to have modes for roleId, roleExpansion, and joint
+    private final List<RoleHeadVars> roleVars;
     private final FNTagging input;
     private final FNParse gold;
-    private final RoleIdStage parent;
+    private final RoleHeadStage parent;
 
     /** you don't know gold */
-    public RoleIdStageDatum(FNTagging frames, RoleIdStage parent) {//FgModel weights, ParserParams globalParams, Params params) {
+    public RoleIdStageDatum(FNTagging frames, RoleHeadStage parent) {
       this.roleVars = new  ArrayList<>();
       this.input = frames;
       this.gold = null;
@@ -203,7 +212,7 @@ public class RoleIdStage
     }
 
     /** you know gold */
-    public RoleIdStageDatum(FNTagging frames, FNParse gold, RoleIdStage parent) {//FgModel weights, ParserParams globalParams, Params params) {
+    public RoleIdStageDatum(FNTagging frames, FNParse gold, RoleHeadStage parent) {
       if(gold == null)
         throw new IllegalArgumentException();
       this.roleVars = new  ArrayList<>();
@@ -248,15 +257,15 @@ public class RoleIdStage
         int targetHead = parent.globalParams.headFinder.head(
             target, fi.getSentence());
 
-        RoleVars rv;
+        RoleHeadVars rv;
         if (hasGold) {	// Train mode
           // goldFI may be null, meaning that we predicted a frame
           // that was not actually present in the sentence.
           FrameInstance goldFI = fiByTarget[targetHead];
-          rv = new RoleVars(goldFI, targetHead, fi.getFrame(),
+          rv = new RoleHeadVars(goldFI, targetHead, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
         } else {		// Predict/decode mode
-          rv = new RoleVars(targetHead, fi.getFrame(),
+          rv = new RoleHeadVars(targetHead, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
         }
 
@@ -288,10 +297,13 @@ public class RoleIdStage
       ConstituencyTreeFactor consTree = null;	// used in RoleSpanStage, not here
       if(parent.globalParams.useLatentDepenencies) {
         depTree = new ProjDepTreeFactor(getSentence().size(), VarType.LATENT);
-        DepParseFactorFactory depParseFactorTemplate = new DepParseFactorFactory(parent.globalParams);
-        factors.addAll(depParseFactorTemplate.initFactorsFor(getSentence(), Collections.emptyList(), depTree, consTree));
+        DepParseFactorFactory depParseFactorTemplate =
+            new DepParseFactorFactory(parent.globalParams);
+        factors.addAll(depParseFactorTemplate.initFactorsFor(
+            getSentence(), Collections.emptyList(), depTree, consTree));
       }
-      factors.addAll(parent.params.factorTemplate.initFactorsFor(getSentence(), roleVars, depTree, consTree));
+      factors.addAll(parent.params.factorTemplate.initFactorsFor(
+          getSentence(), roleVars, depTree, consTree));
 
       // add factors to the factor graph
       for(Factor f : factors)
@@ -306,7 +318,7 @@ public class RoleIdStage
       VarConfig goldConf = new VarConfig();
 
       // add the gold labels
-      for(RoleVars hyp : roleVars) {
+      for(RoleHeadVars hyp : roleVars) {
         hyp.register(fg, goldConf);
       }
 
@@ -331,16 +343,16 @@ public class RoleIdStage
     public static boolean debug = false;
 
     private final Sentence sent;
-    private final List<RoleVars> hypotheses;
+    private final List<RoleHeadVars> hypotheses;
     private final ApproxF1MbrDecoder decoder;
-    private final RoleIdStage parent;
+    private final RoleHeadStage parent;
 
     public RoleIdDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
         Sentence sent,
-        List<RoleVars> hypotheses,
-        RoleIdStage parent) {
+        List<RoleHeadVars> hypotheses,
+        RoleHeadStage parent) {
       super(fg, infFact, parent);
       this.sent = sent;
       this.hypotheses = hypotheses;
@@ -352,12 +364,12 @@ public class RoleIdStage
     public FNParse decode() {
       FgInferencer inf = getMargins();
       List<FrameInstance> fis = new ArrayList<FrameInstance>();
-      for(RoleVars rv : hypotheses)
+      for(RoleHeadVars rv : hypotheses)
         fis.add(decodeRoleVars(rv, inf));
       return new FNParse(sent, fis);
     }
 
-    public FrameInstance decodeRoleVars(RoleVars rv, FgInferencer inf) {
+    public FrameInstance decodeRoleVars(RoleHeadVars rv, FgInferencer inf) {
 
       Timer t = parent.globalParams.getTimer("argId-decode");
       t.start();

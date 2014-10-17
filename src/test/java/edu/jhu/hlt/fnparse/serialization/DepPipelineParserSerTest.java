@@ -23,7 +23,7 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -77,11 +77,11 @@ public class DepPipelineParserSerTest {
 		((FrameIdStage) fid.getFrameIdStage()).params.learningRate = 1d;
 		((FrameIdStage) fid.getFrameIdStage()).params.regularizer = noReg;
 		if (enableArgId) {
-			((RoleIdStage) aid.getArgIdStage()).params.passes = 10;
-			((RoleIdStage) aid.getArgIdStage()).params.learningRate = 1d;
-			((RoleIdStage) aid.getArgIdStage()).params.regularizer = noReg;
-			((RoleIdStage) aid.getArgIdStage()).params.argPruner = new NoArgPruner();
-			((RoleIdStage) aid.getArgIdStage()).params.tuneOnTrainingData = true;
+			((RoleHeadStage) aid.getArgIdStage()).params.passes = 10;
+			((RoleHeadStage) aid.getArgIdStage()).params.learningRate = 1d;
+			((RoleHeadStage) aid.getArgIdStage()).params.regularizer = noReg;
+			((RoleHeadStage) aid.getArgIdStage()).params.argPruner = new NoArgPruner();
+			((RoleHeadStage) aid.getArgIdStage()).params.tuneOnTrainingData = true;
 		}
 		if (enableArgSpans) {
 			((RoleHeadToSpanStage) aid.getArgSpanStage()).params.passes = 10;

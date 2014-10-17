@@ -18,7 +18,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
@@ -33,7 +33,7 @@ public class RoleIdStageOverfittingTests {
 		StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
 		ParserParams params = new ParserParams();
 		params.useSyntaxFeatures = true;
-		RoleIdStage rid = new RoleIdStage(params, params);
+		RoleHeadStage rid = new RoleHeadStage(params, params);
 		rid.params.passes = 20;
 		rid.params.tuneOnTrainingData = true;
 		rid.params.regularizer = new L2(999_999_999d);

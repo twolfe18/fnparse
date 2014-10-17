@@ -13,15 +13,15 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserTests;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleVars;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 
 public class RoleVarsTests {
 
 	private FNParse parse = ParserTests.makeDummyParse();
 	private ParserParams params = new ParserParams();
-	private RoleIdStage.Params roleIdParams = new RoleIdStage.Params(params);
+	private RoleHeadStage.Params roleIdParams = new RoleHeadStage.Params(params);
 	
 	@Test
 	public void testIterator() {
@@ -33,7 +33,7 @@ public class RoleVarsTests {
 		for(FrameInstance fi : parse.getFrameInstances()) {
 			System.out.println(fi);
 			int targetHead = fi.getTarget().start;
-			RoleVars rv = new RoleVars(targetHead, fi.getFrame(), parse.getSentence(), params, roleIdParams);
+			RoleHeadVars rv = new RoleHeadVars(targetHead, fi.getFrame(), parse.getSentence(), params, roleIdParams);
 
 			Var[][] vars = rv.r_kj;
 			assertEquals(vars.length, fi.getFrame().numRoles());

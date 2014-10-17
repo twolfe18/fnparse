@@ -23,14 +23,14 @@ import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper.Mode;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 
 /**
  * should really be called RoleIdFactorFactory (this is not a FactorFactory for RoleSpanStage)
  * 
  * @author travis
  */
-public final class RoleFactorFactory implements FactorFactory<RoleVars> {
+public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
   private static final long serialVersionUID = 1L;
 
   /**
@@ -125,9 +125,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleVars> {
    * r_itjk ~ r_itjk^e
    */
   @Override
-  public List<Factor> initFactorsFor(Sentence s, List<RoleVars> fr, ProjDepTreeFactor l, ConstituencyTreeFactor c) {
+  public List<Factor> initFactorsFor(Sentence s, List<RoleHeadVars> fr, ProjDepTreeFactor l, ConstituencyTreeFactor c) {
     List<Factor> factors = new ArrayList<Factor>();
-    for(RoleVars rv : fr) {
+    for(RoleHeadVars rv : fr) {
 
       final int i = rv.i;
       final Frame t = rv.getFrame();

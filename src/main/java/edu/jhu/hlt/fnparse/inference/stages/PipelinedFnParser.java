@@ -21,9 +21,9 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
-import edu.jhu.hlt.fnparse.inference.role.head.NoRoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
@@ -51,7 +51,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 	public PipelinedFnParser(ParserParams params) {
 		this.params = params;
 		frameId = new FrameIdStage(params, this);
-		argId = new RoleIdStage(params, this);
+		argId = new RoleHeadStage(params, this);
 		argExpansion = new RoleHeadToSpanStage(params, this);
 	}
 
@@ -63,7 +63,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 	// TODO replace this with setters for each stage
 
 	public void disableArgId() {
-		argId = new NoRoleIdStage();
+		argId = new NoRolesStage();
 		argExpansion = new IdentityStage<>();
 	}
 

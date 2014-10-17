@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
@@ -102,11 +102,11 @@ public class ParserTrainer {
 		// Set up array job configurations
 		ArrayJobHelper ajh = new ArrayJobHelper();
 		Option<Integer> nTrainLimit = ajh.addOption("nTrainLimit",
-				Arrays.asList(50, 400, 999999));
+				Arrays.asList(100, 800, 999999));
 		Option<Integer> passes = ajh.addOption("passes",
-				Arrays.asList(2, 5));
+				Arrays.asList(3, 10));
 		Option<Integer> batchSize = ajh.addOption("batchSize",
-				Arrays.asList(5, 50));
+				Arrays.asList(1, 50));
 		Option<Double> regularizer = ajh.addOption("regularizer",
 				Arrays.asList(10000d, 100000d, 1000000d));
 
@@ -163,10 +163,10 @@ public class ParserTrainer {
 			fIdStage.params.regularizer = new L2(regularizer.get());
 			parser.disableArgId();
 		} else if ("argId".equals(mode)) {
-			RoleIdStage aid = (RoleIdStage) parser.getArgIdStage();
+			RoleHeadStage aid = (RoleHeadStage) parser.getArgIdStage();
 			aid.params.batchSize = batchSize.get();
 			aid.params.passes = passes.get();
-			aid.params.regularizer = new L2(regularizer.get());
+			aid.params.regularizer = new L2(regularizer.get() / 10d);
 			parser.useGoldFrameId();
 			//parser.useGoldArgSpans();	// takes gold spans regardless of head
 			parser.disableArgSpans();

@@ -40,9 +40,7 @@ public class ParserParams
    * This encodes all of the features for the model.
    * See {@link TemplatedFeatures}.
    */
-  private String featureTemplateDescription =
-      "1 + headPos + frame * headWord + frame * headCollLabel"
-      + " + dep * headPos + frameDep + frameDep * frame";
+  private String featureTemplateDescription = "frame * targetHeadWord";
 
   public String getFeatureTemplateDescription() {
     return featureTemplateDescription;

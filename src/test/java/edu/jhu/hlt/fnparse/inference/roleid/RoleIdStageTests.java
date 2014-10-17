@@ -31,7 +31,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage.Decodable;
 import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
@@ -229,7 +229,7 @@ public class RoleIdStageTests {
 		});
 	}
 	
-	public void configureRid(RoleIdStage rid) {
+	public void configureRid(RoleHeadStage rid) {
 		rid.params.argPruner = new NoArgPruner();
 	}
 	
@@ -252,7 +252,7 @@ public class RoleIdStageTests {
 		// Latent
 		ParserParams paramsL = new ParserParams();
 		paramsL.useLatentDepenencies = true;
-		RoleIdStage ridL = new RoleIdStage(paramsL, paramsL);
+		RoleHeadStage ridL = new RoleHeadStage(paramsL, paramsL);
 		paramsL.readFeatAlphFrom(alphFile);
 		if(prune) configureRid(ridL);
 		StageDatumExampleList<FNTagging, FNParse> dataL =
@@ -262,7 +262,7 @@ public class RoleIdStageTests {
 		// Regular
 		ParserParams paramsR = new ParserParams();
 		paramsR.useLatentDepenencies = false;
-		RoleIdStage ridR = new RoleIdStage(paramsR, paramsR);
+		RoleHeadStage ridR = new RoleHeadStage(paramsR, paramsR);
 		//ridR.globalParams.readFeatAlphFrom(alphFile);
 		paramsR.setFeatureAlphabet(paramsL.getAlphabet());
 		if(prune) configureRid(ridR);

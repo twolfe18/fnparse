@@ -32,6 +32,11 @@ import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 
+/**
+ * Implements the "classify spans" model of role id.
+ * 
+ * @author travis
+ */
 public class LatentConstituencyPipelinedParser implements Parser {
   public static final Logger LOG =
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
@@ -145,7 +150,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     //BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
     LatentConstituencyPipelinedParser p = new LatentConstituencyPipelinedParser();
-    p.useDeterministicPruning(Mode.XUE_PALMER_DEP);
+    p.useDeterministicPruning(Mode.XUE_PALMER_HERMANN);
     //p.dontDoAnyPruning();
 
     // Get the data
