@@ -250,8 +250,6 @@ public class ParserTrainer {
 		List<SentenceEval> se = Arrays.asList(new SentenceEval(gold, hyp));
 		double f1 = GenerousEvaluation.generousF1.evaluate(se);
 		if (f1 < 0.8d) {
-			if ("FNFUTXT1228804".equals(gold.getId()))
-				LOG.info("debug this");
 			double p = GenerousEvaluation.generousPrecision.evaluate(se);
 			double r = GenerousEvaluation.generousRecall.evaluate(se);
 			Sentence s = gold.getSentence();

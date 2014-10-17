@@ -214,7 +214,10 @@ public class FrameIdStage
 
     private void initHypotheses() {
       TargetIndex ti = parent.params.getTargetIndex();
-      Map<Span, Set<Frame>> byTarget = ti.findFrames(sentence, false);
+      boolean requireInParens = false;
+      boolean requirePosMatchOneSingleWord = false;
+      Map<Span, Set<Frame>> byTarget = ti.findFrames(
+          sentence, requireInParens, requirePosMatchOneSingleWord);
       for (Map.Entry<Span, Set<Frame>> x : byTarget.entrySet()) {
         Span target = x.getKey();
         List<Frame> frames = new ArrayList<>();

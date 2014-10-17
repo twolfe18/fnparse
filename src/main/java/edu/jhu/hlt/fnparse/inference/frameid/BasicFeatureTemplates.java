@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.features.Path;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -101,6 +102,25 @@ public class BasicFeatureTemplates {
         return "targetHeadWord=" + w;
       }
     });
+    //for (int maxLen : Arrays.asList(2, 3, 4, 5, 6, 7)) {
+    for (int maxLen : Arrays.asList(2, 4, 6, 99)) {
+      String name = "targetHeadWordBc256-" + maxLen;
+      basicTemplates.put(name, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          int h = context.getTarget().end - 1;
+          String w = context.getSentence().getWord(h);
+          return name + "=" + BrownClusters.getBc256().getPath(w, maxLen);
+        }
+      });
+      String name2 = "targetHeadWordBc1000-" + maxLen;
+      basicTemplates.put(name2, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          int h = context.getTarget().end - 1;
+          String w = context.getSentence().getWord(h);
+          return name2 + "=" + BrownClusters.getBc1000().getPath(w, maxLen);
+        }
+      });
+    }
     basicTemplates.put("targetHeadWord2", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         int h = context.getTarget().end - 1;

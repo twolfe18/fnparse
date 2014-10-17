@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.jena.atlas.logging.Log;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -26,6 +25,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * @author travis
  */
 public class TargetIndex {
+  public static final Logger LOG = Logger.getLogger(TargetIndex.class);
 
   private static class LuMatcher {
     public static final Logger LOG = Logger.getLogger(LuMatcher.class);
@@ -49,11 +49,15 @@ public class TargetIndex {
 
     /**
      * Returns null if it doesn't match
+     * @param requirePosMatchOneSingleWord - slightly higher performance with
+     *        crappy features if true, higher recall if false
      */
-    public Span matches(int i, Sentence s, boolean requireInParens) {
+    public Span matches(
+        int i,
+        Sentence s,
+        boolean requireInParens,
+        boolean requirePosMatchOneSingleWord) {
       // Check the words are the same
-      //IRAMDictionary dict = TargetPruningData.getInstance().getWordnetDict();
-      //WordnetStemmer stemmer = TargetPruningData.getInstance().getStemmer();
       int end = i;
       for (int offset = 0; offset < words.length; offset++) {
         if (!requireInParens && inParens[offset])
@@ -70,15 +74,12 @@ public class TargetIndex {
           return null;
         }
       }
-      /*
-      if (words.length == 1) {
-        // Require the POS to match
+      if (requirePosMatchOneSingleWord && words.length == 1) {
         if (ptbPos.contains(s.getPos(i)))
           return Span.widthOne(i);
         else
           return null;
       }
-      */
       return Span.getSpan(i, end);
     }
 
@@ -133,16 +134,21 @@ public class TargetIndex {
           // Store the LuMatcher
           LuMatcher lum = new LuMatcher(words, inParens, pos);
           Frame frame = FrameIndex.getInstance().getFrame(frameName);
-          List<LuMatcher> lums = f2lum.get(frame);
-          if (lums == null) {
-            lums = new ArrayList<>();
-            lums.add(lum);
-            f2lum.put(frame, lums);
-          } else {
-            lums.add(lum);
-          }
+          addlum(f2lum, frame, lum);
         }
         r.close();
+
+        // Special cases that are common in training data
+        addlum(f2lum,
+            FrameIndex.getInstance().getFrame("Existence"),
+            new LuMatcher(new String[] {"there"}, new boolean[] {false}, "n"));
+        addlum(f2lum,
+            FrameIndex.getInstance().getFrame("Quantity"),
+            new LuMatcher(new String[] {"lot"}, new boolean[] {false}, "n"));
+        addlum(f2lum,
+            FrameIndex.getInstance().getFrame("Intentionally_act"),
+            new LuMatcher(new String[] {"carry"}, new boolean[] {false}, "v"));
+
         return f2lum;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -150,17 +156,36 @@ public class TargetIndex {
     }
   }
 
+  private static void addlum(
+      Map<Frame, List<LuMatcher>> lums, Frame f, LuMatcher lum) {
+    List<LuMatcher> l = lums.get(f);
+    if (l == null) {
+      l = new ArrayList<>();
+      l.add(lum);
+      lums.put(f, l);
+    } else {
+      l.add(lum);
+    }
+  }
+
   private Map<Frame, List<LuMatcher>> matchers =
       LuMatcher.getLuMatchersFromLuIndex();
 
-  public static final Logger LOG = Logger.getLogger(TargetIndex.class);
-  public Map<Span, Set<Frame>> findFrames(Sentence s, boolean requireInParens) {
+  /**
+   * 
+   * @param requirePosMatchOneSingleWord - slightly higher performance with
+   *        crappy features if true, higher recall if false
+   */
+  public Map<Span, Set<Frame>> findFrames(
+      Sentence s,
+      boolean requireInParens,
+      boolean requirePosMatchOneSingleWord) {
     Map<Span, Set<Frame>> byTarget = new HashMap<>();
     for (Map.Entry<Frame, List<LuMatcher>> x : matchers.entrySet()) {
       Frame f = x.getKey();
       for (LuMatcher m : x.getValue()) {
         for (int i = 0; i < s.size(); i++) {
-          Span t = m.matches(i, s, requireInParens);
+          Span t = m.matches(i, s, requireInParens, requirePosMatchOneSingleWord);
           if (t != null) {
             assert t.start >= 0 && t.end <= s.size();
             Set<Frame> possible = byTarget.get(t);
