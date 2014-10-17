@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.dep;
+package edu.jhu.hlt.fnparse.inference;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,8 +15,6 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
-import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.srl.CorpusStatistics;
 import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
 import edu.jhu.srl.DepParseFactorGraphBuilder.DepParseFactorTemplate;

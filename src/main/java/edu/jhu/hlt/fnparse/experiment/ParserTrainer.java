@@ -19,9 +19,9 @@ import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
-import edu.jhu.hlt.fnparse.inference.stages.RoleSpanStage;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper;
 import edu.jhu.hlt.fnparse.util.ArrayJobHelper.Option;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
@@ -172,7 +172,7 @@ public class ParserTrainer {
 			parser.disableArgSpans();
 		} else {
 			assert "argSpans".equals(mode);
-			RoleSpanStage rss = (RoleSpanStage) parser.getArgSpanStage();
+			RoleHeadToSpanStage rss = (RoleHeadToSpanStage) parser.getArgSpanStage();
 			rss.params.batchSize = batchSize.get();
 			rss.params.passes = passes.get();
 			rss.params.regularizer = new L2(regularizer.get());

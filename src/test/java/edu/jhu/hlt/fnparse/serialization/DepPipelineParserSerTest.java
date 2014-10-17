@@ -22,10 +22,10 @@ import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
-import edu.jhu.hlt.fnparse.inference.stages.RoleSpanStage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -84,9 +84,9 @@ public class DepPipelineParserSerTest {
 			((RoleIdStage) aid.getArgIdStage()).params.tuneOnTrainingData = true;
 		}
 		if (enableArgSpans) {
-			((RoleSpanStage) aid.getArgSpanStage()).params.passes = 10;
-			((RoleSpanStage) aid.getArgSpanStage()).params.learningRate = 1d;
-			((RoleSpanStage) aid.getArgSpanStage()).params.regularizer = noReg;
+			((RoleHeadToSpanStage) aid.getArgSpanStage()).params.passes = 10;
+			((RoleHeadToSpanStage) aid.getArgSpanStage()).params.learningRate = 1d;
+			((RoleHeadToSpanStage) aid.getArgSpanStage()).params.regularizer = noReg;
 		}
 
 		// Train the models (separately)

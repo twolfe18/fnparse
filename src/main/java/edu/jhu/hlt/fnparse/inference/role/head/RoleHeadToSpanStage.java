@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.stages;
+package edu.jhu.hlt.fnparse.inference.role.head;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -34,14 +34,24 @@ import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.spans.ExpansionVar;
+import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
+import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.inference.stages.Stage.Decodable;
+import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
-public class RoleSpanStage
+/**
+ * Takes a FNParse where all of the arguments are headwords (spans of width 1)
+ * and predicts a full span for each input argument.
+ * 
+ * @author travis
+ */
+public class RoleHeadToSpanStage
 		extends AbstractStage<FNParse, FNParse>
 		implements Stage<FNParse, FNParse>, Serializable {
 	private static final long serialVersionUID = 1L;
@@ -64,22 +74,6 @@ public class RoleSpanStage
 		public int batchSize = 4;
 		public int passes = 2;
 
-		// TODO Move this to RoleIdStage
-		// If true, when training the expansion stage, targets which do not
-		// correspond to a target in the gold label will have their argument
-		// gold labels set to nullSpan (as if the frames were present with no
-		// arguments realized in the sentence). In principle this allows this
-		// stage of the pipeline to adapt to errors made in the frameId stage,
-		// but this may also distort the model to get the wrong answer when the
-		// frameId stage was correct.
-		// If false, then targets that are not present in the gold label are
-		// simply dropped, and argument variables are not instantianted/added to
-		// the training set.
-		// NOTE: If you use gold frameId to train this stage, then this option
-		// has no effect one way or the other because every target will be in
-		// the gold label.
-		//public boolean useNullSpanForArgumentsToIncorrectTarget = false;
-
 		public FactorFactory<ExpansionVar> factorTemplate;
 
 		public Params(ParserParams params) {
@@ -89,7 +83,7 @@ public class RoleSpanStage
 
 	public Params params;
 
-	public RoleSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
+	public RoleHeadToSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
 		super(globalParams, featureNames);
 		params = new Params(globalParams);
 		if (globalParams.useLatentDepenencies
@@ -216,10 +210,10 @@ public class RoleSpanStage
 		private final List<ExpansionVar> expansions;
 		private final FNParse onlyHeads;
 		private final FNParse gold;
-		private final RoleSpanStage parent;
+		private final RoleHeadToSpanStage parent;
 
 		/** Constructor for when you don't have the labels. */
-		public RoleSpanStageDatum(FNParse onlyHeads, RoleSpanStage rss) {
+		public RoleSpanStageDatum(FNParse onlyHeads, RoleHeadToSpanStage rss) {
 			this(onlyHeads, null, rss);
 		}
 
@@ -259,7 +253,7 @@ public class RoleSpanStage
 		public RoleSpanStageDatum(
 				FNParse onlyHeads,
 				FNParse gold,
-				RoleSpanStage rss) {
+				RoleHeadToSpanStage rss) {
 			this.parent = rss;
 			this.gold = gold;
 			this.onlyHeads = onlyHeads;

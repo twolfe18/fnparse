@@ -191,7 +191,7 @@ public class TargetPruningData implements Serializable {
    * keys are LU's from FrameNet (note that POS tag set is not PTB)
    */
   private synchronized void initLexicalUnitData() {
-    LOG.info("[TriggerPruningParams] building LU => List<Frame> index...");
+    LOG.info("[TargetPruningData] building LU => List<Frame> index...");
     word2pos2frames = new HashMap<String, Map<String, List<Frame>>>();
     for(Frame f : FrameIndex.getInstance().allFrames()) {
       int nLU = f.numLexicalUnits();

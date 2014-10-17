@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage.Decodable;
 import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;

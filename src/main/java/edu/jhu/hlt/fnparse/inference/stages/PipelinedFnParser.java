@@ -21,8 +21,9 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
-import edu.jhu.hlt.fnparse.inference.roleid.NoRoleIdStage;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.NoRoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
@@ -51,7 +52,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 		this.params = params;
 		frameId = new FrameIdStage(params, this);
 		argId = new RoleIdStage(params, this);
-		argExpansion = new RoleSpanStage(params, this);
+		argExpansion = new RoleHeadToSpanStage(params, this);
 	}
 
 	@Override

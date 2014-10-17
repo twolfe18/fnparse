@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.spans;
+package edu.jhu.hlt.fnparse.inference.role.head;
 
 import java.util.Arrays;
 

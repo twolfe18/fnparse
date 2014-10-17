@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.roleid;
+package edu.jhu.hlt.fnparse.inference.role.head;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -23,7 +23,7 @@ import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper.Mode;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
 
 /**
  * should really be called RoleIdFactorFactory (this is not a FactorFactory for RoleSpanStage)

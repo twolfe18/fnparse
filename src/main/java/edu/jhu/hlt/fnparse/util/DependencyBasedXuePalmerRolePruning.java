@@ -15,7 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.latentConstituents.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 
 public class DependencyBasedXuePalmerRolePruning {
   public static final Logger LOG =

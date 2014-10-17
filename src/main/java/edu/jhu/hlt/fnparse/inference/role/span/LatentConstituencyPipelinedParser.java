@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.latentConstituents;
+package edu.jhu.hlt.fnparse.inference.role.span;
 
 import java.io.File;
 import java.util.Arrays;
@@ -22,7 +22,7 @@ import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.latentConstituents.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;

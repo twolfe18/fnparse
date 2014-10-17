@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.roleid;
+package edu.jhu.hlt.fnparse.inference.role.head;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -30,13 +30,13 @@ import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
 import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
+import edu.jhu.hlt.fnparse.inference.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.dep.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;

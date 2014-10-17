@@ -17,7 +17,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.inference.stages.RoleSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.ModelIO;
@@ -32,7 +32,7 @@ public class RoleSpanStageOverfittingTests {
 	public void test() {
 		StdEvalFunc eval = BasicEvaluation.fullMicroF1;
 		ParserParams params = new ParserParams();
-		RoleSpanStage rss = new RoleSpanStage(params, params);
+		RoleHeadToSpanStage rss = new RoleHeadToSpanStage(params, params);
 		rss.params.maxArgRoleExpandLeft = 99;
 		rss.params.maxArgRoleExpandRight = 99;
 		rss.params.regularizer = new L2(999_999_999d);

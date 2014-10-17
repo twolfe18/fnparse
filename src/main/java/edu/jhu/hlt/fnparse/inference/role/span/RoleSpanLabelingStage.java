@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.latentConstituents;
+package edu.jhu.hlt.fnparse.inference.role.span;
 
 import java.io.Serializable;
 import java.util.ArrayList;

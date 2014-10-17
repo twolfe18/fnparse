@@ -13,7 +13,9 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserTests;
-import edu.jhu.hlt.fnparse.inference.roleid.RoleVars.RVar;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleIdStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleVars;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleVars.RVar;
 
 public class RoleVarsTests {
 
