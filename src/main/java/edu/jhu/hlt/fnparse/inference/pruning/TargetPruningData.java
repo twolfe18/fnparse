@@ -24,7 +24,7 @@ public class TargetPruningData implements Serializable {
 
   private transient IRAMDictionary dict;
   public synchronized IRAMDictionary getWordnetDict() {
-    if(dict == null) {
+    if (dict == null) {
       long start = System.currentTimeMillis();
       File f = new File("toydata/wordnet/dict");
       dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);

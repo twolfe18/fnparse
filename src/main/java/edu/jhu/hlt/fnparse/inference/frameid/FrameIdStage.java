@@ -3,9 +3,11 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
@@ -24,8 +26,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -60,9 +60,7 @@ public class FrameIdStage
     public int maxDev = 50;
     public transient Regularizer regularizer = new L2(1_000_000d);
     public ApproxF1MbrDecoder decoder;
-    //public Features.F features;
     public FactorFactory<FrameVars> factorsTemplate;
-    //public final ParserParams globalParams;
 
     public TargetPruningData getTargetPruningData() {
       return TargetPruningData.getInstance();
@@ -73,43 +71,33 @@ public class FrameIdStage
     // debugging (e.g. an overfitting test).
     public boolean tuneOnTrainingData = false;
 
-    // If true, will add all frame to the set to be predicted from even if
-    // it has a different part of speech tag as a listed lexical unit
-    // (e.g. "terrorist.JJ" will match the Terrorism  frame which lists
-    // "terrorist.n" but not "terrorist.a". The downside of setting this to
-    // false is that you will add some false positives.
-    public boolean useJustWordForPossibleFrames = true;
-
-    // If true, try lowercasing the target word before looking it up in the
-    // frame index.
-    public boolean lowercaseWordForPossibleFrames = true;
-
-    // If true, remove the "s" from words ending in "es" while looking up
-    // frames listed by lexical unit. E.g. "doses.NNS" => "dose.n"
-    public boolean useHackySingularSingularConversion = true;
+    private transient TargetIndex targetIndex;
+    public TargetIndex getTargetIndex() {
+      if (targetIndex == null)
+        targetIndex = new TargetIndex();
+      return targetIndex;
+    }
 
     public Params(ParserParams globalParams) {
       decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
-      /*
-      BinaryBinaryFactorHelper.Mode factorMode =
-          globalParams.useLatentDepenencies
-          ? BinaryBinaryFactorHelper.Mode.ISING
-              : BinaryBinaryFactorHelper.Mode.NONE;
-       */
-      //features = new BasicFrameFeatures(globalParams);
       factorsTemplate = new FrameFactorFactory(globalParams);
     }
   }
 
   public Params params;
 
+  private static int frameVarsInstantiated = 0;
+  public static void frameVarInstantiated() {
+    frameVarsInstantiated++;
+    if (frameVarsInstantiated % 100 == 0)
+      LOG.info(frameVarsInstantiated + " frame vars instantiated");
+  }
+
   public FrameIdStage(
       ParserParams globalParams,
       HasFeatureAlphabet featureAlphabet) {
     super(globalParams, featureAlphabet);
     params = new Params(globalParams);
-    //((FrameFactorFactory) params.factorsTemplate)
-    //  .setAlphabet(globalParams.getAlphabet());
   }
 
   @Override
@@ -190,128 +178,6 @@ public class FrameIdStage
   }
 
   /**
-   * Given a word in a sentence, extract the set of frames it might evoke.
-   * Basic idea: given a target with head word t, include any frame f s.t.
-   * lemma(t) == lemma(f.target)
-   */
-  public static FrameVars makeFrameVar(
-      Sentence s,
-      int headIdx,
-      Params params) {
-    if(params.getTargetPruningData().prune(headIdx, s))
-      return null;
-
-    Set<Frame> uniqFrames = new HashSet<Frame>();
-    List<Frame> frameMatches = new ArrayList<Frame>();
-    List<FrameInstance> prototypes = new ArrayList<FrameInstance>();
-
-    // Get prototypes/frames from the LEX examples
-    List<FrameInstance> fromPrototypes =
-        params.getTargetPruningData()
-        .getPrototypesByStem(headIdx, s, true);
-    for (FrameInstance fi : fromPrototypes) {
-      if (uniqFrames.add(fi.getFrame())) {
-        frameMatches.add(fi.getFrame());
-        prototypes.add(fi);
-      }
-    }
-
-    // Get frames that list this as an LU in the frame index
-    LexicalUnit fnLU = s.getFNStyleLUUnsafe(
-        headIdx, params.getTargetPruningData().getWordnetDict(), false);
-    List<Frame> listedAsLUs = (fnLU == null)
-        ? Collections.<Frame>emptyList()
-        : params.getTargetPruningData().getFramesFromLU(fnLU);
-    for(Frame f : listedAsLUs) {
-      if(uniqFrames.add(f)) {
-        frameMatches.add(f);
-        //prototypes.add(???);
-      }
-    }
-
-    // Sometimes we'll have thing either mis-tagged or presented in a way
-    // that is no in the lexical unit examples (e.g. "terrorist.a" is not
-    // listed, while "terrorist.n" is). In this case, we want the option to
-    // take all words, ignoring POS.
-    if (params.useJustWordForPossibleFrames) {
-      String w = s.getWord(headIdx);
-      for (Frame f : params.getTargetPruningData().getLUFramesByWord(w)) {
-        if (uniqFrames.add(f)) {
-          frameMatches.add(f);
-          //prototypes.add(???);
-        }
-      }
-      // For a lot of NPs like "National Guard", the first word will get
-      // tagged as NNP and framenet will list "national.a" as a LU.
-      // We can re-cover if we ignore the POS tag, but we also need to
-      // ensure that the case matches (which is typically lowercase for
-      // adjectives).
-      boolean alwaysLowercase = true;
-      if (alwaysLowercase || headIdx == 0) {
-        w = w.toLowerCase();
-        for (Frame f : params.getTargetPruningData()
-            .getLUFramesByWord(w)) {
-          if (uniqFrames.add(f)) {
-            frameMatches.add(f);
-            //prototypes.add(???);
-          }
-        }
-      }
-    }
-
-    // Infrequently, stemming messes up, "means" is listed for the Means
-    // frame, but "mean" isn't
-    for(Frame f : params.getTargetPruningData()
-        .getFramesFromLU(s.getLU(headIdx))) {
-      if(uniqFrames.add(f)) {
-        frameMatches.add(f);
-        //prototypes.add(???);
-      }
-    }
-
-    // Sometimes the lemmatization/stemming is bad
-    // e.g. "doses.NNS" => "dos.n"
-    // try my own hair-brained plural-stripping
-    if (params.useHackySingularSingularConversion &&
-        s.getWord(headIdx).endsWith("es")) {
-      String p = PosUtil.getPennToFrameNetTags().get(s.getPos(headIdx));
-      if (p != null) {
-        String w = s.getWord(headIdx);
-        w = w.substring(0, w.length() - 1);
-        LexicalUnit fnLUsing = new LexicalUnit(w, p);
-        for(Frame f :
-          params.getTargetPruningData().getFramesFromLU(fnLUsing)) {
-          if(uniqFrames.add(f)) {
-            frameMatches.add(f);
-            //prototypes.add(???);
-          }
-        }
-      }
-    }
-
-    // "thursday.n" is not an LU, but "Thursday.n" is
-    if (params.lowercaseWordForPossibleFrames) {
-      LexicalUnit fnLUlower = s.getFNStyleLUUnsafe(headIdx,
-          params.getTargetPruningData().getWordnetDict(), true);
-      if (fnLUlower != null) {
-        for(Frame f :
-          params.getTargetPruningData().getFramesFromLU(fnLUlower)) {
-          if(uniqFrames.add(f)) {
-            frameMatches.add(f);
-            //prototypes.add(???);
-          }
-        }
-      }
-    }
-
-    if(frameMatches.size() == 0)
-      return null;
-
-    return new FrameVars(headIdx, prototypes, frameMatches);
-  }
-
-
-  /**
    * Takes a sentence, and optionally a FNTagging, and can make either
    * {@link Decodable}<FNTagging>s (for prediction) or
    * {@link LabeledFgExample}s for training.
@@ -347,39 +213,36 @@ public class FrameIdStage
     }
 
     private void initHypotheses() {
-      final int n = sentence.size();
-      if(n < 4) {
-        // TODO check more carefully, like 4 content words or has a verb
-        LOG.warn("skipping short sentence: " + sentence);
-        return;
-      }
-      for(int i=0; i<n; i++) {
-        FrameVars fv = makeFrameVar(sentence, i, parent.params);
-        if(fv != null) possibleFrames.add(fv);
+      TargetIndex ti = parent.params.getTargetIndex();
+      Map<Span, Set<Frame>> byTarget = ti.findFrames(sentence, false);
+      for (Map.Entry<Span, Set<Frame>> x : byTarget.entrySet()) {
+        Span target = x.getKey();
+        List<Frame> frames = new ArrayList<>();
+        frames.addAll(x.getValue());
+        FrameVars fv = new FrameVars(target, null, frames);
+        possibleFrames.add(fv);
+        frameVarInstantiated();
       }
     }
 
     private void setGold(FNTagging p) {
-      if(p.getSentence() != sentence)
+      if (p.getSentence() != sentence)
         throw new IllegalArgumentException();
 
-      // Build an index from targetHeadIdx to FrameRoleVars
+      // Build an index from target to FrameVars
+      Map<Span, FrameVars> byTarget = new HashMap<>();
       Set<FrameVars> haventSet = new HashSet<FrameVars>();
-      FrameVars[] byHead = new FrameVars[sentence.size()];
-      for(FrameVars fHyp : this.possibleFrames) {
-        assert byHead[fHyp.getTargetHeadIdx()] == null;
-        byHead[fHyp.getTargetHeadIdx()] = fHyp;
+      for (FrameVars fHyp : this.possibleFrames) {
+        FrameVars old = byTarget.put(fHyp.getTarget(), fHyp);
+        assert old == null;
         haventSet.add(fHyp);
       }
 
       // Match up each FI to a FIHypothesis by the head word in the target
-      for(FrameInstance fi : p.getFrameInstances()) {
-        Span target = fi.getTarget();
-        int head = parent.getGlobalParams().headFinder.head(
-            target, sentence);
-        FrameVars fHyp = byHead[head];
-        if(fHyp == null) continue;	// nothing you can do here
-        if(fHyp.goldIsSet()) {
+      for (FrameInstance fi : p.getFrameInstances()) {
+        FrameVars fHyp = byTarget.get(fi.getTarget());
+        if (fHyp == null) continue;	// nothing you can do here
+        if (fHyp.goldIsSet()) {
           System.err.println("WARNING: " + p.getId() +
               " has at least two FrameInstances with the same "
               + "target head word, choosing the first one");
@@ -387,13 +250,16 @@ public class FrameIdStage
         }
         fHyp.setGold(fi);
         boolean removed = haventSet.remove(fHyp);
-        assert removed : "two FrameInstances with same head? "
-        + p.getSentence().getId();
+        if (!removed) {
+          throw new RuntimeException(
+              "two FrameInstances with same target? "
+                  + p.getSentence().getId());
+        }
       }
 
       // The remaining hypotheses must be null because they didn't
       // correspond to a FI in the parse
-      for(FrameVars fHyp : haventSet)
+      for (FrameVars fHyp : haventSet)
         fHyp.setGoldIsNull();
     }
 
@@ -499,10 +365,10 @@ public class FrameIdStage
       FgInferencer hasMargins = this.getMargins();
       final boolean logDomain = this.getMargins().isLogDomain();
       List<FrameInstance> fis = new ArrayList<FrameInstance>();
-      for(FrameVars fvars : possibleFrames) {
+      for (FrameVars fvars : possibleFrames) {
         final int T = fvars.numFrames();
         double[] beliefs = new double[T];
-        for(int t=0; t<T; t++) {
+        for (int t=0; t<T; t++) {
           DenseFactor df =
               hasMargins.getMarginals(fvars.getVariable(t));
           // TODO Exactly1 factor removes the need for this
@@ -515,9 +381,10 @@ public class FrameIdStage
         final int nullFrameIdx = fvars.getNullFrameIdx();
         int tHat = parent.params.decoder.decode(beliefs, nullFrameIdx);
         Frame fHat = fvars.getFrame(tHat);
-        if(fHat != Frame.nullFrame)
-          fis.add(FrameInstance.frameMention(fHat,
-              Span.widthOne(fvars.getTargetHeadIdx()), sentence));
+        if (fHat != Frame.nullFrame) {
+          fis.add(FrameInstance.frameMention(
+              fHat, fvars.getTarget(), sentence));
+        }
       }
       return new FNTagging(sentence, fis);
     }

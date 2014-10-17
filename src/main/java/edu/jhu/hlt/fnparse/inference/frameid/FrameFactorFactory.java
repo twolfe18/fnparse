@@ -50,21 +50,19 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
 
-    final int n = s.size();
-    assert n > 2 || fr.size() == 0;
     List<Factor> factors = new ArrayList<Factor>();
     for (FrameVars fhyp : fr) {
       final int T = fhyp.numFrames();
-      final int i = fhyp.getTargetHeadIdx();
       for (int tIdx = 0; tIdx < T; tIdx++) {
         Frame t = fhyp.getFrame(tIdx);
         Var frameVar = fhyp.getVariable(tIdx);
+        int targetHead = params.getParserParams().headFinder.head(fhyp.getTarget(), s);
         features.getContext().setSentence(s);
         features.getContext().setFrame(t);
         features.getContext().setTarget(fhyp.getTarget());
         ExplicitExpFamFactor phi;
         if (l != null) {  // Latent syntax
-          Var linkVar = l.getLinkVar(-1, i);
+          Var linkVar = l.getLinkVar(-1, targetHead);
           VarSet vs = new VarSet(linkVar, frameVar);
           phi = new ExplicitExpFamFactor(vs);
           //LOG.debug("instantiating binary factor (latent deps) for " + vs);
@@ -83,7 +81,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           phi = new ExplicitExpFamFactor(vs);
           if (params.getParserParams().useSyntaxFeatures) {
             //LOG.debug("instantiating unary factor using syntax for " + vs);
-            int head = s.getCollapsedDeps().getHead(i);
+            int head = s.getCollapsedDeps().getHead(targetHead);
             features.getContext().setHead(head);
           } else {
             //LOG.debug("instantiating unary factor for " + vs);

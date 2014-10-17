@@ -610,6 +610,7 @@ public class BasicFeatureTemplates {
   }
 
   public static void main(String[] args) throws Exception {
+    long start = System.currentTimeMillis();
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
     File f = new File("experiments/forward-selection/basic-templates.txt");
@@ -621,5 +622,6 @@ public class BasicFeatureTemplates {
     }
     System.out.println("there are " + basicTemplates.size() + " templates");
     w.close();
+    System.out.println("took " + (System.currentTimeMillis() - start)/1000d + " seconds");
   }
 }

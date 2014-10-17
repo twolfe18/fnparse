@@ -27,7 +27,8 @@ public class FrameVars implements FgRelated {
 	// and i is implicit information in the instance
 	public Frame[] f_it_values;  // first value is nullFrame
 	public Var[] f_it;
-	public int i;  // TODO change to be Span-valued!
+	//public int i;  // TODO change to be Span-valued!
+	public Span target;
 	public Frame gold;
 	public boolean goldSet = false;
 
@@ -35,10 +36,12 @@ public class FrameVars implements FgRelated {
 	 * @param frames should not contain Frame.nullFrame
 	 */
 	public FrameVars(
-	    int headIdx,
+	    //int headIdx,
+	    Span target,
 	    List<FrameInstance> prototypes,
 	    List<Frame> frames) {
-		this.i = headIdx;
+		//this.i = headIdx;
+	  this.target = target;
 		int n = frames.size() + 1;
 		this.f_it = new Var[n];
 		this.f_it_values = new Frame[n];
@@ -51,7 +54,8 @@ public class FrameVars implements FgRelated {
 				if (f == Frame.nullFrame)
 					throw new IllegalArgumentException("don't include nullFrame");
 			}
-			String name = String.format("f_{i=%d,t=%s}", headIdx, f.getName());
+			String name = String.format("f_{%s@%d-%d}",
+			    f.getName(), target.start, target.end);
 			this.f_it[i] = new Var(VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
 			this.f_it_values[i] = f;
 		}
@@ -68,13 +72,9 @@ public class FrameVars implements FgRelated {
 		return i;
 	}
 
-	/**
-	 * @deprecated
-	 */
-	public int getTargetHeadIdx() { return i; }
-
-	// TODO replace with real span value (field)
-	public Span getTarget() { return Span.widthOne(i); }
+	public Span getTarget() {
+	  return target;
+	}
 
 	public Frame getFrame(int t) { return f_it_values[t]; }
 
@@ -94,13 +94,13 @@ public class FrameVars implements FgRelated {
 
 	@Override
 	public String toString() {
-		return String.format("f_{i=%d,t=1:%d}", i, f_it.length);
+		return String.format("f_{%d@%d-%d}", f_it.length, target.start, target.end);
 	}
 
 	/** Longer than toString */
 	public String debugString() {
 		StringBuilder sb = new StringBuilder();
-		sb.append("<FrameVars @ " + i);
+		sb.append("<FrameVars @ " + target.toString());
 		if (this.goldSet)
 			sb.append(" goldFrame=" + (gold == null ? "null" : gold.getName()));
 		else
@@ -124,16 +124,15 @@ public class FrameVars implements FgRelated {
 	public void setGold(FrameInstance gold) {
 		if(gold.getFrame() == Frame.nullFrame || gold.getFrame() == null)
 			throw new IllegalArgumentException();
-
-		Span target = gold.getTarget();
-		if(!target.includes(this.getTargetHeadIdx()))
+		if (!gold.getTarget().equals(target))
 			throw new IllegalArgumentException();
 
 		this.goldSet = true;
 		if(!Arrays.asList(f_it_values).contains(gold.getFrame())) {
 			LOG.warn("frame filtering heuristic didn't extract "
 					+ gold.getFrame().getName() + " for "
-					+ gold.getSentence().getLU(getTargetHeadIdx()));
+					+ Arrays.toString(gold.getSentence().getWordFor(target))
+					+ " in sentence " + gold.getSentence().getId());
 			this.gold = Frame.nullFrame;
 		}
 		else this.gold = gold.getFrame();

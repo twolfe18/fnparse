@@ -135,24 +135,31 @@ public final class Sentence implements HasId {
     return new LexicalUnit(tokens[i], pos[i]);
   }
 
+  private transient IWord[] wnWords = null;
 	public IWord getWnWord(int i) {
-	  TargetPruningData tpd = TargetPruningData.getInstance();
-	  IRAMDictionary dict = tpd.getWordnetDict();
-	  WordnetStemmer stemmer = tpd.getStemmer();
-	  edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(i));
-	  if (tag == null)
-	    return null;
-	  String w = getWord(i);
-	  if (w.length() == 0)
-	    return null;
-	  List<String> stems = stemmer.findStems(w, tag);
-	  if (stems == null || stems.size() == 0)
-	    return null;
-	  IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
-	  if (ti == null || ti.getWordIDs().isEmpty())
-	    return null;
-	  IWordID t = ti.getWordIDs().get(0);
-	  return dict.getWord(t);
+	  if (wnWords == null) {
+	    wnWords = new IWord[tokens.length];
+	    TargetPruningData tpd = TargetPruningData.getInstance();
+	    IRAMDictionary dict = tpd.getWordnetDict();
+	    WordnetStemmer stemmer = tpd.getStemmer();
+	    for (int idx = 0; idx < tokens.length; idx++) {
+	      edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(idx));
+	      if (tag == null)
+	        continue;
+	      String w = getWord(idx);
+	      if (w.length() == 0)
+	        continue;
+	      List<String> stems = stemmer.findStems(w, tag);
+	      if (stems == null || stems.size() == 0)
+	        continue;
+	      IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+	      if (ti == null || ti.getWordIDs().isEmpty())
+	        continue;
+	      IWordID t = ti.getWordIDs().get(0);
+	      wnWords[idx] = dict.getWord(t);
+	    }
+	  }
+	  return wnWords[i];
 	}
 
   public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
