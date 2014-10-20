@@ -31,6 +31,8 @@ import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Path;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
@@ -737,6 +739,16 @@ public class BasicFeatureTemplates {
     return uniq.size() + 1;
   }
 
+  private static int estimateRoleLabellingCardinality(
+      Template template,
+      List<FNParse> parses) {
+    ParserParams params = new ParserParams();
+    RoleSpanLabelingStage stage = new RoleSpanLabelingStage(params, params);
+    params.getAlphabet().startGrowth();
+    stage.train(parses);
+    return params.getAlphabet().size() + 1;
+  }
+
   public static void main(String[] args) throws Exception {
     long start = System.currentTimeMillis();
     List<FNParse> parses = DataUtil.iter2list(
@@ -745,8 +757,9 @@ public class BasicFeatureTemplates {
     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), "UTF-8"));
     for (Map.Entry<String, Template> tmpl : basicTemplates.entrySet()) {
       System.out.println(tmpl.getKey());
-      int cardinality = estimateFrameIdCardinality(tmpl.getValue(), parses);
-      w.write(String.format("%s\t%d\n", tmpl.getKey(), cardinality));
+      int card_frameId = estimateFrameIdCardinality(tmpl.getValue(), parses);
+      int card_roleLab = estimateRoleLabellingCardinality(tmpl.getValue(), parses);
+      w.write(String.format("%s\t%d\t%d\n", tmpl.getKey(), card_frameId, card_roleLab));
     }
     System.out.println("there are " + basicTemplates.size() + " templates");
     w.close();
