@@ -6,11 +6,15 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.ToIntFunction;
 
 import org.apache.commons.math3.util.FastMath;
 
@@ -23,13 +27,13 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Path;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
+import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -82,204 +86,229 @@ public class BasicFeatureTemplates {
     return l;
   }
 
+  private static void addTemplate(String name, Template t) {
+    if (basicTemplates == null)
+      basicTemplates = new HashMap<>();
+    Template ot = basicTemplates.put(name, t);
+    if (ot != null)
+      throw new RuntimeException("abiguous template name: " + name);
+  }
+
+  private static Map<String, Function<SentencePosition, String>> tokenExtractors;
   private static Map<String, Template> basicTemplates;
   private static Map<String, Template> labels;
   static {
-    basicTemplates = new HashMap<>();
-    basicTemplates.put("1", new TemplateSS() {
+    /* TOKEN EXTRACTORS *******************************************************/
+    tokenExtractors = new HashMap<>();
+    tokenExtractors.put("Word", x -> {
+      if (x.indexInSent())
+        return x.sentence.getWord(x.index);
+      else
+        return null;
+    });
+    tokenExtractors.put("Word2", x -> {
+      if (x.indexInSent()
+          && MinimalRoleFeatures.canLexicalize(x.index, x.sentence)) {
+        return x.sentence.getWord(x.index);
+      } else {
+        return null;
+      }
+    });
+    tokenExtractors.put("Word3", x -> {
+      if (x.indexInSent()) {
+        String s = x.sentence.getWord(x.index);
+        if (s.length() > 4)
+          return s.substring(0, 4);
+        return s;
+      } else {
+        return null;
+      }
+    });
+    tokenExtractors.put("Pos", x -> {
+      if (x.indexInSent())
+        return x.sentence.getPos(x.index);
+      else
+        return null;
+    });
+    tokenExtractors.put("Pos2", x -> {
+      if (x.indexInSent())
+        return x.sentence.getPos(x.index).substring(0, 1);
+      else
+        return null;
+    });
+    tokenExtractors.put("CollapsedLabel", x -> {
+      if (x.indexInSent()) {
+        DependencyParse deps = x.sentence.getCollapsedDeps();
+        return deps.getLabel(x.index);
+      } else {
+        return null;
+      }
+    });
+    tokenExtractors.put("CollapsedParentDir", x -> {
+      if (x.indexInSent()) {
+        DependencyParse deps = x.sentence.getCollapsedDeps();
+        int h = deps.getHead(x.index);
+        if (h < 0)
+          return "root";
+        else if (h < x.index)
+          return "left";
+        else
+          return "right";
+      } else {
+        return null;
+      }
+    });
+    for (int maxLen : Arrays.asList(2, 4, 6, 99)) {
+      tokenExtractors.put("Bc256/" + maxLen, x -> {
+        if (x.indexInSent()) {
+          String w = x.sentence.getWord(x.index);
+          return BrownClusters.getBc256().getPath(w, maxLen);
+        } else {
+          return null;
+        }
+      });
+      tokenExtractors.put("Bc1000/" + maxLen, x -> {
+        if (x.indexInSent()) {
+          String w = x.sentence.getWord(x.index);
+          return BrownClusters.getBc1000().getPath(w, maxLen);
+        } else {
+          return null;
+        }
+      });
+    }
+
+
+    /* START OF TEMPLATES *****************************************************/
+    addTemplate("1", new TemplateSS() {
       @Override
       public String extractSS(TemplateContext context) {
         return "intercept";
       }
     });
 
-    /* TARGET FEATURES ********************************************************/
-    // head
-    basicTemplates.put("targetHeadWord", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        String w = context.getSentence().getWord(h);
-        return "targetHeadWord=" + w;
-      }
-    });
-    for (int maxLen : Arrays.asList(2, 4, 6, 99)) {
-      String name = "targetHeadWordBc256-" + maxLen;
-      basicTemplates.put(name, new TemplateSS() {
+
+    /* BASIC TEMPLATES ********************************************************/
+    // head1
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1" + x.getKey();
+      addTemplate(name, new TemplateSS() {
+        private SentencePosition pos = new SentencePosition();
         public String extractSS(TemplateContext context) {
-          int h = context.getTarget().end - 1;
-          String w = context.getSentence().getWord(h);
-          return name + "=" + BrownClusters.getBc256().getPath(w, maxLen);
-        }
-      });
-      String name2 = "targetHeadWordBc1000-" + maxLen;
-      basicTemplates.put(name2, new TemplateSS() {
-        public String extractSS(TemplateContext context) {
-          int h = context.getTarget().end - 1;
-          String w = context.getSentence().getWord(h);
-          return name2 + "=" + BrownClusters.getBc1000().getPath(w, maxLen);
+          pos.index = context.getHead1();
+          if (pos.index == TemplateContext.UNSET)
+            return null;
+          pos.sentence = context.getSentence();
+          return name + "=" + x.getValue().apply(pos);
         }
       });
     }
-    basicTemplates.put("targetHeadWord2", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        if (!MinimalRoleFeatures.canLexicalize(h, context.getSentence()))
-          return null;
-        String w = context.getSentence().getWord(h);
-        return "targetHeadWord2=" + w;
-      }
-    });
-    basicTemplates.put("targetHeadWord3", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        String w = context.getSentence().getWord(h);
-        if (w.length() > 4)
-          w = w.substring(0, 4);
-        return "targetHeadWord3=" + w;
-      }
-    });
-    basicTemplates.put("targetHeadPos", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        String p = context.getSentence().getPos(h);
-        return "targetHeadPos=" + p;
-      }
-    });
-    basicTemplates.put("targetHeadLabelCol", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        DependencyParse deps = context.getSentence().getCollapsedDeps();
-        return "targetHeadLabelCol=" + deps.getLabel(h);
-      }
-    });
 
-    // parent
-    basicTemplates.put("targetParentWord", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        int p = context.getSentence().getCollapsedDeps().getHead(h);
-        return "targetParentWord=" + AbstractFeatures.getLUSafe(
-            p, context.getSentence()).word;
-      }
-    });
-    basicTemplates.put("targetParentWord2", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        int p = context.getSentence().getCollapsedDeps().getHead(h);
-        if (!MinimalRoleFeatures.canLexicalize(p, context.getSentence()))
-            return null;
-        return "targetParentWord2=" + AbstractFeatures.getLUSafe(
-            p, context.getSentence()).word;
-      }
-    });
-    basicTemplates.put("targetParentPos", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int h = context.getTarget().end - 1;
-        int p = context.getSentence().getCollapsedDeps().getHead(h);
-        return "targetParent=" + AbstractFeatures.getLUSafe(
-            p, context.getSentence()).pos;
-      }
-    });
-    basicTemplates.put("targetParentLabelCol", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        Sentence s = context.getSentence();
-        DependencyParse deps = s.getCollapsedDeps();
-        int h = context.getTarget().end - 1;
-        int p = deps.getHead(h);
-        if (p < 0)
-          return "targetParentCol=ROOT";
-        return "targetParentCol=" + deps.getLabel(p);
-      }
-    });
-    basicTemplates.put("targetParentColDir", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        Sentence s = context.getSentence();
-        DependencyParse deps = s.getCollapsedDeps();
-        int h = context.getTarget().end - 1;
-        int p = deps.getHead(h);
-        if (p < 0)
-          return "targetParentDir=root";
-        else if (p == h)
-          return "targetParentDir=loop";
-        else if (p < h)
-          return "targetParentDir=left";
-        else
-          return "targetParentDir=right";
-      }
-    });
-    // TODO depth
-
-    // children
-    basicTemplates.put("targetChildColWord", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        DependencyParse d = context.getSentence().getCollapsedDeps();
-        int[] c = d.getChildren(context.getTarget().end - 1);
-        if (c.length == 0)
-          return Arrays.asList("targetChildCol=NONE");
-        else {
-          List<String> cs = new ArrayList<>();
-          for (int cd : c)
-            cs.add("targetChildCol=" + context.getSentence().getWord(cd));
-          return cs;
-        }
-      }
-    });
-    basicTemplates.put("targetChildColWord2", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Sentence s = context.getSentence();
-        DependencyParse d = s.getCollapsedDeps();
-        int[] c = d.getChildren(context.getTarget().end - 1);
-        if (c.length == 0)
-          return Arrays.asList("targetChildCol2=NONE");
-        else {
-          List<String> cs = new ArrayList<>();
-          for (int cd : c)
-            if (MinimalRoleFeatures.canLexicalize(cd, s))
-              cs.add("targetChildCol2=" + s.getWord(cd));
-          return cs;
-        }
-      }
-    });
-    basicTemplates.put("targetChildColPos", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        DependencyParse d = context.getSentence().getCollapsedDeps();
-        int[] c = d.getChildren(context.getTarget().end - 1);
-        if (c.length == 0)
-          return Arrays.asList("targetChildCol=NONE");
-        else {
-          List<String> cs = new ArrayList<>();
-          for (int cd : c)
-            cs.add("targetChildCol=" + context.getSentence().getPos(cd));
-          return cs;
-        }
-      }
-    });
-    basicTemplates.put("targetChildLabelCol", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        DependencyParse d = context.getSentence().getCollapsedDeps();
-        int[] c = d.getChildren(context.getTarget().end - 1);
-        if (c.length == 0)
-          return Arrays.asList("targetChildCol=NONE");
-        else {
-          List<String> cs = new ArrayList<>();
-          for (int cd : c)
-            cs.add("targetChildCol=" + d.getLabel(cd));
-          return cs;
-        }
-      }
-    });
-    // TODO max child depth
-    // TODO count children left|right
-
-    // TODO distance to first POS going left|right
-    // TODO count of POS to the left|right
-    
-    // depth
-    for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "targetHeadDepthCol" + coarse;
-      basicTemplates.put(name, new TemplateSS() {
+    // head1 parent
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1Parent" + x.getKey();
+      addTemplate(name, new TemplateSS() {
+        private SentencePosition pos = new SentencePosition();
         public String extractSS(TemplateContext context) {
-          Span t = context.getTarget();
+          int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
+          pos.index = context.getSentence().getCollapsedDeps().getHead(h);
+          pos.sentence = context.getSentence();
+          return name + "=" + x.getValue().apply(pos);
+        }
+      });
+    }
+
+    // head1 children
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1ChildCollaped" + x.getKey();
+      addTemplate(name, new Template() {
+        private SentencePosition pos = new SentencePosition();
+        public Iterable<String> extract(TemplateContext context) {
+          DependencyParse d = context.getSentence().getCollapsedDeps();
+          int[] c = d.getChildren(context.getHead1());
+          if (c.length == 0)
+            return Arrays.asList(name + "=NONE");
+          else {
+            pos.sentence = context.getSentence();
+            List<String> cs = new ArrayList<>();
+            for (int cd : c) {
+              pos.index = cd;
+              cs.add(name + "=" + x.getValue().apply(pos));
+            }
+            return cs;
+          }
+        }
+      });
+    }
+
+    // left, first, last, right
+    Map<String, ToIntFunction<Span>> spanLocs = new HashMap<>();
+    spanLocs.put("Left", x -> x.start - 1);
+    spanLocs.put("First", x -> x.start);
+    spanLocs.put("Last", x -> x.end - 1);
+    spanLocs.put("Right", x -> x.end);
+    for (Entry<String, Function<SentencePosition, String>> ex1 : tokenExtractors.entrySet()) {
+      for (Entry<String, ToIntFunction<Span>> loc1 : spanLocs.entrySet()) {
+        String name1 = "span1" + loc1.getKey() + ex1.getKey();
+        TemplateSS temp1 = new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          public String extractSS(TemplateContext context) {
+            Span s = context.getSpan1();
+            if (s == null)
+              return null;
+            pos.index = loc1.getValue().applyAsInt(s);
+            pos.sentence = context.getSentence();
+            return name1 + "=" + ex1.getValue().apply(pos);
+          }
+        };
+        addTemplate(name1, temp1);
+        // two-index templates
+        for (Entry<String, Function<SentencePosition, String>> ex2 : tokenExtractors.entrySet()) {
+          for (Entry<String, ToIntFunction<Span>> loc2 : spanLocs.entrySet()) {
+            String name2 = name1 + "Span2" + loc2.getKey() + ex2.getKey();
+            addTemplate(name2, new TemplateSS() {
+              private SentencePosition pos = new SentencePosition();
+              public String extractSS(TemplateContext context) {
+                String v1 = temp1.extractSS(context);
+                if (v1 == null)
+                  return null;
+                Span s = context.getSpan2();
+                if (s == null)
+                  return null;
+                pos.index = loc2.getValue().applyAsInt(s);
+                pos.sentence = context.getSentence();
+                String v2 = name2 + "=" + ex2.getValue().apply(pos);
+                return v1 + "_" + v2;
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // span1 width
+    for (int div = 1; div <= 4; div++) {
+      final int divL = div;
+      final String name = "span1Width/" + div;
+      addTemplate(name, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          Span t = context.getSpan1();
+          if (t == null)
+            return null;
+          return discretizeWidth(name, divL, 5, t.width());
+        }
+      });
+    }
+
+    // span1 depth
+    for (int coarse : Arrays.asList(1, 2, 3)) {
+      String name = "span1DepthCol" + coarse;
+      addTemplate(name, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          Span t = context.getSpan1();
+          if (t == null)
+            return null;
           Sentence s = context.getSentence();
           DependencyParse deps = s.getBasicDeps();
           if (deps == null)
@@ -294,12 +323,44 @@ public class BasicFeatureTemplates {
       });
     }
 
-    // left projection
+    // TODO max child depth
+    // TODO count children left|right
+
+    // TODO distance to first POS going left|right
+    // TODO count of POS to the left|right
+
+    addTemplate("span1GovDirRelations", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        DependencyParse deps = context.getSentence().getCollapsedDeps();
+        List<String> rels = new ArrayList<>();
+        for (int i = s.start; i < s.end; i++)
+          rels.add(parentRelTo(i, s.start, s.end - 1, deps));
+        Collections.sort(rels);
+        StringBuilder rs = new StringBuilder();
+        rs.append("span1GovDirRelations");
+        if (rels.size() == 0) {
+          rs.append("_NONE");
+        } else {
+          for (String rel : rels) {
+            rs.append("_");
+            rs.append(rel);
+          }
+        }
+        return rs.toString();
+      }
+    });
+
+    // span1 left projection
     for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "targetLeftProjCol" + coarse;
-      basicTemplates.put(name, new TemplateSS() {
+      String name = "span1LeftProjCol" + coarse;
+      addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
-          Span t = context.getTarget();
+          Span t = context.getSpan1();
+          if (t == null)
+            return null;
           Sentence s = context.getSentence();
           DependencyParse deps = s.getBasicDeps();
           if (deps == null)
@@ -317,10 +378,12 @@ public class BasicFeatureTemplates {
     }
     // right projection
     for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "targetRightProjCol" + coarse;
-      basicTemplates.put(name, new TemplateSS() {
+      String name = "span1RightProjCol" + coarse;
+      addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
-          Span t = context.getTarget();
+          Span t = context.getSpan1();
+          if (t == null)
+            return null;
           Sentence s = context.getSentence();
           DependencyParse deps = s.getBasicDeps();
           if (deps == null)
@@ -336,28 +399,61 @@ public class BasicFeatureTemplates {
       });
     }
 
-
     // path features
     for (Path.NodeType nt : Path.NodeType.values()) {
       for (Path.EdgeType et : Path.EdgeType.values()) {
-        String name1 = "targetRootPath-" + nt + "-" + et + "-t";
-        basicTemplates.put(name1, new TemplateSS() {
+        String name1 = "head1RootPath-" + nt + "-" + et + "-t";
+        addTemplate(name1, new TemplateSS() {
           public String extractSS(TemplateContext context) {
-            Span t = context.getTarget();
+            int h = context.getHead1();
+            if (h == TemplateContext.UNSET)
+              return null;
             Sentence s = context.getSentence();
-            Path p = new Path(s, s.getCollapsedDeps(), t.start, nt, et);
-            return p.getPath();
+            Path p = new Path(s, s.getCollapsedDeps(), h, nt, et);
+            return name1 + "=" + p.getPath();
+          }
+        });
+        String name2 = "head1head2Path-" + nt + "-" + et + "-t";
+        addTemplate(name2, new TemplateSS() {
+          public String extractSS(TemplateContext context) {
+            int h1 = context.getHead1();
+            if (h1 == TemplateContext.UNSET)
+              return null;
+            int h2 = context.getHead2();
+            if (h2 == TemplateContext.UNSET)
+              return null;
+            Sentence s = context.getSentence();
+            Path p = new Path(s, s.getCollapsedDeps(), h1, h2, nt, et);
+            return name2 + "=" + p.getPath();
           }
         });
         for (int length : Arrays.asList(1, 2, 3, 4)) {
-          String name2 = "targetRootPathNgram-" + nt + "-" + et + "-len" + length;
-          basicTemplates.put(name2, new Template() {
+          String nameL = "head1RootPathNgram-" + nt + "-" + et + "-len" + length;
+          addTemplate(nameL, new Template() {
             public Iterable<String> extract(TemplateContext context) {
-              Span t = context.getTarget();
+              int h = context.getHead1();
+              if (h == TemplateContext.UNSET)
+                return null;
               Sentence s = context.getSentence();
-              Path p = new Path(s, s.getCollapsedDeps(), t.start, nt, et);
+              Path p = new Path(s, s.getCollapsedDeps(), h, nt, et);
               Set<String> pieces = new HashSet<>();
-              p.pathNGrams(length, pieces, name2 + "=");
+              p.pathNGrams(length, pieces, nameL + "=");
+              return pieces;
+            }
+          });
+          String nameL2 = "head1head2PathNgram-" + nt + "-" + et + "-len" + length;
+          addTemplate(nameL2, new Template() {
+            public Iterable<String> extract(TemplateContext context) {
+              int h1 = context.getHead1();
+              if (h1 == TemplateContext.UNSET)
+                return null;
+              int h2 = context.getHead2();
+              if (h2 == TemplateContext.UNSET)
+                return null;
+              Sentence s = context.getSentence();
+              Path p = new Path(s, s.getCollapsedDeps(), h1, h2, nt, et);
+              Set<String> pieces = new HashSet<>();
+              p.pathNGrams(length, pieces, nameL2 + "=");
               return pieces;
             }
           });
@@ -365,52 +461,8 @@ public class BasicFeatureTemplates {
       }
     }
 
-    // left and right words
-    basicTemplates.put("targetLeftWord", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        return "targetLeft=" + AbstractFeatures.getLUSafe(
-            context.getTarget().start - 1, context.getSentence()).word;
-      }
-    });
-    basicTemplates.put("targetLeftWord2", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int i = context.getTarget().start - 1;
-        Sentence s = context.getSentence();
-        if (!MinimalRoleFeatures.canLexicalize(i, s))
-          return null;
-        return "targetLeft2=" + AbstractFeatures.getLUSafe(i, s).word;
-      }
-    });
-    basicTemplates.put("targetLeftPos", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        return "targetLeft=" + AbstractFeatures.getLUSafe(
-            context.getTarget().start - 1, context.getSentence()).pos;
-      }
-    });
-    basicTemplates.put("targetRightWord", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        return "targetRight=" + AbstractFeatures.getLUSafe(
-            context.getTarget().end, context.getSentence()).word;
-      }
-    });
-    basicTemplates.put("targetRightWord2", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int i = context.getTarget().end;
-        Sentence s = context.getSentence();
-        if (!MinimalRoleFeatures.canLexicalize(i, s))
-          return null;
-        return "targetRight2=" + AbstractFeatures.getLUSafe(i, s).word;
-      }
-    });
-    basicTemplates.put("targetRightPos", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        return "targetRight=" + AbstractFeatures.getLUSafe(
-            context.getTarget().end, context.getSentence()).pos;
-      }
-    });
-
     /* FRAME-TARGET FEATURES **************************************************/
-    basicTemplates.put("luMatch", new TemplateSS() {
+    addTemplate("luMatch", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span t = context.getTarget();
         if (t.width() != 1)
@@ -425,7 +477,7 @@ public class BasicFeatureTemplates {
           return null;
       }
     });
-    basicTemplates.put("luMatch-WNSynSet", new TemplateSS() {
+    addTemplate("luMatch-WNSynSet", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span t = context.getTarget();
         if (t.width() != 1)
@@ -440,7 +492,7 @@ public class BasicFeatureTemplates {
         int c = 0;
         for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
           hadAChance = true;
-          // see if syn-set match for (targetHead, prototype)
+          // see if syn-set match for (head1, prototype)
           Span pt = p.getTarget();
           if (pt.width() != 1)
             continue;
@@ -454,7 +506,7 @@ public class BasicFeatureTemplates {
         return "luMatch-WnSynSet=" + c;
       }
     });
-    basicTemplates.put("luMatch-WNRelated", new Template() {
+    addTemplate("luMatch-WNRelated", new Template() {
       public Iterable<String> extract(TemplateContext context) {
         Span t = context.getTarget();
         if (t.width() != 1)
@@ -468,7 +520,7 @@ public class BasicFeatureTemplates {
         boolean hadAChance = false;
         for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
           hadAChance = true;
-          // see if syn-set match for (targetHead, prototype)
+          // see if syn-set match for (head1, prototype)
           Span pt = p.getTarget();
           if (pt.width() != 1)
             continue;
@@ -485,7 +537,7 @@ public class BasicFeatureTemplates {
         return ret;
       }
     });
-    basicTemplates.put("luMatch-WNRelatedSynSet", new Template() {
+    addTemplate("luMatch-WNRelatedSynSet", new Template() {
       public Iterable<String> extract(TemplateContext context) {
         Span t = context.getTarget();
         if (t.width() != 1)
@@ -499,7 +551,7 @@ public class BasicFeatureTemplates {
         boolean hadAChance = false;
         for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
           hadAChance = true;
-          // see if syn-set match for (targetHead, prototype)
+          // see if syn-set match for (head1, prototype)
           Span pt = p.getTarget();
           if (pt.width() != 1)
             continue;
@@ -520,46 +572,82 @@ public class BasicFeatureTemplates {
       }
     });
 
+    /* FRAME-ROLE FEATURES ****************************************************/
+    addTemplate("argHeadRelation1", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int t = context.getTargetHead();
+        if (t == TemplateContext.UNSET)
+          return null;
+        int a = context.getArgHead();
+        if (a == TemplateContext.UNSET)
+          return null;
+        DependencyParse deps = context.getSentence().getCollapsedDeps();
+        return "argHeadRelation1=" + parentRelTo(t, t, a, deps);
+      }
+    });
+    addTemplate("argHeadRelation2", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int t = context.getTargetHead();
+        if (t == TemplateContext.UNSET)
+          return null;
+        int a = context.getArgHead();
+        if (a == TemplateContext.UNSET)
+          return null;
+        Span s = context.getArg();
+        assert s != null;
+        DependencyParse deps = context.getSentence().getCollapsedDeps();
+        return "argHeadRelation2=" + parentRelTo(t, s.start, s.end - 1, deps);
+      }
+    });
 
     /* SENTENCE FEATURES ******************************************************/
-    basicTemplates.put("sentenceWords", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Sentence s = context.getSentence();
-        Set<String> words = new HashSet<String>();
-        for (int i = 0; i < s.size(); i++)
-          words.add("sentContains=" + s.getWord(i));
-        if (words.size() == 0)
-          words.add("sentContains=NONE");
-        return words;
-      }
-    });
-    basicTemplates.put("sentenceWords2", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Sentence s = context.getSentence();
-        Set<String> words = new HashSet<String>();
-        for (int i = 0; i < s.size(); i++)
-          if (MinimalRoleFeatures.canLexicalize(i, s))
-            words.add("sentContains2=" + s.getWord(i));
-        if (words.size() == 0)
-          words.add("sentContains2=NONE");
-        return words;
-      }
-    });
-    basicTemplates.put("sentenceWords3", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Sentence s = context.getSentence();
-        Set<String> words = new HashSet<String>();
-        for (int i = 0; i < s.size(); i++) {
-          String w = s.getWord(i);
-          if (w.length() > 4)
-            w = w.substring(0, 4);
-          words.add("sentContains3=" + w);
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      // bag of words for entire sentence
+      String name = "sentence" + x.getKey();
+      addTemplate(name, new Template() {
+        private SentencePosition pos = new SentencePosition();
+        public Iterable<String> extract(TemplateContext context) {
+          pos.sentence = context.getSentence();
+          Set<String> words = new HashSet<String>();
+          for (pos.index = 0;
+              pos.index < pos.sentence.size();
+              pos.index++) {
+            words.add(name + "=" + x.getValue().apply(pos));
+          }
+          if (words.size() == 0)
+            words.add(name + "=NONE");
+          return words;
         }
-        if (words.size() == 0)
-          words.add("sentContains3=NONE");
-        return words;
-      }
-    });
+      });
+      // between head1 and head2
+      String nameBetween = "betweenHead1Head2" + x.getKey();
+      addTemplate(nameBetween, new Template() {
+        private SentencePosition pos = new SentencePosition();
+        public Iterable<String> extract(TemplateContext context) {
+          int h1 = context.getHead1();
+          if (h1 == TemplateContext.UNSET)
+            return null;
+          int h2 = context.getHead2();
+          if (h2 == TemplateContext.UNSET)
+            return null;
+          assert h1 >= 0 && h2 >= 0;
+          if (h1 > h2) {
+            int temp = h1;
+            h1 = h2;
+            h2 = temp;
+          }
+          pos.sentence = context.getSentence();
+          Set<String> words = new HashSet<String>();
+          for (int i = h1 + 1; i < h2; i++) {
+            pos.index = i;
+            words.add(nameBetween + "=" + x.getValue().apply(pos));
+          }
+          if (words.size() == 0)
+            words.add(nameBetween + "=NONE");
+          return words;
+        }
+      });
+    }
 
 
     /* LABELS *****************************************************************/
@@ -584,21 +672,21 @@ public class BasicFeatureTemplates {
     });
     labels.put("dep", new TemplateSS() {
       /**
-       * fires whenever l_{root,i}=1 where i is the head of some FrameInstance
+       * fires whenever l_{root,i} exists where i is the head of some FrameInstance
        */
       public String extractSS(TemplateContext context) {
-        if (context.getHead() == TemplateContext.UNSET)
-          return null;
-        else
+        if (context.getHead1_isRootSet())
           return "dep";
+        else
+          return null;
       }
     });
     labels.put("frameDep", new TemplateSS() {
       /**
-       * fires whenever l_{root,i}=1 AND f_it=1 for some frame t.
+       * fires whenever l_{root,i} exists AND f_it=1 for some frame t.
        */
       public String extractSS(TemplateContext context) {
-        if (context.getHead() == TemplateContext.UNSET)
+        if (!context.getHead1_isRootSet())
           return null;
         else if (context.getFrame() == null)
           return null;
@@ -606,10 +694,29 @@ public class BasicFeatureTemplates {
           return "frameDep=" + context.getFrame().getName();
       }
     });
-    // TODO frameRole
+    labels.put("frameRole", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "frameRole=" + f.getName() + "." + f.getRole(role);
+      }
+    });
+    labels.put("role", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "role=" + f.getRole(role);
+      }
+    });
   }
 
-  private static int estimateCardinality(
+  private static int estimateFrameIdCardinality(
       Template template,
       List<FNParse> parses) {
     TemplateContext ctx = new TemplateContext();
@@ -617,8 +724,10 @@ public class BasicFeatureTemplates {
     for (FNParse p : parses) {
       ctx.setSentence(p.getSentence());
       for (FrameInstance fi : p.getFrameInstances()) {
-        ctx.setTarget(fi.getTarget());
         ctx.setFrame(fi.getFrame());
+        ctx.setTarget(fi.getTarget());
+        ctx.setSpan1(fi.getTarget());
+        ctx.setHead1(fi.getTarget().end - 1);
         Iterable<String> t = template.extract(ctx);
         if (t != null)
           for (String s : t)
@@ -636,7 +745,7 @@ public class BasicFeatureTemplates {
     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), "UTF-8"));
     for (Map.Entry<String, Template> tmpl : basicTemplates.entrySet()) {
       System.out.println(tmpl.getKey());
-      int cardinality = estimateCardinality(tmpl.getValue(), parses);
+      int cardinality = estimateFrameIdCardinality(tmpl.getValue(), parses);
       w.write(String.format("%s\t%d\n", tmpl.getKey(), cardinality));
     }
     System.out.println("there are " + basicTemplates.size() + " templates");

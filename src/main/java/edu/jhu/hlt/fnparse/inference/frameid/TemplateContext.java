@@ -14,6 +14,11 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * (meaning that features have no context to extract from, and thus wont fire).
  * You might want to do this if there are many more cases where Y=false in the
  * gold configuration to prune the number of features and prevent overfitting.
+ * 
+ * NOTE: There are not guards on getters. That is, if a value is not set, you
+ * will get back whatever value is there. The values are chosen so that you
+ * should hit a NPE or index out of bounds error, but the exception is boolean
+ * valued variables. You must call the isSet method before calling them.
  */
 public class TemplateContext {
 
@@ -95,7 +100,7 @@ public class TemplateContext {
   public void setTarget(Span target) {
     this.target = target;
   }
-  public int getHead() {
+  public int getTargetHead() {
     return targetHead;
   }
   public void setTargetHead(int head) {
@@ -136,6 +141,7 @@ public class TemplateContext {
   }
 
   public void setHead2(int head2) {
+    assert head2 >= 0 || head2 == UNSET;
     this.head2 = head2;
   }
 
@@ -144,6 +150,7 @@ public class TemplateContext {
   }
 
   public void setHead1(int head1) {
+    assert head1 >= 0 || head1 == UNSET;
     this.head1 = head1;
   }
 
@@ -167,6 +174,9 @@ public class TemplateContext {
     this.argHead = argHead;
   }
 
+  public boolean getHead1_isRootSet() {
+    return head1_isRoot != UNSET;
+  }
   public boolean getHead1_isRoot() {
     if (head1_isRoot < 0)
       throw new IllegalStateException("not set");

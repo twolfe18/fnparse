@@ -146,7 +146,7 @@ public final class Sentence implements HasId {
 	      edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(idx));
 	      if (tag == null)
 	        continue;
-	      String w = getWord(idx);
+	      String w = getWord(idx).trim().replace("_", "");
 	      if (w.length() == 0)
 	        continue;
 	      List<String> stems = stemmer.findStems(w, tag);

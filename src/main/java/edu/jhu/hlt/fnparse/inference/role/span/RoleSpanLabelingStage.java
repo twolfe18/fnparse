@@ -250,9 +250,6 @@ public class RoleSpanLabelingStage
           new ExplicitExpFamFactor(new VarSet(argVar));
 
       Sentence s = input.getSentence();
-      int argHeadIdx = -1;
-      if (arg != Span.nullSpan)
-        argHeadIdx = parent.globalParams.headFinder.head(arg, s);
       int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
 
       // Compute features for the binary factor
@@ -261,14 +258,17 @@ public class RoleSpanLabelingStage
       ctx.setSentence(s);
       ctx.setFrame(frame);
       ctx.setRole(role);
-      ctx.setTarget(target);
-      ctx.setTargetHead(targetHeadIdx);
-      ctx.setArg(arg);
-      ctx.setArgHead(argHeadIdx);
-      ctx.setSpan1(arg);
-      ctx.setHead1(argHeadIdx);
-      ctx.setSpan2(target);
-      ctx.setHead2(targetHeadIdx);
+      if (arg != null && arg != Span.nullSpan) {
+        ctx.setTarget(target);
+        ctx.setTargetHead(targetHeadIdx);
+        ctx.setSpan2(target);
+        ctx.setHead2(targetHeadIdx);
+        int argHeadIdx = parent.globalParams.headFinder.head(arg, s);
+        ctx.setArg(arg);
+        ctx.setArgHead(argHeadIdx);
+        ctx.setSpan1(arg);
+        ctx.setHead1(argHeadIdx);
+      }
       FeatureVector fv = new FeatureVector();
       parent.features.featurize(fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
