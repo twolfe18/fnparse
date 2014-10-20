@@ -50,6 +50,8 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
 
+    TemplateContext ctx = features.getContext();
+    ctx.clear();
     List<Factor> factors = new ArrayList<Factor>();
     for (FrameVars fhyp : fr) {
       final int T = fhyp.numFrames();
@@ -57,9 +59,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
         Frame t = fhyp.getFrame(tIdx);
         Var frameVar = fhyp.getVariable(tIdx);
         int targetHead = params.getParserParams().headFinder.head(fhyp.getTarget(), s);
-        features.getContext().setSentence(s);
-        features.getContext().setFrame(t);
-        features.getContext().setTarget(fhyp.getTarget());
+        ctx.setSentence(s);
+        ctx.setFrame(t);
+        ctx.setTarget(fhyp.getTarget());
         ExplicitExpFamFactor phi;
         if (l != null) {  // Latent syntax
           Var linkVar = l.getLinkVar(-1, targetHead);
@@ -70,11 +72,14 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
             VarConfig vc = vs.getVarConfig(config);
             boolean link = BinaryVarUtil.configToBool(vc.getState(linkVar));
             boolean frame = BinaryVarUtil.configToBool(vc.getState(frameVar));
-            features.getContext().setHead(link ? -1 : TemplateContext.UNSET);
-            features.getContext().setFrame(frame ? t : null);
-            FeatureVector fv = new FeatureVector();
-            features.featurize(fv);
-            phi.setFeatures(config, fv);
+            if (frame) {
+              ctx.setHead1_isRoot(link);
+              FeatureVector fv = new FeatureVector();
+              features.featurize(fv);
+              phi.setFeatures(config, fv);
+            } else {
+              phi.setFeatures(config, FeatureUtils.emptyFeatures);
+            }
           }
         } else {          // No latent syntax
           VarSet vs = new VarSet(frameVar);
@@ -82,10 +87,10 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           if (params.getParserParams().useSyntaxFeatures) {
             //LOG.debug("instantiating unary factor using syntax for " + vs);
             int head = s.getCollapsedDeps().getHead(targetHead);
-            features.getContext().setHead(head);
+            ctx.setTargetHead(head);
           } else {
             //LOG.debug("instantiating unary factor for " + vs);
-            features.getContext().setHead(TemplateContext.UNSET);
+            ctx.setTargetHead(TemplateContext.UNSET);
           }
           FeatureVector fv = new FeatureVector();
           features.featurize(fv);

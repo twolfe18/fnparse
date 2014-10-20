@@ -29,7 +29,14 @@ public class TemplatedFeatures implements Serializable {
 
   /**
    * Templates have no arguments, just represent a piece of information like
-   * "lemma of the first word in the target"
+   * "lemma of the first word in the target".
+   * 
+   * NOTE: This interface is supposed to work such that you do not need to know
+   * its requirements (e.g. a template only fires for contexts of (frame,span)).
+   * You should implement this template so that it returns NULL if any of the
+   * requirements are not filled. TemplateJoin is implemented with
+   * short circuiting, so this should be particularly efficient in the case
+   * where the label Template doesn't fire (the label Template should be first).
    */
   public static interface Template {
     /**

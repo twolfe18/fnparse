@@ -102,7 +102,6 @@ public class BasicFeatureTemplates {
         return "targetHeadWord=" + w;
       }
     });
-    //for (int maxLen : Arrays.asList(2, 3, 4, 5, 6, 7)) {
     for (int maxLen : Arrays.asList(2, 4, 6, 99)) {
       String name = "targetHeadWordBc256-" + maxLen;
       basicTemplates.put(name, new TemplateSS() {

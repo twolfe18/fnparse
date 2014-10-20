@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.inference.role.span;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -12,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -20,7 +18,6 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
-import edu.jhu.gm.model.ConstituencyTreeFactor.SpanVar;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
@@ -31,24 +28,16 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.features.Path;
-import edu.jhu.hlt.fnparse.features.Path.EdgeType;
-import edu.jhu.hlt.fnparse.features.Path.NodeType;
-import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
-import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
-import edu.jhu.hlt.fnparse.util.PosPatternGenerator.Mode;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
 
@@ -86,7 +75,7 @@ import edu.jhu.hlt.optimize.functions.L2;
  * CHANGE:
  * We are going to pick out the spans that could be arguments for each target.
  * 1) have F*N^2 binary vars each of which says whether a span could be an arg
- *    to that frame.
+ *    to that frame (instance/target).
  * 2) have N^2 binary vars which say whether it can be an argument to any frame
  *    (can use the max_{frames} factor or features for this)
  * => I'm going to go with option 2 for now. The first implementation will not
@@ -108,454 +97,477 @@ import edu.jhu.hlt.optimize.functions.L2;
  *   if s.width=1 && argPruner.prune(fi.frame, role, s.start) forall role, prune
  *   etc.
  *
+ * NOTE: This is replaced by {@link DeterministicRolePruning}
+ *
  * @author travis
  */
 public class RoleSpanPruningStage
-		extends AbstractStage<FNTagging, FNParseSpanPruning> {
-	private static final long serialVersionUID = 1L;
-	public static final Logger LOG = Logger.getLogger(RoleSpanPruningStage.class);
+    extends AbstractStage<FNTagging, FNParseSpanPruning> {
+  private static final long serialVersionUID = 1L;
+  public static final Logger LOG = Logger.getLogger(RoleSpanPruningStage.class);
 
-	// Features that say whether a span might be an arg to a frame.
-	private Features features;
+  // If true, do not prune anything, produce FNParseSpanPrunings that have
+  // 100% recall.
+  private boolean keepEverything = false;
+  private TemplatedFeatures features;
+  private transient Regularizer regularizer;
 
-	// Takes a bunch of JointRoleSpanStageDatum and decides which to prune
-	// NOTE: Not used because RankDecoder is better.
-	//private ApproxF1MbrDecoder decoder;
+  // If there is no constituency syntax, we will use the nonConstituent version
+  // of these variables.
+  // TODO work this into the template system as a mask template.
+  private boolean parameterize_pruned_constituent = true;
+  private boolean parameterize_pruned_nonConstituent = false; // expensive in #features
+  private boolean parameterize_kept_constituent = true;
+  private boolean parameterize_kept_nonConstituent = true;
 
-	// If true, do not prune anything, produce FNParseSpanPrunings that have
-	// 100% recall.
-	private boolean keepEverything = false;
+  public RoleSpanPruningStage(
+      ParserParams params,
+      HasFeatureAlphabet featureNames) {
+    super(params, featureNames);
+    //features = new Features(params);
+    features = new TemplatedFeatures("roleSpanPruning",
+        params.getParserParams().getFeatureTemplateDescription(),
+        params.getParserParams().getAlphabet());
+    regularizer = new L2(100_000d);
+  }
 
-	private transient Regularizer regularizer;
+  @Override
+  public Serializable getParamters() {
+    return keepEverything;
+  }
 
-	public RoleSpanPruningStage(
-			ParserParams params, HasFeatureAlphabet featureNames) {
-		super(params, featureNames);
-		features = new Features(params);
-		//decoder = new ApproxF1MbrDecoder(params.logDomain, Math.exp(-8d));
-		regularizer = new L2(100_000d);
-	}
+  @Override
+  public void setPameters(Serializable params) {
+    keepEverything = (Boolean) params;
+  }
 
-	@Override
-	public Serializable getParamters() {
-		return keepEverything;
-	}
+  public void dontDoAnyPruning() {
+    keepEverything = true;
+  }
 
-	@Override
-	public void setPameters(Serializable params) {
-		keepEverything = (Boolean) params;
-	}
+  @Override
+  public Double getLearningRate() {
+    return 1d;
+  }
 
-	public void dontDoAnyPruning() {
-		keepEverything = true;
-	}
+  @Override
+  public int getNumTrainingPasses() {
+    return 3;
+  }
 
-	@Override
-	public Double getLearningRate() {
-		return 1d;
-	}
+  @Override
+  public Regularizer getRegularizer() {
+    return regularizer;
+  }
 
-	@Override
-	public int getNumTrainingPasses() {
-		return 3;
-	}
+  @Override
+  public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParseSpanPruning> output) {
+    List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
+    for (int i = 0; i < input.size(); i++) {
+      FNParseSpanPruning g = output == null ? null : output.get(i);
+      data.add(new JointRoleSpanStageDatum(input.get(i), g, this));
+    }
+    return new StageDatumExampleList<>(data);
+  }
 
-	@Override
-	public Regularizer getRegularizer() {
-		return regularizer;
-	}
+  /**
+   * A variable that indicates whether a particular span could potentially be
+   * an argument to a given frame (instance/target).
+   */
+  static class ArgSpanPruningVar extends Var {
+    private static final long serialVersionUID = 1L;
+    public final Frame frame;
+    public final Span target;
+    public final Span arg;
+    private boolean hasGold, gold;  // True if this span should be pruned
+    public ArgSpanPruningVar(Span arg, FrameInstance fi) {
+      this(arg, fi.getFrame(), fi.getTarget());
+    }
+    public ArgSpanPruningVar(Span arg, Frame frame, Span target) {
+      super(VarType.PREDICTED, 2,
+          String.format("r_{%s @ %d-%d has arg @ %d-%d}",
+              frame.getName(), target.start, target.end,
+              arg.start, arg.end),
+              BinaryVarUtil.stateNames);
+      this.arg = arg;
+      this.frame = frame;
+      this.target = target;
+      this.hasGold = false;
+    }
+    public void setGold(boolean shouldBePruned) {
+      gold = shouldBePruned;
+      hasGold = true;
+    }
+    public boolean hasGold() {
+      return hasGold;
+    }
+    public boolean gold() {
+      assert hasGold();
+      return gold;
+    }
+    @Override
+    public String toString() {
+      return String.format(
+          "<RolePruningVar %s @ %d-%d has some arg at %d-%d %s>",
+          frame.getName(),
+          target.start,
+          target.end,
+          arg.start,
+          arg.end,
+          "gold=" + (!hasGold ? "???" : (gold ? "prune" : "keep")));
+    }
+  }
 
-	@Override
-	public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
-			List<? extends FNTagging> input,
-			List<? extends FNParseSpanPruning> output) {
-		List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
-		for (int i = 0; i < input.size(); i++) {
-			FNParseSpanPruning g = output == null ? null : output.get(i);
-			data.add(new JointRoleSpanStageDatum(input.get(i), g, this));
-		}
-		return new StageDatumExampleList<>(data);
-	}
+  /**
+   * An example for this stage which holds a latent constituency tree and a
+   * bunch of pruning variables for the roles/args.
+   *
+   * This produces an AlmostFNParse which stores the frames that are allowable
+   * for every (frame,target).
+   */
+  static class JointRoleSpanStageDatum
+      implements StageDatum<FNTagging, FNParseSpanPruning> {
+    private FNTagging input;
+    private FNParseSpanPruning gold;
+    private RoleSpanPruningStage parent;
 
-	/**
-	 * A variable that indicates whether a particular span could potentially be
-	 * an argument to a given frame.
-	 * 
-	 * @author travis
-	 */
-	static class ArgSpanPruningVar extends Var {
-		private static final long serialVersionUID = 1L;
-		public final Frame frame;
-		public final Span target;
-		public final Span arg;
-		private boolean hasGold, gold;  // True if this span should be pruned
-		public ArgSpanPruningVar(Span arg, FrameInstance fi) {
-			this(arg, fi.getFrame(), fi.getTarget());
-		}
-		public ArgSpanPruningVar(Span arg, Frame frame, Span target) {
-			super(VarType.PREDICTED, 2,
-					String.format("r_{%s @ %d-%d has arg @ %d-%d}",
-							frame.getName(), target.start, target.end,
-							arg.start, arg.end),
-					BinaryVarUtil.stateNames);
-			this.arg = arg;
-			this.frame = frame;
-			this.target = target;
-			this.hasGold = false;
-		}
-		public void setGold(boolean shouldBePruned) {
-			gold = shouldBePruned;
-			hasGold = true;
-		}
-		public boolean hasGold() {
-			return hasGold;
-		}
-		public boolean gold() {
-			assert hasGold();
-			return gold;
-		}
-		@Override
-		public String toString() {
-			return String.format(
-					"<RolePruningVar %s @ %d-%d has some arg at %d-%d %s>",
-					frame.getName(),
-					target.start,
-					target.end,
-					arg.start,
-					arg.end,
-					"gold=" + (!hasGold ? "???" : (gold ? "prune" : "keep")));
-		}
-	}
+    public JointRoleSpanStageDatum(
+        FNTagging input,
+        FNParseSpanPruning gold,
+        RoleSpanPruningStage parent) {
+      this.input = input;
+      this.gold = gold;
+      this.parent = parent;
+    }
 
-	/**
-	 * An example for this stage which holds a latent constituency tree and a
-	 * bunch of pruning variables for the roles/args.
-	 *
-	 * This produces an AlmostFNParse which stores the frames that are allowable
-	 * for every (frame,target).
-	 *
-	 * @author travis
-	 */
-	static class JointRoleSpanStageDatum
-			implements StageDatum<FNTagging, FNParseSpanPruning> {
-		private FNTagging input;
-		private FNParseSpanPruning gold;
-		private RoleSpanPruningStage parent;
+    @Override
+    public FNTagging getInput() {
+      return input;
+    }
 
-		public JointRoleSpanStageDatum(
-				FNTagging input,
-				FNParseSpanPruning gold,
-				RoleSpanPruningStage parent) {
-			this.input = input;
-			this.gold = gold;
-			this.parent = parent;
-		}
+    @Override
+    public boolean hasGold() {
+      return gold != null;
+    }
 
-		@Override
-		public FNTagging getInput() {
-			return input;
-		}
+    @Override
+    public FNParseSpanPruning getGold() {
+      assert hasGold();
+      return gold;
+    }
 
-		@Override
-		public boolean hasGold() {
-			return gold != null;
-		}
+    @Override
+    public LabeledFgExample getExample() {
+      FactorGraph fg = new FactorGraph();
+      VarConfig gold = new VarConfig();
+      build(fg, gold, null);
+      return new LabeledFgExample(fg, gold);
+    }
 
-		@Override
-		public FNParseSpanPruning getGold() {
-			assert hasGold();
-			return gold;
-		}
+    private void build(FactorGraph fg, VarConfig goldConf, Collection<ArgSpanPruningVar> roleVars) {
+      // Build the variables
+      final int n = input.getSentence().size();
+      ConstituencyTreeFactor cykPhi =
+          new ConstituencyTreeFactor(n, VarType.LATENT);
+      fg.addFactor(cykPhi);
+      final int nFI = input.numFrameInstances();
+      int numRoleVars = 0;
+      for (int i = 0; i < nFI; i++) {
+        FrameInstance fi = input.getFrameInstance(i);
+        Set<Span> goldArgs = null;
+        if (gold != null) {
+          FrameInstance goldFi = gold.getFrameInstance(i);
+          assert goldFi.getFrame().equals(fi.getFrame());
+          assert goldFi.getTarget().equals(fi.getTarget());
+          goldArgs = new HashSet<>();
+          goldArgs.addAll(gold.getPossibleArgs(i));
+        }
+        for (int start = 0; start < n; start++) {
+          for (int end = start + 1; end <= n; end++) {
+            ArgSpanPruningVar p = new ArgSpanPruningVar(
+                Span.getSpan(start, end), fi);
+            fg.addFactor(buildBinaryFactor(p, cykPhi));
+            numRoleVars++;
+            if (this.gold != null && goldConf != null) {
+              boolean g = !goldArgs.contains(p.arg);
+              p.setGold(g);
+              //LOG.debug("[datum build] setting gold for: " + p);
+              goldConf.put(p, BinaryVarUtil.boolToConfig(g));
+            }
+            if (roleVars != null)
+              roleVars.add(p);
+          }
+        }
+        // You can never prune the nullSpan, so the value is effectively
+        // clamped to gold=keep. We do not include it here.
+      }
+      LOG.debug(input.getSentence().getId() + " has " + numRoleVars
+          + " role vars and " + cykPhi.getVars().size()
+          + " span vars for a sententence of length " + n);
+    }
 
-		@Override
-		public LabeledFgExample getExample() {
-			FactorGraph fg = new FactorGraph();
-			VarConfig gold = new VarConfig();
-			build(fg, gold, null);
-			return new LabeledFgExample(fg, gold);
-		}
+    /**
+     * Create a binary factor for the role pruning var ~ constituency var
+     * which includes the unary factor that would go on just the pruning var
+     */
+    private ExplicitExpFamFactor buildBinaryFactor(
+        ArgSpanPruningVar p,
+        ConstituencyTreeFactor cykPhi) {
+      // -1 because Matt's args are inclusive
+      Var c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);
+      VarSet vs;
+      if (c == null) {
+        if (p.arg.width() != 1)
+          LOG.info("null constituent var for: " + p.arg);
+        vs = new VarSet(p);
+      } else {
+        vs = new VarSet(p, c);
+      }
+      TemplateContext context = parent.features.getContext();
+      ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
+      for (int i = 0; i < vs.calcNumConfigs(); i++) {
+        context.clear();
+        context.setSentence(input.getSentence());
+        context.setFrame(p.frame);
+        context.setTarget(p.target);
+        VarConfig conf = vs.getVarConfig(i);
+        boolean prune = BinaryVarUtil.configToBool(conf.getState(p));
+        if (c == null) {
+          assert parent.parameterize_kept_nonConstituent
+            || parent.parameterize_pruned_nonConstituent;
+          context.setSpan1_isntSet();
+          if ((parent.parameterize_kept_nonConstituent && !prune)
+              || (parent.parameterize_pruned_nonConstituent && prune)) {
+            context.setArg(p.arg);
+          }
+        } else {
+          boolean constit = BinaryVarUtil.configToBool(conf.getState(c));
+          if ((parent.parameterize_kept_constituent && !prune && constit)
+              || (parent.parameterize_kept_nonConstituent && !prune && !constit)
+              || (parent.parameterize_pruned_constituent && prune && constit)
+              || (parent.parameterize_pruned_nonConstituent && prune && !constit)) {
+            context.setArg(p.arg);
+            context.setSpan1_isConstituent(constit);
+          }
+        }
+        FeatureVector fv = new FeatureVector();
+        parent.features.featurize(fv);
+        phi.setFeatures(i, fv);
+        throw new RuntimeException("this code is not tested");
+      }
+      return phi;
+    }
 
-		private void build(FactorGraph fg, VarConfig goldConf, Collection<ArgSpanPruningVar> roleVars) {
-			// Build the variables
-			final int n = input.getSentence().size();
-			ConstituencyTreeFactor cykPhi =
-					new ConstituencyTreeFactor(n, VarType.LATENT);
-			fg.addFactor(cykPhi);
-			final int nFI = input.numFrameInstances();
-			int numRoleVars = 0;
-			for (int i = 0; i < nFI; i++) {
-				FrameInstance fi = input.getFrameInstance(i);
-				Set<Span> goldArgs = null;
-				if (gold != null) {
-					FrameInstance goldFi = gold.getFrameInstance(i);
-					assert goldFi.getFrame().equals(fi.getFrame());
-					assert goldFi.getTarget().equals(fi.getTarget());
-					goldArgs = new HashSet<>();
-					goldArgs.addAll(gold.getPossibleArgs(i));
-				}
-				for (int start = 0; start < n; start++) {
-					for (int end = start + 1; end <= n; end++) {
-						ArgSpanPruningVar p = new ArgSpanPruningVar(
-								Span.getSpan(start, end), fi);
-						fg.addFactor(buildBinaryFactor(p, cykPhi));
-						numRoleVars++;
-						if (this.gold != null && goldConf != null) {
-							boolean g = !goldArgs.contains(p.arg);
-							p.setGold(g);
-							//LOG.debug("[datum build] setting gold for: " + p);
-							goldConf.put(p, BinaryVarUtil.boolToConfig(g));
-						}
-						if (roleVars != null)
-							roleVars.add(p);
-					}
-				}
-				// You can never prune the nullSpan, so the value is effectively
-				// clamped to gold=keep. We do not include it here.
-			}
-			LOG.debug(input.getSentence().getId() + " has " + numRoleVars
-					+ " role vars and " + cykPhi.getVars().size()
-					+ " span vars for a sententence of length " + n);
-		}
+    @Override
+    public IDecodable<FNParseSpanPruning> getDecodable() {
+      FactorGraph fg = new FactorGraph();
+      List<ArgSpanPruningVar> roleVars = new ArrayList<>();
+      build(fg, null, roleVars);
+      if (roleVars.size() == 0) {
+        // If there are no frames, and thus no roles, then return an
+        // empty decodable.
+        final FNParseSpanPruning empty = new FNParseSpanPruning(
+            input.getSentence(),
+            Collections.<FrameInstance>emptyList(),
+            Collections.<FrameInstance, List<Span>>emptyMap());
+        return new IDecodable<FNParseSpanPruning>() {
+          @Override
+          public FNParseSpanPruning decode() {
+            return empty;
+          }
+        };
+      } else {
+        //return new ThresholdDecodable(fg, parent.infFactory(),
+        //		parent, input, roleVars, parent.decoder);
+        if (parent.keepEverything) {
+          ApproxF1MbrDecoder decoder = null;
+          return new ThresholdDecodable(fg, parent.infFactory(),
+              parent, input, roleVars, decoder);
+        } else {
+          return new RankDecodable(fg, parent.infFactory(),
+              parent, input, roleVars);
+        }
+      }
+    }
+  }
 
-		/**
-		 * Create a binary factor for the role pruning var ~ constituency var
-		 * which includes the unary factor that would go on just the pruning var
-		 */
-		private ExplicitExpFamFactor buildBinaryFactor(
-				ArgSpanPruningVar p,
-				ConstituencyTreeFactor cykPhi) {
-			Var c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);  // Matt's args are inclusive
-			VarSet vs;
-			if (c == null) {
-				if (p.arg.width() != 1)
-					LOG.info("null constituent var for: " + p.arg);
-				vs = new VarSet(p);
-			} else {
-				vs = new VarSet(p, c);
-			}
-			ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
-			for (int i = 0; i < vs.calcNumConfigs(); i++) {
-				VarConfig conf = vs.getVarConfig(i);
-				boolean prune = BinaryVarUtil.configToBool(conf.getState(p));
-				boolean constituent = c == null
-						? false : (conf.getState(c) == SpanVar.TRUE);
-				FeatureVector fv = new FeatureVector();
-				parent.features.featurize(fv, Refinements.noRefinements,
-						p, prune, constituent, input.getSentence());
-				phi.setFeatures(i, fv);
-			}
-			return phi;
-		}
+  /**
+   * Take the top scoring/most likely spans for every frame. Re-parameterizes
+   * the simple score threshold by sorting by rank and taking the top K.
+   */
+  static class RankDecodable extends Decodable<FNParseSpanPruning> {
+    private List<ArgSpanPruningVar> roleVars;
+    private FNTagging input;
+    private double recallBias = 2d;
 
-		@Override
-		public IDecodable<FNParseSpanPruning> getDecodable() {
-			FactorGraph fg = new FactorGraph();
-			List<ArgSpanPruningVar> roleVars = new ArrayList<>();
-			build(fg, null, roleVars);
-			if (roleVars.size() == 0) {
-				// If there are no frames, and thus no roles, then return an
-				// empty decodable.
-				final FNParseSpanPruning empty = new FNParseSpanPruning(
-						input.getSentence(),
-						Collections.<FrameInstance>emptyList(),
-						Collections.<FrameInstance, List<Span>>emptyMap());
-				return new IDecodable<FNParseSpanPruning>() {
-					@Override
-					public FNParseSpanPruning decode() {
-						return empty;
-					}
-				};
-			} else {
-				//return new ThresholdDecodable(fg, parent.infFactory(),
-				//		parent, input, roleVars, parent.decoder);
-				if (parent.keepEverything) {
-					ApproxF1MbrDecoder decoder = null;
-					return new ThresholdDecodable(fg, parent.infFactory(),
-							parent, input, roleVars, decoder);
-				} else {
-					return new RankDecodable(fg, parent.infFactory(),
-							parent, input, roleVars);
-				}
-			}
-		}
-	}
+    public RankDecodable(
+        FactorGraph fg,
+        FgInferencerFactory infFact,
+        HasFgModel weights,
+        FNTagging input,
+        List<ArgSpanPruningVar> roleVars) {
+      super(fg, infFact, weights);
+      this.input = input;
+      this.roleVars = roleVars;
+      if (roleVars == null || roleVars.size() == 0)
+        throw new IllegalArgumentException();
+    }
 
-	/**
-	 * Take the top scoring/most likely spans for every frame. Re-parameterizes
-	 * the simple score threshold by sorting by rank and taking the top K.
-	 * 
-	 * @author travis
-	 */
-	static class RankDecodable extends Decodable<FNParseSpanPruning> {
-		private List<ArgSpanPruningVar> roleVars;
-		private FNTagging input;
-		private double recallBias = 2d;
-		public RankDecodable(
-				FactorGraph fg,
-				FgInferencerFactory infFact,
-				HasFgModel weights,
-				FNTagging input,
-				List<ArgSpanPruningVar> roleVars) {
-			super(fg, infFact, weights);
-			this.input = input;
-			this.roleVars = roleVars;
-			if (roleVars == null || roleVars.size() == 0)
-				throw new IllegalArgumentException();
-		}
-		@Override
-		public FNParseSpanPruning decode() {
-			final FgInferencer inf = this.getMargins();
-			// Sort the roleVars by (frame,target) then probability
-			Collections.sort(roleVars, new Comparator<ArgSpanPruningVar>() {
-				@Override
-				public int compare(ArgSpanPruningVar arg0, ArgSpanPruningVar arg1) {
-					if (arg0.frame.getId() < arg1.frame.getId())
-						return -1;
-					if (arg0.frame.getId() > arg1.frame.getId())
-						return 1;
-					int tc = arg0.target.compareTo(arg1.target);
-					if (tc != 0)
-						return tc;
-					DenseFactor df0 = inf.getMarginals(arg0);
-					df0.logNormalize();
-					double p0 = df0.getValue(BinaryVarUtil.boolToConfig(true));
-					DenseFactor df1 = inf.getMarginals(arg1);
-					df1.logNormalize();
-					double p1 = df1.getValue(BinaryVarUtil.boolToConfig(true));
-					if (p0 > p1)
-						return 1;
-					if (p0 < p1)
-						return -1;
-					return 0;
-				}
-			});
-			// For each (frame,target) take the top K
-			Map<FrameInstance, List<Span>> kept = new HashMap<>();
-			List<Span> curKeep = null;
-			FrameInstance cur = null;
-			for (ArgSpanPruningVar rpv : roleVars) {
-				FrameInstance c = FrameInstance.frameMention(
-						rpv.frame, rpv.target, input.getSentence());
-				if (!c.equals(cur)) {
-					if (cur != null) {
-						List<Span> old = kept.put(cur, curKeep);
-						assert old == null;
-					}
-					cur = c;
-					curKeep = new ArrayList<>();
-					curKeep.add(Span.nullSpan);
-				}
-				//LOG.debug(rpv + " has p(prune)=" + inf.getMarginals(rpv).getValue(BinaryVarUtil.boolToConfig(true)));
-				if (curKeep.size() < spansToTakeFor(cur.getFrame())) {
-					//LOG.info("KEEP");
-					curKeep.add(rpv.arg);
-				} else {
-					//LOG.info("DROP");
-				}
-			}
-			List<Span> old = kept.put(cur, curKeep);
-			assert old == null;
-			return new FNParseSpanPruning(
-					input.getSentence(), input.getFrameInstances(), kept);
-		}
+    @Override
+    public FNParseSpanPruning decode() {
+      final FgInferencer inf = this.getMargins();
+      // Sort the roleVars by (frame,target) then probability
+      Collections.sort(roleVars, new Comparator<ArgSpanPruningVar>() {
+        @Override
+        public int compare(ArgSpanPruningVar arg0, ArgSpanPruningVar arg1) {
+          if (arg0.frame.getId() < arg1.frame.getId())
+            return -1;
+          if (arg0.frame.getId() > arg1.frame.getId())
+            return 1;
+          int tc = arg0.target.compareTo(arg1.target);
+          if (tc != 0)
+            return tc;
+          DenseFactor df0 = inf.getMarginals(arg0);
+          df0.logNormalize();
+          double p0 = df0.getValue(BinaryVarUtil.boolToConfig(true));
+          DenseFactor df1 = inf.getMarginals(arg1);
+          df1.logNormalize();
+          double p1 = df1.getValue(BinaryVarUtil.boolToConfig(true));
+          if (p0 > p1)
+            return 1;
+          if (p0 < p1)
+            return -1;
+          return 0;
+        }
+      });
+      // For each (frame,target) take the top K
+      Map<FrameInstance, List<Span>> kept = new HashMap<>();
+      List<Span> curKeep = null;
+      FrameInstance cur = null;
+      for (ArgSpanPruningVar rpv : roleVars) {
+        FrameInstance c = FrameInstance.frameMention(
+            rpv.frame, rpv.target, input.getSentence());
+        if (!c.equals(cur)) {
+          if (cur != null) {
+            List<Span> old = kept.put(cur, curKeep);
+            assert old == null;
+          }
+          cur = c;
+          curKeep = new ArrayList<>();
+          curKeep.add(Span.nullSpan);
+        }
+        //LOG.debug(rpv + " has p(prune)=" + inf.getMarginals(rpv).getValue(BinaryVarUtil.boolToConfig(true)));
+        if (curKeep.size() < spansToTakeFor(cur.getFrame())) {
+          //LOG.info("KEEP");
+          curKeep.add(rpv.arg);
+        } else {
+          //LOG.info("DROP");
+        }
+      }
+      List<Span> old = kept.put(cur, curKeep);
+      assert old == null;
+      return new FNParseSpanPruning(
+          input.getSentence(), input.getFrameInstances(), kept);
+    }
 
-		public int spansToTakeFor(Frame f) {
-			int numCore = 0;
-			for (int k = 0; k < f.numRoles(); k++)
-				if (f.getRole(k).toLowerCase().indexOf("core") >= 0)
-					numCore++;
-			return (int) (recallBias * (input.getSentence().size() + numCore + 5d));
-		}
-	}
+    public int spansToTakeFor(Frame f) {
+      int numCore = 0;
+      for (int k = 0; k < f.numRoles(); k++)
+        if (f.getRole(k).toLowerCase().indexOf("core") >= 0)
+          numCore++;
+      return (int) (recallBias * (input.getSentence().size() + numCore + 5d));
+    }
+  }
 
-	/**
-	 * Decode the set of spans as a classification problem with a probability threshold
-	 *
-	 * @author travis
-	 */
-	static class ThresholdDecodable extends Decodable<FNParseSpanPruning> {
-		// Each variable says whether to prune a particular span for a given
-		// (frame,target).
-		private List<ArgSpanPruningVar> roleVars;
+  /**
+   * Decode the set of spans as a classification problem with a probability
+   * threshold
+   * @deprecated because ranking is better
+   */
+  static class ThresholdDecodable extends Decodable<FNParseSpanPruning> {
+    // Each variable says whether to prune a particular span for a given
+    // (frame,target).
+    private List<ArgSpanPruningVar> roleVars;
 
-		private FNTagging input;
+    private FNTagging input;
 
-		// If null, keep everything. Produce FNParseSpanPrunings that have
-		// 100% recall.
-		private ApproxF1MbrDecoder decoder;
+    // If null, keep everything. Produce FNParseSpanPrunings that have
+    // 100% recall.
+    private ApproxF1MbrDecoder decoder;
 
-		public ThresholdDecodable(
-				FactorGraph fg,
-				FgInferencerFactory infFact,
-				HasFgModel weights,
-				FNTagging input,
-				List<ArgSpanPruningVar> roleVars,
-				ApproxF1MbrDecoder decoder) {
-			super(fg, infFact, weights);
-			this.input = input;
-			this.roleVars = roleVars;
-			this.decoder = decoder;
-			if (roleVars == null || roleVars.size() == 0)
-				throw new IllegalArgumentException();
-		}
-		@Override
-		public FNParseSpanPruning decode() {
-			FgInferencer inf = this.getMargins();
-			Map<FrameInstance, List<Span>> kept = new HashMap<>();
-			int pruned = 0, considered = 0;
-			for (ArgSpanPruningVar rpv : roleVars) {
-				DenseFactor df = inf.getMarginals(rpv);
-				int y = BinaryVarUtil.boolToConfig(false);
-				if (decoder != null) {
-					y = decoder.decode(
-							df.getValues(), BinaryVarUtil.boolToConfig(false));
-				}
-				//LOG.debug("[decode] " + rpv + " has beliefs " + df
-				//		+ " and was decoded as " + y);
-				considered++;
-				if (y == BinaryVarUtil.boolToConfig(true)) {
-					pruned++;
-					continue;
-				}
-				FrameInstance key = FrameInstance.frameMention(
-						rpv.frame, rpv.target, input.getSentence());
-				List<Span> values = kept.get(key);
-				if (values == null) {
-					values = new ArrayList<>();
-					kept.put(key, values);
-				}
-				values.add(rpv.arg);
-			}
-			LOG.info(String.format(
-					"[decode] pruned %d of %d possible spans for %d frames in %s",
-					pruned,
-					considered,
-					input.numFrameInstances(),
-					input.getSentence().getId()));
+    public ThresholdDecodable(
+        FactorGraph fg,
+        FgInferencerFactory infFact,
+        HasFgModel weights,
+        FNTagging input,
+        List<ArgSpanPruningVar> roleVars,
+        ApproxF1MbrDecoder decoder) {
+      super(fg, infFact, weights);
+      this.input = input;
+      this.roleVars = roleVars;
+      this.decoder = decoder;
+      if (roleVars == null || roleVars.size() == 0)
+        throw new IllegalArgumentException();
+    }
+    @Override
+    public FNParseSpanPruning decode() {
+      FgInferencer inf = this.getMargins();
+      Map<FrameInstance, List<Span>> kept = new HashMap<>();
+      int pruned = 0, considered = 0;
+      for (ArgSpanPruningVar rpv : roleVars) {
+        DenseFactor df = inf.getMarginals(rpv);
+        int y = BinaryVarUtil.boolToConfig(false);
+        if (decoder != null) {
+          y = decoder.decode(
+              df.getValues(), BinaryVarUtil.boolToConfig(false));
+        }
+        //LOG.debug("[decode] " + rpv + " has beliefs " + df
+        //		+ " and was decoded as " + y);
+        considered++;
+        if (y == BinaryVarUtil.boolToConfig(true)) {
+          pruned++;
+          continue;
+        }
+        FrameInstance key = FrameInstance.frameMention(
+            rpv.frame, rpv.target, input.getSentence());
+        List<Span> values = kept.get(key);
+        if (values == null) {
+          values = new ArrayList<>();
+          kept.put(key, values);
+        }
+        values.add(rpv.arg);
+      }
+      LOG.info(String.format(
+          "[decode] pruned %d of %d possible spans for %d frames in %s",
+          pruned,
+          considered,
+          input.numFrameInstances(),
+          input.getSentence().getId()));
 
-			// Add nullSpan as an option for the next stage (role labeling).
-			for (FrameInstance fi : input.getFrameInstances()) {
-				FrameInstance key = FrameInstance.frameMention(
-						fi.getFrame(), fi.getTarget(), fi.getSentence());
-				List<Span> values = kept.get(key);
-				if (values == null) {
-					values = new ArrayList<>();
-					kept.put(key, values);
-				}
-				values.add(Span.nullSpan);
-			}
+      // Add nullSpan as an option for the next stage (role labeling).
+      for (FrameInstance fi : input.getFrameInstances()) {
+        FrameInstance key = FrameInstance.frameMention(
+            fi.getFrame(), fi.getTarget(), fi.getSentence());
+        List<Span> values = kept.get(key);
+        if (values == null) {
+          values = new ArrayList<>();
+          kept.put(key, values);
+        }
+        values.add(Span.nullSpan);
+      }
 
-			return new FNParseSpanPruning(
-					input.getSentence(), input.getFrameInstances(), kept);
-		}
-	}
+      return new FNParseSpanPruning(
+          input.getSentence(), input.getFrameInstances(), kept);
+    }
+  }
 
-	/**
-	 * Features that describe if a particular span could be an argument to a
-	 * given frame.
-	 *
-	 * @author travis
-	 */
+  /**
+   * Features that describe if a particular span could be an argument to a
+   * given frame.
+   *
+   * @deprecated going to make this work through templated features
 	static class Features extends AbstractFeatures<Features> {
 		private static final long serialVersionUID = 1L;
 
@@ -708,4 +720,5 @@ public class RoleSpanPruningStage
 			return String.valueOf((int) FastMath.pow(w, 0.6f));
 		}
 	}
+   */
 }

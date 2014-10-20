@@ -27,11 +27,11 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
-import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
@@ -53,14 +53,17 @@ public class RoleSpanLabelingStage
   public static final Logger LOG =
       Logger.getLogger(RoleSpanLabelingStage.class);
 
-  private BasicRoleSpanFeatures features;
+  //private BasicRoleSpanFeatures features;
+  private TemplatedFeatures features;
   private ApproxF1MbrDecoder decoder;
   private transient Regularizer regularizer = new L2(1_000_000d);
 
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    features = new BasicRoleSpanFeatures(params);
+    features = new TemplatedFeatures("roleSpanLabeling",
+        params.getFeatureTemplateDescription(),
+        params.getAlphabet());
     decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
   }
 
@@ -253,10 +256,21 @@ public class RoleSpanLabelingStage
       int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
 
       // Compute features for the binary factor
+      TemplateContext ctx = parent.features.getContext();
+      ctx.clear();
+      ctx.setSentence(s);
+      ctx.setFrame(frame);
+      ctx.setRole(role);
+      ctx.setTarget(target);
+      ctx.setTargetHead(targetHeadIdx);
+      ctx.setArg(arg);
+      ctx.setArgHead(argHeadIdx);
+      ctx.setSpan1(arg);
+      ctx.setHead1(argHeadIdx);
+      ctx.setSpan2(target);
+      ctx.setHead2(targetHeadIdx);
       FeatureVector fv = new FeatureVector();
-      parent.features.featurize(
-          fv, Refinements.noRefinements,
-          targetHeadIdx, frame, argHeadIdx, role, arg, s);
+      parent.features.featurize(fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);
 
@@ -295,8 +309,6 @@ public class RoleSpanLabelingStage
   /**
    * A variable that represents a binary question of whether a given span is
    * an argument for a particular (frame,role).
-   * 
-   * @author travis
    */
   static class ArgSpanLabelVar
       extends RoleSpanPruningStage.ArgSpanPruningVar {
