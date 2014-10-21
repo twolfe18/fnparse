@@ -62,6 +62,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
         ctx.setSentence(s);
         ctx.setFrame(t);
         ctx.setTarget(fhyp.getTarget());
+        ctx.setSpan1(fhyp.getTarget());
+        ctx.setTargetHead(targetHead);
+        ctx.setHead1(targetHead);
         ExplicitExpFamFactor phi;
         if (l != null) {  // Latent syntax
           Var linkVar = l.getLinkVar(-1, targetHead);
@@ -84,14 +87,6 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
         } else {          // No latent syntax
           VarSet vs = new VarSet(frameVar);
           phi = new ExplicitExpFamFactor(vs);
-          if (params.getParserParams().useSyntaxFeatures) {
-            //LOG.debug("instantiating unary factor using syntax for " + vs);
-            int head = s.getCollapsedDeps().getHead(targetHead);
-            ctx.setTargetHead(head);
-          } else {
-            //LOG.debug("instantiating unary factor for " + vs);
-            ctx.setTargetHead(TemplateContext.UNSET);
-          }
           FeatureVector fv = new FeatureVector();
           features.featurize(fv);
           phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);

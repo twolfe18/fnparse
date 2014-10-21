@@ -89,7 +89,7 @@ public class FrameIdStage
   private static int frameVarsInstantiated = 0;
   public static void frameVarInstantiated() {
     frameVarsInstantiated++;
-    if (frameVarsInstantiated % 100 == 0)
+    if (frameVarsInstantiated % 1000 == 0)
       LOG.info(frameVarsInstantiated + " frame vars instantiated");
   }
 

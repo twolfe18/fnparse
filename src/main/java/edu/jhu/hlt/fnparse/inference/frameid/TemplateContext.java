@@ -104,7 +104,7 @@ public class TemplateContext {
     return targetHead;
   }
   public void setTargetHead(int head) {
-    assert target == null || target.includes(head);
+    assert head == UNSET || target == null || target.includes(head);
     this.targetHead = head;
   }
 

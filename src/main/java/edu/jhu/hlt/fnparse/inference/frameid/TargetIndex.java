@@ -28,7 +28,6 @@ public class TargetIndex {
   public static final Logger LOG = Logger.getLogger(TargetIndex.class);
 
   private static class LuMatcher {
-    public static final Logger LOG = Logger.getLogger(LuMatcher.class);
     private String[] words;
     private boolean[] inParens;
     private List<String> ptbPos;
@@ -102,8 +101,6 @@ public class TargetIndex {
           // Poorly annotated case
           if ("(in/out) line.n".equals(lu))
             lu = "in line.n";
-          if ("a lot.n".equals(lu))
-            LOG.debug("check this");
           // Parse out the POS
           int dot = lu.lastIndexOf('.');
           String pos = lu.substring(dot + 1);
