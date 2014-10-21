@@ -257,7 +257,8 @@ public class BasicFeatureTemplates {
     spanLocs.put("First", x -> x.start);
     spanLocs.put("Last", x -> x.end - 1);
     spanLocs.put("Right", x -> x.end);
-    for (Entry<String, Function<SentencePosition, String>> ex1 : tokenExtractors.entrySet()) {
+    for (Entry<String, Function<SentencePosition, String>> ex1 :
+        tokenExtractors.entrySet()) {
       for (Entry<String, ToIntFunction<Span>> loc1 : spanLocs.entrySet()) {
         String name1 = "span1" + loc1.getKey() + ex1.getKey();
         TemplateSS temp1 = new TemplateSS() {
@@ -273,6 +274,8 @@ public class BasicFeatureTemplates {
         };
         addTemplate(name1, temp1);
         // two-index templates
+        /* NOTE: we don't need this; we can learn these features by conjoining
+         * the features above.
         for (Entry<String, Function<SentencePosition, String>> ex2 : tokenExtractors.entrySet()) {
           for (Entry<String, ToIntFunction<Span>> loc2 : spanLocs.entrySet()) {
             String name2 = name1 + "Span2" + loc2.getKey() + ex2.getKey();
@@ -293,6 +296,7 @@ public class BasicFeatureTemplates {
             });
           }
         }
+        */
       }
     }
 
@@ -780,6 +784,8 @@ public class BasicFeatureTemplates {
       templatesToView = basicTemplates.keySet();
     else
       templatesToView = Arrays.asList(args);
+    System.out.println("estimating cardinality for " + basicTemplates.size()
+        + " templates");
     for (String tmplName : templatesToView) {
       Template tmpl = basicTemplates.get(tmplName);
       System.out.println(tmplName);
@@ -788,7 +794,6 @@ public class BasicFeatureTemplates {
       w.write(String.format("%s\t%d\t%d\n", tmplName, card_frameId, card_roleLab));
       w.flush();
     }
-    System.out.println("there are " + basicTemplates.size() + " templates");
     w.close();
     System.out.println("took " + (System.currentTimeMillis() - start)/1000d + " seconds");
   }
