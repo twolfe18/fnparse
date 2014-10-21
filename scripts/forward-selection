@@ -86,7 +86,7 @@ class Feature(CommonEqualityMixin):
         assert len(self.templates) >= 2
         tmpl = random.sample(self.templates, len(self.templates) - 1)
         return Feature(self.label, tmpl)
-  
+
 
 class FeatureSet(object):
   def __init__(self, features=[], derived_from=None):
@@ -104,7 +104,7 @@ class FeatureSet(object):
     c = 1
     for f in self.features:
       cf = f.estimate_cardinality()
-      assert cf is not None and type(cf) is int
+      assert cf is not None and (type(cf) is int or type(cf) is long)
       c += cf
     return c
 
@@ -294,15 +294,18 @@ class ConfigQueue(object):
   def highest_rated_weights(self, reverse, k=10):
     return sorted(self.weights.items(), key=operator.itemgetter(1), reverse=reverse)[:k]
 
-  def show_biggest_weights(self, k=10):
-    print '[show_biggest_weights]', len(self.weights), \
+  def show_state(self, k=10):
+    print '[show_state]', len(self.weights), \
       'weights for', len(self.scores), 'observations'
     print 'biggest (positive) weights:'
     for feat, weight in self.highest_rated_weights(True, k):
-      print feat, weight
+      print "\t%.3f\t%s" % (weight, feat)
     print 'biggest (negative) weights:'
     for feat, weight in self.highest_rated_weights(False, k):
-      print feat, weight
+      print "\t%.3f\t%s" % (weight, feat)
+    print 'best feature sets:'
+    for score, fs in sorted(self.scores, key=operator.itemgetter(0), reverse=True)[:k]:
+      print "\t%.3f\t%s" % (score, fs.config_string())
 
   # TODO support non-binary features (reutrn type must change to dict or list of tuples)
   def features(self, feature_set):
@@ -375,7 +378,7 @@ class ConfigQueue(object):
     heapq.heapify(self.beam)
     # print the biggest weights
     if len(self.scores) % 10 == 0:
-      self.show_biggest_weights()
+      self.show_state()
 
   def pop_feature_set(self):
     ''' returns the FeatureSet which is estimated to have the highest utility '''
@@ -646,7 +649,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     f = open(deser_q_filename, 'rb')
     q = pickle.load(f)
     f.close()
-    q.show_biggest_weights()
+    q.show_state()
 
   # make sure config queue is setup to be saved on SIGINT
   global SER_Q_PATH
