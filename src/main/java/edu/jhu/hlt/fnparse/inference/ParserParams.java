@@ -42,12 +42,13 @@ public class ParserParams
    */
   private String featureTemplateDescription =
       "frame * head1Word + "
+      + "frame * span1LeftPos + "
+      + "frame * span1Width/1 + "
       + "frameRole * head1Bc1000/99 + "
       + "frameRole * span1Width/1 + "
       + "frameRole * head1CollapsedLabel + "
       + "role * span1GovDirRelations + "
-      + "role * head1CollapsedParentDir * head1Pos + "
-      + "role * span1LastBc256/4Span2LastBc256/4";
+      + "role * head1CollapsedParentDir * head1Pos";
 
   public String getFeatureTemplateDescription() {
     return featureTemplateDescription;

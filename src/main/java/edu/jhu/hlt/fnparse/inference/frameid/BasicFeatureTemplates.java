@@ -738,24 +738,15 @@ public class BasicFeatureTemplates {
   }
 
   private static int estimateFrameIdCardinality(
+      String templateName,
       Template template,
       List<FNParse> parses) {
-    TemplateContext ctx = new TemplateContext();
-    Set<String> uniq = new HashSet<>();
-    for (FNParse p : parses) {
-      ctx.setSentence(p.getSentence());
-      for (FrameInstance fi : p.getFrameInstances()) {
-        ctx.setFrame(fi.getFrame());
-        ctx.setTarget(fi.getTarget());
-        ctx.setSpan1(fi.getTarget());
-        ctx.setHead1(fi.getTarget().end - 1);
-        Iterable<String> t = template.extract(ctx);
-        if (t != null)
-          for (String s : t)
-            uniq.add(s);
-      }
-    }
-    return uniq.size() + 1;
+    ParserParams params = new ParserParams();
+    params.setFeatureTemplateDescription("intercept * " + templateName);
+    FrameIdStage fid = new FrameIdStage(params, params);
+    List<Sentence> sentences = DataUtil.stripAnnotations(parses);
+    fid.scanFeatures(sentences, parses, 999, 999_999_999);
+    return params.getAlphabet().size() + 1;
   }
 
   private static int estimateRoleLabellingCardinality(
@@ -764,12 +755,11 @@ public class BasicFeatureTemplates {
       List<FNParse> parses) {
     Logger.getLogger(RoleSpanLabelingStage.class).setLevel(Level.ERROR);
     ParserParams params = new ParserParams();
-    params.setFeatureTemplateDescription("frameRole * " + templateName);
+    params.setFeatureTemplateDescription("intercept * " + templateName);
     RoleSpanLabelingStage stage = new RoleSpanLabelingStage(params, params);
     params.getAlphabet().startGrowth();
     List<FNParseSpanPruning> input = FNParseSpanPruning.optimalPrune(parses);
-    stage.scanFeatures(input, parses, 99, 99_999_999);
-    //stage.train(input, parses);
+    stage.scanFeatures(input, parses, 999, 99_999_999);
     return params.getAlphabet().size() + 1;
   }
 
@@ -789,7 +779,7 @@ public class BasicFeatureTemplates {
     for (String tmplName : templatesToView) {
       Template tmpl = basicTemplates.get(tmplName);
       System.out.println(tmplName);
-      int card_frameId = estimateFrameIdCardinality(tmpl, parses);
+      int card_frameId = estimateFrameIdCardinality(tmplName, tmpl, parses);
       int card_roleLab = estimateRoleLabellingCardinality(tmplName, tmpl, parses);
       w.write(String.format("%s\t%d\t%d\n", tmplName, card_frameId, card_roleLab));
       w.flush();
