@@ -5,12 +5,14 @@ import heapq
 import json
 import math
 import numpy as np
+import operator
 import os
 import pickle
 import random
 import redis
 import scipy
 from sklearn.linear_model import Ridge
+import signal
 import socket
 import subprocess
 import sys
@@ -27,7 +29,8 @@ class CommonEqualityMixin(object):
 # sorry, global
 template_info = None
 FAILED_SCORE = 0.0
-
+SER_Q_PATH = None
+SER_Q = None
 
 class Feature(CommonEqualityMixin):
   ''' uses strings as templates '''
@@ -52,7 +55,7 @@ class Feature(CommonEqualityMixin):
       ct = template_info.template_cardinality[t]
       assert ct is not None
       c *= ct
-    assert type(c) is int
+    assert type(c) is int or type(c) is long
     return c
 
   def propose_modification(self, label_templates, basic_templates):
@@ -288,6 +291,18 @@ class ConfigQueue(object):
       self.weights[i2s[i]] = w[i]
     #print '[update_weights] intercept=', self.intercept, 'weights =', self.weights
 
+  def highest_rated_weights(self, reverse, k=10):
+    return sorted(self.weights.items(), key=operator.itemgetter(1), reverse=reverse)[:k]
+
+  def show_biggest_weights(self, k=10):
+    print '[show_biggest_weights]', len(self.weights), \
+      'weights for', len(self.scores), 'observations'
+    print 'biggest (positive) weights:'
+    for feat, weight in self.highest_rated_weights(True, k):
+      print feat, weight
+    print 'biggest (negative) weights:'
+    for feat, weight in self.highest_rated_weights(False, k):
+      print feat, weight
 
   # TODO support non-binary features (reutrn type must change to dict or list of tuples)
   def features(self, feature_set):
@@ -358,6 +373,9 @@ class ConfigQueue(object):
     # return beam to its regular state
     self.ensure_full_beam()
     heapq.heapify(self.beam)
+    # print the biggest weights
+    if len(self.scores) % 10 == 0:
+      self.show_biggest_weights()
 
   def pop_feature_set(self):
     ''' returns the FeatureSet which is estimated to have the highest utility '''
@@ -594,24 +612,50 @@ class TemplateInfo(object):
       template_card_frameid = int(toks[1])
       template_card_rolelab = int(toks[2])
       assert template_name not in self.template_cardinality
-      self.template_cardinality[template_name] = template_card_rolelab
-      self.basic_templates.append(template_name)
+      if template_card_rolelab > 1:
+        self.template_cardinality[template_name] = template_card_rolelab
+        self.basic_templates.append(template_name)
     f.close()
     # NOTE: the cardinality of frame is w.r.t. how many frames could possibly
     # be evoked at a give target, which is much less than the number of total frames
     self.label_cardinality = {'intercept':1, 'frame':10, 'frameRole':50, 'role':15}
     print '[TemplateInfo init] done'
 
+def save_config_q_handler(signum, frame):
+  if SER_Q is not None and SER_Q_PATH is not None:
+    print 'saving config queue to', SER_Q_PATH
+    pickle.dump(SER_Q, open(SER_Q_PATH, 'wb'))
+  sys.exit(0)
 
-if __name__ == '__main__':
+def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
-  template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
+  global template_info
+  template_info = TemplateInfo(template_info_filename)
+  #template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
   beam_size = 30
-  local = True
+  local = False
   #labels = ['frame', 'intercept']
   labels = ['frameRole', 'role', 'intercept']
-  q = ConfigQueue(beam_size, labels, template_info.basic_templates)
 
+  # create the config queue
+  if deser_q_filename is None:
+    print 'creating empty config queue'
+    q = ConfigQueue(beam_size, labels, template_info.basic_templates)
+  else:
+    print 'loading config queue from', deser_q_filename
+    f = open(deser_q_filename, 'rb')
+    q = pickle.load(f)
+    f.close()
+    q.show_biggest_weights()
+
+  # make sure config queue is setup to be saved on SIGINT
+  global SER_Q_PATH
+  global SER_Q
+  SER_Q_PATH = ser_q_filename
+  SER_Q = q
+  signal.signal(signal.SIGINT, save_config_q_handler)
+
+  # create the job tracker
   if local:
     jt = LocalJobTracker(debug=False, max_concurrent_jobs=2)
     jt.remove_all_jobs()
@@ -637,6 +681,17 @@ if __name__ == '__main__':
   print 'starting...'
   fs.run()
 
+if __name__ == '__main__':
+  if len(sys.argv) == 3:
+    main(sys.argv[1], sys.argv[2])
+  elif len(sys.argv) == 4:
+    main(sys.argv[1], sys.argv[2], deser_q_filename=sys.argv[3])
+  else:
+    print 'please provide:'
+    print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
+    print '2) a path to save the ConfigQueue to'
+    print '3) [optional] a place to load a ConfigQueue from'
+    sys.exit(-1)
 
 
 # every experiment gets a human readable, but uniq name, e.g. 'frameId-forwardSelection-2014-10-09'
