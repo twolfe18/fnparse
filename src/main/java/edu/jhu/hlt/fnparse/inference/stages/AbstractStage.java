@@ -357,7 +357,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		}
 
 		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
-		t.printIterval = 25;
+		t.printIterval = 500;
 		log.info("[scanFeatures] Counting the number of parameters needed over "
 				+ unlabeledExamples.size() + " examples");
 

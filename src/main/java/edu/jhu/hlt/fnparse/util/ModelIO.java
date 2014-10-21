@@ -37,7 +37,7 @@ public class ModelIO {
   public static double[] readFeatureNameWeightsBinary(
       DataInputStream dis,
       Alphabet<String> featureNames)
-          throws IOException {
+      throws IOException {
     int nonzero = dis.readInt();
     int[] idx = new int[nonzero];
     double[] weights = new double[nonzero];
@@ -73,7 +73,10 @@ public class ModelIO {
     try {
       double[] values = new double[model.getNumParams()];
       model.updateDoublesFromModel(values);
-      BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f)));
+      OutputStream os = new FileOutputStream(f);
+      if (f.getName().toLowerCase().endsWith(".gz"))
+        os = new GZIPOutputStream(os);
+      BufferedWriter w = new BufferedWriter(new OutputStreamWriter(os));
       int n = Math.min(model.getNumParams(), featIdx.size());
       for (int i = 0; i < n; i++) {
         if (!outputZeroFeatures && Math.abs(values[i]) < 1e-5)

@@ -67,11 +67,6 @@ public class RoleSpanLabelingStage
     decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
   }
 
-  public void train(List<FNParse> parses) {
-    List<FNParseSpanPruning> input = FNParseSpanPruning.optimalPrune(parses);
-    train(input, parses);
-  }
-
   @Override
   public Serializable getParamters() {
     return decoder;

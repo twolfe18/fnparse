@@ -195,7 +195,14 @@ public class DeterministicRolePruning
               xuePalmerHelper(pred, spanSet);
             }
             if (mode == Mode.XUE_PALMER_HERMANN && pred != null) {
-              Span parent = pred.getParent().getSpan();
+              Span parent;
+              if (pred.getParent() == null) {
+                parent = Span.getSpan(0, fi.getSentence().size());
+                LOG.warn("pred has no parent " + pred + " in "
+                    + fi.getSentence().getId());
+              } else {
+                parent = pred.getParent().getSpan();
+              }
               int s, e;
               // 1)
               spanSet.add(fi.getTarget());

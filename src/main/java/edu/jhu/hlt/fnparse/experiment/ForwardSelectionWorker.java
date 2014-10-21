@@ -2,9 +2,15 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.Arrays;
 
+import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import redis.clients.jedis.Jedis;
 
 public class ForwardSelectionWorker {
+  enum Mode {
+    FRAME_ID,
+    ROLE_LABELING
+  }
+  private static Mode mode = Mode.ROLE_LABELING;
 
   public static void main(String[] args) {
     long start = System.currentTimeMillis();
@@ -16,20 +22,27 @@ public class ForwardSelectionWorker {
     final int port = Integer.parseInt(args[2]);
     final String workingDir = args[3];
     final String config = args[4];
-	System.out.println("channel=" + channel);
-	System.out.println("server=" + server);
-	System.out.println("port=" + port);
+    System.out.println("channel=" + channel);
+    System.out.println("server=" + server);
+    System.out.println("port=" + port);
 
-    double perf = -1d;
+    double perf = 0d;
     try {
-      String[] trainerArgs = new String[] {
-          "frameId",
-          "34",
-          workingDir,
-          config,
-          "regular"
-      };
-      perf = new ParserTrainer().run(trainerArgs);
+      if (mode == Mode.FRAME_ID) {
+        String[] trainerArgs = new String[] {
+            "frameId",
+            "34",
+            workingDir,
+            config,
+            "regular"
+        };
+        perf = new ParserTrainer().run(trainerArgs);
+      } else if (mode == Mode.ROLE_LABELING) {
+        String[] trainerArgs = new String[] {"500", config, workingDir};
+        perf = LatentConstituencyPipelinedParser.main2(trainerArgs, 100);
+      } else {
+        System.out.println("unknown mode: " + mode);
+      }
     } catch (Exception e) {
       e.printStackTrace();
     }

@@ -46,8 +46,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
   private Stage<FNTagging, FNParseSpanPruning> rolePruning;
   private RoleSpanLabelingStage roleLabeling;
 
-  public LatentConstituencyPipelinedParser() {
-    params = new ParserParams();
+  public LatentConstituencyPipelinedParser(ParserParams params) {
+    this.params = params;
     frameId = new OracleStage<>();
     rolePruning = new RoleSpanPruningStage(params, this);
     roleLabeling = new RoleSpanLabelingStage(params, this);
@@ -140,7 +140,24 @@ public class LatentConstituencyPipelinedParser implements Parser {
   }
 
   public static void main(String[] args) throws Exception {
-    int nTrainLimit = 100;
+    main2(args, 0);
+  }
+
+  /** returns arg micro f1 */
+  public static double main2(String[] args, int numTrainEval) throws Exception {
+    if (args.length != 3) {
+      System.out.println("please provide:");
+      System.out.println("1) how many sentences to train on");
+      System.out.println("2) a feature string");
+      System.out.println("3) a working directory");
+      System.exit(-1);
+    }
+    int nTrainLimit = Integer.parseInt(args[0]);
+    String featureDesc = args[1];
+    File workingDir = new File(args[2]);
+    if (!workingDir.isDirectory())
+      workingDir.mkdirs();
+    assert workingDir.isDirectory();
 
     Logger.getLogger(SGD.class).setLevel(Level.ERROR);
     Logger.getLogger(Threads.class).setLevel(Level.ERROR);
@@ -149,7 +166,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
     //Logger.getLogger(RoleSpanPruningStage.class).setLevel(Level.INFO);
     //BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
-    LatentConstituencyPipelinedParser p = new LatentConstituencyPipelinedParser();
+    ParserParams params = new ParserParams();
+    params.setFeatureTemplateDescription(featureDesc);
+    LatentConstituencyPipelinedParser p =
+        new LatentConstituencyPipelinedParser(params);
     p.useDeterministicPruning(Mode.XUE_PALMER_HERMANN);
     //p.dontDoAnyPruning();
 
@@ -181,11 +201,12 @@ public class LatentConstituencyPipelinedParser implements Parser {
     // TODO tune decoder thresholds
 
     // Save model
-    p.saveModel(new File("experiments/testing/cons"));
+    p.saveModel(workingDir);
     ModelIO.writeHumanReadable(
-        p.rolePruning.getWeights(),
+        //p.rolePruning.getWeights(),
+        p.roleLabeling.getWeights(),
         p.params.getAlphabet(),
-        new File("saved-models/constit-pruning.txt"),
+        new File(workingDir, "constit-pruning-weights.txt.gz"),
         true);
     checkPruning(p, train);
     checkPruning(p, test);
@@ -195,12 +216,22 @@ public class LatentConstituencyPipelinedParser implements Parser {
     List<FNParse> predicted = p.parse(sentences, test);
     Map<String, Double> results = BasicEvaluation.evaluate(test, predicted);
     BasicEvaluation.showResults("[test]", results);
+    double ret = results.get("ArgumentMicroF1");
 
     // Eval on train
-    sentences = DataUtil.stripAnnotations(train);
-    predicted = p.parse(sentences, train);
-    results = BasicEvaluation.evaluate(train, predicted);
-    BasicEvaluation.showResults("[train]", results);
+    if (numTrainEval > 0) {
+      List<FNParse> trainSubset = train;
+      if (train.size() > numTrainEval) {
+        trainSubset = DataUtil.reservoirSample(
+            train, numTrainEval, params.rand);
+      }
+      sentences = DataUtil.stripAnnotations(trainSubset);
+      predicted = p.parse(sentences, trainSubset);
+      results = BasicEvaluation.evaluate(trainSubset, predicted);
+      BasicEvaluation.showResults("[train]", results);
+    }
+
+    return ret;
   }
 
   private static void checkPruning(

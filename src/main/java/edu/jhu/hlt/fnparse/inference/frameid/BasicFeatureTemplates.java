@@ -6,6 +6,7 @@ import java.io.FileOutputStream;
 import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +18,8 @@ import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import org.apache.commons.math3.util.FastMath;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -29,11 +32,12 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Path;
+import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
-import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
@@ -227,8 +231,11 @@ public class BasicFeatureTemplates {
       addTemplate(name, new Template() {
         private SentencePosition pos = new SentencePosition();
         public Iterable<String> extract(TemplateContext context) {
+          int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
           DependencyParse d = context.getSentence().getCollapsedDeps();
-          int[] c = d.getChildren(context.getHead1());
+          int[] c = d.getChildren(h);
           if (c.length == 0)
             return Arrays.asList(name + "=NONE");
           else {
@@ -467,6 +474,8 @@ public class BasicFeatureTemplates {
     addTemplate("luMatch", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span t = context.getTarget();
+        if (t == null)
+          return null;
         if (t.width() != 1)
           return null;
         TargetPruningData tpd = TargetPruningData.getInstance();
@@ -482,6 +491,8 @@ public class BasicFeatureTemplates {
     addTemplate("luMatch-WNSynSet", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span t = context.getTarget();
+        if (t == null)
+          return null;
         if (t.width() != 1)
           return null;
         TargetPruningData tpd = TargetPruningData.getInstance();
@@ -511,6 +522,8 @@ public class BasicFeatureTemplates {
     addTemplate("luMatch-WNRelated", new Template() {
       public Iterable<String> extract(TemplateContext context) {
         Span t = context.getTarget();
+        if (t == null)
+          return null;
         if (t.width() != 1)
           return null;
         List<String> ret = new ArrayList<>();
@@ -542,6 +555,8 @@ public class BasicFeatureTemplates {
     addTemplate("luMatch-WNRelatedSynSet", new Template() {
       public Iterable<String> extract(TemplateContext context) {
         Span t = context.getTarget();
+        if (t == null)
+          return null;
         if (t.width() != 1)
           return null;
         List<String> ret = new ArrayList<>();
@@ -740,12 +755,17 @@ public class BasicFeatureTemplates {
   }
 
   private static int estimateRoleLabellingCardinality(
+      String templateName,
       Template template,
       List<FNParse> parses) {
+    Logger.getLogger(RoleSpanLabelingStage.class).setLevel(Level.ERROR);
     ParserParams params = new ParserParams();
+    params.setFeatureTemplateDescription("frameRole * " + templateName);
     RoleSpanLabelingStage stage = new RoleSpanLabelingStage(params, params);
     params.getAlphabet().startGrowth();
-    stage.train(parses);
+    List<FNParseSpanPruning> input = FNParseSpanPruning.optimalPrune(parses);
+    stage.scanFeatures(input, parses, 99, 99_999_999);
+    //stage.train(input, parses);
     return params.getAlphabet().size() + 1;
   }
 
@@ -755,11 +775,18 @@ public class BasicFeatureTemplates {
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
     File f = new File("experiments/forward-selection/basic-templates.txt");
     BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), "UTF-8"));
-    for (Map.Entry<String, Template> tmpl : basicTemplates.entrySet()) {
-      System.out.println(tmpl.getKey());
-      int card_frameId = estimateFrameIdCardinality(tmpl.getValue(), parses);
-      int card_roleLab = estimateRoleLabellingCardinality(tmpl.getValue(), parses);
-      w.write(String.format("%s\t%d\t%d\n", tmpl.getKey(), card_frameId, card_roleLab));
+    Collection<String> templatesToView;
+    if (args.length == 0)
+      templatesToView = basicTemplates.keySet();
+    else
+      templatesToView = Arrays.asList(args);
+    for (String tmplName : templatesToView) {
+      Template tmpl = basicTemplates.get(tmplName);
+      System.out.println(tmplName);
+      int card_frameId = estimateFrameIdCardinality(tmpl, parses);
+      int card_roleLab = estimateRoleLabellingCardinality(tmplName, tmpl, parses);
+      w.write(String.format("%s\t%d\t%d\n", tmplName, card_frameId, card_roleLab));
+      w.flush();
     }
     System.out.println("there are " + basicTemplates.size() + " templates");
     w.close();

@@ -28,6 +28,7 @@ class CommonEqualityMixin(object):
 template_info = None
 FAILED_SCORE = 0.0
 
+
 class Feature(CommonEqualityMixin):
   ''' uses strings as templates '''
   def __init__(self, label, templates=[]):
@@ -151,6 +152,7 @@ class FeatureSet(object):
   def config_string(self):
     ''' returns a description to be passes to an experiment '''
     return ' + '.join([str(x) for x in self.features])
+
 
 class ConfigQueue(object):
   '''
@@ -429,6 +431,7 @@ class SgeJobTracker(object):
     subprocess.Popen(cmd)
     time.sleep(0.2)
 
+
 class LocalJobTracker(object):
   '''
   mock job tracker which uses redis instead of qsub
@@ -446,7 +449,7 @@ class LocalJobTracker(object):
     self.redis.delete(self.key)
 
   def can_submit_more_jobs(self):
-    return len(self.jobs_running) < self.max_concurrent_jobs
+    return len(self.jobs_running()) < self.max_concurrent_jobs
 
   def jobs_running(self):
     # TODO this won't work in cases where jobs die!
@@ -508,7 +511,6 @@ class ForwardSelection:
     if fs:
       name = "fs-%s-%d" % (self.name, len(self.name2config))
       config = fs.config_string()
-      print '[start_job] name =', name, 'config =', config
       assert name not in self.name2config
       assert config not in self.config2name
       self.name2config[name] = config
@@ -578,6 +580,7 @@ class ForwardSelection:
             time.sleep(self.poll_interval)
     perf_file.close()
 
+
 class TemplateInfo(object):
   def __init__(self, filename):
     print '[TemplateInfo init] reading template information from', filename
@@ -588,27 +591,35 @@ class TemplateInfo(object):
     for line in f:
       toks = line.strip().split('\t')
       template_name = toks[0]
-      template_card = int(toks[1])
+      template_card_frameid = int(toks[1])
+      template_card_rolelab = int(toks[2])
       assert template_name not in self.template_cardinality
-      self.template_cardinality[template_name] = template_card
+      self.template_cardinality[template_name] = template_card_rolelab
       self.basic_templates.append(template_name)
     f.close()
     # NOTE: the cardinality of frame is w.r.t. how many frames could possibly
     # be evoked at a give target, which is much less than the number of total frames
-    self.label_cardinality = {'intercept':1, 'frame':10}
+    self.label_cardinality = {'intercept':1, 'frame':10, 'frameRole':50, 'role':15}
     print '[TemplateInfo init] done'
+
 
 if __name__ == '__main__':
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
   template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
   beam_size = 30
-  q = ConfigQueue(beam_size, ['frame', 'intercept'], template_info.basic_templates)
+  local = True
+  #labels = ['frame', 'intercept']
+  labels = ['frameRole', 'role', 'intercept']
+  q = ConfigQueue(beam_size, labels, template_info.basic_templates)
 
-  #jt = LocalJobTracker(debug=True, max_concurrent_jobs=2)
-  #jt.remove_all_jobs()
-  jt = SgeJobTracker()
+  if local:
+    jt = LocalJobTracker(debug=False, max_concurrent_jobs=2)
+    jt.remove_all_jobs()
+  else:
+    jt = SgeJobTracker()
 
-  working_dir = 'experiments/forward-selection/frameId'
+  #working_dir = 'experiments/forward-selection/frameId'
+  working_dir = 'experiments/forward-selection/roleLabeling'
   redis_config = {
     'channel': 'forward-selection',
     'host': socket.gethostname(),
@@ -616,13 +627,13 @@ if __name__ == '__main__':
     'db': '0'
   }
   fs = ForwardSelection('test', working_dir, jt, q, \
-    redis_config=redis_config, poll_interval=0.1)
+    redis_config=redis_config, poll_interval=3.0)
 
-  print 'cleanup...'
-  os.system('kill-all-jobs')
-  time.sleep(2)
   os.system('rm logging/forward-selection/*')
-  time.sleep(1)
+  if not local:
+    print 'cleanup...'
+    os.system('kill-all-jobs')
+    time.sleep(2)
   print 'starting...'
   fs.run()
 
