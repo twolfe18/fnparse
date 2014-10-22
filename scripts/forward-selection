@@ -156,11 +156,38 @@ class FeatureSet(object):
     ''' returns a description to be passes to an experiment '''
     return ' + '.join([str(x) for x in self.features])
 
+class Config(CommonEqualityMixin):
+  ''' a full specification of a FN parsing model '''
+  def __init__(self, feature_set):
+    self.feature_set = feature_set
+    self.params = {}
+    self.params['regularizer'] = '1000.0'
+    self.params['passes'] = '5'
+    self.params['batchSize'] = '1'
+    self.params['parserMode'] = 'classifySpans'
+    self.params['randomSeed'] = '9001'
+    # pre-compute/cache description/config_string
+    self.cs = 'features=' + self.feature_set.config_string()
+    for k, v in self.params.iteritems():
+      self.cs += "_%s=%s" % (k, v)
+
+  def propose_modification(self):
+    fs = self.feature_set.propose_modification()
+    return Config(fs)
+
+  def config_string(self):
+    return self.cs
 
 class ConfigQueue(object):
   '''
   generates FeatureSets on a priority queue and
   estimates (predicts) the utility of a feature set
+
+  TODO As far as I can tell, there are only a few requirements of the elements
+  that go into this queue:
+  1) must have a propose_modification method which returns a mutated version of the entry
+  2) must have a config_string method which fully captures the essesnce of the entry
+  3) some way to handle features
   '''
   def __init__(self, beam_size, labels, basic_templates):
     print '[ConfigQueue init] beam_size =', beam_size
@@ -377,8 +404,8 @@ class ConfigQueue(object):
     if len(self.scores) % 10 == 0:
       self.show_biggest_weights()
 
-  def pop_feature_set(self):
-    ''' returns the FeatureSet which is estimated to have the highest utility '''
+  def pop(self):
+    ''' returns the item which is estimated to have the highest utility '''
     # TODO make this an epsilon-greedy selection
     assert len(self.beam) > 0
     return heapq.heappop(self.beam)[1]
@@ -444,6 +471,8 @@ class SgeJobTracker(object):
     return [name for state, name in self.jobs() if state == 'qw']
 
   def spawn(self, name, args):
+    # TODO need to add {'resultReporter':'redis:host,channel,port'}
+    assert False
     cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub'] + args
     print '[sge spawn] cmd =', cmd
     subprocess.Popen(cmd)
@@ -482,6 +511,9 @@ class LocalJobTracker(object):
     return []
 
   def spawn(self, name, args):
+    # TODO need to add {'resultReporter':'redis:host,channel,port'}
+    assert False
+
     self.redis.rpush(self.key, name)
     if self.debug:
       subprocess.Popen(['scripts/dummy-forward-selection-job'] + args)
@@ -525,7 +557,7 @@ class ForwardSelection:
 
   def start_job(self):
     ''' returns a unique job name and updates self.name2config '''
-    fs = self.config_q.pop_feature_set()
+    model = self.config_q.pop()
     if fs:
       name = "fs-%s-%d" % (self.name, len(self.name2config))
       config = fs.config_string()
