@@ -2,9 +2,14 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.Arrays;
 
+import edu.jhu.hlt.fnparse.experiment.grid.Runner;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import redis.clients.jedis.Jedis;
 
+/**
+ * @deprecated see {@link Runner}
+ * @author travis
+ */
 public class ForwardSelectionWorker {
   enum Mode {
     FRAME_ID,

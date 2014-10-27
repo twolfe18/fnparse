@@ -92,10 +92,10 @@ public class DepPipelineParserSerTest {
 		// Train the models (separately)
 		LOG.info("training frameId");
 		fid.scanFeatures(data, 1, 10_000_000);
-		fid.train(data);
+		fid.learnWeights(data);
 		LOG.info("training argId");
 		aid.scanFeatures(data, 1, 10_000_000);
-		aid.train(data);
+		aid.learnWeights(data);
 
 		// Save the models
 		LOG.info("saving model...");

@@ -185,7 +185,7 @@ public class ParserTrainer {
 		parser.scanFeatures(train, maxTimeInMinutes, maxFeaturesAdded);
 
 		// Train
-		parser.train(train);
+		parser.learnWeights(train);
 		LOG.info("After training, #features=" + parser.getAlphabet().size());
 		printMemUsage();
 

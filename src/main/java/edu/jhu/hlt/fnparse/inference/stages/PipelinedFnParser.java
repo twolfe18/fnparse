@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -21,9 +22,10 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
@@ -53,6 +55,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 		frameId = new FrameIdStage(params, this);
 		argId = new RoleHeadStage(params, this);
 		argExpansion = new RoleHeadToSpanStage(params, this);
+	}
+	
+	@Override
+	public void configure(Map<String, String> configuration) {
+	  LOG.warn("TODO fill this in");
+	  assert false;
 	}
 
 	@Override
@@ -140,6 +148,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 		params.setFeatureAlphabet(featureIndices);
 	}
 
+	@Override
+	public void train(List<FNParse> data) {
+	  scanFeatures(data, 999, 999_999_999);
+	  learnWeights(data);
+	}
+
 	/**
 	 * Builds an Alphabet of feature names and indices, freezes the Alphabet when done.
 	 * This is additive, so you can call it and not lose the features already in the
@@ -188,7 +202,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 				examples.size(), params.getAlphabet().size(), time / 1000d);
 	}
 
-	public void train(List<FNParse> examples) {
+	public void learnWeights(List<FNParse> examples) {
 		if (examples.size() == 0)
 			throw new IllegalArgumentException();
 
@@ -231,26 +245,41 @@ public class PipelinedFnParser implements Serializable, Parser {
 	public List<FNParse> parse(List<Sentence> sentences, List<FNParse> labels) {
 		if (labels != null && labels.size() != sentences.size())
 			throw new IllegalArgumentException();
+		long start;
+		long firstStart = System.currentTimeMillis();
 
 		// Frame id
+		start = firstStart;
 		List<FNTagging> goldFrames = labels == null
 				? null : DataUtil.convertParsesToTaggings(labels);
 		List<FNTagging> frames = frameId
 				.setupInference(sentences, goldFrames)
 				.decodeAll();
+		LOG.info("[parse] frameId done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
 
 		// Arg id
+		start = System.currentTimeMillis();
 		List<FNParse> goldArgHeads = labels == null
 				? null : DataUtil.convertArgumenSpansToHeads(
 						labels, params.headFinder);
 		List<FNParse> argHeads = argId
 				.setupInference(frames, goldArgHeads)
 				.decodeAll();
+		LOG.info("[parse] argId done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
 
 		// Arg spans
+		start = System.currentTimeMillis();
 		List<FNParse> fullParses = argExpansion
 				.setupInference(argHeads, labels)
 				.decodeAll();
+		LOG.info("[parse] argSpans done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
+
+		long totalTime = System.currentTimeMillis() - firstStart;
+		int toks = 0;
+		for (Sentence s : sentences) toks += s.size();
+		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
+		    + sentences.size() + " sentences /" + toks + " tokens, "
+		    + (toks*1000d)/totalTime + " tokens per second");
 
 		return fullParses;
 	}

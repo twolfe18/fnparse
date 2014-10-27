@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.inference.role.head;
 
 import java.util.Arrays;
 
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.inf.FgInferencer;
@@ -13,6 +12,7 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  */
 public class ExpansionVar {
   public static Logger LOG = Logger.getLogger(ExpansionVar.class);
-  static { LOG.setLevel(Level.INFO); }
+  public static boolean SHOW_DECODE = false;
 
   // These are used to point back to the FrameInstance that is being expanded.
   // Just don't change this unless you really think it through.
@@ -48,9 +48,6 @@ public class ExpansionVar {
     this.onlyHeads = onlyHeads;
     this.values = values;
     this.goldIdx = goldIdx;
-    //String name = String.format(
-    //		"r_{i=%d,t=%s,j=%d,k=%d}^e",
-    //		i, getFrame().getName(), j, k);
     String name = String.format(
         "r_{i=%s,t=%s,j=%s,k=%s}^e",
         onlyHeads.getSentence().getWord(i),
@@ -76,11 +73,13 @@ public class ExpansionVar {
   public void addToGoldConfig(VarConfig goldConf) {
     assert hasGold();
     int i = this.goldIdx;
-    // TODO
-    // if i == PRUNED_EXPANSION, don't train on this example
-    // if i == FALSE_POS_ARG, don't train on this example
-    if(i < 0)
+    if (i < 0) {
+      assert false : "no gold?"
+          + " or some other mistake like predicted head not in gold span?";
       i = values.indexOf(Expansion.headToSpan(j, Span.widthOne(j)));
+    }
+    LOG.info(this.var.getName() + " has gold "
+        + Arrays.toString(getSentence().getWordFor(getSpan(i))));
     goldConf.put(this.var, i);
   }
 
@@ -97,9 +96,10 @@ public class ExpansionVar {
 
   public Span decodeSpan(FgInferencer hasMargins) {
     DenseFactor df = hasMargins.getMarginals(var);
-    if (!LOG.getLevel().isGreaterOrEqual(Level.DEBUG)) {
+    if (SHOW_DECODE) {
+      LOG.info("[decodeSpan] hash=" + this.hashCode());
       for (int i = 0; i < df.size(); i++) {
-        Span s = values.get(i).upon(j);
+        Span s = getSpan(i);
         LOG.info(String.format("[decodeSpan] %d %-30s %-80s %.3f",
             i,
             getFrame().getName() + "." + getFrame().getRole(this.k),
@@ -107,6 +107,20 @@ public class ExpansionVar {
             df.getValue(i)));
       }
     }
-    return getSpan(df.getArgmaxConfigId());
+    Span m = getSpan(df.getArgmaxConfigId());
+    if (SHOW_DECODE) {
+      LOG.info("[decodeSpan] argMaxConfig=" + Arrays.toString(onlyHeads.getSentence().getWordFor(m)));
+      if (goldIdx >= 0)
+        LOG.info("[decodeSpan] goldConfig=" + Arrays.toString(onlyHeads.getSentence().getWordFor(getGoldSpan())));
+    }
+    return m;
+  }
+
+  public Span getTarget() {
+    return onlyHeads.getFrameInstance(fiIdx).getTarget();
+  }
+  
+  public Sentence getSentence() {
+    return onlyHeads.getSentence();
   }
 }

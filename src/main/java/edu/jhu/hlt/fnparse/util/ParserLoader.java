@@ -3,8 +3,11 @@ package edu.jhu.hlt.fnparse.util;
 import java.io.File;
 import java.util.Map;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 
 /**
@@ -13,7 +16,27 @@ import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
  * @author travis
  */
 public class ParserLoader {
+  public static final Logger LOG = Logger.getLogger(ParserLoader.class);
 
+  public static Parser instantiateParser(Map<String, String> config) {
+    String mode = config.get(Parser.PARSER_MODE.getName());
+    LOG.info("[instantiateParser] mode=" + mode);
+    ParserParams params = new ParserParams();
+    if (mode.equalsIgnoreCase("classifySpans")) {
+      LatentConstituencyPipelinedParser parser =
+          new LatentConstituencyPipelinedParser(params);
+      return parser;
+    } else if (mode.equals("classifyHeads")) {
+      return new PipelinedFnParser(params);
+    } else {
+      assert !Parser.PARSER_MODE.isPossibleValue(mode);
+      throw new RuntimeException("this method forgot a mode: " + mode);
+    }
+  }
+
+  /**
+   * This method reads stages from disk
+   */
   public static Parser loadParser(Map<String, String> params) {
     String m = params.get("model");
     if ("dep".equals(m)) {

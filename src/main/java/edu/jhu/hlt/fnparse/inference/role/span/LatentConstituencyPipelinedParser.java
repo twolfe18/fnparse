@@ -22,7 +22,6 @@ import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
@@ -68,6 +67,18 @@ public class LatentConstituencyPipelinedParser implements Parser {
     rolePruning = new DeterministicRolePruning(mode);
   }
 
+  @Override
+  public void configure(Map<String, String> configuration) {
+    // TODO
+    LOG.info("[configure] TODO do something here");
+  }
+
+  @Override
+  public void train(List<FNParse> data) {
+    scanFeatures(data);
+    learnWeights(data);
+  }
+
   public void scanFeatures(List<FNParse> parses) {
     LOG.info("setting up inference for " + parses.size() + " parses");
     params.getAlphabet().startGrowth();
@@ -95,7 +106,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     params.getAlphabet().stopGrowth();
   }
 
-  public void train(List<FNParse> parses) {
+  public void learnWeights(List<FNParse> parses) {
     LOG.info("training");
 
     List<Sentence> sentences = DataUtil.stripAnnotations(parses);
@@ -115,6 +126,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold) {
+    long start = System.currentTimeMillis();
     List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
     List<FNParseSpanPruning> goldPrune = null;
     if (gold != null)
@@ -123,6 +135,12 @@ public class LatentConstituencyPipelinedParser implements Parser {
     //for (FNParseSpanPruning pr : prunes)
     //	LOG.info("[predict] pruning predicted AlmostFNParse: " + pr.describe());
     List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
+    long totalTime = System.currentTimeMillis() - start;
+    int toks = 0;
+    for (Sentence s : sentences) toks += s.size();
+		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
+		    + sentences.size() + " sentences /" + toks + " tokens, "
+		    + (toks*1000d)/totalTime + " tokens per second");
     return parses;
   }
 
@@ -170,7 +188,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     params.setFeatureTemplateDescription(featureDesc);
     LatentConstituencyPipelinedParser p =
         new LatentConstituencyPipelinedParser(params);
-    p.useDeterministicPruning(Mode.XUE_PALMER_HERMANN);
+    //p.useDeterministicPruning(Mode.XUE_PALMER_HERMANN);
     //p.dontDoAnyPruning();
 
     // Get the data
@@ -196,7 +214,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
     // Train a model
     p.scanFeatures(train);
-    p.train(train);
+    p.learnWeights(train);
 
     // TODO tune decoder thresholds
 

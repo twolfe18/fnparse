@@ -28,12 +28,14 @@ import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
@@ -106,19 +108,13 @@ public class RoleSpanPruningStage
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(RoleSpanPruningStage.class);
 
+  public static boolean SHOW_FEATURES = false;
+
   // If true, do not prune anything, produce FNParseSpanPrunings that have
   // 100% recall.
   private boolean keepEverything = false;
   private TemplatedFeatures features;
   private transient Regularizer regularizer;
-
-  // If there is no constituency syntax, we will use the nonConstituent version
-  // of these variables.
-  // TODO work this into the template system as a mask template.
-  private boolean parameterize_pruned_constituent = true;
-  private boolean parameterize_pruned_nonConstituent = false; // expensive in #features
-  private boolean parameterize_kept_constituent = true;
-  private boolean parameterize_kept_nonConstituent = true;
 
   public RoleSpanPruningStage(
       ParserParams params,
@@ -217,6 +213,17 @@ public class RoleSpanPruningStage
           arg.start,
           arg.end,
           "gold=" + (!hasGold ? "???" : (gold ? "prune" : "keep")));
+    }
+    private transient int targetHead = -1, argHead = -1;
+    public int getTargetHead(HeadFinder hf, Sentence sent) {
+      if (targetHead < 0)
+        targetHead = hf.head(target, sent);
+      return targetHead;
+    }
+    public int getArgHead(HeadFinder hf, Sentence sent) {
+      if (argHead < 0)
+        argHead = hf.head(arg, sent);
+      return argHead;
     }
   }
 
@@ -319,43 +326,43 @@ public class RoleSpanPruningStage
       Var c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);
       VarSet vs;
       if (c == null) {
-        if (p.arg.width() != 1)
-          LOG.info("null constituent var for: " + p.arg);
+        assert p.arg.width() == 1 :
+          "figure out how to handle pruned constituents";
         vs = new VarSet(p);
       } else {
         vs = new VarSet(p, c);
       }
-      TemplateContext context = parent.features.getContext();
+      HeadFinder hf = parent.getGlobalParams().headFinder;
       ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
-      for (int i = 0; i < vs.calcNumConfigs(); i++) {
-        context.clear();
-        context.setSentence(input.getSentence());
-        context.setFrame(p.frame);
-        context.setTarget(p.target);
+      TemplateContext context = parent.features.getContext();
+      context.clear();
+      context.setStage(RoleSpanPruningStage.class);
+      context.setSentence(input.getSentence());
+      context.setFrame(p.frame);
+      context.setTarget(p.target);
+      context.setTargetHead(p.getTargetHead(hf, input.getSentence()));
+      context.setSpan2(p.target);
+      context.setHead2(p.getTargetHead(hf, input.getSentence()));
+      context.setArg(p.arg);
+      context.setSpan1(p.arg);
+      context.setHead1(p.getArgHead(hf, input.getSentence()));
+      int N = vs.calcNumConfigs();
+      for (int i = 0; i < N; i++) {
         VarConfig conf = vs.getVarConfig(i);
-        boolean prune = BinaryVarUtil.configToBool(conf.getState(p));
-        if (c == null) {
-          assert parent.parameterize_kept_nonConstituent
-            || parent.parameterize_pruned_nonConstituent;
-          context.setSpan1_isntSet();
-          if ((parent.parameterize_kept_nonConstituent && !prune)
-              || (parent.parameterize_pruned_nonConstituent && prune)) {
-            context.setArg(p.arg);
-          }
-        } else {
-          boolean constit = BinaryVarUtil.configToBool(conf.getState(c));
-          if ((parent.parameterize_kept_constituent && !prune && constit)
-              || (parent.parameterize_kept_nonConstituent && !prune && !constit)
-              || (parent.parameterize_pruned_constituent && prune && constit)
-              || (parent.parameterize_pruned_nonConstituent && prune && !constit)) {
-            context.setArg(p.arg);
-            context.setSpan1_isConstituent(constit);
-          }
-        }
+        context.setPrune(BinaryVarUtil.configToBool(conf.getState(p)));
+        context.setSpan1IsConstituent(
+            p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c)));
         FeatureVector fv = new FeatureVector();
-        parent.features.featurize(fv);
+        if (SHOW_FEATURES) {
+          StringBuilder msg = new StringBuilder("[variables]");
+          msg.append(" prune=" + BinaryVarUtil.configToBool(conf.getState(p)));
+          if (c != null)
+            msg.append(" constit=" + BinaryVarUtil.configToBool(conf.getState(c)));
+          parent.features.featurizeDebug(fv, msg.toString());
+        } else {
+          parent.features.featurize(fv);
+        }
         phi.setFeatures(i, fv);
-        throw new RuntimeException("this code is not tested");
       }
       return phi;
     }

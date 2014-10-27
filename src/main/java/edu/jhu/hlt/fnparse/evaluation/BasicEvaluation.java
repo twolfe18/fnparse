@@ -120,6 +120,13 @@ public class BasicEvaluation {
     GenerousEvaluation.generousPrecision,
     GenerousEvaluation.generousRecall};
 
+  public static EvalFunc getEvaluationFunctionByName(String name) {
+    for (EvalFunc ev : evaluationFunctions)
+      if (ev.getName().equals(name))
+        return ev;
+    return null;
+  }
+
   public static Map<String, Double> evaluate(
       List<FNParse> gold, List<FNParse> hyp) {
     List<SentenceEval> se = zip(gold, hyp);

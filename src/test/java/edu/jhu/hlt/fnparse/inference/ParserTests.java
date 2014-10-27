@@ -170,7 +170,7 @@ public class ParserTests {
 		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
 		List<FNParse> dummy = Arrays.asList(e);
 		parser.scanFeatures(dummy, 5d, 99_000_000);
-		parser.train(dummy);
+		parser.learnWeights(dummy);
 		return parser;
 	}
 

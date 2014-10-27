@@ -9,6 +9,10 @@ import java.util.List;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -113,19 +117,18 @@ public class TemplatedFeatures implements Serializable {
     String[] tokens = templateToken.split("\\*");
     for (int i = 0; i < tokens.length; i++)
       tokens[i] = tokens[i].trim();
-    Template template = BasicFeatureTemplates.getLabel(tokens[0]);
-    if (template == null) {
-        throw new TemplateDescriptionParsingException(
-            "could not parse label: " + tokens[0]);
-    }
-    for (int i = 1; i < tokens.length; i++) {
+    Template template = null;
+    for (int i = 0; i < tokens.length; i++) {
       Template basicTemplate =
           BasicFeatureTemplates.getBasicTemplate(tokens[i]);
       if (basicTemplate == null) {
         throw new TemplateDescriptionParsingException(
             "could not parse basic template: " + tokens[i]);
       }
-      template = new TemplateJoin(template, basicTemplate);
+      if (template == null)
+        template = basicTemplate;
+      else
+        template = new TemplateJoin(template, basicTemplate);
     }
     return template;
   }
@@ -181,6 +184,50 @@ public class TemplatedFeatures implements Serializable {
 
   public TemplateContext getContext() {
     return context;
+  }
+
+  public static void showContext(TemplateContext ctx) {
+    Sentence s = ctx.getSentence();
+    Frame f = ctx.getFrame();
+    assert ctx.getStage() != null;
+    LOG.debug("[context] stage=" + ctx.getStage());
+    LOG.debug("[context] sentence=" + s);
+    LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
+    LOG.debug("[context] role=" + (ctx.getRole() == TemplateContext.UNSET ? "UNSET" : f.getRole(ctx.getRole())));
+    LOG.debug("[context] target=" + Describe.span(ctx.getTarget(), s));
+    LOG.debug("[context] targetHead=" + (ctx.getTargetHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getTargetHead())));
+    LOG.debug("[context] arg=" + (ctx.getArg() == null ? "UNSET" : Describe.span(ctx.getArg(), s)));
+    LOG.debug("[context] argHead=" + (ctx.getArgHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getArgHead())));
+    LOG.debug("[context] span1=" + (ctx.getSpan1() == null ? "UNSET" : Describe.span(ctx.getSpan1(), s)));
+    LOG.debug("[context] span2=" + (ctx.getSpan2() == null ? "UNSET" : Describe.span(ctx.getSpan2(), s)));
+    LOG.debug("[context] head1=" + (ctx.getHead1() == TemplateContext.UNSET ? "UNSET" : s.getLU(ctx.getHead1())));
+    LOG.debug("[context] head2=" + (ctx.getHead2() == TemplateContext.UNSET ? "UNSET" : s.getLU(ctx.getHead2())));
+  }
+
+  public static void showFeatures(FeatureVector fv, Alphabet<String> params) {
+    fv.apply(new FnIntDoubleToDouble() {
+      @Override
+      public double call(int arg0, double arg1) {
+        String featName = params.lookupObject(arg0);
+        LOG.debug(String.format("[features] %.1f\t%s", arg1, featName));
+        return arg1;
+      }
+    });
+    if (fv.l0Norm() == 0)
+      LOG.debug("[features] ZERO VECTOR");
+  }
+
+  /**
+   * Same as featurize, but prints the given message, context of the extraction,
+   * and the features extracted.
+   */
+  public void featurizeDebug(FeatureVector v, String message) {
+    featurize(v);
+    LOG.debug("");
+    LOG.info(message);
+    showContext(context);
+    showFeatures(v, featureAlphabet);
+    LOG.debug("");
   }
 
   public void featurize(FeatureVector v) {

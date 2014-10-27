@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.stages.Stage;
 
 /**
  * All of the information needed for a template to make an extraction.
@@ -56,10 +57,16 @@ public class TemplateContext {
 
   // Used for factors that touch a constituency tree variable.
   private int span1_isConstituent;
+  private int span2_isConstituent;
 
-  // TODO fill these in (here and in factor factories)
-  private int head1_isRoot;
-  //private int head1_gov_head2;
+  private int head1_parent;
+  private int head2_parent;
+
+  private int prune;
+
+  // If you want to restrict some features to particular stages, you can write
+  // a Template that filters on this variable
+  private Class<? extends Stage<?, ?>> stage;
 
   public TemplateContext() {
     clear();
@@ -78,8 +85,11 @@ public class TemplateContext {
     head1 = UNSET;
     head2 = UNSET;
     span1_isConstituent = UNSET;
-    head1_isRoot = UNSET;
-    //head1_gov_head2 = UNSET;
+    span2_isConstituent = UNSET;
+    head1_parent = UNSET;
+    head2_parent = UNSET;
+    stage = null;
+    prune = UNSET;
   }
 
   public Sentence getSentence() {
@@ -154,35 +164,70 @@ public class TemplateContext {
     this.head1 = head1;
   }
 
-  public boolean getSpan1_isConstituent() {
-    if (span1_isConstituent < 0)
-      throw new IllegalStateException("not set");
+  public boolean getSpan1IsConstituent() {
+    assert getSpan1IsConstituentIsSet();
     return span1_isConstituent != 0;
   }
-  public void setSpan1_isConstituent(boolean span1_isConstituent) {
+  public boolean getSpan1IsConstituentIsSet() {
+    return span1_isConstituent >= 0;
+  }
+  public void setSpan1IsConstituent(boolean span1_isConstituent) {
     this.span1_isConstituent = span1_isConstituent ? 1 : 0;
   }
-  public void setSpan1_isntSet() {
+  public void clearSpan1IsConstituent() {
     this.span1_isConstituent = UNSET;
+  }
+
+  public boolean getSpan2IsConstituent() {
+    assert getSpan2IsConstituentIsSet();
+    return span2_isConstituent != 0;
+  }
+  public boolean getSpan2IsConstituentIsSet() {
+    return span2_isConstituent >= 0;
+  }
+  public void setSpan2IsConstituent(boolean span2_isConstituent) {
+    this.span2_isConstituent = span2_isConstituent ? 2 : 0;
+  }
+  public void clearSpan2IsConstituent() {
+    this.span2_isConstituent = UNSET;
   }
 
   public int getArgHead() {
     return argHead;
   }
-
   public void setArgHead(int argHead) {
     this.argHead = argHead;
   }
 
-  public boolean getHead1_isRootSet() {
-    return head1_isRoot != UNSET;
+  public Class<? extends Stage<?, ?>> getStage() {
+    return stage;
   }
-  public boolean getHead1_isRoot() {
-    if (head1_isRoot < 0)
-      throw new IllegalStateException("not set");
-    return head1_isRoot != 0;
+  public void setStage(Class<? extends Stage<?, ?>> stage) {
+    this.stage = stage;
   }
-  public void setHead1_isRoot(boolean head1_isRoot) {
-    this.head1_isRoot = head1_isRoot ? 1 : 0;
+
+  public int getHead1_parent() {
+    return head1_parent;
+  }
+  public void setHead1_parent(int head1_parent) {
+    this.head1_parent = head1_parent;
+  }
+
+  public int getHead2_parent() {
+    return head2_parent;
+  }
+  public void setHead2_parent(int head2_parent) {
+    this.head2_parent = head2_parent;
+  }
+
+  public boolean isPrune() {
+    assert isPruneSet();
+    return prune > 0;
+  }
+  public boolean isPruneSet() {
+    return prune != UNSET;
+  }
+  public void setPrune(boolean prune) {
+    this.prune = prune ? 1 : 0;
   }
 }

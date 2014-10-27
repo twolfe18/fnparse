@@ -29,11 +29,11 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
 import edu.jhu.hlt.fnparse.features.Features;
-import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
@@ -53,6 +53,8 @@ public class RoleHeadToSpanStage
 		extends AbstractStage<FNParse, FNParse>
 		implements Stage<FNParse, FNParse>, Serializable {
 	private static final long serialVersionUID = 1L;
+	public static boolean SHOW_FEATURES = false;
+	public static final Logger LOG = Logger.getLogger(RoleHeadToSpanStage.class);
 
 	public static class Params implements Serializable {
 		private static final long serialVersionUID = 1L;
@@ -84,8 +86,7 @@ public class RoleHeadToSpanStage
 	public RoleHeadToSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
 		super(globalParams, featureNames);
 		params = new Params(globalParams);
-		if (globalParams.useLatentDepenencies
-				|| globalParams.useLatentConstituencies) {
+		if (globalParams.useLatentConstituencies) {
 			log.warn("This code does not implement latent syntax yet");
 		}
 	}
@@ -146,13 +147,17 @@ public class RoleHeadToSpanStage
 
 		private static final long serialVersionUID = 1L;
 
-		private final Features.RE features;
-		private final Refinements refs;
+		//private final Features.RE features;
+		//private final Refinements refs;
+		private final TemplatedFeatures features;
 		private final ParserParams params;
 
 		public RoleSpanFactorFactory(ParserParams params) {
-			features = new BasicRoleSpanFeatures(params);
-			refs = new Refinements("r_itjk^e~1");
+			//features = new BasicRoleSpanFeatures(params);
+			//refs = new Refinements("r_itjk^e~1");
+		  features = new TemplatedFeatures("argSpans",
+		      params.getFeatureTemplateDescription(),
+		      params.getAlphabet());
 			this.params = params;
 		}
 
@@ -174,11 +179,29 @@ public class RoleHeadToSpanStage
 				int n = ev.values.size();
 				ExplicitExpFamFactor phi =
 						new ExplicitExpFamFactor(new VarSet(ev.var));
-				for (int i=0; i<n; i++) {
-					Span a = ev.getSpan(i);
+				assert n == phi.getVars().calcNumConfigs();
+				for (int i = 0; i < n; i++) {
 					FeatureVector fv = new FeatureVector();
-					features.featurize(
-							fv, refs, ev.i, ev.getFrame(), ev.j, ev.k, a, s);
+					TemplateContext context = features.getContext();
+					context.clear();
+					context.setStage(RoleHeadToSpanStage.class);
+					context.setSentence(s);
+					context.setFrame(ev.getFrame());
+					context.setRole(ev.getRole());
+					context.setSpan1(ev.getSpan(i));
+					context.setHead1(ev.getArgHeadIdx());
+					context.setArg(ev.getSpan(i));
+					context.setArgHead(ev.getArgHeadIdx());
+					context.setSpan2(ev.getTarget());
+					context.setHead2(ev.getTargetHeadIdx());
+					context.setTarget(ev.getTarget());
+					context.setTargetHead(ev.getTargetHeadIdx());
+					if (SHOW_FEATURES) {
+					  String msg = "[variables] " + ev.var.getName();
+					  features.featurizeDebug(fv, msg);
+					} else {
+					  features.featurize(fv);
+					}
 					phi.setFeatures(i, fv);
 				}
 				factors.add(phi);
@@ -195,10 +218,6 @@ public class RoleHeadToSpanStage
 		}
 	}
 
-	/**
-	 * 
-	 * @author travis
-	 */
 	public static class RoleSpanStageDatum
 			implements StageDatum<FNParse, FNParse> {
 		public static final Logger LOG =
@@ -321,6 +340,14 @@ public class RoleHeadToSpanStage
 				maxLeft = j - i;
 			if (j < i && j + parent.params.maxArgRoleExpandRight > i)
 				maxRight = i - j;
+
+			Frame f = onlyHeads.getFrameInstance(fiIdx).getFrame();
+			if ("Commerce_buy".equals(f.getName())
+			    && "Buyer".equals(f.getRole(k))
+			    && "FNFUTXT1275529".equals(onlyHeads.getSentence().getId())) {
+			  LOG.info("pay attention now");
+			}
+
 			int n = this.onlyHeads.getSentence().size();
 			Expansion.Iter ei = new Expansion.Iter(j, n, maxLeft, maxRight);
 			int goldExpIdx = -1;
@@ -367,11 +394,12 @@ public class RoleHeadToSpanStage
 				consTree = new ConstituencyTreeFactor(
 						getSentence().size(), VarType.LATENT);
 				fg.addFactor(consTree);
-				// TODO add unary factors on constituency vars
+				throw new RuntimeException("add unary factors on constituency vars");
 			}
 			for (Factor f : parent.params.factorTemplate.initFactorsFor(
-					getSentence(), expansions, depTree, consTree))
+					getSentence(), expansions, depTree, consTree)) {
 				fg.addFactor(f);
+			}
 			return fg;
 		}
 
@@ -411,7 +439,7 @@ public class RoleHeadToSpanStage
 			for(FrameInstance fi : onlyHeads.getFrameInstances())
 				fis.add(fi.clone());
 
-			// Update the width-1 arguments as necessary
+			// Update arguments with full spans
 			for(ExpansionVar ev : this.vars) {
 				Span s = ev.decodeSpan(margins);
 				fis.get(ev.fiIdx).setArgument(ev.getRole(), s);

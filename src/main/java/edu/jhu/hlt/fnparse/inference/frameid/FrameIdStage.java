@@ -79,7 +79,7 @@ public class FrameIdStage
     }
 
     public Params(ParserParams globalParams) {
-      decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 2.5d);
+      decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1.5d);
       factorsTemplate = new FrameFactorFactory(globalParams);
     }
   }
@@ -147,7 +147,6 @@ public class FrameIdStage
     final List<Double> biases = new ArrayList<Double>();
     for(double b=0.5d; b<8d; b *= 1.1d) biases.add(b);
     LOG.debug("called getTuningData, trying " + biases.size() + " biases");
-
     return new TuningData() {
       @Override
       public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
@@ -213,6 +212,7 @@ public class FrameIdStage
     }
 
     private void initHypotheses() {
+      assert possibleFrames.size() == 0;
       TargetIndex ti = parent.params.getTargetIndex();
       boolean requireInParens = false;
       boolean requirePosMatchOneSingleWord = false;

@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
 
@@ -53,6 +54,10 @@ public class ParserEvaluator {
     DataSplitReader dsr = new DataSplitReader(ParserTrainer.SENTENCE_ID_SPLITS);
     List<FNParse> test = dsr.getSection(all, "test", false);	// TODO make this true!
     LOG.info("read in " + test.size() + " test instances");
+
+    // Make sure everything is loaded for timing's sake
+    TargetPruningData.getInstance().getPrototypesByFrame();
+    TargetPruningData.getInstance().getWordnetDict();
 
     // Evaluate the parser
     List<Sentence> sentences = DataUtil.stripAnnotations(test);

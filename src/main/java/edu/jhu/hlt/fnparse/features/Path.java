@@ -33,7 +33,7 @@ public class Path {
 	private List<String> upNodes, downNodes;
 	private List<String> upEdges, downEdges;
 	private boolean connected;
-	private boolean toRoot;		// if true, end and down don't mean anything
+	private boolean toRoot;      // if true, end and down don't mean anything
 
 	/** path from root to head */
 	public Path(Sentence s, DependencyParse d, int head, NodeType nodeType, EdgeType edgeType) {
