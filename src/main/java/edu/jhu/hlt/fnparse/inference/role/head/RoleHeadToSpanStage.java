@@ -19,6 +19,7 @@ import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
@@ -30,6 +31,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
@@ -139,22 +141,16 @@ public class RoleHeadToSpanStage
 	}
 
 	/**
-	 * 
-	 * @author travis
+	 * Adds factors for this stage.
 	 */
 	public static class RoleSpanFactorFactory
 			implements FactorFactory<ExpansionVar> {
-
 		private static final long serialVersionUID = 1L;
 
-		//private final Features.RE features;
-		//private final Refinements refs;
 		private final TemplatedFeatures features;
 		private final ParserParams params;
 
 		public RoleSpanFactorFactory(ParserParams params) {
-			//features = new BasicRoleSpanFeatures(params);
-			//refs = new Refinements("r_itjk^e~1");
 		  features = new TemplatedFeatures("argSpans",
 		      params.getFeatureTemplateDescription(),
 		      params.getAlphabet());
@@ -168,51 +164,59 @@ public class RoleHeadToSpanStage
 
 		@Override
 		public List<Factor> initFactorsFor(
-				Sentence s,
+				Sentence sent,
 				List<ExpansionVar> inThisSentence,
 				ProjDepTreeFactor d,
 				ConstituencyTreeFactor c) {
 			List<Factor> factors = new ArrayList<>();
 			for (ExpansionVar ev : inThisSentence) {
-
-				// r_itjk^e ~ 1
-				int n = ev.values.size();
-				ExplicitExpFamFactor phi =
-						new ExplicitExpFamFactor(new VarSet(ev.var));
-				assert n == phi.getVars().calcNumConfigs();
-				for (int i = 0; i < n; i++) {
-					FeatureVector fv = new FeatureVector();
-					TemplateContext context = features.getContext();
-					context.clear();
-					context.setStage(RoleHeadToSpanStage.class);
-					context.setSentence(s);
-					context.setFrame(ev.getFrame());
-					context.setRole(ev.getRole());
-					context.setSpan1(ev.getSpan(i));
-					context.setHead1(ev.getArgHeadIdx());
-					context.setArg(ev.getSpan(i));
-					context.setArgHead(ev.getArgHeadIdx());
-					context.setSpan2(ev.getTarget());
-					context.setHead2(ev.getTargetHeadIdx());
-					context.setTarget(ev.getTarget());
-					context.setTargetHead(ev.getTargetHeadIdx());
-					if (SHOW_FEATURES) {
-					  String msg = "[variables] " + ev.var.getName();
-					  features.featurizeDebug(fv, msg);
-					} else {
-					  features.featurize(fv);
-					}
-					phi.setFeatures(i, fv);
-				}
-				factors.add(phi);
-
-				// r_itjk^e ~ l_mn
-				if (params.useLatentConstituencies) {
-					assert c != null;
-					throw new RuntimeException(
-							"go get code from PairedExactly1");	// TODO
-				}
-
+			  for (int spanIdx = 0; spanIdx < ev.numSpans(); spanIdx++) {
+			    Var sVar = ev.getVar(spanIdx);
+			    Span s = ev.getSpan(spanIdx);
+			    Var cVar = null;
+			    VarSet vs = null;
+			    if (params.useLatentConstituencies && s.width() > 1) {
+			      cVar = c.getSpanVar(s.start, s.end - 1);
+			      vs = new VarSet(sVar, cVar);
+			    } else {
+			      vs = new VarSet(sVar);
+			    }
+			    TemplateContext context = features.getContext();
+			    ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
+			    int n = vs.calcNumConfigs();
+			    for (int i = 0; i < n; i++) {
+			      VarConfig vc = vs.getVarConfig(i);
+			      boolean arg = BinaryVarUtil.configToBool(vc.getState(sVar));
+			      boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
+			      FeatureVector fv = new FeatureVector();
+			      context.clear();
+			      context.setStage(RoleHeadToSpanStage.class);
+			      context.setSentence(sent);
+			      context.setFrame(ev.getFrame());
+			      context.setRole(ev.getRole());
+			      if (arg) {
+			        context.setArg(s);
+			        context.setArgHead(ev.getArgHeadIdx());
+			        context.setSpan1(s);
+			        context.setHead1(ev.getArgHeadIdx());
+			        context.setSpan2(ev.getTarget());
+			        context.setHead2(ev.getTargetHeadIdx());
+			        context.setTarget(ev.getTarget());
+			        context.setTargetHead(ev.getTargetHeadIdx());
+			      }
+			      if (cVar != null)
+			        context.setSpan1IsConstituent(cons);
+			      if (SHOW_FEATURES) {
+			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
+			            arg, cons, sVar.getName());
+			        features.featurizeDebug(fv, msg);
+			      } else {
+			        features.featurize(fv);
+			      }
+			      phi.setFeatures(i, fv);
+			    }
+			    factors.add(phi);
+			  }
 			}
 			return factors;
 		}
@@ -394,7 +398,6 @@ public class RoleHeadToSpanStage
 				consTree = new ConstituencyTreeFactor(
 						getSentence().size(), VarType.LATENT);
 				fg.addFactor(consTree);
-				throw new RuntimeException("add unary factors on constituency vars");
 			}
 			for (Factor f : parent.params.factorTemplate.initFactorsFor(
 					getSentence(), expansions, depTree, consTree)) {

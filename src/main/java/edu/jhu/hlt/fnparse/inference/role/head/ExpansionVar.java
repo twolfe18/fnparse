@@ -14,13 +14,14 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 
 /**
  * @author travis
  */
 public class ExpansionVar {
   public static Logger LOG = Logger.getLogger(ExpansionVar.class);
-  public static boolean SHOW_DECODE = false;
+  public static boolean DEBUG = false;
 
   // These are used to point back to the FrameInstance that is being expanded.
   // Just don't change this unless you really think it through.
@@ -29,7 +30,7 @@ public class ExpansionVar {
   public final int j;
   public final int k;
   public final FNParse onlyHeads;
-  public Var var;
+  private Var[] vars; // indices correspond to that of this.values
   public Expansion.Iter values;
   private int goldIdx;
 
@@ -48,15 +49,25 @@ public class ExpansionVar {
     this.onlyHeads = onlyHeads;
     this.values = values;
     this.goldIdx = goldIdx;
-    String name = String.format(
-        "r_{i=%s,t=%s,j=%s,k=%s}^e",
-        onlyHeads.getSentence().getWord(i),
-        getFrame().getName(),
-        onlyHeads.getSentence().getWord(j),
-        getFrame().getRole(k));
-    this.var = new Var(VarType.PREDICTED, values.size(), name, null);
-    LOG.debug(name + " = " + (goldIdx < 0 ? "NO_LABEL" : Arrays.toString(
-        onlyHeads.getSentence().getWordFor(values.get(goldIdx).upon(j)))));
+    this.vars = new Var[values.size()];
+    for (int idx = 0; idx < vars.length; idx++) {
+      Span arg = getSpan(idx);
+      String name = String.format(
+          "r_{%s.%s@%s=%s}",
+          getFrame().getName(),
+          getFrame().getRole(k),
+          Arrays.asList(getSentence().getWordFor(getTarget())),
+          Arrays.asList(getSentence().getWordFor(arg)));
+      vars[idx] = new Var(VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
+    }
+  }
+
+  public Var getVar(int spanIdx) {
+    return vars[spanIdx];
+  }
+
+  public int numSpans() {
+    return vars.length;
   }
 
   public int getTargetHeadIdx() { return i; }
@@ -72,15 +83,12 @@ public class ExpansionVar {
 
   public void addToGoldConfig(VarConfig goldConf) {
     assert hasGold();
-    int i = this.goldIdx;
-    if (i < 0) {
-      assert false : "no gold?"
-          + " or some other mistake like predicted head not in gold span?";
-      i = values.indexOf(Expansion.headToSpan(j, Span.widthOne(j)));
+    for (int i = 0; i < vars.length; i++) {
+      int gold = BinaryVarUtil.boolToConfig(i == goldIdx);
+      if (DEBUG)
+        LOG.info("[addToGoldConfig] " + vars[i].getName() + " has gold " + gold);
+      goldConf.put(vars[i], gold);
     }
-    LOG.info(this.var.getName() + " has gold "
-        + Arrays.toString(getSentence().getWordFor(getSpan(i))));
-    goldConf.put(this.var, i);
   }
 
   public Span getSpan(int configIdx) {
@@ -95,31 +103,34 @@ public class ExpansionVar {
   }
 
   public Span decodeSpan(FgInferencer hasMargins) {
-    DenseFactor df = hasMargins.getMarginals(var);
-    if (SHOW_DECODE) {
-      LOG.info("[decodeSpan] hash=" + this.hashCode());
-      for (int i = 0; i < df.size(); i++) {
-        Span s = getSpan(i);
+    boolean log = hasMargins.isLogDomain();
+    Span bestSpan = null;
+    double bestScore = 0d;
+    for (int i = 0; i < vars.length; i++) {
+      DenseFactor df = hasMargins.getMarginals(vars[i]);
+      if (log) df.logNormalize();
+      else df.normalize();
+      double p = df.getValue(BinaryVarUtil.boolToConfig(true));
+      Span s = getSpan(i);
+      if (i == 0 || p > bestScore) {
+        bestScore = p;
+        bestSpan = s;
+      }
+      if (DEBUG) {
         LOG.info(String.format("[decodeSpan] %d %-30s %-80s %.3f",
             i,
             getFrame().getName() + "." + getFrame().getRole(this.k),
             Arrays.toString(onlyHeads.getSentence().getWordFor(s)),
-            df.getValue(i)));
+            p));
       }
     }
-    Span m = getSpan(df.getArgmaxConfigId());
-    if (SHOW_DECODE) {
-      LOG.info("[decodeSpan] argMaxConfig=" + Arrays.toString(onlyHeads.getSentence().getWordFor(m)));
-      if (goldIdx >= 0)
-        LOG.info("[decodeSpan] goldConfig=" + Arrays.toString(onlyHeads.getSentence().getWordFor(getGoldSpan())));
-    }
-    return m;
+    return bestSpan;
   }
 
   public Span getTarget() {
     return onlyHeads.getFrameInstance(fiIdx).getTarget();
   }
-  
+
   public Sentence getSentence() {
     return onlyHeads.getSentence();
   }

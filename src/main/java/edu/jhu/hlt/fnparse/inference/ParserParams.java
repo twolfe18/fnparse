@@ -41,14 +41,15 @@ public class ParserParams
    * See {@link TemplatedFeatures}.
    */
   private String featureTemplateDescription =
-      "frame * head1Word + "
-      + "frame * span1LeftPos + "
-      + "frame * span1Width/1 + "
-      + "frameRole * head1Bc1000/99 + "
-      + "frameRole * span1Width/1 + "
-      + "frameRole * head1CollapsedLabel + "
-      + "role * span1GovDirRelations + "
-      + "role * head1CollapsedParentDir * head1Pos";
+      "frame * head1Word"
+      + "+ frame * span1LeftPos"
+      + "+ frame * span1Width/1"
+      + "+ frameRoleArg * head1Bc1000/99"
+      + "+ frameRoleArg * span1Width/1"
+      + "+ frameRoleArg * head1CollapsedLabel"
+      + "+ roleArg * span1GovDirRelations"
+      + "+ roleArg * head1CollapsedParentDir * head1Pos"
+      + "+ frameRoleArg * Word-2-grams-between-Head1-and-Head2 * Dist(Direction,Head1,Head2)";
 
   public String getFeatureTemplateDescription() {
     return featureTemplateDescription;

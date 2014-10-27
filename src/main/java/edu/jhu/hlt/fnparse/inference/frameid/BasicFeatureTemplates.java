@@ -92,6 +92,10 @@ public class BasicFeatureTemplates {
   private static void addTemplate(String name, Template t) {
     if (basicTemplates == null)
       basicTemplates = new HashMap<>();
+    if (name.contains("+"))
+      throw new IllegalArgumentException("ambiguous name with +");
+    if (name.contains("*"))
+      throw new IllegalArgumentException("ambiguous name with *");
     Template ot = basicTemplates.put(name, t);
     if (ot != null)
       throw new RuntimeException("abiguous template name: " + name);
@@ -645,40 +649,6 @@ public class BasicFeatureTemplates {
           return words;
         }
       });
-      // between head1 and head2
-      for (boolean includeDir : Arrays.asList(true, false)) {
-        String nameBetween = "betweenHead1Head2" + x.getKey()
-            + (includeDir ? "WithDir" : "");
-        addTemplate(nameBetween, new Template() {
-          private SentencePosition pos = new SentencePosition();
-          public Iterable<String> extract(TemplateContext context) {
-            int h1 = context.getHead1();
-            if (h1 == TemplateContext.UNSET)
-              return null;
-            int h2 = context.getHead2();
-            if (h2 == TemplateContext.UNSET)
-              return null;
-            assert h1 >= 0 && h2 >= 0;
-            String sep = includeDir ? "->" : "=";
-            if (h1 > h2) {
-              int temp = h1;
-              h1 = h2;
-              h2 = temp;
-              if (includeDir)
-                sep = "<-";
-            }
-            pos.sentence = context.getSentence();
-            Set<String> words = new HashSet<String>();
-            for (int i = h1 + 1; i < h2; i++) {
-              pos.index = i;
-              words.add(nameBetween + sep + x.getValue().apply(pos));
-            }
-            if (words.size() == 0)
-              words.add(nameBetween + "=NONE");
-            return words;
-          }
-        });
-      }
     }
 
     // distance between head1/head2 and span1/span2
@@ -702,9 +672,10 @@ public class BasicFeatureTemplates {
     distanceBucketings.put("Direction", len -> len == 0 ? "0" : (len < 0 ? "-" : "+"));
     distanceBucketings.put("Len3", len -> Math.abs(len) <= 3 ? String.valueOf(len) : (len < 0 ? "-" : "+"));
     distanceBucketings.put("Len5", len -> Math.abs(len) <= 5 ? String.valueOf(len) : (len < 0 ? "-" : "+"));
-    for (Entry<String, IntFunction<String>> d : distanceBucketings.entrySet()) {
-      for (Entry<String, ToIntFunction<TemplateContext>> p1 : distancePoints.entrySet()) {
-        for (Entry<String, ToIntFunction<TemplateContext>> p2 : distancePoints.entrySet()) {
+    for (Entry<String, ToIntFunction<TemplateContext>> p1 : distancePoints.entrySet()) {
+      for (Entry<String, ToIntFunction<TemplateContext>> p2 : distancePoints.entrySet()) {
+        // Distance between two points
+        for (Entry<String, IntFunction<String>> d : distanceBucketings.entrySet()) {
           String name = String.format("Dist(%s,%s,%s)", d.getKey(), p1.getKey(), p2.getKey());
           addTemplate(name, new TemplateSS() {
             @Override
@@ -718,6 +689,58 @@ public class BasicFeatureTemplates {
               return d.getValue().apply(c1 - c2);
             }
           });
+        }
+        // N-grams between the two points
+        for (int n = 1; n <= 2; n++) {
+          for (Map.Entry<String, Function<SentencePosition, String>> ext : tokenExtractors.entrySet()) {
+            if ("Word2".equals(ext.getKey()))
+              continue;
+            if (ext.getKey().toLowerCase().startsWith("bc"))
+              continue;
+            final String name = String.format("%s-%d-grams-between-%s-and-%s",
+                ext.getKey(), n, p1.getKey(), p2.getKey());
+            final int ngram = n;
+            addTemplate(name, new Template() {
+              private Function<SentencePosition, String> extractor = ext.getValue();
+              private SentencePosition pos = new SentencePosition();
+              @Override
+              public Iterable<String> extract(TemplateContext context) {
+                int c1 = p1.getValue().applyAsInt(context);
+                if (c1 == TemplateContext.UNSET)
+                  return null;
+                int c2 = p2.getValue().applyAsInt(context);
+                if (c2 == TemplateContext.UNSET)
+                  return null;
+                if (c1 > c2) {
+                  int temp = c1;
+                  c1 = c2;
+                  c2 = temp;
+                }
+                pos.sentence = context.getSentence();
+                List<String> output = new ArrayList<>();
+                for (int start = c1; start <= c2 - ngram; start++) {
+                  StringBuilder feat = new StringBuilder(name);
+                  feat.append("=");
+                  boolean once = false;
+                  for (pos.index = start;
+                      pos.index < start + ngram && pos.index <= c2;
+                      pos.index++) {
+                    once = true;
+                    String si = extractor.apply(pos);
+                    if (si == null)
+                      si = "NULL";
+                    if (feat.length() > 0)
+                      feat.append("&");
+                    feat.append(si);
+                  }
+                  if (!once)
+                    feat.append("<NONE>");
+                  output.add(feat.toString());
+                }
+                return output;
+              }
+            });
+          }
         }
       }
     }
@@ -741,6 +764,20 @@ public class BasicFeatureTemplates {
         return "frameRole=" + f.getName() + "." + f.getRole(role);
       }
     });
+    addTemplate("frameRoleArg", new TemplateSS() {
+      // Like frameRole, but requires that arg not be null,
+      // which can lead to much sparser feature sets (observed feature trick)
+      public String extractSS(TemplateContext context) {
+        if (context.getArg() == null)
+          return null;
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "frameRoleArg=" + f.getName() + "." + f.getRole(role);
+      }
+    });
     addTemplate("role", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         int role = context.getRole();
@@ -749,6 +786,18 @@ public class BasicFeatureTemplates {
         Frame f = context.getFrame();
         assert f != null;
         return "role=" + f.getRole(role);
+      }
+    });
+    addTemplate("roleArg", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        if (context.getArg() == null)
+          return null;
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "roleArg=" + f.getRole(role);
       }
     });
     addTemplate("span1IsConstituent", new TemplateSS() {

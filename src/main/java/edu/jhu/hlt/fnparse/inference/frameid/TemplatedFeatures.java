@@ -194,7 +194,7 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("[context] sentence=" + s);
     LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
     LOG.debug("[context] role=" + (ctx.getRole() == TemplateContext.UNSET ? "UNSET" : f.getRole(ctx.getRole())));
-    LOG.debug("[context] target=" + Describe.span(ctx.getTarget(), s));
+    LOG.debug("[context] target=" + (ctx.getTarget() == null ? "UNSET" : Describe.span(ctx.getTarget(), s)));
     LOG.debug("[context] targetHead=" + (ctx.getTargetHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getTargetHead())));
     LOG.debug("[context] arg=" + (ctx.getArg() == null ? "UNSET" : Describe.span(ctx.getArg(), s)));
     LOG.debug("[context] argHead=" + (ctx.getArgHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getArgHead())));
