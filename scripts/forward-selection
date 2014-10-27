@@ -157,11 +157,13 @@ class FeatureSet(object):
     return ' + '.join([str(x) for x in self.features])
 
 class Config(CommonEqualityMixin):
-  ''' a full specification of a FN parsing model '''
-  def __init__(self, feature_set):
+  ''' A full specification of a FN parsing model '''
+  def __init__(self, feature_set, regularizer=8):
+    assert type(regularizer) is int   # this is the natural log of the true regularizer
     self.feature_set = feature_set
+    self.regularizer = regularizer
     self.params = {}
-    self.params['regularizer'] = '1000.0'
+    self.params['regularizer'] = str(regularizer)
     self.params['passes'] = '5'
     self.params['batchSize'] = '1'
     self.params['parserMode'] = 'classifySpans'
@@ -171,64 +173,49 @@ class Config(CommonEqualityMixin):
     for k, v in self.params.iteritems():
       self.cs += "_%s=%s" % (k, v)
 
-  def propose_modification(self):
-    fs = self.feature_set.propose_modification()
-    return Config(fs)
-
   def config_string(self):
     return self.cs
 
+def mutate_config(config):
+  next_fs = config.feature_set.propose_modification()
+  cur_card = config.feature_set.estimate_cardinality()
+  next_card = next_fs.estimate_cardinality()
+  diff_card = next_card - cur_card
+  # Do your best to guess if the regularizer needs to change
+  children = [Config(next_fs, config.regularizer)]
+  if card_diff > 25000 or card_diff / cur_card > 1.5:
+    children.append(Config(next_fs, config.regularizer + 1))
+  if card_diff < -25000 or card_diff / cur_card < -1.5:
+    children.append(Config(next_fs, config.regularizer - 1))
+  return children
+
+
 class ConfigQueue(object):
   '''
-  generates FeatureSets on a priority queue and
-  estimates (predicts) the utility of a feature set
+  An infinite queue of items. A seed set of items should be pushed onto the queue
+  to begin with, but after that this queue will generate new items by calling
+  propose_modification on existing items. Remember to call observe_score to let this
+  queue know what are good items and which are bad.
 
-  TODO As far as I can tell, there are only a few requirements of the elements
-  that go into this queue:
+  There are only a few requirements of the elements that go into this queue:
   1) must have a propose_modification method which returns a mutated version of the entry
   2) must have a config_string method which fully captures the essesnce of the entry
-  3) some way to handle features
   '''
-  def __init__(self, beam_size, labels, basic_templates):
-    print '[ConfigQueue init] beam_size =', beam_size
-    print '[ConfigQueue init] labels =', labels
-    print '[ConfigQueue init] basic_templates =', basic_templates
-    assert len(labels) >= 1
-    assert len(basic_templates) >= 1
-    self.beam_size = beam_size
-    self.label_templates = labels
-    self.basic_templates = basic_templates
+  def __init__(self, mutation_function, greediness=1.0):
+    self.mutation_function = mutation_function  # item -> [item]
+    self.greediness = greediness
+    self.config2item = {}   # Has entries for *all* configs that came from self
+    self.scores = []        # Tuples of (score, item) representing the observed scores
+    self.config2score = {}  # Has entries for configs that have had observe_score called
+    self.waiting = []       # List of items that should be popped before mutating scored items
 
-    # feature weights that comprise the score function
-    self.weights = collections.defaultdict(float)
-    self.intercept = 0.0
-
-    # tuples of (score, FeatureSet) representing the observed scores
-    self.scores = []
-
-    # a config -> FeatureSet mapping for all explored FeatureSets
-    self.config2fs = {}
-    self.config2score = {}  # config -> float score
-    self.beam = []  # tuples of (score, FeatureSet), like self.scores
-    for x in basic_templates:
-      for y in labels:
-        f = Feature(y, x)
-        fs = FeatureSet(features=[f], derived_from=None)
-        self.beam.append((0.0, fs))
-        self.config2fs[fs.config_string()] = fs
-    assert len(self.beam) >= self.beam_size
-
-  def pick(self, scored_feature_sets, greediness=1.0):
-    '''
-    makes a greedy but random selection from scored_feature_sets
-    scored_feature_sets should be a list of (score, FeatureSet)
-    '''
+  def _pick(self, greediness):
     debug = False
     # find the max score
-    m = max([x[0] for x in scored_feature_sets])
+    m = max([x[0] for x in self.scores])
     weights = []
     z = 0.0
-    for s, fs in scored_feature_sets:
+    for s, item in self.scores:
       regret = (m - s) * 10.0
       w = math.exp(-regret * greediness)
       weights.append(w)
@@ -240,148 +227,28 @@ class ConfigQueue(object):
     for i in range(len(weights)):
       c += weights[i]
       if debug:
-        print '[pick]', scored_feature_sets[i][1], 'has score', c
+        print '[pick]', self.scores[i][1], 'has score', c
       if c >= t:
-        fs = scored_feature_sets[i][1]
-        print '[pick] chose', fs
-        return fs
-    print '[pick] scored_feature_sets:', scored_feature_sets
+        item = self.scores[i][1]
+        print '[pick] chose', item
+        return item
+    # Should never get here
+    print '[pick] scored_feature_sets:', self.scores
     print '[pick] weights:', weights
     assert False
 
-  def ensure_full_beam(self, gen_from=None):
-    print '[ensure_full_beam] len(beam) =', len(self.beam), 'len(scores) =', len(self.scores)
-    tries = 0
-    max_tries = 20 * self.beam_size
-    while len(self.beam) < self.beam_size and tries < max_tries:
-      tries += 1
-      # generate a new feature set to put on the beam
-      if gen_from:
-        fs_extend = gen_from
-      else:
-        assert len(self.scores) > 0
-        g = 1.0 * (max_tries - tries) / float(max_tries)
-        fs_extend = self.pick(self.scores, greediness=g)
-      fs = fs_extend.propose_modification(self.label_templates, self.basic_templates)
-  
-      # check if fs is already on the beam
-      on_beam = False
-      for bs, bfs in self.beam:
-        if fs == bfs:
-          on_beam = True
-          break
-
-      # store the new feature set
-      if not on_beam:
-        config = fs.config_string()
-        if config not in self.config2fs:
-          self.config2fs[config] = fs
-          score = self.score(fs)
-          self.beam.append((score, fs))
-          print '[ensure_full_beam] adding', config, 'with score', score
-        # otherwise we've already tried this config/fs
-
-  def update_weights(self):
-    ''' minimizes squared error on self.scores '''
-    assert len(self.scores) > 0
-    # make a feature alphbet
-    s2i = {}
-    i2s = []
-    features = []
-    for score, fs in self.scores:
-      x = self.features(fs)
-      features.append(x)
-      for s in x:
-        if s not in s2i:
-          s2i[s] = len(s2i)
-          i2s.append(s)
-    d = len(i2s)
-    # make numeric vectors for numpy to solve
-    A = []
-    b = []
-    for i, x_str in enumerate(features):
-      y = self.scores[i][0]
-      x = np.zeros(d)
-      for s in x_str:
-        x[s2i[s]] += 1.0
-      A.append(x)
-      b.append(y)
-    # call sklearn
-    # NOTE you have to use regularized least square or else things
-    # will almost certainly be co-linear and you'll get wack solutions
-    m = Ridge(alpha=10.0, fit_intercept=True).fit(A, b)
-    w = m.coef_
-    self.intercept = m.intercept_
-    # convert w back into string to double dict
-    self.weights = collections.defaultdict(float)
-    for i in range(len(w)):
-      self.weights[i2s[i]] = w[i]
-    #print '[update_weights] intercept=', self.intercept, 'weights =', self.weights
-
-  def highest_rated_weights(self, reverse, k=10):
-    return sorted(self.weights.items(), key=operator.itemgetter(1), reverse=reverse)[:k]
-
   def show_state(self, k=10):
-    print '[show_state]', len(self.weights), \
-      'weights for', len(self.scores), 'observations'
-    print 'biggest (positive) weights:'
-    for feat, weight in self.highest_rated_weights(True, k):
-      print "\t%.3f\t%s" % (weight, feat)
-    print 'biggest (negative) weights:'
-    for feat, weight in self.highest_rated_weights(False, k):
-      print "\t%.3f\t%s" % (weight, feat)
-    print 'best feature sets:'
-    for score, fs in sorted(self.scores, key=operator.itemgetter(0), reverse=True)[:k]:
-      print "\t%.3f\t%s" % (score, fs.config_string())
-
-  # TODO support non-binary features (reutrn type must change to dict or list of tuples)
-  def features(self, feature_set):
-    meta = []
-    c = feature_set.estimate_cardinality()
-    c = math.floor(pow(c, 0.4) / 30)
-    meta.append('card_feats=' + str(c))
-    meta.append('num_feats=' + str(len(feature_set.features)))
-    min_c = 999
-    max_c = 0
-    labels = set()
-    for feat in feature_set.features:
-      c = feat.estimate_cardinality()
-      c = math.floor(pow(c, 0.5) / 100)
-      if c < min_c: min_c = c
-      if c > max_c: max_c = c
-      labels.add(feat.label)
-      meta.append('label=' + feat.label) # only use if more than one label
-      meta.append('feat=' + str(feat))
-      meta.append('template_arity=' + str(len(feat.templates)))
-      for template in feat.templates:
-        meta.append('template=' + template)
-        meta.append('template=' + template + ',label=' + feat.label)
-    meta.append('label_set=' + '_'.join(sorted(list(labels))))
-    meta.append('template_min_card=' + str(min_c))
-    meta.append('template_max_card=' + str(max_c))
-    if feature_set.derived_from:
-      c = feature_set.derived_from.config_string()
-      s = self.config2score[c]
-      if s:
-        # don't know the scale, convert to scientific notation, take 2 significant digits
-        meta.append("derived_from_score=%.2g" % (s))
-    return meta
-
-  def score(self, feature_set):
-    ''' returns the estimated utility of a feature set '''
-    # TODO add a feature for derived_from's score
-    score = self.intercept
-    for feat in self.features(feature_set):
-      score += self.weights[feat]
-    return score
+    print '[show_state]', len(self.scores), 'observations'
+    best = sorted(self.scores, key=operator.itemgetter(0), reverse=True)
+    for i in range(min(k, len(best))):
+      score, item = best[i]
+      print "[show_state] %dth best\t%.3f\t%s" % (i, score, item.config_string())
 
   def observe_score(self, score, config):
-    ''' updates the model and the beam given the results of an experiment '''
+    ''' Record the score of a given config/item '''
     print '[observe_score] score =', score, 'config =', config
     assert type(score) is float
     assert type(config) is str
-    feature_set = self.config2fs[config]
-    assert type(feature_set) is FeatureSet
     if config in self.config2score:
       if self.config2score[config] == FAILED_SCORE:
         print ("[observe_score] WARN: may need to sleep longer, " \
@@ -392,33 +259,48 @@ class ConfigQueue(object):
           + str(self.config2score[config]) \
           + ' but you tried to observe the score ' + str(score))
     self.config2score[config] = score
-    # update weights
-    self.scores.append((score, feature_set))
-    self.update_weights()
-    # re-score beam
-    for i in range(len(self.beam)):
-      (score, fs) = self.beam[i]
-      score2 = self.score(fs)
-      self.beam[i] = (score2, fs)
-    # return beam to its regular state
-    self.ensure_full_beam()
-    heapq.heapify(self.beam)
     # print the biggest weights
     if len(self.scores) % 10 == 0:
       self.show_state()
 
+  def push(self, item):
+    ''' Push an item onto the queue which must be run before
+    propose_modification's are considered '''
+    cs = item.config_string()
+    assert cs not in self.config2item
+    self.config2item[cs] = item
+    self.waiting.append(item)
+
   def pop(self):
-    ''' returns the item which is estimated to have the highest utility '''
-    # TODO make this an epsilon-greedy selection
-    assert len(self.beam) > 0
-    return heapq.heappop(self.beam)[1]
+    ''' Returns a pushed item if there is one, otherwise chooses
+    a scored item and mutates it with propose_modification '''
+    if self.waiting:
+      return self.waiting.pop()
+    else:
+      if len(self.scores) == 0:
+        raise Exception('you must seed some items using push so there is something to mutate')
+      tries = 0
+      max_tries = 100
+      while tries < max_tries:
+        # g->0 as we run out of tries
+        g = self.greediness * (max_tries - tries) / float(max_tries)
+        parent = self._pick(g)
+        children = self.mutation_function(parent)
+        feasible = [c for c in children if c.config_string() not in self.config2score]
+        if feasible:
+          random.shuffle(feasible)
+          while len(feasible) > 1:
+            self.push(feasible.pop())
+          return feasible.pop()
+        else:
+          tries += 1
+      print '[pop] couldn\'t generate a new configuration'
+      return None
 
 
 class SgeJobTracker(object):
-  '''
-  a job tracker that asks qstat for the jobs that are running
-  and spawns jobs with qsub
-  '''
+  ''' A job tracker that asks qstat for the jobs that are
+  running and spawns jobs with qsub '''
   def can_submit_more_jobs(self):
     return len(self.jobs_queued()) < 30
 
@@ -430,22 +312,7 @@ class SgeJobTracker(object):
     so name_predicate need not filter those out.
     Returns a list of job names.
     '''
-    #r = subprocess.check_output(['qstat'])
-    #if not r:
-    #  return 0
-    #jobs = []
-    #for line in r.split('\n')[2:]:
-    #  toks = line.split()
-    #  name = toks[2]
-    #  if name == 'QLOGIN':
-    #    continue
-    #  if name_predicate(name):
-    #    jobs.append(name)
-    #return jobs
-
-    # need to do this with XML to get the full names
     xml = subprocess.check_output(['qstat', '-u', 'twolfe', '-xml'])
-    #print '[sge jobs] xml=' + xml
     xml = ET.fromstring(xml)
     assert xml.tag == 'job_info'
     # NOTE: wow this is really bad...
@@ -514,27 +381,31 @@ class LocalJobTracker(object):
     return []
 
   def spawn(self, name, args):
-    # TODO need to add {'resultReporter':'redis:host,channel,port'}
-    assert False
-
+    ''' args should be a dictionary of values to pass to grid.Runner '''
     self.redis.rpush(self.key, name)
     if self.debug:
+      raise Exception('need to update args for dummy-forward-selection-job')
       subprocess.Popen(['scripts/dummy-forward-selection-job'] + args)
     else:
       cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
       cp = ':'.join([x.strip() for x in cp.split('\n')])
       cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
       cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
-      cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
-      cmd += args
-      print 'about to spawn:', cmd
+      #cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
+      #cmd += args
+      cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')
+      for k, v in args.iteritems():
+        cmd += [k, v]
+      #print 'about to spawn:', cmd
+      print 'about to spawn:', ' '.join(cmd)
       subprocess.Popen(cmd)
 
 
 # TODO rip out the config_q part of this, daemonize it, and release it as a robust
 # version of qsub (i.e. watches to make sure jobs finish, restarts them if not)
 class ForwardSelection:
-  def __init__(self, name, working_dir, job_tracker, config_q, poll_interval=3.0, \
+  def __init__(self, name, working_dir, job_tracker, config_q, \
+      poll_interval=3.0, max_train_size=None, max_num_jobs=None, \
       redis_config={'channel':'forward-selection', 'host':'localhost', 'port':'6379', 'db':'0'}):
     print '[ForwardSelection] attempting to use redis server at', redis_config
     self.name = name
@@ -546,6 +417,8 @@ class ForwardSelection:
     self.config2name = {}
     self.poll_interval = poll_interval
     self.dispatched = set()         # names of the jobs that (should be) running
+    self.max_train_size = max_train_size  # limit on size of training data to make things faster
+    self.max_num_jobs = max_num_jobs      # limit on how many total jobs can be submitted
 
   def parse_message(self, data):
     '''
@@ -560,10 +433,10 @@ class ForwardSelection:
 
   def start_job(self):
     ''' returns a unique job name and updates self.name2config '''
-    model = self.config_q.pop()
-    if fs:
+    item = self.config_q.pop()
+    if item:
       name = "fs-%s-%d" % (self.name, len(self.name2config))
-      config = fs.config_string()
+      config = item.config_string()
       assert name not in self.name2config
       assert config not in self.config2name
       self.name2config[name] = config
@@ -572,12 +445,18 @@ class ForwardSelection:
       wd = os.path.join(self.working_dir, name + '-wd')
       if not os.path.isdir(wd):
         os.mkdir(wd)
-      cmd = []
-      cmd.append(self.redis_config['channel'])
-      cmd.append(self.redis_config['host'])
-      cmd.append(self.redis_config['port'])
-      cmd.append(wd)
-      cmd.append(config)
+      # Parameters for cross-validation
+      K = 2
+      p = 0.15
+      cmd = {}
+      cmd['KpTrainDev'] = "%d %f" % (K, p)
+      if self.max_train_size:
+        cmd['MaxTrainSize'] = str(self.max_train_size)
+      cmd['resultReporter'] = "redis:%s,%s,%s" % \
+        (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'])
+      cmd['workingDir'] = wd
+      print '[start_job] item.params =', item.params
+      cmd.update(item.params)
       self.job_tracker.spawn(name, cmd)
       self.dispatched.add(name)
       return name
@@ -585,21 +464,26 @@ class ForwardSelection:
       return None
 
   def can_submit_more_jobs(self):
-    return self.job_tracker.can_submit_more_jobs() and len(self.config_q.beam) > 0
+    if self.max_num_jobs and self.num_jobs >= self.max_num_jobs:
+      return False
+    return self.job_tracker.can_submit_more_jobs()
 
   def run(self):
     r = redis.StrictRedis(host=self.redis_config['host'], port=self.redis_config['port'], db=self.redis_config['db'])
     p = r.pubsub(ignore_subscribe_messages=True)
     p.subscribe(self.redis_config['channel'])
     perf_file = open(os.path.join(self.working_dir, 'perf.txt'), 'w')
+    self.num_jobs = 0
     while True:
-      # try to dispatch new jobs
+      # Try to dispatch new jobs
       if self.can_submit_more_jobs():
-        if not self.start_job():
+        if self.start_job():
+          self.num_jobs += 1
+        else:
           print 'Done!'
           break
       else:
-        # check for results
+        # Check for results
         message = p.get_message()
         print 'received message:', message
         if message:
@@ -609,7 +493,7 @@ class ForwardSelection:
           perf_file.write("%f\t%s\t%s\n" % (score, name, config))
           perf_file.flush()
           self.config_q.observe_score(score, config)
-          # remove this jobs from dispatched
+          # Remove this jobs from dispatched
           if type(self.job_tracker) is LocalJobTracker: # for debugging
             self.job_tracker.set_job_done(name)
           try:
@@ -656,57 +540,70 @@ class TemplateInfo(object):
     self.label_cardinality = {'intercept':1, 'frame':10, 'frameRole':50, 'role':15}
     print '[TemplateInfo init] done'
 
-def save_config_q_handler(signum, frame):
-  if SER_Q is not None and SER_Q_PATH is not None:
-    print 'saving config queue to', SER_Q_PATH
-    pickle.dump(SER_Q, open(SER_Q_PATH, 'wb'))
-  sys.exit(0)
 
 def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
   global template_info
   template_info = TemplateInfo(template_info_filename)
-  #template_info = TemplateInfo('experiments/forward-selection/basic-templates.txt')
-  beam_size = 30
-  local = False
+  local = True
   #labels = ['frame', 'intercept']
-  labels = ['frameRole', 'role', 'intercept']
+  labels = ['frame * prune', 'frameRole', 'role']
+  extra_seeds = ['frame * prune * span1Width/2' \
+   + ' + frame * prune * Dist(Len5,Span1.Last,Span2.First)' \
+   + ' + frameRole * head1Word' \
+   + ' + frameRole * span1FirstWord']
 
-  # create the config queue
+  # Create the config queue
   if deser_q_filename is None:
     print 'creating empty config queue'
-    q = ConfigQueue(beam_size, labels, template_info.basic_templates)
+    # Right now the seed set is just each of the labels conjoined
+    # with the headword. You can manually add some good seeds here if you know them.
+    q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
+    for y in labels:
+      fs = FeatureSet(features=[Feature(y + '*head1Word')])
+      q.push(Config(fs, regularizer=8))
+    for fs_str in extra_seeds:
+      fs = FeatureSet(features=[Feature(fs_str)])
+      q.push(Config(fs, regularizer=8))
   else:
     print 'loading config queue from', deser_q_filename
-    f = open(deser_q_filename, 'rb')
-    q = pickle.load(f)
-    f.close()
+    q = pickle.load(open(deser_q_filename, 'rb'))
     q.show_state()
 
-  # make sure config queue is setup to be saved on SIGINT
+  # Make sure config queue is setup to be saved on SIGINT
   global SER_Q_PATH
   global SER_Q
-  SER_Q_PATH = ser_q_filename
-  SER_Q = q
-  signal.signal(signal.SIGINT, save_config_q_handler)
+  if ser_q_filename != '/dev/null':
+    print 'setting up to save to', ser_q_filename, 'on Ctr-C'
+    SER_Q_PATH = ser_q_filename
+    SER_Q = q
+    def save_config_q_handler(signum, frame):
+      ''' Function that saves the config queue on Ctr-C so that you can resume later '''
+      if SER_Q is not None and SER_Q_PATH is not None:
+        print 'saving config queue to', SER_Q_PATH
+        pickle.dump(SER_Q, open(SER_Q_PATH, 'wb'))
+      sys.exit(0)
+    signal.signal(signal.SIGINT, save_config_q_handler)
 
-  # create the job tracker
+  # Create the job tracker
   if local:
     jt = LocalJobTracker(debug=False, max_concurrent_jobs=2)
     jt.remove_all_jobs()
   else:
     jt = SgeJobTracker()
 
-  #working_dir = 'experiments/forward-selection/frameId'
-  working_dir = 'experiments/forward-selection/roleLabeling'
-  redis_config = {
+  #wd = 'experiments/forward-selection/frameId'
+  wd = 'experiments/forward-selection/roleLabeling'
+  rc = {
     'channel': 'forward-selection',
     'host': socket.gethostname(),
     'port': '6379',
     'db': '0'
   }
-  fs = ForwardSelection('test', working_dir, jt, q, \
-    redis_config=redis_config, poll_interval=3.0)
+  max_train = 10  # TODO make this bigger!
+  max_jobs = 1    # TODO make this bigger!
+  fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
+    poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
   os.system('rm logging/forward-selection/*')
   if not local:
@@ -717,6 +614,10 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   fs.run()
 
 if __name__ == '__main__':
+
+  # Make stdout flush regularly
+  sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+
   if len(sys.argv) == 3:
     main(sys.argv[1], sys.argv[2])
   elif len(sys.argv) == 4:
