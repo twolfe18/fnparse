@@ -149,7 +149,7 @@ public class Runner {
         dev.clear();
         train.addAll(splits[0]);
         for (int devSplit = 0; devSplit < K; devSplit++)
-          (devSplit == k ? dev : train).addAll(splits[k + 1]);
+          (devSplit == k ? dev : train).addAll(splits[devSplit + 1]);
         for (FNParse pp : train)
           LOG.debug("training on " + pp.getId());
         parser.train(train);
