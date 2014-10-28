@@ -53,7 +53,6 @@ public class RoleSpanLabelingStage
   public static final Logger LOG =
       Logger.getLogger(RoleSpanLabelingStage.class);
 
-  //private BasicRoleSpanFeatures features;
   private TemplatedFeatures features;
   private ApproxF1MbrDecoder decoder;
   private transient Regularizer regularizer = new L2(1_000_000d);
@@ -178,7 +177,7 @@ public class RoleSpanLabelingStage
         FactorGraph fg,
         VarConfig goldConf,
         Collection<ArgSpanLabelVar> vars) {
-      int prunedGold = 0, total = 0;
+      int prunedGold = 0, total = 0, totalRealized = 0;
       for (int i = 0; i < input.numFrameInstances(); i++) {
         Frame f = input.getFrame(i);
         Span target = input.getTarget(i);
@@ -204,6 +203,8 @@ public class RoleSpanLabelingStage
             }
           }
           total++;
+          if (goldArg != null && goldArg != Span.nullSpan)
+            totalRealized++;
           boolean foundNullSpan = false;
           for (Span arg : input.getPossibleArgs(i)) {
             // Non-null span variables
@@ -222,8 +223,8 @@ public class RoleSpanLabelingStage
       }
       if (gold != null) {
         LOG.info(String.format(
-            "[build] pruned the gold span in %d of %d cases in %s",
-            prunedGold, total, input.getSentence().getId()));
+            "[build] pruned the gold span in %d of %d cases (%d realized) in %s",
+            prunedGold, total, totalRealized, input.getSentence().getId()));
       } else {
         LOG.info("[build] setup " + total
             + " arg-span label variables for prediction in "

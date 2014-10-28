@@ -85,7 +85,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
   }
 
   public void scanFeatures(List<FNParse> parses) {
-    LOG.info("setting up inference for " + parses.size() + " parses");
+    LOG.info("scanning features for " + parses.size() + " parses");
     params.getAlphabet().startGrowth();
 
     List<Sentence> sentences = DataUtil.stripAnnotations(parses);
@@ -109,10 +109,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
     roleLabeling.scanFeatures(noisyPrunes, parses, 45, 10_000_000);
 
     params.getAlphabet().stopGrowth();
+    LOG.info("done scanning features");
   }
 
   public void learnWeights(List<FNParse> parses) {
-    LOG.info("training");
+    LOG.info("starting training on " + parses.size() + " parses");
 
     List<Sentence> sentences = DataUtil.stripAnnotations(parses);
     List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
@@ -127,6 +128,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
     List<FNParseSpanPruning> hypPrunes = rolePruning
         .setupInference(frames, null).decodeAll();
     roleLabeling.train(hypPrunes, parses);
+
+    LOG.info("done training");
   }
 
   @Override
@@ -152,6 +155,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public static final String FRAME_ID_MODEL_NAME = PipelinedFnParser.FRAME_ID_MODEL_NAME;
   public static final String ROLE_PRUNE_MODEL_NAME = "rolePrune.ser.gz";
   public static final String ROLE_LABEL_MODEL_NAME = "roleLabel.ser.gz";
+  public static String ROLE_PRUNE_HUMAN_READABLE = null;
+  public static String ROLE_LABEL_HUMAN_READABLE = null;
 
   @Override
   public void saveModel(File directory) {
@@ -161,6 +166,14 @@ public class LatentConstituencyPipelinedParser implements Parser {
     frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
     rolePruning.saveModel(new File(directory, ROLE_PRUNE_MODEL_NAME));
     roleLabeling.saveModel(new File(directory, ROLE_LABEL_MODEL_NAME));
+    if (ROLE_PRUNE_HUMAN_READABLE != null) {
+      ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
+          new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
+    }
+    if (ROLE_LABEL_HUMAN_READABLE != null) {
+      ModelIO.writeHumanReadable(roleLabeling.getWeights(), getAlphabet(),
+          new File(directory, ROLE_LABEL_HUMAN_READABLE), true);
+    }
   }
 
   public static void main(String[] args) throws Exception {

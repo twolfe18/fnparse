@@ -2,10 +2,13 @@ package edu.jhu.hlt.fnparse.experiment.grid;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -13,12 +16,17 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
+import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
 
@@ -107,6 +115,7 @@ public class Runner {
     }
     List<Sentence> sentences = DataUtil.stripAnnotations(test);
     List<FNParse> predicted = parser.parse(sentences, test);
+    BasicEvaluation.showResults("[evaluate]", BasicEvaluation.evaluate(test, predicted));
     return f.evaluate(SentenceEval.zip(test, predicted));
   }
 
@@ -120,6 +129,31 @@ public class Runner {
       all = DataUtil.reservoirSample(all, n, r);
     }
     return all;
+  }
+
+  public static Counts<String> getFRCounts(Collection<FNParse> parses) {
+    Counts<String> counts = new Counts<>();
+    for (FNParse p : parses) {
+      for (FrameInstance fi : p.getFrameInstances()) {
+        Frame f = fi.getFrame();
+        for (int k = 0; k < f.numRoles(); k++) {
+          if (fi.getArgument(k) != Span.nullSpan)
+            counts.increment(f.getName() + "." + f.getRole(k));
+        }
+      }
+    }
+    return counts;
+  }
+
+  public static <T extends HasId> List<T> overlap(Collection<T> a, Collection<T> b) {
+    Set<String> as = new HashSet<>();
+    for (T ai : a)
+      as.add(ai.getId());
+    List<T> overlap = new ArrayList<>();
+    for (T bi : b)
+      if (as.contains(bi.getId()))
+        overlap.add(bi);
+    return overlap;
   }
 
   public void run() {
@@ -141,6 +175,16 @@ public class Runner {
       LOG.info("[run] performing Kp training with K=" + K + ", p=" + p);
       List<FNParse> all = getAllTrain(rand);
       List<FNParse>[] splits = KpTrainDev.kpSplit(K, p, all, rand);
+      /*
+      assert splits.length == K + 1;
+      for (int i = 0; i < splits.length - 1; i++) {
+        for (int j = i + 1; j < splits.length; j++)
+          assert overlap(splits[i], splits[j]).size() == 0;
+      }
+      for (int i = 0; i < splits.length; i++)
+        for (FNParse pp : splits[i])
+          LOG.info("in bucket " + i + ": " + pp.getId());
+      */
       List<FNParse> train = new ArrayList<>();
       List<FNParse> dev = new ArrayList<>();
       double perfSum = 0d;
@@ -150,11 +194,14 @@ public class Runner {
         train.addAll(splits[0]);
         for (int devSplit = 0; devSplit < K; devSplit++)
           (devSplit == k ? dev : train).addAll(splits[devSplit + 1]);
+        /*
         for (FNParse pp : train)
           LOG.debug("training on " + pp.getId());
-        parser.train(train);
         for (FNParse pp : dev)
           LOG.debug("testing on " + pp.getId());
+        */
+        assert overlap(train, dev).size() == 0;
+        parser.train(train);
         double perf = evaluate(parser, dev);
         LOG.info("[run] for the " + (k+1) + "th split, perf=" + perf);
         perfSum += perf;

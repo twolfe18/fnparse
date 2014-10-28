@@ -138,7 +138,7 @@ public class FrameInstance {
 
   @Override
   public int hashCode() {
-    return (frame.hashCode() << 20) | (target.hashCode() << 10) | sentence.hashCode();
+    return (frame.hashCode() << 20) ^ (target.hashCode() << 10) ^ sentence.hashCode();
   }
 
   @Override

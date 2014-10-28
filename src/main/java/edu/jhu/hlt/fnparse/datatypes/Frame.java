@@ -85,7 +85,7 @@ public class Frame {
 
   @Override
   public int hashCode() {
-    return idx;
+    return idx * 3571;
   }
 
   @Override

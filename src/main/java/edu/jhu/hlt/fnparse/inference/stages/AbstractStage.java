@@ -302,14 +302,17 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		SGDPrm sgdParams = new SGDPrm();
 		AdaGradPrm adagParams = new AdaGradPrm();
 		if (learningRate == null) {
+		  log.info("[train] automatically selecting learning rate");
 			sgdParams.autoSelectLr = true;
 		} else {
+		  log.info("[train] learningRate=" + learningRate);
 			sgdParams.autoSelectLr = false;
 			adagParams.eta = learningRate;
 		}
 		sgdParams.batchSize = batchSize;
 		sgdParams.numPasses = passes;
 		sgdParams.sched = new AdaGrad(adagParams);
+		log.info("[train] passes=" + passes + " batchSize=" + batchSize);
 
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
