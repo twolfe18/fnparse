@@ -57,9 +57,10 @@ class Feature(CommonEqualityMixin):
     assert type(c) is int or type(c) is long
     return c
 
-  def propose_modification(self, label_templates, basic_templates):
+  def propose_modification(self, template_info):
     # TODO prioritize whether you should be growing or shrinking this feature
     p_change_label = 0.1
+    label_templates = template_info.label_templates()
     if len(label_templates) > 1 and random.random() < p_change_label:
       # change the label
       ys = [y for y in label_templates if y != self.label]
@@ -75,7 +76,7 @@ class Feature(CommonEqualityMixin):
       p_shrink = card / (card + 10.0)
       if len(self.templates) > 1 and random.random() < p_shrink:
         # add a new template
-        xs = [x for x in basic_templates if x not in self.templates]
+        xs = [x for x in template_info.basic_templates if x not in self.templates]
         if len(xs) > 0:
           return Feature(self.label, self.templates + [random.choice(xs)])
         else:
@@ -125,7 +126,7 @@ class FeatureSet(object):
       # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification(label_templates, template_info.basic_templates)
+        f = self.features[i].propose_modification(template_info)
         if debug:
           print '[propose_modification] len(self.features) =', \
             len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
@@ -167,6 +168,9 @@ class Config(CommonEqualityMixin):
     self.params['randomSeed'] = '9001'
     self.params.update(settings_dict)
 
+  def __str__(self):
+    return "<Config %s>" % (str(self.feature_set))
+
 def mutate_config(template_info):
   ''' Returns a function from Config to Config '''
   def inner(config):
@@ -194,9 +198,6 @@ class ConfigQueue(object):
   def __init__(self, mutation_function, greediness=1.0):
     self.mutation_function = mutation_function  # item -> [item]
     self.greediness = greediness
-    #self.config2item = {}   # Has entries for *all* configs that came from self
-    #self.scores = []        # Tuples of (score, item) representing the observed scores
-    #self.config2score = {}  # Has entries for configs that have had observe_score called
     self.item2score = {}    # item -> score for popped items
     self.waiting = []       # List of items that should be popped before mutating scored items
 
@@ -286,7 +287,11 @@ class ConfigQueue(object):
         g = self.greediness * (max_tries - tries) / float(max_tries)
         parent = self._pick(g)
         children = self.mutation_function(parent)
-        feasible = [c for c in children if c not in self.item2score]
+        dont_generate = set(self.waiting + self.item2score.keys())
+        feasible = [c for c in children if c not in dont_generate]
+        if len(feasible) < len(children):
+          for c in (set(children) - set(feasible)):
+            print '[pop] pruned', c
         if feasible:
           random.shuffle(feasible)
           while len(feasible) > 1:
@@ -549,7 +554,7 @@ class TemplateInfo(object):
     # be evoked at a give target, which is much less than the number of total frames
     self.label_cardinality = {
       'intercept': 1,
-      'frame * prune': 10,
+      'frame*prune': 10,
       'frame': 10,
       'roleArg': 10,      # adding 'Arg' is like supported features
       'role': 15,
@@ -557,6 +562,14 @@ class TemplateInfo(object):
       'frameRole': 50,
     }
     print '[TemplateInfo init] done'
+
+  def filter_labels(self, allowable_labels):
+    m = {}
+    for k, v in self.label_cardinality.iteritems():
+      if k in allowable_labels:
+        m[k] = v
+    assert len(m) > 0
+    self.label_cardinality = m
 
   def add_cardinality(self, basic_template_name, cardinality):
     self.basic_templates.append(basic_template_name)
@@ -588,7 +601,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'syntaxMode':'regular',
     'evaluationFunction':'TargetMicroF1',
   }
-  labels = ['frame']
+  template_info.filter_labels(['frame'])
   seeds = [FeatureSet([
     Feature('frame', templates=['head1Word']),
     Feature('frame', templates=['span1LeftPos'])
@@ -599,10 +612,10 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'syntaxMode':'regular',
     'evaluationFunction':'ArgumentMicroF1',
   }
-  labels = ['frame * prune', 'frameRoleArg']
+  template_info.filter_labels(['frame*prune', 'frameRoleArg'])
   seeds = [FeatureSet([
-    Feature('frame * prune', templates=['span1Width/2']),
-    Feature('frame * prune', templates=['Dist(Len5,Span1.Last,Span2.First)']),
+    Feature('frame*prune', templates=['span1Width/2']),
+    Feature('frame*prune', templates=['Dist(Len5,Span1.Last,Span2.First)']),
     Feature('frameRoleArg', templates=['head1Word']),
     Feature('frameRoleArg', templates=['span1FirstWord']),
     Feature('frameRoleArg', templates=['Dist(Len5,Span1.Last,Span2.First)']),
@@ -652,7 +665,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'port': '6379',
     'db': '0'
   }
-  max_train = 100
+  max_train = 20
   max_jobs = 10
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
