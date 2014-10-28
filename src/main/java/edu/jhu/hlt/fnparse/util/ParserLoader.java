@@ -20,8 +20,24 @@ public class ParserLoader {
 
   public static Parser instantiateParser(Map<String, String> config) {
     String mode = config.get(Parser.PARSER_MODE.getName());
-    LOG.info("[instantiateParser] mode=" + mode);
+    String synMode = config.get(Parser.SYNTAX_MODE.getName());
+    LOG.info("[instantiateParser] mode=" + mode + ", syntaxMode=" + synMode);
     ParserParams params = new ParserParams();
+    if ("regular".equals(synMode)) {
+      params.useLatentConstituencies = false;
+      params.useLatentDepenencies = false;
+      params.useSyntaxFeatures = true;
+    } else if ("latent".equals(synMode)) {
+      params.useLatentConstituencies = true;
+      params.useLatentDepenencies = true;
+      params.useSyntaxFeatures = false;
+    } else if ("none".equals(synMode)) {
+      params.useLatentConstituencies = false;
+      params.useLatentDepenencies = false;
+      params.useSyntaxFeatures = false;
+    } else {
+      throw new RuntimeException("unknown syntax mode: " + synMode);
+    }
     if (mode.equalsIgnoreCase("classifySpans")) {
       LatentConstituencyPipelinedParser parser =
           new LatentConstituencyPipelinedParser(params);

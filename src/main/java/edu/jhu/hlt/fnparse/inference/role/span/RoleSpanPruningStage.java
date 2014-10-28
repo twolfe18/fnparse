@@ -120,7 +120,6 @@ public class RoleSpanPruningStage
       ParserParams params,
       HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    //features = new Features(params);
     features = new TemplatedFeatures("roleSpanPruning",
         params.getParserParams().getFeatureTemplateDescription(),
         params.getParserParams().getAlphabet());

@@ -881,12 +881,19 @@ public class BasicFeatureTemplates {
       templatesToView = Arrays.asList(args);
     System.out.println("estimating cardinality for " + basicTemplates.size()
         + " templates");
+
+    // Load data ahead of time to ensure fair timing
+    TargetPruningData.getInstance().getWordnetDict();
+    TargetPruningData.getInstance().getPrototypesByFrame();
+
     for (String tmplName : templatesToView) {
       Template tmpl = basicTemplates.get(tmplName);
       System.out.println(tmplName);
+      long tmplStart = System.currentTimeMillis();
       int card_frameId = estimateFrameIdCardinality(tmplName, tmpl, parses);
       int card_roleLab = estimateRoleLabellingCardinality(tmplName, tmpl, parses);
-      w.write(String.format("%s\t%d\t%d\n", tmplName, card_frameId, card_roleLab));
+      double time = (System.currentTimeMillis() - tmplStart) / 1000d;
+      w.write(String.format("%s\t%d\t%d\t%.2f\n", tmplName, card_frameId, card_roleLab, time));
       w.flush();
     }
     w.close();

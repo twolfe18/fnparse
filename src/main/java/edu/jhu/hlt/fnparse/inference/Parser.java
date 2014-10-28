@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +19,10 @@ public interface Parser extends HasFeatureAlphabet {
 
   public static final Option PARSER_MODE =
       new Option("parserMode", true, "classifySpans", "classifyHeads");
+  public static final Option SYNTAX_MODE =
+      new Option("syntaxMode", true, "regular", "latent", "none");
+
+	public void saveModel(File directory);
 
   /**
    * NOTE: You could check for pre-computed stages here

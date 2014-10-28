@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.experiment.grid;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -39,30 +40,18 @@ public class Runner {
     r.run();
   }
 
-  private static Map<String, String> parseIntoMap(String[] args) {
-    Map<String, String> config = new HashMap<>();
-    for (int i = 0; i < args.length; i += 2) {
+  private static String parseIntoMap(String[] args, Map<String, String> config) {
+    assert config.size() == 0;
+    assert args.length % 2 == 1;
+    String name = args[0];
+    for (int i = 1; i < args.length; i += 2) {
       String oldValue = config.put(args[i], args[i + 1]);
       if (oldValue != null) {
         throw new RuntimeException(args[i] + " has at least two values: "
             + args[2] + " and " + oldValue);
       }
     }
-    return config;
-  }
-
-  /**
-   * You can use the key "resultReporter" -> "redis:host,channel,port"
-   * or "resultReporter" -> "none", but something must be there.
-   */
-  private static ResultReporter getResultReporter(Map<String, String> config) {
-    String key = "resultReporter";
-    String desc = config.get(key);
-    if (desc == null) {
-      throw new RuntimeException("this configuration has no key for: " + key);
-    } else {
-      return ResultReporter.getReporter(desc);
-    }
+    return name;
   }
 
   /**
@@ -82,10 +71,27 @@ public class Runner {
     return new Random(seed);
   }
 
+  /**
+   * Provide a working directory to dump output with "workingDir" -> "/tmp/foo"
+   */
+  private static File getWorkingDir(Map<String, String> config) {
+    String key = "workingDir";
+    String wd = config.get(key);
+    if (wd == null)
+      throw new RuntimeException("you need to provide a working directory");
+    File wdf = new File(wd);
+    if (!wdf.isDirectory())
+      wdf.mkdirs();
+    assert wdf.isDirectory();
+    return wdf;
+  }
+
+  private String name;
   private Map<String, String> config;
 
   public Runner(String[] args) {
-    config = parseIntoMap(args);
+    config = new HashMap<>();
+    name = parseIntoMap(args, config);
   }
 
   private double evaluate(Parser parser, List<FNParse> test) {
@@ -94,6 +100,10 @@ public class Runner {
     if (evalFuncName == null)
       throw new RuntimeException("you must provide " + key + " in your config");
     EvalFunc f = BasicEvaluation.getEvaluationFunctionByName(evalFuncName);
+    if (f == null) {
+      throw new RuntimeException("unknown evaluaiton function name: "
+          + evalFuncName);
+    }
     List<Sentence> sentences = DataUtil.stripAnnotations(test);
     List<FNParse> predicted = parser.parse(sentences, test);
     return f.evaluate(SentenceEval.zip(test, predicted));
@@ -114,7 +124,8 @@ public class Runner {
     Logger.getLogger(RoleSpanPruningStage.class).setLevel(Level.WARN);
     LOG.info("[run] starting");
     Random rand = getRandom(config);
-    ResultReporter reporter = getResultReporter(config);
+    List<ResultReporter> reporters = ResultReporter.getReporter(config);
+    File workingDir = getWorkingDir(config);
     Parser parser = ParserLoader.instantiateParser(config);
     parser.configure(config);
 
@@ -142,7 +153,12 @@ public class Runner {
         perfSum += perf;
       }
       double perf = perfSum / K;
-      reporter.reportResult(perf, config);
+      for (ResultReporter r : reporters)
+        r.reportResult(perf, name, config);
+      File trainDevModelDir = new File(workingDir, "trainDevModel");
+      if (!trainDevModelDir.isDirectory())
+        trainDevModelDir.mkdir();
+      parser.saveModel(trainDevModelDir);
     }
 
     // Compute test error and phone home
@@ -151,7 +167,8 @@ public class Runner {
           FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
       LOG.info("[run] testing on " + test.size() + " test sentences");
       double perf = evaluate(parser, test);
-      reporter.reportResult(perf, config);
+      for (ResultReporter r : reporters)
+        r.reportResult(perf, name, config);
     }
     LOG.info("[run] done");
   }

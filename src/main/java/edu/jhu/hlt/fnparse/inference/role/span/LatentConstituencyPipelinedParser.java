@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
@@ -48,7 +49,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public LatentConstituencyPipelinedParser(ParserParams params) {
     this.params = params;
     frameId = new OracleStage<>();
-    rolePruning = new RoleSpanPruningStage(params, this);
+    if (params.useLatentConstituencies) {
+      rolePruning = new RoleSpanPruningStage(params, this);
+    } else {
+      rolePruning = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    }
     roleLabeling = new RoleSpanLabelingStage(params, this);
   }
 
@@ -148,7 +153,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public static final String ROLE_PRUNE_MODEL_NAME = "rolePrune.ser.gz";
   public static final String ROLE_LABEL_MODEL_NAME = "roleLabel.ser.gz";
 
-  public void saveModel(File directory) throws Exception {
+  @Override
+  public void saveModel(File directory) {
     LOG.info("saving model to " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();

@@ -108,15 +108,15 @@ class FeatureSet(object):
       c += cf
     return c
 
-  def propose_modification(self, label_templates, basic_templates):
-    ''' returns a new FeatureSet derived from this feature set '''
+  def propose_modification(self, template_info):
+    ''' Returns a new FeatureSet derived from this feature set '''
     debug = True
     card = self.estimate_cardinality()
     l = 0.5
     p_add_feature = l * 100.0 / (100.0 + pow(card, 0.4)) \
       + (1.0 - l) * (2.0 / (2.0 + len(self.features)))
     if random.random() < p_add_feature:
-      f = self.new_feature(label_templates, basic_templates)
+      f = self.new_feature(template_info)
       if debug:
         print '[propose_modification] len(self.features) =', \
           len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
@@ -126,26 +126,26 @@ class FeatureSet(object):
       # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification(label_templates, basic_templates)
+        f = self.features[i].propose_modification(label_templates, template_info.basic_templates)
         if debug:
           print '[propose_modification] len(self.features) =', \
             len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
           print '[propose_modification] modify existing feature:', self.features[i], '=>', f
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
-        return self.propose_modification(label_templates, basic_templates)
+        return self.propose_modification(template_info)
 
-  def new_feature(self, label_templates, basic_templates):
+  def new_feature(self, template_info):
     ''' creates a feature that is not already in this feature set '''
-    y = random.choice(label_templates)
+    y = random.choice(template_info.label_templates())
     # prefer adding features with small number of templates
     xn = 1
-    while random.random() < 0.1 and xn < len(basic_templates):
+    while random.random() < 0.1 and xn < len(template_info.basic_templates):
       xn = xn + 1
-    xs = random.sample(basic_templates, xn)
+    xs = random.sample(template_info.basic_templates, xn)
     f = Feature(y, xs)
     if f in self.features:
-      return self.new_feature(label_templates, basic_templates)
+      return self.new_feature(template_info)
     else:
       return f
 
@@ -158,7 +158,7 @@ class FeatureSet(object):
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
-  def __init__(self, feature_set, regularizer=8):
+  def __init__(self, feature_set, settings_dict, regularizer=8):
     assert type(regularizer) is int   # this is the natural log of the true regularizer
     self.feature_set = feature_set
     self.regularizer = regularizer
@@ -166,28 +166,31 @@ class Config(CommonEqualityMixin):
     self.params['regularizer'] = str(regularizer)
     self.params['passes'] = '5'
     self.params['batchSize'] = '1'
-    self.params['parserMode'] = 'classifySpans'
     self.params['randomSeed'] = '9001'
+    self.params.update(settings_dict)
     # pre-compute/cache description/config_string
     self.cs = 'features=' + self.feature_set.config_string()
-    for k, v in self.params.iteritems():
-      self.cs += "_%s=%s" % (k, v)
+    for key in sorted(self.params.keys()):
+      self.cs += "_%s=%s" % (key, self.params[key])
 
   def config_string(self):
     return self.cs
 
-def mutate_config(config):
-  next_fs = config.feature_set.propose_modification()
-  cur_card = config.feature_set.estimate_cardinality()
-  next_card = next_fs.estimate_cardinality()
-  diff_card = next_card - cur_card
-  # Do your best to guess if the regularizer needs to change
-  children = [Config(next_fs, config.regularizer)]
-  if card_diff > 25000 or card_diff / cur_card > 1.5:
-    children.append(Config(next_fs, config.regularizer + 1))
-  if card_diff < -25000 or card_diff / cur_card < -1.5:
-    children.append(Config(next_fs, config.regularizer - 1))
-  return children
+def mutate_config(template_info):
+  ''' Returns a function from Config to Config '''
+  def inner(config):
+    next_fs = config.feature_set.propose_modification(template_info)
+    cur_card = config.feature_set.estimate_cardinality()
+    next_card = next_fs.estimate_cardinality()
+    diff_card = next_card - cur_card
+    # Do your best to guess if the regularizer needs to change
+    children = [Config(next_fs, config.params, regularizer=config.regularizer)]
+    if diff_card > 25000 or diff_card / cur_card > 1.5:
+      children.append(Config(next_fs, config.params, config.regularizer + 1))
+    if diff_card < -25000 or diff_card / cur_card < -1.5:
+      children.append(Config(next_fs, config.params, config.regularizer - 1))
+    return children
+  return inner
 
 
 class ConfigQueue(object):
@@ -204,71 +207,80 @@ class ConfigQueue(object):
   def __init__(self, mutation_function, greediness=1.0):
     self.mutation_function = mutation_function  # item -> [item]
     self.greediness = greediness
-    self.config2item = {}   # Has entries for *all* configs that came from self
-    self.scores = []        # Tuples of (score, item) representing the observed scores
-    self.config2score = {}  # Has entries for configs that have had observe_score called
+    #self.config2item = {}   # Has entries for *all* configs that came from self
+    #self.scores = []        # Tuples of (score, item) representing the observed scores
+    #self.config2score = {}  # Has entries for configs that have had observe_score called
+    self.item2score = {}    # item -> score for popped items
     self.waiting = []       # List of items that should be popped before mutating scored items
 
   def _pick(self, greediness):
     debug = False
-    # find the max score
-    m = max([x[0] for x in self.scores])
+    # Find the max score
+    m = max(self.item2score.values())
+    # Compute regret for the other scores
     weights = []
+    items = []
     z = 0.0
-    for s, item in self.scores:
+    for item, s in self.item2score.iteritems():
       regret = (m - s) * 10.0
       w = math.exp(-regret * greediness)
       weights.append(w)
+      items.append(item)
       z += w
     t = random.random() * z
     if debug:
       print '[pick] z =', z, 't =', t
+    # Randomly sample
     c = 0.0
     for i in range(len(weights)):
       c += weights[i]
       if debug:
-        print '[pick]', self.scores[i][1], 'has score', c
+        print '[pick]', items[i], 'has score', c
       if c >= t:
-        item = self.scores[i][1]
-        print '[pick] chose', item
-        return item
+        print '[pick] chose', items[i]
+        return items[i]
     # Should never get here
-    print '[pick] scored_feature_sets:', self.scores
+    print '[pick] scored_feature_sets:', self.item2score
     print '[pick] weights:', weights
     assert False
 
   def show_state(self, k=10):
-    print '[show_state]', len(self.scores), 'observations'
-    best = sorted(self.scores, key=operator.itemgetter(0), reverse=True)
+    print '[show_state]', len(self.item2score), 'observations'
+    best = sorted(self.item2score.items(), key=operator.itemgetter(1), reverse=True)
     for i in range(min(k, len(best))):
       score, item = best[i]
       print "[show_state] %dth best\t%.3f\t%s" % (i, score, item.config_string())
 
-  def observe_score(self, score, config):
+  def observe_score(self, score, name, item):
     ''' Record the score of a given config/item '''
-    print '[observe_score] score =', score, 'config =', config
+    print '[observe_score] score =', score, 'item =', item
     assert type(score) is float
-    assert type(config) is str
-    if config in self.config2score:
-      if self.config2score[config] == FAILED_SCORE:
+    assert type(name) is str
+    assert type(item) is not str  # TODO for debugging, in the future this could technically be a string
+    if item in self.item2score:
+      if self.item2score[item] == FAILED_SCORE:
         print ("[observe_score] WARN: may need to sleep longer, " \
-          "%s was originally deemed failed but later reported a score of %f") \
-          % (config, score)
+          "%s/%s was originally deemed failed but later reported a score of %f") \
+          % (item, name, score)
       else:
-        raise Exception(config + ' had a score of ' \
-          + str(self.config2score[config]) \
+        raise Exception(item + ' had a score of ' \
+          + str(self.item2score[item]) \
           + ' but you tried to observe the score ' + str(score))
-    self.config2score[config] = score
+    self.item2score[item] = score
     # print the biggest weights
-    if len(self.scores) % 10 == 0:
+    if len(self.item2score) % 10 == 0:
       self.show_state()
+
+  def seed(self, item):
+    ''' Like push, but this item is special in that we will use it as the seed
+    for all items until we start receiving scores back '''
+    print '[seed] seeding', item, 'with score', FAILED_SCORE
+    self.push(item)
+    self.observe_score(FAILED_SCORE, 'seed' + str(len(self.item2score)), item)
 
   def push(self, item):
     ''' Push an item onto the queue which must be run before
     propose_modification's are considered '''
-    cs = item.config_string()
-    assert cs not in self.config2item
-    self.config2item[cs] = item
     self.waiting.append(item)
 
   def pop(self):
@@ -277,7 +289,7 @@ class ConfigQueue(object):
     if self.waiting:
       return self.waiting.pop()
     else:
-      if len(self.scores) == 0:
+      if len(self.item2score) == 0:
         raise Exception('you must seed some items using push so there is something to mutate')
       tries = 0
       max_tries = 100
@@ -286,7 +298,7 @@ class ConfigQueue(object):
         g = self.greediness * (max_tries - tries) / float(max_tries)
         parent = self._pick(g)
         children = self.mutation_function(parent)
-        feasible = [c for c in children if c.config_string() not in self.config2score]
+        feasible = [c for c in children if c not in self.item2score]
         if feasible:
           random.shuffle(feasible)
           while len(feasible) > 1:
@@ -341,9 +353,8 @@ class SgeJobTracker(object):
     return [name for state, name in self.jobs() if state == 'qw']
 
   def spawn(self, name, args):
-    # TODO need to add {'resultReporter':'redis:host,channel,port'}
     assert False
-    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub'] + args
+    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub', name] + args
     print '[sge spawn] cmd =', cmd
     subprocess.Popen(cmd)
     time.sleep(0.2)
@@ -380,6 +391,10 @@ class LocalJobTracker(object):
   def jobs_queued(self):
     return []
 
+  # NOTE this implementation is a bit annoying because stdout from the spawned process
+  # dumps into the main process's stdout, BUT this is only a problem locally. This appears
+  # difficult to solve in python because there is no way to properly close the file that
+  # you would route stdout to.
   def spawn(self, name, args):
     ''' args should be a dictionary of values to pass to grid.Runner '''
     self.redis.rpush(self.key, name)
@@ -391,18 +406,14 @@ class LocalJobTracker(object):
       cp = ':'.join([x.strip() for x in cp.split('\n')])
       cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
       cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
-      #cmd.append('edu.jhu.hlt.fnparse.experiment.ForwardSelectionWorker')
-      #cmd += args
       cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')
+      cmd.append(name)
       for k, v in args.iteritems():
         cmd += [k, v]
-      #print 'about to spawn:', cmd
-      print 'about to spawn:', ' '.join(cmd)
+      print '[spawn] about to spawn:', ' '.join(cmd)
       subprocess.Popen(cmd)
 
 
-# TODO rip out the config_q part of this, daemonize it, and release it as a robust
-# version of qsub (i.e. watches to make sure jobs finish, restarts them if not)
 class ForwardSelection:
   def __init__(self, name, working_dir, job_tracker, config_q, \
       poll_interval=3.0, max_train_size=None, max_num_jobs=None, \
@@ -413,8 +424,7 @@ class ForwardSelection:
     self.redis_config = redis_config
     self.job_tracker = job_tracker  # talks to qsub
     self.config_q = config_q
-    self.name2config = {}           # stores (job name -> config string)
-    self.config2name = {}
+    self.name2item = {}
     self.poll_interval = poll_interval
     self.dispatched = set()         # names of the jobs that (should be) running
     self.max_train_size = max_train_size  # limit on size of training data to make things faster
@@ -426,47 +436,57 @@ class ForwardSelection:
     and returns a tuple of (config, score)
     '''
     toks = data.split('\t')
-    assert len(toks) == 2
+    assert len(toks) == 3
     score = float(toks[0])
-    config = toks[1]
-    return (config, score)
+    name = toks[1]
+    config = toks[2]
+    return (score, name, config)
 
   def start_job(self):
-    ''' returns a unique job name and updates self.name2config '''
+    ''' returns a unique job name and updates self.name2item '''
     item = self.config_q.pop()
     if item:
-      name = "fs-%s-%d" % (self.name, len(self.name2config))
+      name = "fs-%s-%d" % (self.name, len(self.name2item))
       config = item.config_string()
-      assert name not in self.name2config
-      assert config not in self.config2name
-      self.name2config[name] = config
-      self.config2name[config] = name
-      print '[start_job] name=' + name + ' config=' + config
+      self.name2item[name] = item
       wd = os.path.join(self.working_dir, name + '-wd')
       if not os.path.isdir(wd):
         os.mkdir(wd)
       # Parameters for cross-validation
+      # NOTE These settings should be here because there are not config-specific.
+      # This is a problem because the jobs responds with a config string to uniquely id itself,
+      # but the job doesn't know the difference between config and params...
+      # Have to use config for id because job name is not known until after the job is launched.
+      # WAIT, couldn't I just use my job name?
       K = 2
       p = 0.15
       cmd = {}
       cmd['KpTrainDev'] = "%d %f" % (K, p)
       if self.max_train_size:
         cmd['MaxTrainSize'] = str(self.max_train_size)
-      cmd['resultReporter'] = "redis:%s,%s,%s" % \
-        (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'])
+      rf = os.path.join(wd, 'results.txt')
+      cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
+        (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'], rf)
       cmd['workingDir'] = wd
-      print '[start_job] item.params =', item.params
       cmd.update(item.params)
       self.job_tracker.spawn(name, cmd)
       self.dispatched.add(name)
+      print '[start_job] name =', name
+      print '[start_job] config =', config
+      print '[start_job] params =', item.params
       return name
     else:
+      print '[start_job] there are no more jobs, returning None'
       return None
 
   def can_submit_more_jobs(self):
     if self.max_num_jobs and self.num_jobs >= self.max_num_jobs:
+      print '[can_submit_more_jobs] can\'t submit any more jobs due to self.max_num_jobs =', self.max_num_jobs
       return False
-    return self.job_tracker.can_submit_more_jobs()
+    if not self.job_tracker.can_submit_more_jobs():
+      print '[can_submit_more_jobs] can\'t submit any more jobs due to the job tracker'
+      return False
+    return True
 
   def run(self):
     r = redis.StrictRedis(host=self.redis_config['host'], port=self.redis_config['port'], db=self.redis_config['db'])
@@ -483,34 +503,35 @@ class ForwardSelection:
           print 'Done!'
           break
       else:
-        # Check for results
+        # Check for results 
+        print 'can\'t submit any more jobs, checking on current jobs'
         message = p.get_message()
-        print 'received message:', message
         if message:
-          (config, score) = self.parse_message(message['data'])
-          name = self.config2name[config]
+          print 'received message:', message
+          (score, name, config) = self.parse_message(message['data'])
           print name, '/', config, 'finished successfully with a score', score
+          item = self.name2item[name]
           perf_file.write("%f\t%s\t%s\n" % (score, name, config))
           perf_file.flush()
-          self.config_q.observe_score(score, config)
+          self.config_q.observe_score(score, name, item)
           # Remove this jobs from dispatched
           if type(self.job_tracker) is LocalJobTracker: # for debugging
+            print 'stopping', name, 'on local job tracker'
             self.job_tracker.set_job_done(name)
           try:
             self.dispatched.remove(name)
+            print 'removed', name, 'from dispatched,', len(self.dispatched), 'still dispatched'
           except:
             print name + ' was not in dispatched, we gave up on this job as failed previously'
         else:
           # check if any jobs died
+          print 'no one phoned home, maybe someone died?'
           r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
           failed = set([name for name in self.dispatched if name not in r])
-          failed_configs = set()
           for name in failed:
-            config = self.name2config[name]
-            print 'failed:', name, config
-            assert config not in failed_configs
-            failed_configs.add(config)
-            self.config_q.observe_score(FAILED_SCORE, config)
+            item = self.name2item[name]
+            print 'dead:', name, item
+            self.config_q.observe_score(FAILED_SCORE, name, item)
             self.dispatched.remove(name)
           else:
             print 'everything is running nicely:', len(r)
@@ -530,41 +551,84 @@ class TemplateInfo(object):
       template_name = toks[0]
       template_card_frameid = int(toks[1])
       template_card_rolelab = int(toks[2])
+      time_coef = float(toks[3])
       assert template_name not in self.template_cardinality
       if template_card_rolelab > 1:
-        self.template_cardinality[template_name] = template_card_rolelab
-        self.basic_templates.append(template_name)
+        self.add_cardinality(template_name, template_card_rolelab)
     f.close()
     # NOTE: the cardinality of frame is w.r.t. how many frames could possibly
     # be evoked at a give target, which is much less than the number of total frames
-    self.label_cardinality = {'intercept':1, 'frame':10, 'frameRole':50, 'role':15}
+    self.label_cardinality = {
+      'intercept': 1,
+      'frame * prune': 10,
+      'frame': 10,
+      'roleArg': 10,      # adding 'Arg' is like supported features
+      'role': 15,
+      'frameRoleArg': 25, # adding 'Arg' is like supported features
+      'frameRole': 50,
+    }
     print '[TemplateInfo init] done'
 
+  def add_cardinality(self, basic_template_name, cardinality):
+    self.basic_templates.append(basic_template_name)
+    self.template_cardinality[basic_template_name] = cardinality
+
+  def allow_unknown_cardinalities(self):
+    temp = self.template_cardinality
+    self.template_cardinality = collections.defaultdict(lambda: 1)
+    self.template_cardinality.update(temp)
+
+  def label_templates(self):
+    return self.label_cardinality.keys()
 
 def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
   global template_info
   template_info = TemplateInfo(template_info_filename)
+
+  # because scanning features is running right now...
+  #template_info.add_cardinality('prune', 1)
+  #template_info.add_cardinality('span1Width/2', 5)
+  template_info.allow_unknown_cardinalities()
+
   local = True
-  #labels = ['frame', 'intercept']
-  labels = ['frame * prune', 'frameRole', 'role']
-  extra_seeds = ['frame * prune * span1Width/2' \
-   + ' + frame * prune * Dist(Len5,Span1.Last,Span2.First)' \
-   + ' + frameRole * head1Word' \
-   + ' + frameRole * span1FirstWord']
+
+  """
+  settings = {
+    'parserMode':'frameId',
+    'syntaxMode':'regular',
+    'evaluationFunction':'TargetMicroF1',
+  }
+  labels = ['frame']
+  seeds = [FeatureSet([
+    Feature('frame', templates=['head1Word']),
+    Feature('frame', templates=['span1LeftPos'])
+  ])]
+  """
+  settings = {
+    'parserMode':'classifySpans',
+    'syntaxMode':'regular',
+    'evaluationFunction':'ArgumentMicroF1',
+  }
+  labels = ['frame * prune', 'frameRoleArg']
+  seeds = [FeatureSet([
+    Feature('frame * prune', templates=['span1Width/2']),
+    Feature('frame * prune', templates=['Dist(Len5,Span1.Last,Span2.First)']),
+    Feature('frameRoleArg', templates=['head1Word']),
+    Feature('frameRoleArg', templates=['span1FirstWord']),
+    Feature('frameRoleArg', templates=['Dist(Len5,Span1.Last,Span2.First)']),
+  ])]
 
   # Create the config queue
   if deser_q_filename is None:
     print 'creating empty config queue'
     # Right now the seed set is just each of the labels conjoined
     # with the headword. You can manually add some good seeds here if you know them.
-    q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
-    for y in labels:
-      fs = FeatureSet(features=[Feature(y + '*head1Word')])
-      q.push(Config(fs, regularizer=8))
-    for fs_str in extra_seeds:
-      fs = FeatureSet(features=[Feature(fs_str)])
-      q.push(Config(fs, regularizer=8))
+    q = ConfigQueue(mutation_function=mutate_config(template_info), greediness=1.0)
+    assert len(seeds) > 0
+    for fs in seeds:
+      conf = Config(fs, settings, regularizer=8)
+      q.seed(conf)
   else:
     print 'loading config queue from', deser_q_filename
     q = pickle.load(open(deser_q_filename, 'rb'))
@@ -601,7 +665,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'db': '0'
   }
   max_train = 10  # TODO make this bigger!
-  max_jobs = 1    # TODO make this bigger!
+  max_jobs = 999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 

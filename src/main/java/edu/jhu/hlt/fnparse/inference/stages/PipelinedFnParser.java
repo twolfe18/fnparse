@@ -22,7 +22,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
@@ -284,6 +283,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 		return fullParses;
 	}
 
+	@Override
 	public void saveModel(File directory) {
 		LOG.info("saving model to " + directory.getPath());
 		if (!directory.isDirectory())
