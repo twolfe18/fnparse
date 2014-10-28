@@ -247,9 +247,10 @@ class ConfigQueue(object):
   def show_state(self, k=10):
     print '[show_state]', len(self.item2score), 'observations'
     best = sorted(self.item2score.items(), key=operator.itemgetter(1), reverse=True)
-    for i in range(min(k, len(best))):
-      score, item = best[i]
+    i = 1
+    for item, score in best[:k]:
       print "[show_state] %dth best\t%.3f\t%s" % (i, score, item.config_string())
+      i += 1
 
   def observe_score(self, score, name, item):
     ''' Record the score of a given config/item '''
@@ -353,8 +354,9 @@ class SgeJobTracker(object):
     return [name for state, name in self.jobs() if state == 'qw']
 
   def spawn(self, name, args):
-    assert False
-    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub', name] + args
+    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub', name]
+    for k, v in args.iteritems():
+      cmd += [k, v]
     print '[sge spawn] cmd =', cmd
     subprocess.Popen(cmd)
     time.sleep(0.2)
@@ -435,7 +437,7 @@ class ForwardSelection:
     parses a message from the experiment over redis pubsub
     and returns a tuple of (config, score)
     '''
-    toks = data.split('\t')
+    toks = data.split('\t', 2)
     assert len(toks) == 3
     score = float(toks[0])
     name = toks[1]
@@ -527,6 +529,7 @@ class ForwardSelection:
           # check if any jobs died
           print 'no one phoned home, maybe someone died?'
           r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
+          print 'running and queued:', r
           failed = set([name for name in self.dispatched if name not in r])
           for name in failed:
             item = self.name2item[name]
@@ -651,24 +654,24 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
 
   # Create the job tracker
   if local:
-    jt = LocalJobTracker(debug=False, max_concurrent_jobs=2)
+    jt = LocalJobTracker(debug=False, max_concurrent_jobs=1)
     jt.remove_all_jobs()
   else:
     jt = SgeJobTracker()
 
-  #wd = 'experiments/forward-selection/frameId'
-  wd = 'experiments/forward-selection/roleLabeling'
+  wd = 'experiments/forward-selection/role/span/regular'
   rc = {
     'channel': 'forward-selection',
     'host': socket.gethostname(),
     'port': '6379',
     'db': '0'
   }
-  max_train = 10  # TODO make this bigger!
-  max_jobs = 999
+  max_train = 100
+  max_jobs = 1
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
+	# TODO this is only here for development/debugging
   os.system('rm logging/forward-selection/*')
   if not local:
     print 'cleanup...'

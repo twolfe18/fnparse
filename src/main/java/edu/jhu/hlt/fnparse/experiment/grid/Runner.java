@@ -99,6 +99,7 @@ public class Runner {
     String evalFuncName = config.get(key);
     if (evalFuncName == null)
       throw new RuntimeException("you must provide " + key + " in your config");
+    LOG.info("[run] using " + evalFuncName + " to evaluate");
     EvalFunc f = BasicEvaluation.getEvaluationFunctionByName(evalFuncName);
     if (f == null) {
       throw new RuntimeException("unknown evaluaiton function name: "
@@ -115,6 +116,7 @@ public class Runner {
     String lim = config.get("MaxTrainSize");
     if (lim != null) {
       int n = Integer.parseInt(lim);
+      LOG.info("[run] limiting the train set from " + all.size() + " to " + n);
       all = DataUtil.reservoirSample(all, n, r);
     }
     return all;
@@ -148,8 +150,13 @@ public class Runner {
         train.addAll(splits[0]);
         for (int devSplit = 0; devSplit < K; devSplit++)
           (devSplit == k ? dev : train).addAll(splits[k + 1]);
+        for (FNParse pp : train)
+          LOG.debug("training on " + pp.getId());
         parser.train(train);
+        for (FNParse pp : dev)
+          LOG.debug("testing on " + pp.getId());
         double perf = evaluate(parser, dev);
+        LOG.info("[run] for the " + (k+1) + "th split, perf=" + perf);
         perfSum += perf;
       }
       double perf = perfSum / K;
