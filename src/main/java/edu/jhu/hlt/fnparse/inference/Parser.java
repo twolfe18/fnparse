@@ -17,10 +17,12 @@ import edu.jhu.hlt.fnparse.util.Option;
  */
 public interface Parser extends HasFeatureAlphabet {
 
+  // Command line options
   public static final Option PARSER_MODE =
       new Option("parserMode", true, "classifySpans", "classifyHeads");
   public static final Option SYNTAX_MODE =
       new Option("syntaxMode", true, "regular", "latent", "none");
+  public static final String FEATURES = "features";
 
 	public void saveModel(File directory);
 

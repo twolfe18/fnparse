@@ -22,7 +22,11 @@ public class ParserLoader {
     String mode = config.get(Parser.PARSER_MODE.getName());
     String synMode = config.get(Parser.SYNTAX_MODE.getName());
     LOG.info("[instantiateParser] mode=" + mode + ", syntaxMode=" + synMode);
+    String featureSet = config.get(Parser.FEATURES);
+    if (featureSet == null)
+      throw new RuntimeException("you need to provide a feature set with " + Parser.FEATURES);
     ParserParams params = new ParserParams();
+    params.setFeatureTemplateDescription(featureSet);
     if ("regular".equals(synMode)) {
       params.useLatentConstituencies = false;
       params.useLatentDepenencies = false;

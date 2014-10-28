@@ -44,8 +44,7 @@ class Feature(CommonEqualityMixin):
     self.templates.sort()
 
   def __str__(self):
-    x = '*'.join(self.templates)
-    return "%s*%s" % (self.label, x)
+	return "*".join([self.label] + self.templates)
 
   # TODO relies on a global variable
   def estimate_cardinality(self):
@@ -153,8 +152,7 @@ class FeatureSet(object):
     return "<FeatureSet %s>" % (', '.join([str(x) for x in self.features]))
 
   def config_string(self):
-    ''' returns a description to be passes to an experiment '''
-    return ' + '.join([str(x) for x in self.features])
+    return "+".join([str(x) for x in self.features])
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
@@ -168,13 +166,6 @@ class Config(CommonEqualityMixin):
     self.params['batchSize'] = '1'
     self.params['randomSeed'] = '9001'
     self.params.update(settings_dict)
-    # pre-compute/cache description/config_string
-    self.cs = 'features=' + self.feature_set.config_string()
-    for key in sorted(self.params.keys()):
-      self.cs += "_%s=%s" % (key, self.params[key])
-
-  def config_string(self):
-    return self.cs
 
 def mutate_config(template_info):
   ''' Returns a function from Config to Config '''
@@ -199,10 +190,6 @@ class ConfigQueue(object):
   to begin with, but after that this queue will generate new items by calling
   propose_modification on existing items. Remember to call observe_score to let this
   queue know what are good items and which are bad.
-
-  There are only a few requirements of the elements that go into this queue:
-  1) must have a propose_modification method which returns a mutated version of the entry
-  2) must have a config_string method which fully captures the essesnce of the entry
   '''
   def __init__(self, mutation_function, greediness=1.0):
     self.mutation_function = mutation_function  # item -> [item]
@@ -249,7 +236,7 @@ class ConfigQueue(object):
     best = sorted(self.item2score.items(), key=operator.itemgetter(1), reverse=True)
     i = 1
     for item, score in best[:k]:
-      print "[show_state] %dth best\t%.3f\t%s" % (i, score, item.config_string())
+      print "[show_state] %dth best\t%.3f\t%s" % (i, score, item)
       i += 1
 
   def observe_score(self, score, name, item):
@@ -449,7 +436,6 @@ class ForwardSelection:
     item = self.config_q.pop()
     if item:
       name = "fs-%s-%d" % (self.name, len(self.name2item))
-      config = item.config_string()
       self.name2item[name] = item
       wd = os.path.join(self.working_dir, name + '-wd')
       if not os.path.isdir(wd):
@@ -470,11 +456,11 @@ class ForwardSelection:
       cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
         (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'], rf)
       cmd['workingDir'] = wd
+      cmd['features'] = item.feature_set.config_string()
       cmd.update(item.params)
       self.job_tracker.spawn(name, cmd)
       self.dispatched.add(name)
       print '[start_job] name =', name
-      print '[start_job] config =', config
       print '[start_job] params =', item.params
       return name
     else:
@@ -667,7 +653,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'db': '0'
   }
   max_train = 100
-  max_jobs = 1
+  max_jobs = 10
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
