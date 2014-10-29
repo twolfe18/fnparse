@@ -127,6 +127,13 @@ public class RoleHeadStage
   }
 
   @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<FNTagging> frames = DataUtil.convertParsesToTaggings(data);
+    List<FNParse> argHeads = DataUtil.convertArgumenSpansToHeads(data, globalParams.headFinder);
+    this.scanFeatures(frames, argHeads, 999, 999_999_999);
+  }
+
+  @Override
   public void train(List<FNTagging> x, List<FNParse> y) {
     List<FNTagging> xUse;
     List<FNParse> yUse;

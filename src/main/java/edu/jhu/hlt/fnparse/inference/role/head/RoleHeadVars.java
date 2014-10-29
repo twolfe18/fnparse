@@ -131,8 +131,7 @@ public class RoleHeadVars implements FgRelated {
         r_kj[k] = null;
         // I'm not removing the Vars from goldConf because it doesn't
         // have a drop method, probably doesn't matter
-      }
-      else {
+      } else {
         // There is no expansion variable for null-realized-arg
         String name = String.format(
             "r_{i=%d,t=%s,k=%d,notRealized}",
@@ -228,9 +227,9 @@ public class RoleHeadVars implements FgRelated {
     }
     private void bump() {
       j++;
-      if(j == roleVars[k].length) {
+      if (j == roleVars[k].length) {
         do { k++; }
-        while(k < roleVars.length && roleVars[k] == null);
+        while (k < roleVars.length && roleVars[k] == null);
         j = 0;
       }
     }
@@ -244,7 +243,7 @@ public class RoleHeadVars implements FgRelated {
     public RVar next() {
       RVar r = new RVar(roleVars[k][j], k, j);
       do { bump(); }
-      while(hasNext() && roleVars[k][j] == null);
+      while (hasNext() && roleVars[k][j] == null);
       return r;
     }
     @Override

@@ -129,4 +129,9 @@ public class NoRolesStage implements Stage<FNTagging, FNParse> {
   public void loadModel(File file) {
     LOG.info("not actually loading model");
   }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    LOG.info("not actually scanning features");
+  }
 }

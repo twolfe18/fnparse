@@ -23,6 +23,7 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -122,6 +123,13 @@ public class RoleHeadToSpanStage
 	public int getNumTrainingPasses() {
 		return params.passes;
 	}
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+	  List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
+	      data, globalParams.headFinder);
+	  this.scanFeatures(onlyHeads, data, 999, 999_999_999);
+  }
 
 	@Override
 	public StageDatumExampleList<FNParse, FNParse> setupInference(
