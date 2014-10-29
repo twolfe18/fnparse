@@ -27,7 +27,7 @@ class CommonEqualityMixin(object):
     return not self.__eq__(other)
 
 # sorry, global
-template_info = None
+TEMPLATE_INFO = None  # Stores info about what templates/stages we're optimizing over
 FAILED_SCORE = 0.0
 SER_Q_PATH = None
 SER_Q = None
@@ -46,21 +46,20 @@ class Feature(CommonEqualityMixin):
   def __str__(self):
 	return "*".join([self.label] + self.templates)
 
-  # TODO relies on a global variable
   def estimate_cardinality(self):
-    c = template_info.label_cardinality[self.label]
+    c = TEMPLATE_INFO.label_cardinality[self.label]
     assert c is not None
     for t in self.templates:
-      ct = template_info.template_cardinality[t]
+      ct = TEMPLATE_INFO.template_cardinality[t]
       assert ct is not None
       c *= ct
     assert type(c) is int or type(c) is long
     return c
 
-  def propose_modification(self, template_info):
+  def propose_modification(self):
     # TODO prioritize whether you should be growing or shrinking this feature
     p_change_label = 0.1
-    label_templates = template_info.label_templates()
+    label_templates = TEMPLATE_INFO.label_templates()
     if len(label_templates) > 1 and random.random() < p_change_label:
       # change the label
       ys = [y for y in label_templates if y != self.label]
@@ -76,7 +75,7 @@ class Feature(CommonEqualityMixin):
       p_shrink = card / (card + 10.0)
       if len(self.templates) > 1 and random.random() < p_shrink:
         # add a new template
-        xs = [x for x in template_info.basic_templates if x not in self.templates]
+        xs = [x for x in TEMPLATE_INFO.basic_templates if x not in self.templates]
         if len(xs) > 0:
           return Feature(self.label, self.templates + [random.choice(xs)])
         else:
@@ -108,7 +107,7 @@ class FeatureSet(object):
       c += cf
     return c
 
-  def propose_modification(self, template_info):
+  def propose_modification(self):
     ''' Returns a new FeatureSet derived from this feature set '''
     debug = True
     card = self.estimate_cardinality()
@@ -116,7 +115,7 @@ class FeatureSet(object):
     p_add_feature = l * 100.0 / (100.0 + pow(card, 0.4)) \
       + (1.0 - l) * (2.0 / (2.0 + len(self.features)))
     if random.random() < p_add_feature:
-      f = self.new_feature(template_info)
+      f = self.new_feature()
       if debug:
         print '[propose_modification] len(self.features) =', \
           len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
@@ -126,26 +125,26 @@ class FeatureSet(object):
       # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification(template_info)
+        f = self.features[i].propose_modification()
         if debug:
           print '[propose_modification] len(self.features) =', \
             len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
           print '[propose_modification] modify existing feature:', self.features[i], '=>', f
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
-        return self.propose_modification(template_info)
+        return self.propose_modification()
 
-  def new_feature(self, template_info):
+  def new_feature(self):
     ''' creates a feature that is not already in this feature set '''
-    y = random.choice(template_info.label_templates())
+    y = random.choice(TEMPLATE_INFO.label_templates())
     # prefer adding features with small number of templates
     xn = 1
-    while random.random() < 0.1 and xn < len(template_info.basic_templates):
+    while random.random() < 0.1 and xn < len(TEMPLATE_INFO.basic_templates):
       xn = xn + 1
-    xs = random.sample(template_info.basic_templates, xn)
+    xs = random.sample(TEMPLATE_INFO.basic_templates, xn)
     f = Feature(y, xs)
     if f in self.features:
-      return self.new_feature(template_info)
+      return self.new_feature()
     else:
       return f
 
@@ -157,10 +156,12 @@ class FeatureSet(object):
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
-  def __init__(self, feature_set, settings_dict, regularizer=8):
-    assert type(regularizer) is int   # this is the natural log of the true regularizer
+  def __init__(self, feature_set, settings_dict, regularizer_dict):
     self.feature_set = feature_set
-    self.regularizer = regularizer
+	  for k, v in regularizer_dict.iteritems():
+      assert type(k) is str # Name of the stage being regularize
+      assert type(v) is int # Natural log of the regularizer
+    self.regularizer_dict = regularizer_dict
     self.params = {}
     self.params['regularizer'] = str(regularizer)
     self.params['passes'] = '5'
@@ -171,21 +172,23 @@ class Config(CommonEqualityMixin):
   def __str__(self):
     return "<Config %s>" % (str(self.feature_set))
 
-def mutate_config(template_info):
+def mutate_config(config):
   ''' Returns a function from Config to Config '''
-  def inner(config):
-    next_fs = config.feature_set.propose_modification(template_info)
-    cur_card = config.feature_set.estimate_cardinality()
-    next_card = next_fs.estimate_cardinality()
-    diff_card = next_card - cur_card
-    # Do your best to guess if the regularizer needs to change
-    children = [Config(next_fs, config.params, regularizer=config.regularizer)]
-    if diff_card > 25000 or diff_card / cur_card > 1.5:
-      children.append(Config(next_fs, config.params, config.regularizer + 1))
-    if diff_card < -25000 or diff_card / cur_card < -1.5:
-      children.append(Config(next_fs, config.params, config.regularizer - 1))
-    return children
-  return inner
+  next_fs = config.feature_set.propose_modification()
+  cur_card = config.feature_set.estimate_cardinality()
+  next_card = next_fs.estimate_cardinality()
+  diff_card = next_card - cur_card
+  # Do your best to guess if the regularizer needs to change
+  children = [Config(next_fs, config.params, regularizer=config.regularizer)]
+  if diff_card > 25000 or diff_card / cur_card > 1.5:
+    children.append(Config(next_fs, config.params, config.regularizer + 1))
+  if diff_card < -25000 or diff_card / cur_card < -1.5:
+    children.append(Config(next_fs, config.params, config.regularizer - 1))
+  return children
+
+# TODO estimate_cardinality needs to consider the features and the *stage*
+# should estimate_cardinality return a map from stage_name to cardinality?
+
 
 
 class ConfigQueue(object):
@@ -534,6 +537,20 @@ class ForwardSelection:
 
 
 class TemplateInfo(object):
+
+  # TODO do i need a distinction between a label and a stage?
+  # YES: e.g. frameRole vs role
+
+  # TODO cardinalities are defined w.r.t. a Template and a stage
+
+  # TODO mutate_config, we need to know what stages are in play for mutation
+
+  # stage-label interactions = [(frameId, 'frame'), (roleId, 'frameRole'), (roleId, 'role'), ...]
+  # OHHHHH.... if i run these various stages in BasicTemplateExtractor, the count will give me this mask
+
+  # FORMAT should then be "stage <tab> template <tab> cardinality <tab> time"
+  # COULD even support products later, just add another column
+
   def __init__(self, filename):
     print '[TemplateInfo init] reading template information from', filename
     self.filename = filename
@@ -585,15 +602,10 @@ class TemplateInfo(object):
 
 def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
-  global template_info
-  template_info = TemplateInfo(template_info_filename)
+  global TEMPLATE_INFO
+  TEMPLATE_INFO = TemplateInfo(template_info_filename)
 
-  # because scanning features is running right now...
-  #template_info.add_cardinality('prune', 1)
-  #template_info.add_cardinality('span1Width/2', 5)
-  template_info.allow_unknown_cardinalities()
-
-  local = True
+  local = False
 
   """
   settings = {
@@ -601,7 +613,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'syntaxMode':'regular',
     'evaluationFunction':'TargetMicroF1',
   }
-  template_info.filter_labels(['frame'])
+  TEMPLATE_INFO.filter_labels(['frame'])
   seeds = [FeatureSet([
     Feature('frame', templates=['head1Word']),
     Feature('frame', templates=['span1LeftPos'])
@@ -612,7 +624,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'syntaxMode':'regular',
     'evaluationFunction':'ArgumentMicroF1',
   }
-  template_info.filter_labels(['frame*prune', 'frameRoleArg'])
+  TEMPLATE_INFO.filter_labels(['frame*prune', 'frameRoleArg'])
   seeds = [FeatureSet([
     Feature('frame*prune', templates=['span1Width/2']),
     Feature('frame*prune', templates=['Dist(Len5,Span1.Last,Span2.First)']),
@@ -626,7 +638,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     print 'creating empty config queue'
     # Right now the seed set is just each of the labels conjoined
     # with the headword. You can manually add some good seeds here if you know them.
-    q = ConfigQueue(mutation_function=mutate_config(template_info), greediness=1.0)
+    q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
     assert len(seeds) > 0
     for fs in seeds:
       conf = Config(fs, settings, regularizer=8)
@@ -665,8 +677,8 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'port': '6379',
     'db': '0'
   }
-  max_train = 20
-  max_jobs = 10
+  max_train = 300
+  max_jobs = 99999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
