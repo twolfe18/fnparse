@@ -8,6 +8,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 
 public class IdentityStage<T> implements Stage<T, T> {
 	private static final long serialVersionUID = 1L;
@@ -113,4 +114,9 @@ public class IdentityStage<T> implements Stage<T, T> {
 	public void loadModel(File file) {
 		LOG.info("not really loading model");
 	}
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+		LOG.info("not really loading model");
+  }
 }

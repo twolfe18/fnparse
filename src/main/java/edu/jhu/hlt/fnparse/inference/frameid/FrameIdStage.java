@@ -22,6 +22,7 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -293,12 +294,6 @@ public class FrameIdStage
       List<Factor> factors = new ArrayList<Factor>();
       ProjDepTreeFactor depTree = null;
       ConstituencyTreeFactor consTree = null;
-      if (parent.getGlobalParams().useLatentConstituencies) {
-        consTree = new ConstituencyTreeFactor(
-            sentence.size(), VarType.LATENT);
-        throw new RuntimeException(
-            "FIXME: I don't know how this is supposed to work");
-      }
       if (parent.getGlobalParams().useLatentDepenencies) {
         depTree = new ProjDepTreeFactor(
             sentence.size(), VarType.LATENT);
@@ -307,8 +302,6 @@ public class FrameIdStage
         factors.addAll(depParseFactorTemplate.initFactorsFor(
             sentence, Collections.emptyList(), depTree, consTree));
       }
-      if (parent.getGlobalParams().useLatentConstituencies)
-        throw new RuntimeException("implement me!");
       factors.addAll(parent.params.factorsTemplate.initFactorsFor(
           sentence, possibleFrames, depTree, consTree));
 
@@ -391,5 +384,11 @@ public class FrameIdStage
       }
       return new FNTagging(sentence, fis);
     }
+  }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<Sentence> sentences = DataUtil.stripAnnotations(data);
+    this.scanFeatures(sentences, data, 999, 999_999_999);
   }
 }

@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FgRelated;
 
 /**
- * Represents all of the frames that could be evoked at a given headword.
+ * Represents all of the frames that could be evoked at a given span.
  * 
  * @author travis
  */
@@ -23,11 +23,8 @@ public class FrameVars implements FgRelated {
 		    Frame.nullFrame, Span.widthOne(head), new Span[0], s);
 	}
 
-	// these arrays are indexed by t (frame)
-	// and i is implicit information in the instance
 	public Frame[] f_it_values;  // first value is nullFrame
 	public Var[] f_it;
-	//public int i;  // TODO change to be Span-valued!
 	public Span target;
 	public Frame gold;
 	public boolean goldSet = false;
@@ -36,11 +33,9 @@ public class FrameVars implements FgRelated {
 	 * @param frames should not contain Frame.nullFrame
 	 */
 	public FrameVars(
-	    //int headIdx,
 	    Span target,
 	    List<FrameInstance> prototypes,
 	    List<Frame> frames) {
-		//this.i = headIdx;
 	  this.target = target;
 		int n = frames.size() + 1;
 		this.f_it = new Var[n];

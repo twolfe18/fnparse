@@ -111,6 +111,11 @@ public class DeterministicRolePruning
   }
 
   @Override
+  public void scanFeatures(List<FNParse> data) {
+    LOG.info("[scanFeatures] not actually doing anything");
+  }
+
+  @Override
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {

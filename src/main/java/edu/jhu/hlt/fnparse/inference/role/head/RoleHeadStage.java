@@ -32,10 +32,8 @@ import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
@@ -78,8 +76,9 @@ public class RoleHeadStage
     public Params(ParserParams globalParams) {
       this.factorTemplate = new RoleFactorFactory(
           globalParams, BinaryBinaryFactorHelper.Mode.ISING);
-      this.argPruner = new ArgPruner(
-          TargetPruningData.getInstance(), globalParams.headFinder);
+      //this.argPruner = new ArgPruner(
+      //    TargetPruningData.getInstance(), globalParams.headFinder);
+      this.argPruner = new NoArgPruner();
       this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
     }
   }

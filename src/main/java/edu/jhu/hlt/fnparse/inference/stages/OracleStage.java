@@ -8,7 +8,8 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.model.FgModel;
-import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+
 
 /**
  * Passes the gold answer as output. Assumes that the gold answer is always
@@ -122,5 +123,10 @@ public class OracleStage<I, O> implements Stage<I, O> {
 	public void loadModel(File file) {
 		LOG.info("not actually loading model");
 	}
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+		LOG.info("not actually loading model");
+  }
 
 }

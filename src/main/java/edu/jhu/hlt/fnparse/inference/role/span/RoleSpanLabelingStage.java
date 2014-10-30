@@ -406,4 +406,10 @@ public class RoleSpanLabelingStage
       return vars.get(y).arg;
     }
   }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<FNParseSpanPruning> goldPrunes = FNParseSpanPruning.optimalPrune(data);
+    this.scanFeatures(goldPrunes, data, 999, 999_999_999);
+  }
 }

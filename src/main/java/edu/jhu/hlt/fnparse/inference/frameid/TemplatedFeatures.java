@@ -119,8 +119,11 @@ public class TemplatedFeatures implements Serializable {
       tokens[i] = tokens[i].trim();
     Template template = null;
     for (int i = 0; i < tokens.length; i++) {
-      Template basicTemplate =
-          BasicFeatureTemplates.getBasicTemplate(tokens[i]);
+      Template basicTemplate = null;
+      if (i == 0)
+        basicTemplate = BasicFeatureTemplates.getStageTemplate(tokens[i]);
+      if (basicTemplate == null)
+        basicTemplate = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
       if (basicTemplate == null) {
         throw new TemplateDescriptionParsingException(
             "could not parse basic template: " + tokens[i]);

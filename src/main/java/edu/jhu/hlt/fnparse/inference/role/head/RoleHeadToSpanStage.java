@@ -89,9 +89,6 @@ public class RoleHeadToSpanStage
 	public RoleHeadToSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
 		super(globalParams, featureNames);
 		params = new Params(globalParams);
-		if (globalParams.useLatentConstituencies) {
-			log.warn("This code does not implement latent syntax yet");
-		}
 	}
 
 	@Override
@@ -352,14 +349,6 @@ public class RoleHeadToSpanStage
 				maxLeft = j - i;
 			if (j < i && j + parent.params.maxArgRoleExpandRight > i)
 				maxRight = i - j;
-
-			Frame f = onlyHeads.getFrameInstance(fiIdx).getFrame();
-			if ("Commerce_buy".equals(f.getName())
-			    && "Buyer".equals(f.getRole(k))
-			    && "FNFUTXT1275529".equals(onlyHeads.getSentence().getId())) {
-			  LOG.info("pay attention now");
-			}
-
 			int n = this.onlyHeads.getSentence().size();
 			Expansion.Iter ei = new Expansion.Iter(j, n, maxLeft, maxRight);
 			int goldExpIdx = -1;

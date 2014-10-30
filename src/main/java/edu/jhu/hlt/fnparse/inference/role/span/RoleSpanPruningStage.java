@@ -25,6 +25,8 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -567,6 +569,13 @@ public class RoleSpanPruningStage
       return new FNParseSpanPruning(
           input.getSentence(), input.getFrameInstances(), kept);
     }
+  }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<FNTagging> frames = DataUtil.convertParsesToTaggings(data);
+    List<FNParseSpanPruning> goldPrunes = FNParseSpanPruning.optimalPrune(data);
+    this.scanFeatures(frames, goldPrunes, 999, 999_999_999);
   }
 
   /**

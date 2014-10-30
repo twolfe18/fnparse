@@ -67,10 +67,17 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
       while (it.hasNext()) {
         RVar rvar = it.next();
         LinkVar link = null;
+        boolean argRealized = rvar.j < s.size();
+        assert rvar.j >= 0;
         VarSet vs;
-        if (params.useLatentDepenencies) {
+        if (argRealized && params.useLatentDepenencies) {
           link = l.getLinkVar(rv.i, rvar.j);
-          vs = new VarSet(rvar.roleVar, link);
+          if (link == null) {
+            assert rv.i == rvar.j;
+            vs = new VarSet(rvar.roleVar);
+          } else {
+            vs = new VarSet(rvar.roleVar, link);
+          }
         } else {
           vs = new VarSet(rvar.roleVar);
         }
@@ -79,7 +86,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
         int n = vs.calcNumConfigs();
         for (int i = 0; i < n; i++) {
           VarConfig vc = vs.getVarConfig(i);
-          boolean role = rvar.j < s.size() && BinaryVarUtil.configToBool(vc.getState(rvar.roleVar));
+          boolean role = argRealized && BinaryVarUtil.configToBool(vc.getState(rvar.roleVar));
           boolean dep = link != null && BinaryVarUtil.configToBool(vc.getState(link));
           context.clear();
           context.setStage(RoleHeadStage.class);

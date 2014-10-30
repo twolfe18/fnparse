@@ -1,12 +1,10 @@
 package edu.jhu.hlt.fnparse.inference.frameid;
 
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -14,12 +12,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.IntFunction;
+import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.apache.commons.math3.util.FastMath;
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -37,8 +38,11 @@ import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
+import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
@@ -48,6 +52,7 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 
 public class BasicFeatureTemplates {
+  public static final Logger LOG = Logger.getLogger(BasicFeatureTemplates.class);
 
   private static String discretizeWidth(String name, int divisor, int maxCardinality, int width) {
     int w = width / divisor;
@@ -191,7 +196,6 @@ public class BasicFeatureTemplates {
         return "1";
       }
     });
-
     /*
     addTemplate("possibleArgs", new TemplateSS() {
       @Override
@@ -203,14 +207,17 @@ public class BasicFeatureTemplates {
       }
     });
     */
-    addTemplate("prune", new TemplateSS() {
+    addTemplate("framePrune", new TemplateSS() {
       @Override
       public String extractSS(TemplateContext context) {
         if (!context.isPruneSet())
           return null;
         if (!context.isPrune())
           return null;
-        return "prune";
+        Frame f = context.getFrame();
+        if (f == null)
+          return null;
+        return "pruneFor" + f.getName();
       }
     });
 
@@ -842,61 +849,125 @@ public class BasicFeatureTemplates {
     });
   }
 
-  private static int estimateFrameIdCardinality(
+  private static int estimateCard(
       String templateName,
-      Template template,
+      ParserParams params,
+      Function<ParserParams, Stage<?, ?>> stageFuture,
       List<FNParse> parses) {
-    ParserParams params = new ParserParams();
     params.setFeatureTemplateDescription(templateName);
-    FrameIdStage fid = new FrameIdStage(params, params);
-    List<Sentence> sentences = DataUtil.stripAnnotations(parses);
-    fid.scanFeatures(sentences, parses, 999, 999_999_999);
-    return params.getAlphabet().size() + 1;
+    Stage<?, ?> stage = stageFuture.apply(params);
+    params.getAlphabet().startGrowth();
+    stage.scanFeatures(parses);
+    return params.getAlphabet().size();
   }
 
-  private static int estimateRoleLabellingCardinality(
-      String templateName,
-      Template template,
-      List<FNParse> parses) {
-    Logger.getLogger(RoleSpanLabelingStage.class).setLevel(Level.ERROR);
-    ParserParams params = new ParserParams();
-    params.setFeatureTemplateDescription(templateName);
-    RoleSpanLabelingStage stage = new RoleSpanLabelingStage(params, params);
-    params.getAlphabet().startGrowth();
-    List<FNParseSpanPruning> input = FNParseSpanPruning.optimalPrune(parses);
-    stage.scanFeatures(input, parses, 999, 99_999_999);
-    return params.getAlphabet().size() + 1;
+  private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
+  private static Map<String, Supplier<ParserParams>> syntaxModes = new HashMap<>();
+  private static Map<String, Template> stageTemplates = new HashMap<>();
+  static {
+    stages.add(pp -> new FrameIdStage(pp, pp));
+    stages.add(pp -> new RoleHeadStage(pp, pp));
+    stages.add(pp -> new RoleHeadToSpanStage(pp, pp));
+    stages.add(pp -> new RoleSpanPruningStage(pp, pp));
+    stages.add(pp -> new RoleSpanLabelingStage(pp, pp));
+    syntaxModes.put("regular", () -> {
+      ParserParams p = new ParserParams();
+      p.useLatentConstituencies = false;
+      p.useLatentDepenencies = false;
+      p.useSyntaxFeatures = true;
+      return p;
+    });
+    syntaxModes.put("latent", () -> {
+      ParserParams p = new ParserParams();
+      p.useLatentConstituencies = true;
+      p.useLatentDepenencies = true;
+      p.useSyntaxFeatures = false;
+      return p;
+    });
+    syntaxModes.put("none", () -> {
+      ParserParams p = new ParserParams();
+      p.useLatentConstituencies = false;
+      p.useLatentDepenencies = false;
+      p.useSyntaxFeatures = false;
+      return p;
+    });
+    for (Entry<String, Supplier<ParserParams>> x : syntaxModes.entrySet()) {
+      ParserParams p = x.getValue().get();
+      for (Function<ParserParams, Stage<?, ?>> y : stages) {
+        Stage<?, ?> s = y.apply(p);
+        String name = s.getName() + "-" + x.getKey();
+        Class<? extends Stage> cls = s.getClass();
+        Object old = stageTemplates.put(name, new TemplateSS() {
+          @Override
+          String extractSS(TemplateContext context) {
+            if (context.getClass() == cls)
+              return cls.getName();
+            return null;
+          }
+        });
+        assert old == null : "name conflict for " + name;
+      }
+    }
+  }
+
+  public static Template getStageTemplate(String name) {
+    return stageTemplates.get(name);
   }
 
   public static void main(String[] args) throws Exception {
-    long start = System.currentTimeMillis();
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-    File f = new File("experiments/forward-selection/basic-templates.txt");
-    BufferedWriter w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f), "UTF-8"));
-    Collection<String> templatesToView;
-    if (args.length == 0)
-      templatesToView = basicTemplates.keySet();
-    else
-      templatesToView = Arrays.asList(args);
-    System.out.println("estimating cardinality for " + basicTemplates.size()
-        + " templates");
+    if (args.length != 2) {
+      System.err.println("please provide:");
+      System.err.println("1) how many threads to use");
+      System.err.println("2) a file to dump to (should be empty or not exist)");
+    }
+    int parallel = Integer.parseInt(args[0]);
+    File f = new File(args[1]);
+    //File f = new File("experiments/forward-selection/basic-templates.txt");
+    LOG.info("estimating cardinality for " + basicTemplates.size()
+        + " templates and " + stages.size() + " stages");
 
     // Load data ahead of time to ensure fair timing
     TargetPruningData.getInstance().getWordnetDict();
     TargetPruningData.getInstance().getPrototypesByFrame();
 
-    for (String tmplName : templatesToView) {
-      Template tmpl = basicTemplates.get(tmplName);
-      System.out.println(tmplName);
-      long tmplStart = System.currentTimeMillis();
-      int card_frameId = estimateFrameIdCardinality(tmplName, tmpl, parses);
-      int card_roleLab = estimateRoleLabellingCardinality(tmplName, tmpl, parses);
-      double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-      w.write(String.format("%s\t%d\t%d\t%.2f\n", tmplName, card_frameId, card_roleLab, time));
-      w.flush();
+    // parallelize with FileWriter that uses append
+    ExecutorService es = Executors.newFixedThreadPool(parallel);
+    LOG.info("actually starting work on " + parallel + " threads");
+
+    for (String tmplName : basicTemplates.keySet()) {
+      for (Entry<String, Supplier<ParserParams>> synM : syntaxModes.entrySet()) {
+        for (Function<ParserParams, Stage<?, ?>> stage : stages) {
+          Runnable r = new Runnable() {
+            @Override
+            public void run() {
+              System.out.println(tmplName);
+              long tmplStart = System.currentTimeMillis();
+              ParserParams params = synM.getValue().get();
+              int card = estimateCard(tmplName, params, stage, parses);
+              String stageName = stage.apply(params).getName()
+                  + "-" + synM.getKey();
+              double time = (System.currentTimeMillis() - tmplStart) / 1000d;
+              String msg = String.format("%s\t%s\t%d\t%.2f\n",
+                  tmplName, stageName, card, time);
+              try (FileWriter fw = new FileWriter(f, true)) {
+                fw.append(msg);
+              } catch (IOException e) {
+                System.out.flush();
+                e.printStackTrace();
+                System.err.println("failed to report: " + msg);
+                System.err.flush();
+                System.out.flush();
+              }
+            }
+          };
+          es.execute(r);
+        }
+      }
     }
-    w.close();
-    System.out.println("took " + (System.currentTimeMillis() - start)/1000d + " seconds");
+    es.shutdown();
+    es.awaitTermination(99, TimeUnit.DAYS);
+    LOG.info("done, results are in " + f.getPath());
   }
 }

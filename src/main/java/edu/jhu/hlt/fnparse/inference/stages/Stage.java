@@ -10,6 +10,7 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.util.HasFactorGraph;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 
@@ -51,6 +52,8 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
       List<? extends Output> labels,
       double maxTimeInMinutes,
       int maxFeaturesAdded);
+
+  public void scanFeatures(List<FNParse> data);
 
   /**
    * Should include any tuning steps that are necessary (implementer of this

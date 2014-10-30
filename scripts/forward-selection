@@ -32,59 +32,50 @@ FAILED_SCORE = 0.0
 SER_Q_PATH = None
 SER_Q = None
 
+
 class Feature(CommonEqualityMixin):
-  ''' uses strings as templates '''
-  def __init__(self, label, templates=[]):
+  def __init__(self, stage, label, templates=[]):
+    ''' label is just a priveledged template that has high selectivitity and must be there '''
     if type(templates) is str:
       templates = [templates]
     assert type(label) is str
-    assert type(templates) is list
+    assert type(templates) is list # of strinsgs
+    self.stage = stage
     self.label = label
     self.templates = templates
     self.templates.sort()
 
   def __str__(self):
-	return "*".join([self.label] + self.templates)
+    return "*".join([self.stage, self.label] + self.templates)
 
   def estimate_cardinality(self):
-    c = TEMPLATE_INFO.label_cardinality[self.label]
-    assert c is not None
+    c = TEMPLATE_INFO.cardinality(self.label, self.stage)
     for t in self.templates:
-      ct = TEMPLATE_INFO.template_cardinality[t]
-      assert ct is not None
-      c *= ct
+      c *= TEMPLATE_INFO.cardinality(t, self.stage)
     assert type(c) is int or type(c) is long
     return c
 
   def propose_modification(self):
-    # TODO prioritize whether you should be growing or shrinking this feature
-    p_change_label = 0.1
-    label_templates = TEMPLATE_INFO.label_templates()
-    if len(label_templates) > 1 and random.random() < p_change_label:
-      # change the label
-      ys = [y for y in label_templates if y != self.label]
-      return Feature(random.choice(ys), self.templates)
-    else:
-      # the higher the estimated cardinality, the greater the chance of
-      # removing a template
-      # e.g. cardinality = 100  -> p(shrink) = 0.500
-      #      cardinality = 4    -> p(shrink) = 0.167
-      #      cardinality = 400  -> p(shrink) = 0.667
-      #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
-      card = pow(self.estimate_cardinality(), 0.5)
-      p_shrink = card / (card + 10.0)
-      if len(self.templates) > 1 and random.random() < p_shrink:
-        # add a new template
-        xs = [x for x in TEMPLATE_INFO.basic_templates if x not in self.templates]
-        if len(xs) > 0:
-          return Feature(self.label, self.templates + [random.choice(xs)])
-        else:
-          raise Exception('cant extend this Feature any further')
+    # the higher the estimated cardinality, the greater the chance of
+    # removing a template
+    # e.g. cardinality = 100  -> p(shrink) = 0.500
+    #      cardinality = 4    -> p(shrink) = 0.167
+    #      cardinality = 400  -> p(shrink) = 0.667
+    #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
+    card = pow(self.estimate_cardinality(), 0.5)
+    p_shrink = card / (card + 10.0)
+    if len(self.templates) > 1 and random.random() < p_shrink:
+      # add a new template
+      xs = [x for x in TEMPLATE_INFO.basic_templates if x not in self.templates]
+      if len(xs) > 0:
+        return Feature(self.stage, self.label, self.templates + [random.choice(xs)])
       else:
-        # remove a template
-        assert len(self.templates) >= 2
-        tmpl = random.sample(self.templates, len(self.templates) - 1)
-        return Feature(self.label, tmpl)
+        raise Exception('cant extend this Feature any further')
+    else:
+      # remove a template
+      assert len(self.templates) >= 2
+      tmpl = random.sample(self.templates, len(self.templates) - 1)
+      return Feature(self.stage, self.label, tmpl)
 
 
 class FeatureSet(object):
@@ -98,28 +89,30 @@ class FeatureSet(object):
   def __ne__(self, other):
     return not self.__eq__(other)
 
-  def estimate_cardinality(self):
-    ''' assumes that features never overlap '''
-    c = 1
+  def estimate_cardinality(self, stage=None):
+    ''' Returns a dict with stage names as keys and int/long values '''
+    cards = collections.defaultdict(lambda: 1)
     for f in self.features:
-      cf = f.estimate_cardinality()
-      assert cf is not None and (type(cf) is int or type(cf) is long)
-      c += cf
-    return c
+      cards[f.stage] = cards[f.stage] * f.estimate_cardinality()
+    if stage:
+      return cards[stage]
+    else:
+      return cards
 
   def propose_modification(self):
     ''' Returns a new FeatureSet derived from this feature set '''
     debug = True
-    card = self.estimate_cardinality()
+    stage = random.choice(TEMPLATE_INFO.stages())
+    card = self.estimate_cardinality(stage)
     l = 0.5
     p_add_feature = l * 100.0 / (100.0 + pow(card, 0.4)) \
       + (1.0 - l) * (2.0 / (2.0 + len(self.features)))
     if random.random() < p_add_feature:
       f = self.new_feature()
       if debug:
-        print '[propose_modification] len(self.features) =', \
-          len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
-        print '[propose_modification] new feature:', f
+        print '[propose_modification add_new_feature] len(self.features) =', \
+          len(self.features), 'stage =', stage, 'cardinality =', card, \
+          'p_add_features =', p_add_feature, 'new_feature =', f
       return FeatureSet(self.features + [f], derived_from=self)
     else:
       # modify and replace a feature that is already in this feature set
@@ -127,9 +120,9 @@ class FeatureSet(object):
         i = random.randrange(len(self.features))
         f = self.features[i].propose_modification()
         if debug:
-          print '[propose_modification] len(self.features) =', \
-            len(self.features), 'cardinality =', card, 'p_add_features =', p_add_feature
-          print '[propose_modification] modify existing feature:', self.features[i], '=>', f
+          print '[propose_modification modify_feature] len(self.features) =', \
+            len(self.features), 'stage =', stage, 'cardinality =', card, \
+            'p_add_features =', p_add_feature, '\t', self.features[i], '=>', f
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
         return self.propose_modification()
@@ -142,7 +135,8 @@ class FeatureSet(object):
     while random.random() < 0.1 and xn < len(TEMPLATE_INFO.basic_templates):
       xn = xn + 1
     xs = random.sample(TEMPLATE_INFO.basic_templates, xn)
-    f = Feature(y, xs)
+    s = random.choice(TEMPLATE_INFO.stages())
+    f = Feature(s, y, xs)
     if f in self.features:
       return self.new_feature()
     else:
@@ -158,32 +152,51 @@ class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
   def __init__(self, feature_set, settings_dict, regularizer_dict):
     self.feature_set = feature_set
-	  for k, v in regularizer_dict.iteritems():
+
+    self.regularizer_dict = regularizer_dict
+    for k, v in regularizer_dict.iteritems():
       assert type(k) is str # Name of the stage being regularize
       assert type(v) is int # Natural log of the regularizer
-    self.regularizer_dict = regularizer_dict
+
     self.params = {}
-    self.params['regularizer'] = str(regularizer)
     self.params['passes'] = '5'
     self.params['batchSize'] = '1'
     self.params['randomSeed'] = '9001'
     self.params.update(settings_dict)
 
   def __str__(self):
-    return "<Config %s>" % (str(self.feature_set))
+    return "<Config features=%s regularizer=%s params=%s>" % \
+      (str(self.feature_set), str(self.regularizer_dict), str(self.params))
 
 def mutate_config(config):
   ''' Returns a function from Config to Config '''
   next_fs = config.feature_set.propose_modification()
   cur_card = config.feature_set.estimate_cardinality()
+  assert type(cur_card) is dict
   next_card = next_fs.estimate_cardinality()
-  diff_card = next_card - cur_card
-  # Do your best to guess if the regularizer needs to change
+  assert type(next_card) is dict
+  # cardinality is now a dict with stages as keys
+  # regularizer is too
+  # for each stage, decide if you want to change the regularizer or not
+  alpha = 15000
+  beta = 1.5
   children = [Config(next_fs, config.params, regularizer=config.regularizer)]
-  if diff_card > 25000 or diff_card / cur_card > 1.5:
-    children.append(Config(next_fs, config.params, config.regularizer + 1))
-  if diff_card < -25000 or diff_card / cur_card < -1.5:
-    children.append(Config(next_fs, config.params, config.regularizer - 1))
+  for stage in TEMPLATE_INFO.stages():
+    cc = cur_card[stage]
+    nc = next_card[stage]
+    dc = nc - cc
+    if dc > alph or dc / cc > beta:
+      # stronger regularizer
+      reg = {}
+      reg.update(config.regularizer)
+      reg[stage] = reg[stage] + 1
+      children.append(Config(next_fs, config.params, regularizer=reg))
+    if dc < -alpha or dc / cc < -beta:
+      # weaker regularizer
+      reg = {}
+      reg.update(config.regularizer)
+      reg[stage] = reg[stage] - 1
+      children.append(Config(next_fs, config.params, regularizer=reg))
   return children
 
 # TODO estimate_cardinality needs to consider the features and the *stage*
@@ -554,83 +567,78 @@ class TemplateInfo(object):
   def __init__(self, filename):
     print '[TemplateInfo init] reading template information from', filename
     self.filename = filename
-    self.template_cardinality = {} # string -> int
-    self.basic_templates = [] # list of strings (names)
-    f = open(filename, 'r')
-    for line in f:
-      toks = line.strip().split('\t')
-      template_name = toks[0]
-      template_card_frameid = int(toks[1])
-      template_card_rolelab = int(toks[2])
-      time_coef = float(toks[3])
-      assert template_name not in self.template_cardinality
-      if template_card_rolelab > 1:
-        self.add_cardinality(template_name, template_card_rolelab)
-    f.close()
-    # NOTE: the cardinality of frame is w.r.t. how many frames could possibly
-    # be evoked at a give target, which is much less than the number of total frames
-    self.label_cardinality = {
-      'intercept': 1,
-      'frame*prune': 10,
-      'frame': 10,
-      'roleArg': 10,      # adding 'Arg' is like supported features
-      'role': 15,
-      'frameRoleArg': 25, # adding 'Arg' is like supported features
-      'frameRole': 50,
-    }
+
+    self.__info = {}  # (templateName, stageName) -> (cardinaityInt, timeFloat)
+    self.__templates = set()
+    self.__stages = set()
+    with open(filename, 'r') as f:
+      for line in f:
+        toks = line.strip().split('\t')
+        assert len(toks) == 4
+        template, stage, card, time = toks
+        card = int(card)
+        time = float(time)
+        assert (template, stage) not in self.__info
+        self.__info[(template, stage)] = (card, time)
+        self.__templates.add(template)
+        self.__stages.add(stage)
+        print template, stage, card, time
+    self.__templates = list(self.__templates)
+    self.__stages = list(self.__stages)
+
+    # compute the set of (stage, templates) which have non-zero cardinality
+    self.__nonzero = collections.defaultdict(list)  # stage -> [template]
+    for (stage, template), (card, time) in self.__info.iteritems():
+      if card > 0:
+        self.__nonzero[stage].append(template)
+
+    # stage -> [label/template]
+    # if a stage appears here, only allow labels/templates to be chosen from this list
+    self.__label_restrictions = {}
+
     print '[TemplateInfo init] done'
 
-  def filter_labels(self, allowable_labels):
-    m = {}
-    for k, v in self.label_cardinality.iteritems():
-      if k in allowable_labels:
-        m[k] = v
-    assert len(m) > 0
-    self.label_cardinality = m
+  def cardinality(self, template, stage):
+    k = (template, stage)
+    return self.__info[k]
 
-  def add_cardinality(self, basic_template_name, cardinality):
-    self.basic_templates.append(basic_template_name)
-    self.template_cardinality[basic_template_name] = cardinality
+  def stages(self):
+    return self.__stages
 
-  def allow_unknown_cardinalities(self):
-    temp = self.template_cardinality
-    self.template_cardinality = collections.defaultdict(lambda: 1)
-    self.template_cardinality.update(temp)
+  def restrict_labels_for(self, stage, labels):
+    self.__label_restrictions[stage] = labels
 
-  def label_templates(self):
-    return self.label_cardinality.keys()
+  def labels_for(self, stage):
+    ''' Returns a list of labels (templates) which can be used with the given stage '''
+    r = self.__label_restrictions[stage]
+    if r:
+      return list(set(r) & set(self.__nonzero[stage]))
+    else:
+      return self.__nonzero[stage]
+
 
 def main(template_info_filename, ser_q_filename, deser_q_filename=None):
   # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
   global TEMPLATE_INFO
   TEMPLATE_INFO = TemplateInfo(template_info_filename)
 
-  local = False
+  local = True
 
-  """
-  settings = {
-    'parserMode':'frameId',
-    'syntaxMode':'regular',
-    'evaluationFunction':'TargetMicroF1',
-  }
-  TEMPLATE_INFO.filter_labels(['frame'])
-  seeds = [FeatureSet([
-    Feature('frame', templates=['head1Word']),
-    Feature('frame', templates=['span1LeftPos'])
-  ])]
-  """
   settings = {
     'parserMode':'classifySpans',
     'syntaxMode':'regular',
     'evaluationFunction':'ArgumentMicroF1',
   }
-  TEMPLATE_INFO.filter_labels(['frame*prune', 'frameRoleArg'])
+  s1 = 'RoleSpanPruningStage-regular'
+  s2 = 'RoleSpanLabelingStage-regular'
+  TEMPLATE_INFO.restrict_labels_for(s1, ['framePrune'])
+  TEMPLATE_INFO.restrict_labels_for(s2, ['frameRoleArg', 'roleArg'])
   seeds = [FeatureSet([
-    Feature('frame*prune', templates=['span1Width/2']),
-    Feature('frame*prune', templates=['Dist(Len5,Span1.Last,Span2.First)']),
-    Feature('frameRoleArg', templates=['head1Word']),
-    Feature('frameRoleArg', templates=['span1FirstWord']),
-    Feature('frameRoleArg', templates=['Dist(Len5,Span1.Last,Span2.First)']),
+    Feature(s1, 'framePrune', ['span1Width/2']),
+    Feature(s1, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
+    Feature(s2, 'frameRoleArg', ['head1Word']),
+    Feature(s2, 'frameRoleArg', ['span1FirstWord']),
+    Feature(s2, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
   ])]
 
   # Create the config queue
@@ -641,7 +649,7 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
     assert len(seeds) > 0
     for fs in seeds:
-      conf = Config(fs, settings, regularizer=8)
+      conf = Config(fs, settings, {s1:7, s2:7})
       q.seed(conf)
   else:
     print 'loading config queue from', deser_q_filename
@@ -677,12 +685,12 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'port': '6379',
     'db': '0'
   }
-  max_train = 300
+  max_train = 30
   max_jobs = 99999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
-	# TODO this is only here for development/debugging
+  # TODO this is only here for development/debugging
   os.system('rm logging/forward-selection/*')
   if not local:
     print 'cleanup...'

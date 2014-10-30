@@ -64,8 +64,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	public static boolean DEBUG_SER = false;
 
-	protected final ParserParams globalParams;	// Not owned by this class
+	protected final ParserParams globalParams; // Not owned by this class
 	protected FgModel weights;
+	protected boolean scanFeaturesHasBeenRun = false;
 	protected transient HasFeatureAlphabet featureNames;
 	protected transient Logger log = Logger.getLogger(this.getClass());
 
@@ -187,9 +188,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	/**
-	 * A convenience method for calling decode on the input,
-	 * which runs inference if it hasn't been run yet and then takes
-	 * the output of that inference and decodes an answer.
+	 * A convenience method for calling decode on the input, which runs inference
+	 * if it hasn't been run yet and then takes the output of that inference and
+	 * decodes an answer.
 	 */
 	public List<O> decode(StageDatumExampleList<I, O> decodables) {
 		List<O> decoded = new ArrayList<>();
@@ -209,8 +210,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	public void initWeights() {
 		int numParams = featureNames.getAlphabet().size();
-		if(numParams == 0)
-			throw new IllegalArgumentException("run AlphabetComputer first!");
+		if(numParams == 0) {
+		  log.warn("[initWeights] no parameters!");
+		  assert scanFeaturesHasBeenRun;
+		}
 		assert globalParams.verifyConsistency();
 		if (weights != null && weights.getNumParams() > 0)
 			log.warn("re-initializing paramters!");
@@ -449,6 +452,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				examplesSeen, t.totalTimeInSeconds() / 60d,
 				featureNames.getAlphabet().size(),
 				featureNames.getAlphabet().size() - alphSizeStart));
+		scanFeaturesHasBeenRun = true;
 	}
 
 	public static interface TuningData {

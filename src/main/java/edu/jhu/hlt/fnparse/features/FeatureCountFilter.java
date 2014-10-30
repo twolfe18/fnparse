@@ -41,19 +41,18 @@ public class FeatureCountFilter {
 		Alphabet<String> keep = new Alphabet<String>();
 		int n = featureNames.size();
 		this.keep = new BitSet(n);
-		for(int i=0; i<n; i++) {
+		for (int i = 0; i < n; i++) {
 			String fn = featureNames.lookupObject(i);
-			if(counts[i] >= minFeatureOccurrences || keepRegardless.lookupIndex(fn, false) >= 0) {
+			if (counts[i] >= minFeatureOccurrences || keepRegardless.lookupIndex(fn, false) >= 0) {
 				keep.lookupIndex(fn, true);
 				this.keep.set(i);
 			}
 		}
-		if(keepRegardless != null && keepRegardless.size() > 0) {
+		if (keepRegardless != null && keepRegardless.size() > 0) {
 			System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples and given %d features to keep regardless, "
 					+ "%d features are in the resulting map because they either appeared %d times or were pre-existing\n",
 					nFG, keepRegardless.size(), keep.size(), minFeatureOccurrences);
-		}
-		else {
+		} else {
 			System.out.printf("[FeatureCountFilter] after inspecting %d FgExmples, found %d of %d features appeared at least %d times\n",
 					nFG, keep.size(), featureNames.size(), minFeatureOccurrences);
 		}
@@ -63,18 +62,17 @@ public class FeatureCountFilter {
 
 	public void observe(FactorGraph instance) {
 		nFG++;
-		for(Factor f : instance.getFactors()) {
+		for (Factor f : instance.getFactors()) {
 			nF++;
-			if(f instanceof ExplicitExpFamFactor) {
+			if (f instanceof ExplicitExpFamFactor) {
 				ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
 				int C = ef.getVars().calcNumConfigs();
-				for(int c=0; c<C; c++)
+				for(int c = 0; c < C; c++)
 					count(ef.getFeatures(c));
-			}
-			else {
+			} else {
 				Class<?> key = f.getClass();
 				Integer c = ignoredCounts.get(key);
-				if(c == null) c = 0;
+				if (c == null) c = 0;
 				ignoredCounts.put(key, c + 1);
 			}
 		}
@@ -84,7 +82,7 @@ public class FeatureCountFilter {
 		observe(instance.getFgLatPred());
 	}
 
-	private BitSet keep = null;	// set in filterByCount()
+	private BitSet keep = null;  // set in filterByCount()
 
 	/**
 	 * removes features that have been pruned by a previous call to this.filterByCount().
@@ -104,12 +102,12 @@ public class FeatureCountFilter {
 			    "you have to call this.filterByCount() before you call this method");
 		}
 
-		for(FactorGraph fg : Arrays.asList(instance.getFgLat(), instance.getFgLatPred())) {
-			for(Factor f : fg.getFactors()) {
-				if(f instanceof ExplicitExpFamFactor) {
+		for (FactorGraph fg : Arrays.asList(instance.getFgLat(), instance.getFgLatPred())) {
+			for (Factor f : fg.getFactors()) {
+				if (f instanceof ExplicitExpFamFactor) {
 					ExplicitExpFamFactor ef = (ExplicitExpFamFactor) f;
 					int C = ef.getVars().calcNumConfigs();
-					for(int c=0; c<C; c++) {
+					for (int c = 0; c < C; c++) {
 						ef.getFeatures(c).apply(new FnIntDoubleToDouble() {	// only keep indices in the bitset
 							@Override
 							public double call(int idx, double val) {
@@ -130,7 +128,7 @@ public class FeatureCountFilter {
 		fv.apply(new FnIntDoubleToDouble() {
 			@Override
 			public double call(int idx, double val) {
-				if(idx >= counts.length)
+				if (idx >= counts.length)
 					grow(idx + 1);
 				counts[idx]++;
 				return val;
