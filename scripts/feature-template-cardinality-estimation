@@ -1,7 +1,8 @@
 #!/bin/bash
 
-THREADS=10
+THREADS=12
+OUTPUT="experiments/forward-selection/basic-templates.txt"
 CP=`find target/ -iname '*.jar' | tr '\n' ':'`
 java -Xmx8G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
-	edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS}
+	edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT}
 

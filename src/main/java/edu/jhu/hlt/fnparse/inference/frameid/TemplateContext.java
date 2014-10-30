@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage;
  * valued variables. You must call the isSet method before calling them.
  */
 public class TemplateContext {
+  private static final boolean DEBUG = true;
 
   public static final int UNSET = -3;
 
@@ -79,7 +80,7 @@ public class TemplateContext {
     targetHead = UNSET;
     role = UNSET;
     arg = null;
-    setArgHead(UNSET);
+    argHead = UNSET;
     span1 = null;
     span2 = null;
     head1 = UNSET;
@@ -108,6 +109,10 @@ public class TemplateContext {
     return target;
   }
   public void setTarget(Span target) {
+    if (DEBUG && sentence != null) {
+      assert target.start >= 0;
+      assert target.end < sentence.size();
+    }
     this.target = target;
   }
   public int getTargetHead() {
@@ -115,6 +120,10 @@ public class TemplateContext {
   }
   public void setTargetHead(int head) {
     assert head == UNSET || target == null || target.includes(head);
+    if (DEBUG && sentence != null) {
+      assert head >= 0;
+      assert head < sentence.size();
+    }
     this.targetHead = head;
   }
 
@@ -122,12 +131,23 @@ public class TemplateContext {
     return role;
   }
   public void setRole(int role) {
+    if (DEBUG) {
+      assert frame != null : "set frame first";
+      assert role >= 0;
+      assert role < frame.numRoles();
+    }
     this.role = role;
   }
+
   public Span getArg() {
     return arg;
   }
   public void setArg(Span arg) {
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert arg.start >= 0;
+      assert arg.end < sentence.size();
+    }
     this.arg = arg;
   }
 
@@ -135,32 +155,49 @@ public class TemplateContext {
     return span2;
   }
   public void setSpan2(Span span2) {
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert span2.start >= 0;
+      assert span2.end < sentence.size();
+    }
     this.span2 = span2;
   }
 
   public Span getSpan1() {
     return span1;
   }
-
   public void setSpan1(Span span1) {
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert span1.start >= 0;
+      assert span1.end < sentence.size();
+    }
     this.span1 = span1;
   }
 
   public int getHead2() {
     return head2;
   }
-
   public void setHead2(int head2) {
     assert head2 >= 0 || head2 == UNSET;
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert head2 >= 0;
+      assert head2 < sentence.size();
+    }
     this.head2 = head2;
   }
 
   public int getHead1() {
     return head1;
   }
-
   public void setHead1(int head1) {
     assert head1 >= 0 || head1 == UNSET;
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert head1 >= 0;
+      assert head1 < sentence.size();
+    }
     this.head1 = head1;
   }
 
@@ -196,6 +233,11 @@ public class TemplateContext {
     return argHead;
   }
   public void setArgHead(int argHead) {
+    if (DEBUG) {
+      assert sentence != null : "set sentence first";
+      assert argHead >= 0;
+      assert argHead < sentence.size();
+    }
     this.argHead = argHead;
   }
 

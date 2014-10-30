@@ -710,12 +710,14 @@ public class BasicFeatureTemplates {
             addTemplate(name, new Template() {
               private Function<SentencePosition, String> extractor = ext.getValue();
               private SentencePosition pos = new SentencePosition();
+              private ToIntFunction<TemplateContext> p1f = p1.getValue();
+              private ToIntFunction<TemplateContext> p2f = p2.getValue();
               @Override
               public Iterable<String> extract(TemplateContext context) {
-                int c1 = p1.getValue().applyAsInt(context);
+                int c1 = p1f.applyAsInt(context);
                 if (c1 == TemplateContext.UNSET)
                   return null;
-                int c2 = p2.getValue().applyAsInt(context);
+                int c2 = p2f.applyAsInt(context);
                 if (c2 == TemplateContext.UNSET)
                   return null;
                 if (c1 > c2) {
@@ -723,9 +725,11 @@ public class BasicFeatureTemplates {
                   c1 = c2;
                   c2 = temp;
                 }
+                assert c1 < context.getSentence().size();
+                assert c2 < context.getSentence().size();
                 pos.sentence = context.getSentence();
                 List<String> output = new ArrayList<>();
-                for (int start = c1; start <= c2 - ngram; start++) {
+                for (int start = c1; start <= (c2 - ngram)+1; start++) {
                   StringBuilder feat = new StringBuilder(name);
                   feat.append("=");
                   boolean once = false;
@@ -733,7 +737,18 @@ public class BasicFeatureTemplates {
                       pos.index < start + ngram && pos.index <= c2;
                       pos.index++) {
                     once = true;
-                    String si = extractor.apply(pos);
+                    String si = null;
+                    try {
+                      extractor.apply(pos);
+                    } catch (java.lang.ArrayIndexOutOfBoundsException e) {
+                      System.err.println("n=" + ngram);
+                      System.err.println("ext=" + ext.getKey());
+                      System.err.println("c1=" + c1);
+                      System.err.println("c2=" + c2);
+                      System.err.println("p1=" + p1.getKey());
+                      System.err.println("p2=" + p2.getKey());
+                      throw new RuntimeException(e);
+                    }
                     if (si == null)
                       si = "NULL";
                     if (feat.length() > 0)
@@ -936,6 +951,8 @@ public class BasicFeatureTemplates {
     ExecutorService es = Executors.newFixedThreadPool(parallel);
     LOG.info("actually starting work on " + parallel + " threads");
 
+    // TODO read in existing results from the given file, skip those jobs
+
     for (String tmplName : basicTemplates.keySet()) {
       for (Entry<String, Supplier<ParserParams>> synM : syntaxModes.entrySet()) {
         for (Function<ParserParams, Stage<?, ?>> stage : stages) {
@@ -945,9 +962,15 @@ public class BasicFeatureTemplates {
               System.out.println(tmplName);
               long tmplStart = System.currentTimeMillis();
               ParserParams params = synM.getValue().get();
-              int card = estimateCard(tmplName, params, stage, parses);
               String stageName = stage.apply(params).getName()
                   + "-" + synM.getKey();
+              int card = -1;
+              try {
+                card = estimateCard(tmplName, params, stage, parses);
+              } catch (Exception e) {
+                System.err.println(tmplName + " on " + stageName + " is to blame!");
+                throw new RuntimeException(e);
+              }
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;
               String msg = String.format("%s\t%s\t%d\t%.2f\n",
                   tmplName, stageName, card, time);
