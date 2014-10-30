@@ -34,24 +34,26 @@ SER_Q = None
 
 
 class Feature(CommonEqualityMixin):
-  def __init__(self, stage, label, templates=[]):
+  def __init__(self, stage, syntax_mode, label, templates=[]):
     ''' label is just a priveledged template that has high selectivitity and must be there '''
     if type(templates) is str:
       templates = [templates]
     assert type(label) is str
     assert type(templates) is list # of strinsgs
     self.stage = stage
+    self.syntax_mode = syntax_mode
     self.label = label
     self.templates = templates
     self.templates.sort()
 
   def __str__(self):
-    return "*".join([self.stage, self.label] + self.templates)
+    st = self.stage + '-' + self.syntax_mode
+    return "*".join([st, self.label] + self.templates)
 
   def estimate_cardinality(self):
-    c = TEMPLATE_INFO.cardinality(self.label, self.stage)
+    c = TEMPLATE_INFO.cardinality(self.label, self.stage, self.syntax_mode)
     for t in self.templates:
-      c *= TEMPLATE_INFO.cardinality(t, self.stage)
+      c *= TEMPLATE_INFO.cardinality(t, self.stage, self.syntax_mode)
     assert type(c) is int or type(c) is long
     return c
 
@@ -66,16 +68,16 @@ class Feature(CommonEqualityMixin):
     p_shrink = card / (card + 10.0)
     if len(self.templates) > 1 and random.random() < p_shrink:
       # add a new template
-      xs = [x for x in TEMPLATE_INFO.basic_templates if x not in self.templates]
+      xs = [x for x in TEMPLATE_INFO.basic_templates() if x not in self.templates]
       if len(xs) > 0:
-        return Feature(self.stage, self.label, self.templates + [random.choice(xs)])
+        return Feature(self.stage, self.syntax_mode, self.label, self.templates + [random.choice(xs)])
       else:
         raise Exception('cant extend this Feature any further')
     else:
       # remove a template
       assert len(self.templates) >= 2
       tmpl = random.sample(self.templates, len(self.templates) - 1)
-      return Feature(self.stage, self.label, tmpl)
+      return Feature(self.stage, self.syntax_mode, self.label, tmpl)
 
 
 class FeatureSet(object):
@@ -129,18 +131,20 @@ class FeatureSet(object):
 
   def new_feature(self):
     ''' creates a feature that is not already in this feature set '''
-    y = random.choice(TEMPLATE_INFO.label_templates())
     # prefer adding features with small number of templates
-    xn = 1
-    while random.random() < 0.1 and xn < len(TEMPLATE_INFO.basic_templates):
-      xn = xn + 1
-    xs = random.sample(TEMPLATE_INFO.basic_templates, xn)
-    s = random.choice(TEMPLATE_INFO.stages())
-    f = Feature(s, y, xs)
+    stage = random.choice(TEMPLATE_INFO.stages())
+    syntax_mode = self.syntax_mode()
+    label = random.choice(TEMPLATE_INFO.labels_for(stage, syntax_mode))
+    templates = random.choice(TEMPLATE_INFO.basic_templates())
+    f = Feature(stage, syntax_mode, label, templates)
     if f in self.features:
       return self.new_feature()
     else:
       return f
+
+  def syntax_mode(self):
+    assert len(self.features) > 0
+    return self.features[0].syntax_mode
 
   def __str__(self):
     return "<FeatureSet %s>" % (', '.join([str(x) for x in self.features]))
@@ -172,31 +176,30 @@ def mutate_config(config):
   ''' Returns a function from Config to Config '''
   next_fs = config.feature_set.propose_modification()
   cur_card = config.feature_set.estimate_cardinality()
-  assert type(cur_card) is dict
   next_card = next_fs.estimate_cardinality()
-  assert type(next_card) is dict
+  print '[mutate_config] cardinality: ', cur_card, ' => ', next_card
   # cardinality is now a dict with stages as keys
   # regularizer is too
   # for each stage, decide if you want to change the regularizer or not
   alpha = 15000
   beta = 1.5
-  children = [Config(next_fs, config.params, regularizer=config.regularizer)]
+  children = [Config(next_fs, config.params, config.regularizer_dict)]
   for stage in TEMPLATE_INFO.stages():
     cc = cur_card[stage]
     nc = next_card[stage]
     dc = nc - cc
-    if dc > alph or dc / cc > beta:
+    if dc > alpha or dc / cc > beta:
       # stronger regularizer
       reg = {}
-      reg.update(config.regularizer)
+      reg.update(config.regularizer_dict)
       reg[stage] = reg[stage] + 1
-      children.append(Config(next_fs, config.params, regularizer=reg))
+      children.append(Config(next_fs, config.params, reg))
     if dc < -alpha or dc / cc < -beta:
       # weaker regularizer
       reg = {}
-      reg.update(config.regularizer)
+      reg.update(config.regularizer_dict)
       reg[stage] = reg[stage] - 1
-      children.append(Config(next_fs, config.params, regularizer=reg))
+      children.append(Config(next_fs, config.params, reg))
   return children
 
 # TODO estimate_cardinality needs to consider the features and the *stage*
@@ -414,6 +417,7 @@ class LocalJobTracker(object):
     else:
       cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
       cp = ':'.join([x.strip() for x in cp.split('\n')])
+      cp = 'target/classes:' + cp
       cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
       cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
       cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')
@@ -550,96 +554,148 @@ class ForwardSelection:
 
 
 class TemplateInfo(object):
-
-  # TODO do i need a distinction between a label and a stage?
-  # YES: e.g. frameRole vs role
-
-  # TODO cardinalities are defined w.r.t. a Template and a stage
-
-  # TODO mutate_config, we need to know what stages are in play for mutation
-
-  # stage-label interactions = [(frameId, 'frame'), (roleId, 'frameRole'), (roleId, 'role'), ...]
-  # OHHHHH.... if i run these various stages in BasicTemplateExtractor, the count will give me this mask
-
-  # FORMAT should then be "stage <tab> template <tab> cardinality <tab> time"
-  # COULD even support products later, just add another column
-
+  # TODO could support cardinalities on higher-order polynomials of features
+  # (e.g. products of templates), just add more columns
   def __init__(self, filename):
-    print '[TemplateInfo init] reading template information from', filename
     self.filename = filename
-
-    self.__info = {}  # (templateName, stageName) -> (cardinaityInt, timeFloat)
+    self.__info = {}  # (templateName, stageName, syntaxMode) -> (cardinaityInt, timeFloat)
     self.__templates = set()
     self.__stages = set()
     with open(filename, 'r') as f:
       for line in f:
         toks = line.strip().split('\t')
-        assert len(toks) == 4
-        template, stage, card, time = toks
+        assert len(toks) == 5
+        template, stage, syntax_mode, card, time = toks
         card = int(card)
         time = float(time)
-        assert (template, stage) not in self.__info
-        self.__info[(template, stage)] = (card, time)
+        assert (template, stage, syntax_mode) not in self.__info
+        self.__info[(template, stage, syntax_mode)] = (card, time)
         self.__templates.add(template)
         self.__stages.add(stage)
-        print template, stage, card, time
+        #print template, stage, card, time
     self.__templates = list(self.__templates)
     self.__stages = list(self.__stages)
+    if len(self.__stages) == 0:
+      raise Exception('no stages?')
 
     # compute the set of (stage, templates) which have non-zero cardinality
     self.__nonzero = collections.defaultdict(list)  # stage -> [template]
-    for (stage, template), (card, time) in self.__info.iteritems():
+    for (template, stage, syntax_mode), (card, time) in self.__info.iteritems():
+      k = (stage, syntax_mode)
       if card > 0:
-        self.__nonzero[stage].append(template)
+        self.__nonzero[k].append(template)
+      else:
+        print template, 'has no support in', k
 
     # stage -> [label/template]
     # if a stage appears here, only allow labels/templates to be chosen from this list
     self.__label_restrictions = {}
 
-    print '[TemplateInfo init] done'
-
-  def cardinality(self, template, stage):
-    k = (template, stage)
-    return self.__info[k]
+  def cardinality(self, template, stage, syntax_mode):
+    k = (template, stage, syntax_mode)
+    return self.__info[k][0]
 
   def stages(self):
     return self.__stages
 
-  def restrict_labels_for(self, stage, labels):
-    self.__label_restrictions[stage] = labels
+  def restrict_stages_to(self, stages):
+    self.__stages = list(set(self.__stages) & set(stages))
+    if len(self.__stages) == 0:
+      raise Exception('no stages left after intersecting with: ' + str(stages))
 
-  def labels_for(self, stage):
+  def restrict_labels_for(self, stage, syntax_mode, labels):
+    k = (stage, syntax_mode)
+    self.__label_restrictions[k] = labels
+    if len(self.__label_restrictions[k]) == 0:
+      raise Exception('no labels available for: ' + str(k))
+
+  def labels_for(self, stage, syntax_mode):
     ''' Returns a list of labels (templates) which can be used with the given stage '''
-    r = self.__label_restrictions[stage]
-    if r:
-      return list(set(r) & set(self.__nonzero[stage]))
-    else:
-      return self.__nonzero[stage]
+    k = (stage, syntax_mode)
+    ret = []
+    try:
+      r = self.__label_restrictions[k]
+      ret = list(set(r) & set(self.__nonzero[k]))
+    except:
+      ret = self.__nonzero[k]
+    if len(ret) == 0:
+      print '__nonzero =', self.__nonzero.get(k)
+      print '__label_restirctions =', self.__label_restrictions.get(k)
+      raise Exception('no labels for ' + str(k))
+    return ret
 
+  def basic_templates(self):
+    return self.__templates
 
-def main(template_info_filename, ser_q_filename, deser_q_filename=None):
-  # Read in the set of templates from disk (dumped by BasicFeatureTemplates)
-  global TEMPLATE_INFO
-  TEMPLATE_INFO = TemplateInfo(template_info_filename)
+def seeds(parser_mode, syntax_mode, settings):
+  ''' Generator of Configs '''
+  if parser_mode == 'span':
+    s1 = 'RoleSpanPruningStage'
+    s2 = 'RoleSpanLabelingStage'
+    yield Config(FeatureSet([
+      Feature(s1, syntax_mode, 'framePrune', ['span1Width/2']),
+      Feature(s1, syntax_mode, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['head1Word']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstWord']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
+    ]), settings, {s1: 8, s2: 8})
+  elif parser_mode == 'head':
+    s1 = 'RoleHeadStage'
+    s2 = 'RoleHeadToSpanStage'
+    yield Config(FeatureSet([
+      Feature(s1, syntax_mode, 'frame', ['head1Word']),
+      Feature(s1, syntax_mode, 'frame', ['head1Pos', 'head2Pos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/1']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'head1Pos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'span1FirstPos']),
+    ]), settings, {s1: 8, s2: 8})
+  else:
+    raise Exception('unknown parser_mode: ' + parser_mode)
+
+# stages:
+# FrameIdStage
+# RoleHeadStage
+# RoleHeadToSpanStage
+# RoleSpanLabelingStage
+# RoleSpanPruningStage
+
+def experiments(template_info_filename):
+  ''' Generator of (TemplateInfo, [Config]) '''
+  stages = {
+    'span': ['RoleSpanPruningStage', 'RoleSpanLabelingStage'],
+    'head': ['RoleHeadStage', 'RoleHeadToSpanStage']
+  }
+  for syntax_mode in ['regular', 'latent', 'none']:
+    for parser_mode in ['span', 'head']:
+      template_info = TemplateInfo(template_info_filename)
+      settings = {
+        'parserMode': parser_mode,
+        'syntaxMode': syntax_mode,
+        'evaluationFunction': 'ArgumentMicroF1',
+      }
+      s1, s2 = stages[parser_mode]
+      s1 += '-' + syntax_mode
+      s2 += '-' + syntax_mode
+      template_info.restrict_stages_to(stages[parser_mode])
+      template_info.restrict_labels_for(s1, syntax_mode, ['framePrune'])
+      template_info.restrict_labels_for(s2, syntax_mode, ['frameRoleArg', 'roleArg'])
+      sd = list(seeds(parser_mode, syntax_mode, settings))
+      yield (template_info, sd)
+
+def run_experiments(template_info_filename, ser_q_filename, deser_q_filename=None):
 
   local = True
 
-  settings = {
-    'parserMode':'classifySpans',
-    'syntaxMode':'regular',
-    'evaluationFunction':'ArgumentMicroF1',
-  }
-  s1 = 'RoleSpanPruningStage-regular'
-  s2 = 'RoleSpanLabelingStage-regular'
-  TEMPLATE_INFO.restrict_labels_for(s1, ['framePrune'])
-  TEMPLATE_INFO.restrict_labels_for(s2, ['frameRoleArg', 'roleArg'])
-  seeds = [FeatureSet([
-    Feature(s1, 'framePrune', ['span1Width/2']),
-    Feature(s1, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
-    Feature(s2, 'frameRoleArg', ['head1Word']),
-    Feature(s2, 'frameRoleArg', ['span1FirstWord']),
-    Feature(s2, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
-  ])]
+  # Run one of these at a time, otherwise caching gets messed up
+  job_idx = 0
+  template_info, configs = list(experiments(template_info_filename))[job_idx]
+  #for template_info, configs in experiments(template_info_filename):
+  print template_info
+  print '\n\t'.join(str(c) for c in configs)
+  #sys.exit(1)
+
+  global TEMPLATE_INFO
+  TEMPLATE_INFO = template_info
 
   # Create the config queue
   if deser_q_filename is None:
@@ -647,9 +703,8 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     # Right now the seed set is just each of the labels conjoined
     # with the headword. You can manually add some good seeds here if you know them.
     q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
-    assert len(seeds) > 0
-    for fs in seeds:
-      conf = Config(fs, settings, {s1:7, s2:7})
+    assert len(configs) > 0
+    for conf in configs:
       q.seed(conf)
   else:
     print 'loading config queue from', deser_q_filename
@@ -685,15 +740,15 @@ def main(template_info_filename, ser_q_filename, deser_q_filename=None):
     'port': '6379',
     'db': '0'
   }
-  max_train = 30
+  max_train = 20
   max_jobs = 99999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
   # TODO this is only here for development/debugging
-  os.system('rm logging/forward-selection/*')
   if not local:
     print 'cleanup...'
+    os.system('rm logging/forward-selection/*')
     os.system('kill-all-jobs')
     time.sleep(2)
   print 'starting...'
@@ -705,9 +760,9 @@ if __name__ == '__main__':
   sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
   if len(sys.argv) == 3:
-    main(sys.argv[1], sys.argv[2])
+    run_experiments(sys.argv[1], sys.argv[2])
   elif len(sys.argv) == 4:
-    main(sys.argv[1], sys.argv[2], deser_q_filename=sys.argv[3])
+    run_experiments(sys.argv[1], sys.argv[2], deser_q_filename=sys.argv[3])
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
