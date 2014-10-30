@@ -44,11 +44,11 @@ public class ParserLoader {
     } else {
       throw new RuntimeException("unknown syntax mode: " + synMode);
     }
-    if (mode.equalsIgnoreCase("classifySpans")) {
+    if (mode.equalsIgnoreCase("span") || mode.equals("spans")) {
       LatentConstituencyPipelinedParser parser =
           new LatentConstituencyPipelinedParser(params);
       return parser;
-    } else if (mode.equals("classifyHeads")) {
+    } else if (mode.equals("head") || mode.equals("heads")) {
       return new PipelinedFnParser(params);
     } else {
       assert !Parser.PARSER_MODE.isPossibleValue(mode);

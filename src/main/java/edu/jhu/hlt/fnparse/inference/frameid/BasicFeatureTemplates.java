@@ -681,6 +681,8 @@ public class BasicFeatureTemplates {
     distanceBucketings.put("Len5", len -> Math.abs(len) <= 5 ? String.valueOf(len) : (len < 0 ? "-" : "+"));
     for (Entry<String, ToIntFunction<TemplateContext>> p1 : distancePoints.entrySet()) {
       for (Entry<String, ToIntFunction<TemplateContext>> p2 : distancePoints.entrySet()) {
+        if (p1.getKey().equals(p2.getKey()))
+          continue;
         // Distance between two points
         for (Entry<String, IntFunction<String>> d : distanceBucketings.entrySet()) {
           String name = String.format("Dist(%s,%s,%s)", d.getKey(), p1.getKey(), p2.getKey());
@@ -906,22 +908,20 @@ public class BasicFeatureTemplates {
       p.useSyntaxFeatures = false;
       return p;
     });
-    for (Entry<String, Supplier<ParserParams>> x : syntaxModes.entrySet()) {
-      ParserParams p = x.getValue().get();
-      for (Function<ParserParams, Stage<?, ?>> y : stages) {
-        Stage<?, ?> s = y.apply(p);
-        String name = s.getName() + "-" + x.getKey();
-        Class<? extends Stage> cls = s.getClass();
-        Object old = stageTemplates.put(name, new TemplateSS() {
-          @Override
-          String extractSS(TemplateContext context) {
-            if (context.getClass() == cls)
-              return cls.getName();
-            return null;
-          }
-        });
-        assert old == null : "name conflict for " + name;
-      }
+    for (Function<ParserParams, Stage<?, ?>> y : stages) {
+      Stage<?, ?> s = y.apply(new ParserParams());
+      String name = s.getName();// + "-" + x.getKey();
+      LOG.info("registering stage: " + name);
+      Class<? extends Stage> cls = s.getClass();
+      Object old = stageTemplates.put(name, new TemplateSS() {
+        @Override
+        String extractSS(TemplateContext context) {
+          if (context.getClass() == cls)
+            return cls.getName();
+          return null;
+        }
+      });
+      assert old == null : "name conflict for " + name;
     }
   }
 
@@ -940,12 +940,19 @@ public class BasicFeatureTemplates {
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);
     //File f = new File("experiments/forward-selection/basic-templates.txt");
+    final boolean fakeIt = true;
+    if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");
+    LOG.info("stages:");
+    for (String k : stageTemplates.keySet())
+      LOG.info(k);
 
     // Load data ahead of time to ensure fair timing
-    TargetPruningData.getInstance().getWordnetDict();
-    TargetPruningData.getInstance().getPrototypesByFrame();
+    if (!fakeIt) {
+      TargetPruningData.getInstance().getWordnetDict();
+      TargetPruningData.getInstance().getPrototypesByFrame();
+    }
 
     // parallelize with FileWriter that uses append
     ExecutorService es = parallel == 1
@@ -967,18 +974,20 @@ public class BasicFeatureTemplates {
               System.out.println(tmplName);
               long tmplStart = System.currentTimeMillis();
               ParserParams params = syntaxModeSupp.get();
-              String stageName = stage.apply(params).getName()
-                  + "-" + syntaxModeName;
+              String stageName = stage.apply(params).getName();
               int card = -1;
               try {
-                card = estimateCard(tmplName, params, stage, parses);
+                if (fakeIt)
+                  card = new java.util.Random().nextInt(10000) + 42;
+                else
+                  card = estimateCard(tmplName, params, stage, parses);
               } catch (Exception e) {
                 System.err.println(tmplName + " on " + stageName + " is to blame!");
                 throw new RuntimeException(e);
               }
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-              String msg = String.format("%s\t%s\t%d\t%.2f\n",
-                  tmplName, stageName, card, time);
+              String msg = String.format("%s\t%s\t%s\t%d\t%.2f\n",
+                  tmplName, stageName, syntaxModeName, card, time);
               try (FileWriter fw = new FileWriter(f, true)) {
                 fw.append(msg);
               } catch (IOException e) {

@@ -120,13 +120,22 @@ public class TemplatedFeatures implements Serializable {
     Template template = null;
     for (int i = 0; i < tokens.length; i++) {
       Template basicTemplate = null;
-      if (i == 0)
+      if (i == 0) {
         basicTemplate = BasicFeatureTemplates.getStageTemplate(tokens[i]);
+        if (basicTemplate == null) {
+          // you must have meant "<template>-<syntax_mode>"
+          String[] tt = tokens[i].split("-");
+          if (tt.length == 2
+              && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
+            basicTemplate = BasicFeatureTemplates.getStageTemplate(tt[0]);
+          }
+        }
+      }
       if (basicTemplate == null)
         basicTemplate = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
       if (basicTemplate == null) {
         throw new TemplateDescriptionParsingException(
-            "could not parse basic template: " + tokens[i]);
+            "could not parse basic template [" + i + "]: " + tokens[i]);
       }
       if (template == null)
         template = basicTemplate;
