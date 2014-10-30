@@ -1,0 +1,7 @@
+#!/bin/bash
+
+THREADS=10
+CP=`find target/ -iname '*.jar' | tr '\n' ':'`
+java -Xmx8G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
+	edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS}
+
