@@ -948,22 +948,27 @@ public class BasicFeatureTemplates {
     TargetPruningData.getInstance().getPrototypesByFrame();
 
     // parallelize with FileWriter that uses append
-    ExecutorService es = Executors.newFixedThreadPool(parallel);
+    ExecutorService es = parallel == 1
+        ? Executors.newSingleThreadScheduledExecutor()
+            : Executors.newFixedThreadPool(parallel);
     LOG.info("actually starting work on " + parallel + " threads");
+    if (parallel > 1)
+      LOG.warn("verify this is thread safe, last time it wasn't");
 
     // TODO read in existing results from the given file, skip those jobs
 
-    for (String tmplName : basicTemplates.keySet()) {
-      for (Entry<String, Supplier<ParserParams>> synM : syntaxModes.entrySet()) {
+    for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
+      Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+      for (String tmplName : basicTemplates.keySet()) {
         for (Function<ParserParams, Stage<?, ?>> stage : stages) {
           Runnable r = new Runnable() {
             @Override
             public void run() {
               System.out.println(tmplName);
               long tmplStart = System.currentTimeMillis();
-              ParserParams params = synM.getValue().get();
+              ParserParams params = syntaxModeSupp.get();
               String stageName = stage.apply(params).getName()
-                  + "-" + synM.getKey();
+                  + "-" + syntaxModeName;
               int card = -1;
               try {
                 card = estimateCard(tmplName, params, stage, parses);
@@ -990,7 +995,7 @@ public class BasicFeatureTemplates {
       }
     }
     es.shutdown();
-    es.awaitTermination(99, TimeUnit.DAYS);
+    es.awaitTermination(999, TimeUnit.DAYS);
     LOG.info("done, results are in " + f.getPath());
   }
 }

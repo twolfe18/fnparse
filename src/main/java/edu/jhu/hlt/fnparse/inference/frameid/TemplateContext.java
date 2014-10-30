@@ -22,7 +22,7 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage;
  * valued variables. You must call the isSet method before calling them.
  */
 public class TemplateContext {
-  private static final boolean DEBUG = true;
+  private static final boolean DEBUG = false;
 
   public static final int UNSET = -3;
 
@@ -111,7 +111,7 @@ public class TemplateContext {
   public void setTarget(Span target) {
     if (DEBUG && sentence != null) {
       assert target.start >= 0;
-      assert target.end < sentence.size();
+      assert target.end <= sentence.size();
     }
     this.target = target;
   }
@@ -146,7 +146,7 @@ public class TemplateContext {
     if (DEBUG) {
       assert sentence != null : "set sentence first";
       assert arg.start >= 0;
-      assert arg.end < sentence.size();
+      assert arg.end <= sentence.size();
     }
     this.arg = arg;
   }
@@ -158,7 +158,7 @@ public class TemplateContext {
     if (DEBUG) {
       assert sentence != null : "set sentence first";
       assert span2.start >= 0;
-      assert span2.end < sentence.size();
+      assert span2.end <= sentence.size();
     }
     this.span2 = span2;
   }
@@ -170,7 +170,7 @@ public class TemplateContext {
     if (DEBUG) {
       assert sentence != null : "set sentence first";
       assert span1.start >= 0;
-      assert span1.end < sentence.size();
+      assert span1.end <= sentence.size();
     }
     this.span1 = span1;
   }
