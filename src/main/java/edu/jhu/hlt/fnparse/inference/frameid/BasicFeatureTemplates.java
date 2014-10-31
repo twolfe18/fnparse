@@ -150,6 +150,8 @@ public class BasicFeatureTemplates {
     tokenExtractors.put("CollapsedLabel", x -> {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
+        if (deps == null)
+          return null;
         return deps.getLabel(x.index);
       } else {
         return null;
@@ -158,6 +160,8 @@ public class BasicFeatureTemplates {
     tokenExtractors.put("CollapsedParentDir", x -> {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
+        if (deps == null)
+          return null;
         int h = deps.getHead(x.index);
         if (h < 0)
           return "root";
@@ -257,7 +261,10 @@ public class BasicFeatureTemplates {
           int h = context.getHead1();
           if (h == TemplateContext.UNSET)
             return null;
-          pos.index = context.getSentence().getCollapsedDeps().getHead(h);
+          DependencyParse deps = context.getSentence().getCollapsedDeps();
+          if (deps == null)
+            return null;
+          pos.index = deps.getHead(h);
           pos.sentence = context.getSentence();
           return name + "=" + x.getValue().apply(pos);
         }
@@ -274,6 +281,8 @@ public class BasicFeatureTemplates {
           if (h == TemplateContext.UNSET)
             return null;
           DependencyParse d = context.getSentence().getCollapsedDeps();
+          if (d == null)
+            return null;
           int[] c = d.getChildren(h);
           if (c.length == 0)
             return Arrays.asList(name + "=NONE");
@@ -364,6 +373,8 @@ public class BasicFeatureTemplates {
         if (s == null)
           return null;
         DependencyParse deps = context.getSentence().getCollapsedDeps();
+        if (deps == null)
+          return null;
         List<String> rels = new ArrayList<>();
         for (int i = s.start; i < s.end; i++)
           rels.add(parentRelTo(i, s.start, s.end - 1, deps));
@@ -438,7 +449,10 @@ public class BasicFeatureTemplates {
             if (h == TemplateContext.UNSET)
               return null;
             Sentence s = context.getSentence();
-            Path p = new Path(s, s.getCollapsedDeps(), h, nt, et);
+            DependencyParse deps = s.getCollapsedDeps();
+            if (deps == null)
+              return null;
+            Path p = new Path(s, deps, h, nt, et);
             return name1 + "=" + p.getPath();
           }
         });
@@ -452,7 +466,10 @@ public class BasicFeatureTemplates {
             if (h2 == TemplateContext.UNSET)
               return null;
             Sentence s = context.getSentence();
-            Path p = new Path(s, s.getCollapsedDeps(), h1, h2, nt, et);
+            DependencyParse deps = s.getCollapsedDeps();
+            if (deps == null)
+              return null;
+            Path p = new Path(s, deps, h1, h2, nt, et);
             return name2 + "=" + p.getPath();
           }
         });
@@ -464,7 +481,10 @@ public class BasicFeatureTemplates {
               if (h == TemplateContext.UNSET)
                 return null;
               Sentence s = context.getSentence();
-              Path p = new Path(s, s.getCollapsedDeps(), h, nt, et);
+              DependencyParse deps = s.getCollapsedDeps();
+              if (deps == null)
+                return null;
+              Path p = new Path(s, deps, h, nt, et);
               Set<String> pieces = new HashSet<>();
               p.pathNGrams(length, pieces, nameL + "=");
               return pieces;
@@ -480,7 +500,10 @@ public class BasicFeatureTemplates {
               if (h2 == TemplateContext.UNSET)
                 return null;
               Sentence s = context.getSentence();
-              Path p = new Path(s, s.getCollapsedDeps(), h1, h2, nt, et);
+              DependencyParse deps = s.getCollapsedDeps();
+              if (deps == null)
+                return null;
+              Path p = new Path(s, deps, h1, h2, nt, et);
               Set<String> pieces = new HashSet<>();
               p.pathNGrams(length, pieces, nameL2 + "=");
               return pieces;
@@ -619,6 +642,8 @@ public class BasicFeatureTemplates {
         if (a == TemplateContext.UNSET)
           return null;
         DependencyParse deps = context.getSentence().getCollapsedDeps();
+        if (deps == null)
+          return null;
         return "argHeadRelation1=" + parentRelTo(t, t, a, deps);
       }
     });
@@ -633,12 +658,15 @@ public class BasicFeatureTemplates {
         Span s = context.getArg();
         assert s != null;
         DependencyParse deps = context.getSentence().getCollapsedDeps();
+        if (deps == null)
+          return null;
         return "argHeadRelation2=" + parentRelTo(t, s.start, s.end - 1, deps);
       }
     });
 
     /* SENTENCE FEATURES ******************************************************/
-    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+    for (Map.Entry<String, Function<SentencePosition, String>> x :
+      tokenExtractors.entrySet()) {
       // bag of words for entire sentence
       String name = "sentence" + x.getKey();
       addTemplate(name, new Template() {
@@ -676,11 +704,16 @@ public class BasicFeatureTemplates {
     Map<String, IntFunction<String>> distanceBucketings = new HashMap<>();
     distanceBucketings.put("SemaforPathLengths",
         len -> MinimalRoleFeatures.semaforPathLengthBuckets(len));
-    distanceBucketings.put("Direction", len -> len == 0 ? "0" : (len < 0 ? "-" : "+"));
-    distanceBucketings.put("Len3", len -> Math.abs(len) <= 3 ? String.valueOf(len) : (len < 0 ? "-" : "+"));
-    distanceBucketings.put("Len5", len -> Math.abs(len) <= 5 ? String.valueOf(len) : (len < 0 ? "-" : "+"));
-    for (Entry<String, ToIntFunction<TemplateContext>> p1 : distancePoints.entrySet()) {
-      for (Entry<String, ToIntFunction<TemplateContext>> p2 : distancePoints.entrySet()) {
+    distanceBucketings.put("Direction", len -> len == 0
+        ? "0" : (len < 0 ? "-" : "+"));
+    distanceBucketings.put("Len3", len -> Math.abs(len) <= 3
+        ? String.valueOf(len) : (len < 0 ? "-" : "+"));
+    distanceBucketings.put("Len5", len -> Math.abs(len) <= 5
+        ? String.valueOf(len) : (len < 0 ? "-" : "+"));
+    for (Entry<String, ToIntFunction<TemplateContext>> p1 :
+      distancePoints.entrySet()) {
+      for (Entry<String, ToIntFunction<TemplateContext>> p2 :
+        distancePoints.entrySet()) {
         if (p1.getKey().equals(p2.getKey()))
           continue;
         // Distance between two points
@@ -740,8 +773,9 @@ public class BasicFeatureTemplates {
                       pos.index++) {
                     once = true;
                     String si = null;
-                    try {
-                      extractor.apply(pos);
+                    //try {
+                    extractor.apply(pos);
+                    /*
                     } catch (java.lang.ArrayIndexOutOfBoundsException e) {
                       System.err.println("n=" + ngram);
                       System.err.println("ext=" + ext.getKey());
@@ -751,6 +785,7 @@ public class BasicFeatureTemplates {
                       System.err.println("p2=" + p2.getKey());
                       throw new RuntimeException(e);
                     }
+                    */
                     if (si == null)
                       si = "NULL";
                     if (feat.length() > 0)
@@ -768,7 +803,6 @@ public class BasicFeatureTemplates {
         }
       }
     }
-
 
     /* LABELS *****************************************************************/
     // These templates should come first in a product, as they are the most selective
@@ -866,18 +900,6 @@ public class BasicFeatureTemplates {
     });
   }
 
-  private static int estimateCard(
-      String templateName,
-      ParserParams params,
-      Function<ParserParams, Stage<?, ?>> stageFuture,
-      List<FNParse> parses) {
-    params.setFeatureTemplateDescription(templateName);
-    Stage<?, ?> stage = stageFuture.apply(params);
-    params.getAlphabet().startGrowth();
-    stage.scanFeatures(parses);
-    return params.getAlphabet().size();
-  }
-
   private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
   private static Map<String, Supplier<ParserParams>> syntaxModes = new HashMap<>();
   private static Map<String, Template> stageTemplates = new HashMap<>();
@@ -929,6 +951,19 @@ public class BasicFeatureTemplates {
     return stageTemplates.get(name);
   }
 
+  private static int estimateCard(
+      String templateName,
+      ParserParams params,
+      Function<ParserParams, Stage<?, ?>> stageFuture,
+      List<FNParse> parses) {
+    Stage<?, ?> stage = stageFuture.apply(params);
+    templateName = stage.getName() + " * " + templateName;
+    params.setFeatureTemplateDescription(templateName);
+    params.getAlphabet().startGrowth();
+    stage.scanFeatures(parses);
+    return params.getAlphabet().size();
+  }
+
   public static void main(String[] args) throws Exception {
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
@@ -940,7 +975,7 @@ public class BasicFeatureTemplates {
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);
     //File f = new File("experiments/forward-selection/basic-templates.txt");
-    final boolean fakeIt = true;
+    final boolean fakeIt = false;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");
@@ -971,20 +1006,22 @@ public class BasicFeatureTemplates {
           Runnable r = new Runnable() {
             @Override
             public void run() {
-              System.out.println(tmplName);
               long tmplStart = System.currentTimeMillis();
               ParserParams params = syntaxModeSupp.get();
               String stageName = stage.apply(params).getName();
+              LOG.info(tmplName + "\t" + stageName);
               int card = -1;
-              try {
-                if (fakeIt)
-                  card = new java.util.Random().nextInt(10000) + 42;
-                else
-                  card = estimateCard(tmplName, params, stage, parses);
+              //try {
+              if (fakeIt)
+                card = new java.util.Random().nextInt(10000) + 42;
+              else
+                card = estimateCard(tmplName, params, stage, parses);
+              /*
               } catch (Exception e) {
                 System.err.println(tmplName + " on " + stageName + " is to blame!");
                 throw new RuntimeException(e);
               }
+              */
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;
               String msg = String.format("%s\t%s\t%s\t%d\t%.2f\n",
                   tmplName, stageName, syntaxModeName, card, time);
@@ -999,7 +1036,10 @@ public class BasicFeatureTemplates {
               }
             }
           };
-          es.execute(r);
+          if (fakeIt || parallel == 1)
+            r.run();
+          else
+            es.execute(r);
         }
       }
     }

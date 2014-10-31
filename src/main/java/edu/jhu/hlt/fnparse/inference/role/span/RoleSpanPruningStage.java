@@ -361,6 +361,7 @@ public class RoleSpanPruningStage
         context.setPrune(BinaryVarUtil.configToBool(conf.getState(p)));
         context.setSpan1IsConstituent(
             p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c)));
+        context.blankOutIllegalInfo(parent.globalParams);
         FeatureVector fv = new FeatureVector();
         if (SHOW_FEATURES) {
           StringBuilder msg = new StringBuilder("[variables]");

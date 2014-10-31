@@ -92,6 +92,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           phi = new ExplicitExpFamFactor(vs);
           FeatureVector fv1 = new FeatureVector();
           context.setFrame(t);
+          context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
             features.featurizeDebug(fv1, "[variables] (contained in context)");
           } else {
@@ -100,6 +101,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv1);
           FeatureVector fv2 = new FeatureVector();
           context.setFrame(null);
+          context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
             features.featurizeDebug(fv2, "[variables] (contained in context)");
           } else {

@@ -219,6 +219,7 @@ public class RoleHeadToSpanStage
 			      }
 			      if (cVar != null)
 			        context.setSpan1IsConstituent(cons);
+			      context.blankOutIllegalInfo(params);
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
 			            arg, cons, sVar.getName());

@@ -61,9 +61,6 @@ public class RoleSpanLabelingStage
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    features = new TemplatedFeatures("roleSpanLabeling",
-        params.getFeatureTemplateDescription(),
-        params.getAlphabet());
     decoder = new ApproxF1MbrDecoder(params.logDomain, 1d);
   }
 
@@ -135,6 +132,15 @@ public class RoleSpanLabelingStage
       data.add(new RoleSpanLabellingStageDatum(input.get(i), gold, this));
     }
     return new StageDatumExampleList<>(data);
+  }
+
+  public TemplatedFeatures getFeatures() {
+    if (features == null) {
+      features = new TemplatedFeatures("roleSpanLabeling",
+          globalParams.getFeatureTemplateDescription(),
+          globalParams.getAlphabet());
+    }
+    return features;
   }
 
   /**
@@ -263,28 +269,30 @@ public class RoleSpanLabelingStage
       int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
 
       // Compute features for the binary factor
-      TemplateContext contex = parent.features.getContext();
-      contex.clear();
-      contex.setStage(RoleSpanLabelingStage.class);
-      contex.setSentence(s);
-      contex.setFrame(frame);
-      contex.setRole(role);
+      TemplatedFeatures feats = parent.getFeatures();
+      TemplateContext context = feats.getContext();
+      context.clear();
+      context.setStage(RoleSpanLabelingStage.class);
+      context.setSentence(s);
+      context.setFrame(frame);
+      context.setRole(role);
       if (arg != null && arg != Span.nullSpan) {
-        contex.setTarget(target);
-        contex.setTargetHead(targetHeadIdx);
-        contex.setSpan2(target);
-        contex.setHead2(targetHeadIdx);
+        context.setTarget(target);
+        context.setTargetHead(targetHeadIdx);
+        context.setSpan2(target);
+        context.setHead2(targetHeadIdx);
         int argHeadIdx = parent.globalParams.headFinder.head(arg, s);
-        contex.setArg(arg);
-        contex.setArgHead(argHeadIdx);
-        contex.setSpan1(arg);
-        contex.setHead1(argHeadIdx);
+        context.setArg(arg);
+        context.setArgHead(argHeadIdx);
+        context.setSpan1(arg);
+        context.setHead1(argHeadIdx);
       }
+      context.blankOutIllegalInfo(parent.globalParams);
       FeatureVector fv = new FeatureVector();
       if (SHOW_FEATURES) {
-        parent.features.featurizeDebug(fv, "[variables] in context");
+        feats.featurizeDebug(fv, "[variables] in context");
       } else {
-        parent.features.featurize(fv);
+        feats.featurize(fv);
       }
       phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);

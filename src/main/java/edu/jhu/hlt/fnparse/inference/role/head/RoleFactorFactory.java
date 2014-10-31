@@ -104,6 +104,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
               context.setHead1_parent(rv.i);
             }
           }
+          context.blankOutIllegalInfo(params);
           FeatureVector fv = new FeatureVector();
           if (SHOW_FEATURES) {
             String msg = String.format("[variables] rvar[%d,%d]=%s dep=%s",

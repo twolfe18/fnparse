@@ -283,14 +283,17 @@ public final class Sentence implements HasId {
       Sentence other = (Sentence) o;
       return id.equals(other.id)
           && Arrays.equals(tokens, other.tokens)
-          && Arrays.equals(pos, other.pos)
-          && collapsedDeps.equals(other.collapsedDeps);
+          && Arrays.equals(pos, other.pos);
     }
     else return false;
   }
 
   public DependencyParse getCollapsedDeps() {
     return collapsedDeps;
+  }
+
+  public void setCollapsedDeps(DependencyParse collapedDeps) {
+    this.collapsedDeps = collapedDeps;
   }
 
   public DependencyParse getBasicDeps() {
