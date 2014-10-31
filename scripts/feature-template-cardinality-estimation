@@ -1,8 +1,20 @@
 #!/bin/bash
 
-THREADS=12
-OUTPUT="experiments/forward-selection/basic-templates.txt"
+THREADS=1
+OUTPUT="experiments/forward-selection/templates.txt"
 CP=`find target/ -iname '*.jar' | tr '\n' ':'`
-java -Xmx8G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
-	edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT}
+
+# enable job control
+set -m
+
+# start jobs in parallel
+PARALLEL=12
+for i in `seq ${PARALLEL}`; do
+  echo "starting job $i"
+  java -Xmx8G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
+    edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT} &
+done
+
+# wait for all jobs to finish
+while [ 1 ]; do fg 2> /dev/null; [ $? == 1 ] && break; done
 

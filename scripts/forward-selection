@@ -417,7 +417,7 @@ class LocalJobTracker(object):
     else:
       cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
       cp = ':'.join([x.strip() for x in cp.split('\n')])
-      cp = 'target/classes:' + cp
+      #cp = 'target/classes:' + cp
       cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
       cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
       cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')

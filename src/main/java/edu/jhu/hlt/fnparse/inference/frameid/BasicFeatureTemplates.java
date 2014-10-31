@@ -970,13 +970,19 @@ public class BasicFeatureTemplates {
     if (args.length != 2) {
       System.err.println("please provide:");
       System.err.println("1) how many threads to use");
-      System.err.println("2) a file to dump to (should be empty or not exist)");
+      System.err.println("2) a file to dump to");
+      System.err.println("3) a partition of the data to take");
+      System.err.println("4) how many partitions for the data");
+      System.err.println("NOTE: if you don't want to use partitions, provide "
+          + "\"0 1\" as the last two arguments");
     }
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);
     //File f = new File("experiments/forward-selection/basic-templates.txt");
+    int part = Integer.parseInt(args[2]);
+    int numParts = Integer.parseInt(args[3]);
     final boolean fakeIt = false;
-    f.delete();
+    if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");
     LOG.info("stages:");
@@ -1010,6 +1016,12 @@ public class BasicFeatureTemplates {
               ParserParams params = syntaxModeSupp.get();
               String stageName = stage.apply(params).getName();
               LOG.info(tmplName + "\t" + stageName);
+
+              // Only care about your part of the data
+              int h = (tmplName + " " + stageName).hashCode();
+              if (h % numParts != part)
+                return;
+
               int card = -1;
               if (fakeIt)
                 card = new java.util.Random().nextInt(10000) + 42;
