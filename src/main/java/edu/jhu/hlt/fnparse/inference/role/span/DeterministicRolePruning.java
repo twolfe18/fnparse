@@ -76,6 +76,9 @@ public class DeterministicRolePruning
     this.mode = mode;
   }
 
+  public void configure(java.util.Map<String,String> configuration) {
+  }
+
   @Override
   public FgModel getWeights() {
     return weights;

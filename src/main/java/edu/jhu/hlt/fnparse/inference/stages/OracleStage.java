@@ -26,6 +26,9 @@ public class OracleStage<I, O> implements Stage<I, O> {
 
 	private final FgModel model = new FgModel(0);
 
+	public void configure(java.util.Map<String,String> configuration) {
+	}
+
 	@Override
 	public FgModel getWeights() {
 		return model;

@@ -55,11 +55,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 		argId = new RoleHeadStage(params, this);
 		argExpansion = new RoleHeadToSpanStage(params, this);
 	}
-	
+
 	@Override
 	public void configure(Map<String, String> configuration) {
-	  LOG.warn("TODO fill this in");
-	  assert false;
+	  frameId.configure(configuration);
+	  argId.configure(configuration);
+	  argExpansion.configure(configuration);
 	}
 
 	@Override

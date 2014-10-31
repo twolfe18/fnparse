@@ -27,6 +27,10 @@ public class NoRolesStage implements Stage<FNTagging, FNParse> {
   private final FgModel model = new FgModel(0);
 
   @Override
+  public void configure(java.util.Map<String,String> configuration) {
+  }
+
+  @Override
   public FgModel getWeights() {
     return model;
   }

@@ -102,6 +102,14 @@ public class FrameIdStage
   }
 
   @Override
+  public void configure(java.util.Map<String,String> configuration) {
+    String key = "regularizer." + getName();
+    String reg = configuration.get(key);
+    if (reg != null)
+      params.regularizer = new L2(Double.parseDouble(reg));
+  }
+
+  @Override
   public Serializable getParamters() {
     return params;
   }

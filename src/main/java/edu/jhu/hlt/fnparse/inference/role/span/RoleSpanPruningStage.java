@@ -129,6 +129,14 @@ public class RoleSpanPruningStage
   }
 
   @Override
+  public void configure(java.util.Map<String,String> configuration) {
+    String key = "regularizer." + getName();
+    String reg = configuration.get(key);
+    if (reg != null)
+      regularizer = new L2(Double.parseDouble(reg));
+  }
+
+  @Override
   public Serializable getParamters() {
     return keepEverything;
   }

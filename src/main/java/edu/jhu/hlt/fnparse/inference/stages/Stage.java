@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.stages;
 import java.io.File;
 import java.io.Serializable;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
@@ -35,6 +36,9 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
 public interface Stage<Input, Output> extends HasFgModel, Serializable {
 
   public String getName();
+
+  /** Take some command line arguments and update/apply them */
+  public void configure(Map<String, String> configuration);
 
   /**
    * Write out a model as pairs of feature names and weights. Do not write out

@@ -16,6 +16,9 @@ public class IdentityStage<T> implements Stage<T, T> {
 
 	private final FgModel model = new FgModel(0);
 
+	public void configure(java.util.Map<String,String> configuration) {
+	}
+
 	@Override
 	public FgModel getWeights() {
 		return model;
