@@ -140,6 +140,10 @@ class FeatureSet(object):
     if f in self.features:
       return self.new_feature()
     else:
+      print '[new_feature] stage =', stage
+      print '[new_feature] syntax_mode =', syntax_mode
+      print '[new_feature] label =', label
+      print '[new_feature] templates =', templates
       return f
 
   def syntax_mode(self):
@@ -183,18 +187,19 @@ def mutate_config(config):
   # for each stage, decide if you want to change the regularizer or not
   alpha = 15000
   beta = 1.5
+  gamma = 0.2   # p(change regularizer irrespective of cardinality)
   children = [Config(next_fs, config.params, config.regularizer_dict)]
   for stage in TEMPLATE_INFO.stages():
     cc = cur_card[stage]
     nc = next_card[stage]
     dc = nc - cc
-    if dc > alpha or dc / cc > beta:
+    if dc > alpha or dc / cc > beta or random.random() < gamma:
       # stronger regularizer
       reg = {}
       reg.update(config.regularizer_dict)
       reg[stage] = reg[stage] + 1
       children.append(Config(next_fs, config.params, reg))
-    if dc < -alpha or dc / cc < -beta:
+    if dc < -alpha or dc / cc < -beta or random.random() < gamma:
       # weaker regularizer
       reg = {}
       reg.update(config.regularizer_dict)
@@ -609,6 +614,8 @@ class TemplateInfo(object):
 
   def restrict_labels_for(self, stage, syntax_mode, labels):
     k = (stage, syntax_mode)
+    assert not stage.endswith(syntax_mode)
+    print '[restrict_labels_for]', k, 'to', labels
     self.__label_restrictions[k] = labels
     if len(self.__label_restrictions[k]) == 0:
       raise Exception('no labels available for: ' + str(k))
@@ -616,12 +623,15 @@ class TemplateInfo(object):
   def labels_for(self, stage, syntax_mode):
     ''' Returns a list of labels (templates) which can be used with the given stage '''
     k = (stage, syntax_mode)
+    print '[labels_for]', k
     ret = []
     try:
       r = self.__label_restrictions[k]
       ret = list(set(r) & set(self.__nonzero[k]))
+      print '[labels_for] INTERSECT(', r, ',', self.__nonzero[k], ') =', ret
     except:
       ret = self.__nonzero[k]
+      print '[labels_for] nonzero =', self.__nonzero[k]
     if len(ret) == 0:
       print '__nonzero =', self.__nonzero.get(k)
       print '__label_restirctions =', self.__label_restrictions.get(k)
@@ -636,13 +646,19 @@ def seeds(parser_mode, syntax_mode, settings):
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
-    yield Config(FeatureSet([
-      Feature(s1, syntax_mode, 'framePrune', ['span1Width/2']),
-      Feature(s1, syntax_mode, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
+    reg = {s2: 10}
+    fs = [
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1Word']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstWord']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
-    ]), settings, {s1: 8, s2: 8})
+    ]
+    if syntax_mode != 'regular':
+      reg[s1] = 10
+      fs += [
+        Feature(s1, syntax_mode, 'framePrune', ['span1Width/2']),
+        Feature(s1, syntax_mode, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
+      ]
+    yield Config(FeatureSet(fs), settings, reg)
   elif parser_mode == 'head':
     s1 = 'RoleHeadStage'
     s2 = 'RoleHeadToSpanStage'
@@ -652,7 +668,7 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/1']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'head1Pos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'span1FirstPos']),
-    ]), settings, {s1: 8, s2: 8})
+    ]), settings, {s1: 10, s2: 10})
   else:
     raise Exception('unknown parser_mode: ' + parser_mode)
 
@@ -678,9 +694,10 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
     'evaluationFunction': 'ArgumentMicroF1',
   }
   s1, s2 = stages[parser_mode]
-  s1 += '-' + syntax_mode
-  s2 += '-' + syntax_mode
-  template_info.restrict_stages_to(stages[parser_mode])
+  if parser_mode == 'span' and syntax_mode == 'regular':
+    template_info.restrict_stages_to([s2])
+  else:
+    template_info.restrict_stages_to([s1, s2])
   template_info.restrict_labels_for(s1, syntax_mode, ['framePrune'])
   template_info.restrict_labels_for(s2, syntax_mode, ['frameRoleArg', 'roleArg'])
   sd = list(seeds(parser_mode, syntax_mode, settings))
@@ -739,8 +756,8 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
   #wd = 'experiments/forward-selection/role/span/regular'
   wd = os.path.join(
     'experiments/forward-selection/role',
-    config.params['parserMode'],
-    config.params['syntaxMode'])
+    configs[0].params['parserMode'],
+    configs[0].params['syntaxMode'])
   print 'working directory:', wd
   rc = {
     'channel': 'forward-selection',
@@ -748,7 +765,7 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 300
+  max_train = 1000
   max_jobs = 99999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
