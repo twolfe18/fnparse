@@ -663,46 +663,45 @@ def seeds(parser_mode, syntax_mode, settings):
 # RoleSpanLabelingStage
 # RoleSpanPruningStage
 
-def experiments(template_info_filename):
-  ''' Generator of (TemplateInfo, [Config]) '''
+def experiments(template_info_filename, parser_mode, syntax_mode):
+  ''' Returns a (TemplateInfo, [Config]) '''
+  assert parser_mode in ['span', 'head']
+  assert syntax_mode in ['regular', 'latent', 'none']
   stages = {
     'span': ['RoleSpanPruningStage', 'RoleSpanLabelingStage'],
     'head': ['RoleHeadStage', 'RoleHeadToSpanStage']
   }
-  for syntax_mode in ['regular', 'latent', 'none']:
-    for parser_mode in ['span', 'head']:
-      template_info = TemplateInfo(template_info_filename)
-      settings = {
-        'parserMode': parser_mode,
-        'syntaxMode': syntax_mode,
-        'evaluationFunction': 'ArgumentMicroF1',
-      }
-      s1, s2 = stages[parser_mode]
-      s1 += '-' + syntax_mode
-      s2 += '-' + syntax_mode
-      template_info.restrict_stages_to(stages[parser_mode])
-      template_info.restrict_labels_for(s1, syntax_mode, ['framePrune'])
-      template_info.restrict_labels_for(s2, syntax_mode, ['frameRoleArg', 'roleArg'])
-      sd = list(seeds(parser_mode, syntax_mode, settings))
-      yield (template_info, sd)
+  template_info = TemplateInfo(template_info_filename)
+  settings = {
+    'parserMode': parser_mode,
+    'syntaxMode': syntax_mode,
+    'evaluationFunction': 'ArgumentMicroF1',
+  }
+  s1, s2 = stages[parser_mode]
+  s1 += '-' + syntax_mode
+  s2 += '-' + syntax_mode
+  template_info.restrict_stages_to(stages[parser_mode])
+  template_info.restrict_labels_for(s1, syntax_mode, ['framePrune'])
+  template_info.restrict_labels_for(s2, syntax_mode, ['frameRoleArg', 'roleArg'])
+  sd = list(seeds(parser_mode, syntax_mode, settings))
+  return (template_info, sd)
 
-def run_experiments(template_info_filename, ser_q_filename, deser_q_filename=None):
+def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, parser_mode, syntax_mode, where):
 
-  local = True
+  local = where == 'local'
+  assert local or where == 'grid'
 
   # Run one of these at a time, otherwise caching gets messed up
-  job_idx = 0
-  template_info, configs = list(experiments(template_info_filename))[job_idx]
+  template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
   #for template_info, configs in experiments(template_info_filename):
   print template_info
   print '\n\t'.join(str(c) for c in configs)
-  #sys.exit(1)
 
   global TEMPLATE_INFO
   TEMPLATE_INFO = template_info
 
   # Create the config queue
-  if deser_q_filename is None:
+  if deser_q_filename == 'None':
     print 'creating empty config queue'
     # Right now the seed set is just each of the labels conjoined
     # with the headword. You can manually add some good seeds here if you know them.
@@ -744,7 +743,7 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename=Non
     'port': '6379',
     'db': '0'
   }
-  max_train = 50
+  max_train = 300
   max_jobs = 99999
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
@@ -763,15 +762,16 @@ if __name__ == '__main__':
   # Make stdout flush regularly
   sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
-  if len(sys.argv) == 3:
-    run_experiments(sys.argv[1], sys.argv[2])
-  elif len(sys.argv) == 4:
-    run_experiments(sys.argv[1], sys.argv[2], deser_q_filename=sys.argv[3])
+  if len(sys.argv) == 7:
+    run_experiments(*(sys.argv[1:]))
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
     print '2) a path to save the ConfigQueue to'
-    print '3) [optional] a place to load a ConfigQueue from'
+    print '3) a path to load the ConfigQueue from, or \"None\"'
+    print '4) a parser mode (i.e. \"head\" or \"span\")'
+    print '5) a syntax mode (i.e. \"regular\", \"latent\", or \"none\"'
+    print '6) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
 
 
