@@ -1,10 +1,13 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.HasSentence;
@@ -18,6 +21,7 @@ import edu.jhu.hlt.fnparse.util.HasSentence;
  * @author travis
  */
 public class FNTagging implements HasId, HasSentence {
+  public static Logger LOG = Logger.getLogger(FNTagging.class);
 
   protected Sentence sent;
   protected List<FrameInstance> frameInstances;
@@ -26,12 +30,21 @@ public class FNTagging implements HasId, HasSentence {
     if(frameMentions == null || s == null)
       throw new IllegalArgumentException();
     this.sent = s;
-    this.frameInstances = frameMentions;
-    Set<Span> seenTargets = new HashSet<Span>();
+    this.frameInstances = new ArrayList<>();
+    Map<Span, FrameInstance> seenTargets = new HashMap<>();
     for(FrameInstance fi : frameInstances) {
-      if(!seenTargets.add(fi.getTarget())) {
-        throw new IllegalArgumentException("you can't have two FrameInstances "
-            + "with the same target!: " + s.getId());
+      FrameInstance collision = seenTargets.get(fi.getTarget());
+      if (collision != null) {
+        LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
+            + ":" + collision + ", " + fi);
+        assert collision.equals(fi);
+        // Keep the one with more arguments
+        FrameInstance keep = fi.numRealizedArguments() > collision.numRealizedArguments() ? fi : collision;
+        seenTargets.put(keep.getTarget(), keep);
+        this.frameInstances.add(fi);
+      } else {
+        seenTargets.put(fi.getTarget(), fi);
+        this.frameInstances.add(fi);
       }
     }
   }
