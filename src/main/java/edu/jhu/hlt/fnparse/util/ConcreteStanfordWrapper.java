@@ -32,19 +32,42 @@ public class ConcreteStanfordWrapper {
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
+  private Map<Sentence, Communication> cache = null;
+  private Timer timer;
 
-  public ConcreteStanfordWrapper() {
+  public ConcreteStanfordWrapper(boolean cache) {
     aUUID = new UUID();
     aUUID.setUuidString("some uuid");
     metadata = new AnnotationMetadata();
     metadata.setTool("fnparse");
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = new AnnotateTokenizedConcrete();
+    timer = new Timer("ConcreteStanfordAnnotator", 2, false);
+    if (cache)
+      this.cache = new HashMap<>();
+  }
+
+  public void clearCache() {
+    cache.clear();
   }
 
   public edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
-    Communication communication = sentenceToConcrete(s);
-    anno.annotateWithStanfordNlp(communication);
+    Communication communication = null;
+    boolean updateCache = false;
+    if (cache != null) {
+      communication = cache.get(s);
+      updateCache = communication == null;
+    }
+    if (communication == null) {
+      timer.start();
+      communication = sentenceToConcrete(s);
+      anno.annotateWithStanfordNlp(communication);
+      timer.stop();
+    }
+    if (updateCache) {
+      Communication old = cache.put(s, communication);
+      assert old == null;
+    }
     SectionSegmentation sectionSeg =
         communication.getSectionSegmentationList().get(0);
     for (Section section : sectionSeg.getSectionList()) {
@@ -195,7 +218,7 @@ public class ConcreteStanfordWrapper {
 
   // Sanity check
   public static void main(String[] args) {
-    ConcreteStanfordWrapper wrapper = new ConcreteStanfordWrapper();
+    ConcreteStanfordWrapper wrapper = new ConcreteStanfordWrapper(false);
     for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       Sentence s = parse.getSentence();
       System.out.println(s.getId() + "==============================================================");
