@@ -45,9 +45,15 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
    */
   public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode factorMode) {
     this.params = params;
-    this.features = new TemplatedFeatures("roleHeadId",
-        params.getFeatureTemplateDescription(),
-        params.getAlphabet());
+  }
+
+  public TemplatedFeatures getTFeatures() {
+    if (features == null) {
+      features = new TemplatedFeatures("roleHeadId",
+          params.getFeatureTemplateDescription(),
+          params.getAlphabet());
+    }
+    return features;
   }
 
   /**
@@ -82,7 +88,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           vs = new VarSet(rvar.roleVar);
         }
         ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
-        TemplateContext context = features.getContext();
+        TemplatedFeatures feats = getTFeatures();
+        TemplateContext context = feats.getContext();
         int n = vs.calcNumConfigs();
         for (int i = 0; i < n; i++) {
           VarConfig vc = vs.getVarConfig(i);
@@ -109,9 +116,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           if (SHOW_FEATURES) {
             String msg = String.format("[variables] rvar[%d,%d]=%s dep=%s",
                 rvar.j, rvar.k, role, dep);
-            features.featurizeDebug(fv, msg);
+            feats.featurizeDebug(fv, msg);
           } else {
-            features.featurize(fv);
+            feats.featurize(fv);
           }
           phi.setFeatures(i, fv);
         }

@@ -122,10 +122,16 @@ public class RoleSpanPruningStage
       ParserParams params,
       HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    features = new TemplatedFeatures("roleSpanPruning",
-        params.getParserParams().getFeatureTemplateDescription(),
-        params.getParserParams().getAlphabet());
     regularizer = new L2(100_000d);
+  }
+
+  public TemplatedFeatures getTFeatures() {
+    if (features == null) {
+      features = new TemplatedFeatures("roleSpanPruning",
+          globalParams.getParserParams().getFeatureTemplateDescription(),
+          globalParams.getParserParams().getAlphabet());
+    }
+    return features;
   }
 
   @Override
@@ -282,7 +288,10 @@ public class RoleSpanPruningStage
       return new LabeledFgExample(fg, gold);
     }
 
-    private void build(FactorGraph fg, VarConfig goldConf, Collection<ArgSpanPruningVar> roleVars) {
+    private void build(
+        FactorGraph fg,
+        VarConfig goldConf,
+        Collection<ArgSpanPruningVar> roleVars) {
       // Build the variables
       final int n = input.getSentence().size();
       ConstituencyTreeFactor cykPhi =
@@ -321,7 +330,7 @@ public class RoleSpanPruningStage
       }
       LOG.debug(input.getSentence().getId() + " has " + numRoleVars
           + " role vars and " + cykPhi.getVars().size()
-          + " span vars for a sententence of length " + n);
+          + " span vars for a sentence of length " + n);
     }
 
     /**
@@ -343,7 +352,8 @@ public class RoleSpanPruningStage
       }
       HeadFinder hf = parent.getGlobalParams().headFinder;
       ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
-      TemplateContext context = parent.features.getContext();
+      TemplatedFeatures feats = parent.getTFeatures();
+      TemplateContext context = feats.getContext();
       context.clear();
       context.setStage(RoleSpanPruningStage.class);
       context.setSentence(input.getSentence());
@@ -368,9 +378,9 @@ public class RoleSpanPruningStage
           msg.append(" prune=" + BinaryVarUtil.configToBool(conf.getState(p)));
           if (c != null)
             msg.append(" constit=" + BinaryVarUtil.configToBool(conf.getState(c)));
-          parent.features.featurizeDebug(fv, msg.toString());
+          feats.featurizeDebug(fv, msg.toString());
         } else {
-          parent.features.featurize(fv);
+          feats.featurize(fv);
         }
         phi.setFeatures(i, fv);
       }

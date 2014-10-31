@@ -976,7 +976,7 @@ public class BasicFeatureTemplates {
     File f = new File(args[1]);
     //File f = new File("experiments/forward-selection/basic-templates.txt");
     final boolean fakeIt = false;
-    if (fakeIt) f.delete();
+    f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");
     LOG.info("stages:");
@@ -1011,17 +1011,10 @@ public class BasicFeatureTemplates {
               String stageName = stage.apply(params).getName();
               LOG.info(tmplName + "\t" + stageName);
               int card = -1;
-              //try {
               if (fakeIt)
                 card = new java.util.Random().nextInt(10000) + 42;
               else
                 card = estimateCard(tmplName, params, stage, parses);
-              /*
-              } catch (Exception e) {
-                System.err.println(tmplName + " on " + stageName + " is to blame!");
-                throw new RuntimeException(e);
-              }
-              */
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;
               String msg = String.format("%s\t%s\t%s\t%d\t%.2f\n",
                   tmplName, stageName, syntaxModeName, card, time);

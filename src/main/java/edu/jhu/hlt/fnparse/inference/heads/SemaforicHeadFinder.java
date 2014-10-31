@@ -100,13 +100,13 @@ public class SemaforicHeadFinder implements HeadFinder {
 
     if (first_verb < 0) {
       // Take the right NP in (NP 's NP)
-      for (int i = s.start; i < s.end; i++) {
+      for (int i = s.start + 1; i < s.end - 1; i++) {
         if ("POS".equals(sent.getPos(i)))
           return head(Span.getSpan(s.start, i), sent);
       }
 
       // Take the left NP in (NP [IN|TO] NP)
-      for (int i = s.start + 1; i < s.end; i++) {
+      for (int i = s.start + 1; i < s.end - 1; i++) {
         String p = sent.getPos(i).toUpperCase();
         if (("IN".equals(p) || "TO".equals(p) || "CC".equals(p))
             && sent.getPos(i-1).startsWith("N")) {

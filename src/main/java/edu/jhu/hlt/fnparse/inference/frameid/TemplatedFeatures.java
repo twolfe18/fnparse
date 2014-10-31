@@ -139,9 +139,12 @@ public class TemplatedFeatures implements Serializable {
     }
 
     // Verify all the templates
-    for (int i = 0; i < n; i++)
-      if (templates[i] == null)
-        throw new IllegalArgumentException("couldnn't parse [" + i + "]: " + tokens[i]);
+    for (int i = 0; i < n; i++) {
+      if (templates[i] == null) {
+        throw new IllegalArgumentException(
+            "couldn't parse [" + i + "]: " + tokens[i]);
+      }
+    }
 
     // Zip up with TemplateJoins
     if (templates.length == 1)
@@ -254,7 +257,6 @@ public class TemplatedFeatures implements Serializable {
   }
 
   public void featurize(FeatureVector v) {
-    boolean grow = featureAlphabet.isGrowing();
     if (templates == null) {
       try {
         templates = parseTemplates(templateString);
@@ -262,6 +264,8 @@ public class TemplatedFeatures implements Serializable {
         throw new RuntimeException(e);
       }
     }
+    boolean grow = featureAlphabet.isGrowing();
+    int initAlphSize = featureAlphabet.size();
     for (Template t : templates) {
       Iterable<String> te = t.extract(context);
       if (te == null)
@@ -269,8 +273,11 @@ public class TemplatedFeatures implements Serializable {
       for (String e : te) {
         String featName = e + "::" + globalPrefix;
         int featIdx = featureAlphabet.lookupIndex(featName, grow);
-        if (featIdx >= 0)
+        if (featIdx >= 0) {
           v.add(featIdx, 1d);
+          if (grow && featIdx > initAlphSize && featIdx % 1000000 == 0)
+            LOG.info("[featurize] alphabet just grew to " + featIdx);
+        }
       }
     }
   }

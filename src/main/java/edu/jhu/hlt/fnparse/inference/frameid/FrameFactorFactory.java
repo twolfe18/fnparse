@@ -36,9 +36,15 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
   public FrameFactorFactory(HasParserParams params) {
     this.params = params;
-    this.features = new TemplatedFeatures("frameId",
-        params.getParserParams().getFeatureTemplateDescription(),
-        params.getParserParams().getAlphabet());
+  }
+
+  public TemplatedFeatures getTFeatures() {
+    if (features == null) {
+      features = new TemplatedFeatures("frameId",
+          params.getParserParams().getFeatureTemplateDescription(),
+          params.getParserParams().getAlphabet());
+    }
+    return features;
   }
 
   // TODO need to add an Exactly1 factor to each FrameVars
@@ -51,7 +57,8 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
       ConstituencyTreeFactor c) {
 
     final int ROOT = -1;
-    TemplateContext context = features.getContext();
+    TemplatedFeatures feats = getTFeatures();
+    TemplateContext context = feats.getContext();
     List<Factor> factors = new ArrayList<Factor>();
     for (FrameVars fhyp : fr) {
       final int T = fhyp.numFrames();
@@ -81,9 +88,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
             FeatureVector fv = new FeatureVector();
             if (SHOW_FEATURES) {
               String msg = "[variables] " + vs.getVarConfig(config);
-              features.featurizeDebug(fv, msg);
+              feats.featurizeDebug(fv, msg);
             } else {
-              features.featurize(fv);
+              feats.featurize(fv);
             }
             phi.setFeatures(config, fv);
           }
@@ -94,18 +101,18 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           context.setFrame(t);
           context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
-            features.featurizeDebug(fv1, "[variables] (contained in context)");
+            feats.featurizeDebug(fv1, "[variables] (contained in context)");
           } else {
-            features.featurize(fv1);
+            feats.featurize(fv1);
           }
           phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv1);
           FeatureVector fv2 = new FeatureVector();
           context.setFrame(null);
           context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
-            features.featurizeDebug(fv2, "[variables] (contained in context)");
+            feats.featurizeDebug(fv2, "[variables] (contained in context)");
           } else {
-            features.featurize(fv2);
+            feats.featurize(fv2);
           }
           phi.setFeatures(BinaryVarUtil.boolToConfig(false), fv2);
         }
@@ -117,6 +124,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
   @Override
   public List<Features> getFeatures() {
+    assert false : "remove this method";
     return Arrays.asList((Features) features);
   }
 }

@@ -160,18 +160,25 @@ public class RoleHeadToSpanStage
 			implements FactorFactory<ExpansionVar> {
 		private static final long serialVersionUID = 1L;
 
-		private final TemplatedFeatures features;
+		private TemplatedFeatures features;
 		private final ParserParams params;
 
 		public RoleSpanFactorFactory(ParserParams params) {
-		  features = new TemplatedFeatures("argSpans",
-		      params.getFeatureTemplateDescription(),
-		      params.getAlphabet());
 			this.params = params;
+		}
+
+		public TemplatedFeatures getTFeatures() {
+		  if (features == null) {
+		    features = new TemplatedFeatures("argSpans",
+		        params.getFeatureTemplateDescription(),
+		        params.getAlphabet());
+		  }
+		  return features;
 		}
 
 		@Override
 		public List<Features> getFeatures() {
+		  assert false : "remove this method";
 			return Arrays.asList((Features) features);
 		}
 
@@ -194,7 +201,8 @@ public class RoleHeadToSpanStage
 			    } else {
 			      vs = new VarSet(sVar);
 			    }
-			    TemplateContext context = features.getContext();
+			    TemplatedFeatures feats = getTFeatures();
+			    TemplateContext context = feats.getContext();
 			    ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
 			    int n = vs.calcNumConfigs();
 			    for (int i = 0; i < n; i++) {
@@ -223,9 +231,9 @@ public class RoleHeadToSpanStage
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
 			            arg, cons, sVar.getName());
-			        features.featurizeDebug(fv, msg);
+			        feats.featurizeDebug(fv, msg);
 			      } else {
-			        features.featurize(fv);
+			        feats.featurize(fv);
 			      }
 			      phi.setFeatures(i, fv);
 			    }
