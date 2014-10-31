@@ -114,35 +114,42 @@ public class TemplatedFeatures implements Serializable {
   /** Take an independent template and build it up from basic templates */
   private static Template parseTemplateToken(String templateToken) 
       throws TemplateDescriptionParsingException {
+    // Normalize
     String[] tokens = templateToken.split("\\*");
-    for (int i = 0; i < tokens.length; i++)
+    int n = tokens.length;
+    for (int i = 0; i < n; i++)
       tokens[i] = tokens[i].trim();
-    Template template = null;
-    for (int i = 0; i < tokens.length; i++) {
-      Template basicTemplate = null;
+
+    // Lookup Templates
+    Template[] templates = new Template[n];
+    for (int i = 0; i < n; i++) {
       if (i == 0) {
-        basicTemplate = BasicFeatureTemplates.getStageTemplate(tokens[i]);
-        if (basicTemplate == null) {
+        templates[i] = BasicFeatureTemplates.getStageTemplate(tokens[i]);
+        if (templates[i] == null) {
           // you must have meant "<template>-<syntax_mode>"
           String[] tt = tokens[i].split("-");
           if (tt.length == 2
               && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
-            basicTemplate = BasicFeatureTemplates.getStageTemplate(tt[0]);
+            templates[i] = BasicFeatureTemplates.getStageTemplate(tt[0]);
           }
         }
+      } else {
+        templates[i] = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
       }
-      if (basicTemplate == null)
-        basicTemplate = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
-      if (basicTemplate == null) {
-        throw new TemplateDescriptionParsingException(
-            "could not parse basic template [" + i + "]: " + tokens[i]);
-      }
-      if (template == null)
-        template = basicTemplate;
-      else
-        template = new TemplateJoin(template, basicTemplate);
     }
-    return template;
+
+    // Verify all the templates
+    for (int i = 0; i < n; i++)
+      if (templates[i] == null)
+        throw new IllegalArgumentException("couldnn't parse [" + i + "]: " + tokens[i]);
+
+    // Zip up with TemplateJoins
+    if (templates.length == 1)
+      return templates[0];
+    Template joined = templates[n-1];
+    for (int left = n - 2; left >= 0; left--)
+      joined = new TemplateJoin(templates[left], joined);
+    return joined;
   }
 
   public static class TemplateDescriptionParsingException extends Exception {
