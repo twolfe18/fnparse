@@ -736,7 +736,12 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
   else:
     jt = SgeJobTracker()
 
-  wd = 'experiments/forward-selection/role/span/regular'
+  #wd = 'experiments/forward-selection/role/span/regular'
+  wd = os.path.join(
+    'experiments/forward-selection/role',
+    config.params['parserMode'],
+    config.params['syntaxMode'])
+  print 'working directory:', wd
   rc = {
     'channel': 'forward-selection',
     'host': socket.gethostname(),
