@@ -967,7 +967,7 @@ public class BasicFeatureTemplates {
   public static void main(String[] args) throws Exception {
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-    if (args.length != 2) {
+    if (args.length != 4) {
       System.err.println("please provide:");
       System.err.println("1) how many threads to use");
       System.err.println("2) a file to dump to");
@@ -975,6 +975,7 @@ public class BasicFeatureTemplates {
       System.err.println("4) how many partitions for the data");
       System.err.println("NOTE: if you don't want to use partitions, provide "
           + "\"0 1\" as the last two arguments");
+	    return;
     }
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);

@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# WARNING: BasicFeatureTemplates is not thread safe yet!
 THREADS=1
 OUTPUT="experiments/forward-selection/templates.txt"
 CP=`find target/ -iname '*.jar' | tr '\n' ':'`
@@ -9,10 +10,10 @@ set -m
 
 # start jobs in parallel
 PARALLEL=12
-for i in `seq ${PARALLEL}`; do
+for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"
-  java -Xmx8G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
-    edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT} &
+  java -Xmx5G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
+    edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT} ${i} ${PARALLEL} &
 done
 
 # wait for all jobs to finish
