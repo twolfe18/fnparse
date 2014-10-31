@@ -916,7 +916,7 @@ public class BasicFeatureTemplates {
       Object old = stageTemplates.put(name, new TemplateSS() {
         @Override
         String extractSS(TemplateContext context) {
-          if (context.getClass() == cls)
+          if (context.getStage() == cls)
             return cls.getName();
           return null;
         }

@@ -175,16 +175,6 @@ public class Runner {
       LOG.info("[run] performing Kp training with K=" + K + ", p=" + p);
       List<FNParse> all = getAllTrain(rand);
       List<FNParse>[] splits = KpTrainDev.kpSplit(K, p, all, rand);
-      /*
-      assert splits.length == K + 1;
-      for (int i = 0; i < splits.length - 1; i++) {
-        for (int j = i + 1; j < splits.length; j++)
-          assert overlap(splits[i], splits[j]).size() == 0;
-      }
-      for (int i = 0; i < splits.length; i++)
-        for (FNParse pp : splits[i])
-          LOG.info("in bucket " + i + ": " + pp.getId());
-      */
       List<FNParse> train = new ArrayList<>();
       List<FNParse> dev = new ArrayList<>();
       double perfSum = 0d;
@@ -194,12 +184,6 @@ public class Runner {
         train.addAll(splits[0]);
         for (int devSplit = 0; devSplit < K; devSplit++)
           (devSplit == k ? dev : train).addAll(splits[devSplit + 1]);
-        /*
-        for (FNParse pp : train)
-          LOG.debug("training on " + pp.getId());
-        for (FNParse pp : dev)
-          LOG.debug("testing on " + pp.getId());
-        */
         assert overlap(train, dev).size() == 0;
         parser.train(train);
         double perf = evaluate(parser, dev);

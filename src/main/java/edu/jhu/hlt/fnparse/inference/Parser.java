@@ -19,7 +19,7 @@ public interface Parser extends HasFeatureAlphabet {
 
   // Command line options
   public static final Option PARSER_MODE =
-      new Option("parserMode", true, "classifySpans", "classifyHeads");
+      new Option("parserMode", true, "span", "head");
   public static final Option SYNTAX_MODE =
       new Option("syntaxMode", true, "regular", "latent", "none");
   public static final String FEATURES = "features";

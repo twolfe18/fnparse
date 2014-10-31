@@ -56,11 +56,13 @@ public class ParserParams
   }
 
   public void setFeatureTemplateDescription(String templates) {
+    /*
     try {
       TemplatedFeatures.parseTemplates(templates);
     } catch (TemplateDescriptionParsingException e) {
       throw new RuntimeException(e);
     }
+    */
     featureTemplateDescription = templates;
   }
 

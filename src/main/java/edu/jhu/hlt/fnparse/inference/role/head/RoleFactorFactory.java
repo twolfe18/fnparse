@@ -33,7 +33,7 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(RoleFactorFactory.class);
-  public static boolean SHOW_FEATURES = true;
+  public static boolean SHOW_FEATURES = false;
 
   private TemplatedFeatures features;
   public FgModel weights;

@@ -184,11 +184,15 @@ public class TemplatedFeatures implements Serializable {
     this.templateString = description;
     this.featureAlphabet = featureAlphabet;
     this.context = new TemplateContext();
+    /*
+    // NOTE this has been pushed back into featurize because of some
+    // initialization terribleness related to BasicFeatureTemplates
     try {
       this.templates = parseTemplates(description);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    */
   }
 
   public String getTemplateString() {
@@ -251,6 +255,13 @@ public class TemplatedFeatures implements Serializable {
 
   public void featurize(FeatureVector v) {
     boolean grow = featureAlphabet.isGrowing();
+    if (templates == null) {
+      try {
+        templates = parseTemplates(templateString);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
     for (Template t : templates) {
       Iterable<String> te = t.extract(context);
       if (te == null)

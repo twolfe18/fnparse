@@ -52,6 +52,7 @@ public class RoleSpanLabelingStage
   private static final long serialVersionUID = 1L;
   public static final Logger LOG =
       Logger.getLogger(RoleSpanLabelingStage.class);
+  public static boolean SHOW_FEATURES = false;
 
   private TemplatedFeatures features;
   private ApproxF1MbrDecoder decoder;
@@ -254,24 +255,29 @@ public class RoleSpanLabelingStage
       int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
 
       // Compute features for the binary factor
-      TemplateContext ctx = parent.features.getContext();
-      ctx.clear();
-      ctx.setSentence(s);
-      ctx.setFrame(frame);
-      ctx.setRole(role);
+      TemplateContext contex = parent.features.getContext();
+      contex.clear();
+      contex.setStage(RoleSpanLabelingStage.class);
+      contex.setSentence(s);
+      contex.setFrame(frame);
+      contex.setRole(role);
       if (arg != null && arg != Span.nullSpan) {
-        ctx.setTarget(target);
-        ctx.setTargetHead(targetHeadIdx);
-        ctx.setSpan2(target);
-        ctx.setHead2(targetHeadIdx);
+        contex.setTarget(target);
+        contex.setTargetHead(targetHeadIdx);
+        contex.setSpan2(target);
+        contex.setHead2(targetHeadIdx);
         int argHeadIdx = parent.globalParams.headFinder.head(arg, s);
-        ctx.setArg(arg);
-        ctx.setArgHead(argHeadIdx);
-        ctx.setSpan1(arg);
-        ctx.setHead1(argHeadIdx);
+        contex.setArg(arg);
+        contex.setArgHead(argHeadIdx);
+        contex.setSpan1(arg);
+        contex.setHead1(argHeadIdx);
       }
       FeatureVector fv = new FeatureVector();
-      parent.features.featurize(fv);
+      if (SHOW_FEATURES) {
+        parent.features.featurizeDebug(fv, "[variables] in context");
+      } else {
+        parent.features.featurize(fv);
+      }
       phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);
 
