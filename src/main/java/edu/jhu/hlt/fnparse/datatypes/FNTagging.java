@@ -2,10 +2,8 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -32,16 +30,19 @@ public class FNTagging implements HasId, HasSentence {
     this.sent = s;
     this.frameInstances = new ArrayList<>();
     Map<Span, FrameInstance> seenTargets = new HashMap<>();
-    for(FrameInstance fi : frameInstances) {
+    for(FrameInstance fi : frameMentions) {
       FrameInstance collision = seenTargets.get(fi.getTarget());
       if (collision != null) {
         LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
             + ":" + collision + ", " + fi);
-        assert collision.equals(fi);
+        if (!collision.equals(fi))
+          throw new IllegalArgumentException();
         // Keep the one with more arguments
-        FrameInstance keep = fi.numRealizedArguments() > collision.numRealizedArguments() ? fi : collision;
-        seenTargets.put(keep.getTarget(), keep);
-        this.frameInstances.add(fi);
+        if (fi.numRealizedArguments() > collision.numRealizedArguments()) {
+          seenTargets.put(fi.getTarget(), fi);
+          int i = frameInstances.indexOf(collision);
+          this.frameInstances.set(i, fi);
+        }
       } else {
         seenTargets.put(fi.getTarget(), fi);
         this.frameInstances.add(fi);
