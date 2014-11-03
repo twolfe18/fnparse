@@ -687,9 +687,19 @@ def seeds(parser_mode, syntax_mode, settings):
     passes = {s2: p}
     fs = [
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1Word']),
-      Feature(s2, syntax_mode, 'frameRoleArg', ['head1Pos']),
-      Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstWord']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1LeftPos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstPos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1LastPos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1RightPos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/1']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/3']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/4']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['Word-1-grams-between-Span1.First-and-Span1.Last']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['head1Pos', 'head2Pos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
     ]
     if syntax_mode != 'regular':
       reg[s1] = 10
@@ -702,6 +712,18 @@ def seeds(parser_mode, syntax_mode, settings):
         Feature(s1, syntax_mode, 'framePrune', ['span1RightWord']),
         Feature(s1, syntax_mode, 'framePrune', ['span1Width/2']),
         Feature(s1, syntax_mode, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['framePrune']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1Width/2', 'span1RightPos']),
+        Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1Width/2']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1Width/2', 'span1RightPos']),
+        Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1Width/2']),
       ]
     yield Config(FeatureSet(fs), settings, reg, batch_size, passes)
   elif parser_mode == 'head':
@@ -710,6 +732,7 @@ def seeds(parser_mode, syntax_mode, settings):
     yield Config(FeatureSet([
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1Word']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1Pos', 'head2Pos']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
       Feature(s1, syntax_mode, 'head2GovHead1', ['frameRoleArg']),
@@ -838,7 +861,7 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 800
+  max_train = 30
   max_jobs = 5000
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)

@@ -127,9 +127,13 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
     // Here we really need to train the last stage of our pipeline to expect
     // the type of pruning that the previous stage will emit.
-    List<FNParseSpanPruning> hypPrunes = rolePruning
-        .setupInference(frames, null).decodeAll();
-    roleLabeling.train(hypPrunes, parses);
+    //List<FNParseSpanPruning> hypPrunes = rolePruning
+    //    .setupInference(frames, null).decodeAll();
+    double pIncludeNegativeSpan = 0.1d;
+    List<FNParseSpanPruning> hypPrunes =
+        FNParseSpanPruning.noisyPruningOf(
+            parses, pIncludeNegativeSpan, params.rand);
+    roleLabeling.train(goldPrunes, parses);
 
     LOG.info("done training");
   }

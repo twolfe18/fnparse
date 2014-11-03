@@ -216,12 +216,24 @@ public class BasicFeatureTemplates {
       public String extractSS(TemplateContext context) {
         if (!context.isPruneSet())
           return null;
-        if (!context.isPrune())
+        // Fires when prune=false
+        if (context.isPrune())
           return null;
         Frame f = context.getFrame();
         if (f == null)
           return null;
         return "pruneFor" + f.getName();
+      }
+    });
+    addTemplate("prune", new TemplateSS() {
+      @Override
+      public String extractSS(TemplateContext context) {
+        if (!context.isPruneSet())
+          return null;
+        // Fires when prune=false
+        if (context.isPrune())
+          return null;
+        return "prune";
       }
     });
 
@@ -960,7 +972,7 @@ public class BasicFeatureTemplates {
     //File f = new File("experiments/forward-selection/basic-templates.txt");
     int part = Integer.parseInt(args[2]);
     int numParts = Integer.parseInt(args[3]);
-    final boolean fakeIt = false;
+    final boolean fakeIt = true;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");

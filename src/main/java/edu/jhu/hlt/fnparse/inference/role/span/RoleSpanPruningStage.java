@@ -124,7 +124,7 @@ public class RoleSpanPruningStage
       ParserParams params,
       HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    regularizer = new L2(100_000d);
+    regularizer = new L2(10_000_000d);
   }
 
   public TemplatedFeatures getTFeatures() {

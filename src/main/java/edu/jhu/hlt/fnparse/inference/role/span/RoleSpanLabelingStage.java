@@ -123,12 +123,12 @@ public class RoleSpanLabelingStage
       }
       @Override
       public EvalFunc getObjective() {
-        return BasicEvaluation.fullMicroF1;
+        return BasicEvaluation.argOnlyMicroF1;
       }
       @Override
       public List<Double> getRecallBiasesToSweep() {
         List<Double> biases = new ArrayList<>();
-        for (double b = 0.5d; b < 12d; b *= 1.25d)
+        for (double b = 0.5d; b < 25d; b *= 1.2d)
           biases.add(b);
         return biases;
       }
