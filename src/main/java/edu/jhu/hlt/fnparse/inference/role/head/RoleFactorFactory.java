@@ -16,7 +16,7 @@ import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FactorFactory;
@@ -39,11 +39,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
   public FgModel weights;
   public final ParserParams params;
 
-  /**
-   * @param params
-   * @param factorMode says how the (r_itjk ~ l_ij) factor should be parameterized
-   */
-  public RoleFactorFactory(ParserParams params, BinaryBinaryFactorHelper.Mode factorMode) {
+  public boolean allowSpanFeatures = true;
+
+  public RoleFactorFactory(ParserParams params) {
     this.params = params;
   }
 
@@ -54,6 +52,18 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           params.getAlphabet());
     }
     return features;
+  }
+
+  private void debugMsg(
+      Sentence s,
+      List<RoleHeadVars> fr,
+      ProjDepTreeFactor l,
+      ConstituencyTreeFactor c) {
+    int count = 0;
+    for (RoleHeadVars rv : fr)
+      for (Iterator<RVar> it = rv.getVars(); it.hasNext(); it.next())
+        count++;
+    LOG.info("[debugMsg] about to featurize " + count + " things");
   }
 
   /**
@@ -67,6 +77,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
       List<RoleHeadVars> fr,
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
+    if (SHOW_FEATURES)
+      debugMsg(s, fr, l, c);
     List<Factor> factors = new ArrayList<Factor>();
     for (RoleHeadVars rv : fr) {
       Iterator<RVar> it = rv.getVars();
@@ -100,12 +112,22 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           context.setSentence(s);
           context.setFrame(rv.t);
           context.setTargetHead(rv.i);
+          if (allowSpanFeatures) {
+            context.setTarget(Span.widthOne(rv.i));
+            context.setSpan2(Span.widthOne(rv.i));
+          }
           if (role || dep) {
             context.setHead2(rv.i);
+            if (allowSpanFeatures)
+              context.setSpan2(Span.widthOne(rv.i));
             if (role) {
               context.setRole(rvar.k);
               context.setArgHead(rvar.j);
               context.setHead1(rvar.j);
+              if (allowSpanFeatures) {
+                context.setSpan1(Span.widthOne(rvar.j));
+                context.setArg(Span.widthOne(rvar.j));
+              }
             }
             if (dep) {
               context.setHead1_parent(rv.i);
