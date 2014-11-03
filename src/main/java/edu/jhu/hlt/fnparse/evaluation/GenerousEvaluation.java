@@ -1,8 +1,12 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+
+import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -26,24 +30,69 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
  * @author travis
  */
 public class GenerousEvaluation {
-	
+  public static Logger LOG = Logger.getLogger(GenerousEvaluation.class);
+
 	public static GenerousEvaluation evaluator =
 			new GenerousEvaluation(
-					Mode.ExtractHead,
+					Mode.ExtractHead,  // Use this because if you call this with fully parsed things it will blow up under ExpectHead
 					new SemaforicHeadFinder(),
 					false /* includeTarget */);
+
+	/**
+	 * @param timeCost is the cost of 1 frame-argument per sentence. Since this is
+	 * being weighed against recall (between 0 and 1), a reasonable value might be
+	 * 0.001
+	 */
+	public static EvalFunc generousPlusTime(FPR.Mode mode, boolean macro, double timeCost) {
+	  if (timeCost < 0)
+	    throw new IllegalArgumentException("timeCost must be >= 0: " + timeCost);
+	  return new EvalFunc() {
+	    private final boolean useMacro = macro;
+	    private final FPR.Mode m = mode;
+	    private final double tc = timeCost;
+	    private final String name =
+	        String.format("GenerousMicroRecallPlusTime:" + tc);
+	    private final GenerousEvaluation ge =
+	        new GenerousEvaluation(Mode.ExpectHead, null, useMacro);
+      @Override
+      public String getName() {
+        return name;
+      }
+      @Override
+      public double evaluate(List<SentenceEval> instances) {
+        if (instances.size() == 0) {
+          assert false;
+          return 0d;
+        }
+        FPR fpr = new FPR(false);
+        double time = 0d;
+        for (SentenceEval se : instances) {
+          FNParse hyp = se.getHypothesisParse();
+          for (FrameInstance fi : hyp.getFrameInstances())
+            time += fi.numRealizedArguments();
+          ge.fpr(se.getGoldParse(), hyp, fpr);
+        }
+        time /= instances.size();
+        double x = fpr.get(m);
+        double value = x - time * tc;
+        LOG.info(String.format(
+            "[%s+time] (f1=%.3f p=%.3f r=%.3f) obj=%.3f - %.3f * time=%.3f = %.3f",
+            m, fpr.get(FPR.Mode.F1), fpr.get(FPR.Mode.PRECISION), fpr.get(FPR.Mode.RECALL),
+            x, tc, time, value));
+        return value;
+      }
+	  };
+	}
 
 	public static EvalFunc generousPrecision = new EvalFunc() {
 		@Override
 		public String getName() { return "GenerousMacroPRECISION"; }
 		@Override
 		public double evaluate(List<SentenceEval> instances) {
-			double p = 0d;
-			for(SentenceEval se : instances) {
-				p += evaluator.precision(
-						se.getGoldParse(), se.getHypothesisParse());
-			}
-			return p / instances.size();
+		  FPR fpr = new FPR(true);
+			for(SentenceEval se : instances)
+			  evaluator.fpr(se.getGoldParse(), se.getHypothesisParse(), fpr);
+			return fpr.get(FPR.Mode.PRECISION);
 		}
 	};
 
@@ -52,12 +101,10 @@ public class GenerousEvaluation {
 		public String getName() { return "GenerousMacroRECALL"; }
 		@Override
 		public double evaluate(List<SentenceEval> instances) {
-			double r = 0d;
-			for(SentenceEval se : instances) {
-				r += evaluator.recall(
-						se.getGoldParse(), se.getHypothesisParse());
-			}
-			return r / instances.size();
+		  FPR fpr = new FPR(true);
+			for(SentenceEval se : instances)
+			  evaluator.fpr(se.getGoldParse(), se.getHypothesisParse(), fpr);
+			return fpr.get(FPR.Mode.RECALL);
 		}
 	};
 
@@ -66,10 +113,10 @@ public class GenerousEvaluation {
 		public String getName() { return "GenerousMacroF1"; }
 		@Override
 		public double evaluate(List<SentenceEval> instances) {
-			double p = generousPrecision.evaluate(instances);
-			double r = generousRecall.evaluate(instances);
-			if(p + r == 0d) return 0d;
-			return 2d * p * r / (p + r);
+		  FPR fpr = new FPR(true);
+			for(SentenceEval se : instances)
+			  evaluator.fpr(se.getGoldParse(), se.getHypothesisParse(), fpr);
+			return fpr.get(FPR.Mode.F1);
 		}
 	};
 
@@ -145,12 +192,30 @@ public class GenerousEvaluation {
 		}
 	}
 
-	public double precision(FNParse gold, FNParse hyp) {
+	public double fpr(FNParse gold, FNParse hyp, FPR fpr) {
 		Sentence s = gold.getSentence();
 		if (!s.getId().equals(hyp.getSentence().getId()))
 			throw new IllegalArgumentException();
 		Map<FrameRoleInstance, Span> goldArgs = indexArgs(gold);
 		Map<FrameRoleInstance, Span> hypArgs = indexArgs(hyp);
+		Set<FrameRoleInstance> all = new HashSet<>();
+		all.addAll(goldArgs.keySet());
+		all.addAll(hypArgs.keySet());
+		for (FrameRoleInstance fri : all) {
+		  Span g = goldArgs.get(fri);
+		  Span h = hypArgs.get(fri);
+		  if (g != null && h != null) {
+		    double x = hit(g, h, s);
+		    assert x >= 0d && x <= 1d;
+		    fpr.accum(x, 1d - x, 1d - x);
+		  } else if (g == null && h != null) {
+		    fpr.accumFP();
+		  } else if (g != null && h == null) {
+		    fpr.accumFN();
+		  } else {
+		    assert false;
+		  }
+		}
 		double n = 0d, d = 0d;
 		for (FrameRoleInstance role : hypArgs.keySet()) {
 			d += 1d;
@@ -160,9 +225,5 @@ public class GenerousEvaluation {
 		}
 		if (d == 0d) return 1d;
 		return n / d;
-	}
-
-	public double recall(FNParse gold, FNParse hyp) {
-		return precision(hyp, gold);
 	}
 }

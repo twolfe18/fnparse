@@ -9,7 +9,7 @@ package edu.jhu.hlt.fnparse.evaluation;
  * @author travis
  */
 public final class FPR {
-  static enum Mode { PRECISION, RECALL, F1 }
+  public static enum Mode { PRECISION, RECALL, F1 }
 
   private double pSum = 0d, pZ = 0d;
   private double rSum = 0d, rZ = 0d;
