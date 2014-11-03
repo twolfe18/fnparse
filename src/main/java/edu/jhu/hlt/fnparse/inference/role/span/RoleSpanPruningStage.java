@@ -395,6 +395,8 @@ public class RoleSpanPruningStage
           msg.append(" prune=" + BinaryVarUtil.configToBool(conf.getState(p)));
           if (c != null)
             msg.append(" constit=" + BinaryVarUtil.configToBool(conf.getState(c)));
+          msg.append(" ");
+          msg.append(p.getName());
           feats.featurizeDebug(fv, msg.toString());
         } else {
           feats.featurize(fv);
