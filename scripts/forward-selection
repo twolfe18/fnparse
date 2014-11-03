@@ -101,6 +101,20 @@ class FeatureSet(object):
     else:
       return cards
 
+  def stages(self):
+    s = set()
+    for f in self.features:
+      s.add(f.stage)
+    return list(s)
+
+  def labels(self, stage=None):
+    ''' If a stage is not provided, we union over stages '''
+    labs = set()
+    for f in self.features:
+      if stage is None or f.stage == stage:
+        labs.add(f.label)
+    return list(labs)
+
   def propose_modification(self):
     ''' Returns a new FeatureSet derived from this feature set '''
     debug = True
@@ -158,19 +172,33 @@ class FeatureSet(object):
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
-  def __init__(self, feature_set, settings_dict, regularizer_dict):
+  def __init__(self, feature_set, settings_dict, regularizer_dict, batch_size_dict, passes_dict):
     self.feature_set = feature_set
 
     self.regularizer_dict = regularizer_dict
     for k, v in regularizer_dict.iteritems():
-      assert type(k) is str # Name of the stage being regularize
+      assert type(k) is str # Name of the stage
       assert type(v) is int # Natural log of the regularizer
 
+    self.batch_size_dict = batch_size_dict
+    for k, v in batch_size_dict.iteritems():
+      assert type(k) is str # Name of the stage
+      assert type(v) is int # Batch size
+
+    self.passes_dict = passes_dict
+    for k, v in passes_dict.iteritems():
+      assert type(k) is str # Name of the stage
+      assert type(v) is int # Number of training passes
+
     self.params = {}
-    self.params['passes'] = '5'
-    self.params['batchSize'] = '1'
     self.params['randomSeed'] = '9001'
     self.params.update(settings_dict)
+
+  def stages(self):
+    s1 = set(self.regularizer_dict.keys())
+    s2 = set(self.features.stages())
+    assert s1.issuperset(s2)
+    return list(s1)
 
   def __str__(self):
     return "<Config features=%s regularizer=%s params=%s>" % \
@@ -188,7 +216,7 @@ def mutate_config(config):
   alpha = 15000
   beta = 1.5
   gamma = 0.2   # p(change regularizer irrespective of cardinality)
-  children = [Config(next_fs, config.params, config.regularizer_dict)]
+  children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
   for stage in TEMPLATE_INFO.stages():
     cc = cur_card[stage]
     nc = next_card[stage]
@@ -198,17 +226,17 @@ def mutate_config(config):
       reg = {}
       reg.update(config.regularizer_dict)
       reg[stage] = reg[stage] + 1
-      children.append(Config(next_fs, config.params, reg))
+      children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
     if dc < -alpha or dc / cc < -beta or random.random() < gamma:
       # weaker regularizer
       reg = {}
       reg.update(config.regularizer_dict)
       reg[stage] = reg[stage] - 1
-      children.append(Config(next_fs, config.params, reg))
-  return children
+      children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
 
-# TODO estimate_cardinality needs to consider the features and the *stage*
-# should estimate_cardinality return a map from stage_name to cardinality?
+  # TODO try increasing/decreasing the number of passes
+
+  return children
 
 
 
@@ -463,6 +491,7 @@ class ForwardSelection:
 
   def start_job(self):
     ''' returns a unique job name and updates self.name2item '''
+    # TODO move this to a separate method that is passed in, like mutate
     item = self.config_q.pop()
     if item:
       name = "fs-%s-%d" % (self.name, len(self.name2item))
@@ -490,6 +519,12 @@ class ForwardSelection:
   
       for stage, regularizer in item.regularizer_dict.iteritems():
         cmd['regularizer.' + stage] = str(math.exp(regularizer))
+
+      for stage, batch_size in item.batch_size_dict.iteritems():
+        cmd['batchSize.' + stage] = str(batch_size)
+
+      for stage, passes in item.passes_dict.iteritems():
+        cmd['passes.' + stage] = str(passes)
 
       cmd.update(item.params)
       self.job_tracker.spawn(name, cmd)
@@ -643,32 +678,56 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
+  p = 10  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
     reg = {s2: 10}
+    batch_size = {s2: 1}
+    passes = {s2: p}
     fs = [
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1Word']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['head1Pos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstWord']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
     ]
     if syntax_mode != 'regular':
       reg[s1] = 10
+      batch_size[s1] = 1
+      passes[s1] = p
       fs += [
+        Feature(s1, syntax_mode, 'framePrune', ['span1LeftWord']),
+        Feature(s1, syntax_mode, 'framePrune', ['span1FirstWord']),
+        Feature(s1, syntax_mode, 'framePrune', ['span1LastWord']),
+        Feature(s1, syntax_mode, 'framePrune', ['span1RightWord']),
         Feature(s1, syntax_mode, 'framePrune', ['span1Width/2']),
         Feature(s1, syntax_mode, 'framePrune', ['Dist(Len5,Span1.Last,Span2.First)']),
       ]
-    yield Config(FeatureSet(fs), settings, reg)
+    yield Config(FeatureSet(fs), settings, reg, batch_size, passes)
   elif parser_mode == 'head':
     s1 = 'RoleHeadStage'
     s2 = 'RoleHeadToSpanStage'
     yield Config(FeatureSet([
-      Feature(s1, syntax_mode, 'frame', ['head1Word']),
-      Feature(s1, syntax_mode, 'frame', ['head1Pos', 'head2Pos']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['head1Word']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['head1Pos', 'head2Pos']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['frameRoleArg']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['span1LeftPos', 'span1FirstPos', 'span1Width/2', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'head2GovHead1', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1Width/2']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/1']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'head1Pos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2', 'span1FirstPos']),
-    ]), settings, {s1: 10, s2: 10})
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1Width/2', 'span1RightPos']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1Width/2']),
+    ]), settings, {s1: 10, s2: 10}, {s1: 1, s2: 1}, {s1: p, s2: p})
   else:
     raise Exception('unknown parser_mode: ' + parser_mode)
 
@@ -698,9 +757,23 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
     template_info.restrict_stages_to([s2])
   else:
     template_info.restrict_stages_to([s1, s2])
-  template_info.restrict_labels_for(s1, syntax_mode, ['framePrune'])
-  template_info.restrict_labels_for(s2, syntax_mode, ['frameRoleArg', 'roleArg'])
   sd = list(seeds(parser_mode, syntax_mode, settings))
+  labels = {
+    ('RoleHeadStage', 'regular'): ['frameRole', 'frame'],
+    ('RoleHeadStage', 'latent'): ['frameRole', 'frame', 'head2GovHead1'],
+    ('RoleHeadStage', 'none'): ['frameRole', 'frame'],
+    ('RoleHeadToSpanStage', 'regular'): ['frameRole', 'frame'],
+    ('RoleHeadToSpanStage', 'latent'): ['frameRole', 'frame', 'span1IsConstituent'],
+    ('RoleHeadToSpanStage', 'none'): ['frameRole', 'frame'],
+    ('RoleSpanPruningStage', 'regular'): ['framePrune'],
+    ('RoleSpanPruningStage', 'latent'): ['framePrune', 'head2GovHead1'],
+    ('RoleSpanPruningStage', 'none'): ['framePrune'],
+    ('RoleSpanLabelingStage', 'regular'): ['frameRoleArg', 'frameRole'],
+    ('RoleSpanLabelingStage', 'latent'): ['frameRoleArg', 'frameRole', 'span1IsConstituent'],
+    ('RoleSpanLabelingStage', 'none'): ['frameRoleArg', 'frameRole'],
+  }
+  template_info.restrict_labels_for(s1, syntax_mode, labels[(s1, syntax_mode)])
+  template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
   return (template_info, sd)
 
 def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, parser_mode, syntax_mode, where):
@@ -765,8 +838,8 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 1000
-  max_jobs = 99999
+  max_train = 800
+  max_jobs = 5000
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
