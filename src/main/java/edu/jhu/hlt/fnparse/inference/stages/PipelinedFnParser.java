@@ -44,6 +44,10 @@ public class PipelinedFnParser implements Serializable, Parser {
 	public static final String ARG_ID_MODEL_NAME = "argId.ser.gz";
 	public static final String ARG_SPANS_MODEL_NAME = "argSpans.ser.gz";
 
+	public static String FRAME_ID_MODEL_HUMAN_READABLE = null;
+	public static String ARG_ID_MODEL_HUMAN_READABLE = null;
+	public static String ARG_SPANS_MODEL_HUMAN_READABLE = null;
+
 	private ParserParams params;
 	private Stage<Sentence, FNTagging> frameId;
 	private Stage<FNTagging, FNParse> argId;
@@ -58,6 +62,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 
 	@Override
 	public void configure(Map<String, String> configuration) {
+	  LOG.info("[configure] " + configuration);
 	  frameId.configure(configuration);
 	  argId.configure(configuration);
 	  argExpansion.configure(configuration);
@@ -174,27 +179,9 @@ public class PipelinedFnParser implements Serializable, Parser {
 
 		params.getAlphabet().startGrowth();
 
-		// TODO add scanFeatures to interface Stage
-		// and remove all these type checks
-
-		if (frameId instanceof FrameIdStage) {
-			List<Sentence> sentences = DataUtil.stripAnnotations(examples);
-			((FrameIdStage) frameId).scanFeatures(
-					sentences, examples, maxTimeInMinutes, maxFeaturesAdded);
-		} else {
-			LOG.warn("not scanning frameId features because frameId stage is "
-					+ "not typical: " + frameId.getClass().getName());
-		}
-
-		List<FNTagging> frames = DataUtil.convertParsesToTaggings(examples);
-		argId.scanFeatures(
-		    frames, examples, maxTimeInMinutes, maxFeaturesAdded);
-
-		// Scan features defined on gold head decisions
-		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
-		    examples, params.headFinder);
-		argExpansion.scanFeatures(
-		    onlyHeads, examples, maxTimeInMinutes, maxFeaturesAdded);
+		frameId.scanFeatures(examples);
+		argId.scanFeatures(examples);
+		argExpansion.scanFeatures(examples);
 
 		params.getAlphabet().stopGrowth();
 		long time = t.stop();
@@ -292,5 +279,18 @@ public class PipelinedFnParser implements Serializable, Parser {
 		frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
 		argId.saveModel(new File(directory, ARG_ID_MODEL_NAME));
 		argExpansion.saveModel(new File(directory, ARG_SPANS_MODEL_NAME));
+
+		if (FRAME_ID_MODEL_HUMAN_READABLE != null) {
+		  ModelIO.writeHumanReadable(frameId.getWeights(), getAlphabet(),
+		      new File(directory, FRAME_ID_MODEL_HUMAN_READABLE), true);
+		}
+		if (ARG_ID_MODEL_HUMAN_READABLE != null) {
+		  ModelIO.writeHumanReadable(argId.getWeights(), getAlphabet(),
+		      new File(directory, ARG_ID_MODEL_HUMAN_READABLE), true);
+		}
+		if (ARG_SPANS_MODEL_HUMAN_READABLE != null) {
+		  ModelIO.writeHumanReadable(argExpansion.getWeights(), getAlphabet(),
+		      new File(directory, ARG_SPANS_MODEL_HUMAN_READABLE), true);
+		}
 	}
 }
