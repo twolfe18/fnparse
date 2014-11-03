@@ -223,20 +223,23 @@ public class RoleHeadToSpanStage
 			      context.clear();
 			      context.setStage(RoleHeadToSpanStage.class);
 			      context.setSentence(sent);
-			      context.setFrame(ev.getFrame());
-			      context.setRole(ev.getRole());
-			      if (arg) {
-			        context.setArg(s);
-			        context.setArgHead(ev.getArgHeadIdx());
+			      if (arg || cVar != null) {
 			        context.setSpan1(s);
-			        context.setHead1(ev.getArgHeadIdx());
 			        context.setSpan2(ev.getTarget());
+			        context.setHead1(ev.getArgHeadIdx());
 			        context.setHead2(ev.getTargetHeadIdx());
-			        context.setTarget(ev.getTarget());
-			        context.setTargetHead(ev.getTargetHeadIdx());
+			        if (arg) {
+			          context.setFrame(ev.getFrame());
+			          context.setRole(ev.getRole());
+			          context.setArg(s);
+			          context.setArgHead(ev.getArgHeadIdx());
+			          context.setTarget(ev.getTarget());
+			          context.setTargetHead(ev.getTargetHeadIdx());
+			        }
+			        if (cVar != null) {
+			          context.setSpan1IsConstituent(cons);
+			        }
 			      }
-			      if (cVar != null)
-			        context.setSpan1IsConstituent(cons);
 			      context.blankOutIllegalInfo(params);
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",

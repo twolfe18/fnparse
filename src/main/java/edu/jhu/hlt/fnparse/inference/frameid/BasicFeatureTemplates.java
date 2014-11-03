@@ -703,7 +703,7 @@ public class BasicFeatureTemplates {
     distancePoints.put("<S>", ctx -> 0);
     distancePoints.put("</S>", ctx -> ctx.getSentence().size() - 1);
     distancePoints.put("Head1", ctx -> ctx.getHead1());
-    distancePoints.put("Head2", ctx -> ctx.getHead1());
+    distancePoints.put("Head2", ctx -> ctx.getHead2());
     for (String locName : Arrays.asList("First", "Last")) {
       ToIntFunction<Span> f = spanLocs.get(locName);
       distancePoints.put("Span1." + locName, ctx -> ctx.getSpan1() == null
@@ -740,7 +740,7 @@ public class BasicFeatureTemplates {
               int c2 = p2.getValue().applyAsInt(context);
               if (c2 == TemplateContext.UNSET)
                 return null;
-              return d.getValue().apply(c1 - c2);
+              return name + "=" + d.getValue().apply(c1 - c2);
             }
           });
         }
