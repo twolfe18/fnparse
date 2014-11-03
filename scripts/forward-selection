@@ -359,7 +359,10 @@ class SgeJobTracker(object):
   ''' A job tracker that asks qstat for the jobs that are
   running and spawns jobs with qsub '''
   def can_submit_more_jobs(self):
-    return len(self.jobs_queued()) < 30
+    try:
+      return len(self.jobs_queued()) < 30
+    except subprocess.CalledProcessError:
+      return False
 
   def jobs(self):
     '''
@@ -463,7 +466,7 @@ class LocalJobTracker(object):
 
 class ForwardSelection:
   def __init__(self, name, working_dir, job_tracker, config_q, \
-      poll_interval=3.0, max_train_size=None, max_num_jobs=None, \
+      poll_interval=5.0, max_train_size=None, max_num_jobs=None, \
       redis_config={'channel':'forward-selection', 'host':'localhost', 'port':'6379', 'db':'0'}):
     print '[ForwardSelection] attempting to use redis server at', redis_config
     self.name = name
@@ -495,6 +498,7 @@ class ForwardSelection:
     item = self.config_q.pop()
     if item:
       name = "fs-%s-%d" % (self.name, len(self.name2item))
+	  assert name not in self.name2item
       self.name2item[name] = item
       wd = os.path.join(self.working_dir, name + '-wd')
       if not os.path.isdir(wd):
@@ -861,10 +865,10 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 30
-  max_jobs = 5000
+  max_train = 1000
+  max_jobs = 15000
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
-    poll_interval=3.0, max_train_size=max_train, max_num_jobs=max_jobs)
+    poll_interval=5.0, max_train_size=max_train, max_num_jobs=max_jobs)
 
   # TODO this is only here for development/debugging
   if not local:
