@@ -122,8 +122,8 @@ class FeatureSet(object):
     card = self.estimate_cardinality(stage)
     l = 0.3   # interpolation between cardinality (1) and #features (0)
     alpha = 0.2
-    beta = 200.0
-    gamma = 3.0
+    beta = 500.0
+    gamma = 15.0
     p_add_feature = l * beta / (beta + pow(card, alpha)) \
       + (1.0 - l) * (gamma / (gamma + len(self.features)))
     if random.random() < p_add_feature:
@@ -889,8 +889,9 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
   # TODO this is only here for development/debugging
   if not local:
     print 'cleanup...'
-    os.system('rm logging/forward-selection/*')
     os.system('kill-all-jobs')
+    time.sleep(2)
+    os.system('rm logging/forward-selection/*')
     time.sleep(2)
   print 'starting...'
   fs.run()
