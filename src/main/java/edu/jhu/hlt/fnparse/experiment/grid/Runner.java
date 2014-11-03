@@ -25,6 +25,8 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleFactorFactory;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.util.Counts;
@@ -46,10 +48,10 @@ public class Runner {
   public static Logger LOG = Logger.getLogger(Runner.class);
 
   public static void main(String[] args) {
-    //RoleFactorFactory.SHOW_FEATURES = true;
-    //RoleHeadToSpanStage.SHOW_FEATURES = true;
-    //RoleSpanPruningStage.SHOW_FEATURES = true;
-    //RoleSpanLabelingStage.SHOW_FEATURES = true;
+    RoleFactorFactory.SHOW_FEATURES = false;
+    RoleHeadToSpanStage.SHOW_FEATURES = false;
+    RoleSpanPruningStage.SHOW_FEATURES = false;
+    RoleSpanLabelingStage.SHOW_FEATURES = false;
 
     //PipelinedFnParser.ARG_ID_MODEL_HUMAN_READABLE = "argId.txt";
     //PipelinedFnParser.ARG_SPANS_MODEL_HUMAN_READABLE = "argSpans.txt";

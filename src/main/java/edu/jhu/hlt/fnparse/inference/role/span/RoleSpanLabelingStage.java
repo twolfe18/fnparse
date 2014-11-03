@@ -307,7 +307,8 @@ public class RoleSpanLabelingStage
       context.blankOutIllegalInfo(parent.globalParams);
       FeatureVector fv = new FeatureVector();
       if (SHOW_FEATURES) {
-        feats.featurizeDebug(fv, "[variables] in context");
+        feats.featurizeDebug(fv, "[variables] " + frame.getName() + "."
+            + frame.getRole(role) + " arg=" + arg);
       } else {
         feats.featurize(fv);
       }

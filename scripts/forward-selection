@@ -120,9 +120,12 @@ class FeatureSet(object):
     debug = True
     stage = random.choice(TEMPLATE_INFO.stages())
     card = self.estimate_cardinality(stage)
-    l = 0.5
-    p_add_feature = l * 100.0 / (100.0 + pow(card, 0.4)) \
-      + (1.0 - l) * (2.0 / (2.0 + len(self.features)))
+    l = 0.3		# interpolation between cardinality (1) and #features (0)
+    alpha = 0.2
+    beta = 200.0
+    gamma = 3.0
+    p_add_feature = l * beta / (beta + pow(card, alpha)) \
+      + (1.0 - l) * (gamma / (gamma + len(self.features)))
     if random.random() < p_add_feature:
       f = self.new_feature()
       if debug:
@@ -215,7 +218,7 @@ def mutate_config(config):
   # for each stage, decide if you want to change the regularizer or not
   alpha = 15000
   beta = 1.5
-  gamma = 0.2   # p(change regularizer irrespective of cardinality)
+  gamma = 0.25   # p(change regularizer irrespective of cardinality)
   children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
   for stage in TEMPLATE_INFO.stages():
     cc = cur_card[stage]
@@ -401,7 +404,7 @@ class SgeJobTracker(object):
     cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub', name]
     for k, v in args.iteritems():
       cmd += [k, v]
-    print '[sge spawn] cmd =', cmd
+    print '[sge spawn] cmd =', ["'" + x + "'" for x in cmd]
     subprocess.Popen(cmd)
     time.sleep(0.2)
 
@@ -457,7 +460,7 @@ class LocalJobTracker(object):
       cmd.append(name)
       for k, v in args.iteritems():
         cmd += [k, v]
-      print '[spawn] about to spawn:', ' '.join(cmd)
+      print '[spawn] about to spawn:', ' '.join(["'" + x + "'" for x in cmd])
       subprocess.Popen(cmd)
 
 

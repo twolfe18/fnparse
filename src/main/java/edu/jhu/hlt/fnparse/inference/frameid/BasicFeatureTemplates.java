@@ -854,6 +854,14 @@ public class BasicFeatureTemplates {
           return null;
         if (!context.getSpan1IsConstituent())
           return null;
+        // There are no span variables for width 1 spans, so do not allow the
+        // features to fire for these cases (there is no decision to be made,
+        // so features are useless).
+        // NOTE: Only use span1IsConstituent as a label rather than a generic
+        // template unless you are willing to deal with this behavior.
+        Span span1 = context.getSpan1();
+        if (span1 == null || span1.width() == 1)
+          return null;
         return "span1IsConstituent";
       }
     });
