@@ -18,6 +18,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -30,14 +31,25 @@ public class RoleIdStageOverfittingTests {
 
 	@Test
 	public void test() {
+	  int maxTest = 10;
+	  RoleFactorFactory.SHOW_FEATURES = false;
 		StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
 		ParserParams params = new ParserParams();
 		params.useSyntaxFeatures = true;
+		StringBuilder fs = new StringBuilder();
+		fs.append("RoleHeadStage * frameRole * head1Word * Word-2-grams-between-<S>-and-Head1 * Word-2-grams-between-Head1-and-</S>");
+		fs.append("+ RoleHeadStage * frameRole * head1Word * Word-2-grams-between-Head1-and-</S>");
+		fs.append("+ RoleHeadStage * frameRole * head1Word * Word-2-grams-between-<S>-and-Head1");
+		fs.append("+ RoleHeadStage * frameRole * head1Word");
+		fs.append("+ RoleHeadStage * frameRole * head1Word * head1Pos");
+		params.setFeatureTemplateDescription(fs.toString());
 		RoleHeadStage rid = new RoleHeadStage(params, params);
-		rid.params.passes = 20;
+		rid.params.learningRate = 0.01d;
+		rid.params.passes = 200;
 		rid.params.tuneOnTrainingData = true;
 		rid.params.regularizer = new L2(999_999_999d);
 		rid.disablePruning();
+		int tested = 0;
 		for (FNParse p : parseToEvaluateOn()) {
 
 			// Convert all arguments to just width-1 spans
@@ -50,7 +62,6 @@ public class RoleIdStageOverfittingTests {
 					p.getId());
 			System.out.println("gold: " + Describe.fnParse(p));
 
-			params.setFeatureAlphabet(new Alphabet<String>());
 			params.getAlphabet().startGrowth();
 			rid.scanFeatures(x, y, 999, 999_999);
 			rid.train(x, y);
@@ -75,11 +86,14 @@ public class RoleIdStageOverfittingTests {
 			if (f1 < 0.9999d)
 				System.out.println("about to fail");
 			assertTrue("couldn't fit " + p.getId(), f1 >= 0.9999d);
+
+			if (++tested >= maxTest)
+			  break;
 		}
 	}
 
 	public static List<FNParse> parseToEvaluateOn() {
-		boolean debug = true;
+		boolean debug = false;
 		if (debug) {
 			return Arrays.asList(FNIterFilters.findBySentenceId(
 					//FileFrameInstanceProvider.debugFIP.getParsedSentences(),
