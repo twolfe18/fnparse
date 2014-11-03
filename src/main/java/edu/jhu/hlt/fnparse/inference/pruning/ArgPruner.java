@@ -30,6 +30,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.RedisFileCache;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.item.IIndexWord;
@@ -347,6 +348,9 @@ public class ArgPruner implements Serializable, IArgPruner {
     catch(Exception e) { throw new RuntimeException(e); }
   }
 
+  private static final RedisFileCache RFC = null;
+      //new RedisFileCache("nov3", "localhost", 6379, 0);
+
   @SuppressWarnings("unchecked")
   public static Set<LexicalUnit>[][] readLUTensor(File f) {
     LOG.info("[ArgPruner readLUTensor] reading from " + f.getPath());
@@ -356,8 +360,15 @@ public class ArgPruner implements Serializable, IArgPruner {
       for(Frame fr : fi.allFrames())
         saa[fr.getId()] = new Set[fr.numRoles()];
 
-      DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(f)));
-      while(true) {
+      DataInputStream dis;
+      if (RFC != null && RFC.hasInpuStreamFor(f.getPath())) {
+        LOG.info("[readLUTensor] using redis file cache: " + RFC);
+        dis = new DataInputStream(new GZIPInputStream(RFC.getInpuStreamFor(f.getPath())));
+      } else {
+        LOG.info("[readLUTensor] using disk");
+        dis = new DataInputStream(new GZIPInputStream(new FileInputStream(f)));
+      }
+      while (true) {
         int frameId = dis.readInt();
         if(frameId == -1) break;
         int roleId = dis.readInt();
