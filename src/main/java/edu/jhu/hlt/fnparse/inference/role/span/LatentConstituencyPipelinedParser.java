@@ -133,7 +133,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     List<FNParseSpanPruning> hypPrunes =
         FNParseSpanPruning.noisyPruningOf(
             parses, pIncludeNegativeSpan, params.rand);
-    roleLabeling.train(goldPrunes, parses);
+    roleLabeling.train(hypPrunes, parses);
 
     LOG.info("done training");
   }

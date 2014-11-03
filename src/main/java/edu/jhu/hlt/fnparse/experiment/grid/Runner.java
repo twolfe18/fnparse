@@ -51,7 +51,7 @@ public class Runner {
     RoleFactorFactory.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;
-    RoleSpanLabelingStage.SHOW_FEATURES = false;
+    RoleSpanLabelingStage.SHOW_FEATURES = true;
 
     //PipelinedFnParser.ARG_ID_MODEL_HUMAN_READABLE = "argId.txt";
     //PipelinedFnParser.ARG_SPANS_MODEL_HUMAN_READABLE = "argSpans.txt";

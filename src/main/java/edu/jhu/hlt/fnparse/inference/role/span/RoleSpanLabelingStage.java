@@ -170,8 +170,6 @@ public class RoleSpanLabelingStage
    *
    * NOTE: do not be tempted to make a k-ary variable for every (frame,role)
    * because then i wont be able to hook up latent syntax binary factors later
-   *
-   * @author travis
    */
   static class RoleSpanLabellingStageDatum
       implements StageDatum<FNParseSpanPruning, FNParse> {
