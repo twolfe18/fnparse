@@ -120,7 +120,7 @@ class FeatureSet(object):
     debug = True
     stage = random.choice(TEMPLATE_INFO.stages())
     card = self.estimate_cardinality(stage)
-    l = 0.3		# interpolation between cardinality (1) and #features (0)
+    l = 0.3     # interpolation between cardinality (1) and #features (0)
     alpha = 0.2
     beta = 200.0
     gamma = 3.0
@@ -501,7 +501,7 @@ class ForwardSelection:
     item = self.config_q.pop()
     if item:
       name = "fs-%s-%d" % (self.name, len(self.name2item))
-	  assert name not in self.name2item
+      assert name not in self.name2item
       self.name2item[name] = item
       wd = os.path.join(self.working_dir, name + '-wd')
       if not os.path.isdir(wd):
@@ -685,7 +685,7 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 10  # default number of training passes (this value is copied for all runs)
+  p = 5  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -868,7 +868,7 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 1000
+  max_train = 500
   max_jobs = 15000
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=5.0, max_train_size=max_train, max_num_jobs=max_jobs)
