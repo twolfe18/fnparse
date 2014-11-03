@@ -13,8 +13,10 @@ import java.util.Set;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -24,7 +26,11 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
+import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
@@ -44,6 +50,19 @@ public class Runner {
   public static Logger LOG = Logger.getLogger(Runner.class);
 
   public static void main(String[] args) {
+    //RoleFactorFactory.SHOW_FEATURES = true;
+    //RoleHeadToSpanStage.SHOW_FEATURES = true;
+    //RoleSpanPruningStage.SHOW_FEATURES = true;
+    //RoleSpanLabelingStage.SHOW_FEATURES = true;
+
+    //PipelinedFnParser.ARG_ID_MODEL_HUMAN_READABLE = "argId.txt";
+    //PipelinedFnParser.ARG_SPANS_MODEL_HUMAN_READABLE = "argSpans.txt";
+    //LatentConstituencyPipelinedParser.ROLE_PRUNE_HUMAN_READABLE = "rolePrune.txt";
+    //LatentConstituencyPipelinedParser.ROLE_LABEL_HUMAN_READABLE = "roleLab.txt";
+
+    // TODO Talk to Matt about numerical instability in ConstituencyTreeFactor
+    Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.ERROR);
+
     Runner r = new Runner(args);
     r.run();
   }
@@ -101,6 +120,11 @@ public class Runner {
     config = new HashMap<>();
     name = parseIntoMap(args, config);
   }
+
+  // TODO compute statistics like:
+  // how many total/per-frame args are predicted
+  // histogram of the span widths predicted
+  // how many unique frame-roles have positive predictions
 
   private double evaluate(Parser parser, List<FNParse> test) {
     String key = "evaluationFunction";

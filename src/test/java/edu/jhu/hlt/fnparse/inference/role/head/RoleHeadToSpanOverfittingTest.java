@@ -29,10 +29,10 @@ public class RoleHeadToSpanOverfittingTest {
     ParserParams params = new ParserParams();
     params.useLatentConstituencies = false;
     // Use some over-fitting features
-    String feats = "frameRoleArg * 1 + frameRoleArg * head1Word * span1LeftWord * span1FirstWord * span1LastWord * span1RightWord * head2Word * span1Width/1 * span1Width/2 * span1Width/3";
+    String feats = "RoleHeadToSpanStage * frameRoleArg * head1Word * span1LeftWord * span1FirstWord * span1LastWord * span1RightWord * head2Word * span1Width/1 * span1Width/2 * span1Width/3";
     if (params.useLatentConstituencies) {
-      feats += " + span1IsConstituent * span1Width/1 * head1Word * span1FirstWord";
-      feats += " + span1IsConstituent * frameRoleArg";
+      feats += " + RoleHeadToSpanStage * span1IsConstituent * span1Width/1 * head1Word * span1FirstWord";
+      feats += " + RoleHeadToSpanStage * span1IsConstituent * frameRoleArg";
     }
     params.setFeatureTemplateDescription(feats);
 

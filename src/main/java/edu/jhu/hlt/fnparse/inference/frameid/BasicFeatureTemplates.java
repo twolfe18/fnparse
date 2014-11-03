@@ -774,7 +774,7 @@ public class BasicFeatureTemplates {
                     once = true;
                     String si = null;
                     //try {
-                    extractor.apply(pos);
+                    si = extractor.apply(pos);
                     /*
                     } catch (java.lang.ArrayIndexOutOfBoundsException e) {
                       System.err.println("n=" + ngram);
@@ -834,28 +834,6 @@ public class BasicFeatureTemplates {
         Frame f = context.getFrame();
         assert f != null;
         return "frameRoleArg=" + f.getName() + "." + f.getRole(role);
-      }
-    });
-    addTemplate("role", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        return "role=" + f.getRole(role);
-      }
-    });
-    addTemplate("roleArg", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        if (context.getArg() == null)
-          return null;
-        int role = context.getRole();
-        if (role == TemplateContext.UNSET)
-          return null;
-        Frame f = context.getFrame();
-        assert f != null;
-        return "roleArg=" + f.getRole(role);
       }
     });
     addTemplate("span1IsConstituent", new TemplateSS() {
@@ -1025,7 +1003,7 @@ public class BasicFeatureTemplates {
 
               int card = -1;
               if (fakeIt)
-                card = new java.util.Random().nextInt(10000) + 42;
+                card = 250;
               else
                 card = estimateCard(tmplName, params, stage, parses);
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;

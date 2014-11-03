@@ -117,6 +117,8 @@ public class RoleSpanPruningStage
   private boolean keepEverything = false;
   private TemplatedFeatures features;
   private transient Regularizer regularizer;
+  private int batchSize = 1;
+  private int passes = 5;
 
   public RoleSpanPruningStage(
       ParserParams params,
@@ -140,6 +142,16 @@ public class RoleSpanPruningStage
     String reg = configuration.get(key);
     if (reg != null)
       regularizer = new L2(Double.parseDouble(reg));
+
+    key = "batchSize." + getName();
+    String bs = configuration.get(key);
+    if (bs != null)
+      batchSize = Integer.parseInt(bs);
+
+    key = "passes." + getName();
+    String passes = configuration.get(key);
+    if (passes != null)
+      this.passes = Integer.parseInt(passes);
   }
 
   @Override
@@ -158,12 +170,17 @@ public class RoleSpanPruningStage
 
   @Override
   public Double getLearningRate() {
-    return 1d;
+    return 0.05d;
+  }
+
+  @Override
+  public int getBatchSize() {
+    return batchSize;
   }
 
   @Override
   public int getNumTrainingPasses() {
-    return 3;
+    return passes;
   }
 
   @Override

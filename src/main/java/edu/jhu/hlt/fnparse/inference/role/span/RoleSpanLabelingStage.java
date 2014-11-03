@@ -57,6 +57,8 @@ public class RoleSpanLabelingStage
   private TemplatedFeatures features;
   private ApproxF1MbrDecoder decoder;
   private transient Regularizer regularizer = new L2(1_000_000d);
+  private int batchSize = 1;
+  private int passes = 5;
 
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
@@ -70,6 +72,16 @@ public class RoleSpanLabelingStage
     String reg = configuration.get(key);
     if (reg != null)
       regularizer = new L2(Double.parseDouble(reg));
+
+    key = "batchSize." + getName();
+    String bs = configuration.get(key);
+    if (bs != null)
+      batchSize = Integer.parseInt(bs);
+
+    key = "passes." + getName();
+    String passes = configuration.get(key);
+    if (passes != null)
+      this.passes = Integer.parseInt(passes);
   }
 
   @Override
@@ -84,12 +96,17 @@ public class RoleSpanLabelingStage
 
   @Override
   public Double getLearningRate() {
-    return 1d;
+    return 0.05d;
   }
 
   @Override
   public int getNumTrainingPasses() {
-    return 2;
+    return passes;
+  }
+
+  @Override
+  public int getBatchSize() {
+    return batchSize;
   }
 
   @Override

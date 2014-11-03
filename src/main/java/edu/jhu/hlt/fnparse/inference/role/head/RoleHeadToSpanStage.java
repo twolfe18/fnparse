@@ -69,13 +69,13 @@ public class RoleHeadToSpanStage
 		// (8,4) gives 90.0 % recall
 		// (10,5) gives 92.3 % recall
 		// (12,5) gives 93.2 % recall
-		public int maxArgRoleExpandLeft = 10;
-		public int maxArgRoleExpandRight = 5;
+		public int maxArgRoleExpandLeft = 8;
+		public int maxArgRoleExpandRight = 4;
 
-		public Double learningRate = 0.05;	// null means auto-select
+		public int batchSize = 1;
+		public int passes = 10;
+		public Double learningRate = 0.05;    // null means auto-select
 		public transient Regularizer regularizer = new L2(10_000_000d);
-		public int batchSize = 4;
-		public int passes = 2;
 
 		public FactorFactory<ExpansionVar> factorTemplate;
 
@@ -97,6 +97,16 @@ public class RoleHeadToSpanStage
     String reg = configuration.get(key);
     if (reg != null)
       params.regularizer = new L2(Double.parseDouble(reg));
+
+    key = "batchSize." + getName();
+    String bs = configuration.get(key);
+    if (bs != null)
+      params.batchSize = Integer.parseInt(bs);
+
+    key = "passes." + getName();
+    String passes = configuration.get(key);
+    if (passes != null)
+      params.passes = Integer.parseInt(passes);
   }
 
 	@Override

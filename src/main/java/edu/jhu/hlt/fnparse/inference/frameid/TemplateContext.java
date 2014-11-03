@@ -109,12 +109,14 @@ public class TemplateContext {
     if (!params.useLatentDepenencies) {
       head1_parent = UNSET;
       head2_parent = UNSET;
-      sentence.setBasicDeps(null);
-      sentence.setCollapsedDeps(null);
     }
     if (!params.useLatentConstituencies) {
       span1_isConstituent = UNSET;
       span2_isConstituent = UNSET;
+    }
+    if (!params.useSyntaxFeatures) {
+      sentence.setBasicDeps(null);
+      sentence.setCollapsedDeps(null);
     }
   }
 

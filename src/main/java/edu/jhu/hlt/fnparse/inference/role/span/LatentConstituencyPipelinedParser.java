@@ -74,6 +74,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public void configure(Map<String, String> configuration) {
+	  LOG.info("[configure] " + configuration);
     frameId.configure(configuration);
     rolePruning.configure(configuration);
     roleLabeling.configure(configuration);

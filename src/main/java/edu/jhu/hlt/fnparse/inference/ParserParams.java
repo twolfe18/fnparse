@@ -5,7 +5,6 @@ import java.io.Serializable;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
@@ -40,7 +39,8 @@ public class ParserParams
    * This encodes all of the features for the model.
    * See {@link TemplatedFeatures}.
    */
-  private String featureTemplateDescription =
+  private String featureTemplateDescription = null;
+  /*
       "frame * head1Word"
       + "+ frame * span1LeftPos"
       + "+ frame * span1Width/1"
@@ -50,6 +50,7 @@ public class ParserParams
       + "+ roleArg * span1GovDirRelations"
       + "+ roleArg * head1CollapsedParentDir * head1Pos"
       + "+ frameRoleArg * Word-2-grams-between-Head1-and-Head2 * Dist(Direction,Head1,Head2)";
+   */
 
   public String getFeatureTemplateDescription() {
     return featureTemplateDescription;

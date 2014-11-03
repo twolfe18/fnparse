@@ -88,11 +88,13 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 
     // 3 words + 1 punctuation is about as short as you might ever see as a
     // legitimate sentence
+    /*
     if(s.size() < 4) {
       LOG.debug("[DepParseFactorFactory] really short sentence "
           + "(skipping): " + s);
       return factors;
     }
+    */
 
     // Global/tree factor
     factors.add(d);

@@ -26,14 +26,16 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
-import edu.jhu.hlt.fnparse.features.BinaryBinaryFactorHelper;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.DepParseFactorFactory;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
+import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
@@ -58,11 +60,10 @@ public class RoleHeadStage
   public static class Params implements Serializable {
     private static final long serialVersionUID = 1L;
 
-    public int batchSize = 4;
-    public int passes = 1;
-    public int threads = 2;
+    public int batchSize = 1;
+    public int passes = 10;
     public int maxSentenceLengthForTraining = -1;
-    public Double learningRate = 0.05;		// null means auto-select
+    public Double learningRate = 0.05;    // null means auto-select
     public transient Regularizer regularizer = new L2(1_000_000d);
     public IArgPruner argPruner;
     public ApproxF1MbrDecoder decoder;
@@ -74,11 +75,10 @@ public class RoleHeadStage
     public boolean tuneOnTrainingData = false;
 
     public Params(ParserParams globalParams) {
-      this.factorTemplate = new RoleFactorFactory(
-          globalParams, BinaryBinaryFactorHelper.Mode.ISING);
-      //this.argPruner = new ArgPruner(
-      //    TargetPruningData.getInstance(), globalParams.headFinder);
-      this.argPruner = new NoArgPruner();
+      this.factorTemplate = new RoleFactorFactory(globalParams);
+      this.argPruner = new ArgPruner(
+          TargetPruningData.getInstance(), globalParams.headFinder);
+      //this.argPruner = new NoArgPruner();
       this.decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1d);
     }
   }
@@ -96,6 +96,16 @@ public class RoleHeadStage
     String reg = configuration.get(key);
     if (reg != null)
       params.regularizer = new L2(Double.parseDouble(reg));
+
+    key = "batchSize." + getName();
+    String bs = configuration.get(key);
+    if (bs != null)
+      params.batchSize = Integer.parseInt(bs);
+
+    key = "passes." + getName();
+    String passes = configuration.get(key);
+    if (passes != null)
+      params.passes = Integer.parseInt(passes);
   }
 
   @Override
@@ -173,13 +183,14 @@ public class RoleHeadStage
   @Override
   public TuningData getTuningData() {
     final List<Double> biases = new ArrayList<Double>();
-    for (double b = 0.1d; b < 3d; b *= 1.1d) biases.add(b);
+    for (double b = 0.2d; b < 75d; b *= 1.2d) biases.add(b);
     return new TuningData() {
       @Override
       public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
       @Override
       public EvalFunc getObjective() {
-        return GenerousEvaluation.generousF1;
+        double timeCost = 1e-6; // anything below 1e-4 is just breaking ties
+        return GenerousEvaluation.generousPlusTime(FPR.Mode.F1, false, timeCost);
       }
       @Override
       public List<Double> getRecallBiasesToSweep() { return biases; }
@@ -272,13 +283,13 @@ public class RoleHeadStage
             target, fi.getSentence());
 
         RoleHeadVars rv;
-        if (hasGold) {	// Train mode
+        if (hasGold) {  // Train mode
           // goldFI may be null, meaning that we predicted a frame
           // that was not actually present in the sentence.
           FrameInstance goldFI = fiByTarget[targetHead];
           rv = new RoleHeadVars(goldFI, targetHead, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
-        } else {		// Predict/decode mode
+        } else {        // Predict/decode mode
           rv = new RoleHeadVars(targetHead, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
         }

@@ -316,6 +316,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		sgdParams.numPasses = passes;
 		sgdParams.sched = new AdaGrad(adagParams);
 		log.info("[train] passes=" + passes + " batchSize=" + batchSize);
+		log.info("[train] regularizer=" + regularizer);
 
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
@@ -524,10 +525,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 		List<Double> regrets = new ArrayList<Double>();
 		for(double s : scores)
-			regrets.add(100d * (bestScore - s));	// 100 percent instead of 1
+			regrets.add(bestScore - s);
 
 		List<Double> weights = new ArrayList<Double>();
-		for(double r : regrets) weights.add(Math.exp(-r * 2));
+		for(double r : regrets) weights.add(Math.exp(-r * 200d));
 
 		double n = 0d, z = 0d;
 		for (int i=0; i<td.getRecallBiasesToSweep().size(); i++) {
@@ -538,8 +539,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		}
 		double bestBias = n / z;
 		log.info(String.format("[tuneRecallBias] Took %.1f sec for inference and"
-				+ " %.1f sec for decoding, done. recallBias %.2f => %.2f",
-				tInf/1000d, tDec/1000d, originalBias, bestBias));
+				+ " %.1f sec for decoding, done. recallBias %.2f => %.2f @ %.3f",
+				tInf/1000d, tDec/1000d, originalBias, bestBias, bestScore));
 		td.getDecoder().setRecallBias(bestBias);
 	}
 

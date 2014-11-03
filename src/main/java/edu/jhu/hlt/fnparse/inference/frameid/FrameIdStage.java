@@ -107,6 +107,16 @@ public class FrameIdStage
     String reg = configuration.get(key);
     if (reg != null)
       params.regularizer = new L2(Double.parseDouble(reg));
+
+    key = "batchSize." + getName();
+    String bs = configuration.get(key);
+    if (bs != null)
+      params.batchSize = Integer.parseInt(bs);
+
+    key = "passes." + getName();
+    String passes = configuration.get(key);
+    if (passes != null)
+      params.passes = Integer.parseInt(passes);
   }
 
   @Override

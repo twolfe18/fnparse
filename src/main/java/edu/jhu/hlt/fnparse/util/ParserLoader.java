@@ -49,7 +49,9 @@ public class ParserLoader {
           new LatentConstituencyPipelinedParser(params);
       return parser;
     } else if (mode.equals("head") || mode.equals("heads")) {
-      return new PipelinedFnParser(params);
+      PipelinedFnParser parser = new PipelinedFnParser(params);
+      parser.useGoldFrameId();
+      return parser;
     } else {
       assert !Parser.PARSER_MODE.isPossibleValue(mode);
       throw new RuntimeException("this method forgot a mode: " + mode);
