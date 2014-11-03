@@ -33,6 +33,7 @@ import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
+import edu.jhu.prim.util.math.FastMath;
 
 /**
  * Takes a feature set (as a string)
@@ -48,6 +49,7 @@ public class Runner {
   public static Logger LOG = Logger.getLogger(Runner.class);
 
   public static void main(String[] args) {
+    FastMath.useLogAddTable = false;  // saw about 8% improvement, not quite worth it
     RoleFactorFactory.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;

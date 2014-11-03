@@ -110,8 +110,9 @@ public class ApproxF1MbrDecoder implements Serializable {
     			risks[i] = risk;
     	}
 
-    	if(Math.abs(Z - one()) > 1e-5)
-    		throw new IllegalArgumentException("that posterior isn't a distribution! " + Arrays.toString(posterior));
+    	double eps = FastMath.useLogAddTable ? 1e-2 : 1e-5;
+    	if(Math.abs(Z - one()) > eps)
+    	  throw new IllegalArgumentException("that posterior isn't a distribution! " + Arrays.toString(posterior));
 
     	return minI;
     }
