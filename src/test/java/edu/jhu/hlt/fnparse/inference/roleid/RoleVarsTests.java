@@ -32,8 +32,7 @@ public class RoleVarsTests {
     final int n = parse.getSentence().size();
     for(FrameInstance fi : parse.getFrameInstances()) {
       System.out.println(fi);
-      int targetHead = fi.getTarget().start;
-      RoleHeadVars rv = new RoleHeadVars(targetHead, fi.getFrame(), parse.getSentence(), params, roleIdParams);
+      RoleHeadVars rv = new RoleHeadVars(fi.getTarget(), fi.getFrame(), parse.getSentence(), params, roleIdParams);
 
       Var[][] vars = rv.r_kj;
       assertEquals(vars.length, fi.getFrame().numRoles());
