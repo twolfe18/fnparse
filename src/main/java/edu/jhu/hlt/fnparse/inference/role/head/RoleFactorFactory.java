@@ -81,6 +81,8 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
       debugMsg(s, fr, l, c);
     List<Factor> factors = new ArrayList<Factor>();
     for (RoleHeadVars rv : fr) {
+      Span target = rv.getTarget();
+      int targetHead = params.headFinder.head(target, s);
       Iterator<RVar> it = rv.getVars();
       while (it.hasNext()) {
         RVar rvar = it.next();
@@ -89,9 +91,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
         assert rvar.j >= 0;
         VarSet vs;
         if (argRealized && params.useLatentDepenencies) {
-          link = l.getLinkVar(rv.i, rvar.j);
+          link = l.getLinkVar(targetHead, rvar.j);
           if (link == null) {
-            assert rv.i == rvar.j;
+            assert targetHead == rvar.j;
             vs = new VarSet(rvar.roleVar);
           } else {
             vs = new VarSet(rvar.roleVar, link);
@@ -110,16 +112,16 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           context.clear();
           context.setStage(RoleHeadStage.class);
           context.setSentence(s);
-          context.setFrame(rv.t);
-          context.setTargetHead(rv.i);
+          context.setFrame(rv.getFrame());
+          context.setTargetHead(targetHead);
           if (allowSpanFeatures) {
-            context.setTarget(Span.widthOne(rv.i));
-            context.setSpan2(Span.widthOne(rv.i));
+            context.setTarget(target);
+            context.setSpan2(target);
           }
           if (role || dep) {
-            context.setHead2(rv.i);
+            context.setHead2(targetHead);
             if (allowSpanFeatures)
-              context.setSpan2(Span.widthOne(rv.i));
+              context.setSpan2(target);
             if (role) {
               context.setRole(rvar.k);
               context.setArgHead(rvar.j);
@@ -130,7 +132,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
               }
             }
             if (dep) {
-              context.setHead1_parent(rv.i);
+              context.setHead1_parent(targetHead);
             }
           }
           context.blankOutIllegalInfo(params);

@@ -59,6 +59,7 @@ public class RoleSpanLabelingStage
   private transient Regularizer regularizer = new L2(1_000_000d);
   private int batchSize = 1;
   private int passes = 5;
+  private Double learningRate = null;
 
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
@@ -96,7 +97,7 @@ public class RoleSpanLabelingStage
 
   @Override
   public Double getLearningRate() {
-    return 0.05d;
+    return learningRate;
   }
 
   @Override
