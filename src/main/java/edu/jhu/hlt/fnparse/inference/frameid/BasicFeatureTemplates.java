@@ -602,8 +602,11 @@ public class BasicFeatureTemplates {
               ret.add("luMatch-WNRelated=" + x.getKey().getName());
           }
         }
-        if (ret.size() == 0 && hadAChance)
-          ret.add("NO-luMatch-WNRelated");
+        if (ret.size() == 0) {
+          if (hadAChance)
+            ret.add("NO-luMatch-WNRelated");
+          else return null;
+        }
         return ret;
       }
     });
@@ -638,8 +641,11 @@ public class BasicFeatureTemplates {
             }
           }
         }
-        if (ret.size() == 0 && hadAChance)
-          ret.add("NO-luMatch-WNRelatedSynSet");
+        if (ret.size() == 0) {
+          if (hadAChance)
+            ret.add("NO-luMatch-WNRelatedSynSet");
+          else return null;
+        }
         return ret;
       }
     });
@@ -808,6 +814,8 @@ public class BasicFeatureTemplates {
                     feat.append("<NONE>");
                   output.add(feat.toString());
                 }
+                if (output.size() == 0)
+                  return Arrays.asList(name + "=NONE");
                 return output;
               }
             });
