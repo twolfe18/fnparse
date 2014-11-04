@@ -68,16 +68,13 @@ public class TemplatedFeatures implements Serializable {
 
   /** Conjoins two basic templates */
   public static class TemplateJoin implements Template {
-    private static final String JOIN_STR = "_";
     private Template left, right;
-
     public TemplateJoin(Template left, Template right) {
       if (left == null || right == null)
         throw new IllegalArgumentException();
       this.left = left;
       this.right = right;
     }
-
     @Override
     public Iterable<String> extract(TemplateContext context) {
       final Iterable<String> l = left.extract(context);
@@ -95,11 +92,10 @@ public class TemplatedFeatures implements Serializable {
     }
   }
   public static class IterableProduct implements Iterator<String> {
-    private Iterable<String> a, b;
+    private Iterable<String> b;
     private Iterator<String> aIter, bIter;
     private String aCur;
     public IterableProduct(Iterable<String> a, Iterable<String> b) {
-      this.a = a;
       this.b = b;
       this.aIter = a.iterator();
       this.bIter = b.iterator();
@@ -213,7 +209,6 @@ public class TemplatedFeatures implements Serializable {
   private String templateString;
   private transient List<Template> templates;
   private transient Alphabet<String> featureAlphabet;
-  private transient TemplateContext context;
 
   public TemplatedFeatures(
       String globalPrefix,
@@ -222,7 +217,6 @@ public class TemplatedFeatures implements Serializable {
     this.globalPrefix = globalPrefix;
     this.templateString = description;
     this.featureAlphabet = featureAlphabet;
-    this.context = new TemplateContext();
     /*
     // NOTE this has been pushed back into featurize because of some
     // initialization terribleness related to BasicFeatureTemplates
@@ -236,16 +230,6 @@ public class TemplatedFeatures implements Serializable {
 
   public String getTemplateString() {
     return templateString;
-  }
-
-  public TemplateContext setContext(TemplateContext context) {
-    TemplateContext old = this.context;
-    this.context = context;
-    return old;
-  }
-
-  public TemplateContext getContext() {
-    return context;
   }
 
   public static void showContext(TemplateContext ctx) {
@@ -283,8 +267,8 @@ public class TemplatedFeatures implements Serializable {
    * Same as featurize, but prints the given message, context of the extraction,
    * and the features extracted.
    */
-  public void featurizeDebug(FeatureVector v, String message) {
-    featurize(v);
+  public void featurizeDebug(FeatureVector v, TemplateContext context, String message) {
+    featurize(v, context);
     LOG.debug("");
     LOG.info(message);
     showContext(context);
@@ -292,7 +276,7 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("");
   }
 
-  public void featurize(FeatureVector v) {
+  public void featurize(FeatureVector v, TemplateContext context) {
     if (templates == null) {
       try {
         templates = parseTemplates(templateString);

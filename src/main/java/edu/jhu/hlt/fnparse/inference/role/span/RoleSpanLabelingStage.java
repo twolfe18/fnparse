@@ -286,7 +286,7 @@ public class RoleSpanLabelingStage
 
       // Compute features for the binary factor
       TemplatedFeatures feats = parent.getFeatures();
-      TemplateContext context = feats.getContext();
+      TemplateContext context = new TemplateContext();
       context.clear();
       context.setStage(RoleSpanLabelingStage.class);
       context.setSentence(s);
@@ -306,10 +306,10 @@ public class RoleSpanLabelingStage
       context.blankOutIllegalInfo(parent.globalParams);
       FeatureVector fv = new FeatureVector();
       if (SHOW_FEATURES) {
-        feats.featurizeDebug(fv, "[variables] " + frame.getName() + "."
+        feats.featurizeDebug(fv, context, "[variables] " + frame.getName() + "."
             + frame.getRole(role) + " arg=" + arg);
       } else {
-        feats.featurize(fv);
+        feats.featurize(fv, context);
       }
       phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
       phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);

@@ -79,6 +79,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
       ConstituencyTreeFactor c) {
     if (SHOW_FEATURES)
       debugMsg(s, fr, l, c);
+    TemplateContext context = new TemplateContext();
     List<Factor> factors = new ArrayList<Factor>();
     for (RoleHeadVars rv : fr) {
       Span target = rv.getTarget();
@@ -103,7 +104,6 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
         }
         ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
         TemplatedFeatures feats = getTFeatures();
-        TemplateContext context = feats.getContext();
         int n = vs.calcNumConfigs();
         for (int i = 0; i < n; i++) {
           VarConfig vc = vs.getVarConfig(i);
@@ -140,9 +140,9 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           if (SHOW_FEATURES) {
             String msg = String.format("[variables] rvar[%d,%d]=%s dep=%s",
                 rvar.j, rvar.k, role, dep);
-            feats.featurizeDebug(fv, msg);
+            feats.featurizeDebug(fv, context, msg);
           } else {
-            feats.featurize(fv);
+            feats.featurize(fv, context);
           }
           phi.setFeatures(i, fv);
         }

@@ -198,6 +198,7 @@ public class RoleHeadToSpanStage
 				List<ExpansionVar> inThisSentence,
 				ProjDepTreeFactor d,
 				ConstituencyTreeFactor c) {
+		  TemplateContext context = new TemplateContext();
 			List<Factor> factors = new ArrayList<>();
 			for (ExpansionVar ev : inThisSentence) {
 			  for (int spanIdx = 0; spanIdx < ev.numSpans(); spanIdx++) {
@@ -212,7 +213,6 @@ public class RoleHeadToSpanStage
 			      vs = new VarSet(sVar);
 			    }
 			    TemplatedFeatures feats = getTFeatures();
-			    TemplateContext context = feats.getContext();
 			    ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
 			    int n = vs.calcNumConfigs();
 			    for (int i = 0; i < n; i++) {
@@ -244,9 +244,9 @@ public class RoleHeadToSpanStage
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
 			            arg, cons, sVar.getName());
-			        feats.featurizeDebug(fv, msg);
+			        feats.featurizeDebug(fv, context, msg);
 			      } else {
-			        feats.featurize(fv);
+			        feats.featurize(fv, context);
 			      }
 			      phi.setFeatures(i, fv);
 			    }

@@ -371,8 +371,7 @@ public class RoleSpanPruningStage
       HeadFinder hf = parent.getGlobalParams().headFinder;
       ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
       TemplatedFeatures feats = parent.getTFeatures();
-      TemplateContext context = feats.getContext();
-      context.clear();
+      TemplateContext context = new TemplateContext();
       context.setStage(RoleSpanPruningStage.class);
       context.setSentence(input.getSentence());
       context.setFrame(p.frame);
@@ -398,9 +397,9 @@ public class RoleSpanPruningStage
             msg.append(" constit=" + BinaryVarUtil.configToBool(conf.getState(c)));
           msg.append(" ");
           msg.append(p.getName());
-          feats.featurizeDebug(fv, msg.toString());
+          feats.featurizeDebug(fv, context, msg.toString());
         } else {
-          feats.featurize(fv);
+          feats.featurize(fv, context);
         }
         phi.setFeatures(i, fv);
       }

@@ -58,7 +58,7 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
 
     final int ROOT = -1;
     TemplatedFeatures feats = getTFeatures();
-    TemplateContext context = feats.getContext();
+    TemplateContext context = new TemplateContext();
     List<Factor> factors = new ArrayList<Factor>();
     for (FrameVars fhyp : fr) {
       final int T = fhyp.numFrames();
@@ -88,9 +88,9 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
             FeatureVector fv = new FeatureVector();
             if (SHOW_FEATURES) {
               String msg = "[variables] " + vs.getVarConfig(config);
-              feats.featurizeDebug(fv, msg);
+              feats.featurizeDebug(fv, context, msg);
             } else {
-              feats.featurize(fv);
+              feats.featurize(fv, context);
             }
             phi.setFeatures(config, fv);
           }
@@ -101,18 +101,18 @@ public final class FrameFactorFactory implements FactorFactory<FrameVars> {
           context.setFrame(t);
           context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
-            feats.featurizeDebug(fv1, "[variables] (contained in context)");
+            feats.featurizeDebug(fv1, context, "[variables] (contained in context)");
           } else {
-            feats.featurize(fv1);
+            feats.featurize(fv1, context);
           }
           phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv1);
           FeatureVector fv2 = new FeatureVector();
           context.setFrame(null);
           context.blankOutIllegalInfo(params.getParserParams());
           if (SHOW_FEATURES) {
-            feats.featurizeDebug(fv2, "[variables] (contained in context)");
+            feats.featurizeDebug(fv2, context, "[variables] (contained in context)");
           } else {
-            feats.featurize(fv2);
+            feats.featurize(fv2, context);
           }
           phi.setFeatures(BinaryVarUtil.boolToConfig(false), fv2);
         }
