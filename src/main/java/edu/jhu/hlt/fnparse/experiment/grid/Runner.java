@@ -263,7 +263,7 @@ public class Runner {
       File trainDevModelDir = new File(workingDir, "trainDevModel");
       if (!trainDevModelDir.isDirectory())
         trainDevModelDir.mkdir();
-      parser.saveModel(trainDevModelDir);
+      //parser.saveModel(trainDevModelDir);
     }
 
     // Compute test error and phone home

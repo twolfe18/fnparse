@@ -321,8 +321,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
-		trainerParams.numThreads = 4; //globalParams.threads;
+		trainerParams.numThreads = 1; //globalParams.threads;
 		trainerParams.regularizer = regularizer;
+		log.info("[train] numThreads=" + trainerParams.numThreads);
 
 		Alphabet<String> alph = featureNames.getAlphabet();
 		log.info("[train] Feature alphabet is frozen (size=" + alph.size() + "), "

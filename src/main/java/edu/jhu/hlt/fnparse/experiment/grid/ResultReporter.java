@@ -128,7 +128,7 @@ public interface ResultReporter {
         anc.append("=");
         anc.append(ancillaryInfo.get(key));
       }
-      String message = String.format("%f\t%s\t%s",
+      String message = String.format("result %f\t%s\t%s",
           mainResult, jobName, anc.toString());
       Jedis r = new Jedis(host, port);
       long f = r.publish(channel, message);

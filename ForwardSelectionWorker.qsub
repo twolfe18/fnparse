@@ -2,8 +2,8 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=48:00:00
-#$ -l mem_free=6G
-#$ -l num_proc=4
+#$ -l mem_free=5G
+#$ -l num_proc=1
 #$ -o logging/forward-selection
 #$ -S /bin/bash
 
