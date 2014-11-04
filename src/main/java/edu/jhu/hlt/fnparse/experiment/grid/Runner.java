@@ -151,8 +151,11 @@ public class Runner {
     String lim = config.get("MaxTrainSize");
     if (lim != null) {
       int n = Integer.parseInt(lim);
-      LOG.info("[run] limiting the train set from " + all.size() + " to " + n);
-      all = DataUtil.reservoirSample(all, n, r);
+      if (n < all.size()) {
+        LOG.info("[run] limiting the train set from " + all.size()
+            + " to " + n);
+        all = DataUtil.reservoirSample(all, n, r);
+      }
     }
     return all;
   }
