@@ -87,18 +87,54 @@ public class TemplatedFeatures implements Serializable {
       if (r == null)
         return null;
       return new Iterable<String>() {
-        private List<String> all;
         @Override
         public Iterator<String> iterator() {
-          if (all == null) {
-            all = new ArrayList<>();
-            for (String ls : l)
-              for (String rs : r)
-                all.add(ls + JOIN_STR + rs);
-          }
-          return all.iterator();
+          return new IterableProduct(l, r);
         }
       };
+    }
+  }
+  public static class IterableProduct implements Iterator<String> {
+    private Iterable<String> a, b;
+    private Iterator<String> aIter, bIter;
+    private String aCur;
+    public IterableProduct(Iterable<String> a, Iterable<String> b) {
+      this.a = a;
+      this.b = b;
+      this.aIter = a.iterator();
+      this.bIter = b.iterator();
+      assert aIter.hasNext();
+      assert bIter.hasNext();
+    }
+    public void remove() { throw new UnsupportedOperationException(); }
+    public boolean hasNext() {
+      return bIter.hasNext() || aIter.hasNext();
+    }
+    public String next() {
+      if (aCur == null)
+        aCur = aIter.next();
+      String bCur;
+      if (bIter.hasNext()) {
+        bCur = bIter.next();
+      } else {
+        aCur = aIter.next();
+        bIter = b.iterator();
+        bCur = bIter.next();
+      }
+      return aCur + "_" + bCur;
+    }
+    public static void main(String[] args) {
+      int a = Integer.parseInt(args[0]);
+      int b = Integer.parseInt(args[1]);
+      List<String> al = new ArrayList<>();
+      List<String> bl = new ArrayList<>();
+      for (int i = 0; i < a; i++)
+        al.add("a" + i);
+      for (int i = 0; i < b; i++)
+        bl.add("b" + i);
+      Iterator<String> c = new IterableProduct(al, bl);
+      while (c.hasNext())
+        System.out.println(c.next());
     }
   }
 
