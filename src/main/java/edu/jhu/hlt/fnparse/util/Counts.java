@@ -10,10 +10,17 @@ import java.util.Map.Entry;
 
 public class Counts<T> {
   private Map<T, Integer> counts = new HashMap<T, Integer>();
+  private int total = 0;
 
   public int getCount(T t) {
     Integer c = counts.get(t);
     return c == null ? 0 : c;
+  }
+
+  public double getProportion(T t) {
+    if (total == 0)
+      return 0d;
+    return ((double) getCount(t)) / total;
   }
 
   public Iterable<Entry<T, Integer>> entrySet() {
@@ -23,11 +30,16 @@ public class Counts<T> {
   public int increment(T t) {
     int c = getCount(t) + 1;
     counts.put(t, c);
+    total++;
     return c;
   }
 
   public int numNonZero() {
     return counts.size();
+  }
+
+  public int getTotalCount() {
+    return total;
   }
 
   public List<T> getKeysSorted(final boolean descending) {
