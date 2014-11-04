@@ -45,8 +45,8 @@ public class RoleHeadVars implements FgRelated {
   public boolean verbose = true;
 
   // frame-target that this belongs to
-  public final int i;
-  public final Frame t;
+  public final Span target;
+  public final Frame frame;
 
   public final int n;	// length of sentence
 
@@ -64,29 +64,30 @@ public class RoleHeadVars implements FgRelated {
       FrameInstance gold,
       boolean gotFramePredictionWrong,
       boolean hasGold,
-      int targetHeadIdx,
+      Span target,
       Frame evoked,
       Sentence sent,
       ParserParams globalParams,
       RoleHeadStage.Params params) {
-    if(evoked == Frame.nullFrame) {
+    if (evoked == Frame.nullFrame) {
       throw new IllegalArgumentException(
           "only create these for non-nullFrame f_it");
     }
 
-    this.i = targetHeadIdx;
-    this.t = evoked;
+    assert target != Span.nullSpan;
+    this.target = target;
+    this.frame = evoked;
     this.n = sent.size();
     this.gold = gold;
-    if(hasGold)
+    if (hasGold)
       this.goldConf = new VarConfig();
 
     int K = evoked.numRoles();
-    r_kj = new Var[K][n+1];
-    for(int k=0; k<K; k++) {
+    r_kj = new Var[K][n + 1];
+    for (int k = 0; k < K; k++) {
       Span jGoldSpan = null;
       int jGold = -1;
-      if(hasGold) {
+      if (hasGold) {
         jGoldSpan = gotFramePredictionWrong
             ? Span.nullSpan : gold.getArgument(k);
         jGold = jGoldSpan == Span.nullSpan
@@ -95,13 +96,13 @@ public class RoleHeadVars implements FgRelated {
       }
 
       int inThisRow = 0;
-      for(int j=0; j<n; j++) {
+      for (int j = 0; j < n; j++) {
         boolean argRealized = (j == jGold);
 
-        if(params.argPruner.pruneArgHead(t, k, j, sent)) {
-          if(argRealized) {
+        if (params.argPruner.pruneArgHead(frame, k, j, sent)) {
+          if (argRealized) {
             params.argPruner.falsePrune();
-            if(verbose) {
+            if (verbose) {
               LOG.warn(String.format(
                   "Pruned %s.%s for head \"%s\"",
                   gold.getFrame().getName(),
@@ -112,12 +113,12 @@ public class RoleHeadVars implements FgRelated {
           continue;
         }
 
-        String name = String.format("r_{i=%d,t=%s,j=%d,k=%d}",
-            i, evoked.getName(), j, k);
+        String name = String.format("r_{%s@%s,j=%d,k=%d}",
+            evoked.getName(), target, j, k);
         r_kj[k][j] = new Var(
             VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
 
-        if(hasGold) {
+        if (hasGold) {
           goldConf.put(r_kj[k][j],
               BinaryVarUtil.boolToConfig(argRealized));
         }
@@ -127,18 +128,18 @@ public class RoleHeadVars implements FgRelated {
 
       // If all roles were pruned, then no need to use that var
       // (or the "no arg" var)
-      if(inThisRow == 0) {
+      if (inThisRow == 0) {
         r_kj[k] = null;
         // I'm not removing the Vars from goldConf because it doesn't
         // have a drop method, probably doesn't matter
       } else {
         // There is no expansion variable for null-realized-arg
         String name = String.format(
-            "r_{i=%d,t=%s,k=%d,notRealized}",
-            i, evoked.getName(), k);
+            "r_{%s@%s,k=%d,notRealized}",
+            evoked.getName(), target, k);
         r_kj[k][n] = new Var(
             VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
-        if(hasGold) {
+        if (hasGold) {
           boolean goldIsNull =
               gotFramePredictionWrong || (n == jGold);
           goldConf.put(r_kj[k][n],
@@ -150,12 +151,12 @@ public class RoleHeadVars implements FgRelated {
 
   /** Constructor for prediction */
   public RoleHeadVars(
-      int targetHeadIdx,
+      Span target,
       Frame evoked,
       Sentence s,
       ParserParams globalParams,
       RoleHeadStage.Params params) {
-    this(null, false, false, targetHeadIdx, evoked, s, globalParams, params);
+    this(null, false, false, target, evoked, s, globalParams, params);
   }
 
   /**
@@ -168,13 +169,13 @@ public class RoleHeadVars implements FgRelated {
    */
   public RoleHeadVars(
       FrameInstance gold,
-      int targetHeadIdx,
+      Span target,
       Frame evoked,
       Sentence s,
       ParserParams globalParams,
       RoleHeadStage.Params params) {
     this(gold, gold == null || gold.getFrame() != evoked, true,
-        targetHeadIdx, evoked, s, globalParams, params);
+        target, evoked, s, globalParams, params);
   }
 
   /**
@@ -186,9 +187,9 @@ public class RoleHeadVars implements FgRelated {
     return new RVarIter(this.r_kj);
   }
 
-  public Frame getFrame() { return t; }
+  public Frame getFrame() { return frame; }
 
-  public int getTargetHead() { return i; }
+  public Span getTarget() { return target; }
 
   @Override
   public void register(FactorGraph fg, VarConfig gold) {
@@ -196,7 +197,7 @@ public class RoleHeadVars implements FgRelated {
     while(iter.hasNext())
       fg.addVar(iter.next().roleVar);
 
-    if(hasLabels())
+    if (hasLabels())
       gold.put(this.goldConf);
   }
 
@@ -222,7 +223,7 @@ public class RoleHeadVars implements FgRelated {
       this.roleVars = roleVars;
       this.k = 0;
       this.j = 0;
-      while(hasNext() && (roleVars[k] == null || roleVars[k][j] == null))
+      while (hasNext() && (roleVars[k] == null || roleVars[k][j] == null))
         bump();
     }
     private void bump() {

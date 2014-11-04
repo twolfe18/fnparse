@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 
@@ -63,7 +64,7 @@ public class RoleHeadStage
     public int batchSize = 1;
     public int passes = 10;
     public int maxSentenceLengthForTraining = -1;
-    public Double learningRate = 0.05;    // null means auto-select
+    public Double learningRate = null;//0.05;    // null means auto-select
     public transient Regularizer regularizer = new L2(1_000_000d);
     public IArgPruner argPruner;
     public ApproxF1MbrDecoder decoder;
@@ -183,7 +184,7 @@ public class RoleHeadStage
   @Override
   public TuningData getTuningData() {
     final List<Double> biases = new ArrayList<Double>();
-    for (double b = 0.2d; b < 75d; b *= 1.2d) biases.add(b);
+    for (double b = 0.2d; b < 15d; b *= 1.2d) biases.add(b);
     return new TuningData() {
       @Override
       public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
@@ -270,27 +271,21 @@ public class RoleHeadStage
       // This assumes that:
       // 1) We are using a headword to describe a target
       // 2) A given headword can evoke at most 1 frame.
-      FrameInstance[] fiByTarget = null;
-      if (hasGold) {
-        fiByTarget = DataUtil.getFrameInstancesIndexByHeadword(
-            gold.getFrameInstances(), getSentence(),
-            parent.globalParams.headFinder);
-      }
+      Map<Span, FrameInstance> fiByTarget = null;
+      if (hasGold)
+        fiByTarget = DataUtil.getFrameInstanceByTarget(gold);
 
       for (FrameInstance fi : frames.getFrameInstances()) {
         Span target = fi.getTarget();
-        int targetHead = parent.globalParams.headFinder.head(
-            target, fi.getSentence());
-
         RoleHeadVars rv;
         if (hasGold) {  // Train mode
           // goldFI may be null, meaning that we predicted a frame
           // that was not actually present in the sentence.
-          FrameInstance goldFI = fiByTarget[targetHead];
-          rv = new RoleHeadVars(goldFI, targetHead, fi.getFrame(),
+          FrameInstance goldFI = fiByTarget.get(target);
+          rv = new RoleHeadVars(goldFI, target, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
         } else {        // Predict/decode mode
-          rv = new RoleHeadVars(targetHead, fi.getFrame(),
+          rv = new RoleHeadVars(target, fi.getFrame(),
               fi.getSentence(), parent.globalParams, parent.params);
         }
 
@@ -429,8 +424,8 @@ public class RoleHeadStage
           System.out.println();
           for (int i = 0; i < beliefs[k].length; i++) {
             LOG.debug(String.format("%-15s %-15s % 5d %-15s %.3f",
-                rv.t.getName() + "@" + rv.i,
-                rv.t.getRole(k) + "/" + k,
+                rv.getFrame().getName() + "@" + rv.getTarget(),
+                rv.getFrame().getRole(k) + "/" + k,
                 i,
                 i < sent.size() ? sent.getWord(i) : "NONE",
                     beliefs[k][i]));
@@ -445,8 +440,8 @@ public class RoleHeadStage
           arguments[k] = Span.widthOne(jHat);
       }
       if (t != null) t.stop();
-      return FrameInstance.newFrameInstance(rv.getFrame(),
-          Span.widthOne(rv.getTargetHead()), arguments, sent);
+      return FrameInstance.newFrameInstance(
+        rv.getFrame(), rv.getTarget(), arguments, sent);
     }
   }
 }

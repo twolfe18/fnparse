@@ -119,6 +119,7 @@ public class RoleSpanPruningStage
   private transient Regularizer regularizer;
   private int batchSize = 1;
   private int passes = 5;
+  private Double learningRate = null;
 
   public RoleSpanPruningStage(
       ParserParams params,
@@ -170,7 +171,7 @@ public class RoleSpanPruningStage
 
   @Override
   public Double getLearningRate() {
-    return 0.05d;
+    return learningRate;
   }
 
   @Override

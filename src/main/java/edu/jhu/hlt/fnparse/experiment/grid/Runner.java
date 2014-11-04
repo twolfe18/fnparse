@@ -185,6 +185,44 @@ public class Runner {
     return overlap;
   }
 
+  private Counts<String> getFrameRoleCounts(List<FNParse> data) {
+    Counts<String> c = new Counts<>();
+    for (FNParse p : data) {
+      for (FrameInstance fi : p.getFrameInstances()) {
+        Frame f = fi.getFrame();
+        for (int k = 0; k < f.numRoles(); k++) {
+          Span arg = fi.getArgument(k);
+          if (arg == Span.nullSpan) continue;
+          String fr = f.getName() + "." + f.getRole(k);
+          c.increment(fr);
+        }
+      }
+    }
+    return c;
+  }
+  public void reportTrainTestStats(List<FNParse> train, List<FNParse> test) {
+    Counts<String> tr = getFrameRoleCounts(train);
+    Counts<String> te = getFrameRoleCounts(test);
+    LOG.info("                     train\ttest");
+    LOG.info("#frame-roles-types  " + tr.numNonZero() + "\t" + te.numNonZero());
+    LOG.info("#frame-roles-tokens " + tr.getTotalCount() + "\t" + te.getTotalCount());
+    for (int i = 1; i <= 15; i++) {
+      List<String> trs = tr.countIsAtLeast(i);
+      LOG.info("#frame-roles-types with count >= " + i + "\t"
+        + trs.size() + "\t" + te.countIsAtLeast(i).size());
+      Set<String> trss = new HashSet<>();
+      trss.addAll(trs);
+      int hits = 0, total = 0;
+      for (String s : te.countIsAtLeast(1)) {
+        if (trss.contains(s))
+          hits++;
+        total++;
+      }
+      LOG.info("%test-frame-role-types with train-count >= " + i + "\t"
+        + hits + "/" + total + " " + (100d*hits)/total + "%");
+    }
+  }
+
   public void run() {
     LOG.info("[run] starting");
     Random rand = getRandom(config);
@@ -213,6 +251,7 @@ public class Runner {
         for (int devSplit = 0; devSplit < K; devSplit++)
           (devSplit == k ? dev : train).addAll(splits[devSplit + 1]);
         assert overlap(train, dev).size() == 0;
+        reportTrainTestStats(train, dev);
         parser.train(train);
         double perf = evaluate(parser, dev);
         LOG.info("[run] for the " + (k+1) + "th split, perf=" + perf);

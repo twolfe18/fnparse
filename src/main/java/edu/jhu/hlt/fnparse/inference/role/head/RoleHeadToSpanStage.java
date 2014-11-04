@@ -74,7 +74,7 @@ public class RoleHeadToSpanStage
 
 		public int batchSize = 1;
 		public int passes = 10;
-		public Double learningRate = 0.05;    // null means auto-select
+		public Double learningRate = null;//0.05;    // null means auto-select
 		public transient Regularizer regularizer = new L2(10_000_000d);
 
 		public FactorFactory<ExpansionVar> factorTemplate;

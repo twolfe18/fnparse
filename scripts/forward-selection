@@ -590,17 +590,20 @@ class ForwardSelection:
         else:
           # check if any jobs died
           print 'no one phoned home, maybe someone died?'
-          r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
-          print 'running and queued:', r
-          failed = set([name for name in self.dispatched if name not in r])
-          for name in failed:
-            item = self.name2item[name]
-            print 'dead:', name, item
-            self.config_q.observe_score(FAILED_SCORE, name, item)
-            self.dispatched.remove(name)
-          else:
-            print 'everything is running nicely:', len(r)
-            time.sleep(self.poll_interval)
+          try:
+            r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
+            print 'running and queued:', r
+            failed = set([name for name in self.dispatched if name not in r])
+            for name in failed:
+              item = self.name2item[name]
+              print 'dead:', name, item
+              self.config_q.observe_score(FAILED_SCORE, name, item)
+              self.dispatched.remove(name)
+            else:
+              print 'everything is running nicely:', len(r)
+              time.sleep(self.poll_interval)
+          except subprocess.CalledProcessError:
+            print 'qstat failed! ignoring...'
     perf_file.close()
 
 
@@ -685,7 +688,7 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 5  # default number of training passes (this value is copied for all runs)
+  p = 8  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -881,7 +884,7 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     'port': '6379',
     'db': '0'
   }
-  max_train = 500
+  max_train = 1500
   max_jobs = 15000
   fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
     poll_interval=5.0, max_train_size=max_train, max_num_jobs=max_jobs)
