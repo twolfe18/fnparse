@@ -27,10 +27,7 @@ class CommonEqualityMixin(object):
     return not self.__eq__(other)
 
 # sorry, global
-TEMPLATE_INFO = None  # Stores info about what templates/stages we're optimizing over
 FAILED_SCORE = 0.0
-SER_Q_PATH = None
-SER_Q = None
 
 
 class Feature(CommonEqualityMixin):
@@ -50,25 +47,25 @@ class Feature(CommonEqualityMixin):
     st = self.stage + '-' + self.syntax_mode
     return "*".join([st, self.label] + self.templates)
 
-  def estimate_cardinality(self):
-    c = TEMPLATE_INFO.cardinality(self.label, self.stage, self.syntax_mode)
+  def estimate_cardinality(self, template_info):
+    c = template_info.cardinality(self.label, self.stage, self.syntax_mode)
     for t in self.templates:
-      c *= TEMPLATE_INFO.cardinality(t, self.stage, self.syntax_mode)
+      c *= template_info.cardinality(t, self.stage, self.syntax_mode)
     assert type(c) is int or type(c) is long
     return c
 
-  def propose_modification(self):
+  def propose_modification(self, template_info):
     # the higher the estimated cardinality, the greater the chance of
     # removing a template
     # e.g. cardinality = 100  -> p(shrink) = 0.500
     #      cardinality = 4    -> p(shrink) = 0.167
     #      cardinality = 400  -> p(shrink) = 0.667
     #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
-    card = pow(self.estimate_cardinality(), 0.5)
+    card = pow(self.estimate_cardinality(template_info), 0.5)
     p_shrink = card / (card + 10.0)
     if len(self.templates) > 1 and random.random() < p_shrink:
       # add a new template
-      xs = [x for x in TEMPLATE_INFO.basic_templates() if x not in self.templates]
+      xs = [x for x in template_info.basic_templates() if x not in self.templates]
       if len(xs) > 0:
         return Feature(self.stage, self.syntax_mode, self.label, self.templates + [random.choice(xs)])
       else:
@@ -91,11 +88,11 @@ class FeatureSet(object):
   def __ne__(self, other):
     return not self.__eq__(other)
 
-  def estimate_cardinality(self, stage=None):
+  def estimate_cardinality(self, template_info, stage=None):
     ''' Returns a dict with stage names as keys and int/long values '''
     cards = collections.defaultdict(lambda: 1)
     for f in self.features:
-      cards[f.stage] = cards[f.stage] * f.estimate_cardinality()
+      cards[f.stage] = cards[f.stage] * f.estimate_cardinality(template_info)
     if stage:
       return cards[stage]
     else:
@@ -115,11 +112,11 @@ class FeatureSet(object):
         labs.add(f.label)
     return list(labs)
 
-  def propose_modification(self):
+  def propose_modification(self, template_info):
     ''' Returns a new FeatureSet derived from this feature set '''
     debug = True
-    stage = random.choice(TEMPLATE_INFO.stages())
-    card = self.estimate_cardinality(stage)
+    stage = random.choice(template_info.stages())
+    card = self.estimate_cardinality(template_info, stage)
     l = 0.3   # interpolation between cardinality (1) and #features (0)
     alpha = 0.2
     beta = 500.0
@@ -127,7 +124,7 @@ class FeatureSet(object):
     p_add_feature = l * beta / (beta + pow(card, alpha)) \
       + (1.0 - l) * (gamma / (gamma + len(self.features)))
     if random.random() < p_add_feature:
-      f = self.new_feature()
+      f = self.new_feature(template_info)
       if debug:
         print '[propose_modification add_new_feature] len(self.features) =', \
           len(self.features), 'stage =', stage, 'cardinality =', card, \
@@ -137,25 +134,25 @@ class FeatureSet(object):
       # modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification()
+        f = self.features[i].propose_modification(template_info)
         if debug:
           print '[propose_modification modify_feature] len(self.features) =', \
             len(self.features), 'stage =', stage, 'cardinality =', card, \
             'p_add_features =', p_add_feature, '\t', self.features[i], '=>', f
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
-        return self.propose_modification()
+        return self.propose_modification(template_info)
 
-  def new_feature(self):
+  def new_feature(self, template_info):
     ''' creates a feature that is not already in this feature set '''
     # prefer adding features with small number of templates
-    stage = random.choice(TEMPLATE_INFO.stages())
+    stage = random.choice(template_info.stages())
     syntax_mode = self.syntax_mode()
-    label = random.choice(TEMPLATE_INFO.labels_for(stage, syntax_mode))
-    templates = random.choice(TEMPLATE_INFO.basic_templates())
+    label = random.choice(template_info.labels_for(stage, syntax_mode))
+    templates = random.choice(template_info.basic_templates())
     f = Feature(stage, syntax_mode, label, templates)
     if f in self.features:
-      return self.new_feature()
+      return self.new_feature(template_info)
     else:
       print '[new_feature] stage =', stage
       print '[new_feature] syntax_mode =', syntax_mode
@@ -172,6 +169,7 @@ class FeatureSet(object):
 
   def config_string(self):
     return "+".join([str(x) for x in self.features])
+
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
@@ -207,40 +205,49 @@ class Config(CommonEqualityMixin):
     return "<Config features=%s regularizer=%s params=%s>" % \
       (str(self.feature_set), str(self.regularizer_dict), str(self.params))
 
-def mutate_config(config):
-  ''' Returns a function from Config to Config '''
-  next_fs = config.feature_set.propose_modification()
-  cur_card = config.feature_set.estimate_cardinality()
-  next_card = next_fs.estimate_cardinality()
-  print '[mutate_config] cardinality: ', cur_card, ' => ', next_card
-  # cardinality is now a dict with stages as keys
-  # regularizer is too
-  # for each stage, decide if you want to change the regularizer or not
-  alpha = 15000
-  beta = 1.5
-  gamma = 0.25   # p(change regularizer irrespective of cardinality)
-  children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
-  for stage in TEMPLATE_INFO.stages():
-    cc = cur_card[stage]
-    nc = next_card[stage]
-    dc = nc - cc
-    if dc > alpha or dc / cc > beta or random.random() < gamma:
-      # stronger regularizer
-      reg = {}
-      reg.update(config.regularizer_dict)
-      reg[stage] = reg[stage] + 1
-      children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
-    if dc < -alpha or dc / cc < -beta or random.random() < gamma:
-      # weaker regularizer
-      reg = {}
-      reg.update(config.regularizer_dict)
-      reg[stage] = reg[stage] - 1
-      children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
+# NOTE: This is only here because pickle doesn't work on instance methods...
+# need to do the 'kingdom of nouns' thing and make an object to make pickle work.
+class Mutator(object):
+  def mutate(self, item):
+    ''' return a list of items derived from the given item '''
+    raise NotImplementedError()
 
-  # TODO try increasing/decreasing the number of passes
+class ConfigMutator(Mutator):
+  def __init__(self, template_info):
+    self.__template_info = template_info
 
-  return children
+  def mutate(self, config):
+    ''' Config -> [Config] '''
+    next_fs = config.feature_set.propose_modification(self.__template_info)
+    cur_card = config.feature_set.estimate_cardinality(self.__template_info)
+    next_card = next_fs.estimate_cardinality(self.__template_info)
+    print '[mutate_config] cardinality: ', cur_card, ' => ', next_card
+    # cardinality is now a dict with stages as keys
+    # regularizer is too
+    # for each stage, decide if you want to change the regularizer or not
+    alpha = 15000
+    beta = 1.5
+    gamma = 0.25   # p(change regularizer irrespective of cardinality)
+    children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
+    for stage in self.__template_info.stages():
+      cc = cur_card[stage]
+      nc = next_card[stage]
+      dc = nc - cc
+      if dc > alpha or dc / cc > beta or random.random() < gamma:
+        # stronger regularizer
+        reg = {}
+        reg.update(config.regularizer_dict)
+        reg[stage] = reg[stage] + 1
+        children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
+      if dc < -alpha or dc / cc < -beta or random.random() < gamma:
+        # weaker regularizer
+        reg = {}
+        reg.update(config.regularizer_dict)
+        reg[stage] = reg[stage] - 1
+        children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
 
+    # TODO try increasing/decreasing the number of passes
+    return children
 
 
 class ConfigQueue(object):
@@ -250,11 +257,13 @@ class ConfigQueue(object):
   propose_modification on existing items. Remember to call observe_score to let this
   queue know what are good items and which are bad.
   '''
-  def __init__(self, mutation_function, greediness=1.0):
-    self.mutation_function = mutation_function  # item -> [item]
+  def __init__(self, mutator, greediness=1.0, max_pops=0):
+    self.__mutator = mutator  # see Mutator.mutate, item -> [item]
     self.greediness = greediness
     self.item2score = {}    # item -> score for popped items
     self.waiting = []       # List of items that should be popped before mutating scored items
+    self.__max_pops = max_pops
+    self.__pop_count = 0
 
   def _pick(self, greediness):
     debug = False
@@ -307,12 +316,12 @@ class ConfigQueue(object):
           "%s/%s was originally deemed failed but later reported a score of %f") \
           % (item, name, score)
       else:
-        raise Exception(item + ' had a score of ' \
+        raise Exception(str(item) + '/' + name + ' had a score of ' \
           + str(self.item2score[item]) \
           + ' but you tried to observe the score ' + str(score))
     self.item2score[item] = score
     # print the biggest weights
-    if len(self.item2score) % 10 == 0:
+    if len(self.item2score) % 50 == 0:
       self.show_state()
 
   def seed(self, item):
@@ -330,6 +339,10 @@ class ConfigQueue(object):
   def pop(self):
     ''' Returns a pushed item if there is one, otherwise chooses
     a scored item and mutates it with propose_modification '''
+    if self.__max_pops > 0 and self.__pop_count >= self.__max_pops:
+      print '[pop]', str(self), 'hit max pops:', self.__max_pops
+      return None
+    self.__pop_count += 1
     if self.waiting:
       return self.waiting.pop()
     else:
@@ -341,7 +354,7 @@ class ConfigQueue(object):
         # g->0 as we run out of tries
         g = self.greediness * (max_tries - tries) / float(max_tries)
         parent = self._pick(g)
-        children = self.mutation_function(parent)
+        children = self.__mutator.mutate(parent)
         dont_generate = set(self.waiting + self.item2score.keys())
         feasible = [c for c in children if c not in dont_generate]
         if len(feasible) < len(children):
@@ -357,6 +370,92 @@ class ConfigQueue(object):
       print '[pop] couldn\'t generate a new configuration'
       return None
 
+class MultiQueue(object):
+  ''' Muxes multiple Queues into one Queue '''
+  def __init__(self):
+    self.__item2qn = {}
+    self.__name2q = {}
+    self.__q_names = []
+    self.__on_deck = 0
+    self.__stopped = set()  # names of queues that are paused/stopped
+    self.__all_stopped = False
+
+  def add_queue(self, name, queue):
+    assert name not in self.__name2q
+    self.__name2q[name] = queue
+    self.__q_names.append(name)
+
+  def message(self, message):
+    print '[MultiQueue message]', message
+    if message == 'list' or message == 'info':
+      if self.__all_stopped:
+          print '[MultiQueue message list] all stopped:', self.__q_names
+      elif self.__q_names:
+        for q in self.__q_names:
+          r = 'stopped' if q in self.__stopped else 'running'
+          print '[MultiQueue message list]', q, 'is', r
+      else:
+        print '[MultiQueue message list] no queues!'
+    elif message == 'stop':
+      self.__all_stopped = True
+    elif message == 'start':
+      self.__all_stopped = False
+    elif message == 'help':
+      print '[MultiQueue message help] allowable commands:'
+      print 'list: list all queues'
+      print 'help: this command'
+      print 'stop: pause all queues'
+      print 'start: resume all queues'
+      print '[queue_name] [command]: dispatch command to queue_name'
+    else:
+      # queue-specific message
+      try:
+        qn, msg = message.split(' ', 1)
+        if msg == 'stop':
+          print '[MultiQueue message] stopping', qn
+          self.__stopped.add(qn)
+        elif msg == 'start':
+          print '[MultiQueue message] starting', qn
+          self.__stopped.remove(qn)
+        else:
+          print '[MultiQueue message] forwarding', msg, 'to', qn
+          q = self.__name2q[qn]
+          q.message(msg)
+      except:
+        print '[MultiQueue message] failed to handle message:', message
+
+  def observe_score(self, score, name, item):
+    # parse name, lookup queue, forward call
+    qn = self.__item2qn[item]
+    q = self.__name2q[qn]
+    q.observe_score(score, name, item)
+
+  def __nextq(self):
+    n = len(self.__q_names)
+    if self.__on_deck == n - 1:
+      self.__on_deck = 0
+    else:
+      self.__on_deck += 1
+
+  def pop(self):
+    if self.__all_stopped:
+      print '[MultiQueue pop] stopped, returning None'
+      return None
+    n = len(self.__q_names)
+    assert self.__on_deck < n
+    for i in range(n):
+      qn = self.__q_names[self.__on_deck]
+      if qn in self.__stopped:
+        self.__nextq()
+      else:
+        q = self.__name2q[qn]
+        p = q.pop()
+        self.__nextq()
+        if p:
+          self.__item2qn[p] = qn
+          return p
+    print '[MultiQueue pop] returning None', len(self.__stopped), 'stopped queues'
+    return None
 
 class SgeJobTracker(object):
   ''' A job tracker that asks qstat for the jobs that are
@@ -466,22 +565,51 @@ class LocalJobTracker(object):
       print '[spawn] about to spawn:', ' '.join(["'" + x + "'" for x in cmd])
       subprocess.Popen(cmd)
 
+# ForwardSelection: listens to messages, pops items from a Queue, names jobs, and asks the JobTracker to start the job
+# JobTracker: reports the state of the computation resource (grid), w.r.t. a user (possibly including items from multiple Queues)
+# JobStarter: given a (name, item, JobTracker) start a job
+class ConfigJobStarter:
+  ''' A job starter for items that are Configs '''
+  def __init__(self, working_dir, max_train_size, redis_config):
+    self.working_dir = working_dir
+    self.max_train_size = max_train_size
+    self.redis_config = redis_config
+    self.K = 2
+    self.p = 0.15
+
+  def start_job(self, name, config, job_tracker):
+    ''' Just a function that adds arguments that are not Config-specific,
+    but constitute more information than a general JobTracker should know '''
+    cmd = {}
+    cmd['KpTrainDev'] = "%d %f" % (self.K, self.p)
+    if self.max_train_size:
+      cmd['MaxTrainSize'] = str(self.max_train_size)
+    wd = os.path.join(self.working_dir, 'wd-' + name)
+    rf = os.path.join(wd, 'results.txt')
+    cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
+      (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'], rf)
+    cmd['workingDir'] = wd
+    cmd['features'] = config.feature_set.config_string()
+    for stage, regularizer in config.regularizer_dict.iteritems():
+      cmd['regularizer.' + stage] = str(math.exp(regularizer))
+    for stage, batch_size in config.batch_size_dict.iteritems():
+      cmd['batchSize.' + stage] = str(batch_size)
+    for stage, passes in config.passes_dict.iteritems():
+      cmd['passes.' + stage] = str(passes)
+    cmd.update(config.params)
+    job_tracker.spawn(name, cmd)
 
 class ForwardSelection:
-  def __init__(self, name, working_dir, job_tracker, config_q, \
-      poll_interval=5.0, max_train_size=None, max_num_jobs=None, \
-      redis_config={'channel':'forward-selection', 'host':'localhost', 'port':'6379', 'db':'0'}):
+  def __init__(self, name, job_tracker, config_q, job_starter, redis_config, poll_interval=8.0):
     print '[ForwardSelection] attempting to use redis server at', redis_config
     self.name = name
-    self.working_dir = working_dir  # where workers are allowed to dump results
+    self.job_tracker = job_tracker    # talks to qsub
+    self.config_q = config_q          # provides pop() and observe_score(score, name, item)
+    self.job_starter = job_starter    # has start_job(name, item, job_tracker)
     self.redis_config = redis_config
-    self.job_tracker = job_tracker  # talks to qsub
-    self.config_q = config_q
     self.name2item = {}
     self.poll_interval = poll_interval
-    self.dispatched = set()         # names of the jobs that (should be) running
-    self.max_train_size = max_train_size  # limit on size of training data to make things faster
-    self.max_num_jobs = max_num_jobs      # limit on how many total jobs can be submitted
+    self.dispatched = set()           # names of the jobs that (should be) running
 
   def parse_message(self, data):
     '''
@@ -500,41 +628,12 @@ class ForwardSelection:
     # TODO move this to a separate method that is passed in, like mutate
     item = self.config_q.pop()
     if item:
+      # TODO this name needs to start with the queue name so MultiQueue knows
+      # what to do when you call .observe_score()
       name = "fs-%s-%d" % (self.name, len(self.name2item))
       assert name not in self.name2item
       self.name2item[name] = item
-      wd = os.path.join(self.working_dir, name + '-wd')
-      if not os.path.isdir(wd):
-        os.mkdir(wd)
-      # Parameters for cross-validation
-      # NOTE These settings should be here because there are not config-specific.
-      # This is a problem because the jobs responds with a config string to uniquely id itself,
-      # but the job doesn't know the difference between config and params...
-      # Have to use config for id because job name is not known until after the job is launched.
-      # WAIT, couldn't I just use my job name?
-      K = 2
-      p = 0.15
-      cmd = {}
-      cmd['KpTrainDev'] = "%d %f" % (K, p)
-      if self.max_train_size:
-        cmd['MaxTrainSize'] = str(self.max_train_size)
-      rf = os.path.join(wd, 'results.txt')
-      cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
-        (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'], rf)
-      cmd['workingDir'] = wd
-      cmd['features'] = item.feature_set.config_string()
-  
-      for stage, regularizer in item.regularizer_dict.iteritems():
-        cmd['regularizer.' + stage] = str(math.exp(regularizer))
-
-      for stage, batch_size in item.batch_size_dict.iteritems():
-        cmd['batchSize.' + stage] = str(batch_size)
-
-      for stage, passes in item.passes_dict.iteritems():
-        cmd['passes.' + stage] = str(passes)
-
-      cmd.update(item.params)
-      self.job_tracker.spawn(name, cmd)
+      self.job_starter.start_job(name, item, self.job_tracker)
       self.dispatched.add(name)
       print '[start_job] name =', name
       print '[start_job] params =', item.params
@@ -543,55 +642,87 @@ class ForwardSelection:
       print '[start_job] there are no more jobs, returning None'
       return None
 
-  def can_submit_more_jobs(self):
-    if self.max_num_jobs and self.num_jobs >= self.max_num_jobs:
-      print '[can_submit_more_jobs] can\'t submit any more jobs due to self.max_num_jobs =', self.max_num_jobs
-      return False
-    if not self.job_tracker.can_submit_more_jobs():
-      print '[can_submit_more_jobs] can\'t submit any more jobs due to the job tracker'
-      return False
-    return True
+  def __handle_message(self, message, perf_file):
+    ''' NOTE there is no command for 'stop'. This is because you should use 'messageQ',
+    tell it to 'stop', and then this loop will exit when all the jobs are done. '''
+    toks = message.split(' ', 1)
+    if len(toks) == 1:
+      print '[__handle_message] unknown message type:', message
+      return
+    m_type, rest = toks
+    if m_type == 'result':
+      # parse out (score, name, config), do what we were doing before
+      score, name, config = rest.split('\t', 2)
+      score = float(score)
+      item = self.name2item[name]
+      print name, '/', config, 'finished successfully with a score', score
+      perf_file.write("%f\t%s\t%s\n" % (score, name, config))
+      perf_file.flush()
+      self.config_q.observe_score(score, name, item)
+      # Remove this jobs from dispatched
+      print 'about to print job tracker'
+      print self.job_tracker
+      if type(self.job_tracker) is LocalJobTracker: # for debugging
+        print 'stopping', name, 'on local job tracker'
+        self.job_tracker.set_job_done(name)
+      try:
+        self.dispatched.remove(name)
+        print 'removed', name, 'from dispatched,', len(self.dispatched), 'still dispatched'
+      except:
+        print name + ' was not in dispatched, we gave up on this job as failed previously'
+    elif m_type == 'messageQ':
+      # check for a queue name argument, forward to q.message(remaining_message)
+      try:
+        self.config_q.message(rest)
+      except (AttributeError, TypeError) as e:
+        print '[__handle_message] this queue does not support messages:', rest
+        print e
+    elif m_type == 'saveQ':
+      # parse out file, pickle the queue to that
+      print '[__handle_message] saving queue to', rest
+      with open(rest, 'wb') as f:
+        pickle.dump(self.config_q, f)
+    elif m_type == 'loadQ':
+      # parse out file, unpickle the queue from that
+      print '[__handle_message] loading queue from', rest
+      with open(rest, 'rb') as f:
+        self.config_q = pickle.load(f)
+      self.config_q.show_state()
+    else:
+      print '[__handle_message] unknown message:', message
 
-  def run(self):
+  def run(self, perf_file_name):
     r = redis.StrictRedis(host=self.redis_config['host'], port=self.redis_config['port'], db=self.redis_config['db'])
     p = r.pubsub(ignore_subscribe_messages=True)
     p.subscribe(self.redis_config['channel'])
-    perf_file = open(os.path.join(self.working_dir, 'perf.txt'), 'w')
+    print '[run] writing results to', perf_file_name
+    perf_file = open(perf_file_name, 'w')
     self.num_jobs = 0
     while True:
       # Try to dispatch new jobs
-      if self.can_submit_more_jobs():
-        if self.start_job():
-          self.num_jobs += 1
-        else:
-          print 'Done!'
-          break
+      can_sub = self.job_tracker.can_submit_more_jobs()
+      if can_sub and self.start_job():
+        self.num_jobs += 1
       else:
         # Check for results 
-        print 'can\'t submit any more jobs, checking on current jobs'
+        if can_sub:
+          print 'can submit more jobs, but queue is empty'
+        else:
+          print 'can\'t submit any more jobs'
+        print 'checking on current jobs'
         message = p.get_message()
         if message:
           print 'received message:', message
-          (score, name, config) = self.parse_message(message['data'])
-          print name, '/', config, 'finished successfully with a score', score
-          item = self.name2item[name]
-          perf_file.write("%f\t%s\t%s\n" % (score, name, config))
-          perf_file.flush()
-          self.config_q.observe_score(score, name, item)
-          # Remove this jobs from dispatched
-          if type(self.job_tracker) is LocalJobTracker: # for debugging
-            print 'stopping', name, 'on local job tracker'
-            self.job_tracker.set_job_done(name)
-          try:
-            self.dispatched.remove(name)
-            print 'removed', name, 'from dispatched,', len(self.dispatched), 'still dispatched'
-          except:
-            print name + ' was not in dispatched, we gave up on this job as failed previously'
+          self.__handle_message(message['data'], perf_file)
         else:
           # check if any jobs died
+          time.sleep(self.poll_interval)
           print 'no one phoned home, maybe someone died?'
           try:
             r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
+            if len(r) == 0 and can_sub:
+              print 'all jobs are done!'
+              break
             print 'running and queued:', r
             failed = set([name for name in self.dispatched if name not in r])
             for name in failed:
@@ -601,7 +732,6 @@ class ForwardSelection:
               self.dispatched.remove(name)
             else:
               print 'everything is running nicely:', len(r)
-              time.sleep(self.poll_interval)
           except subprocess.CalledProcessError:
             print 'qstat failed! ignoring...'
     perf_file.close()
@@ -822,74 +952,54 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
   template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
   return (template_info, sd)
 
-def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, parser_mode, syntax_mode, where):
+def run_experiments(template_info_filename, parser_mode, syntax_mode, where):
 
   local = where == 'local'
   assert local or where == 'grid'
 
-  # Run one of these at a time, otherwise caching gets messed up
-  template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
-  #for template_info, configs in experiments(template_info_filename):
-  print template_info
-  print '\n\t'.join(str(c) for c in configs)
+  # Make a queue for every configuration
+  mq = MultiQueue()
+  for parser_mode in ['span', 'head']:
+    for syntax_mode in ['regular', 'latent']:
+      template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
+      q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
+      print 'setting up queue for', q_name
+      print template_info
+      print '\n\t'.join(str(c) for c in configs)
 
-  global TEMPLATE_INFO
-  TEMPLATE_INFO = template_info
+      # Create the config queue
+      # TODO could put a limit on the number of jobs for every parser mode here
+      max_fs = 2500   # number of feature sets to try
+      mutator = ConfigMutator(template_info)
+      q = ConfigQueue(mutator, greediness=1.0, max_pops=max_fs)
+      assert len(configs) > 0
+      for conf in configs:
+        q.seed(conf)
 
-  # Create the config queue
-  if deser_q_filename == 'None':
-    print 'creating empty config queue'
-    # Right now the seed set is just each of the labels conjoined
-    # with the headword. You can manually add some good seeds here if you know them.
-    q = ConfigQueue(mutation_function=mutate_config, greediness=1.0)
-    assert len(configs) > 0
-    for conf in configs:
-      q.seed(conf)
-  else:
-    print 'loading config queue from', deser_q_filename
-    q = pickle.load(open(deser_q_filename, 'rb'))
-    q.show_state()
-
-  # Make sure config queue is setup to be saved on SIGINT
-  global SER_Q_PATH
-  global SER_Q
-  if ser_q_filename != '/dev/null':
-    print 'setting up to save to', ser_q_filename, 'on Ctr-C'
-    SER_Q_PATH = ser_q_filename
-    SER_Q = q
-    def save_config_q_handler(signum, frame):
-      ''' Function that saves the config queue on Ctr-C so that you can resume later '''
-      if SER_Q is not None and SER_Q_PATH is not None:
-        print 'saving config queue to', SER_Q_PATH
-        pickle.dump(SER_Q, open(SER_Q_PATH, 'wb'))
-      sys.exit(0)
-    signal.signal(signal.SIGINT, save_config_q_handler)
+      mq.add_queue(q_name, q)
 
   # Create the job tracker
   if local:
-    jt = LocalJobTracker(debug=False, max_concurrent_jobs=2)
-    jt.remove_all_jobs()
+    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
+    job_tracker.remove_all_jobs()
   else:
-    jt = SgeJobTracker()
+    job_tracker = SgeJobTracker()
 
-  #wd = 'experiments/forward-selection/role/span/regular'
-  wd = os.path.join(
-    'experiments/forward-selection/role',
-    configs[0].params['parserMode'],
-    configs[0].params['syntaxMode'])
-  print 'working directory:', wd
-  rc = {
+  working_dir = 'experiments/forward-selection/role/omni'
+  perf_filename = os.path.join(working_dir, 'perf.txt')
+  redis_config = {
     'channel': 'forward-selection',
     'host': socket.gethostname(),
     'port': '6379',
     'db': '0'
   }
-  max_train = 1500
-  max_jobs = 15000
-  fs = ForwardSelection('test', wd, jt, q, redis_config=rc,
-    poll_interval=5.0, max_train_size=max_train, max_num_jobs=max_jobs)
+  max_train = 9999
+  job_starter = ConfigJobStarter(working_dir, max_train, redis_config)
+  print 'working directory:', working_dir
 
-  # TODO this is only here for development/debugging
+  # Create the ForwardSelection
+  fs = ForwardSelection('test', job_tracker, mq, job_starter, redis_config)
+
   if not local:
     print 'cleanup...'
     os.system('kill-all-jobs')
@@ -897,23 +1007,21 @@ def run_experiments(template_info_filename, ser_q_filename, deser_q_filename, pa
     os.system('rm logging/forward-selection/*')
     time.sleep(2)
   print 'starting...'
-  fs.run()
+  fs.run(perf_filename)
 
 if __name__ == '__main__':
 
   # Make stdout flush regularly
   sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
-  if len(sys.argv) == 7:
+  if len(sys.argv) == 5:
     run_experiments(*(sys.argv[1:]))
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
-    print '2) a path to save the ConfigQueue to'
-    print '3) a path to load the ConfigQueue from, or \"None\"'
-    print '4) a parser mode (i.e. \"head\" or \"span\")'
-    print '5) a syntax mode (i.e. \"regular\", \"latent\", or \"none\"'
-    print '6) where to run (i.e. \"grid\" or \"local\")'
+    print '2) a parser mode (i.e. \"head\" or \"span\")'
+    print '3) a syntax mode (i.e. \"regular\", \"latent\", or \"none\"'
+    print '4) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
 
 
