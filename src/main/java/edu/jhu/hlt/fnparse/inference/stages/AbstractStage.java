@@ -321,7 +321,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.maximizer = null;
 		trainerParams.batchMaximizer = new SGD(sgdParams);
 		trainerParams.infFactory = infFactory();
-		trainerParams.numThreads = globalParams.threads;
+		trainerParams.numThreads = 4; //globalParams.threads;
 		trainerParams.regularizer = regularizer;
 
 		Alphabet<String> alph = featureNames.getAlphabet();

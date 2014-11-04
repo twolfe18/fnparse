@@ -2,8 +2,8 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=48:00:00
-#$ -l mem_free=5G
-#$ -l num_proc=1
+#$ -l mem_free=6G
+#$ -l num_proc=4
 #$ -o logging/forward-selection
 #$ -S /bin/bash
 
@@ -13,5 +13,5 @@ echo "java versions: `which -a java`"
 echo "arguments: $@"
 
 CP=`find target -iname '*.jar' | tr '\n' ':'`
-java -cp ${CP} -ea -Xmx4G -XX:+UseSerialGC edu.jhu.hlt.fnparse.experiment.grid.Runner "$@"
+java -cp ${CP} -ea -Xmx5G -XX:+UseSerialGC edu.jhu.hlt.fnparse.experiment.grid.Runner "$@"
 
