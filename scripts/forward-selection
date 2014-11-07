@@ -574,8 +574,8 @@ class ConfigJobStarter:
     self.working_dir = working_dir
     self.max_train_size = max_train_size
     self.redis_config = redis_config
-    self.K = 2
-    self.p = 0.15
+    self.K = 1
+    self.p = 0.25
 
   def start_job(self, name, config, job_tracker):
     ''' Just a function that adds arguments that are not Config-specific,
@@ -818,11 +818,11 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 8  # default number of training passes (this value is copied for all runs)
+  p = 10  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
-    reg = {s1: 10, s2: 10}
+    reg = {s1: 12, s2: 12}
     batch_size = {s1: 1, s2: 1}
     passes = {s1: p, s2: p}
     fs = [
@@ -860,6 +860,7 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['roleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
@@ -889,13 +890,18 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/3']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/4']),
-      Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstWord']),
-      Feature(s2, syntax_mode, 'frameRoleArg', ['span1LastWord']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstPos']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1LastPos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1LeftPos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1RightPos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['Word-2-grams-between-Span1.First-and-Span1.Last']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['Pos-2-grams-between-Span1.First-and-Span1.Last']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.First,Head)']),
+      Feature(s2, syntax_mode, 'roleArg',      ['Dist(Len5,Span1.First,Head)']),
+      Feature(s2, syntax_mode, 'arg',          ['Dist(Len5,Span1.First,Head)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['roleArg']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['arg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
@@ -903,7 +909,7 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1Width/2', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1Width/2']),
-    ]), settings, {s1: 10, s2: 10}, {s1: 1, s2: 1}, {s1: p, s2: p})
+    ]), settings, {s1: 12, s2: 12}, {s1: 1, s2: 1}, {s1: p, s2: p})
   else:
     raise Exception('unknown parser_mode: ' + parser_mode)
 
@@ -936,23 +942,23 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
   sd = list(seeds(parser_mode, syntax_mode, settings))
   labels = {
     ('RoleHeadStage', 'regular'): ['frameRole', 'frame'],
-    ('RoleHeadStage', 'latent'): ['frameRole', 'frame', 'head2GovHead1'],
-    ('RoleHeadStage', 'none'): ['frameRole', 'frame'],
-    ('RoleHeadToSpanStage', 'regular'): ['frameRole', 'frame'],
-    ('RoleHeadToSpanStage', 'latent'): ['frameRole', 'frame', 'span1IsConstituent'],
-    ('RoleHeadToSpanStage', 'none'): ['frameRole', 'frame'],
+    ('RoleHeadStage', 'latent'):  ['frameRole', 'frame', 'head2GovHead1'],
+    ('RoleHeadStage', 'none'):    ['frameRole', 'frame'],
+    ('RoleHeadToSpanStage', 'regular'): ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame'],
+    ('RoleHeadToSpanStage', 'latent'):  ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame', 'span1IsConstituent'],
+    ('RoleHeadToSpanStage', 'none'):    ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame'],
     ('RoleSpanPruningStage', 'regular'): ['framePrune'],
-    ('RoleSpanPruningStage', 'latent'): ['framePrune', 'head2GovHead1'],
-    ('RoleSpanPruningStage', 'none'): ['framePrune'],
+    ('RoleSpanPruningStage', 'latent'):  ['framePrune', 'head2GovHead1'],
+    ('RoleSpanPruningStage', 'none'):    ['framePrune'],
     ('RoleSpanLabelingStage', 'regular'): ['frameRoleArg', 'frameRole'],
-    ('RoleSpanLabelingStage', 'latent'): ['frameRoleArg', 'frameRole', 'span1IsConstituent'],
-    ('RoleSpanLabelingStage', 'none'): ['frameRoleArg', 'frameRole'],
+    ('RoleSpanLabelingStage', 'latent'):  ['frameRoleArg', 'frameRole', 'span1IsConstituent'],
+    ('RoleSpanLabelingStage', 'none'):    ['frameRoleArg', 'frameRole'],
   }
   template_info.restrict_labels_for(s1, syntax_mode, labels[(s1, syntax_mode)])
   template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
   return (template_info, sd)
 
-def run_experiments(template_info_filename, parser_mode, syntax_mode, where):
+def run_experiments(template_info_filename, where):
 
   local = where == 'local'
   assert local or where == 'grid'
@@ -993,7 +999,7 @@ def run_experiments(template_info_filename, parser_mode, syntax_mode, where):
     'port': '6379',
     'db': '0'
   }
-  max_train = 9999
+  max_train = 1500
   job_starter = ConfigJobStarter(working_dir, max_train, redis_config)
   print 'working directory:', working_dir
 
@@ -1014,14 +1020,12 @@ if __name__ == '__main__':
   # Make stdout flush regularly
   sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
-  if len(sys.argv) == 5:
+  if len(sys.argv) == 3:
     run_experiments(*(sys.argv[1:]))
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
-    print '2) a parser mode (i.e. \"head\" or \"span\")'
-    print '3) a syntax mode (i.e. \"regular\", \"latent\", or \"none\"'
-    print '4) where to run (i.e. \"grid\" or \"local\")'
+    print '2) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
 
 
