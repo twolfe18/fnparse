@@ -352,8 +352,8 @@ public class FrameIdStage
    * @author travis
    */
   public static class FrameIdDecodable
-  extends Decodable<FNTagging>
-  implements Iterable<FrameVars> {
+      extends Decodable<FNTagging>
+      implements Iterable<FrameVars> {
 
     private final FrameIdStage parent;
     private final Sentence sentence;

@@ -390,7 +390,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		StageDatumExampleList<I, O> data = this.setupInference(
 				unlabeledExamples, null);
 		int n = data.size();
-		for (int i=0; i<n; i++) {
+		for (int i = 0; i < n; i++) {
 			t.start();
 			StageDatum<I, O> d = data.getStageDatum(i);
 			IDecodable<O> dec = d.getDecodable();

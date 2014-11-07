@@ -4,6 +4,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 
 /**
@@ -66,6 +67,9 @@ public class TemplateContext {
 
   private int prune;
 
+  /** See {@link RoleSequenceStage} */
+  private int role2;
+
   // TODO put constituency and dependency parses in here instead of in sentence?
 
   // If you want to restrict some features to particular stages, you can write
@@ -94,6 +98,7 @@ public class TemplateContext {
     head2_parent = UNSET;
     stage = null;
     prune = UNSET;
+    role2 = UNSET;
   }
 
   /**
@@ -298,5 +303,27 @@ public class TemplateContext {
   }
   public void setPrune(boolean prune) {
     this.prune = prune ? 1 : 0;
+  }
+
+  public void setRole2(int role) {
+    this.role2 = role;
+  }
+  public int getRole2() {
+    return role2;
+  }
+  
+  public String getRoleStrDebug() {
+    if (role == UNSET)
+      return "UNSET";
+    if (role == frame.numRoles())
+      return "NO_ROLE";
+    return frame.getRole(role);
+  }
+  public String getRole2StrDebug() {
+    if (role2 == UNSET)
+      return "UNSET";
+    if (role2 == frame.numRoles())
+      return "NO_ROLE";
+    return frame.getRole(role2);
   }
 }

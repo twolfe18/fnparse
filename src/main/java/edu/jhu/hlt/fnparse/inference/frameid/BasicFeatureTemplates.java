@@ -5,6 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,6 +41,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
@@ -283,6 +285,28 @@ public class BasicFeatureTemplates {
       });
     }
 
+    // head1 grandparent
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1Grandparent" + x.getKey();
+      addTemplate(name, new TemplateSS() {
+        private SentencePosition pos = new SentencePosition();
+        public String extractSS(TemplateContext context) {
+          int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
+          DependencyParse deps = context.getSentence().getCollapsedDeps();
+          if (deps == null)
+            return null;
+          pos.index = deps.getHead(h);
+          if (pos.index < 0)
+            return null;
+          pos.index = deps.getHead(pos.index);
+          pos.sentence = context.getSentence();
+          return name + "=" + x.getValue().apply(pos);
+        }
+      });
+    }
+
     // head1 children
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
       String name = "head1ChildCollapsed" + x.getKey();
@@ -335,6 +359,56 @@ public class BasicFeatureTemplates {
         };
         addTemplate(name1, temp1);
       }
+    }
+
+    // head to span features
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1ToLeft" + x.getKey();
+      addTemplate(name, new Template() {
+        private Function<SentencePosition, String> ext = x.getValue();
+        private String namePref = name + "=";
+        private SentencePosition pos = new SentencePosition();
+        @Override
+        public Iterable<String> extract(TemplateContext context) {
+          int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
+          Span s = context.getSpan1();
+          if (s == null)
+            return null;
+          if (s.start >= h)
+            return null;
+          Collection<String> elems = new HashSet<>();
+          pos.sentence = context.getSentence();
+          for (pos.index = h - 1; pos.index >= s.start; pos.index--)
+            elems.add(namePref + ext.apply(pos));
+          return elems;
+        }
+      });
+    }
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head1ToRight" + x.getKey();
+      addTemplate(name, new Template() {
+        private Function<SentencePosition, String> ext = x.getValue();
+        private String namePref = name + "=";
+        private SentencePosition pos = new SentencePosition();
+        @Override
+        public Iterable<String> extract(TemplateContext context) {
+          int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
+          Span s = context.getSpan1();
+          if (s == null)
+            return null;
+          if (h >= s.end)
+            return null;
+          Collection<String> elems = new HashSet<>();
+          pos.sentence = context.getSentence();
+          for (pos.index = h + 1; pos.index < s.end; pos.index++)
+            elems.add(namePref + ext.apply(pos));
+          return elems;
+        }
+      });
     }
 
     // span1 width
@@ -724,8 +798,6 @@ public class BasicFeatureTemplates {
         len -> MinimalRoleFeatures.semaforPathLengthBuckets(len));
     distanceBucketings.put("Direction", len -> len == 0
         ? "0" : (len < 0 ? "-" : "+"));
-    distanceBucketings.put("Len3", len -> Math.abs(len) <= 3
-        ? String.valueOf(len) : (len < 0 ? "-" : "+"));
     distanceBucketings.put("Len5", len -> Math.abs(len) <= 5
         ? String.valueOf(len) : (len < 0 ? "-" : "+"));
     for (Entry<String, ToIntFunction<TemplateContext>> p1 :
@@ -781,7 +853,8 @@ public class BasicFeatureTemplates {
                 assert c1 < context.getSentence().size();
                 assert c2 < context.getSentence().size();
                 pos.sentence = context.getSentence();
-                List<String> output = new ArrayList<>();
+                //Collection<String> output = new ArrayList<>();
+                Collection<String> output = new HashSet<>();
                 for (int start = c1; start <= (c2 - ngram)+1; start++) {
                   StringBuilder feat = new StringBuilder(name);
                   feat.append("=");
@@ -856,6 +929,34 @@ public class BasicFeatureTemplates {
         return "frameRoleArg=" + f.getName() + "." + f.getRole(role);
       }
     });
+    addTemplate("roleArg", new TemplateSS() {
+      // Like frameRole, but requires that arg not be null,
+      // which can lead to much sparser feature sets (observed feature trick)
+      public String extractSS(TemplateContext context) {
+        if (context.getArg() == null)
+          return null;
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "roleArg=" + f.getRole(role);
+      }
+    });
+    addTemplate("arg", new TemplateSS() {
+      // Like frameRole, but requires that arg not be null,
+      // which can lead to much sparser feature sets (observed feature trick)
+      public String extractSS(TemplateContext context) {
+        if (context.getArg() == null)
+          return null;
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "someArg";
+      }
+    });
     addTemplate("span1IsConstituent", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         if (!context.getSpan1IsConstituentIsSet())
@@ -904,6 +1005,26 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
+    addTemplate("Role1", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int r = context.getRole();
+        if (r == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "Role1=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
+      }
+    });
+    addTemplate("Role2", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        int r = context.getRole2();
+        if (r == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "Role2=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
+      }
+    });
   }
 
   private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
@@ -915,6 +1036,7 @@ public class BasicFeatureTemplates {
     stages.add(pp -> new RoleHeadToSpanStage(pp, pp));
     stages.add(pp -> new RoleSpanPruningStage(pp, pp));
     stages.add(pp -> new RoleSpanLabelingStage(pp, pp));
+    stages.add(pp -> new RoleSequenceStage(pp, pp));
     syntaxModes.put("regular", () -> {
       ParserParams p = new ParserParams();
       p.useLatentConstituencies = false;

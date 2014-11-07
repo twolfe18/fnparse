@@ -165,9 +165,9 @@ public class TemplatedFeatures implements Serializable {
             templates[i] = BasicFeatureTemplates.getStageTemplate(tt[0]);
           }
         }
-      } else {
-        templates[i] = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
       }
+      if (templates[i] == null)
+        templates[i] = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
     }
 
     // Verify all the templates
@@ -239,7 +239,8 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("[context] stage=" + ctx.getStage());
     LOG.debug("[context] sentence=" + s);
     LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
-    LOG.debug("[context] role=" + (ctx.getRole() == TemplateContext.UNSET ? "UNSET" : f.getRole(ctx.getRole())));
+    LOG.debug("[context] role=" + ctx.getRoleStrDebug());
+    LOG.debug("[context] role2=" + ctx.getRole2StrDebug());
     LOG.debug("[context] target=" + (ctx.getTarget() == null ? "UNSET" : Describe.span(ctx.getTarget(), s)));
     LOG.debug("[context] targetHead=" + (ctx.getTargetHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getTargetHead())));
     LOG.debug("[context] arg=" + (ctx.getArg() == null ? "UNSET" : Describe.span(ctx.getArg(), s)));
