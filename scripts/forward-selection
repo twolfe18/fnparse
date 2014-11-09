@@ -148,16 +148,15 @@ class FeatureSet(object):
     # prefer adding features with small number of templates
     stage = random.choice(template_info.stages())
     syntax_mode = self.syntax_mode()
-    label = random.choice(template_info.labels_for(stage, syntax_mode))
-    templates = random.choice(template_info.basic_templates())
-    f = Feature(stage, syntax_mode, label, templates)
+    label_template, basic_template = random.choice(template_info.labels_for(stage, syntax_mode))
+    f = Feature(stage, syntax_mode, label_template, basic_template)
     if f in self.features:
       return self.new_feature(template_info)
     else:
       print '[new_feature] stage =', stage
       print '[new_feature] syntax_mode =', syntax_mode
-      print '[new_feature] label =', label
-      print '[new_feature] templates =', templates
+      print '[new_feature] label_template =', label_template
+      print '[new_feature] basic_template =', basic_template
       return f
 
   def syntax_mode(self):
@@ -742,18 +741,21 @@ class TemplateInfo(object):
   # (e.g. products of templates), just add more columns
   def __init__(self, filename):
     self.filename = filename
-    self.__info = {}  # (templateName, stageName, syntaxMode) -> (cardinaityInt, timeFloat)
+    #self.__info = {}  # (templateName, stageName, syntaxMode) -> (cardinaityInt, timeFloat)
+    self.__info = {}  # (stageName, syntaxMode, labelTemplate, basicTemplate) -> (cardinaityInt, timeFloat)
     self.__templates = set()
     self.__stages = set()
     with open(filename, 'r') as f:
       for line in f:
         toks = line.strip().split('\t')
-        assert len(toks) == 5
-        template, stage, syntax_mode, card, time = toks
+        assert len(toks) == 6
+        #template, stage, syntax_mode, card, time = toks
+        stage, syntax_mode, label, template, card, time = toks
+        k = (stage, syntax_mode, label, template)
         card = int(card)
         time = float(time)
-        assert (template, stage, syntax_mode) not in self.__info
-        self.__info[(template, stage, syntax_mode)] = (card, time)
+        assert k not in self.__info
+        self.__info[k] = (card, time)
         self.__templates.add(template)
         self.__stages.add(stage)
         #print template, stage, card, time
@@ -762,18 +764,19 @@ class TemplateInfo(object):
     if len(self.__stages) == 0:
       raise Exception('no stages?')
 
-    # compute the set of (stage, templates) which have non-zero cardinality
-    self.__nonzero = collections.defaultdict(list)  # stage -> [template]
-    for (template, stage, syntax_mode), (card, time) in self.__info.iteritems():
+    # compute the set features that have non-zero cardinality (and we might want to instantiate)
+    self.__nonzero = collections.defaultdict(list)
+    for (stage, syntax_mode, label, template), (card, time) in self.__info.iteritems():
       k = (stage, syntax_mode)
+      v = (label, template)
       if card > 0:
-        self.__nonzero[k].append(template)
-      else:
-        print template, 'has no support in', k
+        self.__nonzero[k].append(v)
+      #else:
+      #  print template, 'has no support in', k
 
     # stage -> [label/template]
     # if a stage appears here, only allow labels/templates to be chosen from this list
-    self.__label_restrictions = {}
+    #self.__label_restrictions = {}
 
   def cardinality(self, template, stage, syntax_mode):
     k = (template, stage, syntax_mode)
@@ -791,30 +794,34 @@ class TemplateInfo(object):
     k = (stage, syntax_mode)
     assert not stage.endswith(syntax_mode)
     print '[restrict_labels_for]', k, 'to', labels
-    self.__label_restrictions[k] = labels
-    if len(self.__label_restrictions[k]) == 0:
-      raise Exception('no labels available for: ' + str(k))
+    print '[restrict_labels_for] WARNING: no-op!'
+    #self.__label_restrictions[k] = labels
+    #if len(self.__label_restrictions[k]) == 0:
+    #  raise Exception('no labels available for: ' + str(k))
 
   def labels_for(self, stage, syntax_mode):
-    ''' Returns a list of labels (templates) which can be used with the given stage '''
+    ''' Returns a list of (label_template, basic_template) which can be used with the given stage '''
     k = (stage, syntax_mode)
     print '[labels_for]', k
-    ret = []
-    try:
-      r = self.__label_restrictions[k]
-      ret = list(set(r) & set(self.__nonzero[k]))
-      print '[labels_for] INTERSECT(', r, ',', self.__nonzero[k], ') =', ret
-    except:
-      ret = self.__nonzero[k]
-      print '[labels_for] nonzero =', self.__nonzero[k]
-    if len(ret) == 0:
-      print '__nonzero =', self.__nonzero.get(k)
-      print '__label_restirctions =', self.__label_restrictions.get(k)
-      raise Exception('no labels for ' + str(k))
-    return ret
+    print '[labels_for] WARNING: ignoring restrict_stages_to!'
+    return self.__nonzero[k]
+    #ret = []
+    #try:
+    #  r = self.__label_restrictions[k]
+    #  ret = list(set(r) & set(self.__nonzero[k]))
+    #  print '[labels_for] INTERSECT(', r, ',', self.__nonzero[k], ') =', ret
+    #except:
+    #  ret = self.__nonzero[k]
+    #  print '[labels_for] nonzero =', self.__nonzero[k]
+    #if len(ret) == 0:
+    #  print '__nonzero =', self.__nonzero.get(k)
+    #  print '__label_restirctions =', self.__label_restrictions.get(k)
+    #  raise Exception('no labels for ' + str(k))
+    #return ret
 
   def basic_templates(self):
     return self.__templates
+
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
@@ -839,10 +846,10 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
-      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3'],
-      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4'],
-      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3'],
-      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4'],
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
@@ -863,14 +870,17 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['CfgFeat-CommonParent-Category']),
+      Feature(s2, syntax_mode, 'roleArg', ['CfgFeat-CommonParent-Category']),
+      Feature(s2, syntax_mode, 'arg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['roleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4'],
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
@@ -907,15 +917,18 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Head1,Span1.First)']),
       Feature(s2, syntax_mode, 'roleArg',      ['Dist(Len5,Head1,Span1.First)']),
       Feature(s2, syntax_mode, 'arg',          ['Dist(Len5,Head1,Span1.First)']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['CfgFeat-CommonParent-Category']),
+      Feature(s2, syntax_mode, 'roleArg', ['CfgFeat-CommonParent-Category']),
+      Feature(s2, syntax_mode, 'arg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['roleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['arg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3'],
-      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4'],
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/4']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1Width/2', 'span1FirstPos', 'span1LastPos', 'span1RightPos']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LeftPos', 'span1Width/2', 'span1LastPos', 'span1RightPos']),
@@ -977,7 +990,7 @@ def run_experiments(template_info_filename, where):
 
   # Make a queue for every configuration
   mq = MultiQueue()
-  for parser_mode in ['span', 'head']:
+  for parser_mode in ['span']: #['span', 'head']:
     for syntax_mode in ['regular', 'latent']:
       template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
       q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
