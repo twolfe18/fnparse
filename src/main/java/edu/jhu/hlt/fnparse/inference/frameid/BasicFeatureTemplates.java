@@ -1040,7 +1040,7 @@ public class BasicFeatureTemplates {
     stages.add(pp -> new RoleHeadToSpanStage(pp, pp));
     stages.add(pp -> new RoleSpanPruningStage(pp, pp));
     stages.add(pp -> new RoleSpanLabelingStage(pp, pp));
-    //stages.add(pp -> new RoleSequenceStage(pp, pp));
+    stages.add(pp -> new RoleSequenceStage(pp, pp));
     syntaxModes.put("regular", () -> {
       ParserParams p = new ParserParams();
       p.useLatentConstituencies = false;
