@@ -202,6 +202,8 @@ public class TemplatedFeatures implements Serializable {
    */
   public static List<Template> parseTemplates(String templateDescription)
       throws TemplateDescriptionParsingException {
+    assert templateDescription != null;
+    assert templateDescription.length() > 0;
     List<Template> templates = new ArrayList<>();
     for (String tok : tokenizeTemplates(templateDescription))
       templates.add(parseTemplateToken(tok));
@@ -297,6 +299,7 @@ public class TemplatedFeatures implements Serializable {
       try {
         templates = parseTemplates(templateString);
       } catch (Exception e) {
+        System.err.println("problem parsing: " + templateString);
         throw new RuntimeException(e);
       }
     }

@@ -65,27 +65,27 @@ public class BasicFeatureTemplates {
       return String.format("%s=%d", name, w);
   }
 
-	/**
-	 * Describes the position of the parent of p w.r.t. i and j.
-	 */
-	public static String parentRelTo(int p, int i, int j, DependencyParse d) {
-		if (p < 0 || p >= d.size())
-			return "none";
-		int lp = d.getHead(p);
-		if (lp < 0 || lp >= d.size()) {
-			return "root";
-		} else if (lp < Math.min(i, j)) {
-			return "left";
-		} else if (lp == Math.min(i, j)) {
-			return "min";
-		} else if (lp < Math.max(i, j)) {
-			return "middle";
-		} else if (lp == Math.max(i, j)) {
-			return "max";
-		} else {
-			return "right";
-		}
-	}
+  /**
+  * Describes the position of the parent of p w.r.t. i and j.
+  */
+  public static String parentRelTo(int p, int i, int j, DependencyParse d) {
+    if (p < 0 || p >= d.size())
+      return "none";
+    int lp = d.getHead(p);
+    if (lp < 0 || lp >= d.size()) {
+      return "root";
+    } else if (lp < Math.min(i, j)) {
+      return "left";
+    } else if (lp == Math.min(i, j)) {
+      return "min";
+    } else if (lp < Math.max(i, j)) {
+      return "middle";
+    } else if (lp == Math.max(i, j)) {
+      return "max";
+    } else {
+      return "right";
+    }
+  }
 
   public static Template getBasicTemplate(String name) {
     return basicTemplates.get(name);
@@ -116,14 +116,14 @@ public class BasicFeatureTemplates {
     tokenExtractors = new HashMap<>();
     tokenExtractors.put("Word", x -> {
       if (x.indexInSent())
-        return x.sentence.getWord(x.index);
+        return "Word=" + x.sentence.getWord(x.index);
       else
         return null;
     });
     tokenExtractors.put("Word2", x -> {
       if (x.indexInSent()
           && MinimalRoleFeatures.canLexicalize(x.index, x.sentence)) {
-        return x.sentence.getWord(x.index);
+        return "Word2=" + x.sentence.getWord(x.index);
       } else {
         return null;
       }
@@ -132,21 +132,21 @@ public class BasicFeatureTemplates {
       if (x.indexInSent()) {
         String s = x.sentence.getWord(x.index);
         if (s.length() > 4)
-          return s.substring(0, 4);
-        return s;
+          return "Word3=" + s.substring(0, 4);
+        return "Word3=" + s;
       } else {
         return null;
       }
     });
     tokenExtractors.put("Pos", x -> {
       if (x.indexInSent())
-        return x.sentence.getPos(x.index);
+        return "Pos=" + x.sentence.getPos(x.index);
       else
         return null;
     });
     tokenExtractors.put("Pos2", x -> {
       if (x.indexInSent())
-        return x.sentence.getPos(x.index).substring(0, 1);
+        return "Pos2=" + x.sentence.getPos(x.index).substring(0, 1);
       else
         return null;
     });
@@ -155,7 +155,9 @@ public class BasicFeatureTemplates {
         DependencyParse deps = x.sentence.getCollapsedDeps();
         if (deps == null)
           return null;
-        return deps.getLabel(x.index);
+        if (!x.indexInSent())
+          return null;
+        return "CollapsedLabel=" + deps.getLabel(x.index);
       } else {
         return null;
       }
@@ -168,29 +170,31 @@ public class BasicFeatureTemplates {
           return null;
         int h = deps.getHead(x.index);
         if (h < 0)
-          return "root";
+          return "CollapsedParentDir=root";
         else if (h < x.index)
-          return "left";
+          return "CollapsedParentDir=left";
         else
-          return "right";
+          return "CollapsedParentDir=right";
       } else {
         return null;
       }
     });
     */
     for (int maxLen : Arrays.asList(3, 6, 99)) {
-      tokenExtractors.put("Bc256/" + maxLen, x -> {
+      String name = "Bc256/" + maxLen;
+      tokenExtractors.put(name, x -> {
         if (x.indexInSent()) {
           String w = x.sentence.getWord(x.index);
-          return BrownClusters.getBc256().getPath(w, maxLen);
+          return name + "=" + BrownClusters.getBc256().getPath(w, maxLen);
         } else {
           return null;
         }
       });
-      tokenExtractors.put("Bc1000/" + maxLen, x -> {
+      String name2 = "Bc1000/" + maxLen;
+      tokenExtractors.put(name2, x -> {
         if (x.indexInSent()) {
           String w = x.sentence.getWord(x.index);
-          return BrownClusters.getBc1000().getPath(w, maxLen);
+          return name2 + "=" + BrownClusters.getBc1000().getPath(w, maxLen);
         } else {
           return null;
         }
@@ -1112,7 +1116,7 @@ public class BasicFeatureTemplates {
       System.err.println("4) how many partitions for the data");
       System.err.println("NOTE: if you don't want to use partitions, provide "
           + "\"0 1\" as the last two arguments");
-	    return;
+      return;
     }
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);

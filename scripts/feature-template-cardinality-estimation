@@ -1,21 +1,10 @@
 #!/bin/bash
 
-# WARNING: BasicFeatureTemplates is not thread safe yet!
-THREADS=1
-OUTPUT="experiments/forward-selection/templates.txt"
-CP=`find target/ -iname '*.jar' | tr '\n' ':'`
-
-# enable job control
-set -m
-
-# start jobs in parallel
-PARALLEL=12
+THREADS=6     # threads per job
+PARALLEL=64   # number of jobs
 for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"
-  java -Xmx5G -ea -cp ${CP} -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
-    edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates ${THREADS} ${OUTPUT} ${i} ${PARALLEL} &
+  qsub -N "feat-card-$i" ./scripts/feature-template-cardinality-estimation-sge-helper \
+    ${THREADS} ${i} ${PARALLEL}
 done
-
-# wait for all jobs to finish
-while [ 1 ]; do fg 2> /dev/null; [ $? == 1 ] && break; done
 
