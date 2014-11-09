@@ -41,6 +41,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
@@ -274,7 +275,6 @@ public class RoleHeadToSpanStage
 			      vs = new VarSet(sVar);
 			    }
 			    TemplatedFeatures feats = getTFeatures();
-			    //ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
 			    ExplicitExpFamFactorWithConstraint phi = new ExplicitExpFamFactorWithConstraint(vs, -1);
 			    int n = vs.calcNumConfigs();
 			    for (int i = 0; i < n; i++) {
@@ -283,6 +283,8 @@ public class RoleHeadToSpanStage
 			      boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
 			      context.clear();
 			      context.setStage(RoleHeadToSpanStage.class);
+			      if (params.useSyntaxFeatures)
+			        context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
 			      if (DISALLOW_ARG_WITHOUT_CONSTITUENT && arg && cVar != null && !cons) {
 			        phi.setBadConfig(i);
 			      } else {

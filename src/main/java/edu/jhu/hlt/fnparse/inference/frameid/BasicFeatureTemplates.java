@@ -14,6 +14,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +29,9 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -47,6 +52,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
@@ -168,8 +174,6 @@ public class BasicFeatureTemplates {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
         if (deps == null)
-          return null;
-        if (!x.indexInSent())
           return null;
         return "CollapsedLabel=" + deps.getLabel(x.index);
       } else {
@@ -619,6 +623,271 @@ public class BasicFeatureTemplates {
         }
       }
     }
+    
+    
+    
+
+    // ********** PosPatternGenerator ******************************************
+    // TODO
+    
+    
+    
+    
+    
+    
+
+    // ********** Constituency parse features **********************************
+    // basic:
+    addTemplate("span1StanfordCategory", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = context.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        String cat = "NONE";
+        if (n != null)
+          cat = n.getTag();
+        return "span1StanfordCategory=" + cat;
+      }
+    });
+    addTemplate("span1StanfordRule", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = context.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        String rule = "NONE";
+        if (n != null)
+          rule = n.getRule();
+        return "span1IsStanfordRule=" + rule;
+      }
+    });
+    // Values of this map have the following interpretation:
+    // Entries in the outer list should fire as separate features (a bag of features)
+    // Entries in the inner list should be conjoined into one feature string
+    SortedMap<String,
+      Function<TemplateContext,
+        List<List<ConstituencyParse.NodePathPiece>>>> node2Path = new TreeMap<>();
+    node2Path.put("DirectChildren", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<NodePathPiece> children = new ArrayList<>();
+        for (Node c : n.getChildren())
+          children.add(new NodePathPiece(c, null));
+        return Arrays.asList(children);
+      }
+    });
+    node2Path.put("AllChildrenBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<List<NodePathPiece>> children = new ArrayList<>();
+        helper(n, children);
+        if (children.size() == 0)
+          return null;
+        return children;
+      }
+      private void helper(ConstituencyParse.Node n, List<List<ConstituencyParse.NodePathPiece>> addTo) {
+        addTo.add(Arrays.asList(new NodePathPiece(n, null)));
+        for (ConstituencyParse.Node c : n.getChildren())
+          helper(c, addTo);
+      }
+    });
+    node2Path.put("ToRootPath", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<NodePathPiece> parents = new ArrayList<>();
+        while (n != null) {
+          parents.add(new NodePathPiece(n, null));
+          n = n.getParent();
+        }
+        assert parents.size() > 0;
+        return Arrays.asList(parents);
+      }
+    });
+    node2Path.put("ToRootBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<List<NodePathPiece>> parents = new ArrayList<>();
+        while (n != null) {
+          parents.add(Arrays.asList(new NodePathPiece(n, ">")));
+          n = n.getParent();
+        }
+        assert parents.size() > 0;
+        return parents;
+      }
+    });
+    node2Path.put("CommonParent", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s1 = t.getSpan1();
+        if (s1 == null)
+          return null;
+        Span s2 = t.getSpan2();
+        if (s2 == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n1 = cp.getConstituent(s1);
+        if (n1 == null)
+          return null;
+        ConstituencyParse.Node n2 = cp.getConstituent(s2);
+        if (n2 == null)
+          return null;
+        List<NodePathPiece> n1up = new ArrayList<>();
+        Map<ConstituencyParse.Node, Integer> n1upseen = new HashMap<>();
+        ConstituencyParse.Node n = n1;
+        while (n != null) {
+          n1up.add(new NodePathPiece(n, ">"));
+          n1upseen.put(n, n1up.size() - 1);
+          n = n.getParent();
+        }
+        int match = -1;
+        List<NodePathPiece> n2up = new ArrayList<>();
+        n = n2;
+        while (n != null) {
+          n2up.add(new NodePathPiece(n, "<"));
+          Integer idx = n1upseen.get(n);
+          if (idx != null) {
+            match = idx;
+            break;
+          }
+          n = n.getParent();
+        }
+        if (match < 0)
+          return null;
+        List<NodePathPiece> common = new ArrayList<>();
+        common.addAll(n1up.subList(0, match + 1));
+        common.addAll(n2up);
+        return Arrays.asList(common);
+      }
+    });
+
+    SortedMap<String, Function<List<ConstituencyParse.NodePathPiece>, String>>
+      path2Feat = new TreeMap<>();
+    path2Feat.put("Category", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Category:");
+        boolean first = true;
+        for (NodePathPiece npp : t) {
+          if (!first) {
+            String e = npp.getEdge();
+            if (e == null) e = "_";
+            sb.append(e);
+          }
+          first = false;
+          sb.append(npp.getNode().getTag());
+        }
+        return sb.toString();
+      }
+    });
+    path2Feat.put("Rule", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Rule:");
+        boolean first = true;
+        for (NodePathPiece npp : t) {
+          if (!first) {
+            String e = npp.getEdge();
+            if (e == null) e = "_";
+            sb.append(e);
+          }
+          first = false;
+          sb.append(npp.getNode().getRule());
+        }
+        return sb.toString();
+      }
+    });
+    path2Feat.put("DeltaDepth", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        if (t.size() < 2)
+          return "TOO-SHORT";
+        int a = t.get(0).getNode().getDepth();
+        int b = t.get(t.size() - 1).getNode().getDepth();
+        return "DeltaDepth=" + (a - b);
+      }
+    });
+
+    for (Entry<String, Function<TemplateContext, List<List<NodePathPiece>>>> a : node2Path.entrySet()) {
+      for (Entry<String, Function<List<ConstituencyParse.NodePathPiece>, String>> b : path2Feat.entrySet()) {
+        String name = String.format("CfgFeat-%s-%s", a.getKey(), b.getKey());
+        addTemplate(name, new Template() {
+          private Function<TemplateContext, List<List<NodePathPiece>>> extract = a.getValue();
+          private Function<List<NodePathPiece>, String> collapse = b.getValue();
+          @Override
+          public Iterable<String> extract(TemplateContext context) {
+            List<List<NodePathPiece>> paths = extract.apply(context);
+            if (paths == null || paths.size() == 0)
+              return null;
+            //Collection<String> feats = new ArrayList<>();
+            Collection<String> feats = new HashSet<>();
+            for (List<NodePathPiece> p : paths)
+              feats.add(name + "=" + collapse.apply(p));
+            return feats;
+          }
+        });
+      }
+    }
+
 
     /* FRAME-TARGET FEATURES **************************************************/
     addTemplate("luMatch", new TemplateSS() {

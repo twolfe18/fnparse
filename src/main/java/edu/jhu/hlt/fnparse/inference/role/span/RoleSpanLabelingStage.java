@@ -34,6 +34,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -288,6 +289,8 @@ public class RoleSpanLabelingStage
       TemplatedFeatures feats = parent.getFeatures();
       TemplateContext context = new TemplateContext();
       context.clear();
+      if (parent.globalParams.useSyntaxFeatures)
+        context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
       context.setStage(RoleSpanLabelingStage.class);
       context.setSentence(s);
       context.setFrame(frame);

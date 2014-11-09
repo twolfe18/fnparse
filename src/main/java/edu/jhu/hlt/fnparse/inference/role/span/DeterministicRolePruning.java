@@ -70,7 +70,8 @@ public class DeterministicRolePruning
 
   private Mode mode = Mode.STANFORD_CONSTITUENTS;
   private final FgModel weights = new FgModel(0);
-  private ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper(true);
+  private ConcreteStanfordWrapper parser =
+      ConcreteStanfordWrapper.getSingleton(true);
 
   public DeterministicRolePruning(Mode mode) {
     this.mode = mode;

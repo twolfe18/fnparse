@@ -23,12 +23,28 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.stanford.AnnotateTokenizedConcrete;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class ConcreteStanfordWrapper {
+
+  private static ConcreteStanfordWrapper nonCachingSingleton, cachingSingleton;
+
+  public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
+    if (caching) {
+      if (cachingSingleton == null)
+        cachingSingleton = new ConcreteStanfordWrapper(true);
+      return cachingSingleton;
+    } else {
+      if (nonCachingSingleton == null)
+        nonCachingSingleton = new ConcreteStanfordWrapper(false);
+      return nonCachingSingleton;
+    }
+  }
+
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
@@ -49,6 +65,10 @@ public class ConcreteStanfordWrapper {
 
   public void clearCache() {
     cache.clear();
+  }
+
+  public ConstituencyParse getCParse(Sentence s) {
+    return new ConstituencyParse(parse(s, false));
   }
 
   public edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
