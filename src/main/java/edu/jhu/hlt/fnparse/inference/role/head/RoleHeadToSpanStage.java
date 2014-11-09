@@ -18,6 +18,7 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
@@ -57,6 +58,7 @@ public class RoleHeadToSpanStage
 		implements Stage<FNParse, FNParse>, Serializable {
 	private static final long serialVersionUID = 1L;
 	public static boolean SHOW_FEATURES = false;
+	public static boolean DISALLOW_ARG_WITHOUT_CONSTITUENT = true;
 	public static final Logger LOG = Logger.getLogger(RoleHeadToSpanStage.class);
 
 	public static class Params implements Serializable {
@@ -213,34 +215,39 @@ public class RoleHeadToSpanStage
 			      vs = new VarSet(sVar);
 			    }
 			    TemplatedFeatures feats = getTFeatures();
-			    ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
+			    //ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
+			    ExplicitExpFamFactorWithConstraint phi = new ExplicitExpFamFactorWithConstraint(vs, -1);
 			    int n = vs.calcNumConfigs();
 			    for (int i = 0; i < n; i++) {
 			      VarConfig vc = vs.getVarConfig(i);
 			      boolean arg = BinaryVarUtil.configToBool(vc.getState(sVar));
 			      boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
-			      FeatureVector fv = new FeatureVector();
 			      context.clear();
 			      context.setStage(RoleHeadToSpanStage.class);
-			      context.setSentence(sent);
-			      if (arg || cVar != null) {
-			        context.setSpan1(s);
-			        context.setSpan2(ev.getTarget());
-			        context.setHead1(ev.getArgHeadIdx());
-			        context.setHead2(ev.getTargetHeadIdx());
-			        if (arg) {
-			          context.setFrame(ev.getFrame());
-			          context.setRole(ev.getRole());
-			          context.setArg(s);
-			          context.setArgHead(ev.getArgHeadIdx());
-			          context.setTarget(ev.getTarget());
-			          context.setTargetHead(ev.getTargetHeadIdx());
-			        }
-			        if (cVar != null) {
-			          context.setSpan1IsConstituent(cons);
+			      if (DISALLOW_ARG_WITHOUT_CONSTITUENT && arg && cVar != null && !cons) {
+			        phi.setBadConfig(i);
+			      } else {
+			        context.setSentence(sent);
+			        if (arg || cVar != null) {
+			          context.setSpan1(s);
+			          context.setSpan2(ev.getTarget());
+			          context.setHead1(ev.getArgHeadIdx());
+			          context.setHead2(ev.getTargetHeadIdx());
+			          if (arg) {
+			            context.setFrame(ev.getFrame());
+			            context.setRole(ev.getRole());
+			            context.setArg(s);
+			            context.setArgHead(ev.getArgHeadIdx());
+			            context.setTarget(ev.getTarget());
+			            context.setTargetHead(ev.getTargetHeadIdx());
+			          }
+			          if (cVar != null) {
+			            context.setSpan1IsConstituent(cons);
+			          }
 			        }
 			      }
 			      context.blankOutIllegalInfo(params);
+			      FeatureVector fv = new FeatureVector();
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
 			            arg, cons, sVar.getName());
@@ -255,6 +262,30 @@ public class RoleHeadToSpanStage
 			}
 			return factors;
 		}
+	}
+
+	private static class ExplicitExpFamFactorWithConstraint
+	    extends ExplicitExpFamFactor {
+    private static final long serialVersionUID = 1L;
+    private int badConfig = -1;
+	  public ExplicitExpFamFactorWithConstraint(VarSet vars, int badConfig) {
+      super(vars);
+      this.badConfig = badConfig;
+    }
+	  public int setBadConfig(int config) {
+	    assert config >= 0 && config < this.getVars().calcNumConfigs();
+	    int old = this.badConfig;
+	    this.badConfig = config;
+	    return old;
+	  }
+	  @Override
+	  public double getDotProd(int config, FgModel model, boolean logDomain) {
+	    if (config == badConfig) {
+	      return logDomain ? -100d : 0d;
+	    } else {
+	      return super.getDotProd(config, model, logDomain);
+	    }
+	  }
 	}
 
 	public static class RoleSpanStageDatum
