@@ -109,8 +109,22 @@ public class BasicFeatureTemplates {
       throw new RuntimeException("abiguous template name: " + name);
   }
 
+  private static void addLabel(String name, Template t) {
+    if (labelTemplates == null)
+      labelTemplates = new HashMap<>();
+    if (name.contains("+"))
+      throw new IllegalArgumentException("ambiguous name with +");
+    if (name.contains("*"))
+      throw new IllegalArgumentException("ambiguous name with *");
+    Template ot = labelTemplates.put(name, t);
+    if (ot != null)
+      throw new RuntimeException("abiguous template name: " + name);
+    addTemplate(name, t);
+  }
+
   private static Map<String, Function<SentencePosition, String>> tokenExtractors;
   private static Map<String, Template> basicTemplates;
+  private static Map<String, Template> labelTemplates;
   static {
     /* TOKEN EXTRACTORS *******************************************************/
     tokenExtractors = new HashMap<>();
@@ -907,13 +921,13 @@ public class BasicFeatureTemplates {
 
     /* LABELS *****************************************************************/
     // These templates should come first in a product, as they are the most selective
-    addTemplate("frame", new TemplateSS() {
+    addLabel("frame", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Frame f = context.getFrame();
         return f == null ? null : "frame=" + f.getName();
       }
     });
-    addTemplate("frameRole", new TemplateSS() {
+    addLabel("frameRole", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         int role = context.getRole();
         if (role == TemplateContext.UNSET)
@@ -923,7 +937,7 @@ public class BasicFeatureTemplates {
         return "frameRole=" + f.getName() + "." + f.getRole(role);
       }
     });
-    addTemplate("frameRoleArg", new TemplateSS() {
+    addLabel("frameRoleArg", new TemplateSS() {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
       public String extractSS(TemplateContext context) {
@@ -937,7 +951,7 @@ public class BasicFeatureTemplates {
         return "frameRoleArg=" + f.getName() + "." + f.getRole(role);
       }
     });
-    addTemplate("roleArg", new TemplateSS() {
+    addLabel("roleArg", new TemplateSS() {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
       public String extractSS(TemplateContext context) {
@@ -951,7 +965,7 @@ public class BasicFeatureTemplates {
         return "roleArg=" + f.getRole(role);
       }
     });
-    addTemplate("arg", new TemplateSS() {
+    addLabel("arg", new TemplateSS() {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
       public String extractSS(TemplateContext context) {
@@ -965,7 +979,7 @@ public class BasicFeatureTemplates {
         return "someArg";
       }
     });
-    addTemplate("span1IsConstituent", new TemplateSS() {
+    addLabel("span1IsConstituent", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         if (!context.getSpan1IsConstituentIsSet())
           return null;
@@ -982,7 +996,7 @@ public class BasicFeatureTemplates {
         return "span1IsConstituent";
       }
     });
-    addTemplate("head1IsRoot", new TemplateSS() {
+    addLabel("head1IsRoot", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         if (context.getHead1_parent() == TemplateContext.UNSET)
           return null;
@@ -991,7 +1005,7 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    addTemplate("head1GovHead2", new TemplateSS() {
+    addLabel("head1GovHead2", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         if (context.getHead2_parent() == TemplateContext.UNSET)
           return null;
@@ -1002,7 +1016,7 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    addTemplate("head2GovHead1", new TemplateSS() {
+    addLabel("head2GovHead1", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         if (context.getHead1_parent() == TemplateContext.UNSET)
           return null;
@@ -1013,7 +1027,7 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    addTemplate("Role1", new TemplateSS() {
+    addLabel("Role1", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         int r = context.getRole();
         if (r == TemplateContext.UNSET)
@@ -1023,7 +1037,7 @@ public class BasicFeatureTemplates {
         return "Role1=" + (r == f.numRoles() ? "NO_ROLE" : f.getRole(r));
       }
     });
-    addTemplate("Role2", new TemplateSS() {
+    addLabel("Role2", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         int r = context.getRole2();
         if (r == TemplateContext.UNSET)
@@ -1102,9 +1116,29 @@ public class BasicFeatureTemplates {
     Stage<?, ?> stage = stageFuture.apply(params);
     templateName = stage.getName() + " * " + templateName;
     params.setFeatureTemplateDescription(templateName);
+
+    // Try with the first K examples, if its 0, then assume it will remain 0
+    int K = 50;
     params.getAlphabet().startGrowth();
-    stage.scanFeatures(parses);
+    stage.scanFeatures(parses.subList(0, K));
+    if (params.getAlphabet().size() == 0)
+      return 0;
+
+    // Else finish the job
+    params.getAlphabet().startGrowth();
+    stage.scanFeatures(parses.subList(K, parses.size()));
     return params.getAlphabet().size();
+  }
+
+  private static boolean incompatible(String stageName, String syntaxMode, String labelName) {
+    // TODO add more rules!
+    if ("FrameIdStage".equals(stageName) && !labelName.toLowerCase().contains("frame"))
+      return true;
+    if ("FrameIdStage".equals(stageName) && labelName.endsWith("Arg"))
+      return true;
+    if ("RoleSequenceStage".equals(stageName) && !"Role1".equals(labelName))
+      return true;
+    return false;
   }
 
   public static void main(String[] args) throws Exception {
@@ -1152,46 +1186,52 @@ public class BasicFeatureTemplates {
     // TODO read in existing results from the given file, skip those jobs
 
     LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
-    for (String syntaxModeName : Arrays.asList("regular", "latent")) {
-      Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
-      for (String tmplName : basicTemplates.keySet()) {
-        for (Function<ParserParams, Stage<?, ?>> stage : stages) {
-          Runnable r = new Runnable() {
-            @Override
-            public void run() {
-              long tmplStart = System.currentTimeMillis();
-              ParserParams params = syntaxModeSupp.get();
-              String stageName = stage.apply(params).getName();
-              LOG.info(tmplName + "\t" + stageName);
+    for (Entry<String, Template> label : labelTemplates.entrySet()) {
+      for (String syntaxModeName : Arrays.asList("regular", "latent")) {
+        Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+        for (String tmplName : basicTemplates.keySet()) {
+          for (Function<ParserParams, Stage<?, ?>> stage : stages) {
+            Runnable r = new Runnable() {
+              @Override
+              public void run() {
+                long tmplStart = System.currentTimeMillis();
+                ParserParams params = syntaxModeSupp.get();
+                String stageName = stage.apply(params).getName();
+                String labelName = label.getKey();
 
-              // Only care about your part of the data
-              int h = (tmplName + " " + stageName).hashCode();
-              if (h % numParts != part)
-                return;
+                // Only care about your part of the data
+                String desc = stageName + "\t" + labelName + "\t" + tmplName;
+                int h = desc.hashCode();
+                if (h % numParts != part)
+                  return;
 
-              int card = -1;
-              if (fakeIt)
-                card = 2;
-              else
-                card = estimateCard(tmplName, params, stage, parses);
-              double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-              String msg = String.format("%s\t%s\t%s\t%d\t%.2f\n",
-                  tmplName, stageName, syntaxModeName, card, time);
-              try (FileWriter fw = new FileWriter(f, true)) {
-                fw.append(msg);
-              } catch (IOException e) {
-                System.out.flush();
-                e.printStackTrace();
-                System.err.println("failed to report: " + msg);
-                System.err.flush();
-                System.out.flush();
+                LOG.info("estimating cardinality for: " + desc);
+                int card = -1;
+                if (incompatible(stageName, syntaxModeName, labelName))
+                  card = 0;
+                else if (fakeIt)
+                  card = 2;
+                else
+                  card = estimateCard(labelName + " * " + tmplName, params, stage, parses);
+                double time = (System.currentTimeMillis() - tmplStart) / 1000d;
+                String msg = String.format("%s\t%s\t%s\t%s\t%d\t%.2f\n",
+                    stageName, syntaxModeName, labelName, tmplName, card, time);
+                try (FileWriter fw = new FileWriter(f, true)) {
+                  fw.append(msg);
+                } catch (IOException e) {
+                  System.out.flush();
+                  e.printStackTrace();
+                  System.err.println("failed to report: " + msg);
+                  System.err.flush();
+                  System.out.flush();
+                }
               }
-            }
-          };
-          if (fakeIt || parallel == 1)
-            r.run();
-          else
-            es.execute(r);
+            };
+            if (fakeIt || parallel == 1)
+              r.run();
+            else
+              es.execute(r);
+          }
         }
       }
     }
