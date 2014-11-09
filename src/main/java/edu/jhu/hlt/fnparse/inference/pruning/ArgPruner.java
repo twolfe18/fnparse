@@ -187,32 +187,32 @@ public class ArgPruner implements Serializable, IArgPruner {
     if (year.matcher(word).matches())
       return false;
     String pos = sentence.getPos(headWordIdx);
-    if(pruneByPOS && (pos.endsWith("DT") || pennPunctuationPosTags.contains(pos) || pennOtherPrunePosTags.contains(pos))) {
+    if (pruneByPOS && (pos.endsWith("DT") || pennPunctuationPosTags.contains(pos) || pennOtherPrunePosTags.contains(pos))) {
       argsPrunedPos++;
       return true;
     }
-    if(lexMethod != LexPruneMethod.NONE) {
+    if (lexMethod != LexPruneMethod.NONE) {
       Set<LexicalUnit> possibleLUs;
-      if(lexMethod == LexPruneMethod.EXACT)
+      if (lexMethod == LexPruneMethod.EXACT) {
         possibleLUs = getRoleWordMap()[f.getId()][roleIdx];
-      else if(lexMethod == LexPruneMethod.SYNSET)
+      } else if (lexMethod == LexPruneMethod.SYNSET) {
         possibleLUs = getRoleSynsetMap()[f.getId()][roleIdx];
-      else {
+      } else {
         assert false : "need to update this code for: " + lexMethod;
-      possibleLUs = null;
+        possibleLUs = null;
       }
       argsPrunedLex++;
       if(possibleLUs == null)
         return true;
       LexicalUnit lu = sentence.getFNStyleLUUnsafe(
           headWordIdx, targetPruningData.getWordnetDict(), true);
-      if(lu == null || possibleLUs.contains(lu))
+      if (lu == null || possibleLUs.contains(lu))
         return true;
       argsPrunedLex--;
     }
     argsKept++;
 
-    if(argsPruningInterval > 0 && argsKept % argsPruningInterval == 0) {
+    if (argsPruningInterval > 0 && argsKept % argsPruningInterval == 0) {
       LOG.info(String.format("[ArgPruner] pruned %.1f %% of args seen, %d "
           + "by POS, %d by lex, with %d false prunes",
           pruneRatio()*100d,
@@ -226,14 +226,13 @@ public class ArgPruner implements Serializable, IArgPruner {
 
   @SuppressWarnings("unchecked")
   private synchronized void init() {
-    if(roleSynsetMap != null && roleWordMap != null)
+    if (roleSynsetMap != null && roleWordMap != null)
       return;
-    if(persistRoleWordMapTo != null && persistRoleWordMapTo.isFile() &&
+    if (persistRoleWordMapTo != null && persistRoleWordMapTo.isFile() &&
         persistRoleSynsetMapTo != null && persistRoleSynsetMapTo.isFile()) {
       roleWordMap = readLUTensor(persistRoleWordMapTo);
       roleSynsetMap = readLUTensor(persistRoleSynsetMapTo);
-    }
-    else {
+    } else {
       // compute the word lists
       Timer t = Timer.start("[ArgPruner]");
       LOG.info("[ArgPruner] building role word and synset maps...");
@@ -242,18 +241,17 @@ public class ArgPruner implements Serializable, IArgPruner {
       FrameIndex fi = FrameIndex.getInstance();
       IDictionary dict = targetPruningData.getWordnetDict();
       WordnetStemmer stemmer = new WordnetStemmer(dict);
-      for(Frame f : fi.allFrames()) {
+      for (Frame f : fi.allFrames()) {
         int K = f.numRoles();
         Set<LexicalUnit>[] roleWords = new Set[K];
         Set<LexicalUnit>[] roleSynset = new Set[K];
-        for(FrameInstance frameInst : targetPruningData.getPrototypesByFrame(f)) {
-          for(int k=0; k<K; k++) {
+        for (FrameInstance frameInst : targetPruningData.getPrototypesByFrame(f)) {
+          for (int k = 0; k < K; k++) {
             Span s = frameInst.getArgument(k);
-            if(s == Span.nullSpan) continue;
-
+            if (s == Span.nullSpan) continue;
 
             int argHead = s.start;
-            if(s.width() > 1)
+            if (s.width() > 1)
               argHead = headFinder.head(s, frameInst.getSentence());
             LexicalUnit lu;
             try {
@@ -271,7 +269,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 
             // ======= EXACT WORD MATCH ==================
             Set<LexicalUnit> ws = roleWords[k];
-            if(ws == null) {
+            if (ws == null) {
               ws = new HashSet<LexicalUnit>();
               roleWords[k] = ws;
             }
@@ -279,7 +277,7 @@ public class ArgPruner implements Serializable, IArgPruner {
 
             // ======= SYNSET MATCH ======================
             ws = roleSynset[k];
-            if(ws == null) {
+            if (ws == null) {
               ws = new HashSet<LexicalUnit>();
               roleSynset[k] = ws;
             }
@@ -287,12 +285,12 @@ public class ArgPruner implements Serializable, IArgPruner {
             if(pos == null) continue;
             List<String> stems = stemmer.findStems(lu.word, pos);
             if(stems == null) continue;
-            for(String st : stems) {
+            for (String st : stems) {
               IIndexWord iw = dict.getIndexWord(st, pos);
-              if(iw == null) continue;
-              for(IWordID wid : iw.getWordIDs()) {
+              if (iw == null) continue;
+              for (IWordID wid : iw.getWordIDs()) {
                 IWord w = dict.getWord(wid);
-                for(IWord syn : w.getSynset().getWords()) {
+                for (IWord syn : w.getSynset().getWords()) {
                   LexicalUnit synLU = new LexicalUnit(syn.getLemma(), syn.getPOS().toString());
                   ws.add(synLU);
                 }
@@ -306,21 +304,21 @@ public class ArgPruner implements Serializable, IArgPruner {
       t.stop();
 
       // save this data for later
-      if(persistRoleWordMapTo != null)
+      if (persistRoleWordMapTo != null)
         writeLUTensor(persistRoleWordMapTo, roleWordMap);
-      if(persistRoleSynsetMapTo != null)
+      if (persistRoleSynsetMapTo != null)
         writeLUTensor(persistRoleSynsetMapTo, roleSynsetMap);
     }
   }
 
   public Set<LexicalUnit>[][] getRoleWordMap() {
-    if(roleWordMap == null)
+    if (roleWordMap == null)
       init();
     return roleWordMap;
   }
 
   public Set<LexicalUnit>[][] getRoleSynsetMap() {
-    if(roleSynsetMap == null)
+    if (roleSynsetMap == null)
       init();
     return roleSynsetMap;
   }
@@ -344,8 +342,7 @@ public class ArgPruner implements Serializable, IArgPruner {
       // i write a -1 at the end to signify that there are no more frames
       dos.writeInt(-1);
       dos.close();
-    }
-    catch(Exception e) { throw new RuntimeException(e); }
+    } catch (Exception e) { throw new RuntimeException(e); }
   }
 
   private static final RedisFileCache RFC = null;
@@ -380,7 +377,6 @@ public class ArgPruner implements Serializable, IArgPruner {
       }
       dis.close();
       return saa;
-    }
-    catch(Exception e) { throw new RuntimeException(e); }
+    } catch(Exception e) { throw new RuntimeException(e); }
   }
 }
