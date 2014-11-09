@@ -76,7 +76,7 @@ public class Path {
 			upIndices[ptr] = upNodes.size();
 			upNodes.add(getNodeNameFor(ptr));
 			upEdges.add(getEdgeNameFor(ptr, true));
-			ptr = sent.governor(ptr);
+			ptr = d.getHead(ptr);
 		}
 
 		// the order down starts out backwards
@@ -89,7 +89,7 @@ public class Path {
 				seen[ptr] = true;
 				downNodes.add(getNodeNameFor(ptr));
 				downEdges.add(getEdgeNameFor(ptr, false));
-				ptr = sent.governor(ptr);
+				ptr = d.getHead(ptr);
 			}
 			Collections.reverse(downNodes);
 			Collections.reverse(downEdges);
@@ -119,9 +119,9 @@ public class Path {
 	}
 
 	private String getNodeNameFor(int i) {
-		if(nodeType == NodeType.LEMMA) return sent.getLemma(i);
-		else if(nodeType == NodeType.POS) return sent.getPos(i);
-		else if(nodeType == NodeType.NONE) return "*";
+		if (nodeType == NodeType.LEMMA) return sent.getLemma(i);
+		else if (nodeType == NodeType.POS) return sent.getPos(i);
+		else if (nodeType == NodeType.NONE) return "*";
 		else throw new RuntimeException();
 	}
 
@@ -180,13 +180,13 @@ public class Path {
 
 	/** prefix may be null */
 	public void pathNGrams(int length, Collection<String> addTo, String prefix) {
-		int U = 2*upNodes.size() + 1;
-		if(!toRoot) U += 2*downNodes.size();
-		for(int s=0; s < U-length+1; s++) {
+		int U = 2 * upNodes.size() + 1;
+		if (!toRoot) U += 2 * downNodes.size();
+		for (int s = 0; s < U - length + 1; s++) {
 			StringBuilder ngram = new StringBuilder();
-			if(prefix != null)
+			if (prefix != null)
 				ngram.append(prefix);
-			for(int i=0; i<length; i++)
+			for (int i = 0; i < length; i++)
 				ngram.append(pathNGramsHelper2(s + i));
 			addTo.add(ngram.toString());
 		}
@@ -197,15 +197,16 @@ public class Path {
 		// A B C D R X Y Z
 		// 0 1 2 3   0 1 2
 		int U = 2 * upNodes.size();	// U=8 in example above
-		if(i < U) {
-			if(i % 2 == 0) return upNodes.get(i / 2);
+		if (i < U) {
+			if (i % 2 == 0) return upNodes.get(i / 2);
 			else return upEdges.get(i / 2);
-		}
-		else if(i == U) return "ROOT";
-		else {
+		} else if (i == U) {
+		  return "ROOT";
+		} else {
 			assert !toRoot;
 			int j = i - U;
-			if(j % 2 == 0) return downNodes.get((j / 2) - 1);
+			if (j % 2 == 0)
+			  return downNodes.get((j / 2) - 1);
 			else return downEdges.get(j / 2);
 		}
 	}
