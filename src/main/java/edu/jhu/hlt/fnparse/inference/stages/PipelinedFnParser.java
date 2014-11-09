@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
@@ -260,6 +261,14 @@ public class PipelinedFnParser implements Serializable, Parser {
 				.setupInference(argHeads, labels)
 				.decodeAll();
 		LOG.info("[parse] argSpans done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
+
+		if (labels != null && argExpansion instanceof RoleHeadToSpanStage) {
+		  RoleHeadToSpanStage rhtss = (RoleHeadToSpanStage) argExpansion;
+		  Counts<String> errs = new Counts<>();
+		  for (int i = 0; i < labels.size(); i++) 
+		    rhtss.errAnalysis(errs, labels.get(i), fullParses.get(i), argHeads.get(i));
+		  LOG.info("[parse] errors: " + errs);
+		}
 
 		long totalTime = System.currentTimeMillis() - firstStart;
 		int toks = 0;

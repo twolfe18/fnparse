@@ -63,6 +63,25 @@ public class DataUtil {
     return m;
   }
 
+  /**
+   * The return type is deceiving...
+   * The keys in the returned map are just (frame,target) and the values have
+   * the roles and their locations in them.
+   */
+  public static Map<FrameInstance, FrameInstance> getFrameInstancesByFrameTarget(FNParse p) {
+    Map<FrameInstance, FrameInstance> index = new HashMap<>();
+    for (FrameInstance fi : p.getFrameInstances()) {
+      FrameInstance t = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
+      FrameInstance oldValue = index.put(t, fi);
+      if (oldValue != null)
+        throw new RuntimeException();
+    }
+    return index;
+  }
+
+  /**
+   * @deprecated You should not be using this, index on target (span)
+   */
   public static FrameInstance[] getFrameInstancesIndexByHeadword(
       List<FrameInstance> fis,
       Sentence s,

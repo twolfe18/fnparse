@@ -42,6 +42,10 @@ public class Counts<T> {
     return total;
   }
 
+  public String toString() {
+    return counts.toString();
+  }
+
   public List<T> getKeysSorted(final boolean descending) {
     List<T> items = new ArrayList<>();
     items.addAll(counts.keySet());

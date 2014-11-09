@@ -41,6 +41,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
@@ -163,6 +164,64 @@ public class RoleHeadToSpanStage
 				data.add(new RoleSpanStageDatum(x, labels.get(i), this));
 		}
 		return new StageDatumExampleList<>(data);
+	}
+
+	public static void errAnalysis(Counts<String> errorCounts, FNParse gold, FNParse hyp, FNParse argHeads) {
+	  // for every head that was given to this stage, which bucket does it fall into:
+	  // 1) not a valid head for the given frame-role
+	  // 2) valid head, but we pruned the gold span
+	  // 3) valid head, but we predicted the wrong span
+	  // 4) valid head, and we predicted the right span
+	  //Map<Span, FrameInstance> a = DataUtil.getFrameInstanceByTarget(argHeads);
+	  //Map<Span, FrameInstance> b = DataUtil.getFrameInstanceByTarget(hyp);
+	  //Map<Span, FrameInstance> c = DataUtil.getFrameInstanceByTarget(gold);
+	  Map<FrameInstance, FrameInstance> a = DataUtil.getFrameInstancesByFrameTarget(argHeads);
+	  Map<FrameInstance, FrameInstance> b = DataUtil.getFrameInstancesByFrameTarget(hyp);
+	  Map<FrameInstance, FrameInstance> c = DataUtil.getFrameInstancesByFrameTarget(gold);
+	  for (FrameInstance target : a.keySet()) {
+	    FrameInstance heads = a.get(target);
+	    FrameInstance hypFI = b.get(target);
+	    FrameInstance goldFI = c.get(target);
+	    if (hypFI == null) {
+	      errorCounts.increment("hypFI-is-null?");
+	    } else if (goldFI == null) {
+	      errorCounts.increment("predicted-bad-frame-location");
+	    } else if (goldFI.getFrame() != hypFI.getFrame()) {
+	      errorCounts.increment("predicted-bad-frame-value");
+	    } else {
+	      // try to line up the arguments
+	      int K = goldFI.getFrame().numRoles();
+	      for (int k = 0; k < K; k++) {
+	        Span h = heads.getArgument(k);
+	        assert h == Span.nullSpan || h.width() == 1;
+	        Span hypArg = hypFI.getArgument(k);
+	        assert h == Span.nullSpan || hypArg.includes(h.start);
+	        Span goldArg = goldFI.getArgument(k);
+	        if (h != Span.nullSpan)
+	          errorCounts.increment("predicted-role-head");
+	        if (h == Span.nullSpan && goldArg != Span.nullSpan) {
+	          errorCounts.increment("pruned-head");
+	        } else if (h == Span.nullSpan && goldArg == Span.nullSpan) {
+	          // Correct
+	          errorCounts.increment("GOLD-pruned-head");
+	        } else if (h != Span.nullSpan && goldArg == Span.nullSpan) {
+	          // Correct
+	          errorCounts.increment("GOLD-kept-head");
+	        } else {
+	          if (!goldArg.includes(h.start))
+	            errorCounts.increment("predicted-head-outside-of-gold-arg");
+	          if (goldArg.start < h.start - 8 || goldArg.end > h.end + 4)
+	            errorCounts.increment("pruned-gold-span");
+	          if (goldArg == hypArg)
+	            errorCounts.increment("GOLD!");
+	          if (goldArg.width() < hypArg.width())
+	            errorCounts.increment("span-too-wide");
+	          if (goldArg.width() > hypArg.width())
+	            errorCounts.increment("span-too-narrow");
+	        }
+	      }
+	    }
+	  }
 	}
 
 	/**
