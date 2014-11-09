@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -159,6 +160,7 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
+    /*
     tokenExtractors.put("CollapsedParentDir", x -> {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
@@ -175,7 +177,8 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    for (int maxLen : Arrays.asList(2, 4, 6, 99)) {
+    */
+    for (int maxLen : Arrays.asList(3, 6, 99)) {
       tokenExtractors.put("Bc256/" + maxLen, x -> {
         if (x.indexInSent()) {
           String w = x.sentence.getWord(x.index);
@@ -412,7 +415,7 @@ public class BasicFeatureTemplates {
     }
 
     // span1 width
-    for (int div = 1; div <= 4; div++) {
+    for (int div = 1; div <= 5; div++) {
       final int divL = div;
       final String name = "span1Width/" + div;
       addTemplate(name, new TemplateSS() {
@@ -420,7 +423,7 @@ public class BasicFeatureTemplates {
           Span t = context.getSpan1();
           if (t == null)
             return null;
-          return discretizeWidth(name, divL, 5, t.width());
+          return discretizeWidth(name, divL, 6, t.width());
         }
       });
     }
@@ -800,22 +803,25 @@ public class BasicFeatureTemplates {
         ? "0" : (len < 0 ? "-" : "+"));
     distanceBucketings.put("Len5", len -> Math.abs(len) <= 5
         ? String.valueOf(len) : (len < 0 ? "-" : "+"));
-    for (Entry<String, ToIntFunction<TemplateContext>> p1 :
-      distancePoints.entrySet()) {
-      for (Entry<String, ToIntFunction<TemplateContext>> p2 :
-        distancePoints.entrySet()) {
-        if (p1.getKey().equals(p2.getKey()))
-          continue;
+    List<String> dpKeys = new ArrayList<>();
+    dpKeys.addAll(distancePoints.keySet());
+    Collections.sort(dpKeys);
+    for (int i = 0; i < dpKeys.size() - 1; i++) {
+      for (int j = i + 1; j < dpKeys.size(); j++) {
+        String p1k = dpKeys.get(i);
+        String p2k = dpKeys.get(j);
+        ToIntFunction<TemplateContext> p1v = distancePoints.get(p1k);
+        ToIntFunction<TemplateContext> p2v = distancePoints.get(p2k);
         // Distance between two points
         for (Entry<String, IntFunction<String>> d : distanceBucketings.entrySet()) {
-          String name = String.format("Dist(%s,%s,%s)", d.getKey(), p1.getKey(), p2.getKey());
+          String name = String.format("Dist(%s,%s,%s)", d.getKey(), p1k, p2k);
           addTemplate(name, new TemplateSS() {
             @Override
             String extractSS(TemplateContext context) {
-              int c1 = p1.getValue().applyAsInt(context);
+              int c1 = p1v.applyAsInt(context);
               if (c1 == TemplateContext.UNSET)
                 return null;
-              int c2 = p2.getValue().applyAsInt(context);
+              int c2 = p2v.applyAsInt(context);
               if (c2 == TemplateContext.UNSET)
                 return null;
               return name + "=" + d.getValue().apply(c1 - c2);
@@ -830,19 +836,17 @@ public class BasicFeatureTemplates {
             if (ext.getKey().toLowerCase().startsWith("bc"))
               continue;
             final String name = String.format("%s-%d-grams-between-%s-and-%s",
-                ext.getKey(), n, p1.getKey(), p2.getKey());
+                ext.getKey(), n, p1k, p2k);
             final int ngram = n;
             addTemplate(name, new Template() {
               private Function<SentencePosition, String> extractor = ext.getValue();
               private SentencePosition pos = new SentencePosition();
-              private ToIntFunction<TemplateContext> p1f = p1.getValue();
-              private ToIntFunction<TemplateContext> p2f = p2.getValue();
               @Override
               public Iterable<String> extract(TemplateContext context) {
-                int c1 = p1f.applyAsInt(context);
+                int c1 = p1v.applyAsInt(context);
                 if (c1 == TemplateContext.UNSET)
                   return null;
-                int c2 = p2f.applyAsInt(context);
+                int c2 = p2v.applyAsInt(context);
                 if (c2 == TemplateContext.UNSET)
                   return null;
                 if (c1 > c2) {
@@ -1036,7 +1040,7 @@ public class BasicFeatureTemplates {
     stages.add(pp -> new RoleHeadToSpanStage(pp, pp));
     stages.add(pp -> new RoleSpanPruningStage(pp, pp));
     stages.add(pp -> new RoleSpanLabelingStage(pp, pp));
-    stages.add(pp -> new RoleSequenceStage(pp, pp));
+    //stages.add(pp -> new RoleSequenceStage(pp, pp));
     syntaxModes.put("regular", () -> {
       ParserParams p = new ParserParams();
       p.useLatentConstituencies = false;
@@ -1064,10 +1068,17 @@ public class BasicFeatureTemplates {
       LOG.info("registering stage: " + name);
       Class<? extends Stage> cls = s.getClass();
       Object old = stageTemplates.put(name, new TemplateSS() {
+        private String cn = null;
         @Override
         String extractSS(TemplateContext context) {
-          if (context.getStage() == cls)
-            return cls.getName();
+          if (context.getStage() == cls) {
+            if (cn == null) {
+              cn = cls.getName();
+              int dot = cn.lastIndexOf('.');
+              cn = cn.substring(dot + 1, cn.length());
+            }
+            return cn;
+          }
           return null;
         }
       });
@@ -1093,8 +1104,6 @@ public class BasicFeatureTemplates {
   }
 
   public static void main(String[] args) throws Exception {
-    List<FNParse> parses = DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
     if (args.length != 4) {
       System.err.println("please provide:");
       System.err.println("1) how many threads to use");
@@ -1110,13 +1119,17 @@ public class BasicFeatureTemplates {
     //File f = new File("experiments/forward-selection/basic-templates.txt");
     int part = Integer.parseInt(args[2]);
     int numParts = Integer.parseInt(args[3]);
-    final boolean fakeIt = true;
+    final boolean fakeIt = false;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
         + " templates and " + stages.size() + " stages");
     LOG.info("stages:");
     for (String k : stageTemplates.keySet())
       LOG.info(k);
+
+    final List<FNParse> parses = DataUtil.reservoirSample(DataUtil.iter2list(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()),
+        1000, new Random(9001));
 
     // Load data ahead of time to ensure fair timing
     if (!fakeIt) {
@@ -1134,7 +1147,8 @@ public class BasicFeatureTemplates {
 
     // TODO read in existing results from the given file, skip those jobs
 
-    for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
+    LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
+    for (String syntaxModeName : Arrays.asList("regular", "latent")) {
       Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
       for (String tmplName : basicTemplates.keySet()) {
         for (Function<ParserParams, Stage<?, ?>> stage : stages) {
@@ -1153,7 +1167,7 @@ public class BasicFeatureTemplates {
 
               int card = -1;
               if (fakeIt)
-                card = 250;
+                card = 2;
               else
                 card = estimateCard(tmplName, params, stage, parses);
               double time = (System.currentTimeMillis() - tmplStart) / 1000d;

@@ -49,7 +49,7 @@ public class Runner {
   public static Logger LOG = Logger.getLogger(Runner.class);
 
   public static void main(String[] args) {
-    FastMath.useLogAddTable = false;  // saw about 8% improvement, not quite worth it
+    FastMath.useLogAddTable = false;  // saw about 8% improvement, not worth it
     RoleFactorFactory.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;

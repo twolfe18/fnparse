@@ -11,6 +11,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -82,6 +83,8 @@ public class TemplatedFeatures implements Serializable {
         return null;
       final Iterable<String> r = right.extract(context);
       if (r == null)
+        return null;
+      if (!l.iterator().hasNext() || !r.iterator().hasNext())
         return null;
       return new Iterable<String>() {
         @Override
@@ -241,14 +244,26 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
     LOG.debug("[context] role=" + ctx.getRoleStrDebug());
     LOG.debug("[context] role2=" + ctx.getRole2StrDebug());
-    LOG.debug("[context] target=" + (ctx.getTarget() == null ? "UNSET" : Describe.span(ctx.getTarget(), s)));
+    LOG.debug("[context] target=" + desc(ctx.getTarget(), ctx));
     LOG.debug("[context] targetHead=" + (ctx.getTargetHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getTargetHead())));
-    LOG.debug("[context] arg=" + (ctx.getArg() == null ? "UNSET" : Describe.span(ctx.getArg(), s)));
-    LOG.debug("[context] argHead=" + (ctx.getArgHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getArgHead())));
-    LOG.debug("[context] span1=" + (ctx.getSpan1() == null ? "UNSET" : Describe.span(ctx.getSpan1(), s)));
-    LOG.debug("[context] span2=" + (ctx.getSpan2() == null ? "UNSET" : Describe.span(ctx.getSpan2(), s)));
-    LOG.debug("[context] head1=" + (ctx.getHead1() == TemplateContext.UNSET ? "UNSET" : s.getLU(ctx.getHead1())));
-    LOG.debug("[context] head2=" + (ctx.getHead2() == TemplateContext.UNSET ? "UNSET" : s.getLU(ctx.getHead2())));
+    LOG.debug("[context] arg = " + desc(ctx.getArg(), ctx));
+    LOG.debug("[context] argHead=" + desc(ctx.getArgHead(), ctx));
+    LOG.debug("[context] span1=" + desc(ctx.getSpan1(), ctx));
+    LOG.debug("[context] span2=" + desc(ctx.getSpan2(), ctx));
+    LOG.debug("[context] head1=" + desc(ctx.getHead1(), ctx));
+    LOG.debug("[context] head2=" + desc(ctx.getHead2(), ctx));
+  }
+
+  public static String desc(int i, TemplateContext ctx) {
+    if (i == TemplateContext.UNSET)
+      return "UNSET";
+    return ctx.getSentence().getWord(i) + " @ " + i;
+  }
+
+  public static String desc(Span s, TemplateContext ctx) {
+    if (s == null)
+      return "UNSET";
+    return Describe.span(s, ctx.getSentence()) + " @ " + s.toString();
   }
 
   public static void showFeatures(FeatureVector fv, Alphabet<String> params) {

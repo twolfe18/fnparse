@@ -119,7 +119,7 @@ public class TemplateContext {
       span1_isConstituent = UNSET;
       span2_isConstituent = UNSET;
     }
-    if (!params.useSyntaxFeatures) {
+    if (!params.useSyntaxFeatures && sentence != null) {
       sentence.setBasicDeps(null);
       sentence.setCollapsedDeps(null);
     }
