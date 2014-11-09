@@ -53,6 +53,8 @@ public class ParserParams
    */
 
   public String getFeatureTemplateDescription() {
+    if (featureTemplateDescription == null)
+      throw new IllegalStateException("must set featureTemplateDescription before using it");
     return featureTemplateDescription;
   }
 

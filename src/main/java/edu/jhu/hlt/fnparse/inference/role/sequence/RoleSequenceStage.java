@@ -262,7 +262,7 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
       int N = input.getSentence().size();
       for (int f = 0; f < F; f++)
         for (int i = 0; i < N - 1; i++)
-          fg.addFactor(vars[f].getFactor(i, features));
+          fg.addFactor(vars[f].getFactor(i, getFeatures()));
       // TODO Connect to dependency vars? Make a binary factor that connects the
       // i^{th} label variable to link[targetHead, i]
       return fg;
@@ -313,9 +313,15 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
 
   public RoleSequenceStage(ParserParams params, HasFeatureAlphabet featureNames) {
     super(params, featureNames);
-    features = new TemplatedFeatures("RoleSequenceStage",
-        globalParams.getFeatureTemplateDescription(),
-        globalParams.getAlphabet());
+  }
+
+  TemplatedFeatures getFeatures() {
+    if (features == null) {
+      features = new TemplatedFeatures("RoleSequenceStage",
+          globalParams.getFeatureTemplateDescription(),
+          globalParams.getAlphabet());
+    }
+    return features;
   }
 
   @Override
