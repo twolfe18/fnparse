@@ -1219,7 +1219,8 @@ public class BasicFeatureTemplates {
           return null;
         Frame f = context.getFrame();
         assert f != null;
-        return "frameRole=" + f.getName() + "." + f.getRole(role);
+        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
+        return "frameRole=" + f.getName() + "." + r;
       }
     });
     addLabel("role", new TemplateSS() {
@@ -1231,7 +1232,8 @@ public class BasicFeatureTemplates {
           return null;
         Frame f = context.getFrame();
         assert f != null;
-        return "role=" + f.getRole(role);
+        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
+        return "role=" + r;
       }
     });
     addLabel("frameRoleArg", new TemplateSS() {
@@ -1245,7 +1247,8 @@ public class BasicFeatureTemplates {
           return null;
         Frame f = context.getFrame();
         assert f != null;
-        return "frameRoleArg=" + f.getName() + "." + f.getRole(role);
+        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
+        return "frameRoleArg=" + f.getName() + "." + r;
       }
     });
     addLabel("roleArg", new TemplateSS() {
@@ -1259,7 +1262,8 @@ public class BasicFeatureTemplates {
           return null;
         Frame f = context.getFrame();
         assert f != null;
-        return "roleArg=" + f.getRole(role);
+        String r = role >= f.numRoles() ? "NOT-REALIZED" : f.getRole(role);
+        return "roleArg=" + r;
       }
     });
     addLabel("arg", new TemplateSS() {
