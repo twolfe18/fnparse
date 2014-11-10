@@ -41,6 +41,8 @@ public final class Sentence implements HasId {
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
 
+  private ConstituencyParse stanfordParse;
+
   public Sentence(
       String dataset,
       String id,
@@ -74,8 +76,9 @@ public final class Sentence implements HasId {
   }
 
   public Sentence copy() {
-    return new Sentence(dataset, id, tokens.clone(), pos.clone(),
-        lemmas.clone(), collapsedDeps.getHeads(), collapsedDeps.getLabels());
+    throw new RuntimeException("this is not up to date!");
+    //return new Sentence(dataset, id, tokens.clone(), pos.clone(),
+    //    lemmas.clone(), collapsedDeps.getHeads(), collapsedDeps.getLabels());
   }
 
   public String getDataset() { return dataset; }
@@ -303,4 +306,14 @@ public final class Sentence implements HasId {
   public void setBasicDeps(DependencyParse basicDeps) {
     this.basicDeps = basicDeps;
   }
+
+  /*
+  public ConstituencyParse getStanfordParse() {
+    return this.stanfordParse;
+  }
+
+  public void setStanfordParse(ConstituencyParse p) {
+    this.stanfordParse = p;
+  }
+  */
 }

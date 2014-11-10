@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,17 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
  */
 public class ConstituencyParse {
   public static Logger LOG = Logger.getLogger(ConstituencyParse.class);
+
+  public static class NodePathPiece {
+    private Node node;
+    private String edge;
+    public NodePathPiece(Node n, String e) {
+      node = n;
+      edge = e;
+    }
+    public Node getNode() { return node; }
+    public String getEdge() { return edge; }
+  }
 
   public static class Node {
     edu.jhu.hlt.concrete.Constituent base;
@@ -57,6 +69,27 @@ public class ConstituencyParse {
 
     public String getTag() {
       return base.getTag();
+    }
+
+    private transient String rule;
+    public String getRule() {
+      if (rule == null) {
+        if (children.size() == 0) {
+          rule = getParent().getTag() + "->" + getTag();
+        } else {
+          StringBuilder sb = new StringBuilder();
+          sb.append(getTag());
+          sb.append("->");
+          boolean first = true;
+          for (Node n : children) {
+            if (first) first = false;
+            else sb.append(",");
+            sb.append(n.getTag());
+          }
+          rule = sb.toString();
+        }
+      }
+      return rule;
     }
 
     public int getDepth() {
@@ -166,6 +199,13 @@ public class ConstituencyParse {
         cur.children.add(child);
       }
     }
+    Comparator<Node> order = new Comparator<Node>() {
+      public int compare(Node o1, Node o2) {
+        return o1.getSpan().start - o2.getSpan().start;
+      }
+    };
+    for (Node n : nodes)
+      Collections.sort(n.children, order);
     builtPointers = true;
   }
 }

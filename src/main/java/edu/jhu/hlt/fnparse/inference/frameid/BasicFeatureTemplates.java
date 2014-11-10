@@ -1,8 +1,11 @@
 package edu.jhu.hlt.fnparse.inference.frameid;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -14,6 +17,8 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +32,9 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -47,6 +55,8 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
@@ -168,8 +178,6 @@ public class BasicFeatureTemplates {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
         if (deps == null)
-          return null;
-        if (!x.indexInSent())
           return null;
         return "CollapsedLabel=" + deps.getLabel(x.index);
       } else {
@@ -620,6 +628,280 @@ public class BasicFeatureTemplates {
       }
     }
 
+    // ********** PosPatternGenerator ******************************************
+    for (PosPatternGenerator.Mode mode : PosPatternGenerator.Mode.values()) {
+      for (int tagsLeft : Arrays.asList(0, 1, 2, 3)) {
+        for (int tagsRight : Arrays.asList(0, 1, 2, 3)) {
+          if (tagsLeft + tagsRight > 3) continue;
+          String name = String.format("span1PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
+          addTemplate(name, new TemplateSS() {
+            private PosPatternGenerator pat
+              = new PosPatternGenerator(tagsLeft, tagsRight, mode);
+            @Override
+            String extractSS(TemplateContext context) {
+              Span s = context.getSpan1();
+              if (s == null)
+                return null;
+              return name + "=" + pat.extract(s, context.getSentence());
+            }
+          });
+        }
+      }
+    }
+
+    // ********** Constituency parse features **********************************
+    // basic:
+    addTemplate("span1StanfordCategory", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = context.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        String cat = "NONE";
+        if (n != null)
+          cat = n.getTag();
+        return "span1StanfordCategory=" + cat;
+      }
+    });
+    addTemplate("span1StanfordRule", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = context.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        String rule = "NONE";
+        if (n != null)
+          rule = n.getRule();
+        return "span1IsStanfordRule=" + rule;
+      }
+    });
+    // Values of this map have the following interpretation:
+    // Entries in the outer list should fire as separate features (a bag of features)
+    // Entries in the inner list should be conjoined into one feature string
+    SortedMap<String,
+      Function<TemplateContext,
+        List<List<ConstituencyParse.NodePathPiece>>>> node2Path = new TreeMap<>();
+    node2Path.put("DirectChildren", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<NodePathPiece> children = new ArrayList<>();
+        for (Node c : n.getChildren())
+          children.add(new NodePathPiece(c, null));
+        return Arrays.asList(children);
+      }
+    });
+    node2Path.put("AllChildrenBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<List<NodePathPiece>> children = new ArrayList<>();
+        helper(n, children);
+        if (children.size() == 0)
+          return null;
+        return children;
+      }
+      private void helper(ConstituencyParse.Node n, List<List<ConstituencyParse.NodePathPiece>> addTo) {
+        addTo.add(Arrays.asList(new NodePathPiece(n, null)));
+        for (ConstituencyParse.Node c : n.getChildren())
+          helper(c, addTo);
+      }
+    });
+    node2Path.put("ToRootPath", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<NodePathPiece> parents = new ArrayList<>();
+        while (n != null) {
+          parents.add(new NodePathPiece(n, null));
+          n = n.getParent();
+        }
+        assert parents.size() > 0;
+        return Arrays.asList(parents);
+      }
+    });
+    node2Path.put("ToRootBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s = t.getSpan1();
+        if (s == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n == null)
+          return null;
+        List<List<NodePathPiece>> parents = new ArrayList<>();
+        while (n != null) {
+          parents.add(Arrays.asList(new NodePathPiece(n, ">")));
+          n = n.getParent();
+        }
+        assert parents.size() > 0;
+        return parents;
+      }
+    });
+    node2Path.put("CommonParent", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+      public List<List<NodePathPiece>> apply(TemplateContext t) {
+        Span s1 = t.getSpan1();
+        if (s1 == null)
+          return null;
+        Span s2 = t.getSpan2();
+        if (s2 == null)
+          return null;
+        ConcreteStanfordWrapper parser = t.getCParser();
+        if (parser == null)
+          return null;
+        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n1 = cp.getConstituent(s1);
+        if (n1 == null)
+          return null;
+        ConstituencyParse.Node n2 = cp.getConstituent(s2);
+        if (n2 == null)
+          return null;
+        List<NodePathPiece> n1up = new ArrayList<>();
+        Map<ConstituencyParse.Node, Integer> n1upseen = new HashMap<>();
+        ConstituencyParse.Node n = n1;
+        while (n != null) {
+          n1up.add(new NodePathPiece(n, ">"));
+          n1upseen.put(n, n1up.size() - 1);
+          n = n.getParent();
+        }
+        int match = -1;
+        List<NodePathPiece> n2up = new ArrayList<>();
+        n = n2;
+        while (n != null) {
+          n2up.add(new NodePathPiece(n, "<"));
+          Integer idx = n1upseen.get(n);
+          if (idx != null) {
+            match = idx;
+            break;
+          }
+          n = n.getParent();
+        }
+        if (match < 0)
+          return null;
+        List<NodePathPiece> common = new ArrayList<>();
+        common.addAll(n1up.subList(0, match + 1));
+        common.addAll(n2up);
+        return Arrays.asList(common);
+      }
+    });
+
+    SortedMap<String, Function<List<ConstituencyParse.NodePathPiece>, String>>
+      path2Feat = new TreeMap<>();
+    path2Feat.put("Category", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Category:");
+        boolean first = true;
+        for (NodePathPiece npp : t) {
+          if (!first) {
+            String e = npp.getEdge();
+            if (e == null) e = "_";
+            sb.append(e);
+          }
+          first = false;
+          sb.append(npp.getNode().getTag());
+        }
+        return sb.toString();
+      }
+    });
+    path2Feat.put("Rule", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Rule:");
+        boolean first = true;
+        for (NodePathPiece npp : t) {
+          if (!first) {
+            String e = npp.getEdge();
+            if (e == null) e = "_";
+            sb.append(e);
+          }
+          first = false;
+          sb.append(npp.getNode().getRule());
+        }
+        return sb.toString();
+      }
+    });
+    path2Feat.put("DeltaDepth", new Function<List<ConstituencyParse.NodePathPiece>, String>() {
+      public String apply(List<NodePathPiece> t) {
+        if (t.size() < 2)
+          return "TOO-SHORT";
+        int a = t.get(0).getNode().getDepth();
+        int b = t.get(t.size() - 1).getNode().getDepth();
+        return "DeltaDepth=" + (a - b);
+      }
+    });
+
+    for (Entry<String, Function<TemplateContext, List<List<NodePathPiece>>>> a : node2Path.entrySet()) {
+      for (Entry<String, Function<List<ConstituencyParse.NodePathPiece>, String>> b : path2Feat.entrySet()) {
+        String name = String.format("CfgFeat-%s-%s", a.getKey(), b.getKey());
+        addTemplate(name, new Template() {
+          private Function<TemplateContext, List<List<NodePathPiece>>> extract = a.getValue();
+          private Function<List<NodePathPiece>, String> collapse = b.getValue();
+          @Override
+          public Iterable<String> extract(TemplateContext context) {
+            List<List<NodePathPiece>> paths = extract.apply(context);
+            if (paths == null || paths.size() == 0)
+              return null;
+            //Collection<String> feats = new ArrayList<>();
+            Collection<String> feats = new HashSet<>();
+            for (List<NodePathPiece> p : paths)
+              feats.add(name + "=" + collapse.apply(p));
+            return feats;
+          }
+        });
+      }
+    }
+
+
     /* FRAME-TARGET FEATURES **************************************************/
     addTemplate("luMatch", new TemplateSS() {
       public String extractSS(TemplateContext context) {
@@ -867,10 +1149,12 @@ public class BasicFeatureTemplates {
                 int c2 = p2v.applyAsInt(context);
                 if (c2 == TemplateContext.UNSET)
                   return null;
+                boolean rev = false;
                 if (c1 > c2) {
                   int temp = c1;
                   c1 = c2;
                   c2 = temp;
+                  rev = true;
                 }
                 assert c1 < context.getSentence().size();
                 assert c2 < context.getSentence().size();
@@ -878,7 +1162,8 @@ public class BasicFeatureTemplates {
                 //Collection<String> output = new ArrayList<>();
                 Collection<String> output = new HashSet<>();
                 for (int start = c1; start <= (c2 - ngram)+1; start++) {
-                  StringBuilder feat = new StringBuilder(name);
+                  StringBuilder feat = new StringBuilder();
+                  feat.append(name);
                   feat.append("=");
                   boolean once = false;
                   for (pos.index = start;
@@ -901,8 +1186,8 @@ public class BasicFeatureTemplates {
                     */
                     if (si == null)
                       si = "NULL";
-                    if (feat.length() > 0)
-                      feat.append("&");
+                    if (pos.index > start)
+                      feat.append(rev ? "<" : ">");
                     feat.append(si);
                   }
                   if (!once)
@@ -1084,6 +1369,7 @@ public class BasicFeatureTemplates {
       Stage<?, ?> s = y.apply(new ParserParams());
       String name = s.getName();// + "-" + x.getKey();
       LOG.info("registering stage: " + name);
+      @SuppressWarnings("rawtypes")
       Class<? extends Stage> cls = s.getClass();
       Object old = stageTemplates.put(name, new TemplateSS() {
         private String cn = null;
@@ -1131,7 +1417,7 @@ public class BasicFeatureTemplates {
   }
 
   private static boolean incompatible(String stageName, String syntaxMode, String labelName) {
-    // TODO add more rules!
+    // TODO add more rules for speed!
     if ("FrameIdStage".equals(stageName) && !labelName.toLowerCase().contains("frame"))
       return true;
     if ("FrameIdStage".equals(stageName) && labelName.endsWith("Arg"))
@@ -1141,6 +1427,26 @@ public class BasicFeatureTemplates {
     return false;
   }
 
+  private static Set<String> alreadyComputedEntries(String filename) {
+    Set<String> s = new HashSet<>();
+    try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(new File(filename))))) {
+      while (r.ready()) {
+        String line = r.readLine();
+        String[] toks = line.split("\\t");
+        assert toks.length == 6;
+        String key = String.format("%s\t%s\t%s\t%s",
+            toks[0], toks[1], toks[2], toks[3]);
+        boolean added = s.add(key);
+        assert added;
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    LOG.info("read " + s.size() + " pre-computed template cardinalities from "
+        + filename);
+    return s;
+  }
+
   public static void main(String[] args) throws Exception {
     if (args.length != 4) {
       System.err.println("please provide:");
@@ -1148,15 +1454,17 @@ public class BasicFeatureTemplates {
       System.err.println("2) a file to dump to");
       System.err.println("3) a partition of the data to take");
       System.err.println("4) how many partitions for the data");
+      System.err.println("5) [optional] a file containing entries that have already been computed");
       System.err.println("NOTE: if you don't want to use partitions, provide "
-          + "\"0 1\" as the last two arguments");
+          + "\"0 1\" as the last two required arguments");
       return;
     }
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);
-    //File f = new File("experiments/forward-selection/basic-templates.txt");
     int part = Integer.parseInt(args[2]);
     int numParts = Integer.parseInt(args[3]);
+    final Set<String> preComputed = args.length == 4
+        ? null : alreadyComputedEntries(args[4]);
     final boolean fakeIt = false;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
@@ -1199,13 +1507,22 @@ public class BasicFeatureTemplates {
                 String stageName = stage.apply(params).getName();
                 String labelName = label.getKey();
 
+                String key = String.format("%s\t%s\t%s\t%s",
+                    stageName,
+                    syntaxModeName,
+                    labelName,
+                    tmplName);
+
+                // Check if we've already computed this cardinality
+                if (preComputed != null && preComputed.contains(key))
+                  return;
+
                 // Only care about your part of the data
-                String desc = stageName + "\t" + labelName + "\t" + tmplName;
-                int h = desc.hashCode();
+                int h = key.hashCode();
                 if (h % numParts != part)
                   return;
 
-                LOG.info("estimating cardinality for: " + desc);
+                LOG.info("estimating cardinality for: " + key);
                 int card = -1;
                 if (incompatible(stageName, syntaxModeName, labelName))
                   card = 0;
@@ -1214,8 +1531,7 @@ public class BasicFeatureTemplates {
                 else
                   card = estimateCard(labelName + " * " + tmplName, params, stage, parses);
                 double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-                String msg = String.format("%s\t%s\t%s\t%s\t%d\t%.2f\n",
-                    stageName, syntaxModeName, labelName, tmplName, card, time);
+                String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
                 try (FileWriter fw = new FileWriter(f, true)) {
                   fw.append(msg);
                 } catch (IOException e) {
