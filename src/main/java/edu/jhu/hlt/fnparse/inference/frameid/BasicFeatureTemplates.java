@@ -56,6 +56,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
@@ -626,18 +627,27 @@ public class BasicFeatureTemplates {
         }
       }
     }
-    
-    
-    
 
     // ********** PosPatternGenerator ******************************************
-    // TODO
-    
-    
-    
-    
-    
-    
+    for (PosPatternGenerator.Mode mode : PosPatternGenerator.Mode.values()) {
+      for (int tagsLeft : Arrays.asList(0, 1, 2, 3)) {
+        for (int tagsRight : Arrays.asList(0, 1, 2, 3)) {
+          if (tagsLeft + tagsRight > 3) continue;
+          String name = String.format("span1PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
+          addTemplate(name, new TemplateSS() {
+            private PosPatternGenerator pat
+              = new PosPatternGenerator(tagsLeft, tagsRight, mode);
+            @Override
+            String extractSS(TemplateContext context) {
+              Span s = context.getSpan1();
+              if (s == null)
+                return null;
+              return name + "=" + pat.extract(s, context.getSentence());
+            }
+          });
+        }
+      }
+    }
 
     // ********** Constituency parse features **********************************
     // basic:
