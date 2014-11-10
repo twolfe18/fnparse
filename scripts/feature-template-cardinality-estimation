@@ -1,10 +1,20 @@
 #!/bin/bash
 
-THREADS=6     # threads per job
-PARALLEL=64   # number of jobs
+### GRID
+#THREADS=6     # threads per job
+#PARALLEL=64   # number of jobs
+#for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
+#  echo "starting job $i"
+#  qsub -N "feat-card-$i" ./scripts/feature-template-cardinality-estimation-sge-helper \
+#    ${THREADS} ${i} ${PARALLEL}
+#done
+
+### LOCAL
+THREADS=2     # threads per job
+PARALLEL=24   # number of jobs
 for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"
-  qsub -N "feat-card-$i" ./scripts/feature-template-cardinality-estimation-sge-helper \
-    ${THREADS} ${i} ${PARALLEL}
+  ./scripts/feature-template-cardinality-estimation-sge-helper ${THREADS} ${i} ${PARALLEL} \
+    >logging/feature-cardinality-estimation/feat-card-local-$i-of-${PARALLEL}.log &
 done
 
