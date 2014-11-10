@@ -1139,10 +1139,12 @@ public class BasicFeatureTemplates {
                 int c2 = p2v.applyAsInt(context);
                 if (c2 == TemplateContext.UNSET)
                   return null;
+                boolean rev = false;
                 if (c1 > c2) {
                   int temp = c1;
                   c1 = c2;
                   c2 = temp;
+                  rev = true;
                 }
                 assert c1 < context.getSentence().size();
                 assert c2 < context.getSentence().size();
@@ -1150,7 +1152,8 @@ public class BasicFeatureTemplates {
                 //Collection<String> output = new ArrayList<>();
                 Collection<String> output = new HashSet<>();
                 for (int start = c1; start <= (c2 - ngram)+1; start++) {
-                  StringBuilder feat = new StringBuilder(name);
+                  StringBuilder feat = new StringBuilder();
+                  feat.append(name);
                   feat.append("=");
                   boolean once = false;
                   for (pos.index = start;
@@ -1173,8 +1176,8 @@ public class BasicFeatureTemplates {
                     */
                     if (si == null)
                       si = "NULL";
-                    if (feat.length() > 0)
-                      feat.append("&");
+                    if (pos.index > start)
+                      feat.append(rev ? "<" : ">");
                     feat.append(si);
                   }
                   if (!once)
@@ -1356,6 +1359,7 @@ public class BasicFeatureTemplates {
       Stage<?, ?> s = y.apply(new ParserParams());
       String name = s.getName();// + "-" + x.getKey();
       LOG.info("registering stage: " + name);
+      @SuppressWarnings("rawtypes")
       Class<? extends Stage> cls = s.getClass();
       Object old = stageTemplates.put(name, new TemplateSS() {
         private String cn = null;
@@ -1403,7 +1407,7 @@ public class BasicFeatureTemplates {
   }
 
   private static boolean incompatible(String stageName, String syntaxMode, String labelName) {
-    // TODO add more rules!
+    // TODO add more rules for speed!
     if ("FrameIdStage".equals(stageName) && !labelName.toLowerCase().contains("frame"))
       return true;
     if ("FrameIdStage".equals(stageName) && labelName.endsWith("Arg"))
