@@ -11,6 +11,7 @@ import java.util.Map;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
  * Wraps edu.jhu.hlt.concrete.Parse and builds a tree (with pointers)
@@ -19,6 +20,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
  */
 public class ConstituencyParse {
   public static Logger LOG = Logger.getLogger(ConstituencyParse.class);
+  public static Timer TIMER = new Timer("ConstituencyParse.buildPointers", 50, false);
 
   public static class NodePathPiece {
     private Node node;
@@ -182,6 +184,7 @@ public class ConstituencyParse {
     if (builtPointers)
       return;
     //LOG.info("building pointers");
+    TIMER.start();
     for (int i = 0; i < nodes.length; i++) {
       Node cur = nodes[i];
       if (cur == null) {
@@ -207,5 +210,6 @@ public class ConstituencyParse {
     for (Node n : nodes)
       Collections.sort(n.children, order);
     builtPointers = true;
+    TIMER.stop();
   }
 }

@@ -268,7 +268,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		assert globalParams.verifyConsistency();
 		if (x.size() != y.size())
 			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
-		log.info("starting training");
+		log.info("[train] starting training");
 		Timer t = globalParams.getTimer(this.getName() + "-train");
 		t.start();
 
@@ -279,18 +279,18 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		List<O> yTrain, yDev;
 		TuningData td = this.getTuningData();
 		if (td == null) {
-		  log.info("performing no dev tuning");
+		  log.info("[train] performing no dev tuning");
 			xTrain = x;
 			yTrain = y;
 			xDev = Collections.emptyList();
 			yDev = Collections.emptyList();
 		} else {
 			if (td.tuneOnTrainingData()) {
-			  log.info("tuning on train data");
+			  log.info("[train] tuning on train data");
 				xDev = xTrain = x;
 				yDev = yTrain = y;
 			} else {
-			  log.info("tuning on held-out data");
+			  log.info("[train] tuning on held-out data");
 				xTrain = new ArrayList<>();
 				yTrain = new ArrayList<>();
 				xDev = new ArrayList<>();
@@ -342,14 +342,14 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		}
 		long timeTrain = t.stop();
 		log.info(String.format(
-				"Done training on %d examples for %.1f minutes, using %d features",
+				"[train] Done training on %d examples for %.1f minutes, using %d features",
 				exs.size(), timeTrain/(1000d*60d), alph.size()));
 
 		// Tune
 		if(td != null)
 			tuneRecallBias(xDev, yDev, td);
 
-		log.info("done training");
+		log.info("[train] done training");
 	}
 
 	/**

@@ -5,6 +5,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import org.apache.jena.atlas.logging.Log;
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
@@ -30,6 +33,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class ConcreteStanfordWrapper {
+  public static final Logger LOG = Logger.getLogger(ConcreteStanfordWrapper.class);
 
   private static ConcreteStanfordWrapper nonCachingSingleton, cachingSingleton;
 
@@ -49,7 +53,7 @@ public class ConcreteStanfordWrapper {
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
   private Map<Sentence, Communication> cache = null;
-  private Timer timer;
+  private Timer parseTimer, convertTimer;
 
   public ConcreteStanfordWrapper(boolean cache) {
     aUUID = new UUID();
@@ -58,7 +62,8 @@ public class ConcreteStanfordWrapper {
     metadata.setTool("fnparse");
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = new AnnotateTokenizedConcrete();
-    timer = new Timer("ConcreteStanfordAnnotator", 2, false);
+    parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 2, false);
+    convertTimer = new Timer("ConcreteStanfordAnnotator.convert", 20, false);
     if (cache)
       this.cache = new HashMap<>();
   }
@@ -76,18 +81,21 @@ public class ConcreteStanfordWrapper {
     boolean updateCache = false;
     if (cache != null) {
       communication = cache.get(s);
+      if (communication == null)
+        LOG.info("cache miss for " + s.getId());
       updateCache = communication == null;
     }
     if (communication == null) {
-      timer.start();
+      parseTimer.start();
       communication = sentenceToConcrete(s);
       anno.annotateWithStanfordNlp(communication);
-      timer.stop();
+      parseTimer.stop();
     }
     if (updateCache) {
       Communication old = cache.put(s, communication);
       assert old == null;
     }
+    convertTimer.start();
     SectionSegmentation sectionSeg =
         communication.getSectionSegmentationList().get(0);
     for (Section section : sectionSeg.getSectionList()) {
@@ -121,6 +129,7 @@ public class ConcreteStanfordWrapper {
             throw new RuntimeException("couldn't get basic dep parse");
           }
         }
+        convertTimer.stop();
         return tokenization.getParseList().get(0);
       }
     }
