@@ -1,8 +1,11 @@
 package edu.jhu.hlt.fnparse.inference.frameid;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1410,6 +1413,26 @@ public class BasicFeatureTemplates {
     return false;
   }
 
+  private static Set<String> alreadyComputedEntries(String filename) {
+    Set<String> s = new HashSet<>();
+    try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(new File(filename))))) {
+      while (r.ready()) {
+        String line = r.readLine();
+        String[] toks = line.split("\\t");
+        assert toks.length == 6;
+        String key = String.format("%s\t%s\t%s\t%s",
+            toks[0], toks[1], toks[2], toks[3]);
+        boolean added = s.add(key);
+        assert added;
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    LOG.info("read " + s.size() + " pre-computed template cardinalities from "
+        + filename);
+    return s;
+  }
+
   public static void main(String[] args) throws Exception {
     if (args.length != 4) {
       System.err.println("please provide:");
@@ -1417,15 +1440,17 @@ public class BasicFeatureTemplates {
       System.err.println("2) a file to dump to");
       System.err.println("3) a partition of the data to take");
       System.err.println("4) how many partitions for the data");
+      System.err.println("5) [optional] a file containing entries that have already been computed");
       System.err.println("NOTE: if you don't want to use partitions, provide "
-          + "\"0 1\" as the last two arguments");
+          + "\"0 1\" as the last two required arguments");
       return;
     }
     int parallel = Integer.parseInt(args[0]);
     File f = new File(args[1]);
-    //File f = new File("experiments/forward-selection/basic-templates.txt");
     int part = Integer.parseInt(args[2]);
     int numParts = Integer.parseInt(args[3]);
+    final Set<String> preComputed = args.length == 4
+        ? null : alreadyComputedEntries(args[4]);
     final boolean fakeIt = false;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
@@ -1468,13 +1493,22 @@ public class BasicFeatureTemplates {
                 String stageName = stage.apply(params).getName();
                 String labelName = label.getKey();
 
+                String key = String.format("%s\t%s\t%s\t%s",
+                    stageName,
+                    syntaxModeName,
+                    labelName,
+                    tmplName);
+
+                // Check if we've already computed this cardinality
+                if (preComputed != null && preComputed.contains(key))
+                  return;
+
                 // Only care about your part of the data
-                String desc = stageName + "\t" + labelName + "\t" + tmplName;
-                int h = desc.hashCode();
+                int h = key.hashCode();
                 if (h % numParts != part)
                   return;
 
-                LOG.info("estimating cardinality for: " + desc);
+                LOG.info("estimating cardinality for: " + key);
                 int card = -1;
                 if (incompatible(stageName, syntaxModeName, labelName))
                   card = 0;
@@ -1483,8 +1517,7 @@ public class BasicFeatureTemplates {
                 else
                   card = estimateCard(labelName + " * " + tmplName, params, stage, parses);
                 double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-                String msg = String.format("%s\t%s\t%s\t%s\t%d\t%.2f\n",
-                    stageName, syntaxModeName, labelName, tmplName, card, time);
+                String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
                 try (FileWriter fw = new FileWriter(f, true)) {
                   fw.append(msg);
                 } catch (IOException e) {
