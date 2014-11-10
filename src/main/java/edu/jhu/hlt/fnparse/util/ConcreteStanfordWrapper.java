@@ -52,7 +52,7 @@ public class ConcreteStanfordWrapper {
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
   private Map<Sentence, Communication> cache = null;
-  private Timer parseTimer, convertTimer;
+  private Timer parseTimer;//, convertTimer;
 
   public ConcreteStanfordWrapper(boolean cache) {
     aUUID = new UUID();
@@ -61,8 +61,8 @@ public class ConcreteStanfordWrapper {
     metadata.setTool("fnparse");
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = new AnnotateTokenizedConcrete();
-    parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 2, false);
-    convertTimer = new Timer("ConcreteStanfordAnnotator.convert", 20, false);
+    parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 5, false);
+    //convertTimer = new Timer("ConcreteStanfordAnnotator.convert", 75000, false);
     if (cache)
       this.cache = new HashMap<>();
   }
@@ -90,7 +90,7 @@ public class ConcreteStanfordWrapper {
       Communication old = cache.put(s, communication);
       assert old == null;
     }
-    convertTimer.start();
+    //convertTimer.start();
     SectionSegmentation sectionSeg =
         communication.getSectionSegmentationList().get(0);
     for (Section section : sectionSeg.getSectionList()) {
@@ -124,7 +124,7 @@ public class ConcreteStanfordWrapper {
             throw new RuntimeException("couldn't get basic dep parse");
           }
         }
-        convertTimer.stop();
+        //convertTimer.stop();
         return tokenization.getParseList().get(0);
       }
     }
