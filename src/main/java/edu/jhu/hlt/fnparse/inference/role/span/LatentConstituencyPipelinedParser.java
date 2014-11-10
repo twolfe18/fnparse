@@ -140,16 +140,43 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold) {
+
     long start = System.currentTimeMillis();
     List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
     List<FNParseSpanPruning> goldPrune = null;
     if (gold != null)
       goldPrune = FNParseSpanPruning.optimalPrune(gold);
-    List<FNParseSpanPruning> prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
-    //for (FNParseSpanPruning pr : prunes)
-    //	LOG.info("[predict] pruning predicted AlmostFNParse: " + pr.describe());
+    List<FNParseSpanPruning> prunes = rolePruning
+        .setupInference(frames, goldPrune).decodeAll();
     List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
     long totalTime = System.currentTimeMillis() - start;
+
+    if (gold != null) {
+      start = System.currentTimeMillis();
+      // Compute recall/F1 for pruning stage
+      FPR prunePerf = new FPR(false);
+      for (int i = 0; i < gold.size(); i++) {
+        FNParseSpanPruning mask = prunes.get(i);
+        mask.perf(gold.get(i), prunePerf);
+      }
+      LOG.info("[parse] pruning recall=" + prunePerf.recall()
+          + " f1=" + prunePerf.f1() + " precision*=" + prunePerf.precision());
+
+      // For each FrameRoleInstance, if we included the correct span, what was
+      // the precision?
+      FPR labelPerf = new FPR(false);
+      for (int i = 0; i < gold.size(); i++) {
+        FNParseSpanPruning mask = prunes.get(i);
+        FNParseSpanPruning.precisionOnProperlyPrunedFrameRoleInstances(
+            mask, parses.get(i), gold.get(i), labelPerf);
+      }
+      LOG.info("[parse] labeling precision=" + labelPerf.precision()
+          + " (" + labelPerf.getTP() + " / "
+          + (labelPerf.getTP() + labelPerf.getFP()) + ")");
+      LOG.info("[parse] extra diagnostics took "
+          + (System.currentTimeMillis()-start)/1000d + " seconds");
+    }
+
     int toks = 0;
     for (Sentence s : sentences) toks += s.size();
 		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "

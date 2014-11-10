@@ -6,13 +6,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
@@ -43,6 +46,52 @@ public class FNParseSpanPruning extends FNTagging {
       if (!possibleArgs.containsKey(key))
         assert false;
     }
+  }
+
+  /**
+    * For each FrameRoleInstance, if we included the correct span in the pruning
+    * mask, did we predict the correct span in hyp?
+    * 
+    * This is implemented by adding to perf, where a TP counts as a case where
+    * we predicted the correct span and FP counts as a case we didn't. Both of
+    * these counts are in the case where the correct span was in the pruning
+    * mask. FNs are not counted.
+   */
+  public static void precisionOnProperlyPrunedFrameRoleInstances(
+      FNParseSpanPruning pruning,
+      FNParse hyp,
+      FNParse gold,
+      FPR perf) {
+    Map<FrameRoleInstance, Set<Span>> prune = pruning.getMapRepresentation();
+    Map<FrameRoleInstance, Span> hypE = hyp.getMapRepresentation();
+    Map<FrameRoleInstance, Span> goldE = gold.getMapRepresentation();
+    for (FrameRoleInstance fri : goldE.keySet()) {
+      Span goldS = goldE.get(fri);
+      Set<Span> reachable = prune.get(fri);
+      if (reachable.contains(goldS)) {
+        Span hypS = hypE.get(fri);
+        if (hypS == goldS)
+          perf.accumTP();
+        else
+          perf.accumFP();
+      }
+    }
+  }
+
+  public Map<FrameRoleInstance, Set<Span>> getMapRepresentation() {
+    Map<FrameRoleInstance, Set<Span>> explicit = new HashMap<>();
+    for (Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+      FrameInstance fi = x.getKey();
+      Set<Span> possible = new HashSet<>();
+      possible.addAll(x.getValue());
+      for (int k = 0; k < fi.getFrame().numRoles(); k++) {
+        FrameRoleInstance key =
+            new FrameRoleInstance(fi.getFrame(), fi.getTarget(), k);
+        Set<Span> old = explicit.put(key, possible);
+        assert old == null;
+      }
+    }
+    return explicit;
   }
 
   /** Returns the number of span variables that are permitted by this mask */
@@ -124,24 +173,41 @@ public class FNParseSpanPruning extends FNTagging {
   public FPR recall(FNParse p) {
     boolean macro = false;
     FPR fpr = new FPR(macro);
+    perf(p, fpr);
+    return fpr;
+  }
+
+  public void perf(FNParse p, FPR perf) {
+    Set<FrameArgInstance> gold = new HashSet<>();
     for (FrameInstance fi : p.getFrameInstances()) {
-      FrameInstance key = FrameInstance.frameMention(
-          fi.getFrame(), fi.getTarget(), fi.getSentence());
-      Set<Span> possibleS = new HashSet<>();
-      List<Span> possible = possibleArgs.get(key);
-      if (possible != null) possibleS.addAll(possible);
       Frame f = fi.getFrame();
       for (int k = 0; k < f.numRoles(); k++) {
         Span s = fi.getArgument(k);
         if (s == Span.nullSpan)
           continue;
-        else if (possibleS.contains(s))
-          fpr.accumTP();
-        else
-          fpr.accumFN();
+        gold.add(new FrameArgInstance(f, fi.getTarget(), k, s));
       }
     }
-    return fpr;
+    Set<FrameArgInstance> hyp = new HashSet<>();
+    for (Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+      FrameInstance fi = x.getKey();
+      for (int k = 0; k < fi.getFrame().numRoles(); k++)
+        for (Span s : x.getValue())
+          hyp.add(new FrameArgInstance(fi.getFrame(), fi.getTarget(), k, s));
+    }
+    Set<FrameArgInstance> all = new HashSet<>();
+    all.addAll(gold);
+    all.addAll(hyp);
+    for (FrameArgInstance fai : all) {
+      boolean g = gold.contains(fai);
+      boolean h = hyp.contains(fai);
+      if (g && h)
+        perf.accumTP();
+      if (g && !h)
+        perf.accumFN();
+      if (!g && h)
+        perf.accumFP();
+    }
   }
 
   public static List<FNParseSpanPruning> noisyPruningOf(

@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * a Sentence with Frame's identified with their arguments.
@@ -24,5 +26,25 @@ public class FNParse extends FNTagging {
       if(fi.onlyTargetLabeled())
         throw new IllegalArgumentException();
     }
+  }
+
+  /**
+   * Convenience method. Doesn't cache/memoize or mutate this instance.
+   * 
+   * Only includes non-null roles/args in keys.
+   */
+  public Map<FrameRoleInstance, Span> getMapRepresentation() {
+    Map<FrameRoleInstance, Span> explicit = new HashMap<>();
+    for (FrameInstance fi : this.frameInstances) {
+      Frame f = fi.getFrame();
+      for (int k = 0; k < f.numRoles(); k++) {
+        Span s = fi.getArgument(k);
+        if (s == Span.nullSpan) continue;
+        FrameRoleInstance key = new FrameRoleInstance(f, fi.getTarget(), k);
+        Span old = explicit.put(key, s);
+        assert old == null;
+      }
+    }
+    return explicit;
   }
 }
