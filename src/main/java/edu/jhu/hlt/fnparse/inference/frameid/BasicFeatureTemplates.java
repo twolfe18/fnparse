@@ -223,52 +223,15 @@ public class BasicFeatureTemplates {
       });
     }
 
-
     /* START OF TEMPLATES *****************************************************/
+    // intercept
     addTemplate("1", new TemplateSS() {
       @Override
       public String extractSS(TemplateContext context) {
         return "1";
       }
     });
-    /*
-    addTemplate("possibleArgs", new TemplateSS() {
-      @Override
-      public String extractSS(TemplateContext context) {
-        if (context.getStage() == RoleSpanPruningStage.class)
-          return "possibleArgs";
-        else
-          return null;
-      }
-    });
-    */
-    addTemplate("framePrune", new TemplateSS() {
-      @Override
-      public String extractSS(TemplateContext context) {
-        if (!context.isPruneSet())
-          return null;
-        // Fires when prune=false
-        if (context.isPrune())
-          return null;
-        Frame f = context.getFrame();
-        if (f == null)
-          return null;
-        return "pruneFor" + f.getName();
-      }
-    });
-    addTemplate("prune", new TemplateSS() {
-      @Override
-      public String extractSS(TemplateContext context) {
-        if (!context.isPruneSet())
-          return null;
-        // Fires when prune=false
-        if (context.isPrune())
-          return null;
-        return "prune";
-      }
-    });
 
-    /* BASIC TEMPLATES ********************************************************/
     // head1
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
       String name1 = "head1" + x.getKey();
@@ -1295,6 +1258,31 @@ public class BasicFeatureTemplates {
         if (span1 == null || span1.width() == 1)
           return null;
         return "span1IsConstituent";
+      }
+    });
+    addLabel("framePrune", new TemplateSS() {
+      @Override
+      public String extractSS(TemplateContext context) {
+        if (!context.isPruneSet())
+          return null;
+        // Fires when prune=false
+        if (context.isPrune())
+          return null;
+        Frame f = context.getFrame();
+        if (f == null)
+          return null;
+        return "pruneFor" + f.getName();
+      }
+    });
+    addLabel("prune", new TemplateSS() {
+      @Override
+      public String extractSS(TemplateContext context) {
+        if (!context.isPruneSet())
+          return null;
+        // Fires when prune=false
+        if (context.isPrune())
+          return null;
+        return "prune";
       }
     });
     addLabel("head1IsRoot", new TemplateSS() {

@@ -39,7 +39,7 @@ public class SentenceEval {
   // True if we are only evaluating the frames tagged and not the args
   private final boolean onlyTagging;
 
-  private final int size;		// Length of sentence in gold and hyp examples
+  private final int size;   // Length of sentence in gold and hyp examples
   private final FNTagging gold, hyp;
 
   // Not always populated
@@ -62,7 +62,7 @@ public class SentenceEval {
   }
 
   public SentenceEval(FNTagging gold, FNTagging hyp, boolean storeDebugInfo) {
-    if(!gold.getSentence().getId().equals(hyp.getSentence().getId())) {
+    if (!gold.getSentence().getId().equals(hyp.getSentence().getId())) {
       String msg = "goldSent=" + gold.getSentence().getId()
           + " hypSent=" + hyp.getSentence().getId();
       throw new IllegalArgumentException(msg);
@@ -75,8 +75,7 @@ public class SentenceEval {
     if (!onlyTagging) {
       this.fullConfusion = new int[2][2];
       this.argOnlyConfusion = new int[2][2];
-    }
-    else {
+    } else {
       this.fullConfusion = null;
       this.argOnlyConfusion = null;
     }
@@ -84,7 +83,7 @@ public class SentenceEval {
     this.gold = gold;
     this.hyp = hyp;
 
-    if(storeDebugInfo) {
+    if (storeDebugInfo) {
       targetFalsePos = new ArrayList<>();
       targetFalseNeg = new ArrayList<>();
       if (!onlyTagging) {
@@ -161,7 +160,7 @@ public class SentenceEval {
       Collection<FrameArgInstance> targetPreds,
       Collection<FrameArgInstance> targetRolePreds,
       Collection<FrameArgInstance> onlyArgPreds) {
-    for(FrameInstance fi : fis) {
+    for (FrameInstance fi : fis) {
       Frame f = fi.getFrame();
       Span t = fi.getTarget();
       if (targetPreds != null)
@@ -169,9 +168,9 @@ public class SentenceEval {
       if (targetRolePreds != null)
         targetRolePreds.add(new FrameArgInstance(f, t, -1, null));
       int n = fi.getFrame().numRoles();
-      for(int i=0; i<n; i++) {
+      for (int i = 0; i < n; i++) {
         Span arg = fi.getArgument(i);
-        if(arg != Span.nullSpan) {
+        if (arg != Span.nullSpan) {
           FrameArgInstance p = new FrameArgInstance(f, t, i, arg);
           if (targetRolePreds != null)
             targetRolePreds.add(p);
@@ -201,7 +200,7 @@ public class SentenceEval {
     s.addAll(hyp);
     s.removeAll(gold);
     confusion[0][1] = s.size();
-    if(fpStore != null)
+    if (fpStore != null)
       fpStore.addAll(s);
 
     // FN = G -- H
@@ -209,7 +208,7 @@ public class SentenceEval {
     s.addAll(gold);
     s.removeAll(hyp);
     confusion[1][0] = s.size();
-    if(fnStore != null)
+    if (fnStore != null)
       fnStore.addAll(s);
 
     // TN

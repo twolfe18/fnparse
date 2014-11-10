@@ -87,7 +87,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
   }
 
   public void scanFeatures(List<FNParse> parses) {
-    LOG.info("scanning features for " + parses.size() + " parses");
+    LOG.info("[scanFeatures] scanning features for " + parses.size() + " parses");
     params.getAlphabet().startGrowth();
 
     List<Sentence> sentences = DataUtil.stripAnnotations(parses);
@@ -111,11 +111,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
     roleLabeling.scanFeatures(noisyPrunes, parses, 45, 10_000_000);
 
     params.getAlphabet().stopGrowth();
-    LOG.info("done scanning features");
+    LOG.info("[scanFeatures] done scanning features");
   }
 
   public void learnWeights(List<FNParse> parses) {
-    LOG.info("starting training on " + parses.size() + " parses");
+    LOG.info("[learnWeights] starting training on " + parses.size() + " parses");
 
     List<Sentence> sentences = DataUtil.stripAnnotations(parses);
     List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
@@ -135,7 +135,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
             parses, pIncludeNegativeSpan, params.rand);
     roleLabeling.train(hypPrunes, parses);
 
-    LOG.info("done training");
+    LOG.info("[learnWeights] done training");
   }
 
   @Override
