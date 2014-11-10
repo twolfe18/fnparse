@@ -1222,6 +1222,18 @@ public class BasicFeatureTemplates {
         return "frameRole=" + f.getName() + "." + f.getRole(role);
       }
     });
+    addLabel("role", new TemplateSS() {
+      // Does not require an arg or span to be set, which is needed for
+      // RoleHeadStage
+      public String extractSS(TemplateContext context) {
+        int role = context.getRole();
+        if (role == TemplateContext.UNSET)
+          return null;
+        Frame f = context.getFrame();
+        assert f != null;
+        return "role=" + f.getRole(role);
+      }
+    });
     addLabel("frameRoleArg", new TemplateSS() {
       // Like frameRole, but requires that arg not be null,
       // which can lead to much sparser feature sets (observed feature trick)
@@ -1251,8 +1263,8 @@ public class BasicFeatureTemplates {
       }
     });
     addLabel("arg", new TemplateSS() {
-      // Like frameRole, but requires that arg not be null,
-      // which can lead to much sparser feature sets (observed feature trick)
+      // This is a backoff from roleArg. Requires the same data be present, but
+      // doesn't give the name of the role in the feature
       public String extractSS(TemplateContext context) {
         if (context.getArg() == null)
           return null;
