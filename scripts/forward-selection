@@ -112,10 +112,24 @@ class FeatureSet(object):
         labs.add(f.label)
     return list(labs)
 
+  def __count_feats_for_stage(self, stage):
+    c = 0
+    for f in self.features:
+      if f.stage == stage:
+        c += 1
+    return c
+
   def propose_modification(self, template_info):
     ''' Returns a new FeatureSet derived from this feature set '''
+
+    # a few options for mutation:
+    # 1) add a Feature
+    # 2) remove a Feature
+    # 3) mutate a Feature
+
     debug = True
     stage = random.choice(template_info.stages())
+    relevant_feats = [f for f in self.features if f.stage == stage]
     card = self.estimate_cardinality(template_info, stage)
     l = 0.3   # interpolation between cardinality (1) and #features (0)
     alpha = 0.2
@@ -123,28 +137,50 @@ class FeatureSet(object):
     gamma = 15.0
     p_add_feature = l * beta / (beta + pow(card, alpha)) \
       + (1.0 - l) * (gamma / (gamma + len(self.features)))
-    if random.random() < p_add_feature:
+
+    p_remove_feature = 0.3 if len(relevant_feats) > 0 else 0.0
+    p_mutate_feature = 0.5
+
+    # re-normalize
+    z = p_add_feature + p_remove_feature + p_mutate_feature
+    p_add_feature /= z
+    p_remove_feature /= z
+    p_mutate_feature /= z
+
+    if debug:
+      print '[FeatureSet propose_modification] len(self.features) =', \
+        len(self.features), 'stage =', stage, 'cardinality =', card, \
+        'p_add_features =', p_add_feature, \
+        'p_remove_feature =', p_remove_feature, \
+        'p_mutate_feature =', p_mutate_feature
+
+    r = random.random()
+    if r < p_add_feature:
+      # Make a new feature and add it to this set
       f = self.new_feature(template_info)
       if debug:
-        print '[propose_modification add_new_feature] len(self.features) =', \
-          len(self.features), 'stage =', stage, 'cardinality =', card, \
-          'p_add_features =', p_add_feature, 'new_feature =', f
+        print '[FeatureSet propose_modification] adding:', f
       return FeatureSet(self.features + [f], derived_from=self)
+    elif r >= p_add_feature and r < p_add_feature + p_remove_feature:
+      # Remove a feature from this set
+      f = random.choice(relevant_features)
+      if debug:
+        print '[FeatureSet propose_modification] removing:', f
+      i = self.features.index(f)
+      return FeatureSet(self.features[:i] + self.features[i+1:], derived_from=self)
     else:
-      # modify and replace a feature that is already in this feature set
+      # Modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
         f = self.features[i].propose_modification(template_info)
         if debug:
-          print '[propose_modification modify_feature] len(self.features) =', \
-            len(self.features), 'stage =', stage, 'cardinality =', card, \
-            'p_add_features =', p_add_feature, '\t', self.features[i], '=>', f
+          print '[FeatureSet propose_modification] mutating:', self.features[i]
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
         return self.propose_modification(template_info)
 
   def new_feature(self, template_info):
-    ''' creates a feature that is not already in this feature set '''
+    ''' Creates a feature that is not already in this feature set '''
     # prefer adding features with small number of templates
     stage = random.choice(template_info.stages())
     syntax_mode = self.syntax_mode()
