@@ -48,9 +48,9 @@ class Feature(CommonEqualityMixin):
     return "*".join([st, self.label] + self.templates)
 
   def estimate_cardinality(self, template_info):
-    c = template_info.cardinality(self.label, self.stage, self.syntax_mode)
+    c = 1
     for t in self.templates:
-      c *= template_info.cardinality(t, self.stage, self.syntax_mode)
+      c *= template_info.cardinality(self.stage, self.syntax_mode, self.label, t)
     assert type(c) is int or type(c) is long
     return c
 
@@ -163,7 +163,7 @@ class FeatureSet(object):
       return FeatureSet(self.features + [f], derived_from=self)
     elif r >= p_add_feature and r < p_add_feature + p_remove_feature:
       # Remove a feature from this set
-      f = random.choice(relevant_features)
+      f = random.choice(relevant_feats)
       if debug:
         print '[FeatureSet propose_modification] removing:', f
       i = self.features.index(f)
@@ -268,13 +268,13 @@ class ConfigMutator(Mutator):
       cc = cur_card[stage]
       nc = next_card[stage]
       dc = nc - cc
-      if dc > alpha or dc / cc > beta or random.random() < gamma:
+      if dc > alpha or (cc > 0 and dc / cc > beta) or random.random() < gamma:
         # stronger regularizer
         reg = {}
         reg.update(config.regularizer_dict)
         reg[stage] = reg[stage] + 1
         children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
-      if dc < -alpha or dc / cc < -beta or random.random() < gamma:
+      if dc < -alpha or (cc > 0 and dc / cc < -beta) or random.random() < gamma:
         # weaker regularizer
         reg = {}
         reg.update(config.regularizer_dict)
@@ -379,6 +379,7 @@ class ConfigQueue(object):
       return None
     self.__pop_count += 1
     if self.waiting:
+      print '[pop] from waiting'
       return self.waiting.pop()
     else:
       if len(self.item2score) == 0:
@@ -399,6 +400,7 @@ class ConfigQueue(object):
           random.shuffle(feasible)
           while len(feasible) > 1:
             self.push(feasible.pop())
+          print '[pop] after', tries, 'tries'
           return feasible.pop()
         else:
           tries += 1
@@ -690,21 +692,21 @@ class ForwardSelection:
       score, name, config = rest.split('\t', 2)
       score = float(score)
       item = self.name2item[name]
-      print name, '/', config, 'finished successfully with a score', score
+      print '[__handle_message]', name, '/', config, 'finished successfully with a score', score
       perf_file.write("%f\t%s\t%s\n" % (score, name, config))
       perf_file.flush()
       self.config_q.observe_score(score, name, item)
       # Remove this jobs from dispatched
-      print 'about to print job tracker'
-      print self.job_tracker
+      print '[__handle_message] about to print job tracker'
+      print '[__handle_message]', self.job_tracker
       if type(self.job_tracker) is LocalJobTracker: # for debugging
-        print 'stopping', name, 'on local job tracker'
+        print '[__handle_message] stopping', name, 'on local job tracker'
         self.job_tracker.set_job_done(name)
       try:
         self.dispatched.remove(name)
-        print 'removed', name, 'from dispatched,', len(self.dispatched), 'still dispatched'
+        print '[__handle_message] removed', name, 'from dispatched,', len(self.dispatched), 'still dispatched'
       except:
-        print name + ' was not in dispatched, we gave up on this job as failed previously'
+        print '[__handle_message]', name, 'was not in dispatched, we gave up on this job as failed previously'
     elif m_type == 'messageQ':
       # check for a queue name argument, forward to q.message(remaining_message)
       try:
@@ -741,34 +743,34 @@ class ForwardSelection:
       else:
         # Check for results 
         if can_sub:
-          print 'can submit more jobs, but queue is empty'
+          print '[run] can submit more jobs, but queue is empty'
         else:
-          print 'can\'t submit any more jobs'
-        print 'checking on current jobs'
+          print '[run] can\'t submit any more jobs'
+        print '[run] checking on current jobs'
         message = p.get_message()
         if message:
-          print 'received message:', message
+          print '[run] received message:', message
           self.__handle_message(message['data'], perf_file)
         else:
           # check if any jobs died
           time.sleep(self.poll_interval)
-          print 'no one phoned home, maybe someone died?'
+          print '[run] no one phoned home, maybe someone died?'
           try:
             r = set(self.job_tracker.jobs_running() + self.job_tracker.jobs_queued())
             if len(r) == 0 and can_sub:
-              print 'all jobs are done!'
+              print '[run] all jobs are done!'
               break
-            print 'running and queued:', r
+            print '[run] running and queued:', r
             failed = set([name for name in self.dispatched if name not in r])
             for name in failed:
               item = self.name2item[name]
-              print 'dead:', name, item
+              print '[run] dead:', name, item
               self.config_q.observe_score(FAILED_SCORE, name, item)
               self.dispatched.remove(name)
             else:
-              print 'everything is running nicely:', len(r)
+              print '[run] everything is running nicely:', len(r)
           except subprocess.CalledProcessError:
-            print 'qstat failed! ignoring...'
+            print '[run] qstat failed! ignoring...'
     perf_file.close()
 
 
@@ -814,9 +816,13 @@ class TemplateInfo(object):
     # if a stage appears here, only allow labels/templates to be chosen from this list
     #self.__label_restrictions = {}
 
-  def cardinality(self, template, stage, syntax_mode):
-    k = (template, stage, syntax_mode)
-    return self.__info[k][0]
+  def cardinality(self, stage, syntax_mode, label_template, basic_template):
+    k = (stage, syntax_mode, label_template, basic_template)
+    try:
+      return self.__info[k][0]
+    except:
+      print '[cardinality] key error for:', k
+      return 2
 
   def stages(self):
     return self.__stages
@@ -830,7 +836,7 @@ class TemplateInfo(object):
     k = (stage, syntax_mode)
     assert not stage.endswith(syntax_mode)
     print '[restrict_labels_for]', k, 'to', labels
-    print '[restrict_labels_for] WARNING: no-op!'
+    print '[restrict_labels_for] WARNING: no-op! Cardinality estimation should give you this for free.'
     #self.__label_restrictions[k] = labels
     #if len(self.__label_restrictions[k]) == 0:
     #  raise Exception('no labels available for: ' + str(k))
@@ -861,7 +867,7 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 10  # default number of training passes (this value is copied for all runs)
+  p = 2  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1018,19 +1024,20 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
   else:
     template_info.restrict_stages_to([s1, s2])
   sd = list(seeds(parser_mode, syntax_mode, settings))
+  # NOTE: I believe this is no longer relied on (check TemplateInfo.restrict_labels_for)
   labels = {
-    ('RoleHeadStage', 'regular'): ['frameRole', 'frame'],
-    ('RoleHeadStage', 'latent'):  ['frameRole', 'frame', 'head2GovHead1'],
-    ('RoleHeadStage', 'none'):    ['frameRole', 'frame'],
+    ('RoleHeadStage', 'regular'): ['frameRole', 'frame', 'role'],
+    ('RoleHeadStage', 'latent'):  ['frameRole', 'frame', 'role', 'head2GovHead1'],
+    ('RoleHeadStage', 'none'):    ['frameRole', 'frame', 'role'],
     ('RoleHeadToSpanStage', 'regular'): ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame'],
     ('RoleHeadToSpanStage', 'latent'):  ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame', 'span1IsConstituent'],
     ('RoleHeadToSpanStage', 'none'):    ['frameRoleArg', 'frameRole', 'roleArg', 'arg', 'frame'],
     ('RoleSpanPruningStage', 'regular'): ['framePrune'],
     ('RoleSpanPruningStage', 'latent'):  ['framePrune', 'head2GovHead1'],
     ('RoleSpanPruningStage', 'none'):    ['framePrune'],
-    ('RoleSpanLabelingStage', 'regular'): ['frameRoleArg', 'frameRole'],
-    ('RoleSpanLabelingStage', 'latent'):  ['frameRoleArg', 'frameRole', 'span1IsConstituent'],
-    ('RoleSpanLabelingStage', 'none'):    ['frameRoleArg', 'frameRole'],
+    ('RoleSpanLabelingStage', 'regular'): ['frameRoleArg', 'roleArg', 'arg'],
+    ('RoleSpanLabelingStage', 'latent'):  ['frameRoleArg', 'roleArg', 'arg', 'span1IsConstituent'],
+    ('RoleSpanLabelingStage', 'none'):    ['frameRoleArg', 'roleArg', 'arg'],
   }
   template_info.restrict_labels_for(s1, syntax_mode, labels[(s1, syntax_mode)])
   template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
@@ -1043,7 +1050,7 @@ def run_experiments(template_info_filename, where):
 
   # Make a queue for every configuration
   mq = MultiQueue()
-  for parser_mode in ['span']: #['span', 'head']:
+  for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent']:
       template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
       q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
@@ -1052,8 +1059,7 @@ def run_experiments(template_info_filename, where):
       print '\n\t'.join(str(c) for c in configs)
 
       # Create the config queue
-      # TODO could put a limit on the number of jobs for every parser mode here
-      max_fs = 2500   # number of feature sets to try
+      max_fs = 5000   # number of feature sets to try
       mutator = ConfigMutator(template_info)
       q = ConfigQueue(mutator, greediness=1.0, max_pops=max_fs)
       assert len(configs) > 0
@@ -1077,7 +1083,7 @@ def run_experiments(template_info_filename, where):
     'port': '6379',
     'db': '0'
   }
-  max_train = 1500
+  max_train = 10
   job_starter = ConfigJobStarter(working_dir, max_train, redis_config)
   print 'working directory:', working_dir
 
