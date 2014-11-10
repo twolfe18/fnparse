@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import org.apache.jena.atlas.logging.Log;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -68,15 +67,11 @@ public class ConcreteStanfordWrapper {
       this.cache = new HashMap<>();
   }
 
-  public void clearCache() {
-    cache.clear();
-  }
-
   public ConstituencyParse getCParse(Sentence s) {
     return new ConstituencyParse(parse(s, false));
   }
 
-  public edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
+  public synchronized edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
     Communication communication = null;
     boolean updateCache = false;
     if (cache != null) {
