@@ -1460,7 +1460,7 @@ public class BasicFeatureTemplates {
   }
 
   public static void main(String[] args) throws Exception {
-    if (args.length != 4) {
+    if (args.length != 4 && args.length != 5) {
       System.err.println("please provide:");
       System.err.println("1) how many threads to use");
       System.err.println("2) a file to dump to");
@@ -1477,6 +1477,8 @@ public class BasicFeatureTemplates {
     int numParts = Integer.parseInt(args[3]);
     final Set<String> preComputed = args.length == 4
         ? null : alreadyComputedEntries(args[4]);
+    if (preComputed == null)
+      LOG.info("not using any pre-computed entries");
     final boolean fakeIt = false;
     if (fakeIt) f.delete();
     LOG.info("estimating cardinality for " + basicTemplates.size()
