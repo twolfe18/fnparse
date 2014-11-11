@@ -1271,7 +1271,7 @@ public class BasicFeatureTemplates {
         Frame f = context.getFrame();
         if (f == null)
           return null;
-        return "pruneFor" + f.getName();
+        return "framePrune=" + f.getName();
       }
     });
     addLabel("prune", new TemplateSS() {
@@ -1518,15 +1518,21 @@ public class BasicFeatureTemplates {
                     syntaxModeName,
                     labelName,
                     tmplName);
+                LOG.info("key=" + key);
 
                 // Check if we've already computed this cardinality
-                if (preComputed != null && preComputed.contains(key))
+                if (preComputed != null && preComputed.contains(key)) {
+                  LOG.info("already computed");
                   return;
+                }
 
                 // Only care about your part of the data
                 int h = key.hashCode();
-                if (h % numParts != part)
+				if (h < 0) h = ~h;
+                if (h % numParts != part) {
+                  LOG.info("not a part of this piece, h=" + (h%numParts) + " numParts=" + numParts + " part=" + part);
                   return;
+                }
 
                 LOG.info("estimating cardinality for: " + key);
                 int card = -1;
