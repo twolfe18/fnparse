@@ -130,7 +130,7 @@ public interface ResultReporter {
       }
       String message = String.format("result %f\t%s\t%s",
           mainResult, jobName, anc.toString());
-      Jedis r = new Jedis(host, port);
+      Jedis r = new Jedis(host, port, 60 * 1000);
       long f = r.publish(channel, message);
       if (f == 0) {
         System.out.println("failed to phone home!");
