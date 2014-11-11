@@ -1,9 +1,10 @@
 #!/bin/bash
 
-PRE_COMPUTE="experiments/forward-selection/template-nov9a.txt"
+#PRE_COMPUTE="experiments/forward-selection/template-nov9a.txt"
+PRE_COMPUTE="experiments/forward-selection/template.real.txt"
 
 ### GRID
-THREADS=6     # threads per job
+THREADS=1     # threads per job
 PARALLEL=64   # number of jobs
 for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"

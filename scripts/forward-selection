@@ -612,7 +612,7 @@ class ConfigJobStarter:
     self.max_train_size = max_train_size
     self.redis_config = redis_config
     self.K = 1
-    self.p = 0.25
+    self.p = 0.3
 
   def start_job(self, name, config, job_tracker):
     ''' Just a function that adds arguments that are not Config-specific,
@@ -779,7 +779,6 @@ class TemplateInfo(object):
   # (e.g. products of templates), just add more columns
   def __init__(self, filename):
     self.filename = filename
-    #self.__info = {}  # (templateName, stageName, syntaxMode) -> (cardinaityInt, timeFloat)
     self.__info = {}  # (stageName, syntaxMode, labelTemplate, basicTemplate) -> (cardinaityInt, timeFloat)
     self.__templates = set()
     self.__stages = set()
@@ -792,7 +791,8 @@ class TemplateInfo(object):
         k = (stage, syntax_mode, label, template)
         card = int(card)
         time = float(time)
-        assert k not in self.__info
+        if k in self.__info:
+          raise Exception('duplicate key: ' + str(k))
         self.__info[k] = (card, time)
         self.__templates.add(template)
         self.__stages.add(stage)
@@ -818,10 +818,14 @@ class TemplateInfo(object):
 
   def cardinality(self, stage, syntax_mode, label_template, basic_template):
     k = (stage, syntax_mode, label_template, basic_template)
+    # For debugging, we should get a KeyError if we can't lookup a template,
+    # but I don't want this to halt the entire server if we're running experiments
+    # "in production".
+    #return self.__info[k][0]
     try:
       return self.__info[k][0]
     except:
-      print '[cardinality] key error for:', k
+      print '[cardinality] WARNING key error for:', k
       return 2
 
   def stages(self):
@@ -867,7 +871,7 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 2  # default number of training passes (this value is copied for all runs)
+  p = 10  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1070,7 +1074,7 @@ def run_experiments(template_info_filename, where):
 
   # Create the job tracker
   if local:
-    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
+    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=8)
     job_tracker.remove_all_jobs()
   else:
     job_tracker = SgeJobTracker()
@@ -1083,7 +1087,7 @@ def run_experiments(template_info_filename, where):
     'port': '6379',
     'db': '0'
   }
-  max_train = 10
+  max_train = 2000  # Keep in mind that dev data is still taken out of this
   job_starter = ConfigJobStarter(working_dir, max_train, redis_config)
   print 'working directory:', working_dir
 
