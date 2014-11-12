@@ -242,11 +242,11 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	public int getBatchSize() {
-		return 4;
+		return 1;
 	}
 
 	public int getNumTrainingPasses() {
-		return 2;
+		return 10;
 	}
 
 	@Override
@@ -296,7 +296,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				xDev = new ArrayList<>();
 				yDev = new ArrayList<>();
 				devTuneSplit(x, y, xTrain, yTrain, xDev, yDev,
-						0.15d, 50, globalParams.rand);
+						0.15d, 150, globalParams.rand);
 			}
 		}
 		log.info("[train] #train=" + xTrain.size() + " #tune=" + xDev.size());

@@ -61,6 +61,7 @@ public class RoleSpanLabelingStage
   private int batchSize = 1;
   private int passes = 5;
   private Double learningRate = null;
+  private boolean allExamplesInMem = false;
 
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
@@ -150,7 +151,7 @@ public class RoleSpanLabelingStage
       FNParse gold = output == null ? null : output.get(i);
       data.add(new RoleSpanLabellingStageDatum(input.get(i), gold, this));
     }
-    return new StageDatumExampleList<>(data);
+    return new StageDatumExampleList<>(data, allExamplesInMem);
   }
 
   public TemplatedFeatures getFeatures() {
@@ -166,9 +167,6 @@ public class RoleSpanLabelingStage
    * Represents all of the variables needed to choose from a pruned set of
    * spans for every role. In cases where we've pruned the gold span, we do
    * not add a training variable/instance for that role.
-   *
-   * TODO: Implement latent syntax version of this factor. Right now it only
-   * adds a binary factor for the labels.
    *
    * NOTE: do not be tempted to make a k-ary variable for every (frame,role)
    * because then i wont be able to hook up latent syntax binary factors later
