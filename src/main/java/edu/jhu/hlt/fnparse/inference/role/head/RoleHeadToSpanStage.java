@@ -325,7 +325,7 @@ public class RoleHeadToSpanStage
 		}
 	}
 
-	private static class ExplicitExpFamFactorWithConstraint
+	public static class ExplicitExpFamFactorWithConstraint
 	    extends ExplicitExpFamFactor {
     private static final long serialVersionUID = 1L;
     private int badConfig = -1;
