@@ -90,25 +90,9 @@ public class LatentConstituencyPipelinedParser implements Parser {
     LOG.info("[scanFeatures] scanning features for " + parses.size() + " parses");
     params.getAlphabet().startGrowth();
 
-    List<Sentence> sentences = DataUtil.stripAnnotations(parses);
-    List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
-    frameId.scanFeatures(sentences, frames, 45, 10_000_000);
-
-    List<FNParseSpanPruning> goldPrunes =
-        FNParseSpanPruning.optimalPrune(parses);
-    rolePruning.scanFeatures(frames, goldPrunes, 45, 10_000_000);
-
-    // Here we have not trained a role pruning model yet, so we can't really
-    // take scan the features of all of the decisions we will see at train
-    // time. It would be problematic if we only scanned features on the
-    // correct roles, possibly with the nullSpan as an option, because we
-    // would lose most of the negative features. Instead we opt to take a
-    // random sample of the negative decisions.
-    double pIncludeNegativeSpan = 0.1d;
-    List<FNParseSpanPruning> noisyPrunes =
-        FNParseSpanPruning.noisyPruningOf(
-            parses, pIncludeNegativeSpan, params.rand);
-    roleLabeling.scanFeatures(noisyPrunes, parses, 45, 10_000_000);
+    frameId.scanFeatures(parses);
+    rolePruning.scanFeatures(parses);
+    roleLabeling.scanFeatures(parses);
 
     params.getAlphabet().stopGrowth();
     LOG.info("[scanFeatures] done scanning features");

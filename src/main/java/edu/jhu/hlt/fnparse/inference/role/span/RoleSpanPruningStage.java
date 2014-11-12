@@ -114,8 +114,6 @@ public class RoleSpanPruningStage
 
   public static boolean SHOW_FEATURES = false;
 
-	public static boolean DISALLOW_ARG_WITHOUT_CONSTITUENT = false;
-
   // If true, do not prune anything, produce FNParseSpanPrunings that have
   // 100% recall.
   private boolean keepEverything = false;
@@ -124,6 +122,8 @@ public class RoleSpanPruningStage
   private int batchSize = 1;
   private int passes = 5;
   private Double learningRate = null;
+  private boolean allExamplesInMem = false;
+	private boolean disallowArgWithoutConstituent = false;
 
   public RoleSpanPruningStage(
       ParserParams params,
@@ -157,6 +157,14 @@ public class RoleSpanPruningStage
     String passes = configuration.get(key);
     if (passes != null)
       this.passes = Integer.parseInt(passes);
+
+    key = "disallowArgWithoutConstituent";
+    String roleSpanCons = configuration.get(key);
+    if (passes != null) {
+      this.disallowArgWithoutConstituent = "true".equalsIgnoreCase(roleSpanCons);
+      assert this.disallowArgWithoutConstituent || "false".equalsIgnoreCase(roleSpanCons);
+      LOG.info("set disallowArgWithoutConstituent=" + this.disallowArgWithoutConstituent);
+    }
   }
 
   @Override
@@ -200,9 +208,9 @@ public class RoleSpanPruningStage
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParseSpanPruning g = output == null ? null : output.get(i);
-      data.add(new JointRoleSpanStageDatum(input.get(i), g, this));
+      data.add(new RoleSpanPruningStageDatum(input.get(i), g, this));
     }
-    return new StageDatumExampleList<>(data);
+    return new StageDatumExampleList<>(data, allExamplesInMem);
   }
 
   /**
@@ -271,13 +279,13 @@ public class RoleSpanPruningStage
    * This produces an AlmostFNParse which stores the frames that are allowable
    * for every (frame,target).
    */
-  static class JointRoleSpanStageDatum
+  static class RoleSpanPruningStageDatum
       implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
     private FNParseSpanPruning gold;
     private RoleSpanPruningStage parent;
 
-    public JointRoleSpanStageDatum(
+    public RoleSpanPruningStageDatum(
         FNTagging input,
         FNParseSpanPruning gold,
         RoleSpanPruningStage parent) {
@@ -393,7 +401,7 @@ public class RoleSpanPruningStage
         VarConfig conf = vs.getVarConfig(i);
         boolean keep = !BinaryVarUtil.configToBool(conf.getState(p));
         boolean cons = p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c));
-        if (DISALLOW_ARG_WITHOUT_CONSTITUENT && keep && !cons) {
+        if (parent.disallowArgWithoutConstituent && keep && !cons) {
           phi.setBadConfig(i);
           phi.setFeatures(i, AbstractFeatures.emptyFeatures);
         } else {
@@ -437,8 +445,6 @@ public class RoleSpanPruningStage
           }
         };
       } else {
-        //return new ThresholdDecodable(fg, parent.infFactory(),
-        //		parent, input, roleVars, parent.decoder);
         if (parent.keepEverything) {
           ApproxF1MbrDecoder decoder = null;
           return new ThresholdDecodable(fg, parent.infFactory(),

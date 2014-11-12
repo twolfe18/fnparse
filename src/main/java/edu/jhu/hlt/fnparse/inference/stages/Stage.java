@@ -117,7 +117,6 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
     public LabeledFgExample getExample();
 
     /** For prediction */
-    //public IDecodable<Output> getDecodable(FgInferencerFactory infFact);
     public IDecodable<Output> getDecodable();
   }
 

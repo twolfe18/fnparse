@@ -51,6 +51,7 @@ public class FNParseSpanPruning extends FNTagging {
   /**
     * For each FrameRoleInstance, if we included the correct span in the pruning
     * mask, did we predict the correct span in hyp?
+    * Only counts roles/args where the role is realized in the gold parse.
     * 
     * This is implemented by adding to perf, where a TP counts as a case where
     * we predicted the correct span and FP counts as a case we didn't. Both of
