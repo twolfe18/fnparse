@@ -163,7 +163,7 @@ public class RoleSpanPruningStage
     if (passes != null) {
       this.disallowArgWithoutConstituent = "true".equalsIgnoreCase(roleSpanCons);
       assert this.disallowArgWithoutConstituent || "false".equalsIgnoreCase(roleSpanCons);
-      LOG.info("set disallowArgWithoutConstituent=" + this.disallowArgWithoutConstituent);
+      LOG.info("set disallowArgWithoutConstituent=" + disallowArgWithoutConstituent);
     }
   }
 

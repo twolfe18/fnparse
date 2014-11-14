@@ -28,6 +28,30 @@ public class DependencyBasedXuePalmerRolePruning {
       Collection<Span> spans) {
     spans.add(parse.getSpan(i));
     for (int sib : parse.getSiblings(i)) {
+      // TODO
+      // In section 3.1 of http://www.aclweb.org/anthology/D08-1008
+      // they describe that you should consider the case where the argument
+      // is the parent of the predicate, and you should just ignore the
+      // arg->pred link when performing this step.
+      //
+      // They were describing converting the output of their (deps+SRL) to a
+      // span-based SRL labeling. Whereas here we are considering how to get the
+      // set of spans from just deps (their algorithm is not directly relevant
+      // because we don't know where the predicates and arguments are yet).
+      // I still think this is a useful method to try, but it may not be worth
+      // its recall in cost of precision.
+      //
+      // Example: "The president, rejoicing in his victory, made a good speech."
+      //   det(president-2, The-1)
+      //   nsubj(made-9, president-2)
+      // **vmod(president-2, rejoicing-4)
+      //   prep(rejoicing-4, in-5)
+      //   poss(victory-7, his-6)
+      //   pobj(in-5, victory-7)
+      //   root(ROOT-0, made-9)
+      //   det(speech-12, a-10)
+      //   amod(speech-12, good-11)
+      //   dobj(made-9, speech-12)
       spans.add(parse.getSpan(sib));
       if ("prep".equals(parse.getLabel(sib))) {
         for (int niece : parse.getChildren(sib))
@@ -99,6 +123,7 @@ public class DependencyBasedXuePalmerRolePruning {
       // Convert set to list
       List<Span> spans = new ArrayList<>();
       spans.add(Span.nullSpan);
+      assert !spanSet.contains(Span.nullSpan);
       spans.addAll(spanSet);
       // Store the spans using only frame/target information
       FrameInstance key = FrameInstance.frameMention(
