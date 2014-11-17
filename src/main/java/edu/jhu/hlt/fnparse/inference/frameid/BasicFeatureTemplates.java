@@ -1022,6 +1022,26 @@ public class BasicFeatureTemplates {
       }
     });
 
+    // span overlap feature
+    addTemplate("span1span2Overlap", new TemplateSS() {
+      @Override
+      String extractSS(TemplateContext context) {
+        Span s1 = context.getSpan1();
+        if (s1 == null || s1 == Span.nullSpan)
+          return null;
+        Span s2 = context.getSpan2();
+        if (s2 == null || s2 == Span.nullSpan)
+          return null;
+        return String.format("overlap=%s-%s",
+            rel(s1.start, s2.start), rel(s1.end, s2.end));
+      }
+      private String rel(int i, int j) {
+        if (i == j) return "E";
+        if (i < j) return "L";
+        return "R";
+      }
+    });
+
     /* SENTENCE FEATURES ******************************************************/
     for (Map.Entry<String, Function<SentencePosition, String>> x :
       tokenExtractors.entrySet()) {

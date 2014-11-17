@@ -907,6 +907,7 @@ def seeds(parser_mode, syntax_mode, settings):
     passes = {s1: p, s2: p}
     fs = [
       Feature(s1, syntax_mode, 'framePrune', ['1']),
+      Feature(s1, syntax_mode, 'framePrune', ['span1span2Overlap']),
       Feature(s1, syntax_mode, 'framePrune', ['span1LeftWord']),
       Feature(s1, syntax_mode, 'framePrune', ['span1FirstWord']),
       Feature(s1, syntax_mode, 'framePrune', ['span1LastWord']),
@@ -936,6 +937,7 @@ def seeds(parser_mode, syntax_mode, settings):
     ] + [
       Feature(s2, syntax_mode, 'frameRoleArg', ['1']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1Word']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1span2Overlap']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1LeftPos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1FirstPos']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1LastPos']),
@@ -982,6 +984,7 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s1, syntax_mode, 'frameRoleArg', ['1']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1Pos2']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1Word']),
+      Feature(s1, syntax_mode, 'frameRoleArg', ['span1span2Overlap']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1Pos', 'head2Pos']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
       Feature(s1, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
@@ -993,6 +996,7 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s1, syntax_mode, 'head2GovHead1', ['frame', 'head2Pos']),   # NOTE: there are already unary dep link factors from pacaya not included here
     ] + [
       Feature(s2, syntax_mode, 'frameRoleArg', ['1']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1span2Overlap']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/1']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/2']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1Width/3']),
