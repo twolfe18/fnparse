@@ -2,6 +2,7 @@
 
 import collections
 import heapq
+import itertools
 import json
 import math
 import numpy as np
@@ -87,6 +88,9 @@ class FeatureSet(object):
 
   def __ne__(self, other):
     return not self.__eq__(other)
+
+  def copy(self):
+    return FeatureSet(self.features[:], self.derived_from)
 
   def estimate_cardinality(self, template_info, stage=None):
     ''' Returns a dict with stage names as keys and int/long values '''
@@ -240,6 +244,18 @@ class Config(CommonEqualityMixin):
     return "<Config features=%s regularizer=%s params=%s>" % \
       (str(self.feature_set), str(self.regularizer_dict), str(self.params))
 
+  def copy(self):
+    r = {}
+    r.update(self.regularizer_dict)
+    b = {}
+    b.update(self.batch_size_dict)
+    p = {}
+    p.update(self.passes_dict)
+    x = {}
+    x.update(self.params)
+    fs = self.feature_set.copy()
+    return Config(fs, x, r, b, p)
+
 # NOTE: This is only here because pickle doesn't work on instance methods...
 # need to do the 'kingdom of nouns' thing and make an object to make pickle work.
 class Mutator(object):
@@ -284,8 +300,24 @@ class ConfigMutator(Mutator):
     # TODO try increasing/decreasing the number of passes
     return children
 
+class Queue(object):
+  def observe_score(self, score, name, item):
+    ''' Receive a message about the final score of an item running '''
+    #raise NotImplementedError()
+    pass
+  def pop(self):
+    raise NotImplementedError()
 
-class ConfigQueue(object):
+class ExplicitQueue(Queue):
+  ''' Takes a list of items to pop in order '''
+  def __init__(self, items):
+    self.items = items
+  def pop(self):
+    r = self.items[0]
+    self.items = self.items[1:]
+    return r
+
+class MutatorQueue(Queue):
   '''
   An infinite queue of items. A seed set of items should be pushed onto the queue
   to begin with, but after that this queue will generate new items by calling
@@ -602,25 +634,20 @@ class LocalJobTracker(object):
       print '[spawn] about to spawn:', ' '.join(["'" + x + "'" for x in cmd])
       subprocess.Popen(cmd)
 
-# ForwardSelection: listens to messages, pops items from a Queue, names jobs, and asks the JobTracker to start the job
+# JobEngine: listens to messages, pops items from a Queue, names jobs, and asks the JobTracker to start the job
 # JobTracker: reports the state of the computation resource (grid), w.r.t. a user (possibly including items from multiple Queues)
 # JobStarter: given a (name, item, JobTracker) start a job
 class ConfigJobStarter:
   ''' A job starter for items that are Configs '''
-  def __init__(self, working_dir, max_train_size, redis_config):
+  def __init__(self, working_dir, redis_config):
     self.working_dir = working_dir
-    self.max_train_size = max_train_size
     self.redis_config = redis_config
-    self.K = 1
-    self.p = 0.3
 
   def start_job(self, name, config, job_tracker):
     ''' Just a function that adds arguments that are not Config-specific,
     but constitute more information than a general JobTracker should know '''
+    assert isinstance(config, Config), "%s has type %s" % (config, type(config))
     cmd = {}
-    cmd['KpTrainDev'] = "%d %f" % (self.K, self.p)
-    if self.max_train_size:
-      cmd['MaxTrainSize'] = str(self.max_train_size)
     wd = os.path.join(self.working_dir, 'wd-' + name)
     rf = os.path.join(wd, 'results.txt')
     cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
@@ -636,9 +663,9 @@ class ConfigJobStarter:
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
 
-class ForwardSelection:
+class JobEngine:
   def __init__(self, name, job_tracker, config_q, job_starter, redis_config, poll_interval=8.0):
-    print '[ForwardSelection] attempting to use redis server at', redis_config
+    print '[JobEngine] attempting to use redis server at', redis_config
     self.name = name
     self.job_tracker = job_tracker    # talks to qsub
     self.config_q = config_q          # provides pop() and observe_score(score, name, item)
@@ -895,6 +922,8 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frameRoleArg']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']),
+      Feature(s1, syntax_mode, 'span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
       Feature(s1, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
@@ -933,6 +962,8 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'span1IsConstituent', ['roleArg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
@@ -988,6 +1019,8 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'span1IsConstituent', ['arg']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['frame', 'head1Pos']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']),
+      Feature(s2, syntax_mode, 'span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/3']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1FirstPos', 'span1Width/4']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['span1LastPos', 'span1Width/3']),
@@ -1008,7 +1041,7 @@ def seeds(parser_mode, syntax_mode, settings):
 # RoleSpanLabelingStage
 # RoleSpanPruningStage
 
-def experiments(template_info_filename, parser_mode, syntax_mode):
+def experiments(parser_mode, syntax_mode, template_info_filename, max_train=2000):
   ''' Returns a (TemplateInfo, [Config]) '''
   assert parser_mode in ['span', 'head']
   assert syntax_mode in ['regular', 'latent', 'none']
@@ -1021,6 +1054,8 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
     'parserMode': parser_mode,
     'syntaxMode': syntax_mode,
     'evaluationFunction': 'ArgumentMicroF1',
+    'MaxTrainSize': str(max_train),
+    'KpTrainDev': '1\t0.3',
   }
   s1, s2 = stages[parser_mode]
   if parser_mode == 'span' and syntax_mode == 'regular':
@@ -1047,16 +1082,17 @@ def experiments(template_info_filename, parser_mode, syntax_mode):
   template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
   return (template_info, sd)
 
-def run_experiments(template_info_filename, where):
+def default_config(parser_mode, syntax_mode, template_info_filename):
+  ''' Returns a Config for a default/good configuration of the model specified by params '''
+  template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
+  return configs[0]
 
-  local = where == 'local'
-  assert local or where == 'grid'
-
-  # Make a queue for every configuration
+def forward_selection_queue(template_info_filename):
+  ''' Returns a MultiQueue for forward (feature) selection on each model '''
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent']:
-      template_info, configs = experiments(template_info_filename, parser_mode, syntax_mode)
+      template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
       q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
       print 'setting up queue for', q_name
       print template_info
@@ -1065,34 +1101,94 @@ def run_experiments(template_info_filename, where):
       # Create the config queue
       max_fs = 5000   # number of feature sets to try
       mutator = ConfigMutator(template_info)
-      q = ConfigQueue(mutator, greediness=1.0, max_pops=max_fs)
+      q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
       assert len(configs) > 0
       for conf in configs:
         q.seed(conf)
-
       mq.add_queue(q_name, q)
+  return mq
+
+def sweep(starting_config, names_to_values):
+  ''' Returns a Queue representing a parameter sweep
+  NOTE: for now, only supports params_name being a key in config.params
+  '''
+  jobs = []
+  def pair(key, values):  # {k: [x,y,x], ...} => [[(k,x), (k,y), (k,z)], ...]
+    return [(key, v) for v in values]
+  flat = [pair(k,v) for k,v in names_to_values.iteritems()]
+  for conf in itertools.product(*flat):
+    c = starting_config.copy()
+    for k, v in conf:
+      c.params[k] = v
+    jobs.append(c)
+  return ExplicitQueue(jobs)
+
+def ab_test_queue(template_info_filename):
+  # NOTE: These only need to be tested for latent.
+  # under regular syntax vars are not rolled out, no binary factors
+  mq = MultiQueue()
+
+  # TODO Not doing this now because even if I kick this constraint up to
+  # a ternary factor (arg * l_{target,arg} * l_{arg,target}), many args
+  # are still not local (57% for *collapsed* dependencies).
+  # Also, this stage appears to work pretty well already.
+  #mq.add_queue('head-latent-s1-argIsCons',
+  #  sweep(default_config('head', 'latent', template_info_filename),
+  #    {'disallowArgWithoutDepenency.RoleHeadStage': ['true', 'false'],
+  #     'MaxTrainSize': ['250', '750', '2250']}))
+
+  # IMPLMENTED IN JAVA
+  # VISUALLY TESTED
+  mq.add_queue('head-latent-s2-argIsCons',
+    sweep(default_config('head', 'latent', template_info_filename),
+      {'disallowArgWithoutConstituent.RoleHeadToSpanStage': ['true', 'false'],
+       'MaxTrainSize': ['250', '750', '2250']}))
+
+  # IMPLMENTED IN JAVA
+  # VISUALLY TESTED
+  mq.add_queue('span-regular-s1-argIsCons',
+    sweep(default_config('span', 'latent', template_info_filename),
+      {'disallowArgWithoutConstituent.RoleSpanPruningStage': ['true', 'false'],
+       'MaxTrainSize': ['250', '750', '2250']}))
+
+  # IMPLMENTED IN JAVA
+  # VISUALLY TESTED
+  mq.add_queue('span-regular-s2-argIsCons',
+    sweep(default_config('span', 'latent', template_info_filename),
+      {'disallowArgWithoutConstituent.RoleSpanLabelingStage': ['true', 'false'],
+       'MaxTrainSize': ['250', '750', '2250']}))
+
+  return mq
+
+def run_experiments(template_info_filename, where):
+
+  local = where == 'local'
+  assert local or where == 'grid'
+
+  # Work to be done
+  #mq = forward_selection_queue(template_info_filename)
+  mq = ab_test_queue(template_info_filename)
 
   # Create the job tracker
   if local:
-    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=8)
+    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
     job_tracker.remove_all_jobs()
   else:
     job_tracker = SgeJobTracker()
 
   working_dir = 'experiments/forward-selection/role/omni'
   perf_filename = os.path.join(working_dir, 'perf.txt')
+  this_machine = socket.gethostname()
   redis_config = {
     'channel': 'forward-selection',
-    'host': socket.gethostname(),
+    'host': this_machine,
     'port': '6379',
     'db': '0'
   }
-  max_train = 2000  # Keep in mind that dev data is still taken out of this
-  job_starter = ConfigJobStarter(working_dir, max_train, redis_config)
+  job_starter = ConfigJobStarter(working_dir, redis_config)
   print 'working directory:', working_dir
 
-  # Create the ForwardSelection
-  fs = ForwardSelection('test', job_tracker, mq, job_starter, redis_config)
+  fs = JobEngine('test', job_tracker, mq, job_starter, redis_config)
 
   if not local:
     print 'cleanup...'
