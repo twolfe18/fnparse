@@ -14,9 +14,11 @@ import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
+import edu.jhu.gm.model.ConstituencyTreeFactor.SpanVar;
 import edu.jhu.gm.model.DenseFactor;
-import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -27,11 +29,13 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFamFactorWithConstraint;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -45,6 +49,9 @@ import edu.jhu.prim.arrays.Multinomials;
  * This stage takes a list of frame instances, each of which has a pruned set of
  * spans which could hold their arguments, and chooses the roles that are
  * realized for every given frame-role.
+ * 
+ * The latent version will roll out a latent constituency tree and the regular
+ * version will not.
  * 
  * @author travis
  */
@@ -62,6 +69,8 @@ public class RoleSpanLabelingStage
   private int passes = 5;
   private Double learningRate = null;
   private boolean allExamplesInMem = false;
+
+  private boolean disallowArgWithoutConstituent = true;
 
   public RoleSpanLabelingStage(
       ParserParams params, HasFeatureAlphabet featureNames) {
@@ -85,6 +94,14 @@ public class RoleSpanLabelingStage
     String passes = configuration.get(key);
     if (passes != null)
       this.passes = Integer.parseInt(passes);
+
+    key = "disallowArgWithoutConstituent." + getName();
+    String c = configuration.get(key);
+    if (c != null) {
+      disallowArgWithoutConstituent = Boolean.valueOf(c);
+      LOG.info("setting disallowArgWithoutConstituent to "
+          + disallowArgWithoutConstituent);
+    }
   }
 
   @Override
@@ -173,7 +190,6 @@ public class RoleSpanLabelingStage
    */
   static class RoleSpanLabellingStageDatum
       implements StageDatum<FNParseSpanPruning, FNParse> {
-    private static final FeatureVector zero = new FeatureVector();
     private final FNParseSpanPruning input;
     private final FNParse gold;
     private final RoleSpanLabelingStage parent;
@@ -207,6 +223,14 @@ public class RoleSpanLabelingStage
         FactorGraph fg,
         VarConfig goldConf,
         Collection<ArgSpanLabelVar> vars) {
+
+      ConstituencyTreeFactor consTree = null;
+      if (parent.globalParams.useLatentConstituencies) {
+        int n = input.getSentence().size();
+        consTree = new ConstituencyTreeFactor(n, VarType.LATENT);
+        fg.addFactor(consTree);
+      }
+
       int prunedGold = 0, total = 0, totalRealized = 0;
       for (int i = 0; i < input.numFrameInstances(); i++) {
         Frame f = input.getFrame(i);
@@ -241,8 +265,10 @@ public class RoleSpanLabelingStage
             Boolean spanIsGold = null;
             if (goldArg != null)
               spanIsGold = (goldArg == arg);
-            buildSpanVar(f, target, k, arg, spanIsGold,
-                fg, goldConf, vars);
+            SpanVar spanVar = null;
+            if (consTree != null && arg.width() > 1)
+              spanVar = consTree.getSpanVar(arg.start, arg.end - 1);
+            buildSpanVar(f, target, k, arg, spanVar, spanIsGold, fg, goldConf, vars);
             if (arg == Span.nullSpan) {
               assert !foundNullSpan;
               foundNullSpan = true;
@@ -267,18 +293,21 @@ public class RoleSpanLabelingStage
         Span target,
         int role,
         Span arg,
+        SpanVar spanVar,  // may be null
         Boolean isGold,
         FactorGraph fg,
         VarConfig goldConf,
         Collection<ArgSpanLabelVar> vars) {
-      // Make the variable
+
       ArgSpanLabelVar argVar = new ArgSpanLabelVar(
           arg, frame, target, role);
       if (vars != null) vars.add(argVar);
 
-      // Make a binary factor
-      ExplicitExpFamFactor phi =
-          new ExplicitExpFamFactor(new VarSet(argVar));
+      VarSet vs = spanVar == null
+          ? new VarSet(argVar) : new VarSet(argVar, spanVar);
+
+      ExplicitExpFamFactorWithConstraint phi =
+          new ExplicitExpFamFactorWithConstraint(vs, -1);
 
       Sentence s = input.getSentence();
       int targetHeadIdx = parent.globalParams.headFinder.head(target, s);
@@ -287,35 +316,64 @@ public class RoleSpanLabelingStage
       TemplatedFeatures feats = parent.getFeatures();
       TemplateContext context = new TemplateContext();
       context.clear();
-      if (parent.globalParams.useSyntaxFeatures)
-        context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
-      context.setStage(RoleSpanLabelingStage.class);
-      context.setSentence(s);
-      context.setFrame(frame);
-      context.setRole(role);
-      if (arg != null && arg != Span.nullSpan) {
-        context.setTarget(target);
-        context.setTargetHead(targetHeadIdx);
-        context.setSpan2(target);
-        context.setHead2(targetHeadIdx);
-        int argHeadIdx = parent.globalParams.headFinder.head(arg, s);
-        context.setArg(arg);
-        context.setArgHead(argHeadIdx);
-        context.setSpan1(arg);
-        context.setHead1(argHeadIdx);
-      }
-      context.blankOutIllegalInfo(parent.globalParams);
-      FeatureVector fv = new FeatureVector();
-      if (SHOW_FEATURES) {
-        feats.featurizeDebug(fv, context, "[variables] " + frame.getName() + "."
-            + frame.getRole(role) + " arg=" + arg);
-      } else {
-        feats.featurize(fv, context);
-      }
-      phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv);
-      phi.setFeatures(BinaryVarUtil.boolToConfig(false), zero);
 
-      // Add the factor to the graph (this adds the var too)
+      int n = vs.calcNumConfigs();
+      for (int c = 0; c < n; c++) {
+        if (parent.globalParams.useSyntaxFeatures)
+          context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
+        context.setStage(RoleSpanLabelingStage.class);
+        context.setSentence(s);
+        context.setFrame(frame);
+
+        VarConfig conf = vs.getVarConfig(c);
+        boolean roleIsRealized = arg != Span.nullSpan && BinaryVarUtil.configToBool(conf.getState(argVar));
+        boolean spanIsConstit = arg.width() == 1
+            || (spanVar != null && BinaryVarUtil.configToBool(conf.getState(spanVar)));
+
+        if (roleIsRealized || spanIsConstit) {
+          int argHeadIdx = parent.globalParams.headFinder.head(arg, s);
+          context.setHead1(argHeadIdx);
+          context.setHead2(targetHeadIdx);
+          context.setSpan1(arg);
+          context.setSpan2(target);
+          if (roleIsRealized) {
+            context.setRole(role);
+            context.setTarget(target);
+            context.setTargetHead(targetHeadIdx);
+            context.setArg(arg);
+            context.setArgHead(argHeadIdx);
+          }
+          if (spanVar != null) {
+            context.setSpan1IsConstituent(spanIsConstit);
+          }
+        }
+
+        String msg = null;
+        if (SHOW_FEATURES) {
+          msg = "[variables] roleIsRealized=" + roleIsRealized
+              + " spanIsConstit=" + spanIsConstit + "\t" + frame.getName()
+              + "." + frame.getRole(role) + " arg=" + arg;
+        }
+        if (parent.disallowArgWithoutConstituent
+            && roleIsRealized && !spanIsConstit) {
+          phi.setBadConfig(c);
+          phi.setFeatures(c, AbstractFeatures.emptyFeatures);
+          if (SHOW_FEATURES) {
+            LOG.info(msg + " CONSTRAINED TO -INFINITY");
+            LOG.info("");
+          }
+        } else {
+          context.blankOutIllegalInfo(parent.globalParams);
+          FeatureVector fv = new FeatureVector();
+          if (SHOW_FEATURES) {
+            feats.featurizeDebug(fv, context, msg);
+          } else {
+            feats.featurize(fv, context);
+          }
+          phi.setFeatures(c, fv);
+        }
+      }
+
       fg.addFactor(phi);
 
       // Set the gold if it is known

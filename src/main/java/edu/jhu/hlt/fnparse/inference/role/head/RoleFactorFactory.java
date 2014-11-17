@@ -10,7 +10,6 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.VarConfig;
@@ -33,12 +32,13 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(RoleFactorFactory.class);
-  public static boolean SHOW_FEATURES = false;
 
   private TemplatedFeatures features;
-  public FgModel weights;
   public final ParserParams params;
 
+  // If true, set the span fields in TemplateContext so that all the span
+  // features fire. If you change this, re-compute feature cardinality with
+  // BasicFeatureTemplates.main.
   public boolean allowSpanFeatures = true;
 
   public RoleFactorFactory(ParserParams params) {
@@ -77,7 +77,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
       List<RoleHeadVars> fr,
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
-    if (SHOW_FEATURES)
+    if (RoleHeadStage.SHOW_FEATURES)
       debugMsg(s, fr, l, c);
     TemplateContext context = new TemplateContext();
     List<Factor> factors = new ArrayList<Factor>();
@@ -137,7 +137,7 @@ public final class RoleFactorFactory implements FactorFactory<RoleHeadVars> {
           }
           context.blankOutIllegalInfo(params);
           FeatureVector fv = new FeatureVector();
-          if (SHOW_FEATURES) {
+          if (RoleHeadStage.SHOW_FEATURES) {
             String msg = String.format("[variables] rvar[%d,%d]=%s dep=%s",
                 rvar.j, rvar.k, role, dep);
             feats.featurizeDebug(fv, context, msg);

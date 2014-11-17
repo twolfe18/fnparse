@@ -57,6 +57,7 @@ public class RoleHeadStage
     extends AbstractStage<FNTagging, FNParse>
     implements Stage<FNTagging, FNParse>, Serializable {
   private static final long serialVersionUID = 1L;
+  public static boolean SHOW_FEATURES = false;
 
   public static class Params implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -69,6 +70,16 @@ public class RoleHeadStage
     public IArgPruner argPruner;
     public ApproxF1MbrDecoder decoder;
     public RoleFactorFactory factorTemplate;
+
+    // TODO If true, create a ternary factor that fires -infinity if there isn't
+    // a syntactic dependency between the arg/role head and the target head.
+    // This needs to be ternary because you want to consider cases where the arg
+    // is the syntactic parent of the target.
+    // As measured with Stanford collapsed dependencies:
+    // (57.7%) arguments are local
+    // (47.8%) arguments are a child of the target
+    // ( 9.9%) arguments are the parent of the target
+    //public boolean disallowArgWithoutDependency = false;
 
     // If true, tuning the decoder will be done on training data. Generally
     // this is undesirable for risk of overfitting, but is good for

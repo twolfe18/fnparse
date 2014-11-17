@@ -60,7 +60,6 @@ public class RoleHeadToSpanStage
 		implements Stage<FNParse, FNParse>, Serializable {
 	private static final long serialVersionUID = 1L;
 	public static boolean SHOW_FEATURES = false;
-	public static boolean DISALLOW_ARG_WITHOUT_CONSTITUENT = true;
 	public static final Logger LOG = Logger.getLogger(RoleHeadToSpanStage.class);
 
 	public static class Params implements Serializable {
@@ -76,23 +75,21 @@ public class RoleHeadToSpanStage
 		public int maxArgRoleExpandLeft = 8;
 		public int maxArgRoleExpandRight = 4;
 
+		public boolean disallowArgWithoutConstituent = true;
+
 		public int batchSize = 1;
 		public int passes = 10;
 		public Double learningRate = null;//0.05;    // null means auto-select
 		public transient Regularizer regularizer = new L2(10_000_000d);
-
-		public FactorFactory<ExpansionVar> factorTemplate;
-
-		public Params(ParserParams params) {
-			factorTemplate = new RoleSpanFactorFactory(params);
-		}
 	}
 
 	public Params params;
+	public FactorFactory<ExpansionVar> factorTemplate;
 
 	public RoleHeadToSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
 		super(globalParams, featureNames);
-		params = new Params(globalParams);
+		params = new Params();
+		factorTemplate = new RoleSpanFactorFactory(this);
 	}
 
   @Override
@@ -111,6 +108,14 @@ public class RoleHeadToSpanStage
     String passes = configuration.get(key);
     if (passes != null)
       params.passes = Integer.parseInt(passes);
+
+    key = "disallowArgWithoutConstituent." + getName();
+    String d = configuration.get(key);
+    if (d != null) {
+      params.disallowArgWithoutConstituent = Boolean.valueOf(d);
+      LOG.info("setting disallowArgWithoutConstituent to "
+          + params.disallowArgWithoutConstituent);
+    }
   }
 
 	@Override
@@ -233,17 +238,17 @@ public class RoleHeadToSpanStage
 		private static final long serialVersionUID = 1L;
 
 		private TemplatedFeatures features;
-		private final ParserParams params;
+		private RoleHeadToSpanStage parent;
 
-		public RoleSpanFactorFactory(ParserParams params) {
-			this.params = params;
+		public RoleSpanFactorFactory(RoleHeadToSpanStage parent) {
+			this.parent = parent;
 		}
 
 		public TemplatedFeatures getTFeatures() {
 		  if (features == null) {
 		    features = new TemplatedFeatures("argSpans",
-		        params.getFeatureTemplateDescription(),
-		        params.getAlphabet());
+		        parent.globalParams.getFeatureTemplateDescription(),
+		        parent.globalParams.getAlphabet());
 		  }
 		  return features;
 		}
@@ -268,7 +273,7 @@ public class RoleHeadToSpanStage
 			    Span s = ev.getSpan(spanIdx);
 			    Var cVar = null;
 			    VarSet vs = null;
-			    if (params.useLatentConstituencies && s.width() > 1) {
+			    if (parent.globalParams.useLatentConstituencies && s.width() > 1) {
 			      cVar = c.getSpanVar(s.start, s.end - 1);
 			      vs = new VarSet(sVar, cVar);
 			    } else {
@@ -283,10 +288,12 @@ public class RoleHeadToSpanStage
 			      boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
 			      context.clear();
 			      context.setStage(RoleHeadToSpanStage.class);
-			      if (params.useSyntaxFeatures)
+			      if (parent.globalParams.useSyntaxFeatures)
 			        context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
-			      if (DISALLOW_ARG_WITHOUT_CONSTITUENT && arg && cVar != null && !cons) {
+			      if (parent.params.disallowArgWithoutConstituent && arg && cVar != null && !cons) {
 			        phi.setBadConfig(i);
+			        if (SHOW_FEATURES)
+			          LOG.info("CONSTRAINING NEXT CONFIG TO BE -INFINITY");
 			      } else {
 			        context.setSentence(sent);
 			        if (arg || cVar != null) {
@@ -307,7 +314,7 @@ public class RoleHeadToSpanStage
 			          }
 			        }
 			      }
-			      context.blankOutIllegalInfo(params);
+			      context.blankOutIllegalInfo(parent.globalParams);
 			      FeatureVector fv = new FeatureVector();
 			      if (SHOW_FEATURES) {
 			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
@@ -518,7 +525,7 @@ public class RoleHeadToSpanStage
 						getSentence().size(), VarType.LATENT);
 				fg.addFactor(consTree);
 			}
-			for (Factor f : parent.params.factorTemplate.initFactorsFor(
+			for (Factor f : parent.factorTemplate.initFactorsFor(
 					getSentence(), expansions, depTree, consTree)) {
 				fg.addFactor(f);
 			}

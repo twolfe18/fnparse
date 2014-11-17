@@ -158,12 +158,12 @@ public class RoleSpanPruningStage
     if (passes != null)
       this.passes = Integer.parseInt(passes);
 
-    key = "disallowArgWithoutConstituent";
+    key = "disallowArgWithoutConstituent." + getName();
     String roleSpanCons = configuration.get(key);
     if (passes != null) {
-      this.disallowArgWithoutConstituent = "true".equalsIgnoreCase(roleSpanCons);
-      assert this.disallowArgWithoutConstituent || "false".equalsIgnoreCase(roleSpanCons);
-      LOG.info("set disallowArgWithoutConstituent=" + disallowArgWithoutConstituent);
+      disallowArgWithoutConstituent = Boolean.valueOf(roleSpanCons);
+      LOG.info("setting disallowArgWithoutConstituent="
+          + disallowArgWithoutConstituent);
     }
   }
 
@@ -381,7 +381,6 @@ public class RoleSpanPruningStage
         vs = new VarSet(p, c);
       }
       HeadFinder hf = parent.getGlobalParams().headFinder;
-      //ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
       ExplicitExpFamFactorWithConstraint phi =
         new ExplicitExpFamFactorWithConstraint(vs, -1);
       TemplatedFeatures feats = parent.getTFeatures();
@@ -396,26 +395,37 @@ public class RoleSpanPruningStage
       context.setArg(p.arg);
       context.setSpan1(p.arg);
       context.setHead1(p.getArgHead(hf, input.getSentence()));
+
       int N = vs.calcNumConfigs();
       for (int i = 0; i < N; i++) {
         VarConfig conf = vs.getVarConfig(i);
         boolean keep = !BinaryVarUtil.configToBool(conf.getState(p));
         boolean cons = p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c));
+
+        StringBuilder msg = null;
+        if (SHOW_FEATURES) {
+          msg = new StringBuilder("[variables]");
+          msg.append(" keep=" + keep);
+          if (c != null)
+            msg.append(" cons=" + cons);
+          msg.append(" ");
+          msg.append(p.getName());
+        }
+
         if (parent.disallowArgWithoutConstituent && keep && !cons) {
           phi.setBadConfig(i);
           phi.setFeatures(i, AbstractFeatures.emptyFeatures);
+          if (SHOW_FEATURES) {
+            msg.append(" CONSTRAINED TO -INFINITY");
+            LOG.info(msg);
+            LOG.info("");
+          }
         } else {
           context.setPrune(!keep);
           context.setSpan1IsConstituent(cons);
           context.blankOutIllegalInfo(parent.globalParams);
           FeatureVector fv = new FeatureVector();
           if (SHOW_FEATURES) {
-            StringBuilder msg = new StringBuilder("[variables]");
-            msg.append(" prune=" + BinaryVarUtil.configToBool(conf.getState(p)));
-            if (c != null)
-              msg.append(" constit=" + BinaryVarUtil.configToBool(conf.getState(c)));
-            msg.append(" ");
-            msg.append(p.getName());
             feats.featurizeDebug(fv, context, msg.toString());
           } else {
             feats.featurize(fv, context);

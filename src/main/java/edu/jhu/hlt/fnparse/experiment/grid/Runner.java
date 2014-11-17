@@ -25,7 +25,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleFactorFactory;
+import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
@@ -50,7 +50,7 @@ public class Runner {
 
   public static void main(String[] args) {
     FastMath.useLogAddTable = false;  // saw about 8% improvement, not worth it
-    RoleFactorFactory.SHOW_FEATURES = false;
+    RoleHeadStage.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;
     RoleSpanLabelingStage.SHOW_FEATURES = false;
