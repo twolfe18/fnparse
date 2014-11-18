@@ -19,6 +19,7 @@ import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -243,9 +244,10 @@ public class DeterministicRolePruning
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {
+          DependencyParse deps = input.getSentence().getCollapsedDeps();
           Map<Span, Integer> spanMap =
               DependencyBasedXuePalmerRolePruning
-              .getAllSpansFromDeps(input.getSentence(), true);
+              .getAllSpansFromDeps(deps, true);
           List<Span> spans = new ArrayList<>();
           spans.add(Span.nullSpan);
           spans.addAll(spanMap.keySet());

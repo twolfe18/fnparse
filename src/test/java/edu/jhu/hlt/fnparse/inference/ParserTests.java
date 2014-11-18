@@ -19,16 +19,13 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -44,7 +41,8 @@ public class ParserTests {
 		String[] pos     = new String[] {"DT",  "NN",    "RB",  "VBD",    "IN",   "DT",  "NN"};
 		int[] gov        = new int[]    {1,     3,       3,     -1,       3,      6,     4};
 		String[] depType = new String[] {"G",   "G",     "G",   "G",      "G",    "G",   "G"};
-		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas, gov, depType);
+		Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas);
+		s.setCollapsedDeps(new DependencyParse(gov, depType));
 
 		FrameIndex frameIdx = FrameIndex.getInstance();
 		List<FrameInstance> instances = new ArrayList<FrameInstance>();
@@ -95,10 +93,6 @@ public class ParserTests {
 		//		FileFrameInstanceProvider.debugFIP.getParsedSentences(),
 		//		"FNFUTXT1274826");
 
-		BasicFrameFeatures.OVERFITTING_DEBUG = true;
-		MinimalRoleFeatures.OVERFITTING_DEBUG = true;
-		BasicRoleFeatures.OVERFITTING_DEBUG = true;
-		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 		PipelinedFnParser parser = train(p);
 		checkGoodPerf(parser, p, 1d, 1d, true);
 		serializeWeights(parser, new File("saved-models/testing"), "basic");

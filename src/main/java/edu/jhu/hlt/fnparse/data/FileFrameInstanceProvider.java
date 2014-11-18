@@ -14,6 +14,7 @@ import org.apache.commons.io.LineIterator;
 import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Logger;
 
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -128,9 +129,10 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 					prevSentIdConll, 
 					tokens.toArray(new String[0]), 
 					pos.toArray(new String[0]),
-					lemmas.toArray(new String[0]),
-					ArrayUtils.toPrimitive(gov.toArray(new Integer[0])), 
-					depType.toArray(new String[0]));
+					lemmas.toArray(new String[0]));
+			s.setCollapsedDeps(new DependencyParse(
+			    ArrayUtils.toPrimitive(gov.toArray(new Integer[0])),
+					depType.toArray(new String[0])));
 
 			List<FrameInstance> frameInstancesForFNTagging = new ArrayList<FrameInstance>();
 			if(prevSentIdConll.equals(curSentIdFrames)){

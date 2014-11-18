@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * This class should represent all details of the data
@@ -14,25 +13,20 @@ import java.util.List;
 public class FrameInstance {
 
   /**
-   * @deprecated
-   */
+   * deprecated
   public static class Prototype extends FrameInstance {
 
-    /**
      * Used as a dummy FrameInstance which can really belong to any Frame.
      * As is, most of the time it will map to nullFrame, but it could have some
      * association with another Frame.
-     */
     public static final Prototype nullPrototype = new Prototype("nullPrototype");
 
-    /**
      * TODO add other "multi-purpose latent prototypes". The features can learn
      * any connection they want -- this is just a latent variable CRF with no
      * particular semantics to the values of the latent variable.
      * 
      * TODO I should give these guys some data that is more specific than just id,
      * like a distribution over words or something.
-     */
     public static final Prototype multiPurposePrototype1 = new Prototype("multiPurpose1");
     public static final Prototype multiPurposePrototype2 = new Prototype("multiPurpose2");
     public static final Prototype multiPurposePrototype3 = new Prototype("multiPurpose3");
@@ -49,6 +43,7 @@ public class FrameInstance {
       this.id = id;
     }
   }
+   */
 
   private Frame frame;
   private Span target;  // index of the target word

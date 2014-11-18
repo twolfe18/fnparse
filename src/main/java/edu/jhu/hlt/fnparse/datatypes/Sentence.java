@@ -19,8 +19,8 @@ import edu.mit.jwi.morph.WordnetStemmer;
 
 public class Sentence implements HasId {
   public static final Logger LOG = Logger.getLogger(Sentence.class);
-  public static final Sentence nullSentence =
-      new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
+//  public static final Sentence nullSentence =
+//      new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
 
   /**
    * a __globally__ unique identifier
@@ -48,9 +48,7 @@ public class Sentence implements HasId {
       String id,
       String[] tokens,
       String[] pos,
-      String[] lemmas,
-      int[] gov,
-      String[] depType) {
+      String[] lemmas) {
     if(id == null || tokens == null)
       throw new IllegalArgumentException();
     final int n = tokens.length;
@@ -58,36 +56,30 @@ public class Sentence implements HasId {
       throw new IllegalArgumentException();
     if(lemmas != null && lemmas.length != n)
       throw new IllegalArgumentException();
-    if(gov != null && gov.length != n)
-      throw new IllegalArgumentException();
-    if(depType != null && depType.length != n)
-      throw new IllegalArgumentException();
 
     this.dataset = dataset;
     this.id = id;
     this.tokens = tokens;
     this.pos = pos;
     this.lemmas = lemmas;
-    if (gov != null) {
-      assert depType != null;
-      this.collapsedDeps = new DependencyParse(gov, depType);
-    }
 
     // upcase the POS tags for consistency (e.g. with LexicalUnit)
-    for(int i=0; i<pos.length; i++)
+    for (int i = 0; i < pos.length; i++)
       this.pos[i] = this.pos[i].toUpperCase().intern();
   }
 
   public Sentence copy() {
     throw new RuntimeException("this is not up to date!");
-    //return new Sentence(dataset, id, tokens.clone(), pos.clone(),
-    //    lemmas.clone(), collapsedDeps.getHeads(), collapsedDeps.getLabels());
   }
 
+  public int size() { return tokens.length; }
+
   public String getDataset() { return dataset; }
+
   public String getId() { return id; }
 
-  public static final String fnStyleBadPOSstrPrefix = "couldn't convert Penn tag of ".toUpperCase();	// once in LU, this will be upcased anyway
+  public static final String fnStyleBadPOSstrPrefix =
+      "couldn't convert Penn tag of ".toUpperCase();
   /**
    * Uses the lemma instead of the word, and converts POS to
    * a FrameNet style POS.
@@ -175,10 +167,17 @@ public class Sentence implements HasId {
   public String[] getLemmas() { return lemmas; }
   public String getLemma(int i){return lemmas[i];}
 
-  public String[] getWordFor(Span s) { return Arrays.copyOfRange(tokens, s.start, s.end); }
-  public String[] getPosFor(Span s) { return Arrays.copyOfRange(pos, s.start, s.end); }
-  public String[] getLemmasFor(Span s) { return Arrays.copyOfRange(lemmas, s.start, s.end); }
+  public String[] getWordFor(Span s) {
+    return Arrays.copyOfRange(tokens, s.start, s.end);
+  }
+  public String[] getPosFor(Span s) {
+    return Arrays.copyOfRange(pos, s.start, s.end);
+  }
+  public String[] getLemmasFor(Span s) {
+    return Arrays.copyOfRange(lemmas, s.start, s.end);
+  }
 
+  /*
   public int[] childrenOf(int wordIdx) {
     return collapsedDeps.getChildren(wordIdx);
   }
@@ -186,8 +185,9 @@ public class Sentence implements HasId {
   public boolean isRoot(int i) {
     return collapsedDeps.isRoot(i);
   }
+  */
 
-  /** returns 0 if it hits a loop */
+  /** returns 0 if it hits a loop
   public int depth(int i) {
     int[] gov = collapsedDeps.getHeads();
     int cur = i;
@@ -209,10 +209,10 @@ public class Sentence implements HasId {
     //return gov[i];
     return collapsedDeps.getHead(i);
   }
+  */
 
   /**
    * Returns true if token i is a verb and is part of a passive construction
-   */
   public boolean passive(int i) {
     if (!pos[i].startsWith("V"))
       return false;
@@ -228,6 +228,7 @@ public class Sentence implements HasId {
     }
     return false;
   }
+   */
 
   /**
    * Returns the index of a verb to the right of token i. Skips over aux verbs
@@ -247,9 +248,11 @@ public class Sentence implements HasId {
     return lastVerb;
   }
 
+  /*
   public String dependencyType(int childIdx) {
     return collapsedDeps.getLabel(childIdx);
   }
+  */
 
   public List<String> wordsIn(Span s) {
     List<String> l = new ArrayList<String>();
@@ -264,8 +267,6 @@ public class Sentence implements HasId {
       l.add(pos[i]);
     return l;
   }
-
-  public int size() { return tokens.length; }
 
   @Override
   public String toString() {
@@ -310,7 +311,6 @@ public class Sentence implements HasId {
     this.basicDeps = basicDeps;
   }
 
-  /*
   public ConstituencyParse getStanfordParse() {
     return this.stanfordParse;
   }
@@ -318,5 +318,4 @@ public class Sentence implements HasId {
   public void setStanfordParse(ConstituencyParse p) {
     this.stanfordParse = p;
   }
-  */
 }

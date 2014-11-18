@@ -15,10 +15,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.features.BasicFrameFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleFeatures;
-import edu.jhu.hlt.fnparse.features.BasicRoleSpanFeatures;
-import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
@@ -51,10 +47,6 @@ public class DepPipelineParserSerTest {
 			LOG.debug(Describe.fnParse(p));
 
 		StdEvalFunc eval = BasicEvaluation.fullMicroF1;
-		BasicFrameFeatures.OVERFITTING_DEBUG = true;
-		BasicRoleFeatures.OVERFITTING_DEBUG = true;	// not being used
-		MinimalRoleFeatures.OVERFITTING_DEBUG = true;
-		BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 		AbstractStage.DEBUG_SER = false;
 
 		// Create some models

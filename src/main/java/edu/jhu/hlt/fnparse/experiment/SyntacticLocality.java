@@ -4,6 +4,7 @@ import java.util.Iterator;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -28,18 +29,19 @@ public class SyntacticLocality {
     long start = System.currentTimeMillis();
     int numArgs = 0;
     int numLocalArgs = 0;
-    int numArgsChildren = 0;	// of target
-    int numArgsParent = 0;		// of target
-    int numArgsSelf = 0;		// overlap(target, argument) != emptySet
+    int numArgsChildren = 0;    // of target
+    int numArgsParent = 0;      // of target
+    int numArgsSelf = 0;        // overlap(target, argument) != emptySet
 
     FrameInstanceProvider fip = FileFrameInstanceProvider.fn15trainFIP;
     Iterator<FNParse> iter = fip.getParsedSentences();
     while (iter.hasNext()) {
       FNParse parse = iter.next();
       Sentence s = parse.getSentence();
+      DependencyParse d = s.getCollapsedDeps();
       for (FrameInstance fi : parse.getFrameInstances()) {
         Span t = fi.getTarget();
-        for (int k=0; k<fi.numArguments(); k++) {
+        for (int k = 0; k < fi.numArguments(); k++) {
           Span a = fi.getArgument(k);
           if (a == Span.nullSpan) continue;
 
@@ -47,16 +49,16 @@ public class SyntacticLocality {
 
           // is target the parent of this argument?
           boolean local = false;
-          for (int ai=a.start; ai<a.end && !local; ai++) {
-            if (t.includes(s.governor(ai))) {
+          for (int ai = a.start; ai < a.end && !local; ai++) {
+            if (t.includes(d.getHead(ai))) {
               numArgsChildren++;
               local = true;
             }
           }
 
           // is argument the parent of the target
-          for (int ti=t.start; ti<t.end && !local; ti++) {
-            if (a.includes(s.governor(ti))) {
+          for (int ti = t.start; ti < t.end && !local; ti++) {
+            if (a.includes(d.getHead(ti))) {
               numArgsParent++;
               local = true;
             }

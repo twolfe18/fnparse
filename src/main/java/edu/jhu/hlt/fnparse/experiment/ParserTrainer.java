@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNIterFilters;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -255,12 +256,14 @@ public class ParserTrainer {
 			Sentence s = gold.getSentence();
 			LOG.info(s.getId() + " has F1=" + f1
 					+ " precision=" + p + " recall=" + r);
+			DependencyParse d = s.getBasicDeps();
+			if (d == null) d = s.getCollapsedDeps();
 			for (int i = 0; i < s.size(); i++) {
 				String parent = "ROOT";
-				if (s.governor(i) < s.size() && s.governor(i) >= 0)
-					parent = s.getWord(s.governor(i));
+				if (d.getHead(i) < s.size() && d.getHead(i) >= 0)
+					parent = s.getWord(d.getHead(i));
 				LOG.info(String.format("% 3d %-15s %-15s %-15s %-15s",
-					i, s.getWord(i), s.getPos(i), s.dependencyType(i), parent));
+					i, s.getWord(i), s.getPos(i), d.getLabel(i), parent));
 			}
 			LOG.info("gold:\n" + Describe.fnParse(gold));
 			LOG.info("hyp:\n" + Describe.fnParse(hyp));

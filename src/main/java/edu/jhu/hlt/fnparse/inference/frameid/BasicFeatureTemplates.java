@@ -42,7 +42,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.MinimalRoleFeatures;
 import edu.jhu.hlt.fnparse.features.Path;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
@@ -97,6 +96,42 @@ public class BasicFeatureTemplates {
     }
   }
 
+  public static String semaforPathLengthBuckets(int len) {
+    if (len <= -20) return "(-inf,-20]";
+    else if (len <= -10) return "(-20,-10]";
+    else if (len <= -5) return "(-10,-5]";
+    else if (len <= 4) return "[" + len + "]";
+    else if (len < 10) return "[5,10)";
+    else if (len < 20) return "[10,20)";
+    else return "[20,inf)";
+  }
+
+  public static String sentenceLengthBuckets(int len) {
+    if (len <= 5) return "[" + len + "]";
+    else if (len <= 10) return "(5,10]";
+    else if (len <= 15) return "(10,15]";
+    else if (len <= 20) return "(15,20]";
+    else if (len <= 25) return "(20,25]";
+    else if (len <= 30) return "(25,30]";
+    else if (len <= 40) return "(30,40]";
+    else return "(40,inf)";
+  }
+
+  public static boolean canLexicalize(int i, Sentence s) {
+    if (i < 0 || i >= s.size())
+      return true;
+    String pos = s.getPos(i);
+    if (pos.startsWith("PRP")) return true;
+    if (pos.equals("MD")) return true;
+    if (pos.equals("CC")) return true;
+    if (pos.equals("IN")) return true;
+    if (pos.startsWith("W")) return true;
+    if (pos.endsWith("DT")) return true;
+    //if (pos.equals("SYM")) return true;
+    if (pos.equals("RP")) return true;
+    return false;
+  }
+
   public static Template getBasicTemplate(String name) {
     return basicTemplates.get(name);
   }
@@ -146,7 +181,7 @@ public class BasicFeatureTemplates {
     });
     tokenExtractors.put("Word2", x -> {
       if (x.indexInSent()
-          && MinimalRoleFeatures.canLexicalize(x.index, x.sentence)) {
+          && canLexicalize(x.index, x.sentence)) {
         return "Word2=" + x.sentence.getWord(x.index);
       } else {
         return null;
@@ -1081,7 +1116,7 @@ public class BasicFeatureTemplates {
     }
     Map<String, IntFunction<String>> distanceBucketings = new HashMap<>();
     distanceBucketings.put("SemaforPathLengths",
-        len -> MinimalRoleFeatures.semaforPathLengthBuckets(len));
+        len -> semaforPathLengthBuckets(len));
     distanceBucketings.put("Direction", len -> len == 0
         ? "0" : (len < 0 ? "-" : "+"));
     distanceBucketings.put("Len5", len -> Math.abs(len) <= 5

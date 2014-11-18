@@ -7,9 +7,7 @@ import java.util.Collections;
 import java.util.List;
 
 import org.apache.log4j.Logger;
-import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.protocol.TSimpleJSONProtocol;
-import org.apache.thrift.transport.TFileTransport;
 import org.apache.thrift.transport.TIOStreamTransport;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -60,6 +58,7 @@ public class FNAnnotator implements DummyAnnotator {
     parser.learnWeights(Collections.emptyList());
 
     // Attempt to load static resources ahead of time
+    TargetPruningData.getInstance().getPrototypesByFrame();
     TargetPruningData.getInstance().getWordnetDict();
   }
 

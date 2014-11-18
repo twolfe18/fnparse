@@ -13,7 +13,6 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 
@@ -140,30 +139,30 @@ public class DependencyBasedXuePalmerRolePruning {
    * the headword of that span.
    */
   public static Map<Span, Integer> getAllSpansFromDeps(
-      Sentence s,
+      DependencyParse deps,
       boolean includeHermannStyleExtensions) {
     if (DEBUG)
-      LOG.debug("[getAllSpansFromDeps] for sentence " + s.getId());
+      LOG.debug("[getAllSpansFromDeps]");
     Map<Span, Integer> spans = new HashMap<>();
-    boolean[] seen = new boolean[s.size()];
-    for (int i = 0; i < s.size(); i++) {
-      if (s.governor(i) < 0 || s.governor(i) >= s.size())
-        helper(s, i, spans, seen, false);
+    boolean[] seen = new boolean[deps.size()];
+    for (int i = 0; i < deps.size(); i++) {
+      if (deps.isRoot(i))
+        helper(deps, i, spans, seen, false);
     }
     return spans;
   }
 
   private static void helper(
-      Sentence s,
+      DependencyParse deps,
       int i,
       Map<Span, Integer> addTo,
       boolean[] seen,
       boolean includeHermannStyleExtensions) {
-    if (s.childrenOf(i).length == 0)
+    if (deps.getChildren(i).length == 0)
       return;
     int l = i;
     int r = i;
-    for (int c : s.childrenOf(i)) {
+    for (int c : deps.getChildren(i)) {
       if (c < l) l = c;
       if (c > r) r = c;
     }
@@ -185,12 +184,12 @@ public class DependencyBasedXuePalmerRolePruning {
           addTo.put(sp, iOld);
       }
     }
-    for (int c : s.childrenOf(i)) {
+    for (int c : deps.getChildren(i)) {
       if (seen[c]) continue;
       seen[c] = true;
       if (DEBUG)
         LOG.debug("[helper] recursing on " + c);
-      helper(s, c, addTo, seen, false);
+      helper(deps, c, addTo, seen, false);
     }
   }
 }

@@ -121,7 +121,7 @@ public class SemaforicHeadFinder implements HeadFinder {
       deps = sent.getCollapsedDeps();
     if (deps != null) {
       for (int i = s.end - 1; i >= s.start; i--) {
-        int p = sent.governor(i);
+        int p = deps.getHead(i);
         if (!s.includes(p)) {
           if (i > s.start
               && Arrays.asList("CC", "POS", "WDT", "TO", "IN")
