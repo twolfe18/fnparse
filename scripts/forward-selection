@@ -1150,16 +1150,25 @@ def ab_test_queue(template_info_filename):
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
-  mq.add_queue('span-regular-s1-argIsCons',
+  mq.add_queue('span-latent-s1-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
       {'disallowArgWithoutConstituent.RoleSpanPruningStage': ['true', 'false'],
        'MaxTrainSize': ['250', '750', '2250']}))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
-  mq.add_queue('span-regular-s2-argIsCons',
+  mq.add_queue('span-latent-s2-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
       {'disallowArgWithoutConstituent.RoleSpanLabelingStage': ['true', 'false'],
+       'MaxTrainSize': ['250', '750', '2250']}))
+
+  # IMPLMENTED IN JAVA
+  # VISUALLY TESTED
+  mq.add_queue('span-regular-s1-pruneMethod',
+    sweep(default_config('span', 'regular', template_info_filename),
+      {'deterministicRolePruningMethod':
+        ['STANFORD_CONSTITUENTS', 'DEPENDENCY_SPANS', 'XUE_PALMER',
+          'XUE_PALMER_HERMANN', 'XUE_PALMER_DEP', 'XUE_PALMER_DEP_HERMANN'],
        'MaxTrainSize': ['250', '750', '2250']}))
 
   return mq

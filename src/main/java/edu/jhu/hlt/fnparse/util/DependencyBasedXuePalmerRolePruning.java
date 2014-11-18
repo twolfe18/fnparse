@@ -52,6 +52,8 @@ public class DependencyBasedXuePalmerRolePruning {
       //   det(speech-12, a-10)
       //   amod(speech-12, good-11)
       //   dobj(made-9, speech-12)
+      // WANT: subtree headed at "president" excluding the edge vmod(president, rejoicing)
+      // WAIT A SECOND: XUE_PALMER_DEP_HERMANN algorithm already covers this case!
       spans.add(parse.getSpan(sib));
       if ("prep".equals(parse.getLabel(sib))) {
         for (int niece : parse.getChildren(sib))

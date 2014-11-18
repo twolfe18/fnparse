@@ -54,17 +54,14 @@ public class DeterministicRolePruning
     XUE_PALMER_HERMANN,
 
     // Based on XUE_PALMER, but first converting dep tree to constituent tree
-    // TODO def dep2Cons:
-    // For a dep node rooted at i, project to its left and rightmost
-    // children l and r.
-    // Make a constituent (l,r).
-    // For each child of i, ask for their constituents from this same
-    // projection step.
-    // Attach each of these children to the (l,r) constituent
     XUE_PALMER_DEP,
 
     // Described in the section "Argument Candidates" in
     // http://www.dipanjandas.com/files/acl2014frames.pdf
+    // NOTE: under projectivity + the assumption that all argument spans are
+    // contiguous, this will have 100% recall of argument spans produced by
+    // Algorithm 2 in Johansson and Nuges (2008)
+    // http://www.aclweb.org/anthology/D08-1008
     XUE_PALMER_DEP_HERMANN,
   }
 
@@ -78,6 +75,13 @@ public class DeterministicRolePruning
   }
 
   public void configure(java.util.Map<String,String> configuration) {
+    String key = "deterministicRolePruningMethod";
+    String value = configuration.get(key);
+    if (value != null) {
+      LOG.info("setting " + key + " to " + value);
+      mode = Mode.valueOf(value);
+      assert mode != null;
+    }
   }
 
   @Override
