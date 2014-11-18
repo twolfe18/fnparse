@@ -18,21 +18,18 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleFactorFactory;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.functions.L2;
-import edu.jhu.util.Alphabet;
 
 public class RoleIdStageOverfittingTests {
 
 	@Test
 	public void test() {
 	  int maxTest = 10;
-	  RoleFactorFactory.SHOW_FEATURES = false;
 		StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
 		ParserParams params = new ParserParams();
 		params.useSyntaxFeatures = true;

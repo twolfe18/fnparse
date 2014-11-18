@@ -12,8 +12,8 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.Section;
-import edu.jhu.hlt.concrete.SectionSegmentation;
-import edu.jhu.hlt.concrete.SentenceSegmentation;
+//import edu.jhu.hlt.concrete.SectionSegmentation;
+//import edu.jhu.hlt.concrete.SentenceSegmentation;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
@@ -91,16 +91,9 @@ public class ConcreteStanfordWrapper {
       assert old == null;
     }
     //convertTimer.start();
-    SectionSegmentation sectionSeg =
-        communication.getSectionSegmentationList().get(0);
-    for (Section section : sectionSeg.getSectionList()) {
-      SentenceSegmentation sentenceSeg =
-          section.getSentenceSegmentationList().get(0);
-      for (edu.jhu.hlt.concrete.Sentence sentence :
-        sentenceSeg.getSentenceList()) {
-        Tokenization tokenization =
-            sentence.getTokenizationList().get(0);
-        assert tokenization.getParseList().size() == 1;
+    for (Section section : communication.getSectionList()) {
+      for (edu.jhu.hlt.concrete.Sentence sentence : section.getSentenceList()) {
+        Tokenization tokenization = sentence.getTokenization();
         if (storeBasicDeps) {
           Optional<edu.jhu.hlt.concrete.DependencyParse> deps =
               tokenization.getDependencyParseList()
@@ -215,28 +208,24 @@ public class ConcreteStanfordWrapper {
       pos.addToTaggedTokenList(tt);
     }
     tokenization.addToTokenTaggingList(pos);
+
     edu.jhu.hlt.concrete.Sentence sentence =
         new edu.jhu.hlt.concrete.Sentence();
     sentence.setUuid(aUUID);
-    sentence.addToTokenizationList(tokenization);
-    SentenceSegmentation sentenceSeg = new SentenceSegmentation();
-    sentenceSeg.setUuid(aUUID);
-    sentenceSeg.setMetadata(metadata);
-    sentenceSeg.addToSentenceList(sentence);
+    sentence.setTokenization(tokenization);
+
     Section section = new Section();
     section.setUuid(aUUID);
     section.setKind("main");
-    section.addToSentenceSegmentationList(sentenceSeg);
-    SectionSegmentation sectionSeg = new SectionSegmentation();
-    sectionSeg.setUuid(aUUID);
-    sectionSeg.setMetadata(metadata);
-    sectionSeg.addToSectionList(section);
+    section.addToSentenceList(sentence);
+
     Communication communication = new Communication();
     communication.setUuid(aUUID);
     communication.setMetadata(metadata);
     communication.setId(s.getId());
     communication.setText(docText.toString());
-    communication.addToSectionSegmentationList(sectionSeg);
+    communication.addToSectionList(section);
+
     return communication;
   }
 

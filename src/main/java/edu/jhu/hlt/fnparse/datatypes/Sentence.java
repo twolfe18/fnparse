@@ -17,7 +17,7 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public final class Sentence implements HasId {
+public class Sentence implements HasId {
   public static final Logger LOG = Logger.getLogger(Sentence.class);
   public static final Sentence nullSentence =
       new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
@@ -68,7 +68,10 @@ public final class Sentence implements HasId {
     this.tokens = tokens;
     this.pos = pos;
     this.lemmas = lemmas;
-    this.collapsedDeps = new DependencyParse(gov, depType);
+    if (gov != null) {
+      assert depType != null;
+      this.collapsedDeps = new DependencyParse(gov, depType);
+    }
 
     // upcase the POS tags for consistency (e.g. with LexicalUnit)
     for(int i=0; i<pos.length; i++)

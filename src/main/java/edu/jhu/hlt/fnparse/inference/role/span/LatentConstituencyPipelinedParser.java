@@ -57,6 +57,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
     roleLabeling = new RoleSpanLabelingStage(params, this);
   }
 
+  public void setFrameIdStage(Stage<Sentence, FNTagging> s) {
+    this.frameId = s;
+  }
+
   @Override
   public Alphabet<String> getAlphabet() {
     return params.getAlphabet();
