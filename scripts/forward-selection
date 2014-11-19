@@ -313,9 +313,12 @@ class ExplicitQueue(Queue):
   def __init__(self, items):
     self.items = items
   def pop(self):
-    r = self.items[0]
-    self.items = self.items[1:]
-    return r
+    if self.items:
+      r = self.items[0]
+      self.items = self.items[1:]
+      return r
+    else:
+      return None
 
 class MutatorQueue(Queue):
   '''
@@ -1173,6 +1176,31 @@ def ab_test_queue(template_info_filename):
 
   return mq
 
+
+def agiga_model_queue(template_info_filename):
+  c = default_config('span', 'regular', template_info_filename)
+  c.params['learnFrameId'] = 'true'
+  c.params['MaxTrainSize'] = '200'
+  fs = [
+    Feature('FrameIdStage', 'regular', 'frame', ['head1Word']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1Bc1000/6']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1CollapsedLabel']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1Pos']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1ParentPos']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1ParentWord3']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1RootPath-LEMMA-DEP-t']),
+    Feature('FrameIdStage', 'regular', 'frame', ['Word3-2-grams-between-</S>-and-<S>']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1LeftPos']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1RightPos']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1LeftWord3']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1RightWord3']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1PosPat-COARSE_POS-3-0']),
+    Feature('FrameIdStage', 'regular', 'frame', ['span1PosPat-COARSE_POS-0-3']),
+  ]
+  c.feature_set.features += fs
+  return ExplicitQueue([c])
+
+
 def run_experiments(template_info_filename, where):
 
   local = where == 'local'
@@ -1180,7 +1208,11 @@ def run_experiments(template_info_filename, where):
 
   # Work to be done
   #mq = forward_selection_queue(template_info_filename)
-  mq = ab_test_queue(template_info_filename)
+  #working_dir = 'experiments/forward-selection/role/omni'
+  #mq = ab_test_queue(template_info_filename)
+  #working_dir = 'experiments/ab-test'
+  mq = agiga_model_queue(template_info_filename)
+  working_dir = 'experiments/agiga'
 
   # Create the job tracker
   if local:
@@ -1189,7 +1221,6 @@ def run_experiments(template_info_filename, where):
   else:
     job_tracker = SgeJobTracker()
 
-  working_dir = 'experiments/forward-selection/role/omni'
   perf_filename = os.path.join(working_dir, 'perf.txt')
   this_machine = socket.gethostname()
   redis_config = {
