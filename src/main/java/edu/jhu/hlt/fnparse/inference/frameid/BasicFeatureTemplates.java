@@ -197,6 +197,16 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
+    tokenExtractors.put("Word4", x -> {
+      if (x.indexInSent()) {
+        String s = x.sentence.getWord(x.index);
+        if (s.length() > 5)
+          return "Word4=" + s.substring(0, 5);
+        return "Word4=" + s;
+      } else {
+        return null;
+      }
+    });
     tokenExtractors.put("Pos", x -> {
       if (x.indexInSent())
         return "Pos=" + x.sentence.getPos(x.index);
@@ -219,7 +229,6 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    /*
     tokenExtractors.put("CollapsedParentDir", x -> {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
@@ -236,7 +245,6 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    */
     for (int maxLen : Arrays.asList(3, 6, 99)) {
       String name = "Bc256/" + maxLen;
       tokenExtractors.put(name, x -> {
@@ -1227,7 +1235,19 @@ public class BasicFeatureTemplates {
     addLabel("frame", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Frame f = context.getFrame();
-        return f == null ? null : "frame=" + f.getName();
+        if (f == null)
+          return null;
+        return "frame=" + f.getName();
+      }
+    });
+    addLabel("frameInst", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Frame f = context.getFrame();
+        if (f == null)
+          return null;
+        if (f == Frame.nullFrame)
+          return null;
+        return "frameInst=" + f.getName();
       }
     });
     addLabel("frameRole", new TemplateSS() {
