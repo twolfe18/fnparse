@@ -4,7 +4,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.junit.Test;
@@ -16,12 +18,12 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.hlt.optimize.functions.L2;
-import edu.jhu.util.Alphabet;
 
 public class RoleSpanStageOverfittingTests {
 	public static final Logger LOG =
@@ -30,22 +32,24 @@ public class RoleSpanStageOverfittingTests {
 	@Test
 	public void test() {
 		StdEvalFunc eval = BasicEvaluation.fullMicroF1;
-		ParserParams params = new ParserParams();
-		RoleHeadToSpanStage rss = new RoleHeadToSpanStage(params, params);
-		rss.params.maxArgRoleExpandLeft = 99;
-		rss.params.maxArgRoleExpandRight = 99;
-		rss.params.regularizer = new L2(999_999_999d);
-		rss.params.passes = 10;
-		rss.params.learningRate = 1d;
+		String features = null;
+		RoleHeadToSpanStage rss = new RoleHeadToSpanStage(new GlobalParameters(), features);
+		Map<String, String> conf = new HashMap<>();
+		conf.put("maxArgRoleExpandLeft", "99");
+		conf.put("maxArgRoleExpandRight", "99");
+		conf.put("regularizer.RoleHeadToSpanStage", "999999999");
+		conf.put("passes.RoleHeadToSpanStage", "10");
+		conf.put("learningRate.RoleHeadToSpanStage", "1");
+		rss.configure(conf);
 		List<FNParse> y = parseToEvaluateOn();
 		List<FNParse> x = DataUtil.convertArgumenSpansToHeads(
-				y, params.headFinder);
+				y, SemaforicHeadFinder.getInstance());
 		for (int i = 0; i < y.size(); i++) {
 			List<FNParse> yi = y.subList(i, i + 1);
 			List<FNParse> xi = x.subList(i, i + 1);
 
-			params.setFeatureAlphabet(new Alphabet<String>());
-			params.getAlphabet().startGrowth();
+			//params.setFeatureAlphabet(new Alphabet<String>());
+			rss.getGlobalParameters().getFeatureNames().startGrowth();
 			rss.scanFeatures(xi, yi, 999, 999_999);
 			rss.train(xi, yi);
 
@@ -59,7 +63,7 @@ public class RoleSpanStageOverfittingTests {
 					f1, y.get(0).getFrameInstances().size(), y.get(0).getId()));
 			ModelIO.writeHumanReadable(
 					rss.getWeights(),
-					params.getAlphabet(),
+					rss.getGlobalParameters().getFeatureNames(),
 					new File("saved-models/testing/argExpansion-weights."
 							+ yi_hat.getSentence().getId() + ".txt"),
 					true);

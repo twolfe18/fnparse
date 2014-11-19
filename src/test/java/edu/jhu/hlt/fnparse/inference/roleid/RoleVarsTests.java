@@ -11,17 +11,17 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.ParserTests;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
+import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 
 public class RoleVarsTests {
 
   private FNParse parse = ParserTests.makeDummyParse();
-  private ParserParams params = new ParserParams();
-  private RoleHeadStage.Params roleIdParams = new RoleHeadStage.Params(params);
 
   @Test
   public void testIterator() {
@@ -32,7 +32,10 @@ public class RoleVarsTests {
     final int n = parse.getSentence().size();
     for(FrameInstance fi : parse.getFrameInstances()) {
       System.out.println(fi);
-      RoleHeadVars rv = new RoleHeadVars(fi.getTarget(), fi.getFrame(), parse.getSentence(), params, roleIdParams);
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
+      IArgPruner argPruner = new NoArgPruner();
+      RoleHeadVars rv = new RoleHeadVars(
+          fi.getTarget(), fi.getFrame(), parse.getSentence(), hf, argPruner);
 
       Var[][] vars = rv.r_kj;
       assertEquals(vars.length, fi.getFrame().numRoles());

@@ -4,7 +4,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Test;
 
@@ -22,8 +24,8 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.hlt.optimize.functions.L2;
 
 public class RoleIdStageOverfittingTests {
 
@@ -39,12 +41,13 @@ public class RoleIdStageOverfittingTests {
 		fs.append("+ RoleHeadStage * frameRole * head1Word * Word-2-grams-between-<S>-and-Head1");
 		fs.append("+ RoleHeadStage * frameRole * head1Word");
 		fs.append("+ RoleHeadStage * frameRole * head1Word * head1Pos");
-		params.setFeatureTemplateDescription(fs.toString());
-		RoleHeadStage rid = new RoleHeadStage(params, params);
-		rid.params.learningRate = 0.01d;
-		rid.params.passes = 200;
-		rid.params.tuneOnTrainingData = true;
-		rid.params.regularizer = new L2(999_999_999d);
+		RoleHeadStage rid = new RoleHeadStage(new GlobalParameters(), fs.toString());
+		Map<String, String> conf = new HashMap<>();
+		conf.put("learningRate.RoleHeadStage", "0.01");
+		conf.put("passes.RoleHeadStage", "200");
+		conf.put("tuneOnTrainingData.RoleHeadStage", "true");
+		conf.put("regularizer.RoleHeadStage", "999999999");
+		rid.configure(conf);
 		rid.disablePruning();
 		int tested = 0;
 		for (FNParse p : parseToEvaluateOn()) {

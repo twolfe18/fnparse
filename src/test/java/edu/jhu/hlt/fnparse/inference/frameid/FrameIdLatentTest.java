@@ -4,7 +4,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -22,10 +24,10 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -54,20 +56,18 @@ public class FrameIdLatentTest {
 	public void frameIdWithLatentDeps() {
 		final StdEvalFunc eval = BasicEvaluation.targetMicroF1;
 
-		ParserParams regParams = new ParserParams();
-		regParams.useSyntaxFeatures = true;
-		regParams.useLatentConstituencies = false;
-		regParams.useLatentDepenencies = false;
-		FrameIdStage regular = new FrameIdStage(regParams, regParams);
-		regular.params.tuneOnTrainingData = true;
+		Map<String, String> conf = new HashMap<>();
+		conf.put("tuneOnTrainingData.FrameIdStage", "true");
 
-		ParserParams latentParams = new ParserParams();
-		latentParams.useSyntaxFeatures = true;
-		latentParams.useLatentConstituencies = false;
-		latentParams.useLatentDepenencies = true;
-		FrameIdStage latent = new FrameIdStage(latentParams, latentParams);
-		latent.params.tuneOnTrainingData = true;
-		//latent.params.passes = 100;
+		String features = null;
+
+		FrameIdStage regular = new FrameIdStage(new GlobalParameters(), features);
+		regular.setSyntaxMode("regular");
+		regular.configure(conf);
+
+		FrameIdStage latent = new FrameIdStage(new GlobalParameters(), features);
+		latent.setSyntaxMode("latent");
+		latent.configure(conf);
 
 		Timer tReg = new Timer("regular-frameId", 1, false);
 		Timer tLat = new Timer("latent-frameId", 1, false);
@@ -128,7 +128,7 @@ public class FrameIdLatentTest {
 			FNParse p) {
 		List<Sentence> x = Arrays.asList(p.getSentence());
 		List<FNParse> y = Arrays.asList(p);
-		final Alphabet<String> alph = frameId.getGlobalParams().getAlphabet();
+		final Alphabet<String> alph = frameId.getGlobalParameters().getFeatureNames();
 		alph.startGrowth();
 		frameId.scanFeatures(x, y, 999, 99_999_999);
 		frameId.train(Arrays.asList(p));

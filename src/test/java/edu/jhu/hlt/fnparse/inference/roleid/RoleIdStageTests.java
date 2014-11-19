@@ -230,7 +230,8 @@ public class RoleIdStageTests {
 	}
 	
 	public void configureRid(RoleHeadStage rid) {
-		rid.params.argPruner = new NoArgPruner();
+		//rid.params.argPruner = new NoArgPruner();
+	  throw new RuntimeException("fixme");
 	}
 	
 	@Test
@@ -249,6 +250,8 @@ public class RoleIdStageTests {
 		File alphFile = new File("saved-models/testing/latent.alph.gz");
 		assertTrue(alphFile.isFile());
 
+	  throw new RuntimeException("fixme");
+		/*
 		// Latent
 		ParserParams paramsL = new ParserParams();
 		paramsL.useLatentDepenencies = true;
@@ -321,5 +324,6 @@ public class RoleIdStageTests {
 			ridL.randomlyInitWeights(sigma, new Random(seed));
 			ridR.randomlyInitWeights(sigma, new Random(seed));
 		}
+		*/
 	}
 }

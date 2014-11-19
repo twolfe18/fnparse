@@ -13,6 +13,8 @@ import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import jdk.nashorn.internal.objects.Global;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -27,7 +29,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 
@@ -160,8 +161,8 @@ public class ParserTests {
 	public PipelinedFnParser train(FNParse e) {
 		ParserParams params = new ParserParams();
 		params.useOverfittingFeatures = true;
-		PipelinedFnParser parser = new PipelinedFnParser(params);
-		((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
+		PipelinedFnParser parser = new PipelinedFnParser();
+		//((FrameIdStage) parser.getFrameIdStage()).params.tuneOnTrainingData = true;
 		List<FNParse> dummy = Arrays.asList(e);
 		parser.scanFeatures(dummy, 5d, 99_000_000);
 		parser.learnWeights(dummy);

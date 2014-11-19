@@ -4,7 +4,9 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.log4j.Logger;
 import org.junit.Test;
@@ -17,8 +19,8 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.hlt.optimize.functions.L2;
 
 public class RoleHeadToSpanOverfittingTest {
   public static final Logger LOG = Logger.getLogger(
@@ -36,12 +38,14 @@ public class RoleHeadToSpanOverfittingTest {
     }
     params.setFeatureTemplateDescription(feats);
 
-    RoleHeadToSpanStage stage = new RoleHeadToSpanStage(params, params);
+    RoleHeadToSpanStage stage = new RoleHeadToSpanStage(new GlobalParameters(), feats);
     // Make sure we're not pruning the best answer
-    stage.params.maxArgRoleExpandLeft = 99;
-    stage.params.maxArgRoleExpandRight = 99;
-    stage.params.passes = 100;
-    stage.params.regularizer = new L2(999_999_999d);
+    Map<String, String> conf = new HashMap<>();
+    conf.put("maxArgRoleExpandLeft", "99");
+    conf.put("maxArgRoleExpandRight", "99");
+    conf.put("passes.RoleHeadToSpanStage", "100");
+    conf.put("regularizer.RoleHeadToSpanStage", "999999999");
+    stage.configure(conf);
     RoleHeadToSpanStage.SHOW_FEATURES = false;
 
     List<FNParse> parses = DataUtil.iter2list(
