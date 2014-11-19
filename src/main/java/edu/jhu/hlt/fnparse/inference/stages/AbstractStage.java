@@ -2,20 +2,13 @@ package edu.jhu.hlt.fnparse.inference.stages;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -37,8 +30,8 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
@@ -47,6 +40,7 @@ import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.prim.arrays.Multinomials;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
@@ -59,91 +53,157 @@ import edu.jhu.util.Alphabet;
  * @param <O> output of this stage
  */
 public abstract class AbstractStage<I, O extends FNTagging>
-		implements Stage<I, O>, Serializable {
-	private static final long serialVersionUID = 1L;
-
-	public static boolean DEBUG_SER = false;
-
-	protected final ParserParams globalParams; // Not owned by this class
-	protected FgModel weights;
-	protected boolean scanFeaturesHasBeenRun = false;
-	protected transient HasFeatureAlphabet featureNames;
+    implements Stage<I, O> {
 	protected transient Logger log = Logger.getLogger(this.getClass());
 
-	public AbstractStage(ParserParams params, HasFeatureAlphabet featureNames) {
-		this.globalParams = params;
-		this.featureNames = featureNames;
+	protected FgModel weights;
+	protected String featureTemplatesString;
+	private TemplatedFeatures featureTemplates;
+	protected GlobalParameters globals;
+
+	protected boolean useSyntaxFeatures = true;
+	protected boolean useLatentDependencies = false;
+	protected boolean useLatentConstituencies = false;
+
+	protected boolean scanFeaturesHasBeenRun = false;
+
+	protected int bpIters = 1;
+  protected Double learningRate = null;
+  protected int batchSize = 1;
+  protected int passes = 10;
+  protected Regularizer regularizer = new L2(1_000_000d);
+  protected double propDev = 0.15d;
+  protected int maxDev = 150;
+  protected boolean tuneOnTrainingData = false;
+
+  public AbstractStage(GlobalParameters globals, String featureTemplatesString) {
+    this.globals = globals;
+    this.featureTemplatesString = featureTemplatesString;
+  }
+
+  public void setFeatures(String featureTemplatesString) {
+    this.featureTemplates = null;
+    this.featureTemplatesString = featureTemplatesString;
+  }
+
+  public TemplatedFeatures getFeatures() {
+    if (featureTemplates == null) {
+      featureTemplates = new TemplatedFeatures(
+          getName(), featureTemplatesString, globals.getFeatureNames());
+    }
+    return featureTemplates;
+  }
+
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    try {
+      dos.writeUTF(featureTemplatesString);
+      dos.writeBoolean(useSyntaxFeatures);
+      dos.writeBoolean(useLatentDependencies);
+      dos.writeBoolean(useLatentConstituencies);
+      dos.writeBoolean(scanFeaturesHasBeenRun);
+      dos.writeInt(bpIters);
+      dos.writeDouble(learningRate == null ? 0d : learningRate);
+      dos.writeInt(batchSize);
+      dos.writeInt(passes);
+      // TODO Regularizer
+      dos.writeDouble(propDev);
+      dos.writeInt(maxDev);
+      dos.writeBoolean(tuneOnTrainingData);
+      ModelIO.writeBinaryWithStringFeatureNames(
+          weights, globals.getFeatureNames(), dos);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    this.globals = globals;
+    try {
+      setFeatures(dis.readUTF());
+      useSyntaxFeatures = dis.readBoolean();
+      useLatentDependencies = dis.readBoolean();
+      useLatentConstituencies = dis.readBoolean();
+      scanFeaturesHasBeenRun = dis.readBoolean();
+      bpIters = dis.readInt();
+      learningRate = dis.readDouble();
+      if (learningRate == 0) learningRate = null;
+      batchSize = dis.readInt();
+      passes = dis.readInt();
+      // TODO Regularizer
+      propDev = dis.readDouble();
+      maxDev = dis.readInt();
+      tuneOnTrainingData = dis.readBoolean();
+      this.weights = ModelIO.readBinaryWithStringFeatureNames(
+          globals.getFeatureNames(), dis);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Override
+  public void configure(Map<String, String> configuration) {
+    String key, value;
+
+    key = "regularizer." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      regularizer = new L2(Double.parseDouble(value));
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "batchSize." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      batchSize = Integer.parseInt(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "passes." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      this.passes = Integer.parseInt(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "useSyntaxFeatures";
+    value = configuration.get(key);
+    if (value != null) {
+      useSyntaxFeatures = Boolean.valueOf(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "useLatentDependencies";
+    value = configuration.get(key);
+    if (value != null) {
+      useLatentDependencies = Boolean.valueOf(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "useLatentConstituencies";
+    value = configuration.get(key);
+    if (value != null) {
+      useLatentConstituencies = Boolean.valueOf(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+  }
+
+	public void setGlobals(GlobalParameters globals) {
+	  this.globals = globals;
 	}
 
-	public ParserParams getGlobalParams() {
-		return globalParams;
-	}
+  /** checks if they're log proportions from this.logDomain */
+  public void normalize(double[] proportions) {
+    if (logDomain())
+      Multinomials.normalizeLogProps(proportions);
+    else
+      Multinomials.normalizeProps(proportions);
+  }
 
 	public String getName() {
 		String[] ar = this.getClass().getName().split("\\.");
 		return ar[ar.length-1];
-	}
-
-	/**
-	 * Return your parameters other than the weights
-	 * (this is used to implement saveModel)
-	 */
-	public abstract Serializable getParamters();
-
-	/**
-	 * Set the parameters that were returned by getParamters
-	 * (this is used to implement loadModel)
-	 */
-	public abstract void setPameters(Serializable params);
-
-	@Override
-	public void saveModel(File file) {
-		log.info("[saveModel] writing to " + file.getPath());
-		try {
-			DataOutputStream dos = new DataOutputStream(
-					new GZIPOutputStream(new FileOutputStream(file)));
-			ObjectOutputStream oos = new ObjectOutputStream(dos);
-			oos.writeObject(getParamters());
-			double[] ps = new double[weights.getNumParams()];
-			weights.updateDoublesFromModel(ps);
-			ModelIO.writeFeatureNameWeightsBinary(
-					ps, featureNames.getAlphabet(), dos);
-			oos.close();  // closes dos too
-
-			if (DEBUG_SER) {
-				for (int i = 0; i < ps.length; i++) {
-					String fn = featureNames.getAlphabet().lookupObject(i);
-					log.debug("[saveModel] " + fn + "\t" + ps[i]);
-				}
-			}
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-
-	@Override
-	public void loadModel(File file) {
-		log.info("[loadModel] reading from " + file.getPath());
-		try {
-			DataInputStream dis = new DataInputStream(
-					new GZIPInputStream(new FileInputStream(file)));
-			ObjectInputStream ois = new ObjectInputStream(dis);
-			setPameters((Serializable) ois.readObject());
-			double[] ps = ModelIO.readFeatureNameWeightsBinary(
-					dis, featureNames.getAlphabet());
-			weights = new FgModel(ps.length);
-			weights.updateModelFromDoubles(ps);
-			ois.close();
-
-			if (DEBUG_SER) {
-				for (int i = 0; i < ps.length; i++) {
-					String fn = featureNames.getAlphabet().lookupObject(i);
-					log.debug("[loadModel] " + fn + "\t" + ps[i]);
-				}
-			}
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
 	}
 
 	@Override
@@ -167,14 +227,14 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	@Override
 	public boolean logDomain() {
-		return globalParams.logDomain;
+		return true;  //globalParams.logDomain;
 	}
 
 	public FgInferencerFactory infFactory() {
 		final BeliefPropagationPrm bpParams = new BeliefPropagationPrm();
 		bpParams.normalizeMessages = false;
 		bpParams.schedule = BpScheduleType.TREE_LIKE;
-		bpParams.logDomain = globalParams.logDomain;
+		bpParams.logDomain = logDomain();
 		bpParams.cacheFactorBeliefs = false;
 		bpParams.maxIterations = 1;
 		return new FgInferencerFactory() {
@@ -209,12 +269,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	}
 
 	public void initWeights() {
-		int numParams = featureNames.getAlphabet().size();
+		int numParams = globals.getFeatureNames().size();
 		if(numParams == 0) {
 		  log.warn("[initWeights] no parameters!");
 		  assert scanFeaturesHasBeenRun;
 		}
-		assert globalParams.verifyConsistency();
+		//assert globalParams.verifyConsistency();
 		if (weights != null && weights.getNumParams() > 0)
 			log.warn("re-initializing paramters!");
 		weights = new FgModel(numParams);
@@ -265,12 +325,11 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	 */
 	public void train(List<I> x, List<O> y, Double learningRate,
 			Regularizer regularizer, int batchSize, int passes) {
-		assert globalParams.verifyConsistency();
+		//assert globalParams.verifyConsistency();
 		if (x.size() != y.size())
 			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
 		log.info("[train] starting training");
-		Timer t = globalParams.getTimer(this.getName() + "-train");
-		t.start();
+		long start = System.currentTimeMillis();
 
 		//initWeights();
 		randomlyInitWeights(0.1d, new Random(9001));
@@ -296,7 +355,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 				xDev = new ArrayList<>();
 				yDev = new ArrayList<>();
 				devTuneSplit(x, y, xTrain, yTrain, xDev, yDev,
-						0.15d, 150, globalParams.rand);
+						0.15d, maxDev, globals.getRandom());
 			}
 		}
 		log.info("[train] #train=" + xTrain.size() + " #tune=" + xDev.size());
@@ -325,7 +384,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		trainerParams.regularizer = regularizer;
 		log.info("[train] numThreads=" + trainerParams.numThreads);
 
-		Alphabet<String> alph = featureNames.getAlphabet();
+		Alphabet<String> alph = globals.getFeatureNames();
 		log.info("[train] Feature alphabet is frozen (size=" + alph.size() + "), "
 				+ "going straight into training");
 		alph.stopGrowth();
@@ -340,7 +399,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		} catch(cc.mallet.optimize.OptimizationException oe) {
 			oe.printStackTrace();
 		}
-		long timeTrain = t.stop();
+		long timeTrain = System.currentTimeMillis() - start;
 		log.info(String.format(
 				"[train] Done training on %d examples for %.1f minutes, using %d features",
 				exs.size(), timeTrain/(1000d*60d), alph.size()));
@@ -365,13 +424,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			int maxFeaturesAdded) {
 		if (labels != null && unlabeledExamples.size() != labels.size())
 			throw new IllegalArgumentException();
-		if (!featureNames.getAlphabet().isGrowing()) {
+		if (!globals.getFeatureNames().isGrowing()) {
 			throw new IllegalStateException("There is no reason to run this "
 					+ "unless you've set the alphabet to be growing");
 		}
 
-		Timer t = globalParams.getTimer(this.getName() + "@scan-features");
-		t.printIterval = 500;
+		Timer t = new Timer(this.getName() + "@scan-features", 500, false);
 		log.info("[scanFeatures] Counting the number of parameters needed over "
 				+ unlabeledExamples.size() + " examples");
 
@@ -384,7 +442,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		// frame/role coverage.
 		List<FNTagging> seen = new ArrayList<>();
 
-		final int alphSizeStart = featureNames.getAlphabet().size();
+		final int alphSizeStart = globals.getFeatureNames().size();
 		int examplesSeen = 0;
 		int examplesWithNoFactorGraph = 0;
 		StageDatumExampleList<I, O> data = this.setupInference(
@@ -409,7 +467,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 						+ "(in minutes): " + maxTimeInMinutes);
 				break;
 			}
-			int featuresAdded = featureNames.getAlphabet().size()
+			int featuresAdded = globals.getFeatureNames().size()
 					- alphSizeStart;
 			if (featuresAdded > maxFeaturesAdded) {
 				log.info("[scanFeatures] Stopping because we added the max "
@@ -452,8 +510,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		log.info(String.format("[scanFeatures] Done, scanned %d examples in "
 				+ "%.1f minutes, alphabet size is %d, added %d",
 				examplesSeen, t.totalTimeInSeconds() / 60d,
-				featureNames.getAlphabet().size(),
-				featureNames.getAlphabet().size() - alphSizeStart));
+				globals.getFeatureNames().size(),
+				globals.getFeatureNames().size() - alphSizeStart));
 		scanFeaturesHasBeenRun = true;
 	}
 

@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.util;
 
-import java.io.File;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
@@ -46,10 +45,10 @@ public class ParserLoader {
     }
     if (mode.equalsIgnoreCase("span") || mode.equals("spans")) {
       LatentConstituencyPipelinedParser parser =
-          new LatentConstituencyPipelinedParser(params);
+          new LatentConstituencyPipelinedParser();
       return parser;
     } else if (mode.equals("head") || mode.equals("heads")) {
-      PipelinedFnParser parser = new PipelinedFnParser(params);
+      PipelinedFnParser parser = new PipelinedFnParser();
       parser.useGoldFrameId();
       return parser;
     } else {
@@ -83,6 +82,7 @@ public class ParserLoader {
    */
   public static Parser loadDepParser(
       String frameId, String argId, String argSpans) {
+    /*
     if (frameId == null)
       throw new IllegalArgumentException("provide frameId");
     if (argId == null)
@@ -104,6 +104,8 @@ public class ParserLoader {
     assert !"oracle".equals(argSpans);
     parser.getArgSpanStage().loadModel(new File(argSpans));
     return parser;
+    */
+    throw new RuntimeException("implement me");
   }
 
   /**

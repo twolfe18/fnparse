@@ -27,6 +27,14 @@ public class SemaforicHeadFinder implements HeadFinder {
   public static final Logger LOG = Logger.getLogger(SemaforicHeadFinder.class);
   public static boolean DEBUG = false;
 
+  private static SemaforicHeadFinder singleton;
+
+  public static SemaforicHeadFinder getInstance() {
+    if (singleton == null)
+      singleton = new SemaforicHeadFinder();
+    return singleton;
+  }
+
   private static boolean isQuote(int i, Sentence sent) {
     String pos = sent.getPos(i);
     if ("''".equals(pos))

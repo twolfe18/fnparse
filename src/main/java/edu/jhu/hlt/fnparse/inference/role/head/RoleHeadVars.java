@@ -14,7 +14,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.FgRelated;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 
 /**
  * Represents which roles are active for a given frame at a location
@@ -67,8 +68,8 @@ public class RoleHeadVars implements FgRelated {
       Span target,
       Frame evoked,
       Sentence sent,
-      ParserParams globalParams,
-      RoleHeadStage.Params params) {
+      HeadFinder hf,
+      IArgPruner argPruner) {
     if (evoked == Frame.nullFrame) {
       throw new IllegalArgumentException(
           "only create these for non-nullFrame f_it");
@@ -91,17 +92,16 @@ public class RoleHeadVars implements FgRelated {
         jGoldSpan = gotFramePredictionWrong
             ? Span.nullSpan : gold.getArgument(k);
         jGold = jGoldSpan == Span.nullSpan
-            ? n : globalParams.headFinder.head(
-                jGoldSpan, gold.getSentence());
+            ? n : hf.head(jGoldSpan, gold.getSentence());
       }
 
       int inThisRow = 0;
       for (int j = 0; j < n; j++) {
         boolean argRealized = (j == jGold);
 
-        if (params.argPruner.pruneArgHead(frame, k, j, sent)) {
+        if (argPruner.pruneArgHead(frame, k, j, sent)) {
           if (argRealized) {
-            params.argPruner.falsePrune();
+            argPruner.falsePrune();
             if (verbose) {
               LOG.warn(String.format(
                   "Pruned %s.%s for head \"%s\"",
@@ -154,9 +154,9 @@ public class RoleHeadVars implements FgRelated {
       Span target,
       Frame evoked,
       Sentence s,
-      ParserParams globalParams,
-      RoleHeadStage.Params params) {
-    this(null, false, false, target, evoked, s, globalParams, params);
+      HeadFinder hf,
+      IArgPruner argPruner) {
+    this(null, false, false, target, evoked, s, hf, argPruner);
   }
 
   /**
@@ -172,10 +172,10 @@ public class RoleHeadVars implements FgRelated {
       Span target,
       Frame evoked,
       Sentence s,
-      ParserParams globalParams,
-      RoleHeadStage.Params params) {
+      HeadFinder hf,
+      IArgPruner argPruner) {
     this(gold, gold == null || gold.getFrame() != evoked, true,
-        target, evoked, s, globalParams, params);
+        target, evoked, s, hf, argPruner);
   }
 
   /**

@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.role.sequence;
 
-import java.io.Serializable;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,6 +16,7 @@ import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -26,15 +28,11 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
-import edu.jhu.hlt.fnparse.util.HasFgModel;
-import edu.jhu.hlt.optimize.function.Regularizer;
-import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 
 /**
  * Constructs a CRF tagging problem for every frame instance in a sentence.
@@ -43,7 +41,6 @@ import edu.jhu.hlt.optimize.functions.L2;
  * @author travis
  */
 public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
-  private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(RoleSequenceStage.class);
   private static boolean DEBUG = true;
   private static boolean SHOW_FEATURES = false;
@@ -191,24 +188,21 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
    * Represents everything needed for a sentence.
    */
   class RoleSeqDatum implements StageDatum<FNTagging, FNParse> {
-    private HasFgModel weights;
     private FNTagging input;
     private FNParse gold;
     private RoleSeqVars[] vars;   // Co-indexed with i in input.getFrameIndex(i)
 
     /** Constructor for when doing prediction / gold label is not known */
-    public RoleSeqDatum(FNTagging input, HasFgModel weights) {
+    public RoleSeqDatum(FNTagging input) {
       this.input = input;
       this.gold = null;
-      this.weights = weights;
       initVars();
     }
 
     /** Constructor for when you know the gold label */
-    public RoleSeqDatum(FNTagging input, FNParse gold, HasFgModel weights) {
+    public RoleSeqDatum(FNTagging input, FNParse gold) {
       this.input = input;
       this.gold = gold;
-      this.weights = weights;
       initVars();
     }
 
@@ -280,17 +274,16 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
 
     @Override
     public IDecodable<FNParse> getDecodable() {
-      return new RoleSeqDecodable(this, infFactory(), weights);
+      return new RoleSeqDecodable(this, infFactory());
     }
   }
 
-  static class RoleSeqDecodable extends Decodable<FNParse> {
+  class RoleSeqDecodable extends Decodable<FNParse> {
     private RoleSeqDatum datum;
     public RoleSeqDecodable(
         RoleSeqDatum datum,
-        FgInferencerFactory infFact,
-        HasFgModel weights) {
-      super(datum.getFG(), infFact, weights);
+        FgInferencerFactory infFact) {
+      super(datum.getFG(), infFact);
       this.datum = datum;
     }
     @Override
@@ -305,42 +298,41 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
       }
       return new FNParse(datum.getSentence(), fis);
     }
+    @Override
+    public FgModel getWeights() {
+      return RoleSequenceStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleSequenceStage.this.logDomain();
+    }
   }
 
   /* START of RoleSequenceStage ***********************************************/
 
-  private TemplatedFeatures features;
-
-  public RoleSequenceStage(ParserParams params, HasFeatureAlphabet featureNames) {
-    super(params, featureNames);
-  }
-
-  TemplatedFeatures getFeatures() {
-    if (features == null) {
-      features = new TemplatedFeatures("RoleSequenceStage",
-          globalParams.getFeatureTemplateDescription(),
-          globalParams.getAlphabet());
-    }
-    return features;
+  public RoleSequenceStage(
+      GlobalParameters globals,
+      String featureTemplatesString) {
+    super(globals, featureTemplatesString);
   }
 
   @Override
-  public Double getLearningRate() {
-    return 0.1d;
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    super.saveModel(dos, globals);
   }
 
   @Override
-	public Regularizer getRegularizer() {
-		return new L2(10_000_000d);
-	}
-
-	public int getNumTrainingPasses() {
-		return 10;
-	}
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    super.loadModel(dis, globals);
+  }
 
   @Override
   public void configure(Map<String, String> configuration) {
-    throw new RuntimeException("implement me");
+    super.configure(configuration);
   }
 
   @Override
@@ -355,21 +347,10 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
     List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       if (output == null)
-        data.add(this.new RoleSeqDatum(input.get(i), this));
+        data.add(this.new RoleSeqDatum(input.get(i)));
       else
-        data.add(this.new RoleSeqDatum(input.get(i), output.get(i), this));
+        data.add(this.new RoleSeqDatum(input.get(i), output.get(i)));
     }
     return new StageDatumExampleList<>(data);
-  }
-
-  @Override
-  public Serializable getParamters() {
-    LOG.info("[getParameters] not actually doing anything");
-    return null;
-  }
-
-  @Override
-  public void setPameters(Serializable params) {
-    LOG.info("[setParameters] not actually doing anything");
   }
 }

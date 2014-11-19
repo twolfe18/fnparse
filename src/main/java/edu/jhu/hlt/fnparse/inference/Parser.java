@@ -1,11 +1,16 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.Option;
 
@@ -23,6 +28,26 @@ public interface Parser extends HasFeatureAlphabet {
   public static final Option SYNTAX_MODE =
       new Option("syntaxMode", true, "regular", "latent", "none");
   public static final String FEATURES = "features";
+
+  public static final File SENTENCE_ID_SPLITS =
+      new File("toydata/development-split.dipanjan-train.txt");
+
+  public static DataOutputStream getDOStreamFor(File directory, String filename) {
+    assert directory.isDirectory();
+    try {
+      File f = new File(directory, filename);
+      OutputStream os = new FileOutputStream(f);
+      if (filename.toLowerCase().endsWith(".gz"))
+        os = new GZIPOutputStream(os);
+      return new DataOutputStream(os);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public GlobalParameters getGlobalParameters();
+
+  public void setFeatures(String featureTemplateDescription);
 
 	public void saveModel(File directory);
 

@@ -20,16 +20,16 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
-import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -49,16 +49,16 @@ public class PipelinedFnParser implements Serializable, Parser {
 	public static String ARG_ID_MODEL_HUMAN_READABLE = null;
 	public static String ARG_SPANS_MODEL_HUMAN_READABLE = null;
 
-	private ParserParams params;
+	private GlobalParameters globals;
 	private Stage<Sentence, FNTagging> frameId;
 	private Stage<FNTagging, FNParse> argId;
 	private Stage<FNParse, FNParse> argExpansion;
 
-	public PipelinedFnParser(ParserParams params) {
-		this.params = params;
-		frameId = new FrameIdStage(params, this);
-		argId = new RoleHeadStage(params, this);
-		argExpansion = new RoleHeadToSpanStage(params, this);
+	public PipelinedFnParser() {
+	  this.globals = new GlobalParameters();
+		frameId = new FrameIdStage(globals, "");
+		argId = new RoleHeadStage(globals, "");
+		argExpansion = new RoleHeadToSpanStage(globals, "");
 	}
 
 	@Override
@@ -69,9 +69,30 @@ public class PipelinedFnParser implements Serializable, Parser {
 	  argExpansion.configure(configuration);
 	}
 
+  @Override
+  public void setFeatures(String featureTemplateDescription) {
+    if (frameId instanceof AbstractStage)
+      ((AbstractStage<?, ?>) frameId).setFeatures(featureTemplateDescription);
+    else
+      LOG.warn("not setting features for frameId");
+    if (argId instanceof AbstractStage)
+      ((AbstractStage<?, ?>) argId).setFeatures(featureTemplateDescription);
+    else
+      LOG.warn("not setting features for argId");
+    if (argExpansion instanceof AbstractStage)
+      ((AbstractStage<?, ?>) argExpansion).setFeatures(featureTemplateDescription);
+    else
+      LOG.warn("not setting features for argExpansion");
+  }
+
+	@Override
+	public GlobalParameters getGlobalParameters() {
+	  return globals;
+	}
+
 	@Override
 	public Alphabet<String> getAlphabet() {
-		return params.getAlphabet();
+	  return globals.getFeatureNames();
 	}
 
 	// TODO replace this with setters for each stage
@@ -97,10 +118,6 @@ public class PipelinedFnParser implements Serializable, Parser {
 	public void useGoldArgId() {
 		useGoldFrameId();
 		argId = new OracleStage<>();
-	}
-
-	public ParserParams getParams() {
-		return params;
 	}
 
 	public Stage<Sentence, FNTagging> getFrameIdStage() {
@@ -150,10 +167,6 @@ public class PipelinedFnParser implements Serializable, Parser {
 		LOG.info("done writing alphabet");
 	}
 
-	public void setAlphabet(Alphabet<String> featureIndices) {
-		params.setFeatureAlphabet(featureIndices);
-	}
-
 	@Override
 	public void train(List<FNParse> data) {
 	  scanFeatures(data, 999, 999_999_999);
@@ -173,21 +186,21 @@ public class PipelinedFnParser implements Serializable, Parser {
 			List<FNParse> examples,
 			double maxTimeInMinutes,
 			int maxFeaturesAdded) {
-		Timer t = params.getTimer("computeAlphabet");
-		t.start();
 
+	  long start = System.currentTimeMillis();
 		examples = ParseSelector.sort(examples);
 
-		params.getAlphabet().startGrowth();
+		getAlphabet().startGrowth();
 
 		frameId.scanFeatures(examples);
 		argId.scanFeatures(examples);
 		argExpansion.scanFeatures(examples);
 
-		params.getAlphabet().stopGrowth();
-		long time = t.stop();
-		System.out.printf("[computeAlphabet] %d parses with %d features in %.1f seconds\n",
-				examples.size(), params.getAlphabet().size(), time / 1000d);
+		getAlphabet().stopGrowth();
+		long time = System.currentTimeMillis() - start;
+		System.out.printf(
+		    "[computeAlphabet] %d parses with %d features in %.1f seconds\n",
+				examples.size(), getAlphabet().size(), time / 1000d);
 	}
 
 	public void learnWeights(List<FNParse> examples) {
@@ -200,13 +213,15 @@ public class PipelinedFnParser implements Serializable, Parser {
 		frameId.train(sentences, goldTags);
 
 		List<FNTagging> frames;
-		if (params.usePredictedFramesToTrainArgId) {
+		/*
+		if (usePredictedFramesToTrainArgId) {
 			LOG.info("[train] predicting frames before training argId model...");
 			frames = frameId.setupInference(sentences, null).decodeAll();
 		} else {
+		*/
 			LOG.info("[train] using gold frames to train argId model...");
 			frames = DataUtil.convertParsesToTaggings(examples);
-		}
+		//}
 		LOG.info("[train] training argId model...");
 		argId.train(frames, examples);
 
@@ -217,7 +232,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 		// consider alternative training regimes.
 		LOG.info("[train] training argId span model...");
 		List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
-				examples, params.headFinder);
+				examples, SemaforicHeadFinder.getInstance());
 		argExpansion.train(onlyHeads, examples);
 	}
 
@@ -249,7 +264,7 @@ public class PipelinedFnParser implements Serializable, Parser {
 		start = System.currentTimeMillis();
 		List<FNParse> goldArgHeads = labels == null
 				? null : DataUtil.convertArgumenSpansToHeads(
-						labels, params.headFinder);
+						labels, SemaforicHeadFinder.getInstance());
 		List<FNParse> argHeads = argId
 				.setupInference(frames, goldArgHeads)
 				.decodeAll();
@@ -263,10 +278,9 @@ public class PipelinedFnParser implements Serializable, Parser {
 		LOG.info("[parse] argSpans done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
 
 		if (labels != null && argExpansion instanceof RoleHeadToSpanStage) {
-		  RoleHeadToSpanStage rhtss = (RoleHeadToSpanStage) argExpansion;
 		  Counts<String> errs = new Counts<>();
 		  for (int i = 0; i < labels.size(); i++) 
-		    rhtss.errAnalysis(errs, labels.get(i), fullParses.get(i), argHeads.get(i));
+		    RoleHeadToSpanStage.errAnalysis(errs, labels.get(i), fullParses.get(i), argHeads.get(i));
 		  LOG.info("[parse] errors: " + errs);
 		}
 
@@ -285,9 +299,9 @@ public class PipelinedFnParser implements Serializable, Parser {
 		LOG.info("saving model to " + directory.getPath());
 		if (!directory.isDirectory())
 			throw new IllegalArgumentException();
-		frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
-		argId.saveModel(new File(directory, ARG_ID_MODEL_NAME));
-		argExpansion.saveModel(new File(directory, ARG_SPANS_MODEL_NAME));
+		frameId.saveModel(Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME), globals);
+		argId.saveModel(Parser.getDOStreamFor(directory, ARG_ID_MODEL_NAME), globals);
+		argExpansion.saveModel(Parser.getDOStreamFor(directory, ARG_SPANS_MODEL_NAME), globals);
 
 		if (FRAME_ID_MODEL_HUMAN_READABLE != null) {
 		  ModelIO.writeHumanReadable(frameId.getWeights(), getAlphabet(),

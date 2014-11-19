@@ -46,12 +46,12 @@ public class ParserEvaluator {
 
     // Get the evaluation data
     LOG.info("loading evaluation data from "
-        + ParserTrainer.SENTENCE_ID_SPLITS);
+        + Parser.SENTENCE_ID_SPLITS);
     List<FNParse> all = DataUtil.iter2list(
         new FNIterFilters.SkipSentences<FNParse>(
             FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
             Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
-    DataSplitReader dsr = new DataSplitReader(ParserTrainer.SENTENCE_ID_SPLITS);
+    DataSplitReader dsr = new DataSplitReader(Parser.SENTENCE_ID_SPLITS);
     List<FNParse> test = dsr.getSection(all, "test", false);	// TODO make this true!
     LOG.info("read in " + test.size() + " test instances");
 

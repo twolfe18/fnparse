@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.frameid;
 
-import java.io.Serializable;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -13,15 +14,20 @@ import java.util.Set;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
+import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -34,58 +40,43 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
 import edu.jhu.hlt.fnparse.inference.DepParseFactorFactory;
-import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
-import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
-import edu.jhu.hlt.optimize.function.Regularizer;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.prim.arrays.Multinomials;
 
-public class FrameIdStage
-    extends AbstractStage<Sentence, FNTagging>
-    implements Stage<Sentence, FNTagging>, Serializable {
-  private static final long serialVersionUID = 1L;
+public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
   public static final Logger LOG = Logger.getLogger(FrameIdStage.class);
+  public static boolean SHOW_FEATURES = false;
 
-  public static class Params implements Serializable {
-    private static final long serialVersionUID = 1L;
+  private ApproxF1MbrDecoder decoder = new ApproxF1MbrDecoder(true, 1.0d);
 
-    // If null, auto select learning rate
-    public Double learningRate = 0.05d;
-    public int batchSize = 4;
-    public int passes = 2;
-    public double propDev = 0.15d;
-    public int maxDev = 50;
-    public transient Regularizer regularizer = new L2(1_000_000d);
-    public ApproxF1MbrDecoder decoder;
-    public FactorFactory<FrameVars> factorsTemplate;
+  public FrameIdStage(GlobalParameters globals, String featureTemplateString) {
+    super(globals, featureTemplateString);
+  }
 
-    public TargetPruningData getTargetPruningData() {
-      return TargetPruningData.getInstance();
-    }
-
-    // If true, tuning the decoder will be done on training data. Generally
-    // this is undesirable for risk of overfitting, but is good for
-    // debugging (e.g. an overfitting test).
-    public boolean tuneOnTrainingData = false;
-
-    private transient TargetIndex targetIndex;
-    public TargetIndex getTargetIndex() {
-      if (targetIndex == null)
-        targetIndex = new TargetIndex();
-      return targetIndex;
-    }
-
-    public Params(ParserParams globalParams) {
-      decoder = new ApproxF1MbrDecoder(globalParams.logDomain, 1.5d);
-      factorsTemplate = new FrameFactorFactory(globalParams);
+  @Override
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    super.loadModel(dis, globals);
+    try {
+      decoder = new ApproxF1MbrDecoder(false, dis.readDouble());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
-  public Params params;
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    super.saveModel(dos, globals);
+    try {
+      dos.writeDouble(decoder.getRecallBias());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   private static int frameVarsInstantiated = 0;
   public static void frameVarInstantiated() {
@@ -94,71 +85,33 @@ public class FrameIdStage
       LOG.info(frameVarsInstantiated + " frame vars instantiated");
   }
 
-  public FrameIdStage(
-      ParserParams globalParams,
-      HasFeatureAlphabet featureAlphabet) {
-    super(globalParams, featureAlphabet);
-    params = new Params(globalParams);
-  }
-
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     String key = "regularizer." + getName();
     String reg = configuration.get(key);
     if (reg != null)
-      params.regularizer = new L2(Double.parseDouble(reg));
+      regularizer = new L2(Double.parseDouble(reg));
 
     key = "batchSize." + getName();
     String bs = configuration.get(key);
     if (bs != null)
-      params.batchSize = Integer.parseInt(bs);
+      batchSize = Integer.parseInt(bs);
 
     key = "passes." + getName();
     String passes = configuration.get(key);
     if (passes != null)
-      params.passes = Integer.parseInt(passes);
-  }
-
-  @Override
-  public Serializable getParamters() {
-    return params;
-  }
-
-  @Override
-  public void setPameters(Serializable params) {
-    this.params = (Params) params;
-  }
-
-  @Override
-  public Double getLearningRate() {
-    return params.learningRate;
-  }
-
-  @Override
-  public Regularizer getRegularizer() {
-    return params.regularizer;
-  }
-
-  @Override
-  public int getBatchSize() {
-    return params.batchSize;
-  }
-
-  @Override
-  public int getNumTrainingPasses() {
-    return params.passes;
+      this.passes = Integer.parseInt(passes);
   }
 
   public void train(List<FNParse> examples) {
-    Collections.shuffle(examples, globalParams.rand);
+    Collections.shuffle(examples, globals.getRandom());
     List<Sentence> x = new ArrayList<>();
     List<FNTagging> y = new ArrayList<>();
     for (FNTagging t : examples) {
       x.add(t.getSentence());
       y.add(t);
     }
-    train(x, y, params.learningRate,
-        params.regularizer, params.batchSize, params.passes);
+    train(x, y, learningRate, regularizer, batchSize, passes);
   }
 
   @Override
@@ -168,13 +121,13 @@ public class FrameIdStage
     LOG.debug("called getTuningData, trying " + biases.size() + " biases");
     return new TuningData() {
       @Override
-      public ApproxF1MbrDecoder getDecoder() { return params.decoder; }
+      public ApproxF1MbrDecoder getDecoder() { return decoder; }
       @Override
       public EvalFunc getObjective() { return BasicEvaluation.targetMicroF1; }
       @Override
       public List<Double> getRecallBiasesToSweep() { return biases; }
       @Override
-      public boolean tuneOnTrainingData() { return params.tuneOnTrainingData; }
+      public boolean tuneOnTrainingData() { return tuneOnTrainingData; }
     };
   }
 
@@ -188,11 +141,91 @@ public class FrameIdStage
     for (int i = 0; i < n; i++) {
       Sentence s = input.get(i);
       if(labels == null)
-        data.add(new FrameIdDatum(s, this));
+        data.add(this.new FrameIdDatum(s));//, this));
       else
-        data.add(new FrameIdDatum(s, this, labels.get(i)));
+        data.add(this.new FrameIdDatum(s, /*this,*/ labels.get(i)));
     }
     return new StageDatumExampleList<Sentence, FNTagging>(data);
+  }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<Sentence> sentences = DataUtil.stripAnnotations(data);
+    this.scanFeatures(sentences, data, 999, 999_999_999);
+  }
+
+  // TODO need to add an Exactly1 factor to each FrameVars
+  // ^^^^ do i really need this if i'm not doing joint inference?
+  public List<Factor> initFactorsFor(
+      Sentence s,
+      List<FrameVars> fr,
+      ProjDepTreeFactor l,
+      ConstituencyTreeFactor c) {
+
+    final int ROOT = -1;
+    HeadFinder hf = SemaforicHeadFinder.getInstance();
+    TemplatedFeatures feats = FrameIdStage.this.getFeatures();
+    TemplateContext context = new TemplateContext();
+    List<Factor> factors = new ArrayList<Factor>();
+    for (FrameVars fhyp : fr) {
+      final int T = fhyp.numFrames();
+      int targetHead = hf.head(fhyp.getTarget(), s);
+      context.clear();
+      context.setStage(FrameIdStage.class);
+      context.setSentence(s);
+      context.setTarget(fhyp.getTarget());
+      context.setSpan1(fhyp.getTarget());
+      context.setTargetHead(targetHead);
+      context.setHead1(targetHead);
+      for (int tIdx = 0; tIdx < T; tIdx++) {
+        Frame t = fhyp.getFrame(tIdx);
+        Var frameVar = fhyp.getVariable(tIdx);
+        ExplicitExpFamFactor phi;
+        if (l != null) {  // Latent syntax
+          Var linkVar = l.getLinkVar(-1, targetHead);
+          VarSet vs = new VarSet(linkVar, frameVar);
+          phi = new ExplicitExpFamFactor(vs);
+          for (int config = 0; config < 4; config++) {
+            VarConfig vc = vs.getVarConfig(config);
+            boolean link = BinaryVarUtil.configToBool(vc.getState(linkVar));
+            boolean frame = BinaryVarUtil.configToBool(vc.getState(frameVar));
+            context.setHead1_parent(link ? ROOT : TemplateContext.UNSET);
+            context.setFrame(frame ? t : null);
+            FeatureVector fv = new FeatureVector();
+            if (SHOW_FEATURES) {
+              String msg = "[variables] " + vs.getVarConfig(config);
+              feats.featurizeDebug(fv, context, msg);
+            } else {
+              feats.featurize(fv, context);
+            }
+            phi.setFeatures(config, fv);
+          }
+        } else {          // No latent syntax
+          VarSet vs = new VarSet(frameVar);
+          phi = new ExplicitExpFamFactor(vs);
+          FeatureVector fv1 = new FeatureVector();
+          context.setFrame(t);
+          //context.blankOutIllegalInfo(params.getParserParams());
+          if (SHOW_FEATURES) {
+            feats.featurizeDebug(fv1, context, "[variables] (contained in context)");
+          } else {
+            feats.featurize(fv1, context);
+          }
+          phi.setFeatures(BinaryVarUtil.boolToConfig(true), fv1);
+          FeatureVector fv2 = new FeatureVector();
+          context.setFrame(null);
+          //context.blankOutIllegalInfo(params.getParserParams());
+          if (SHOW_FEATURES) {
+            feats.featurizeDebug(fv2, context, "[variables] (contained in context)");
+          } else {
+            feats.featurize(fv2, context);
+          }
+          phi.setFeatures(BinaryVarUtil.boolToConfig(false), fv2);
+        }
+        factors.add(phi);
+      }
+    }
+    return factors;
   }
 
   /**
@@ -202,16 +235,14 @@ public class FrameIdStage
    * 
    * @author travis
    */
-  public static class FrameIdDatum
+  public class FrameIdDatum
       implements StageDatum<Sentence, FNTagging> {
     private final Sentence sentence;
     private final boolean hasGold;
     private final FNTagging gold;
     private final List<FrameVars> possibleFrames;
-    private final FrameIdStage parent;
 
-    public FrameIdDatum(Sentence s, FrameIdStage fid) {
-      this.parent = fid;
+    public FrameIdDatum(Sentence s) {
       this.sentence = s;
       this.hasGold = false;
       this.gold = null;
@@ -219,9 +250,8 @@ public class FrameIdStage
       initHypotheses();
     }
 
-    public FrameIdDatum(Sentence s, FrameIdStage fid, FNTagging gold) {
+    public FrameIdDatum(Sentence s, FNTagging gold) {
       assert gold != null;
-      this.parent = fid;
       this.sentence = s;
       this.hasGold = true;
       this.gold = gold;
@@ -232,7 +262,7 @@ public class FrameIdStage
 
     private void initHypotheses() {
       assert possibleFrames.size() == 0;
-      TargetIndex ti = parent.params.getTargetIndex();
+      TargetIndex ti = TargetIndex.getInstance();
       boolean requireInParens = false;
       boolean requirePosMatchOneSingleWord = false;
       Map<Span, Set<Frame>> byTarget = ti.findFrames(
@@ -312,15 +342,15 @@ public class FrameIdStage
       List<Factor> factors = new ArrayList<Factor>();
       ProjDepTreeFactor depTree = null;
       ConstituencyTreeFactor consTree = null;
-      if (parent.getGlobalParams().useLatentDepenencies) {
+      if (useLatentDependencies) {
         depTree = new ProjDepTreeFactor(
             sentence.size(), VarType.LATENT);
         DepParseFactorFactory depParseFactorTemplate =
-            new DepParseFactorFactory(parent.getGlobalParams());
+            new DepParseFactorFactory(globals);
         factors.addAll(depParseFactorTemplate.initFactorsFor(
             sentence, Collections.emptyList(), depTree, consTree));
       }
-      factors.addAll(parent.params.factorsTemplate.initFactorsFor(
+      factors.addAll(initFactorsFor(
           sentence, possibleFrames, depTree, consTree));
 
       // Add factors to the factor graph
@@ -332,10 +362,9 @@ public class FrameIdStage
 
     @Override
     public FrameIdDecodable getDecodable() {
-      FgInferencerFactory infFact = parent.infFactory();
+      FgInferencerFactory infFact = infFactory();
       FactorGraph fg = this.getFactorGraph();
-      return new FrameIdDecodable(
-          sentence, possibleFrames, fg, infFact, parent);
+      return new FrameIdDecodable(sentence, possibleFrames, fg, infFact);
     }
 
     @Override
@@ -351,18 +380,16 @@ public class FrameIdStage
    * 
    * @author travis
    */
-  public static class FrameIdDecodable
+  public class FrameIdDecodable
       extends Decodable<FNTagging>
       implements Iterable<FrameVars> {
 
-    private final FrameIdStage parent;
     private final Sentence sentence;
     private final List<FrameVars> possibleFrames;
 
     public FrameIdDecodable(Sentence sent, List<FrameVars> possibleFrames,
-        FactorGraph fg, FgInferencerFactory infFact, FrameIdStage fid) {
-      super(fg, infFact, fid);
-      this.parent = fid;
+        FactorGraph fg, FgInferencerFactory infFact) {
+      super(fg, infFactory());
       this.sentence = sent;
       this.possibleFrames = possibleFrames;
     }
@@ -377,23 +404,25 @@ public class FrameIdStage
     @Override
     public FNTagging decode() {
       FgInferencer hasMargins = this.getMargins();
-      final boolean logDomain = this.getMargins().isLogDomain();
       List<FrameInstance> fis = new ArrayList<FrameInstance>();
       for (FrameVars fvars : possibleFrames) {
         final int T = fvars.numFrames();
         double[] beliefs = new double[T];
-        for (int t=0; t<T; t++) {
+        for (int t = 0; t < T; t++) {
           DenseFactor df =
               hasMargins.getMarginals(fvars.getVariable(t));
           // TODO Exactly1 factor removes the need for this
-          if (logDomain) df.logNormalize();
+          if (logDomain()) df.logNormalize();
           else df.normalize();
           beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
         }
-        parent.globalParams.normalize(beliefs);
+        if (logDomain())
+          Multinomials.normalizeLogProps(beliefs);
+        else
+          Multinomials.normalizeProps(beliefs);
 
         final int nullFrameIdx = fvars.getNullFrameIdx();
-        int tHat = parent.params.decoder.decode(beliefs, nullFrameIdx);
+        int tHat = decoder.decode(beliefs, nullFrameIdx);
         Frame fHat = fvars.getFrame(tHat);
         if (fHat != Frame.nullFrame) {
           fis.add(FrameInstance.frameMention(
@@ -402,11 +431,17 @@ public class FrameIdStage
       }
       return new FNTagging(sentence, fis);
     }
-  }
-
-  @Override
-  public void scanFeatures(List<FNParse> data) {
-    List<Sentence> sentences = DataUtil.stripAnnotations(data);
-    this.scanFeatures(sentences, data, 999, 999_999_999);
+    @Override
+    public FgModel getWeights() {
+      return FrameIdStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return FrameIdStage.this.logDomain();
+    }
   }
 }

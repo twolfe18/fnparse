@@ -7,6 +7,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class ModelIO {
@@ -110,8 +111,52 @@ public class ModelIO {
     double[] values = new double[n];
     model.updateDoublesFromModel(values);
     dos.writeInt(n);
-    for(int i=0; i<n; i++)
+    for (int i = 0; i < n; i++)
       dos.writeDouble(values[i]);
+  }
+
+  public static void writeBinaryWithStringFeatureNames(FgModel model, Alphabet<String> featureNames, DataOutputStream dos) {
+    int n = model.getNumParams();
+    try {
+      dos.writeInt(n);
+      model.apply(new FnIntDoubleToDouble() {
+        @Override
+        public double call(int arg0, double arg1) {
+          String fn = featureNames.lookupObject(arg0);
+          try {
+            dos.writeUTF(fn);
+            dos.writeDouble(arg1);
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+          return arg1;
+        }
+      });
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static FgModel readBinaryWithStringFeatureNames(Alphabet<String> featureNames, DataInputStream dis) {
+    if (!featureNames.isGrowing())
+      throw new RuntimeException();
+    try {
+      int n = dis.readInt();
+      assert n > 0;
+      int[] indices = new int[n];
+      double[] weights = new double[n];
+      for (int i = 0; i < n; i++) {
+        String fn = dis.readUTF();
+        weights[i] = dis.readDouble();
+        indices[i] = featureNames.lookupIndex(fn, true);
+      }
+      FgModel model = new FgModel(featureNames.size());
+      for (int i = 0; i < n; i++)
+        model.add(indices[i], weights[i]);
+      return model;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static FgModel readBinary(File f) {
@@ -176,16 +221,16 @@ public class ModelIO {
       OutputStream os = new FileOutputStream(f);
       if(f.getName().toLowerCase().endsWith(".gz"))
         os = new GZIPOutputStream(os);
-      BufferedWriter w = new BufferedWriter(new OutputStreamWriter(os));
-      int n = alph.size();
-      for(int i=0; i<n; i++) {
-        String e = alph.lookupObject(i);
-        if(e.contains("\n"))
-          throw new RuntimeException("this feature name contains my delimiter (newline): " + e);
-        w.write(e);
-        w.write("\n");
+      try (BufferedWriter w = new BufferedWriter(new OutputStreamWriter(os))) {
+        int n = alph.size();
+        for (int i = 0; i < n; i++) {
+          String e = alph.lookupObject(i);
+          if (e.contains("\n"))
+            throw new RuntimeException("this feature name contains my delimiter (newline): " + e);
+          w.write(e);
+          w.write("\n");
+        }
       }
-      w.close();
       t.stop();
       LOG.info(String.format(
           "[ModelIO.writeAlphabet] wrote %d entries to %s in %.1f seconds",

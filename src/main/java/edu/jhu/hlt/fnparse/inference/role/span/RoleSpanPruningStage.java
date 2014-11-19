@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.role.span;
 
-import java.io.Serializable;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -21,6 +22,7 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
+import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -35,17 +37,14 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFamFactorWithConstraint;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
-import edu.jhu.hlt.fnparse.util.HasFgModel;
-import edu.jhu.hlt.optimize.function.Regularizer;
-import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 
 /**
  * This identifies roles (span-valued) given some frames. It has two kinds of
@@ -109,96 +108,58 @@ import edu.jhu.hlt.optimize.functions.L2;
  */
 public class RoleSpanPruningStage
     extends AbstractStage<FNTagging, FNParseSpanPruning> {
-  private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(RoleSpanPruningStage.class);
 
   public static boolean SHOW_FEATURES = false;
 
-  // If true, do not prune anything, produce FNParseSpanPrunings that have
-  // 100% recall.
-  private boolean keepEverything = false;
-  private TemplatedFeatures features;
-  private transient Regularizer regularizer;
-  private int batchSize = 1;
-  private int passes = 5;
-  private Double learningRate = null;
   private boolean allExamplesInMem = false;
+  private boolean keepEverything = false;
 	private boolean disallowArgWithoutConstituent = false;
 
   public RoleSpanPruningStage(
-      ParserParams params,
-      HasFeatureAlphabet featureNames) {
-    super(params, featureNames);
-    regularizer = new L2(10_000_000d);
+      GlobalParameters globals,
+      String featureTemplateString) {
+    super(globals, featureTemplateString);
   }
 
-  public TemplatedFeatures getTFeatures() {
-    if (features == null) {
-      features = new TemplatedFeatures("roleSpanPruning",
-          globalParams.getParserParams().getFeatureTemplateDescription(),
-          globalParams.getParserParams().getAlphabet());
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    super.saveModel(dos, globals);
+    try {
+      dos.writeBoolean(allExamplesInMem);
+      dos.writeBoolean(keepEverything);
+      dos.writeBoolean(disallowArgWithoutConstituent);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-    return features;
+  }
+
+  @Override
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    super.loadModel(dis, globals);
+    try {
+      allExamplesInMem = dis.readBoolean();
+      keepEverything = dis.readBoolean();
+      disallowArgWithoutConstituent = dis.readBoolean();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
   public void configure(java.util.Map<String,String> configuration) {
-    String key = "regularizer." + getName();
-    String reg = configuration.get(key);
-    if (reg != null)
-      regularizer = new L2(Double.parseDouble(reg));
-
-    key = "batchSize." + getName();
-    String bs = configuration.get(key);
-    if (bs != null)
-      batchSize = Integer.parseInt(bs);
-
-    key = "passes." + getName();
-    String passes = configuration.get(key);
-    if (passes != null)
-      this.passes = Integer.parseInt(passes);
-
-    key = "disallowArgWithoutConstituent." + getName();
+    super.configure(configuration);
+    String key = "disallowArgWithoutConstituent." + getName();
     String roleSpanCons = configuration.get(key);
-    if (passes != null) {
+    if (roleSpanCons != null) {
       disallowArgWithoutConstituent = Boolean.valueOf(roleSpanCons);
       LOG.info("setting disallowArgWithoutConstituent="
           + disallowArgWithoutConstituent);
     }
   }
 
-  @Override
-  public Serializable getParamters() {
-    return keepEverything;
-  }
-
-  @Override
-  public void setPameters(Serializable params) {
-    keepEverything = (Boolean) params;
-  }
-
   public void dontDoAnyPruning() {
     keepEverything = true;
-  }
-
-  @Override
-  public Double getLearningRate() {
-    return learningRate;
-  }
-
-  @Override
-  public int getBatchSize() {
-    return batchSize;
-  }
-
-  @Override
-  public int getNumTrainingPasses() {
-    return passes;
-  }
-
-  @Override
-  public Regularizer getRegularizer() {
-    return regularizer;
   }
 
   @Override
@@ -208,9 +169,16 @@ public class RoleSpanPruningStage
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParseSpanPruning g = output == null ? null : output.get(i);
-      data.add(new RoleSpanPruningStageDatum(input.get(i), g, this));
+      data.add(this.new RoleSpanPruningStageDatum(input.get(i), g));
     }
     return new StageDatumExampleList<>(data, allExamplesInMem);
+  }
+
+  @Override
+  public void scanFeatures(List<FNParse> data) {
+    List<FNTagging> frames = DataUtil.convertParsesToTaggings(data);
+    List<FNParseSpanPruning> goldPrunes = FNParseSpanPruning.optimalPrune(data);
+    this.scanFeatures(frames, goldPrunes, 999, 999_999_999);
   }
 
   /**
@@ -279,19 +247,16 @@ public class RoleSpanPruningStage
    * This produces an AlmostFNParse which stores the frames that are allowable
    * for every (frame,target).
    */
-  static class RoleSpanPruningStageDatum
+  class RoleSpanPruningStageDatum
       implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
     private FNParseSpanPruning gold;
-    private RoleSpanPruningStage parent;
 
     public RoleSpanPruningStageDatum(
         FNTagging input,
-        FNParseSpanPruning gold,
-        RoleSpanPruningStage parent) {
+        FNParseSpanPruning gold) {
       this.input = input;
       this.gold = gold;
-      this.parent = parent;
     }
 
     @Override
@@ -380,10 +345,10 @@ public class RoleSpanPruningStage
       } else {
         vs = new VarSet(p, c);
       }
-      HeadFinder hf = parent.getGlobalParams().headFinder;
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
       ExplicitExpFamFactorWithConstraint phi =
         new ExplicitExpFamFactorWithConstraint(vs, -1);
-      TemplatedFeatures feats = parent.getTFeatures();
+      TemplatedFeatures feats = RoleSpanPruningStage.this.getFeatures();
       TemplateContext context = new TemplateContext();
       context.setStage(RoleSpanPruningStage.class);
       context.setSentence(input.getSentence());
@@ -412,7 +377,7 @@ public class RoleSpanPruningStage
           msg.append(p.getName());
         }
 
-        if (parent.disallowArgWithoutConstituent && keep && !cons) {
+        if (disallowArgWithoutConstituent && keep && !cons) {
           phi.setBadConfig(i);
           phi.setFeatures(i, AbstractFeatures.emptyFeatures);
           if (SHOW_FEATURES) {
@@ -423,7 +388,6 @@ public class RoleSpanPruningStage
         } else {
           context.setPrune(!keep);
           context.setSpan1IsConstituent(cons);
-          context.blankOutIllegalInfo(parent.globalParams);
           FeatureVector fv = new FeatureVector();
           if (SHOW_FEATURES) {
             feats.featurizeDebug(fv, context, msg.toString());
@@ -455,13 +419,12 @@ public class RoleSpanPruningStage
           }
         };
       } else {
-        if (parent.keepEverything) {
+        if (keepEverything) {
           ApproxF1MbrDecoder decoder = null;
-          return new ThresholdDecodable(fg, parent.infFactory(),
-              parent, input, roleVars, decoder);
+          return new ThresholdDecodable(
+              fg, infFactory(), input, roleVars, decoder);
         } else {
-          return new RankDecodable(fg, parent.infFactory(),
-              parent, input, roleVars);
+          return new RankDecodable(fg, infFactory(), input, roleVars);
         }
       }
     }
@@ -471,7 +434,7 @@ public class RoleSpanPruningStage
    * Take the top scoring/most likely spans for every frame. Re-parameterizes
    * the simple score threshold by sorting by rank and taking the top K.
    */
-  static class RankDecodable extends Decodable<FNParseSpanPruning> {
+  class RankDecodable extends Decodable<FNParseSpanPruning> {
     private List<ArgSpanPruningVar> roleVars;
     private FNTagging input;
     private double recallBias = 2d;
@@ -479,10 +442,9 @@ public class RoleSpanPruningStage
     public RankDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
-        HasFgModel weights,
         FNTagging input,
         List<ArgSpanPruningVar> roleVars) {
-      super(fg, infFact, weights);
+      super(fg, infFact);
       this.input = input;
       this.roleVars = roleVars;
       if (roleVars == null || roleVars.size() == 0)
@@ -553,6 +515,18 @@ public class RoleSpanPruningStage
           numCore++;
       return (int) (recallBias * (input.getSentence().size() + numCore + 5d));
     }
+    @Override
+    public FgModel getWeights() {
+      return RoleSpanPruningStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleSpanPruningStage.this.logDomain();
+    }
   }
 
   /**
@@ -560,7 +534,7 @@ public class RoleSpanPruningStage
    * threshold
    * @deprecated because ranking is better
    */
-  static class ThresholdDecodable extends Decodable<FNParseSpanPruning> {
+  class ThresholdDecodable extends Decodable<FNParseSpanPruning> {
     // Each variable says whether to prune a particular span for a given
     // (frame,target).
     private List<ArgSpanPruningVar> roleVars;
@@ -574,11 +548,10 @@ public class RoleSpanPruningStage
     public ThresholdDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
-        HasFgModel weights,
         FNTagging input,
         List<ArgSpanPruningVar> roleVars,
         ApproxF1MbrDecoder decoder) {
-      super(fg, infFact, weights);
+      super(fg, infFact);
       this.input = input;
       this.roleVars = roleVars;
       this.decoder = decoder;
@@ -635,12 +608,17 @@ public class RoleSpanPruningStage
       return new FNParseSpanPruning(
           input.getSentence(), input.getFrameInstances(), kept);
     }
-  }
-
-  @Override
-  public void scanFeatures(List<FNParse> data) {
-    List<FNTagging> frames = DataUtil.convertParsesToTaggings(data);
-    List<FNParseSpanPruning> goldPrunes = FNParseSpanPruning.optimalPrune(data);
-    this.scanFeatures(frames, goldPrunes, 999, 999_999_999);
+    @Override
+    public FgModel getWeights() {
+      return RoleSpanPruningStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleSpanPruningStage.this.logDomain();
+    }
   }
 }

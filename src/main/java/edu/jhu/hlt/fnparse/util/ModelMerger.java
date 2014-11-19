@@ -74,6 +74,7 @@ public class ModelMerger {
 	 * Merges the alphabets and weights of a and b, and then sets them in a.
 	 */
 	public static void merge(PipelinedFnParser a, PipelinedFnParser b) {
+		/*
 		Model<String> ma = mergePipelinedFnParserModel(a);
 		Model<String> mb = mergePipelinedFnParserModel(b);
 		Model<String> mm = merge(ma, mb);
@@ -82,6 +83,8 @@ public class ModelMerger {
 		a.getFrameIdStage().setWeights(mmm);
 		a.getArgIdStage().setWeights(mmm);
 		a.getArgSpanStage().setWeights(mmm);
+		*/
+		throw new RuntimeException("make this work");
 	}
 
 	/**

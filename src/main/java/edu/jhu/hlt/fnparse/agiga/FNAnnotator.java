@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 
@@ -52,13 +53,14 @@ public class FNAnnotator implements DummyAnnotator {
     params.useSyntaxFeatures = true;
     params.setFeatureTemplateDescription("frame * head1Word"
         + " + frameRole * head1Word + frameRole * span1FirstWord");
-    parser = new LatentConstituencyPipelinedParser(params);
-    parser.setFrameIdStage(new FrameIdStage(params, params));
+    parser = new LatentConstituencyPipelinedParser();
+    parser.setFrameIdStage(new FrameIdStage(parser.getGlobalParameters(), ""));
+    parser.setFeatures("todo");
     parser.scanFeatures(Collections.emptyList());
     parser.learnWeights(Collections.emptyList());
 
     // Attempt to load static resources ahead of time
-    TargetPruningData.getInstance().getPrototypesByFrame();
+    ArgPruner.getInstance();
     TargetPruningData.getInstance().getWordnetDict();
   }
 

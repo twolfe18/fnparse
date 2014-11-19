@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.role.head;
 
-import java.io.File;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -13,6 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 
 /**
  * This stage has the same type as RoleIdStage, but doesn't identify any
@@ -22,7 +24,6 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
  * @author travis
  */
 public class NoRolesStage implements Stage<FNTagging, FNParse> {
-  private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(NoRolesStage.class);
   private final FgModel model = new FgModel(0);
 
@@ -125,17 +126,17 @@ public class NoRolesStage implements Stage<FNTagging, FNParse> {
   }
 
   @Override
-  public void saveModel(File file) {
+  public void scanFeatures(List<FNParse> data) {
+    LOG.info("not actually scanning features");
+  }
+
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
     LOG.info("not actually saving model");
   }
 
   @Override
-  public void loadModel(File file) {
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
     LOG.info("not actually loading model");
-  }
-
-  @Override
-  public void scanFeatures(List<FNParse> data) {
-    LOG.info("not actually scanning features");
   }
 }

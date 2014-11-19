@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
-import java.io.File;
-import java.io.Serializable;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.List;
 import java.util.Map;
 
@@ -10,8 +10,8 @@ import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasFactorGraph;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 
@@ -33,7 +33,7 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * 
  * @author travis
  */
-public interface Stage<Input, Output> extends HasFgModel, Serializable {
+public interface Stage<Input, Output> extends HasFgModel {
 
   public String getName();
 
@@ -44,12 +44,12 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
    * Write out a model as pairs of feature names and weights. Do not write out
    * anything using integer feature indexes or alphabets.
    */
-  public void saveModel(File file);
+  public void saveModel(DataOutputStream dos, GlobalParameters globals);
 
   /**
    * Read in the same format that is written out by saveModel.
    */
-  public void loadModel(File file);
+  public void loadModel(DataInputStream dis, GlobalParameters globals);
 
   public void scanFeatures(
       List<? extends Input> unlabeledExamples,
@@ -132,19 +132,18 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
    * decode many times without running inference more than once.
    */
   public static abstract class Decodable<Output>
-  implements IDecodable<Output>, HasFactorGraph {
+      implements IDecodable<Output>, HasFactorGraph, HasFgModel {
     public final FactorGraph fg;
     public final FgInferencerFactory infFact;
-    public final HasFgModel hasModel;
+    //public final HasFgModel hasModel;
     private FgInferencer inf;
 
     public Decodable(
         FactorGraph fg,
-        FgInferencerFactory infFact,
-        HasFgModel weights) {
+        FgInferencerFactory infFact) {
       this.fg = fg;
       this.infFact = infFact;
-      this.hasModel = weights;
+      //this.hasModel = weights;
     }
 
     @Override
@@ -157,8 +156,6 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
       getMargins();
     }
 
-    public FgModel getWeights() { return hasModel.getWeights(); }
-
     /**
      * Forces inference to be run, but will only do so once
      * (future calls are just returned from cache).
@@ -170,8 +167,8 @@ public interface Stage<Input, Output> extends HasFgModel, Serializable {
         // that it should happen as late as possible, which is here.
         for(Factor f : fg.getFactors()) {
           f.updateFromModel(
-              hasModel.getWeights(),
-              hasModel.logDomain());
+              getWeights(),
+              logDomain());
         }
         inf = infFact.getInferencer(fg);
         inf.run();

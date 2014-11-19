@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.role.span;
 
-import java.io.File;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,10 +30,10 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 
 public class DeterministicRolePruning
     implements Stage<FNTagging, FNParseSpanPruning> {
-  private static final long serialVersionUID = 1L;
   public static final Logger LOG =
       Logger.getLogger(DeterministicRolePruning.class);
 
@@ -283,16 +284,6 @@ public class DeterministicRolePruning
       xuePalmerHelper(node.getParent(), spans);
   }
 
-  @Override
-  public void saveModel(File file) {
-    LOG.info("not actually saving anything");
-  }
-
-  @Override
-  public void loadModel(File file) {
-    LOG.info("not actually loading anything");
-  }
-
   public static void main(String[] args) {
     DeterministicRolePruning prune =
         new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN);
@@ -311,6 +302,16 @@ public class DeterministicRolePruning
       }
       LOG.info("------------------------------------------------------");
     }
+  }
+
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    LOG.info("not actually saving anything");
+  }
+
+  @Override
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    LOG.info("not actually loading anything");
   }
 }
 

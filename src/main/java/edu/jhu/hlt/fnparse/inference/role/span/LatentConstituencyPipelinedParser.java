@@ -19,14 +19,14 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
-import edu.jhu.hlt.fnparse.experiment.ParserTrainer;
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.util.Alphabet;
@@ -41,20 +41,42 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public static final Logger LOG =
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
 
-  private ParserParams params;
+  //private ParserParams params;
+  private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
   private Stage<FNTagging, FNParseSpanPruning> rolePruning;
   private RoleSpanLabelingStage roleLabeling;
 
-  public LatentConstituencyPipelinedParser(ParserParams params) {
-    this.params = params;
+  public LatentConstituencyPipelinedParser() {
+    this.globals = new GlobalParameters();
     frameId = new OracleStage<>();
-    if (params.useLatentConstituencies) {
-      rolePruning = new RoleSpanPruningStage(params, this);
-    } else {
-      rolePruning = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
-    }
-    roleLabeling = new RoleSpanLabelingStage(params, this);
+    //if (params.useLatentConstituencies) {
+    //  rolePruning = new RoleSpanPruningStage(params, this);
+    //} else {
+    rolePruning = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    //}
+    roleLabeling = new RoleSpanLabelingStage(globals, "");
+  }
+
+  @Override
+  public GlobalParameters getGlobalParameters() {
+    return globals;
+  }
+
+  @Override
+  public void setFeatures(String features) {
+    if (frameId instanceof AbstractStage)
+      ((AbstractStage<?, ?>) frameId).setFeatures(features);
+    else
+      LOG.warn("not setting features for frameId");
+    if (rolePruning instanceof AbstractStage)
+      ((AbstractStage<?, ?>) rolePruning).setFeatures(features);
+    else
+      LOG.warn("not setting features for rolePruning");
+    if (roleLabeling instanceof AbstractStage)
+      ((AbstractStage<?, ?>) roleLabeling).setFeatures(features);
+    else
+      LOG.warn("not setting features for roleLabeling");
   }
 
   public void setFrameIdStage(Stage<Sentence, FNTagging> s) {
@@ -63,12 +85,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public Alphabet<String> getAlphabet() {
-    return params.getAlphabet();
+    return globals.getFeatureNames();
   }
 
   public void dontDoAnyPruning() {
-    if (!(rolePruning instanceof RoleSpanPruningStage))
-      rolePruning = new RoleSpanPruningStage(params, this);
     ((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
   }
 
@@ -92,13 +112,13 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   public void scanFeatures(List<FNParse> parses) {
     LOG.info("[scanFeatures] scanning features for " + parses.size() + " parses");
-    params.getAlphabet().startGrowth();
+    getAlphabet().startGrowth();
 
     frameId.scanFeatures(parses);
     rolePruning.scanFeatures(parses);
     roleLabeling.scanFeatures(parses);
 
-    params.getAlphabet().stopGrowth();
+    getAlphabet().stopGrowth();
     LOG.info("[scanFeatures] done scanning features");
   }
 
@@ -120,7 +140,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     double pIncludeNegativeSpan = 0.1d;
     List<FNParseSpanPruning> hypPrunes =
         FNParseSpanPruning.noisyPruningOf(
-            parses, pIncludeNegativeSpan, params.rand);
+            parses, pIncludeNegativeSpan, globals.getRandom());
     roleLabeling.train(hypPrunes, parses);
 
     LOG.info("[learnWeights] done training");
@@ -184,9 +204,9 @@ public class LatentConstituencyPipelinedParser implements Parser {
     LOG.info("saving model to " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();
-    frameId.saveModel(new File(directory, FRAME_ID_MODEL_NAME));
-    rolePruning.saveModel(new File(directory, ROLE_PRUNE_MODEL_NAME));
-    roleLabeling.saveModel(new File(directory, ROLE_LABEL_MODEL_NAME));
+    frameId.saveModel(Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME), globals);
+    rolePruning.saveModel(Parser.getDOStreamFor(directory, ROLE_PRUNE_MODEL_NAME), globals);
+    roleLabeling.saveModel(Parser.getDOStreamFor(directory, ROLE_LABEL_MODEL_NAME), globals);
     if (ROLE_PRUNE_HUMAN_READABLE != null) {
       ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
           new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
@@ -224,10 +244,9 @@ public class LatentConstituencyPipelinedParser implements Parser {
     //Logger.getLogger(RoleSpanPruningStage.class).setLevel(Level.INFO);
     //BasicRoleSpanFeatures.OVERFITTING_DEBUG = true;
 
-    ParserParams params = new ParserParams();
-    params.setFeatureTemplateDescription(featureDesc);
     LatentConstituencyPipelinedParser p =
-        new LatentConstituencyPipelinedParser(params);
+        new LatentConstituencyPipelinedParser();
+    p.setFeatures(featureDesc);
     //p.useDeterministicPruning(Mode.XUE_PALMER_HERMANN);
     //p.dontDoAnyPruning();
 
@@ -236,7 +255,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
         new FNIterFilters.SkipSentences<FNParse>(
             FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
             Arrays.asList("FNFUTXT1274640", "FNFUTXT1279095")));
-    DataSplitReader dsr = new DataSplitReader(ParserTrainer.SENTENCE_ID_SPLITS);
+    DataSplitReader dsr = new DataSplitReader(Parser.SENTENCE_ID_SPLITS);
     List<FNParse> train = dsr.getSection(all, "train", false);
     List<FNParse> tune = dsr.getSection(all, "tune", false);
     List<FNParse> test = dsr.getSection(all, "test", false);
@@ -263,7 +282,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     ModelIO.writeHumanReadable(
         //p.rolePruning.getWeights(),
         p.roleLabeling.getWeights(),
-        p.params.getAlphabet(),
+        p.getAlphabet(),
         new File(workingDir, "constit-pruning-weights.txt.gz"),
         true);
     checkPruning(p, train);
@@ -281,7 +300,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
       List<FNParse> trainSubset = train;
       if (train.size() > numTrainEval) {
         trainSubset = DataUtil.reservoirSample(
-            train, numTrainEval, params.rand);
+            train, numTrainEval, p.getGlobalParameters().getRandom());
       }
       sentences = DataUtil.stripAnnotations(trainSubset);
       predicted = p.parse(sentences, trainSubset);

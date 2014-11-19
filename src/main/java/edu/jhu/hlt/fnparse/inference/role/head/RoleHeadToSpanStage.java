@@ -1,13 +1,12 @@
 package edu.jhu.hlt.fnparse.inference.role.head;
 
-import java.io.Serializable;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -32,22 +31,17 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
-import edu.jhu.hlt.fnparse.inference.FactorFactory;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
-import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
-import edu.jhu.hlt.fnparse.util.HasFgModel;
-import edu.jhu.hlt.optimize.function.Regularizer;
-import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 
 /**
  * Takes a FNParse where all of the arguments are headwords (spans of width 1)
@@ -56,102 +50,65 @@ import edu.jhu.hlt.optimize.functions.L2;
  * @author travis
  */
 public class RoleHeadToSpanStage
-		extends AbstractStage<FNParse, FNParse>
-		implements Stage<FNParse, FNParse>, Serializable {
-	private static final long serialVersionUID = 1L;
+		extends AbstractStage<FNParse, FNParse> {
 	public static boolean SHOW_FEATURES = false;
 	public static final Logger LOG = Logger.getLogger(RoleHeadToSpanStage.class);
 
-	public static class Params implements Serializable {
-		private static final long serialVersionUID = 1L;
+	// if you check the pareto frontier in ExpansionPruningExperiment:
+	// (6,0) gives 77.9 % recall
+	// (6,3) gives 86.7 % recall
+	// (8,3) gives 88.4 % recall
+	// (8,4) gives 90.0 % recall
+	// (10,5) gives 92.3 % recall
+	// (12,5) gives 93.2 % recall
+	private int maxArgRoleExpandLeft = 8;
+	private int maxArgRoleExpandRight = 4;
+	private boolean disallowArgWithoutConstituent = true;
 
-		// if you check the pareto frontier in ExpansionPruningExperiment:
-		// (6,0) gives 77.9 % recall
-		// (6,3) gives 86.7 % recall
-		// (8,3) gives 88.4 % recall
-		// (8,4) gives 90.0 % recall
-		// (10,5) gives 92.3 % recall
-		// (12,5) gives 93.2 % recall
-		public int maxArgRoleExpandLeft = 8;
-		public int maxArgRoleExpandRight = 4;
-
-		public boolean disallowArgWithoutConstituent = true;
-
-		public int batchSize = 1;
-		public int passes = 10;
-		public Double learningRate = null;//0.05;    // null means auto-select
-		public transient Regularizer regularizer = new L2(10_000_000d);
+	public RoleHeadToSpanStage(GlobalParameters globals, String featureTemplatesString) {
+	  super(globals, featureTemplatesString);
 	}
 
-	public Params params;
-	public FactorFactory<ExpansionVar> factorTemplate;
+	@Override
+	public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+	  super.saveModel(dos, globals);
+	  try {
+	    dos.writeInt(maxArgRoleExpandLeft);
+	    dos.writeInt(maxArgRoleExpandRight);
+	    dos.writeBoolean(disallowArgWithoutConstituent);
+	  } catch (Exception e) {
+	    throw new RuntimeException();
+	  }
+	}
 
-	public RoleHeadToSpanStage(ParserParams globalParams, HasFeatureAlphabet featureNames) {
-		super(globalParams, featureNames);
-		params = new Params();
-		factorTemplate = new RoleSpanFactorFactory(this);
+	@Override
+	public void loadModel(DataInputStream dis, GlobalParameters globals) {
+	  super.loadModel(dis, globals);
+	  try {
+	    maxArgRoleExpandLeft = dis.readInt();
+	    maxArgRoleExpandRight = dis.readInt();
+	    disallowArgWithoutConstituent = dis.readBoolean();
+	  } catch (Exception e) {
+	    throw new RuntimeException();
+	  }
 	}
 
   @Override
   public void configure(java.util.Map<String,String> configuration) {
-    String key = "regularizer." + getName();
-    String reg = configuration.get(key);
-    if (reg != null)
-      params.regularizer = new L2(Double.parseDouble(reg));
-
-    key = "batchSize." + getName();
-    String bs = configuration.get(key);
-    if (bs != null)
-      params.batchSize = Integer.parseInt(bs);
-
-    key = "passes." + getName();
-    String passes = configuration.get(key);
-    if (passes != null)
-      params.passes = Integer.parseInt(passes);
-
-    key = "disallowArgWithoutConstituent." + getName();
+    super.configure(configuration);
+    String key = "disallowArgWithoutConstituent." + getName();
     String d = configuration.get(key);
     if (d != null) {
-      params.disallowArgWithoutConstituent = Boolean.valueOf(d);
+      disallowArgWithoutConstituent = Boolean.valueOf(d);
       LOG.info("setting disallowArgWithoutConstituent to "
-          + params.disallowArgWithoutConstituent);
+          + disallowArgWithoutConstituent);
     }
   }
 
-	@Override
-	public Serializable getParamters() {
-		return params;
-	}
-
-	@Override
-	public void setPameters(Serializable params) {
-		this.params = (Params) params;
-	}
-
-	@Override
-	public Double getLearningRate() {
-		return params.learningRate;
-	}
-
-	@Override
-	public Regularizer getRegularizer() {
-		return params.regularizer;
-	}
-
-	@Override
-	public int getBatchSize() {
-		return params.batchSize;
-	}
-
-	@Override
-	public int getNumTrainingPasses() {
-		return params.passes;
-	}
-
   @Override
   public void scanFeatures(List<FNParse> data) {
-	  List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(
-	      data, globalParams.headFinder);
+    HeadFinder hf = SemaforicHeadFinder.getInstance();
+	  List<FNParse> onlyHeads = DataUtil.convertArgumenSpansToHeads(data, hf);
 	  this.scanFeatures(onlyHeads, data, 999, 999_999_999);
   }
 
@@ -165,9 +122,9 @@ public class RoleHeadToSpanStage
 		for(int i=0; i<n; i++) {
 			FNParse x = onlyHeads.get(i);
 			if(labels == null)
-				data.add(new RoleSpanStageDatum(x, this));
+				data.add(new RoleSpanStageDatum(x));
 			else
-				data.add(new RoleSpanStageDatum(x, labels.get(i), this));
+				data.add(new RoleSpanStageDatum(x, labels.get(i)));
 		}
 		return new StageDatumExampleList<>(data);
 	}
@@ -178,9 +135,6 @@ public class RoleHeadToSpanStage
 	  // 2) valid head, but we pruned the gold span
 	  // 3) valid head, but we predicted the wrong span
 	  // 4) valid head, and we predicted the right span
-	  //Map<Span, FrameInstance> a = DataUtil.getFrameInstanceByTarget(argHeads);
-	  //Map<Span, FrameInstance> b = DataUtil.getFrameInstanceByTarget(hyp);
-	  //Map<Span, FrameInstance> c = DataUtil.getFrameInstanceByTarget(gold);
 	  Map<FrameInstance, FrameInstance> a = DataUtil.getFrameInstancesByFrameTarget(argHeads);
 	  Map<FrameInstance, FrameInstance> b = DataUtil.getFrameInstancesByFrameTarget(hyp);
 	  Map<FrameInstance, FrameInstance> c = DataUtil.getFrameInstancesByFrameTarget(gold);
@@ -230,106 +184,74 @@ public class RoleHeadToSpanStage
 	  }
 	}
 
-	/**
-	 * Adds factors for this stage.
-	 */
-	public static class RoleSpanFactorFactory
-			implements FactorFactory<ExpansionVar> {
-		private static final long serialVersionUID = 1L;
-
-		private TemplatedFeatures features;
-		private RoleHeadToSpanStage parent;
-
-		public RoleSpanFactorFactory(RoleHeadToSpanStage parent) {
-			this.parent = parent;
-		}
-
-		public TemplatedFeatures getTFeatures() {
-		  if (features == null) {
-		    features = new TemplatedFeatures("argSpans",
-		        parent.globalParams.getFeatureTemplateDescription(),
-		        parent.globalParams.getAlphabet());
-		  }
-		  return features;
-		}
-
-		@Override
-		public List<Features> getFeatures() {
-		  assert false : "remove this method";
-			return Arrays.asList((Features) features);
-		}
-
-		@Override
-		public List<Factor> initFactorsFor(
-				Sentence sent,
-				List<ExpansionVar> inThisSentence,
-				ProjDepTreeFactor d,
-				ConstituencyTreeFactor c) {
-		  TemplateContext context = new TemplateContext();
-			List<Factor> factors = new ArrayList<>();
-			for (ExpansionVar ev : inThisSentence) {
-			  for (int spanIdx = 0; spanIdx < ev.numSpans(); spanIdx++) {
-			    Var sVar = ev.getVar(spanIdx);
-			    Span s = ev.getSpan(spanIdx);
-			    Var cVar = null;
-			    VarSet vs = null;
-			    if (parent.globalParams.useLatentConstituencies && s.width() > 1) {
-			      cVar = c.getSpanVar(s.start, s.end - 1);
-			      vs = new VarSet(sVar, cVar);
-			    } else {
-			      vs = new VarSet(sVar);
-			    }
-			    TemplatedFeatures feats = getTFeatures();
-			    ExplicitExpFamFactorWithConstraint phi = new ExplicitExpFamFactorWithConstraint(vs, -1);
-			    int n = vs.calcNumConfigs();
-			    for (int i = 0; i < n; i++) {
-			      VarConfig vc = vs.getVarConfig(i);
-			      boolean arg = BinaryVarUtil.configToBool(vc.getState(sVar));
-			      boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
-			      context.clear();
-			      context.setStage(RoleHeadToSpanStage.class);
-			      if (parent.globalParams.useSyntaxFeatures)
-			        context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
-			      if (parent.params.disallowArgWithoutConstituent && arg && cVar != null && !cons) {
-			        phi.setBadConfig(i);
-			        if (SHOW_FEATURES)
-			          LOG.info("CONSTRAINING NEXT CONFIG TO BE -INFINITY");
-			      } else {
-			        context.setSentence(sent);
-			        if (arg || cVar != null) {
-			          context.setSpan1(s);
-			          context.setSpan2(ev.getTarget());
-			          context.setHead1(ev.getArgHeadIdx());
-			          context.setHead2(ev.getTargetHeadIdx());
-			          if (arg) {
-			            context.setFrame(ev.getFrame());
-			            context.setRole(ev.getRole());
-			            context.setArg(s);
-			            context.setArgHead(ev.getArgHeadIdx());
-			            context.setTarget(ev.getTarget());
-			            context.setTargetHead(ev.getTargetHeadIdx());
-			          }
-			          if (cVar != null) {
-			            context.setSpan1IsConstituent(cons);
-			          }
-			        }
-			      }
-			      context.blankOutIllegalInfo(parent.globalParams);
-			      FeatureVector fv = new FeatureVector();
-			      if (SHOW_FEATURES) {
-			        String msg = String.format("[variables] arg=%s cons=%s name=%s",
-			            arg, cons, sVar.getName());
-			        feats.featurizeDebug(fv, context, msg);
-			      } else {
-			        feats.featurize(fv, context);
-			      }
-			      phi.setFeatures(i, fv);
-			    }
-			    factors.add(phi);
-			  }
-			}
-			return factors;
-		}
+	public List<Factor> initFactorsFor(
+	    Sentence sent,
+	    List<ExpansionVar> inThisSentence,
+	    ProjDepTreeFactor d,
+	    ConstituencyTreeFactor c) {
+	  TemplateContext context = new TemplateContext();
+	  List<Factor> factors = new ArrayList<>();
+	  for (ExpansionVar ev : inThisSentence) {
+	    for (int spanIdx = 0; spanIdx < ev.numSpans(); spanIdx++) {
+	      Var sVar = ev.getVar(spanIdx);
+	      Span s = ev.getSpan(spanIdx);
+	      Var cVar = null;
+	      VarSet vs = null;
+	      if (useLatentConstituencies && s.width() > 1) {
+	        cVar = c.getSpanVar(s.start, s.end - 1);
+	        vs = new VarSet(sVar, cVar);
+	      } else {
+	        vs = new VarSet(sVar);
+	      }
+	      TemplatedFeatures feats = getFeatures();
+	      ExplicitExpFamFactorWithConstraint phi = new ExplicitExpFamFactorWithConstraint(vs, -1);
+	      int n = vs.calcNumConfigs();
+	      for (int i = 0; i < n; i++) {
+	        VarConfig vc = vs.getVarConfig(i);
+	        boolean arg = BinaryVarUtil.configToBool(vc.getState(sVar));
+	        boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
+	        context.clear();
+	        context.setStage(RoleHeadToSpanStage.class);
+	        if (useSyntaxFeatures)
+	          context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
+	        if (disallowArgWithoutConstituent && arg && cVar != null && !cons) {
+	          phi.setBadConfig(i);
+	          if (SHOW_FEATURES)
+	            LOG.info("CONSTRAINING NEXT CONFIG TO BE -INFINITY");
+	        } else {
+	          context.setSentence(sent);
+	          if (arg || cVar != null) {
+	            context.setSpan1(s);
+	            context.setSpan2(ev.getTarget());
+	            context.setHead1(ev.getArgHeadIdx());
+	            context.setHead2(ev.getTargetHeadIdx());
+	            if (arg) {
+	              context.setFrame(ev.getFrame());
+	              context.setRole(ev.getRole());
+	              context.setArg(s);
+	              context.setArgHead(ev.getArgHeadIdx());
+	              context.setTarget(ev.getTarget());
+	              context.setTargetHead(ev.getTargetHeadIdx());
+	            }
+	            if (cVar != null) {
+	              context.setSpan1IsConstituent(cons);
+	            }
+	          }
+	        }
+	        FeatureVector fv = new FeatureVector();
+	        if (SHOW_FEATURES) {
+	          String msg = String.format("[variables] arg=%s cons=%s name=%s",
+	              arg, cons, sVar.getName());
+	          feats.featurizeDebug(fv, context, msg);
+	        } else {
+	          feats.featurize(fv, context);
+	        }
+	        phi.setFeatures(i, fv);
+	      }
+	      factors.add(phi);
+	    }
+	  }
+	  return factors;
 	}
 
 	public static class ExplicitExpFamFactorWithConstraint
@@ -356,20 +278,14 @@ public class RoleHeadToSpanStage
 	  }
 	}
 
-	public static class RoleSpanStageDatum
-			implements StageDatum<FNParse, FNParse> {
-		public static final Logger LOG =
-				Logger.getLogger(RoleSpanStageDatum.class);
-		static { LOG.setLevel(Level.INFO); }
-
+	class RoleSpanStageDatum implements StageDatum<FNParse, FNParse> {
 		private final List<ExpansionVar> expansions;
 		private final FNParse onlyHeads;
 		private final FNParse gold;
-		private final RoleHeadToSpanStage parent;
 
 		/** Constructor for when you don't have the labels. */
-		public RoleSpanStageDatum(FNParse onlyHeads, RoleHeadToSpanStage rss) {
-			this(onlyHeads, null, rss);
+		public RoleSpanStageDatum(FNParse onlyHeads) {
+			this(onlyHeads, null);
 		}
 
 		/**
@@ -405,11 +321,7 @@ public class RoleHeadToSpanStage
 		 * matches the gold label requires checking if there exists and span for
 		 * itk and if j is in that span.
 		 */
-		public RoleSpanStageDatum(
-				FNParse onlyHeads,
-				FNParse gold,
-				RoleHeadToSpanStage rss) {
-			this.parent = rss;
+		public RoleSpanStageDatum(FNParse onlyHeads, FNParse gold) {
 			this.gold = gold;
 			this.onlyHeads = onlyHeads;
 			this.expansions = new ArrayList<>();
@@ -433,13 +345,13 @@ public class RoleHeadToSpanStage
 
 			// Go over all the arguments in onlyHeads and roll out expansion
 			// variables for them.
+			HeadFinder hf = SemaforicHeadFinder.getInstance();
 			for (int fiIdx = 0; fiIdx < onlyHeads.numFrameInstances(); fiIdx++) {
 				FrameInstance fi = onlyHeads.getFrameInstance(fiIdx);
 				LOG.debug("roles for " + Describe.frameInstance(fi));
 				Frame f = fi.getFrame();
 				Span t = fi.getTarget();
-				int ti = parent.getGlobalParams().headFinder.head(
-						t, fi.getSentence());
+				int ti = hf.head(t, fi.getSentence());
 				int K = fi.getFrame().numRoles();
 				for (int k = 0; k < K; k++) {
 					Span arg = fi.getArgument(k);
@@ -472,11 +384,11 @@ public class RoleHeadToSpanStage
 				int k,
 				Span goldSpan) {
 			// Make sure expanding right/left wouldn't overlap the target
-			int maxLeft = parent.params.maxArgRoleExpandLeft;
-			int maxRight = parent.params.maxArgRoleExpandRight;
-			if (j > i && j - parent.params.maxArgRoleExpandLeft >= i)
+			int maxLeft = maxArgRoleExpandLeft;
+			int maxRight = maxArgRoleExpandRight;
+			if (j > i && j - maxArgRoleExpandLeft >= i)
 				maxLeft = j - i;
-			if (j < i && j + parent.params.maxArgRoleExpandRight > i)
+			if (j < i && j + maxArgRoleExpandRight > i)
 				maxRight = i - j;
 			int n = this.onlyHeads.getSentence().size();
 			Expansion.Iter ei = new Expansion.Iter(j, n, maxLeft, maxRight);
@@ -520,44 +432,38 @@ public class RoleHeadToSpanStage
 			FactorGraph fg = new FactorGraph();
 			ProjDepTreeFactor depTree = null;
 			ConstituencyTreeFactor consTree = null;
-			if (parent.getGlobalParams().useLatentConstituencies) {
+			if (useLatentConstituencies) {
 				consTree = new ConstituencyTreeFactor(
 						getSentence().size(), VarType.LATENT);
 				fg.addFactor(consTree);
 			}
-			for (Factor f : parent.factorTemplate.initFactorsFor(
-					getSentence(), expansions, depTree, consTree)) {
+			for (Factor f : initFactorsFor(getSentence(), expansions, depTree, consTree))
 				fg.addFactor(f);
-			}
 			return fg;
 		}
 
 		@Override
 		public Decodable<FNParse> getDecodable() {
-			FgInferencerFactory infFact = parent.infFactory();
+			FgInferencerFactory infFact = infFactory();
 			return new RoleSpanDecodable(
-					getFactorGraph(), infFact, parent, onlyHeads, expansions);
+					getFactorGraph(), infFact, onlyHeads, expansions);
 		}
 	}
 
-	public static class RoleSpanDecodable extends Decodable<FNParse> {
-
+	class RoleSpanDecodable extends Decodable<FNParse> {
 		// Indexing for these is the same as the loop order in which you would
 		// see non-null roles.
 		private FNParse onlyHeads;
 		private List<ExpansionVar> vars;
-
 		public RoleSpanDecodable(
 				FactorGraph fg,
 				FgInferencerFactory infFact,
-				HasFgModel hasModel,
 				FNParse onlyHeads,
 				List<ExpansionVar> vars) {
-			super(fg, infFact, hasModel);
+			super(fg, infFact);
 			this.onlyHeads = onlyHeads;
 			this.vars = vars;
 		}
-
 		@Override
 		public FNParse decode() {
 			// Run inference
@@ -576,5 +482,17 @@ public class RoleHeadToSpanStage
 
 			return new FNParse(onlyHeads.getSentence(), fis);
 		}
+    @Override
+    public FgModel getWeights() {
+      return RoleHeadToSpanStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleHeadToSpanStage.this.logDomain();
+    }
 	}
 }

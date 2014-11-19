@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.RedisFileCache;
@@ -43,6 +44,17 @@ public class ArgPruner implements Serializable, IArgPruner {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(ArgPruner.class);
 
+  private static ArgPruner singleton;
+
+  public static ArgPruner getInstance() {
+    if (singleton == null) {
+      singleton = new ArgPruner(
+          TargetPruningData.getInstance(),
+          SemaforicHeadFinder.getInstance());
+    }
+    return singleton;
+  }
+
   /**
    * just creates an arg pruner and memoizes the results on disk
    * 
@@ -54,9 +66,9 @@ public class ArgPruner implements Serializable, IArgPruner {
     File parent = new File("toydata/arg-pruning");
     ParserParams params = new ParserParams();
     HasFeatureAlphabet featureNames = null;
-    FrameIdStage fid = new FrameIdStage(params, featureNames);
-    ArgPruner ap = new ArgPruner(
-        fid.params.getTargetPruningData(), params.headFinder);
+    FrameIdStage fid = null;  //new FrameIdStage(params, featureNames);
+    ArgPruner ap = null;  //new ArgPruner(
+        //fid.params.getTargetPruningData(), params.headFinder);
 
     if(plain) {
       ap.clearCachedFiles();

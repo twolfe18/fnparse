@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -113,7 +112,6 @@ public class TemplateContext {
    * which would be a nightmare.
    * NOTE: having this here is slightly better than having this code repeated in
    * every stage's feature computation code.
-   */
   public void blankOutIllegalInfo(ParserParams params) {
     if (!params.useLatentDepenencies) {
       head1_parent = UNSET;
@@ -131,6 +129,7 @@ public class TemplateContext {
       }
     }
   }
+   */
 
   public Sentence getSentence() {
     return sentence;

@@ -22,9 +22,9 @@ import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
-import java.util.function.Supplier;
 import java.util.function.ToIntFunction;
 
 import org.apache.commons.math3.util.FastMath;
@@ -43,7 +43,6 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Path;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
@@ -55,6 +54,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.mit.jwi.item.IPointer;
@@ -1393,39 +1393,45 @@ public class BasicFeatureTemplates {
     });
   }
 
-  private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
-  private static Map<String, Supplier<ParserParams>> syntaxModes = new HashMap<>();
+  //private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
+  private static List<Function<GlobalParameters, Function<String, Stage<?, ?>>>> stages = new ArrayList<>();
+  //private static Map<String, Supplier<ParserParams>> syntaxModes = new HashMap<>();
+  private static Map<String, Consumer<Stage<?, ?>>> syntaxModes = new HashMap<>();
   private static Map<String, Template> stageTemplates = new HashMap<>();
   static {
-    stages.add(pp -> new FrameIdStage(pp, pp));
-    stages.add(pp -> new RoleHeadStage(pp, pp));
-    stages.add(pp -> new RoleHeadToSpanStage(pp, pp));
-    stages.add(pp -> new RoleSpanPruningStage(pp, pp));
-    stages.add(pp -> new RoleSpanLabelingStage(pp, pp));
-    stages.add(pp -> new RoleSequenceStage(pp, pp));
-    syntaxModes.put("regular", () -> {
-      ParserParams p = new ParserParams();
-      p.useLatentConstituencies = false;
-      p.useLatentDepenencies = false;
-      p.useSyntaxFeatures = true;
-      return p;
+    stages.add(gp -> (fs -> new FrameIdStage(gp, fs)));
+    stages.add(gp -> (fs -> new RoleHeadStage(gp, fs)));
+    stages.add(gp -> (fs -> new RoleHeadToSpanStage(gp, fs)));
+    stages.add(gp -> (fs -> new RoleSpanPruningStage(gp, fs)));
+    stages.add(gp -> (fs -> new RoleSpanLabelingStage(gp, fs)));
+    stages.add(gp -> (fs -> new RoleSequenceStage(gp, fs)));
+
+    syntaxModes.put("regular", stage -> {
+      Map<String, String> c = new HashMap<>();
+      c.put("useSyntaxFeatures", "true");
+      c.put("useLatentDependencies", "false");
+      c.put("useLatentConstituencies", "false");
+      stage.configure(c);
     });
-    syntaxModes.put("latent", () -> {
-      ParserParams p = new ParserParams();
-      p.useLatentConstituencies = true;
-      p.useLatentDepenencies = true;
-      p.useSyntaxFeatures = false;
-      return p;
+    syntaxModes.put("latent", stage -> {
+      Map<String, String> c = new HashMap<>();
+      c.put("useSyntaxFeatures", "false");
+      c.put("useLatentDependencies", "true");
+      c.put("useLatentConstituencies", "true");
+      stage.configure(c);
     });
-    syntaxModes.put("none", () -> {
-      ParserParams p = new ParserParams();
-      p.useLatentConstituencies = false;
-      p.useLatentDepenencies = false;
-      p.useSyntaxFeatures = false;
-      return p;
+    syntaxModes.put("none", stage -> {
+      Map<String, String> c = new HashMap<>();
+      c.put("useSyntaxFeatures", "false");
+      c.put("useLatentDependencies", "false");
+      c.put("useLatentConstituencies", "false");
+      stage.configure(c);
     });
-    for (Function<ParserParams, Stage<?, ?>> y : stages) {
-      Stage<?, ?> s = y.apply(new ParserParams());
+
+    // Add a template that checks for the class, for every stage.
+    //for (Function<ParserParams, Stage<?, ?>> y : stages) {
+    for (Function<GlobalParameters, Function<String, Stage<?, ?>>> y : stages) {
+      Stage<?, ?> s = y.apply(new GlobalParameters()).apply("");
       String name = s.getName();// + "-" + x.getKey();
       LOG.info("registering stage: " + name);
       @SuppressWarnings("rawtypes")
@@ -1455,24 +1461,21 @@ public class BasicFeatureTemplates {
 
   private static int estimateCard(
       String templateName,
-      ParserParams params,
-      Function<ParserParams, Stage<?, ?>> stageFuture,
+      GlobalParameters gp,
+      Stage<?, ?> stage,
       List<FNParse> parses) {
-    Stage<?, ?> stage = stageFuture.apply(params);
-    templateName = stage.getName() + " * " + templateName;
-    params.setFeatureTemplateDescription(templateName);
 
     // Try with the first K examples, if its 0, then assume it will remain 0
     int K = 50;
-    params.getAlphabet().startGrowth();
+    gp.getFeatureNames().startGrowth();
     stage.scanFeatures(parses.subList(0, K));
-    if (params.getAlphabet().size() == 0)
+    if (gp.getFeatureNames().size() == 0)
       return 0;
 
     // Else finish the job
-    params.getAlphabet().startGrowth();
+    gp.getFeatureNames().startGrowth();
     stage.scanFeatures(parses.subList(K, parses.size()));
-    return params.getAlphabet().size();
+    return gp.getFeatureNames().size();
   }
 
   private static boolean incompatible(String stageName, String syntaxMode, String labelName) {
@@ -1557,19 +1560,24 @@ public class BasicFeatureTemplates {
     LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
     for (Entry<String, Template> label : labelTemplates.entrySet()) {
       for (String syntaxModeName : Arrays.asList("regular", "latent")) {
-        Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+        //Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+        Consumer<Stage<?, ?>> syntaxModeSupp = syntaxModes.get(syntaxModeName);
         for (String tmplName : basicTemplates.keySet()) {
-          for (Function<ParserParams, Stage<?, ?>> stage : stages) {
+          //for (Function<ParserParams, Stage<?, ?>> stage : stages) {
+          for (Function<GlobalParameters, Function<String, Stage<?, ?>>> stageFut : stages) {
             Runnable r = new Runnable() {
               @Override
               public void run() {
                 long tmplStart = System.currentTimeMillis();
-                ParserParams params = syntaxModeSupp.get();
-                String stageName = stage.apply(params).getName();
+                //ParserParams params = syntaxModeSupp.get();
+                GlobalParameters gp = new GlobalParameters();
                 String labelName = label.getKey();
+                String fs = labelName + " * " + tmplName;
+                Stage<?, ?> stage = stageFut.apply(gp).apply(fs);
+                syntaxModeSupp.accept(stage);
 
                 String key = String.format("%s\t%s\t%s\t%s",
-                    stageName,
+                    stage.getName(),
                     syntaxModeName,
                     labelName,
                     tmplName);
@@ -1583,20 +1591,21 @@ public class BasicFeatureTemplates {
 
                 // Only care about your part of the data
                 int h = key.hashCode();
-				if (h < 0) h = ~h;
+                if (h < 0) h = ~h;  // Java mod of negatives is negative!
                 if (h % numParts != part) {
-                  LOG.info("not a part of this piece, h=" + (h%numParts) + " numParts=" + numParts + " part=" + part);
+                  LOG.info("not a part of this piece, h=" + (h % numParts)
+                      + " numParts=" + numParts + " part=" + part);
                   return;
                 }
 
                 LOG.info("estimating cardinality for: " + key);
                 int card = -1;
-                if (incompatible(stageName, syntaxModeName, labelName))
+                if (incompatible(stage.getName(), syntaxModeName, labelName))
                   card = 0;
                 else if (fakeIt)
                   card = 2;
                 else
-                  card = estimateCard(labelName + " * " + tmplName, params, stage, parses);
+                  card = estimateCard(fs, gp, stage, parses);
                 double time = (System.currentTimeMillis() - tmplStart) / 1000d;
                 String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
                 try (FileWriter fw = new FileWriter(f, true)) {

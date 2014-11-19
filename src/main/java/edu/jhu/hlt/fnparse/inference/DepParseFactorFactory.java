@@ -15,6 +15,7 @@ import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.srl.CorpusStatistics;
 import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
 import edu.jhu.srl.DepParseFactorGraphBuilder.DepParseFactorTemplate;
@@ -44,10 +45,12 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 
   private DepParseFeatureExtractorPrm fePrm;
   private CorpusStatistics corpusStats;
-  private ParserParams params;
+  //private ParserParams params;
+  private GlobalParameters globals;
 
-  public DepParseFactorFactory(ParserParams params) {
-    this.params = params;
+  public DepParseFactorFactory(GlobalParameters globals) {
+    //this.params = params;
+    this.globals = globals;
     fePrm = new DepParseFeatureExtractorPrm();
     // defaults for fePrm are fine
 
@@ -101,8 +104,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
 
     // Unary factors on edge variables
     @SuppressWarnings("unchecked")
-    Alphabet<Object> alph =
-    (Alphabet<Object>) (Object) params.getAlphabet();
+    Alphabet<Object> alph = (Alphabet<Object>) (Object) globals.getFeatureNames();
     DepParseFeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
         toPacayaSentence(s), corpusStats, alph);
     final int n = s.size();

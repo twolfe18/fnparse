@@ -27,6 +27,14 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 public class TargetIndex {
   public static final Logger LOG = Logger.getLogger(TargetIndex.class);
 
+  private static TargetIndex singleton;
+
+  public static TargetIndex getInstance() {
+    if (singleton == null)
+      singleton = new TargetIndex();
+    return singleton;
+  }
+
   private static class LuMatcher {
     private String[] words;
     private boolean[] inParens;

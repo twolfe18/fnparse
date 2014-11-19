@@ -247,7 +247,7 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("[context] role=" + ctx.getRoleStrDebug());
     LOG.debug("[context] role2=" + ctx.getRole2StrDebug());
     LOG.debug("[context] target=" + desc(ctx.getTarget(), ctx));
-    LOG.debug("[context] targetHead=" + (ctx.getTargetHead() == TemplateContext.UNSET ? "UNSET" : s.getWord(ctx.getTargetHead())));
+    LOG.debug("[context] targetHead=" + desc(ctx.getTargetHead(), ctx));
     LOG.debug("[context] arg = " + desc(ctx.getArg(), ctx));
     LOG.debug("[context] argHead=" + desc(ctx.getArgHead(), ctx));
     LOG.debug("[context] span1=" + desc(ctx.getSpan1(), ctx));
