@@ -96,12 +96,28 @@ public class RoleHeadToSpanStage
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
-    String key = "disallowArgWithoutConstituent." + getName();
-    String d = configuration.get(key);
-    if (d != null) {
-      disallowArgWithoutConstituent = Boolean.valueOf(d);
-      LOG.info("setting disallowArgWithoutConstituent to "
-          + disallowArgWithoutConstituent);
+
+    String key, value;
+
+    key = "disallowArgWithoutConstituent." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      disallowArgWithoutConstituent = Boolean.valueOf(value);
+      LOG.info("setting " + key + " = " + value);
+    }
+
+    key = "maxArgRoleExpandLeft";
+    value = configuration.get(key);
+    if (value != null) {
+      maxArgRoleExpandLeft = Integer.parseInt(value);
+      LOG.info("setting " + key + " = " + value);
+    }
+
+    key = "maxArgRoleExpandRight";
+    value = configuration.get(key);
+    if (value != null) {
+      maxArgRoleExpandRight = Integer.parseInt(value);
+      LOG.info("setting " + key + " = " + value);
     }
   }
 

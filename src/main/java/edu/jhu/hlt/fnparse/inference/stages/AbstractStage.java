@@ -4,6 +4,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +80,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
   public AbstractStage(GlobalParameters globals, String featureTemplatesString) {
     this.globals = globals;
     this.featureTemplatesString = featureTemplatesString;
+  }
+
+  public GlobalParameters getGlobalParameters() {
+    return globals;
   }
 
   public void setFeatures(String featureTemplatesString) {
@@ -167,6 +172,20 @@ public abstract class AbstractStage<I, O extends FNTagging>
       log.info("[configure] set " + key + " = " + value);
     }
 
+    key = "tuneOnTrainingData." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      this.tuneOnTrainingData = Boolean.valueOf(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "regularizer." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      this.regularizer = new L2(Double.parseDouble(value));
+      log.info("[configure] set " + key + " = " + value);
+    }
+
     key = "useSyntaxFeatures";
     value = configuration.get(key);
     if (value != null) {
@@ -187,6 +206,26 @@ public abstract class AbstractStage<I, O extends FNTagging>
       useLatentConstituencies = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
     }
+  }
+
+  public void setSyntaxMode(String syntaxMode) {
+    Map<String, String> config = new HashMap<>();
+    if ("regular".equalsIgnoreCase(syntaxMode)) {
+      config.put("useSyntaxFeatures", "true");
+      config.put("useLatentDependencies", "false");
+      config.put("useLatentConstituencies", "false");
+    } else if ("latent".equalsIgnoreCase(syntaxMode)) {
+      config.put("useSyntaxFeatures", "false");
+      config.put("useLatentDependencies", "true");
+      config.put("useLatentConstituencies", "true");
+    } else if ("none".equalsIgnoreCase(syntaxMode)) {
+      config.put("useSyntaxFeatures", "false");
+      config.put("useLatentDependencies", "false");
+      config.put("useLatentConstituencies", "false");
+    } else {
+      throw new RuntimeException("unknown mode: " + syntaxMode);
+    }
+    configure(config);
   }
 
 	public void setGlobals(GlobalParameters globals) {

@@ -54,7 +54,7 @@ public class Frame {
   }
 
   public int numLexicalUnits() {
-    if(this == nullFrame)
+    if (this == nullFrame)
       return 0;
     return lexicalUnits.length;
   }
@@ -64,13 +64,13 @@ public class Frame {
   }
 
   public String getRoleSafe(int i) {
-    if(i < roles.length)
+    if (i < roles.length)
       return roles[i];
     return "<not-a-role>";
   }
 
   public int numRoles() {
-    if(this == nullFrame)
+    if (this == nullFrame)
       return 0;
     return roles.length;
   }
@@ -90,7 +90,7 @@ public class Frame {
 
   @Override
   public boolean equals(Object other) {
-    if(other instanceof Frame) {
+    if (other instanceof Frame) {
       Frame f = (Frame) other;
       return idx == f.idx;
     }

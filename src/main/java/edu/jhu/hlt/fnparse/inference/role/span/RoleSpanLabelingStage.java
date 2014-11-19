@@ -187,6 +187,8 @@ public class RoleSpanLabelingStage
         VarConfig goldConf,
         Collection<ArgSpanLabelVar> vars) {
 
+      boolean training = goldConf != null;
+
       ConstituencyTreeFactor consTree = null;
       if (useLatentConstituencies) {
         int n = input.getSentence().size();
@@ -199,7 +201,8 @@ public class RoleSpanLabelingStage
         Frame f = input.getFrame(i);
         Span target = input.getTarget(i);
         FrameInstance goldFi = null;
-        if (gold != null) {
+        if (training) {
+          assert gold != null;
           goldFi = gold.getFrameInstance(i);
           assert goldFi.getFrame().equals(f);
           assert goldFi.getTarget().equals(target);
@@ -240,7 +243,7 @@ public class RoleSpanLabelingStage
           assert foundNullSpan;
         }
       }
-      if (gold != null) {
+      if (training) {
         LOG.info(String.format(
             "[build] pruned the gold span in %d of %d cases (%d realized) in %s",
             prunedGold, total, totalRealized, input.getSentence().getId()));

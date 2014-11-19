@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
@@ -50,6 +51,7 @@ public class Runner {
 
   public static void main(String[] args) {
     FastMath.useLogAddTable = false;  // saw about 8% improvement, not worth it
+    FrameIdStage.SHOW_FEATURES = true;
     RoleHeadStage.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;
@@ -263,7 +265,7 @@ public class Runner {
       File trainDevModelDir = new File(workingDir, "trainDevModel");
       if (!trainDevModelDir.isDirectory())
         trainDevModelDir.mkdir();
-      //parser.saveModel(trainDevModelDir);
+      parser.saveModel(trainDevModelDir);
     }
 
     // Compute test error and phone home

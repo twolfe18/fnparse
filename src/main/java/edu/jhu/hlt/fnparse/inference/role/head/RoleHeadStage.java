@@ -84,6 +84,11 @@ public class RoleHeadStage
 
   public RoleHeadStage(GlobalParameters globals, String featureTemplateString) {
     super(globals, featureTemplateString);
+    if (useArgPruner)
+      argPruner = ArgPruner.getInstance();
+    else
+      argPruner = new NoArgPruner();
+    decoder = new ApproxF1MbrDecoder(logDomain(), 1d);
   }
 
   @Override

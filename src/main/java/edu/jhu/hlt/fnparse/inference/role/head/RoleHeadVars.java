@@ -70,6 +70,7 @@ public class RoleHeadVars implements FgRelated {
       Sentence sent,
       HeadFinder hf,
       IArgPruner argPruner) {
+    assert argPruner != null;
     if (evoked == Frame.nullFrame) {
       throw new IllegalArgumentException(
           "only create these for non-nullFrame f_it");

@@ -67,6 +67,14 @@ public class PipelinedFnParser implements Serializable, Parser {
 	  frameId.configure(configuration);
 	  argId.configure(configuration);
 	  argExpansion.configure(configuration);
+
+	  String key, value;
+	  key = "features";
+	  value = configuration.get(key);
+	  if (value != null) {
+	    setFeatures(value);
+	    LOG.info("setting " + key + " = " + value);
+	  }
 	}
 
   @Override

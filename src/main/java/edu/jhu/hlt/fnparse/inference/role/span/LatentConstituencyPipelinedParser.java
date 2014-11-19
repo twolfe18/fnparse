@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
@@ -41,7 +42,6 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public static final Logger LOG =
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
 
-  //private ParserParams params;
   private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
   private Stage<FNTagging, FNParseSpanPruning> rolePruning;
@@ -50,11 +50,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public LatentConstituencyPipelinedParser() {
     this.globals = new GlobalParameters();
     frameId = new OracleStage<>();
-    //if (params.useLatentConstituencies) {
-    //  rolePruning = new RoleSpanPruningStage(params, this);
-    //} else {
     rolePruning = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
-    //}
     roleLabeling = new RoleSpanLabelingStage(globals, "");
   }
 
@@ -102,6 +98,25 @@ public class LatentConstituencyPipelinedParser implements Parser {
     frameId.configure(configuration);
     rolePruning.configure(configuration);
     roleLabeling.configure(configuration);
+
+	  String key, value;
+
+	  key = "learnFrameId";
+	  value = configuration.get(key);
+	  if (value != null) {
+	    LOG.info("setting " + key + " = " + value);
+	    if (Boolean.valueOf(value))
+	      frameId = new FrameIdStage(globals, null);
+	    else
+	      frameId = new OracleStage<>();
+	  }
+
+	  key = "features";
+	  value = configuration.get(key);
+	  if (value != null) {
+	    setFeatures(value);
+	    LOG.info("setting " + key + " = " + value);
+	  }
   }
 
   @Override
@@ -151,11 +166,13 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
     long start = System.currentTimeMillis();
     List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
+
     List<FNParseSpanPruning> goldPrune = null;
     if (gold != null)
       goldPrune = FNParseSpanPruning.optimalPrune(gold);
     List<FNParseSpanPruning> prunes = rolePruning
         .setupInference(frames, goldPrune).decodeAll();
+
     List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
     long totalTime = System.currentTimeMillis() - start;
 

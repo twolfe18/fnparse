@@ -69,7 +69,7 @@ public class FNParseSpanPruning extends FNTagging {
     for (FrameRoleInstance fri : goldE.keySet()) {
       Span goldS = goldE.get(fri);
       Set<Span> reachable = prune.get(fri);
-      if (reachable.contains(goldS)) {
+      if (reachable != null && reachable.contains(goldS)) {
         Span hypS = hypE.get(fri);
         if (hypS == goldS)
           perf.accumTP();
