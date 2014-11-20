@@ -40,8 +40,8 @@ public class Sentence implements HasId {
 
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
-
   private ConstituencyParse stanfordParse;
+  private boolean hideSyntax = false;
 
   public Sentence(
       String dataset,
@@ -177,59 +177,6 @@ public class Sentence implements HasId {
     return Arrays.copyOfRange(lemmas, s.start, s.end);
   }
 
-  /*
-  public int[] childrenOf(int wordIdx) {
-    return collapsedDeps.getChildren(wordIdx);
-  }
-
-  public boolean isRoot(int i) {
-    return collapsedDeps.isRoot(i);
-  }
-  */
-
-  /** returns 0 if it hits a loop
-  public int depth(int i) {
-    int[] gov = collapsedDeps.getHeads();
-    int cur = i;
-    int depth = 0;
-    boolean[] seen = new boolean[gov.length];
-    seen[cur] = true;
-    while (cur >= 0 && cur < gov.length) {
-      depth++;
-      cur = gov[cur];
-      if (cur >= 0 && cur < seen.length && !seen[cur])
-        seen[cur] = true;
-      else
-        return 0;
-    }
-    return depth;
-  }
-
-  public int governor(int i) {
-    //return gov[i];
-    return collapsedDeps.getHead(i);
-  }
-  */
-
-  /**
-   * Returns true if token i is a verb and is part of a passive construction
-  public boolean passive(int i) {
-    if (!pos[i].startsWith("V"))
-      return false;
-    // Look for auxpass or nsubjpass while skipping over verb-like things
-    for (int idx = i - 1, searched = 0; idx > 0; idx--, searched++) {
-      //String label = depType[idx];
-      String label = collapsedDeps.getLabel(idx);
-      if ("auxpass".equals(label)
-          || "nsubjpass".equals(label))
-        return true;
-      if (pos[idx].startsWith("N")) break;
-      if (searched > 5) return false;
-    }
-    return false;
-  }
-   */
-
   /**
    * Returns the index of a verb to the right of token i. Skips over aux verbs
    * and returns -1 if no verb is found.
@@ -247,12 +194,6 @@ public class Sentence implements HasId {
     }
     return lastVerb;
   }
-
-  /*
-  public String dependencyType(int childIdx) {
-    return collapsedDeps.getLabel(childIdx);
-  }
-  */
 
   public List<String> wordsIn(Span s) {
     List<String> l = new ArrayList<String>();
@@ -295,27 +236,47 @@ public class Sentence implements HasId {
     else return false;
   }
 
+  public boolean syntaxIsHidden() {
+    return hideSyntax;
+  }
+
+  public void hideSyntax() {
+    hideSyntax(true);
+  }
+  public void hideSyntax(boolean hidden) {
+    this.hideSyntax = hidden;
+  }
+
   public DependencyParse getCollapsedDeps() {
+    if (hideSyntax)
+      return null;
     return collapsedDeps;
   }
 
   public void setCollapsedDeps(DependencyParse collapedDeps) {
+    assert !hideSyntax;
     this.collapsedDeps = collapedDeps;
   }
 
   public DependencyParse getBasicDeps() {
+    if (hideSyntax)
+      return null;
     return basicDeps;
   }
 
   public void setBasicDeps(DependencyParse basicDeps) {
+    assert !hideSyntax;
     this.basicDeps = basicDeps;
   }
 
   public ConstituencyParse getStanfordParse() {
+    if (hideSyntax)
+      return null;
     return this.stanfordParse;
   }
 
   public void setStanfordParse(ConstituencyParse p) {
+    assert !hideSyntax;
     this.stanfordParse = p;
   }
 }

@@ -38,7 +38,6 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
@@ -228,8 +227,6 @@ public class RoleHeadToSpanStage
 	        boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
 	        context.clear();
 	        context.setStage(RoleHeadToSpanStage.class);
-	        if (useSyntaxFeatures)
-	          context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
 	        if (disallowArgWithoutConstituent && arg && cVar != null && !cons) {
 	          phi.setBadConfig(i);
 	          if (SHOW_FEATURES)

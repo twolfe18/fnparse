@@ -53,7 +53,6 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.BrownClusters;
-import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
@@ -662,10 +661,7 @@ public class BasicFeatureTemplates {
         Span s = context.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = context.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        ConstituencyParse cp = context.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -680,10 +676,7 @@ public class BasicFeatureTemplates {
         Span s = context.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = context.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(context.getSentence());
+        ConstituencyParse cp = context.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -704,10 +697,7 @@ public class BasicFeatureTemplates {
         Span s = t.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = t.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        ConstituencyParse cp = t.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -724,10 +714,7 @@ public class BasicFeatureTemplates {
         Span s = t.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = t.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        ConstituencyParse cp = t.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -750,10 +737,7 @@ public class BasicFeatureTemplates {
         Span s = t.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = t.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        ConstituencyParse cp = t.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -773,10 +757,7 @@ public class BasicFeatureTemplates {
         Span s = t.getSpan1();
         if (s == null)
           return null;
-        ConcreteStanfordWrapper parser = t.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        ConstituencyParse cp = t.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n = cp.getConstituent(s);
@@ -799,10 +780,7 @@ public class BasicFeatureTemplates {
         Span s2 = t.getSpan2();
         if (s2 == null)
           return null;
-        ConcreteStanfordWrapper parser = t.getCParser();
-        if (parser == null)
-          return null;
-        ConstituencyParse cp = parser.getCParse(t.getSentence());
+        ConstituencyParse cp = t.getSentence().getStanfordParse();
         if (cp == null)
           return null;
         ConstituencyParse.Node n1 = cp.getConstituent(s1);

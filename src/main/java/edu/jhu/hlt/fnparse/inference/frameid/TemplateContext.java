@@ -5,7 +5,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 
 /**
  * All of the information needed for a template to make an extraction.
@@ -70,8 +69,6 @@ public class TemplateContext {
   /** See {@link RoleSequenceStage} */
   private int role2;
 
-  private ConcreteStanfordWrapper cParser;
-
   // TODO put constituency and dependency parses in here instead of in sentence?
 
   // If you want to restrict some features to particular stages, you can write
@@ -101,7 +98,6 @@ public class TemplateContext {
     stage = null;
     prune = UNSET;
     role2 = UNSET;
-    cParser = null;
   }
 
   /**
@@ -331,12 +327,5 @@ public class TemplateContext {
     if (role2 == frame.numRoles())
       return "NO_ROLE";
     return frame.getRole(role2);
-  }
-
-  public void setCParser(ConcreteStanfordWrapper cParser) {
-    this.cParser = cParser;
-  }
-  public ConcreteStanfordWrapper getCParser() {
-    return cParser;
   }
 }

@@ -42,7 +42,6 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFamFactorWithConstraint;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
 import edu.jhu.prim.arrays.Multinomials;
@@ -347,8 +346,6 @@ public class RoleSpanLabelingStage
 
       int n = vs.calcNumConfigs();
       for (int c = 0; c < n; c++) {
-        if (useSyntaxFeatures)
-          context.setCParser(ConcreteStanfordWrapper.getSingleton(true));
         context.setStage(RoleSpanLabelingStage.class);
         context.setSentence(s);
         context.setFrame(frame);

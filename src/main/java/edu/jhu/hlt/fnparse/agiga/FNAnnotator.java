@@ -35,9 +35,9 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 public class FNAnnotator implements DummyAnnotator {
   public static final Logger LOG = Logger.getLogger(FNAnnotator.class);
 
-  public File frameIdModel =
+  public static File frameIdModel =
       new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/frameId.ser.gz");
-  public File roleLabelingModel =
+  public static File roleLabelingModel =
       new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/roleLabel.ser.gz");
 
   private LatentConstituencyPipelinedParser parser;
@@ -133,6 +133,12 @@ public class FNAnnotator implements DummyAnnotator {
   }
 
   public static void main(String[] args) throws Exception {
+    if (args.length == 2) {
+      frameIdModel = new File(args[0]);
+      roleLabelingModel = new File(args[1]);
+      assert frameIdModel.isFile();
+      assert roleLabelingModel.isFile();
+    }
     FNAnnotator anno = new FNAnnotator();
     anno.init();
     File f = new File("agiga2/input-data/concrete-3.8.0-post-stanford");

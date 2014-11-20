@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.stages;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,6 +26,7 @@ import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
@@ -33,6 +35,7 @@ import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
@@ -392,6 +395,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		log.info("[train] starting training");
 		long start = System.currentTimeMillis();
 
+		boolean unhideAtEnd = hideSyntax(x);
+
 		//initWeights();
 		randomlyInitWeights(0.1d, new Random(9001));
 
@@ -471,7 +476,46 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		if(td != null)
 			tuneRecallBias(xDev, yDev, td);
 
+		if (unhideAtEnd)
+		  unhideSyntax(x);
+
 		log.info("[train] done training");
+	}
+
+	private void unhideSyntax(Collection<? extends I> input) {
+	  log.info("unhiding syntax");
+	  for (I in : input) {
+	    Sentence s;
+	    if (in instanceof Sentence)
+	      s = (Sentence) in;
+	    else if (in instanceof HasSentence)
+	      s = ((HasSentence) in).getSentence();
+	    else
+	      throw new RuntimeException("input type: " + in.getClass());
+	    s.hideSyntax(false);
+	  }
+	}
+
+	private boolean hideSyntax(Collection<? extends I> input) {
+		if (useSyntaxFeatures) {
+		  return false;
+		} else {
+		  log.info("hiding syntax");
+		  boolean unhideAfter = false;
+		  for (I in : input) {
+		    Sentence s;
+		    if (in instanceof Sentence)
+		      s = (Sentence) in;
+		    else if (in instanceof HasSentence)
+		      s = ((HasSentence) in).getSentence();
+		    else
+		      throw new RuntimeException("input type: " + in.getClass());
+		    if (s.syntaxIsHidden())
+		      unhideAfter = true;
+		    s.hideSyntax();
+		  }
+		  return unhideAfter;
+		}
 	}
 
 	/**
@@ -491,6 +535,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			throw new IllegalStateException("There is no reason to run this "
 					+ "unless you've set the alphabet to be growing");
 		}
+
+		boolean unhideAtEnd = hideSyntax(unlabeledExamples);
 
 		Timer t = new Timer(this.getName() + "@scan-features", 500, false);
 		log.info("[scanFeatures] Counting the number of parameters needed over "
@@ -570,6 +616,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
 					+ "%d frame-roles, and %d roles (ignoring frame)",
 					fSeen.size(), frSeen.size(), rSeen.size()));
 		}
+
+		if (unhideAtEnd)
+		  unhideSyntax(unlabeledExamples);
+
 		log.info(String.format("[scanFeatures] Done, scanned %d examples in "
 				+ "%.1f minutes, alphabet size is %d, added %d",
 				examplesSeen, t.totalTimeInSeconds() / 60d,
