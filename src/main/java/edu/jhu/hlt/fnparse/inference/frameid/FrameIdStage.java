@@ -45,7 +45,6 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.hlt.optimize.functions.L2;
 import edu.jhu.prim.arrays.Multinomials;
 
 public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
@@ -62,7 +61,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
   public void loadModel(DataInputStream dis, GlobalParameters globals) {
     super.loadModel(dis, globals);
     try {
-      decoder = new ApproxF1MbrDecoder(false, dis.readDouble());
+      decoder = new ApproxF1MbrDecoder(logDomain(), dis.readDouble());
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -87,20 +86,7 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
 
   @Override
   public void configure(java.util.Map<String,String> configuration) {
-    String key = "regularizer." + getName();
-    String reg = configuration.get(key);
-    if (reg != null)
-      regularizer = new L2(Double.parseDouble(reg));
-
-    key = "batchSize." + getName();
-    String bs = configuration.get(key);
-    if (bs != null)
-      batchSize = Integer.parseInt(bs);
-
-    key = "passes." + getName();
-    String passes = configuration.get(key);
-    if (passes != null)
-      this.passes = Integer.parseInt(passes);
+    super.configure(configuration);
   }
 
   public void train(List<FNParse> examples) {
