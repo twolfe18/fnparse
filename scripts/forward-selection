@@ -1177,10 +1177,12 @@ def ab_test_queue(template_info_filename):
   return mq
 
 
-def agiga_model_queue(template_info_filename):
-  c = default_config('span', 'regular', template_info_filename)
+def agiga_model_queue(template_info_filename, run_feature_selection=False):
+  template_info, configs = experiments('span', 'regular', template_info_filename)
+  c = configs[0]
   c.params['learnFrameId'] = 'true'
   c.params['MaxTrainSize'] = '200'
+  c.regularizer_dict['FrameIdStage'] = 12
   fs = [
     Feature('FrameIdStage', 'regular', 'frame', ['head1Word']),
     Feature('FrameIdStage', 'regular', 'frame', ['head1Bc1000/6']),
@@ -1198,7 +1200,17 @@ def agiga_model_queue(template_info_filename):
     Feature('FrameIdStage', 'regular', 'frame', ['span1PosPat-COARSE_POS-0-3']),
   ]
   c.feature_set.features += fs
-  return ExplicitQueue([c])
+  if run_feature_selection:
+    # Train only frameId
+    c.params['evaluationFunction'] = 'TargetMicroF1'
+    c.params['skipArgId'] = 'true'
+    mut = ConfigMutator(template_info)
+    q = MutatorQueue(mut)
+    q.seed(c)
+    return q
+  else:
+    # Train frameId + argLabeling
+    return ExplicitQueue([c])
 
 
 def run_experiments(template_info_filename, where):
@@ -1211,7 +1223,7 @@ def run_experiments(template_info_filename, where):
   #working_dir = 'experiments/forward-selection/role/omni'
   #mq = ab_test_queue(template_info_filename)
   #working_dir = 'experiments/ab-test'
-  mq = agiga_model_queue(template_info_filename)
+  mq = agiga_model_queue(template_info_filename, run_feature_selection=True)
   working_dir = 'experiments/agiga'
 
   # Create the job tracker
