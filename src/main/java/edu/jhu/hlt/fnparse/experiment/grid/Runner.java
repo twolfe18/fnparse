@@ -226,7 +226,7 @@ public class Runner {
     }
   }
 
-  boolean serTest = true;
+  boolean serTest = false;
 
   public void run() {
     LOG.info("[run] starting");

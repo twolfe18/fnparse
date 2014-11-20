@@ -123,6 +123,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
     ((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
   }
 
+  public void dontDoAnyArgId() {
+    rolePruning = null;
+    roleLabeling = null;
+  }
+
   public void useDeterministicPruning(DeterministicRolePruning.Mode mode) {
     rolePruning = new DeterministicRolePruning(mode);
   }
@@ -146,6 +151,16 @@ public class LatentConstituencyPipelinedParser implements Parser {
 	      frameId = new OracleStage<>();
 	  }
 
+	  key = "skipArgId";
+	  value = configuration.get(key);
+	  if (value != null) {
+	    LOG.info("setting " + key + " = " + value);
+	    if (Boolean.valueOf(value))
+	      dontDoAnyArgId();
+	    else
+	      LOG.warn(key + " should never have a false value!");
+	  }
+
 	  key = "features";
 	  value = configuration.get(key);
 	  if (value != null) {
@@ -165,8 +180,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
     getAlphabet().startGrowth();
 
     frameId.scanFeatures(parses);
-    rolePruning.scanFeatures(parses);
-    roleLabeling.scanFeatures(parses);
+    if (rolePruning != null)
+      rolePruning.scanFeatures(parses);
+    if (roleLabeling != null)
+      roleLabeling.scanFeatures(parses);
 
     getAlphabet().stopGrowth();
     LOG.info("[scanFeatures] done scanning features");
@@ -179,38 +196,40 @@ public class LatentConstituencyPipelinedParser implements Parser {
     List<FNTagging> frames = DataUtil.convertParsesToTaggings(parses);
     frameId.train(sentences, frames);
 
-    List<FNParseSpanPruning> goldPrunes =
-        FNParseSpanPruning.optimalPrune(parses);
-    rolePruning.train(frames, goldPrunes);
+    if (rolePruning != null) {
+      List<FNParseSpanPruning> goldPrunes =
+          FNParseSpanPruning.optimalPrune(parses);
+      rolePruning.train(frames, goldPrunes);
 
-    // TODO move this to PipelinedFnParser
-    // For training this last stage, we want to interpolate between two training
-    // methods:
-    // A) You assume you got the heads 100% right and you want the model to try
-    //    to predict the correct span for each (if it's been pruned by max,
-    //    don't create a training example).
-    // B) You take the predictions from RoleHeadStage, which are likely to be
-    //    incorrect, and train them to recover gracefully; i.e. predict nullSpan
-    //    when the head is wrong.
-    //    (this presumes that the model has the capacity to tell when its wrong,
-    //     which seems like an unreasonable assumption).
-    // You can flip a weighted coin to decide which training method you'd like
-    // to use for a given example.
+      // TODO move this to PipelinedFnParser
+      // For training this last stage, we want to interpolate between two training
+      // methods:
+      // A) You assume you got the heads 100% right and you want the model to try
+      //    to predict the correct span for each (if it's been pruned by max,
+      //    don't create a training example).
+      // B) You take the predictions from RoleHeadStage, which are likely to be
+      //    incorrect, and train them to recover gracefully; i.e. predict nullSpan
+      //    when the head is wrong.
+      //    (this presumes that the model has the capacity to tell when its wrong,
+      //     which seems like an unreasonable assumption).
+      // You can flip a weighted coin to decide which training method you'd like
+      // to use for a given example.
 
-    // This is not really relevant for the span model because you can't get to a
-    // point where you've already committed to a mistake. You can only prune the
-    // correct answer, in which case you should just drop the example. There is
-    // no option to train your model to handle mistakes though.
+      // This is not really relevant for the span model because you can't get to a
+      // point where you've already committed to a mistake. You can only prune the
+      // correct answer, in which case you should just drop the example. There is
+      // no option to train your model to handle mistakes though.
 
-    List<FNParseSpanPruning> hypPrunes = rolePruning
-        .setupInference(frames, null).decodeAll();
-    /*
-    double pIncludeNegativeSpan = 0.1d;
-    List<FNParseSpanPruning> hypPrunes =
+      List<FNParseSpanPruning> hypPrunes = rolePruning
+          .setupInference(frames, null).decodeAll();
+      /*
+      double pIncludeNegativeSpan = 0.1d;
+      List<FNParseSpanPruning> hypPrunes =
         FNParseSpanPruning.noisyPruningOf(
             parses, pIncludeNegativeSpan, globals.getRandom());
-    */
-    roleLabeling.train(hypPrunes, parses);
+      */
+      roleLabeling.train(hypPrunes, parses);
+    }
 
     LOG.info("[learnWeights] done training");
   }
@@ -221,41 +240,47 @@ public class LatentConstituencyPipelinedParser implements Parser {
     long start = System.currentTimeMillis();
     List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
 
-    List<FNParseSpanPruning> goldPrune = null;
-    if (gold != null)
-      goldPrune = FNParseSpanPruning.optimalPrune(gold);
-    List<FNParseSpanPruning> prunes = rolePruning
-        .setupInference(frames, goldPrune).decodeAll();
+    List<FNParse> parses;
+    if (rolePruning == null) {
+      LOG.info("[parse] skipping argPruning/labeling and just returning frame taggings");
+      parses = DataUtil.convertTaggingsToParses(frames);
+    } else {
+      List<FNParseSpanPruning> goldPrune = null;
+      if (gold != null)
+        goldPrune = FNParseSpanPruning.optimalPrune(gold);
+      List<FNParseSpanPruning> prunes = rolePruning
+          .setupInference(frames, goldPrune).decodeAll();
 
-    List<FNParse> parses = roleLabeling.setupInference(prunes, gold).decodeAll();
-    long totalTime = System.currentTimeMillis() - start;
+      parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
-    if (gold != null) {
-      start = System.currentTimeMillis();
-      // Compute recall/F1 for pruning stage
-      FPR prunePerf = new FPR(false);
-      for (int i = 0; i < gold.size(); i++) {
-        FNParseSpanPruning mask = prunes.get(i);
-        mask.perf(gold.get(i), prunePerf);
+      if (gold != null) {
+        start = System.currentTimeMillis();
+        // Compute recall/F1 for pruning stage
+        FPR prunePerf = new FPR(false);
+        for (int i = 0; i < gold.size(); i++) {
+          FNParseSpanPruning mask = prunes.get(i);
+          mask.perf(gold.get(i), prunePerf);
+        }
+        LOG.info("[parse] pruning recall=" + prunePerf.recall()
+            + " f1=" + prunePerf.f1() + " precision*=" + prunePerf.precision());
+
+        // For each FrameRoleInstance, if we included the correct span, what was
+        // the precision?
+        FPR labelPerf = new FPR(false);
+        for (int i = 0; i < gold.size(); i++) {
+          FNParseSpanPruning mask = prunes.get(i);
+          FNParseSpanPruning.precisionOnProperlyPrunedFrameRoleInstances(
+              mask, parses.get(i), gold.get(i), labelPerf);
+        }
+        LOG.info("[parse] labeling precision=" + labelPerf.precision()
+            + " (" + labelPerf.getTP() + " / "
+            + (labelPerf.getTP() + labelPerf.getFP()) + ")");
+        LOG.info("[parse] extra diagnostics took "
+            + (System.currentTimeMillis()-start)/1000d + " seconds");
       }
-      LOG.info("[parse] pruning recall=" + prunePerf.recall()
-          + " f1=" + prunePerf.f1() + " precision*=" + prunePerf.precision());
-
-      // For each FrameRoleInstance, if we included the correct span, what was
-      // the precision?
-      FPR labelPerf = new FPR(false);
-      for (int i = 0; i < gold.size(); i++) {
-        FNParseSpanPruning mask = prunes.get(i);
-        FNParseSpanPruning.precisionOnProperlyPrunedFrameRoleInstances(
-            mask, parses.get(i), gold.get(i), labelPerf);
-      }
-      LOG.info("[parse] labeling precision=" + labelPerf.precision()
-          + " (" + labelPerf.getTP() + " / "
-          + (labelPerf.getTP() + labelPerf.getFP()) + ")");
-      LOG.info("[parse] extra diagnostics took "
-          + (System.currentTimeMillis()-start)/1000d + " seconds");
     }
 
+    long totalTime = System.currentTimeMillis() - start;
     int toks = 0;
     for (Sentence s : sentences) toks += s.size();
 		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
@@ -281,21 +306,24 @@ public class LatentConstituencyPipelinedParser implements Parser {
       frameId.saveModel(dos, globals);
       dos.close();
 
-      dos = Parser.getDOStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
-      rolePruning.saveModel(dos, globals);
-      dos.close();
-
-      dos = Parser.getDOStreamFor(directory, ROLE_LABEL_MODEL_NAME);
-      roleLabeling.saveModel(dos, globals);
-      dos.close();
-
-      if (ROLE_PRUNE_HUMAN_READABLE != null) {
-        ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
-            new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
+      if (rolePruning != null) {
+        dos = Parser.getDOStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
+        rolePruning.saveModel(dos, globals);
+        dos.close();
+        if (ROLE_PRUNE_HUMAN_READABLE != null) {
+          ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
+              new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
+        }
       }
-      if (ROLE_LABEL_HUMAN_READABLE != null) {
-        ModelIO.writeHumanReadable(roleLabeling.getWeights(), getAlphabet(),
-            new File(directory, ROLE_LABEL_HUMAN_READABLE), true);
+
+      if (roleLabeling != null) {
+        dos = Parser.getDOStreamFor(directory, ROLE_LABEL_MODEL_NAME);
+        roleLabeling.saveModel(dos, globals);
+        dos.close();
+        if (ROLE_LABEL_HUMAN_READABLE != null) {
+          ModelIO.writeHumanReadable(roleLabeling.getWeights(), getAlphabet(),
+              new File(directory, ROLE_LABEL_HUMAN_READABLE), true);
+        }
       }
     } catch (Exception e) {
       throw new RuntimeException(e);

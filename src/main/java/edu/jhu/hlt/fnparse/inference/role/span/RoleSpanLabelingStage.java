@@ -224,7 +224,7 @@ public class RoleSpanLabelingStage
             // over abundance of negative examples?
 
             // TODO implement an ab-test for this (continue statement)
-            continue;
+            //continue;
           } else {
             if (!reachable.contains(g))
               prunedGold++;
