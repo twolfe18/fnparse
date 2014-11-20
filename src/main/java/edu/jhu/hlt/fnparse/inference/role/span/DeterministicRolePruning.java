@@ -179,15 +179,23 @@ public class DeterministicRolePruning
       this.mode = mode;
       this.parser = parser;
     }
+    public ConstituencyParse getConstituencyParse() {
+      ConstituencyParse cp = input.getSentence().getStanfordParse();
+      if (cp != null)
+        return cp;
+      cp = new ConstituencyParse(parser.parse(input.getSentence(), false));
+      return cp;
+    }
     @Override
     public FNParseSpanPruning decode() {
       if (output == null) {
         Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
         if (mode == Mode.STANFORD_CONSTITUENTS) {
-          Map<Span, String> cons =
-              parser.parseSpans(input.getSentence());
+          Set<Span> cons = new HashSet<>();
+          ConstituencyParse cp = getConstituencyParse();
+          cp.getSpans(cons);
           List<Span> consSpans = new ArrayList<>();
-          consSpans.addAll(cons.keySet());
+          consSpans.addAll(cons);
           consSpans.add(Span.nullSpan);
           for (FrameInstance fi : input.getFrameInstances()) {
             FrameInstance key = FrameInstance.frameMention(
@@ -197,8 +205,7 @@ public class DeterministicRolePruning
           }
         } else if (mode == Mode.XUE_PALMER
             || mode == Mode.XUE_PALMER_HERMANN) {
-          ConstituencyParse parse = new ConstituencyParse(
-              parser.parse(input.getSentence(), false));
+          ConstituencyParse parse = getConstituencyParse();
           for (FrameInstance fi : input.getFrameInstances()) {
             ConstituencyParse.Node pred =
                 parse.getConstituent(fi.getTarget());
@@ -241,11 +248,14 @@ public class DeterministicRolePruning
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
-          parser.parse(input.getSentence(), true);
+          if (input.getSentence().getBasicDeps() == null)
+            parser.parse(input.getSentence(), true);
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {
-          DependencyParse deps = input.getSentence().getCollapsedDeps();
+          if (input.getSentence().getBasicDeps() == null)
+            parser.parse(input.getSentence(), true);
+          DependencyParse deps = input.getSentence().getBasicDeps();
           Map<Span, Integer> spanMap =
               DependencyBasedXuePalmerRolePruning
               .getAllSpansFromDeps(deps, true);
