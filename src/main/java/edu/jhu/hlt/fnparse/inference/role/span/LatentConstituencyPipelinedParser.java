@@ -1,10 +1,15 @@
 package edu.jhu.hlt.fnparse.inference.role.span;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.zip.GZIPInputStream;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -77,6 +82,36 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   public void setFrameIdStage(Stage<Sentence, FNTagging> s) {
     this.frameId = s;
+  }
+
+  public void loadFrameIdStage(File f) {
+    try {
+      InputStream is = new FileInputStream(f);
+      if (f.getName().toLowerCase().endsWith(".gz"))
+        is = new GZIPInputStream(is);
+      DataInputStream dis = new DataInputStream(is);
+      FrameIdStage fid = new FrameIdStage(globals, "");
+      fid.loadModel(dis, globals);
+      dis.close();
+      this.frameId = fid;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void loadRoleSpanLabelingStage(File f) {
+    try {
+      InputStream is = new FileInputStream(f);
+      if (f.getName().toLowerCase().endsWith(".gz"))
+        is = new GZIPInputStream(is);
+      DataInputStream dis = new DataInputStream(is);
+      RoleSpanLabelingStage rsl = new RoleSpanLabelingStage(globals, "");
+      rsl.loadModel(dis, globals);
+      dis.close();
+      this.roleLabeling = rsl;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -240,16 +275,30 @@ public class LatentConstituencyPipelinedParser implements Parser {
     LOG.info("saving model to " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();
-    frameId.saveModel(Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME), globals);
-    rolePruning.saveModel(Parser.getDOStreamFor(directory, ROLE_PRUNE_MODEL_NAME), globals);
-    roleLabeling.saveModel(Parser.getDOStreamFor(directory, ROLE_LABEL_MODEL_NAME), globals);
-    if (ROLE_PRUNE_HUMAN_READABLE != null) {
-      ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
-          new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
-    }
-    if (ROLE_LABEL_HUMAN_READABLE != null) {
-      ModelIO.writeHumanReadable(roleLabeling.getWeights(), getAlphabet(),
-          new File(directory, ROLE_LABEL_HUMAN_READABLE), true);
+    DataOutputStream dos;
+    try {
+      dos = Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME);
+      frameId.saveModel(dos, globals);
+      dos.close();
+
+      dos = Parser.getDOStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
+      rolePruning.saveModel(dos, globals);
+      dos.close();
+
+      dos = Parser.getDOStreamFor(directory, ROLE_LABEL_MODEL_NAME);
+      roleLabeling.saveModel(dos, globals);
+      dos.close();
+
+      if (ROLE_PRUNE_HUMAN_READABLE != null) {
+        ModelIO.writeHumanReadable(rolePruning.getWeights(), getAlphabet(),
+            new File(directory, ROLE_PRUNE_HUMAN_READABLE), true);
+      }
+      if (ROLE_LABEL_HUMAN_READABLE != null) {
+        ModelIO.writeHumanReadable(roleLabeling.getWeights(), getAlphabet(),
+            new File(directory, ROLE_LABEL_HUMAN_READABLE), true);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
   }
 
