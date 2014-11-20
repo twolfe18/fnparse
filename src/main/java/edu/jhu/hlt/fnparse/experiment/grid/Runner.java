@@ -277,7 +277,14 @@ public class Runner {
       File trainDevModelDir = new File(workingDir, "trainDevModel");
       if (!trainDevModelDir.isDirectory())
         trainDevModelDir.mkdir();
-      parser.saveModel(trainDevModelDir);
+
+      String toBeat = config.get("scoreToBeat");
+      if (toBeat != null)
+        LOG.info("[run] need to beat: " + toBeat);
+      if (toBeat == null || perf > Double.parseDouble(toBeat)) {
+        LOG.info("[run] saving model");
+        parser.saveModel(trainDevModelDir);
+      }
     }
 
     // Compute test error and phone home
