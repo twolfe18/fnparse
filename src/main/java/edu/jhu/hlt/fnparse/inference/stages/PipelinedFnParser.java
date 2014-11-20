@@ -307,21 +307,35 @@ public class PipelinedFnParser implements Serializable, Parser {
 		LOG.info("saving model to " + directory.getPath());
 		if (!directory.isDirectory())
 			throw new IllegalArgumentException();
-		frameId.saveModel(Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME), globals);
-		argId.saveModel(Parser.getDOStreamFor(directory, ARG_ID_MODEL_NAME), globals);
-		argExpansion.saveModel(Parser.getDOStreamFor(directory, ARG_SPANS_MODEL_NAME), globals);
+		try {
+		  DataOutputStream dos;
 
-		if (FRAME_ID_MODEL_HUMAN_READABLE != null) {
-		  ModelIO.writeHumanReadable(frameId.getWeights(), getAlphabet(),
-		      new File(directory, FRAME_ID_MODEL_HUMAN_READABLE), true);
-		}
-		if (ARG_ID_MODEL_HUMAN_READABLE != null) {
-		  ModelIO.writeHumanReadable(argId.getWeights(), getAlphabet(),
-		      new File(directory, ARG_ID_MODEL_HUMAN_READABLE), true);
-		}
-		if (ARG_SPANS_MODEL_HUMAN_READABLE != null) {
-		  ModelIO.writeHumanReadable(argExpansion.getWeights(), getAlphabet(),
-		      new File(directory, ARG_SPANS_MODEL_HUMAN_READABLE), true);
+		  dos = Parser.getDOStreamFor(directory, FRAME_ID_MODEL_NAME);
+		  frameId.saveModel(dos, globals);
+		  dos.close();
+
+		  dos = Parser.getDOStreamFor(directory, ARG_ID_MODEL_NAME);
+		  argId.saveModel(dos, globals);
+		  dos.close();
+
+		  dos = Parser.getDOStreamFor(directory, ARG_SPANS_MODEL_NAME);
+		  argExpansion.saveModel(dos, globals);
+		  dos.close();
+
+		  if (FRAME_ID_MODEL_HUMAN_READABLE != null) {
+		    ModelIO.writeHumanReadable(frameId.getWeights(), getAlphabet(),
+		        new File(directory, FRAME_ID_MODEL_HUMAN_READABLE), true);
+		  }
+		  if (ARG_ID_MODEL_HUMAN_READABLE != null) {
+		    ModelIO.writeHumanReadable(argId.getWeights(), getAlphabet(),
+		        new File(directory, ARG_ID_MODEL_HUMAN_READABLE), true);
+		  }
+		  if (ARG_SPANS_MODEL_HUMAN_READABLE != null) {
+		    ModelIO.writeHumanReadable(argExpansion.getWeights(), getAlphabet(),
+		        new File(directory, ARG_SPANS_MODEL_HUMAN_READABLE), true);
+		  }
+		} catch (Exception e) {
+		  throw new RuntimeException(e);
 		}
 	}
 }
