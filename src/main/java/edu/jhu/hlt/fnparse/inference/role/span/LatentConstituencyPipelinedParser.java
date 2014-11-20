@@ -148,14 +148,33 @@ public class LatentConstituencyPipelinedParser implements Parser {
         FNParseSpanPruning.optimalPrune(parses);
     rolePruning.train(frames, goldPrunes);
 
-    // Here we really need to train the last stage of our pipeline to expect
-    // the type of pruning that the previous stage will emit.
-    //List<FNParseSpanPruning> hypPrunes = rolePruning
-    //    .setupInference(frames, null).decodeAll();
+    // TODO move this to PipelinedFnParser
+    // For training this last stage, we want to interpolate between two training
+    // methods:
+    // A) You assume you got the heads 100% right and you want the model to try
+    //    to predict the correct span for each (if it's been pruned by max,
+    //    don't create a training example).
+    // B) You take the predictions from RoleHeadStage, which are likely to be
+    //    incorrect, and train them to recover gracefully; i.e. predict nullSpan
+    //    when the head is wrong.
+    //    (this presumes that the model has the capacity to tell when its wrong,
+    //     which seems like an unreasonable assumption).
+    // You can flip a weighted coin to decide which training method you'd like
+    // to use for a given example.
+
+    // This is not really relevant for the span model because you can't get to a
+    // point where you've already committed to a mistake. You can only prune the
+    // correct answer, in which case you should just drop the example. There is
+    // no option to train your model to handle mistakes though.
+
+    List<FNParseSpanPruning> hypPrunes = rolePruning
+        .setupInference(frames, null).decodeAll();
+    /*
     double pIncludeNegativeSpan = 0.1d;
     List<FNParseSpanPruning> hypPrunes =
         FNParseSpanPruning.noisyPruningOf(
             parses, pIncludeNegativeSpan, globals.getRandom());
+    */
     roleLabeling.train(hypPrunes, parses);
 
     LOG.info("[learnWeights] done training");
