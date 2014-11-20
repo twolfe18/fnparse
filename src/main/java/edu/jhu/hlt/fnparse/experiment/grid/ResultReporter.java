@@ -37,7 +37,9 @@ public interface ResultReporter {
         LOG.warn(key + " was not specified");
       return Arrays.asList(NO_REPORTING);
     }
-    String[] names = name.split("\t");
+    // Don't have two consecutive spaces in a file path!
+    // (this is very useful for pasting from the command line into eclipse)
+    String[] names = name.split("\t|  ");
     List<ResultReporter> reporters = new ArrayList<>();
     for (String n : names) {
       String ln = n.toLowerCase();
