@@ -321,7 +321,7 @@ public class RoleSpanLabelingStage
         int role,
         Span arg,
         SpanVar spanVar,  // may be null
-        Boolean isGold,
+        Boolean isGold,   // may be null
         FactorGraph fg,
         VarConfig goldConf,
         Collection<ArgSpanLabelVar> vars) {

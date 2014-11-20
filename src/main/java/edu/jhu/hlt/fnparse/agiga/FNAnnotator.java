@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.agiga;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -23,8 +22,6 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
-import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
@@ -38,7 +35,11 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 public class FNAnnotator implements DummyAnnotator {
   public static final Logger LOG = Logger.getLogger(FNAnnotator.class);
 
-  private ParserParams params;
+  public File frameIdModel =
+      new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/frameId.ser.gz");
+  public File roleLabelingModel =
+      new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/roleLabel.ser.gz");
+
   private LatentConstituencyPipelinedParser parser;
   private ConcreteUUIDFactory uuidFactory;
 
@@ -46,22 +47,17 @@ public class FNAnnotator implements DummyAnnotator {
   public void init() {
     uuidFactory = new ConcreteUUIDFactory();
 
-    // TODO probably a call to ParserLoader
-    params = new ParserParams();
-    params.useLatentConstituencies = false;
-    params.useLatentDepenencies = false;
-    params.useSyntaxFeatures = true;
-    params.setFeatureTemplateDescription("frame * head1Word"
-        + " + frameRole * head1Word + frameRole * span1FirstWord");
+    LOG.info("loading models...");
     parser = new LatentConstituencyPipelinedParser();
-    parser.setFrameIdStage(new FrameIdStage(parser.getGlobalParameters(), ""));
-    parser.setFeatures("todo");
-    parser.scanFeatures(Collections.emptyList());
-    parser.learnWeights(Collections.emptyList());
+    parser.loadFrameIdStage(frameIdModel);
+    parser.loadRoleSpanLabelingStage(roleLabelingModel);
 
     // Attempt to load static resources ahead of time
+    LOG.info("loading other static resources...");
     ArgPruner.getInstance();
     TargetPruningData.getInstance().getWordnetDict();
+
+    LOG.info("done init");
   }
 
   @Override
