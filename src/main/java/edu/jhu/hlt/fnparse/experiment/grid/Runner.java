@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.util.Counts;
@@ -51,7 +52,7 @@ public class Runner {
 
   public static void main(String[] args) {
     FastMath.useLogAddTable = false;  // saw about 8% improvement, not worth it
-    FrameIdStage.SHOW_FEATURES = true;
+    FrameIdStage.SHOW_FEATURES = false;
     RoleHeadStage.SHOW_FEATURES = false;
     RoleHeadToSpanStage.SHOW_FEATURES = false;
     RoleSpanPruningStage.SHOW_FEATURES = false;
@@ -225,11 +226,14 @@ public class Runner {
     }
   }
 
+  boolean serTest = false;
+
   public void run() {
     LOG.info("[run] starting");
     Random rand = getRandom(config);
     List<ResultReporter> reporters = ResultReporter.getReporter(config);
     File workingDir = getWorkingDir(config);
+
     Parser parser = ParserLoader.instantiateParser(config);
     parser.configure(config);
 
@@ -254,7 +258,15 @@ public class Runner {
           (devSplit == k ? dev : train).addAll(splits[devSplit + 1]);
         assert overlap(train, dev).size() == 0;
         reportTrainTestStats(train, dev);
-        parser.train(train);
+        if (serTest) {
+          LatentConstituencyPipelinedParser sParser =
+              new LatentConstituencyPipelinedParser();
+          sParser.loadFrameIdStage(new File("experiments/agiga/wd-fs-test-0/trainDevModel/frameId.ser.gz"));
+          sParser.loadRoleSpanLabelingStage(new File("experiments/agiga/wd-fs-test-0/trainDevModel/roleLabel.ser.gz"));
+          parser = sParser;
+        } else {
+          parser.train(train);
+        }
         double perf = evaluate(parser, dev);
         LOG.info("[run] for the " + (k+1) + "th split, perf=" + perf);
         perfSum += perf;

@@ -14,6 +14,10 @@ import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 
+/**
+ * @deprecated
+ * @author travis
+ */
 public class ParserParams
     implements Serializable, HasFeatureAlphabet, HasParserParams {
   private static final long serialVersionUID = 1L;

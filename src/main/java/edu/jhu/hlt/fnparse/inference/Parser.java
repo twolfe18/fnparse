@@ -33,7 +33,8 @@ public interface Parser extends HasFeatureAlphabet {
       new File("toydata/development-split.dipanjan-train.txt");
 
   public static DataOutputStream getDOStreamFor(File directory, String filename) {
-    assert directory.isDirectory();
+    if (!directory.isDirectory())
+      throw new RuntimeException();
     try {
       File f = new File(directory, filename);
       OutputStream os = new FileOutputStream(f);

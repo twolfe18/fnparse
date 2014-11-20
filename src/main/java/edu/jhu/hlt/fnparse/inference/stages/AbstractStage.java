@@ -101,6 +101,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
   @Override
   public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    log.info("starting save model");
     try {
       dos.writeUTF(featureTemplatesString);
       dos.writeBoolean(useSyntaxFeatures);
@@ -120,10 +121,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    log.info("done save model");
   }
 
   @Override
   public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    log.info("starting load model");
     this.globals = globals;
     try {
       setFeatures(dis.readUTF());
@@ -145,6 +148,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    log.info("done load model");
   }
 
   @Override
