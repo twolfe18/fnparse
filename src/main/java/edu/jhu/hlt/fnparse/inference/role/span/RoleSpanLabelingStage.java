@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -182,6 +183,7 @@ public class RoleSpanLabelingStage
       return gold;
     }
 
+    private int msgCtr = 0, msgInterval = 500;
     private void build(
         FactorGraph fg,
         VarConfig goldConf,
@@ -196,10 +198,57 @@ public class RoleSpanLabelingStage
         fg.addFactor(consTree);
       }
 
+      Map<FrameRoleInstance, Span> goldSpans = null;
+      if (training)
+        goldSpans = gold.getMapRepresentation();
+
+      Map<FrameRoleInstance, Set<Span>> inputSpans =
+          input.getMapRepresentation();
+
       int prunedGold = 0, total = 0, totalRealized = 0;
+      for (FrameRoleInstance key : inputSpans.keySet()) {
+        Set<Span> reachable = inputSpans.get(key);
+        Span g = null;
+        if (training) {
+          g = goldSpans.get(key);
+          if (g == null) {
+            // Interestingly, the MLE thing to do would not be to skip this case
+            // but rather have all of the variables have a gold value of nullSpan.
+
+            // This however is twice as fast and produce better solutions!
+
+            // All I can think of is that this is sub-sampling negative training
+            // examples, which helps the model not be overly pessimistic...
+
+            // Maybe I need an ApproxF1MbrDecoder step here to compensate for
+            // over abundance of negative examples?
+
+            // TODO implement an ab-test for this (continue statement)
+            continue;
+          } else {
+            if (!reachable.contains(g))
+              prunedGold++;
+            totalRealized++;
+          }
+        }
+        total++;
+        for (Span s : reachable) {
+          Boolean isGold = null;
+          if (training)
+            isGold = (s == g);
+          SpanVar spanVar = null;
+          if (consTree != null && s.width() > 1)
+            spanVar = consTree.getSpanVar(s.start, s.end - 1);
+          buildSpanVar(key.frame, key.target, key.role,
+              s, spanVar, isGold, fg, goldConf, vars);
+        }
+      }
+
+      /*
       for (int i = 0; i < input.numFrameInstances(); i++) {
         Frame f = input.getFrame(i);
         Span target = input.getTarget(i);
+
         FrameInstance goldFi = null;
         if (training) {
           assert gold != null;
@@ -207,8 +256,17 @@ public class RoleSpanLabelingStage
           assert goldFi.getFrame().equals(f);
           assert goldFi.getTarget().equals(target);
         }
+
+        List<Span> possibleArgs = input.getPossibleArgs(i);
         for (int k = 0; k < f.numRoles(); k++) {
+
+          // Get the gold label
           Span goldArg = null;
+          if (training) {
+            FrameRoleInstance key = new FrameRoleInstance(f, target, k);
+            goldArg = goldSpans.get(key);
+          }
+
           if (goldFi != null) {
             goldArg = goldFi.getArgument(k);
             int goldArgIdx = input.getPossibleArgs(i).indexOf(goldArg);
@@ -243,14 +301,17 @@ public class RoleSpanLabelingStage
           assert foundNullSpan;
         }
       }
-      if (training) {
-        LOG.info(String.format(
-            "[build] pruned the gold span in %d of %d cases (%d realized) in %s",
-            prunedGold, total, totalRealized, input.getSentence().getId()));
-      } else {
-        LOG.info("[build] setup " + total
-            + " arg-span label variables for prediction in "
-            + input.getSentence().getId());
+      */
+      if (msgCtr++ % msgInterval == 0) {
+        if (training) {
+          LOG.info(String.format(
+              "[build] pruned the gold span in %d of %d cases (%d realized) in %s",
+              prunedGold, total, totalRealized, input.getSentence().getId()));
+        } else {
+          LOG.info("[build] setup " + total
+              + " arg-span label variables for prediction in "
+              + input.getSentence().getId());
+        }
       }
     }
 
