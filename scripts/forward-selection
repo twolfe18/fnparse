@@ -92,6 +92,16 @@ class FeatureSet(object):
   def copy(self):
     return FeatureSet(self.features[:], self.derived_from)
 
+  def restrict_to(self, stages):
+    n = len(self.features)
+    fs = []
+    for f in self.features:
+      if f.stage in stages:
+        fs.append(f)
+    self.features = fs
+    print "[FeatureSet restrict_to] only including stages: %s, %d => %d" \
+      % (str(stages), n, len(self.features))
+
   def estimate_cardinality(self, template_info, stage=None):
     ''' Returns a dict with stage names as keys and int/long values '''
     cards = collections.defaultdict(lambda: 1)
@@ -132,7 +142,12 @@ class FeatureSet(object):
     # 3) mutate a Feature
 
     debug = True
-    stage = random.choice(template_info.stages())
+    rel_stages = set(template_info.stages()) & set(self.stages())
+    if len(rel_stages) == 0:
+      print 'self.stages', self.stages()
+      print 'template_info.stages', template_info.stages()
+      assert False
+    stage = random.choice(list(rel_stages))
     relevant_feats = [f for f in self.features if f.stage == stage]
     card = self.estimate_cardinality(template_info, stage)
     l = 0.3   # interpolation between cardinality (1) and #features (0)
@@ -212,8 +227,13 @@ class FeatureSet(object):
 
 class Config(CommonEqualityMixin):
   ''' A full specification of a FN parsing model '''
-  def __init__(self, feature_set, settings_dict, regularizer_dict, batch_size_dict, passes_dict):
+  def __init__(self, feature_set, settings_dict, regularizer_dict, batch_size_dict, passes_dict, derived_from=None):
     self.feature_set = feature_set
+
+    # Score of this configuration once evaluated (e.g. an F1 score)
+    # This value is not set by this class
+    self.score = None
+    self.derived_from = derived_from
 
     self.regularizer_dict = regularizer_dict
     for k, v in regularizer_dict.iteritems():
@@ -280,22 +300,33 @@ class ConfigMutator(Mutator):
     beta = 1.5
     gamma = 0.25   # p(change regularizer irrespective of cardinality)
     children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
-    for stage in self.__template_info.stages():
+    stages = set(self.__template_info.stages()) & set(next_fs.stages())
+    for stage in stages:
       cc = cur_card[stage]
       nc = next_card[stage]
       dc = nc - cc
-      if dc > alpha or (cc > 0 and dc / cc > beta) or random.random() < gamma:
-        # stronger regularizer
-        reg = {}
-        reg.update(config.regularizer_dict)
-        reg[stage] = reg[stage] + 1
-        children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
-      if dc < -alpha or (cc > 0 and dc / cc < -beta) or random.random() < gamma:
-        # weaker regularizer
-        reg = {}
-        reg.update(config.regularizer_dict)
-        reg[stage] = reg[stage] - 1
-        children.append(Config(next_fs, config.params, reg, config.batch_size_dict, config.passes_dict))
+      try:
+        if dc > alpha or (cc > 0 and dc / cc > beta) or random.random() < gamma:
+          # stronger regularizer
+          reg = {}
+          reg.update(config.regularizer_dict)
+          reg[stage] = reg[stage] + 1
+          c = Config(next_fs, config.params, reg, config.batch_size_dict, \
+            config.passes_dict, derived_from=config)
+          children.append(c)
+          print '[mutate] upping regularizer for', stage, 'to', reg[stage]
+        if dc < -alpha or (cc > 0 and dc / cc < -beta) or random.random() < gamma:
+          # weaker regularizer
+          reg = {}
+          reg.update(config.regularizer_dict)
+          reg[stage] = reg[stage] - 1
+          c = Config(next_fs, config.params, reg, config.batch_size_dict, \
+            config.passes_dict, derived_from=config)
+          children.append(c)
+          print '[mutate] downing regularizer for', stage, 'to', reg[stage]
+      except:
+        print '[mutate] WARNING: goofed for stage', stage
+        pass
 
     # TODO try increasing/decreasing the number of passes
     return children
@@ -334,6 +365,7 @@ class MutatorQueue(Queue):
     self.waiting = []       # List of items that should be popped before mutating scored items
     self.__max_pops = max_pops
     self.__pop_count = 0
+    self.stopped = False
 
   def _pick(self, greediness):
     debug = False
@@ -366,8 +398,15 @@ class MutatorQueue(Queue):
     print '[pick] weights:', weights
     assert False
 
+  def message(self, message):
+    if message == 'stop':
+      self.stopped = True
+    else:
+      print '[MutatorQueue message] unknown message:', message
+
   def show_state(self, k=10):
     print '[show_state]', len(self.item2score), 'observations'
+    print '[show_state] stopped:', self.stopped
     best = sorted(self.item2score.items(), key=operator.itemgetter(1), reverse=True)
     i = 1
     for item, score in best[:k]:
@@ -380,6 +419,12 @@ class MutatorQueue(Queue):
     assert type(score) is float
     assert type(name) is str
     assert type(item) is not str  # TODO for debugging, in the future this could technically be a string
+
+    try:
+      item.score = score
+    except:
+      print '[observe_score] this item type does not have a score attribute:', type(item)
+
     if item in self.item2score:
       if self.item2score[item] == FAILED_SCORE:
         print ("[observe_score] WARN: may need to sleep longer, " \
@@ -409,6 +454,9 @@ class MutatorQueue(Queue):
   def pop(self):
     ''' Returns a pushed item if there is one, otherwise chooses
     a scored item and mutates it with propose_modification '''
+    if self.stopped:
+      print '[pop] MutatorQueue is stopped, returning None'
+      return None
     if self.__max_pops > 0 and self.__pop_count >= self.__max_pops:
       print '[pop]', str(self), 'hit max pops:', self.__max_pops
       return None
@@ -532,6 +580,11 @@ class MultiQueue(object):
 class SgeJobTracker(object):
   ''' A job tracker that asks qstat for the jobs that are
   running and spawns jobs with qsub '''
+  def __init__(self, logging_dir=None):
+    self.logging_dir = logging_dir
+    if logging_dir and not os.path.isdir(logging_dir):
+      os.makedirs(logging_dir)
+
   def can_submit_more_jobs(self):
     try:
       return len(self.jobs_queued()) < 30
@@ -575,10 +628,13 @@ class SgeJobTracker(object):
     return [name for state, name in self.jobs() if state == 'qw']
 
   def spawn(self, name, args):
-    cmd = ['qsub', '-N', name, 'ForwardSelectionWorker.qsub', name]
+    cmd = ['qsub', '-N', name]
+    if self.logging_dir:
+      cmd += ['-o', self.logging_dir]
+    cmd += ['ForwardSelectionWorker.qsub', name]
     for k, v in args.iteritems():
       cmd += [k, v]
-    print '[sge spawn] cmd =', ["'" + x + "'" for x in cmd]
+    print '[sge spawn] cmd =', cmd
     subprocess.Popen(cmd)
     time.sleep(0.2)
 
@@ -663,6 +719,12 @@ class ConfigJobStarter:
       cmd['batchSize.' + stage] = str(batch_size)
     for stage, passes in config.passes_dict.iteritems():
       cmd['passes.' + stage] = str(passes)
+
+    # pull out the score of the previous config, and tell the job not to save its
+    # model if the score is lower than that.
+    if config.derived_from and config.derived_from.score:
+      cmd['scoreToBeat'] = str(config.derived_from.score)
+
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
 
@@ -1065,10 +1127,13 @@ def experiments(parser_mode, syntax_mode, template_info_filename, max_train=2000
     'KpTrainDev': '1\t0.3',
   }
   s1, s2 = stages[parser_mode]
+  """
+  # This should no longer be necessary
   if parser_mode == 'span' and syntax_mode == 'regular':
     template_info.restrict_stages_to([s2])
   else:
     template_info.restrict_stages_to([s1, s2])
+  """
   sd = list(seeds(parser_mode, syntax_mode, settings))
   # NOTE: I believe this is no longer relied on (check TemplateInfo.restrict_labels_for)
   labels = {
@@ -1181,7 +1246,7 @@ def agiga_model_queue(template_info_filename, run_feature_selection=False):
   template_info, configs = experiments('span', 'regular', template_info_filename)
   c = configs[0]
   c.params['learnFrameId'] = 'true'
-  c.params['MaxTrainSize'] = '200'
+  c.params['MaxTrainSize'] = '99999'
   c.regularizer_dict['FrameIdStage'] = 12
   fs = [
     Feature('FrameIdStage', 'regular', 'frame', ['head1Word']),
@@ -1189,13 +1254,11 @@ def agiga_model_queue(template_info_filename, run_feature_selection=False):
     Feature('FrameIdStage', 'regular', 'frame', ['head1CollapsedLabel']),
     Feature('FrameIdStage', 'regular', 'frame', ['head1Pos']),
     Feature('FrameIdStage', 'regular', 'frame', ['head1ParentPos']),
-    Feature('FrameIdStage', 'regular', 'frame', ['head1ParentWord3']),
+    Feature('FrameIdStage', 'regular', 'frame', ['head1ParentWord4']),
     Feature('FrameIdStage', 'regular', 'frame', ['head1RootPath-LEMMA-DEP-t']),
-    Feature('FrameIdStage', 'regular', 'frame', ['Word3-2-grams-between-</S>-and-<S>']),
+    Feature('FrameIdStage', 'regular', 'frame', ['Word4-2-grams-between-</S>-and-<S>']),
     Feature('FrameIdStage', 'regular', 'frame', ['span1LeftPos']),
     Feature('FrameIdStage', 'regular', 'frame', ['span1RightPos']),
-    Feature('FrameIdStage', 'regular', 'frame', ['span1LeftWord3']),
-    Feature('FrameIdStage', 'regular', 'frame', ['span1RightWord3']),
     Feature('FrameIdStage', 'regular', 'frame', ['span1PosPat-COARSE_POS-3-0']),
     Feature('FrameIdStage', 'regular', 'frame', ['span1PosPat-COARSE_POS-0-3']),
   ]
@@ -1204,13 +1267,19 @@ def agiga_model_queue(template_info_filename, run_feature_selection=False):
     # Train only frameId
     c.params['evaluationFunction'] = 'TargetMicroF1'
     c.params['skipArgId'] = 'true'
+    # prune any features that are not related to frameId
+    c.feature_set.restrict_to(['FrameIdStage'])
     mut = ConfigMutator(template_info)
     q = MutatorQueue(mut)
     q.seed(c)
     return q
   else:
     # Train frameId + argLabeling
-    return ExplicitQueue([c])
+    #return ExplicitQueue([c])
+    mut = ConfigMutator(template_info)
+    q = MutatorQueue(mut)
+    q.seed(c)
+    return q
 
 
 def run_experiments(template_info_filename, where):
@@ -1223,7 +1292,7 @@ def run_experiments(template_info_filename, where):
   #working_dir = 'experiments/forward-selection/role/omni'
   #mq = ab_test_queue(template_info_filename)
   #working_dir = 'experiments/ab-test'
-  mq = agiga_model_queue(template_info_filename, run_feature_selection=True)
+  mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
   working_dir = 'experiments/agiga'
 
   # Create the job tracker
@@ -1231,7 +1300,8 @@ def run_experiments(template_info_filename, where):
     job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
     job_tracker.remove_all_jobs()
   else:
-    job_tracker = SgeJobTracker()
+    d = os.path.join(working_dir, 'sge-logs')
+    job_tracker = SgeJobTracker(logging_dir=d)
 
   perf_filename = os.path.join(working_dir, 'perf.txt')
   this_machine = socket.gethostname()
