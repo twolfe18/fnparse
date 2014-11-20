@@ -34,6 +34,8 @@ import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
+import edu.jhu.hlt.fnparse.util.ModelViewer;
+import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.hlt.fnparse.util.Timer;
 import edu.jhu.hlt.optimize.AdaGrad;
 import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
@@ -97,6 +99,22 @@ public abstract class AbstractStage<I, O extends FNTagging>
           getName(), featureTemplatesString, globals.getFeatureNames());
     }
     return featureTemplates;
+  }
+
+  public void showExtremeFeatures(int k) {
+    if (globals == null || weights == null) {
+      log.info("[showExtremeFeatures] can't, globals or weights are null");
+      return;
+    }
+    List<FeatureWeight> weights =
+        ModelViewer.getSortedWeights(this.weights, globals.getFeatureNames());
+    int n = weights.size();
+    log.info("[showExtremeFeatures] " + k + " smallest features:");
+    for (int i = 0; i < k && i < n; i++)
+      log.info("[showExtremeFeatures] " + weights.get(i));
+    log.info("[showExtremeFeatures] " + k + " biggest features:");
+    for (int i = 0; i < k && i < n; i++)
+      log.info("[showExtremeFeatures] " + weights.get((n - k) + i));
   }
 
   @Override
@@ -446,6 +464,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		log.info(String.format(
 				"[train] Done training on %d examples for %.1f minutes, using %d features",
 				exs.size(), timeTrain/(1000d*60d), alph.size()));
+
+		showExtremeFeatures(20);
 
 		// Tune
 		if(td != null)
