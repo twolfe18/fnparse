@@ -172,6 +172,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
     log.info("done load model");
   }
 
+  public void configure(String key, String value) {
+    Map<String, String> m = new HashMap<>();
+    m.put(key, value);
+    configure(m);
+  }
+
   @Override
   public void configure(Map<String, String> configuration) {
     String key, value;
@@ -229,6 +235,13 @@ public abstract class AbstractStage<I, O extends FNTagging>
     value = configuration.get(key);
     if (value != null) {
       useLatentConstituencies = Boolean.valueOf(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
+
+    key = "bpIters." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      bpIters = Integer.parseInt(value);
       log.info("[configure] set " + key + " = " + value);
     }
   }
@@ -300,7 +313,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		bpParams.schedule = BpScheduleType.TREE_LIKE;
 		bpParams.logDomain = logDomain();
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = 1;
+		bpParams.maxIterations = bpIters;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }

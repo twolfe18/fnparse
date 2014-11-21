@@ -112,6 +112,8 @@ public class ConcreteSentenceAdapter implements HasSentence {
   }
 
   public TextSpan getTextSpan(int tokenIndex) {
+    if (tokenIndex < 0)
+      throw new IllegalArgumentException();
     return cSent.getTokenization().getTokenList().getTokenList().get(tokenIndex).getTextSpan();
   }
 

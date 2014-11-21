@@ -12,48 +12,15 @@ import java.util.Arrays;
  */
 public class FrameInstance {
 
-  /**
-   * deprecated
-  public static class Prototype extends FrameInstance {
-
-     * Used as a dummy FrameInstance which can really belong to any Frame.
-     * As is, most of the time it will map to nullFrame, but it could have some
-     * association with another Frame.
-    public static final Prototype nullPrototype = new Prototype("nullPrototype");
-
-     * TODO add other "multi-purpose latent prototypes". The features can learn
-     * any connection they want -- this is just a latent variable CRF with no
-     * particular semantics to the values of the latent variable.
-     * 
-     * TODO I should give these guys some data that is more specific than just id,
-     * like a distribution over words or something.
-    public static final Prototype multiPurposePrototype1 = new Prototype("multiPurpose1");
-    public static final Prototype multiPurposePrototype2 = new Prototype("multiPurpose2");
-    public static final Prototype multiPurposePrototype3 = new Prototype("multiPurpose3");
-    public static final Prototype multiPurposePrototype4 = new Prototype("multiPurpose4");
-
-    public static List<Prototype> miscPrototypes() {
-      return Arrays.asList(nullPrototype, multiPurposePrototype1,
-          multiPurposePrototype2, multiPurposePrototype3, multiPurposePrototype4);
-    }
-
-    public final String id;
-    public Prototype(String id) {
-      super(Frame.nullFrame, Span.nullSpan, new Span[0], Sentence.nullSentence);
-      this.id = id;
-    }
-  }
-   */
-
-  private Frame frame;
-  private Span target;  // index of the target word
-  private Sentence sentence;
+  protected Frame frame;
+  protected Span target;  // index of the target word
+  protected Sentence sentence;
 
   /**
    * indices correspond to frame.getRoles()
    * null-instantiated arguments should be Span.nullSpan, NOT null
    */
-  private Span[] arguments;
+  protected Span[] arguments;
 
   protected FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
     this.frame = frame;
@@ -94,7 +61,9 @@ public class FrameInstance {
 
   public FrameInstance clone() {
     Span[] args = this.arguments.clone();
-    return new FrameInstance(this.frame, this.target, args, this.sentence);
+    FrameInstance fi = new FrameInstance(
+        this.frame, this.target, args, this.sentence);
+    return fi;
   }
 
   public boolean onlyTargetLabeled() { return this.arguments == null; }

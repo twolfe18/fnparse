@@ -80,6 +80,14 @@ public class LatentConstituencyPipelinedParser implements Parser {
       LOG.warn("not setting features for roleLabeling");
   }
 
+  public RoleSpanLabelingStage getRoleLabelingStage() {
+    return roleLabeling;
+  }
+
+  public Stage<Sentence, FNTagging> getFrameIdStage() {
+    return frameId;
+  }
+
   public void setFrameIdStage(Stage<Sentence, FNTagging> s) {
     this.frameId = s;
   }

@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.inference.role.span;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +29,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
@@ -44,7 +44,6 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
-import edu.jhu.prim.arrays.Multinomials;
 
 /**
  * This stage takes a list of frame instances, each of which has a pruned set of
@@ -65,6 +64,11 @@ public class RoleSpanLabelingStage
   private ApproxF1MbrDecoder decoder;
   private boolean allExamplesInMem = false;
   private boolean disallowArgWithoutConstituent = true;
+
+  // If 1, perform regular max_{frame,target,role} decoding
+  // If >1, take the top-K roles per {frame,target,role}, ignoring decoder
+  // TODO add configure/saveModel/loadModel support
+  public int maxSpansPerArg = 1;
 
   public RoleSpanLabelingStage(
       GlobalParameters globals,
@@ -137,7 +141,7 @@ public class RoleSpanLabelingStage
     List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParse gold = output == null ? null : output.get(i);
-      data.add(this.new RoleSpanLabellingStageDatum(input.get(i), gold));
+      data.add(this.new RoleSpanLabelingStageDatum(input.get(i), gold));
     }
     return new StageDatumExampleList<>(data, allExamplesInMem);
   }
@@ -156,12 +160,12 @@ public class RoleSpanLabelingStage
    * NOTE: do not be tempted to make a k-ary variable for every (frame,role)
    * because then i wont be able to hook up latent syntax binary factors later
    */
-  class RoleSpanLabellingStageDatum
+  class RoleSpanLabelingStageDatum
       implements StageDatum<FNParseSpanPruning, FNParse> {
     private final FNParseSpanPruning input;
     private final FNParse gold;
 
-    public RoleSpanLabellingStageDatum(FNParseSpanPruning input, FNParse gold) {
+    public RoleSpanLabelingStageDatum(FNParseSpanPruning input, FNParse gold) {
       this.input = input;
       this.gold = gold;
     }
@@ -421,10 +425,7 @@ public class RoleSpanLabelingStage
       Collection<ArgSpanLabelVar> vars = new ArrayList<>();
       FactorGraph fg = new FactorGraph();
       build(fg, null, vars);
-      return new Decoder(
-          fg, infFactory(),
-          null,
-          vars, input.getSentence());
+      return new Decoder(fg, infFactory(), null, vars, input);
     }
   }
 
@@ -446,15 +447,15 @@ public class RoleSpanLabelingStage
 
   class Decoder extends Decodable<FNParse> {
     private Map<FrameRoleInstance, List<ArgSpanLabelVar>> vars;
-    private Sentence sentence;
+    private FNParseSpanPruning pruneMask;
     public Decoder(
         FactorGraph fg,
         FgInferencerFactory infFact,
         HasFgModel weights,
         Collection<ArgSpanLabelVar> vars,
-        Sentence sentence) {
+        FNParseSpanPruning pruneMask) {
       super(fg, infFact);
-      this.sentence = sentence;
+      this.pruneMask = pruneMask;
 
       // Index span variables by (frame,target,role)
       this.vars = new HashMap<>();
@@ -472,56 +473,46 @@ public class RoleSpanLabelingStage
 
     @Override
     public FNParse decode() {
-      // Decode the best argument for every (frame,target,role)
-      Map<FrameInstance, Span[]> bestArgs = new HashMap<>();
-      for (Map.Entry<FrameRoleInstance, List<ArgSpanLabelVar>> x : vars.entrySet()) {
-        FrameRoleInstance ftr = x.getKey();
-        FrameInstance key = FrameInstance.frameMention(
-            ftr.frame, ftr.target, sentence);
-        Span[] all = bestArgs.get(key);
-        if (all == null) {
-          all = new Span[ftr.frame.numRoles()];
-          Arrays.fill(all, Span.nullSpan);
-          bestArgs.put(key, all);
-        } else {
-          assert ftr.frame.numRoles() == all.length;
-        }
-        all[ftr.role] = argmax(x.getValue());
-      }
-      // Aggregate all roles for each (frame,target)
       List<FrameInstance> fis = new ArrayList<>();
-      for (Map.Entry<FrameInstance, Span[]> x : bestArgs.entrySet()) {
-        FrameInstance fi = x.getKey();
-        fis.add(FrameInstance.newFrameInstance(
-            fi.getFrame(), fi.getTarget(), x.getValue(), sentence));
-      }
-      return new FNParse(sentence, fis);
-    }
-
-    private Span argmax(List<ArgSpanLabelVar> vars) {
       FgInferencer inf = this.getMargins();
-      double[] posterior = new double[vars.size()];
-      int nullSpanIdx = -1;
-      for (int i = 0; i < posterior.length; i++) {
-        if (vars.get(i).arg == Span.nullSpan) {
-          assert nullSpanIdx < 0;
-          nullSpanIdx = i;
+      Map<FrameInstance, WeightedFrameInstance> best = new HashMap<>();
+      for (FrameRoleInstance ftr : pruneMask.getMapRepresentation().keySet()) {
+        List<ArgSpanLabelVar> argVars = vars.get(ftr);
+        FrameInstance key = FrameInstance.frameMention(
+            ftr.frame, ftr.target, pruneMask.getSentence());
+        WeightedFrameInstance value = best.get(key);
+        if (value == null) {
+          value = WeightedFrameInstance.newWeightedFrameInstance(
+              ftr.frame, ftr.target, pruneMask.getSentence());
+          value.setTargetWeight(pruneMask.getTargetWeight(
+              key.getFrame(), key.getTarget()));;
+          best.put(key, value);
         }
-        DenseFactor df = inf.getMarginals(vars.get(i));
-        if (logDomain())
-          df.logNormalize();
-        else
-          df.normalize();
-        posterior[i] = df.getValue(BinaryVarUtil.boolToConfig(true));
-        //LOG.debug("[labeling argmax] " + posterior[i] + "\t" + vars.get(i));
+        for (ArgSpanLabelVar aslv : argVars) {
+          DenseFactor df = inf.getMarginals(aslv);
+          if (logDomain()) df.logNormalize();
+          else df.normalize();
+          double w = df.getValue(BinaryVarUtil.boolToConfig(true));
+          value.addArgumentTheory(aslv.role, aslv.arg, w);
+        }
       }
-      assert nullSpanIdx >= 0;
-      if (logDomain())
-        Multinomials.normalizeLogProps(posterior);
-      else
-        Multinomials.normalizeProps(posterior);
-      int y = decoder.decode(posterior, nullSpanIdx);
-      return vars.get(y).arg;
+      int totalTargets = 0, totalArgs = 0, totalTheories = 0;
+      for (WeightedFrameInstance wfi : best.values()) {
+        if (maxSpansPerArg == 1) {
+          wfi.decode(decoder);
+        } else {
+          wfi.sortArgumentTheories();
+          wfi.pruneArgumentTheories(maxSpansPerArg);
+          wfi.setArgumentTheoriesAsValues();
+        }
+        fis.add(wfi);
+        totalTargets++;
+        totalArgs += wfi.numRealizedArguments();
+        totalTheories += wfi.numRealizedTheories();
+      }
+      LOG.info(String.format("[decode] realized %d theories and %d arguments on %d targets",
+          totalTheories, totalArgs, totalTargets));
+      return new FNParse(pruneMask.getSentence(), fis);
     }
 
     @Override

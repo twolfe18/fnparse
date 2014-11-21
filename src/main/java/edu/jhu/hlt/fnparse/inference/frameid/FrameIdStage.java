@@ -35,6 +35,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
@@ -45,7 +46,6 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.prim.arrays.Multinomials;
 
 public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
   public static final Logger LOG = Logger.getLogger(FrameIdStage.class);
@@ -87,6 +87,15 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
+
+    String key, value;
+
+    key = "recallBias." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      decoder.setRecallBias(Double.parseDouble(value));
+    }
   }
 
   public void train(List<FNParse> examples) {
@@ -402,17 +411,17 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
           else df.normalize();
           beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
         }
-        if (logDomain())
-          Multinomials.normalizeLogProps(beliefs);
-        else
-          Multinomials.normalizeProps(beliefs);
+        normalize(beliefs);
 
         final int nullFrameIdx = fvars.getNullFrameIdx();
         int tHat = decoder.decode(beliefs, nullFrameIdx);
         Frame fHat = fvars.getFrame(tHat);
         if (fHat != Frame.nullFrame) {
-          fis.add(FrameInstance.frameMention(
-              fHat, fvars.getTarget(), sentence));
+          WeightedFrameInstance wfi =
+              WeightedFrameInstance.newWeightedFrameInstance(
+                  fHat, fvars.getTarget(), sentence);
+          wfi.setTargetWeight(beliefs[tHat]);
+          fis.add(wfi);
         }
       }
       return new FNTagging(sentence, fis);
