@@ -237,6 +237,13 @@ public abstract class AbstractStage<I, O extends FNTagging>
       useLatentConstituencies = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
     }
+
+    key = "bpIters." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      bpIters = Integer.parseInt(value);
+      log.info("[configure] set " + key + " = " + value);
+    }
   }
 
   public void setSyntaxMode(String syntaxMode) {

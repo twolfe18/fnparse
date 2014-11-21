@@ -725,6 +725,13 @@ class ConfigJobStarter:
     if config.derived_from and config.derived_from.score:
       cmd['scoreToBeat'] = str(config.derived_from.score)
 
+    latent_stages = set()
+    for f in config.feature_set.features:
+      if f.syntax_mode == 'latent':
+        latent_stages.add(f.stage)
+    for s in latent_stages:
+      cmd['bpIters.' + s] = '10'
+
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
 
