@@ -306,7 +306,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		bpParams.schedule = BpScheduleType.TREE_LIKE;
 		bpParams.logDomain = logDomain();
 		bpParams.cacheFactorBeliefs = false;
-		bpParams.maxIterations = 1;
+		bpParams.maxIterations = bpIters;
 		return new FgInferencerFactory() {
 			@Override
 			public boolean isLogDomain() { return bpParams.isLogDomain(); }
