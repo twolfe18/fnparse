@@ -1163,7 +1163,7 @@ def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
-    for syntax_mode in ['regular', 'latent']:
+    for syntax_mode in ['regular', 'latent', 'none']:
       template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
       q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
       print 'setting up queue for', q_name
@@ -1214,21 +1214,21 @@ def ab_test_queue(template_info_filename):
   mq.add_queue('head-latent-s2-argIsCons',
     sweep(default_config('head', 'latent', template_info_filename),
       {'disallowArgWithoutConstituent.RoleHeadToSpanStage': ['true', 'false'],
-       'MaxTrainSize': ['250', '750', '2250']}))
+       'MaxTrainSize': ['500', '1500', '99999']}))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('span-latent-s1-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
       {'disallowArgWithoutConstituent.RoleSpanPruningStage': ['true', 'false'],
-       'MaxTrainSize': ['250', '750', '2250']}))
+       'MaxTrainSize': ['500', '1500', '99999']}))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('span-latent-s2-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
       {'disallowArgWithoutConstituent.RoleSpanLabelingStage': ['true', 'false'],
-       'MaxTrainSize': ['250', '750', '2250']}))
+       'MaxTrainSize': ['500', '1500', '99999']}))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
@@ -1237,7 +1237,7 @@ def ab_test_queue(template_info_filename):
       {'deterministicRolePruningMethod':
         ['STANFORD_CONSTITUENTS', 'DEPENDENCY_SPANS', 'XUE_PALMER',
           'XUE_PALMER_HERMANN', 'XUE_PALMER_DEP', 'XUE_PALMER_DEP_HERMANN'],
-       'MaxTrainSize': ['250', '750', '2250']}))
+       'MaxTrainSize': ['500', '1500', '99999']}))
 
   return mq
 
@@ -1288,12 +1288,12 @@ def run_experiments(template_info_filename, where):
   assert local or where == 'grid'
 
   # Work to be done
-  #mq = forward_selection_queue(template_info_filename)
-  #working_dir = 'experiments/forward-selection/role/omni'
+  mq = forward_selection_queue(template_info_filename)
+  working_dir = 'experiments/forward-selection/role/omni'
   #mq = ab_test_queue(template_info_filename)
   #working_dir = 'experiments/ab-test'
-  mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
-  working_dir = 'experiments/agiga'
+  #mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
+  #working_dir = 'experiments/agiga'
 
   # Create the job tracker
   if local:
