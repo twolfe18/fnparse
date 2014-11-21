@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.log4j.Logger;
+import org.apache.thrift.protocol.TCompactProtocol;
 import org.apache.thrift.protocol.TSimpleJSONProtocol;
 import org.apache.thrift.transport.TIOStreamTransport;
 
@@ -22,9 +23,13 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
+import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.pruning.ArgPruner;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 
 /**
  * TODO add 1-best annotations.
@@ -39,6 +44,8 @@ public class FNAnnotator implements DummyAnnotator {
       new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/frameId.ser.gz");
   public static File roleLabelingModel =
       new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/roleLabel.ser.gz");
+  public static int kBest = 5;
+  public static boolean includeSituationMentionText = true;
 
   private LatentConstituencyPipelinedParser parser;
   private ConcreteUUIDFactory uuidFactory;
@@ -51,6 +58,15 @@ public class FNAnnotator implements DummyAnnotator {
     parser = new LatentConstituencyPipelinedParser();
     parser.loadFrameIdStage(frameIdModel);
     parser.loadRoleSpanLabelingStage(roleLabelingModel);
+
+    if (kBest > 1) {
+      LOG.info("setting high recall mode on");
+      FrameIdStage fid = (FrameIdStage) parser.getFrameIdStage();
+      double recallBias = 8d / (10d + kBest);
+      fid.configure("recallBias.FrameIdStage", String.valueOf(recallBias));
+      RoleSpanLabelingStage rsl = parser.getRoleLabelingStage();
+      rsl.maxSpansPerArg = kBest;
+    }
 
     // Attempt to load static resources ahead of time
     LOG.info("loading other static resources...");
@@ -71,9 +87,12 @@ public class FNAnnotator implements DummyAnnotator {
     List<Sentence> sentences = new ArrayList<>();
     List<ConcreteSentenceAdapter> cSentences = new ArrayList<>();
     for (Section section : c.getSectionList()) {
-      if (!"passage".equalsIgnoreCase(section.getKind()))
-        continue;
       for (edu.jhu.hlt.concrete.Sentence sentence : section.getSentenceList()) {
+        if (!sentence.isSetTokenization()
+            || sentence.getTokenization().getTokenList() == null
+            || sentence.getTokenization().getTokenTaggingList() == null) {
+          continue;
+        }
         ConcreteSentenceAdapter csa = new ConcreteSentenceAdapter(sentence);
         sentences.add(csa.getSentence());
         cSentences.add(csa);
@@ -91,6 +110,16 @@ public class FNAnnotator implements DummyAnnotator {
     return addTo;
   }
 
+  public static String join(String[] toks, String sep) {
+    StringBuilder sb = new StringBuilder();
+    for (int i = 0; i < toks.length; i++) {
+      if (i > 0)
+        sb.append(sep);
+      sb.append(toks[i]);
+    }
+    return sb.toString();
+  }
+
   public void addSituations(
       Communication c,
       List<ConcreteSentenceAdapter> sentences,
@@ -101,34 +130,42 @@ public class FNAnnotator implements DummyAnnotator {
     sms.setUuid(uuidFactory.getConcreteUUID());
     AnnotationMetadata meta = new AnnotationMetadata();
     meta.setTool("JHU-fnparse");
+    meta.setTimestamp(System.currentTimeMillis() / 1000);
+    meta.setKBest(kBest);
     sms.setMetadata(meta);
+    List<SituationMention> smsMentionList = new ArrayList<>();
     for (int i = 0; i < sentences.size(); i++) {
       ConcreteSentenceAdapter sentence = sentences.get(i);
       FNParse parse = parses.get(i);
       for (FrameInstance fi : parse.getFrameInstances()) {
         Frame f = fi.getFrame();
+        WeightedFrameInstance wfi = (WeightedFrameInstance) fi;
         SituationMention sm = new SituationMention();
         sm.setUuid(uuidFactory.getConcreteUUID());
         sm.setSituationKind(f.getName());
         sm.setTokens(sentence.getTokenRefSequence(fi.getTarget()));
+        if (includeSituationMentionText)
+          sm.setText(join(sentence.getSentence().getWordFor(fi.getTarget()), " "));
+        sm.setConfidence(wfi.getTargetWeight());
         List<MentionArgument> args = new ArrayList<>();
-        // TODO CRAP! i've lost the probabilities!
-        // add this when i make the switch to "high recall mode"...
         int K = f.numRoles();
         for (int k = 0; k < K; k++) {
-          Span argSpan = fi.getArgument(k);
-          if (argSpan == Span.nullSpan)
-            continue;
-          MentionArgument arg = new MentionArgument();
-          arg.setRole(f.getRole(k));
-          arg.setTokens(sentence.getTokenRefSequence(argSpan));
-          args.add(arg);
-          // TODO recover probabilities
+          for (ArgTheory at : wfi.getArgumentTheories(k)) {
+            if (at.span == Span.nullSpan)
+              continue;
+            assert !Double.isNaN(at.weight);
+            MentionArgument arg = new MentionArgument();
+            arg.setRole(f.getRole(k));
+            arg.setTokens(sentence.getTokenRefSequence(at.span));
+            arg.setConfidence(at.weight);
+            args.add(arg);
+          }
         }
         sm.setArgumentList(args);
-        sms.addToMentionList(sm);
+        smsMentionList.add(sm);
       }
     }
+    sms.setMentionList(smsMentionList);
     c.addToSituationMentionSetList(sms);
   }
 
@@ -148,6 +185,8 @@ public class FNAnnotator implements DummyAnnotator {
     for (File commFile : f.listFiles()) {
       if (commFile.getName().endsWith(".json"))
         continue;
+      if (commFile.getName().contains(".anno"))
+        continue;
       LOG.info("reading " + commFile.toPath());
       Communication comm = deser.fromPath(commFile.toPath());
 
@@ -162,6 +201,10 @@ public class FNAnnotator implements DummyAnnotator {
           new TIOStreamTransport(
               new FileOutputStream(
                   new File(commFile.getCanonicalPath() + ".anno.json")))));
+      commAnno.write(new TCompactProtocol(
+          new TIOStreamTransport(
+              new FileOutputStream(
+                  new File(commFile.getCanonicalPath() + ".anno.compact")))));
     }
   }
 

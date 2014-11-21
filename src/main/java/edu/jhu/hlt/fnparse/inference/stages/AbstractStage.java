@@ -172,6 +172,12 @@ public abstract class AbstractStage<I, O extends FNTagging>
     log.info("done load model");
   }
 
+  public void configure(String key, String value) {
+    Map<String, String> m = new HashMap<>();
+    m.put(key, value);
+    configure(m);
+  }
+
   @Override
   public void configure(Map<String, String> configuration) {
     String key, value;

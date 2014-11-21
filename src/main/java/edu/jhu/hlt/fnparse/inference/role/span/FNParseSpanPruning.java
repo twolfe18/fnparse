@@ -18,6 +18,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.util.Describe;
 
@@ -46,6 +47,18 @@ public class FNParseSpanPruning extends FNTagging {
       if (!possibleArgs.containsKey(key))
         assert false;
     }
+  }
+
+  // TODO fix/remove me
+  public double getTargetWeight(Frame f, Span target) {
+    Double d = null;
+    for (FrameInstance fi : frameInstances) {
+      if (fi.getFrame().equals(f) && fi.getTarget().equals(target)) {
+        assert d == null;
+        d = ((WeightedFrameInstance) fi).getTargetWeight();
+      }
+    }
+    return d;
   }
 
   /**
