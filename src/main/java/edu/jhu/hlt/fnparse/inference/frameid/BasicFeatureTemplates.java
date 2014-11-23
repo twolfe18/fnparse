@@ -1553,21 +1553,16 @@ public class BasicFeatureTemplates {
     if (parallel > 1)
       LOG.warn("verify this is thread safe, last time it wasn't");
 
-    // TODO read in existing results from the given file, skip those jobs
-
     LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
     for (Entry<String, Template> label : labelTemplates.entrySet()) {
-      for (String syntaxModeName : Arrays.asList("regular", "latent")) {
-        //Supplier<ParserParams> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+      for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
         Consumer<Stage<?, ?>> syntaxModeSupp = syntaxModes.get(syntaxModeName);
         for (String tmplName : basicTemplates.keySet()) {
-          //for (Function<ParserParams, Stage<?, ?>> stage : stages) {
           for (Function<GlobalParameters, Function<String, Stage<?, ?>>> stageFut : stages) {
             Runnable r = new Runnable() {
               @Override
               public void run() {
                 long tmplStart = System.currentTimeMillis();
-                //ParserParams params = syntaxModeSupp.get();
                 GlobalParameters gp = new GlobalParameters();
                 String labelName = label.getKey();
                 String fs = labelName + " * " + tmplName;

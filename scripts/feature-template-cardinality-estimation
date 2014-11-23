@@ -8,17 +8,8 @@ THREADS=1     # threads per job
 PARALLEL=64   # number of jobs
 for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"
-  OUTPUT="experiments/forward-selection/template-pieces-sge-${i}-of-${PARALLEL}.txt"
+  OUTPUT="experiments/feature-cardinality-estimation/template-pieces-sge-${i}-of-${PARALLEL}.txt"
   qsub -N "feat-card-$i" ./scripts/feature-template-cardinality-estimation-sge-helper \
     ${THREADS} ${OUTPUT} ${i} ${PARALLEL} ${PRE_COMPUTE}
 done
-
-### LOCAL
-#THREADS=1    # threads per job
-#PARALLEL=8   # number of jobs
-#for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
-#  echo "starting job $i"
-#  ./scripts/feature-template-cardinality-estimation-sge-helper ${THREADS} ${i} ${PARALLEL} ${PRE_COMPUTE} \
-#    >logging/feature-cardinality-estimation/feat-card-local-$i-of-${PARALLEL}.log &
-#done
 

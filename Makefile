@@ -5,6 +5,7 @@ argIdQ = text.q
 argSpansQ = text.q
 
 jar:
+	rm -f target/*.jar
 	mvn package assembly:assembly -DskipTests
 
 frameIdTrain:

@@ -1117,7 +1117,7 @@ def seeds(parser_mode, syntax_mode, settings):
 # RoleSpanLabelingStage
 # RoleSpanPruningStage
 
-def experiments(parser_mode, syntax_mode, template_info_filename, max_train=2000):
+def experiments(parser_mode, syntax_mode, template_info_filename, max_train=99999):
   ''' Returns a (TemplateInfo, [Config]) '''
   assert parser_mode in ['span', 'head']
   assert syntax_mode in ['regular', 'latent', 'none']
@@ -1323,12 +1323,6 @@ def run_experiments(template_info_filename, where):
 
   fs = JobEngine('test', job_tracker, mq, job_starter, redis_config)
 
-  if not local:
-    print 'cleanup...'
-    os.system('kill-all-jobs')
-    time.sleep(2)
-    os.system('rm logging/forward-selection/*')
-    time.sleep(2)
   print 'starting...'
   fs.run(perf_filename)
 
