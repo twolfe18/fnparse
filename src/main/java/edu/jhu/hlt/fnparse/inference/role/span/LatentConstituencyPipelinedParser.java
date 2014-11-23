@@ -46,22 +46,37 @@ import edu.jhu.util.Threads;
 public class LatentConstituencyPipelinedParser implements Parser {
   public static final Logger LOG =
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
+  private static final DeterministicRolePruning.Mode DEFAULT_PRUNING_METHOD =
+      Mode.XUE_PALMER_HERMANN;
 
   private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
   private Stage<FNTagging, FNParseSpanPruning> rolePruning;
   private RoleSpanLabelingStage roleLabeling;
 
+  // null indicates that DeterministicRolePruning is not being used,
+  // RoleSpanPruningStage is.
+  private DeterministicRolePruning.Mode pruningMode;
+
   public LatentConstituencyPipelinedParser() {
     this.globals = new GlobalParameters();
     frameId = new OracleStage<>();
-    rolePruning = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    setPruningMethod(DEFAULT_PRUNING_METHOD);
     roleLabeling = new RoleSpanLabelingStage(globals, "");
   }
 
   @Override
   public GlobalParameters getGlobalParameters() {
     return globals;
+  }
+
+  public void setPruningMethod(DeterministicRolePruning.Mode mode) {
+    pruningMode = mode;
+    if (mode == null) {
+      rolePruning = new RoleSpanPruningStage(globals, "");
+    } else {
+      rolePruning = new DeterministicRolePruning(pruningMode);
+    }
   }
 
   @Override
@@ -143,11 +158,18 @@ public class LatentConstituencyPipelinedParser implements Parser {
   @Override
   public void configure(Map<String, String> configuration) {
 	  LOG.info("[configure] " + configuration);
-    frameId.configure(configuration);
-    rolePruning.configure(configuration);
-    roleLabeling.configure(configuration);
-
 	  String key, value;
+
+	  key = "syntaxMode";
+	  value = configuration.get(key);
+	  if (value != null) {
+	    if ("regular".equals(value)) {
+	      setPruningMethod(DEFAULT_PRUNING_METHOD);
+	    } else {
+	      rolePruning = new RoleSpanPruningStage(globals, "");
+	    }
+	    LOG.info("setting " + key + " = " + value);
+	  }
 
 	  key = "learnFrameId";
 	  value = configuration.get(key);
@@ -175,6 +197,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
 	    setFeatures(value);
 	    LOG.info("setting " + key + " = " + value);
 	  }
+
+    frameId.configure(configuration);
+    rolePruning.configure(configuration);
+    roleLabeling.configure(configuration);
   }
 
   @Override

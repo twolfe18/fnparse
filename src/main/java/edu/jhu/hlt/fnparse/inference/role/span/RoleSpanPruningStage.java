@@ -240,6 +240,7 @@ public class RoleSpanPruningStage
     }
   }
 
+  private int buildCtr = 0, buildCtrInterval = 100;
   /**
    * An example for this stage which holds a latent constituency tree and a
    * bunch of pruning variables for the roles/args.
@@ -277,6 +278,7 @@ public class RoleSpanPruningStage
 
     @Override
     public LabeledFgExample getExample() {
+      observeGetExample(input.getId());
       FactorGraph fg = new FactorGraph();
       VarConfig gold = new VarConfig();
       build(fg, gold, null);
@@ -287,11 +289,13 @@ public class RoleSpanPruningStage
         FactorGraph fg,
         VarConfig goldConf,
         Collection<ArgSpanPruningVar> roleVars) {
-      // Build the variables
+
       final int n = input.getSentence().size();
-      ConstituencyTreeFactor cykPhi =
-          new ConstituencyTreeFactor(n, VarType.LATENT);
-      fg.addFactor(cykPhi);
+      ConstituencyTreeFactor cykPhi = null;
+      if (useLatentConstituencies) {
+        cykPhi = new ConstituencyTreeFactor(n, VarType.LATENT);
+        fg.addFactor(cykPhi);
+      }
       final int nFI = input.numFrameInstances();
       int numRoleVars = 0;
       for (int i = 0; i < nFI; i++) {
@@ -308,7 +312,7 @@ public class RoleSpanPruningStage
           for (int end = start + 1; end <= n; end++) {
             ArgSpanPruningVar p = new ArgSpanPruningVar(
                 Span.getSpan(start, end), fi);
-            fg.addFactor(buildBinaryFactor(p, cykPhi));
+            fg.addFactor(buildFactor(p, cykPhi));
             numRoleVars++;
             if (this.gold != null && goldConf != null) {
               boolean g = !goldArgs.contains(p.arg);
@@ -323,28 +327,45 @@ public class RoleSpanPruningStage
         // You can never prune the nullSpan, so the value is effectively
         // clamped to gold=keep. We do not include it here.
       }
-      LOG.debug(input.getSentence().getId() + " has " + numRoleVars
-          + " role vars and " + cykPhi.getVars().size()
-          + " span vars for a sentence of length " + n);
+      if (buildCtr++ % buildCtrInterval == 0) {
+        if (cykPhi == null) {
+          LOG.debug("[build] " + input.getSentence().getId()
+              + " has " + numRoleVars + " role vars and"
+              + " no span vars for a sentence of length " + n);
+        } else {
+          LOG.debug("[build] " + input.getSentence().getId()
+              + " has " + numRoleVars + " role vars"
+              + " and " + cykPhi.getVars().size()
+              + " span vars for a sentence of length " + n);
+        }
+      }
     }
 
     /**
-     * Create a binary factor for the role pruning var ~ constituency var
+     * Creates either a binary factor for the role pruning var ~ constituency var
      * which includes the unary factor that would go on just the pruning var
+     * or a unary factor the pruning var if cykPhi is null.
      */
-    private ExplicitExpFamFactor buildBinaryFactor(
+    private ExplicitExpFamFactor buildFactor(
         ArgSpanPruningVar p,
-        ConstituencyTreeFactor cykPhi) {
-      // -1 because Matt's args are inclusive
-      Var c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);
+        ConstituencyTreeFactor cykPhi) {  // can be null
+
       VarSet vs;
-      if (c == null) {
-        assert p.arg.width() == 1 :
-          "figure out how to handle pruned constituents";
+      Var c = null;    // Constituency variable
+      if (cykPhi == null) {
         vs = new VarSet(p);
       } else {
-        vs = new VarSet(p, c);
+        // -1 because Matt's args are inclusive
+        c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);
+        if (c == null) {
+          assert p.arg.width() == 1 :
+            "figure out how to handle pruned constituents";
+          vs = new VarSet(p);
+        } else {
+          vs = new VarSet(p, c);
+        }
       }
+
       HeadFinder hf = SemaforicHeadFinder.getInstance();
       ExplicitExpFamFactorWithConstraint phi =
         new ExplicitExpFamFactorWithConstraint(vs, -1);
@@ -365,7 +386,9 @@ public class RoleSpanPruningStage
       for (int i = 0; i < N; i++) {
         VarConfig conf = vs.getVarConfig(i);
         boolean keep = !BinaryVarUtil.configToBool(conf.getState(p));
-        boolean cons = p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c));
+        boolean cons  = false;
+        if (c != null)
+          cons = p.arg.width() == 1 || BinaryVarUtil.configToBool(conf.getState(c));
 
         StringBuilder msg = null;
         if (SHOW_FEATURES) {
@@ -377,7 +400,7 @@ public class RoleSpanPruningStage
           msg.append(p.getName());
         }
 
-        if (disallowArgWithoutConstituent && keep && !cons) {
+        if (disallowArgWithoutConstituent && keep && !cons && c != null) {
           phi.setBadConfig(i);
           phi.setFeatures(i, AbstractFeatures.emptyFeatures);
           if (SHOW_FEATURES) {
@@ -402,6 +425,7 @@ public class RoleSpanPruningStage
 
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
+      observeGetDecodable(input.getId());
       FactorGraph fg = new FactorGraph();
       List<ArgSpanPruningVar> roleVars = new ArrayList<>();
       build(fg, null, roleVars);

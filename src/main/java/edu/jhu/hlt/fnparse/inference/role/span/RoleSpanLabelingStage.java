@@ -152,6 +152,7 @@ public class RoleSpanLabelingStage
     this.scanFeatures(goldPrunes, data, 999, 999_999_999);
   }
 
+  private int buildCtr = 0, buildCtrInterval = 500;
   /**
    * Represents all of the variables needed to choose from a pruned set of
    * spans for every role. In cases where we've pruned the gold span, we do
@@ -186,7 +187,6 @@ public class RoleSpanLabelingStage
       return gold;
     }
 
-    private int msgCtr = 0, msgInterval = 500;
     private void build(
         FactorGraph fg,
         VarConfig goldConf,
@@ -305,7 +305,7 @@ public class RoleSpanLabelingStage
         }
       }
       */
-      if (msgCtr++ % msgInterval == 0) {
+      if (buildCtr++ % buildCtrInterval == 0) {
         if (training) {
           LOG.info(String.format(
               "[build] pruned the gold span in %d of %d cases (%d realized) in %s",
@@ -414,6 +414,7 @@ public class RoleSpanLabelingStage
 
     @Override
     public LabeledFgExample getExample() {
+      observeGetExample(input.getId());
       VarConfig gold = new VarConfig();
       FactorGraph fg = new FactorGraph();
       build(fg, gold, null);
@@ -422,6 +423,7 @@ public class RoleSpanLabelingStage
 
     @Override
     public IDecodable<FNParse> getDecodable() {
+      observeGetDecodable(input.getId());
       Collection<ArgSpanLabelVar> vars = new ArrayList<>();
       FactorGraph fg = new FactorGraph();
       build(fg, null, vars);

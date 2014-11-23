@@ -64,9 +64,6 @@ public class PipelinedFnParser implements Serializable, Parser {
 	@Override
 	public void configure(Map<String, String> configuration) {
 	  LOG.info("[configure] " + configuration);
-	  frameId.configure(configuration);
-	  argId.configure(configuration);
-	  argExpansion.configure(configuration);
 
 	  String key, value;
 	  key = "features";
@@ -75,6 +72,10 @@ public class PipelinedFnParser implements Serializable, Parser {
 	    setFeatures(value);
 	    LOG.info("setting " + key + " = " + value);
 	  }
+
+	  frameId.configure(configuration);
+	  argId.configure(configuration);
+	  argExpansion.configure(configuration);
 	}
 
   @Override

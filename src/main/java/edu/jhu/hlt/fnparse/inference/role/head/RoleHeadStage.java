@@ -390,6 +390,7 @@ public class RoleHeadStage
 
     @Override
     public LabeledFgExample getExample() {
+      observeGetExample(input.getId());
       FactorGraph fg = getFactorGraph();
       VarConfig goldConf = new VarConfig();
 
@@ -403,6 +404,7 @@ public class RoleHeadStage
 
     @Override
     public Decodable<FNParse> getDecodable() {
+      observeGetDecodable(input.getId());
       FgInferencerFactory infFact = infFactory();
       return new RoleIdDecodable(
           getFactorGraph(), infFact, getSentence(), roleVars);

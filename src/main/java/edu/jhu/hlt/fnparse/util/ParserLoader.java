@@ -5,7 +5,6 @@ import java.util.Map;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.inference.Parser;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 
@@ -19,30 +18,7 @@ public class ParserLoader {
 
   public static Parser instantiateParser(Map<String, String> config) {
     String mode = config.get(Parser.PARSER_MODE.getName());
-    String synMode = config.get(Parser.SYNTAX_MODE.getName());
-    String featureSet = config.get(Parser.FEATURES);
-    LOG.info("[instantiateParser] mode=" + mode
-        + ", syntaxMode=" + synMode
-        + ", featureSet=" + featureSet);
-    if (featureSet == null)
-      throw new RuntimeException("you need to provide a feature set with " + Parser.FEATURES);
-    ParserParams params = new ParserParams();
-    params.setFeatureTemplateDescription(featureSet);
-    if ("regular".equals(synMode)) {
-      params.useLatentConstituencies = false;
-      params.useLatentDepenencies = false;
-      params.useSyntaxFeatures = true;
-    } else if ("latent".equals(synMode)) {
-      params.useLatentConstituencies = true;
-      params.useLatentDepenencies = true;
-      params.useSyntaxFeatures = false;
-    } else if ("none".equals(synMode)) {
-      params.useLatentConstituencies = false;
-      params.useLatentDepenencies = false;
-      params.useSyntaxFeatures = false;
-    } else {
-      throw new RuntimeException("unknown syntax mode: " + synMode);
-    }
+    LOG.info("[instantiateParser] mode=" + mode);
     if (mode.equalsIgnoreCase("span") || mode.equals("spans")) {
       LatentConstituencyPipelinedParser parser =
           new LatentConstituencyPipelinedParser();

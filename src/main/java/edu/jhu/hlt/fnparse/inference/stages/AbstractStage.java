@@ -92,6 +92,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
   }
 
   public void setFeatures(String featureTemplatesString) {
+    log.info("[setFeatures] " + featureTemplatesString);
     this.featureTemplates = null;
     this.featureTemplatesString = featureTemplatesString;
   }
@@ -185,64 +186,71 @@ public abstract class AbstractStage<I, O extends FNTagging>
     key = "regularizer." + getName();
     value = configuration.get(key);
     if (value != null) {
-      regularizer = new L2(Double.parseDouble(value));
       log.info("[configure] set " + key + " = " + value);
+      regularizer = new L2(Double.parseDouble(value));
     }
 
     key = "batchSize." + getName();
     value = configuration.get(key);
     if (value != null) {
-      batchSize = Integer.parseInt(value);
       log.info("[configure] set " + key + " = " + value);
+      batchSize = Integer.parseInt(value);
     }
 
     key = "passes." + getName();
     value = configuration.get(key);
     if (value != null) {
-      this.passes = Integer.parseInt(value);
       log.info("[configure] set " + key + " = " + value);
+      this.passes = Integer.parseInt(value);
     }
 
     key = "tuneOnTrainingData." + getName();
     value = configuration.get(key);
     if (value != null) {
-      this.tuneOnTrainingData = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
+      this.tuneOnTrainingData = Boolean.valueOf(value);
     }
 
     key = "regularizer." + getName();
     value = configuration.get(key);
     if (value != null) {
-      this.regularizer = new L2(Double.parseDouble(value));
       log.info("[configure] set " + key + " = " + value);
+      this.regularizer = new L2(Double.parseDouble(value));
     }
 
     key = "useSyntaxFeatures";
     value = configuration.get(key);
     if (value != null) {
-      useSyntaxFeatures = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
+      useSyntaxFeatures = Boolean.valueOf(value);
     }
 
     key = "useLatentDependencies";
     value = configuration.get(key);
     if (value != null) {
-      useLatentDependencies = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
+      useLatentDependencies = Boolean.valueOf(value);
     }
 
     key = "useLatentConstituencies";
     value = configuration.get(key);
     if (value != null) {
-      useLatentConstituencies = Boolean.valueOf(value);
       log.info("[configure] set " + key + " = " + value);
+      useLatentConstituencies = Boolean.valueOf(value);
     }
 
     key = "bpIters." + getName();
     value = configuration.get(key);
     if (value != null) {
-      bpIters = Integer.parseInt(value);
       log.info("[configure] set " + key + " = " + value);
+      bpIters = Integer.parseInt(value);
+    }
+
+    key = "syntaxMode";
+    value = configuration.get(key);
+    if (value != null) {
+      log.info("[configure] set " + key + " = " + value);
+      setSyntaxMode(value);
     }
   }
 
@@ -268,6 +276,30 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	public void setGlobals(GlobalParameters globals) {
 	  this.globals = globals;
+	}
+
+	private int getExampleCtr = 0, getExampleCtrInterval = 500;
+	protected void observeGetExample(String msg) {
+	  if (getExampleCtr % getExampleCtrInterval == 0) {
+	    log.info("[getExample] (" + msg + ")"
+	        + " ctr=" + getExampleCtr
+	        + " useLatentConstituencies=" + useLatentConstituencies
+	        + " useLatentDependencies=" + useLatentDependencies
+	        + " useSyntaxFeatures=" + useSyntaxFeatures);
+	  }
+	  getExampleCtr++;
+	}
+
+	private int getDecodableCtr = 0, getDecodableCtrInterval = 500;
+	protected void observeGetDecodable(String msg) {
+	  if (getDecodableCtr % getDecodableCtrInterval == 0) {
+	    log.info("[getDecodable] (" + msg + ")"
+	        + " ctr=" + getDecodableCtr
+	        + " useLatentConstituencies=" + useLatentConstituencies
+	        + " useLatentDependencies=" + useLatentDependencies
+	        + " useSyntaxFeatures=" + useSyntaxFeatures);
+	  }
+	  getDecodableCtr++;
 	}
 
   /** checks if they're log proportions from this.logDomain */

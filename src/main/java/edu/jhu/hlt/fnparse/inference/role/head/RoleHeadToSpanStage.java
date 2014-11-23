@@ -432,6 +432,7 @@ public class RoleHeadToSpanStage
 
 		@Override
 		public LabeledFgExample getExample() {
+		  observeGetExample(onlyHeads.getId());
 			FactorGraph fg = this.getFactorGraph();
 			VarConfig goldConf = new VarConfig();
 			for(ExpansionVar ev : this.expansions) {
@@ -457,6 +458,7 @@ public class RoleHeadToSpanStage
 
 		@Override
 		public Decodable<FNParse> getDecodable() {
+		  observeGetDecodable(onlyHeads.getId());
 			FgInferencerFactory infFact = infFactory();
 			return new RoleSpanDecodable(
 					getFactorGraph(), infFact, onlyHeads, expansions);
