@@ -51,10 +51,9 @@ public class FNParseSpanPruning extends FNTagging {
 
   // TODO fix/remove me
   public double getTargetWeight(Frame f, Span target) {
-    Double d = 1d;
+    double d = 1d;
     for (FrameInstance fi : frameInstances) {
       if (fi.getFrame().equals(f) && fi.getTarget().equals(target)) {
-        assert d == null;
         if (fi instanceof WeightedFrameInstance)
           d = ((WeightedFrameInstance) fi).getTargetWeight();
       }
