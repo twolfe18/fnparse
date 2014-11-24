@@ -46,7 +46,7 @@ import edu.jhu.util.Threads;
 public class LatentConstituencyPipelinedParser implements Parser {
   public static final Logger LOG =
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
-  private static final DeterministicRolePruning.Mode DEFAULT_PRUNING_METHOD =
+  public static final DeterministicRolePruning.Mode DEFAULT_PRUNING_METHOD =
       Mode.XUE_PALMER_HERMANN;
 
   private GlobalParameters globals;

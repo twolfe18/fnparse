@@ -67,7 +67,7 @@ public class DeterministicRolePruning
     XUE_PALMER_DEP_HERMANN,
   }
 
-  private Mode mode = Mode.STANFORD_CONSTITUENTS;
+  private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
   private final FgModel weights = new FgModel(0);
   private ConcreteStanfordWrapper parser =
       ConcreteStanfordWrapper.getSingleton(true);

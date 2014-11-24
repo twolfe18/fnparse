@@ -248,7 +248,10 @@ public class Sentence implements HasId {
   }
 
   public DependencyParse getCollapsedDeps() {
-    if (hideSyntax)
+    return getCollapsedDeps(true);
+  }
+  public DependencyParse getCollapsedDeps(boolean askPermission) {
+    if (askPermission && hideSyntax)
       return null;
     return collapsedDeps;
   }
@@ -259,7 +262,10 @@ public class Sentence implements HasId {
   }
 
   public DependencyParse getBasicDeps() {
-    if (hideSyntax)
+    return getBasicDeps(true);
+  }
+  public DependencyParse getBasicDeps(boolean askPermission) {
+    if (askPermission && hideSyntax)
       return null;
     return basicDeps;
   }
@@ -270,7 +276,10 @@ public class Sentence implements HasId {
   }
 
   public ConstituencyParse getStanfordParse() {
-    if (hideSyntax)
+    return getStanfordParse(true);
+  }
+  public ConstituencyParse getStanfordParse(boolean askPermission) {
+    if (askPermission && hideSyntax)
       return null;
     return this.stanfordParse;
   }

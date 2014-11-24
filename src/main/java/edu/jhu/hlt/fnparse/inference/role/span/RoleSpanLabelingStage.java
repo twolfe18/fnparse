@@ -138,6 +138,7 @@ public class RoleSpanLabelingStage
   public StageDatumExampleList<FNParseSpanPruning, FNParse> setupInference(
       List<? extends FNParseSpanPruning> input,
       List<? extends FNParse> output) {
+    super.setupInferenceHook(input, output);
     List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParse gold = output == null ? null : output.get(i);

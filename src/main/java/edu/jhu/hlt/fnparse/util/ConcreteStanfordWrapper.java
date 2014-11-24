@@ -71,7 +71,9 @@ public class ConcreteStanfordWrapper {
     return new ConstituencyParse(parse(s, false));
   }
 
-  public synchronized edu.jhu.hlt.concrete.Parse parse(Sentence s, boolean storeBasicDeps) {
+  public synchronized edu.jhu.hlt.concrete.Parse parse(
+      Sentence s,
+      boolean storeBasicDeps) {
     Communication communication = null;
     boolean updateCache = false;
     if (cache != null) {

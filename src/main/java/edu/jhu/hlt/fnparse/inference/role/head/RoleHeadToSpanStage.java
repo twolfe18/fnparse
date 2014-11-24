@@ -131,6 +131,7 @@ public class RoleHeadToSpanStage
 	public StageDatumExampleList<FNParse, FNParse> setupInference(
 			List<? extends FNParse> onlyHeads,
 			List<? extends FNParse> labels) {
+    super.setupInferenceHook(onlyHeads, labels);
 		List<StageDatum<FNParse, FNParse>> data = new ArrayList<>();
 		int n = onlyHeads.size();
 		assert labels == null || labels.size() == n;
