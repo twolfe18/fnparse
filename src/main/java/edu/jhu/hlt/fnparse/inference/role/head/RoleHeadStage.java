@@ -193,6 +193,7 @@ public class RoleHeadStage
   public StageDatumExampleList<FNTagging, FNParse> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParse> output) {
+    super.setupInferenceHook(input, output);
     List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
     int n = input.size();
     assert output == null || output.size() == n;

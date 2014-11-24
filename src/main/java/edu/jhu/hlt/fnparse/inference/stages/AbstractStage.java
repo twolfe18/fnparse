@@ -23,6 +23,7 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -34,6 +35,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
@@ -418,6 +420,49 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		return 10;
 	}
 
+	/**
+	 * You MUST call this before doing your setupInference work.
+	 */
+	protected void setupInferenceHook(
+	    List<? extends I> input,
+	    List<? extends O> output) {
+	  assert input != null;
+	  assert output == null || output.size() == input.size();
+	  setupSyntax(input);
+	}
+
+	// every time i call setupInference, you have to call
+	// super.setupInferenceHook
+	// which will do the appropriate hiding of syntax, parsing, or making it visible
+	private void setupSyntax(Collection<? extends I> input) {
+		if (useSyntaxFeatures) {
+		  log.info("[setupSyntax] useSyntaxFeatures=true checking if anything needs to be parsed");
+		  ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
+		  for (I in : input) {
+		    Sentence s = getSentence(in);
+		    if (s.getStanfordParse(false) == null || s.getBasicDeps(false) == null) {
+		      ConstituencyParse cp = new ConstituencyParse(parser.parse(s, true));
+		      s.setStanfordParse(cp);
+		      assert s.getBasicDeps(false) != null;
+		    }
+		    s.hideSyntax(false);
+		  }
+		} else {
+		  log.info("[setupSyntax] useSyntaxFeatures=false hiding syntax");
+		  for (I in : input)
+		    getSentence(in).hideSyntax();
+		}
+	}
+
+	private static Sentence getSentence(Object in) {
+	  if (in instanceof Sentence)
+	    return (Sentence) in;
+	  else if (in instanceof HasSentence)
+	    return ((HasSentence) in).getSentence();
+	  else
+	    throw new RuntimeException("input type: " + in.getClass());
+	}
+
 	@Override
 	public void train(List<I> x, List<O> y) {
 		train(x, y, getLearningRate(),
@@ -439,8 +484,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			throw new IllegalArgumentException("x.size=" + x.size() + ", y.size=" + y.size());
 		log.info("[train] starting training");
 		long start = System.currentTimeMillis();
-
-		boolean unhideAtEnd = hideSyntax(x);
 
 		//initWeights();
 		randomlyInitWeights(0.1d, new Random(9001));
@@ -521,46 +564,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		if(td != null)
 			tuneRecallBias(xDev, yDev, td);
 
-		if (unhideAtEnd)
-		  unhideSyntax(x);
-
 		log.info("[train] done training");
-	}
-
-	private void unhideSyntax(Collection<? extends I> input) {
-	  log.info("unhiding syntax");
-	  for (I in : input) {
-	    Sentence s;
-	    if (in instanceof Sentence)
-	      s = (Sentence) in;
-	    else if (in instanceof HasSentence)
-	      s = ((HasSentence) in).getSentence();
-	    else
-	      throw new RuntimeException("input type: " + in.getClass());
-	    s.hideSyntax(false);
-	  }
-	}
-
-	private boolean hideSyntax(Collection<? extends I> input) {
-		if (useSyntaxFeatures) {
-		  return false;
-		} else {
-		  log.info("hiding syntax");
-		  boolean unhideAfter = false;
-		  for (I in : input) {
-		    Sentence s;
-		    if (in instanceof Sentence)
-		      s = (Sentence) in;
-		    else if (in instanceof HasSentence)
-		      s = ((HasSentence) in).getSentence();
-		    else
-		      throw new RuntimeException("input type: " + in.getClass());
-		    if (s.syntaxIsHidden())
-		      unhideAfter = true;
-		    s.hideSyntax();
-		  }
-		  return unhideAfter;
-		}
 	}
 
 	/**
@@ -580,8 +584,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 			throw new IllegalStateException("There is no reason to run this "
 					+ "unless you've set the alphabet to be growing");
 		}
-
-		boolean unhideAtEnd = hideSyntax(unlabeledExamples);
 
 		Timer t = new Timer(this.getName() + "@scan-features", 500, false);
 		log.info("[scanFeatures] Counting the number of parameters needed over "
@@ -661,9 +663,6 @@ public abstract class AbstractStage<I, O extends FNTagging>
 					+ "%d frame-roles, and %d roles (ignoring frame)",
 					fSeen.size(), frSeen.size(), rSeen.size()));
 		}
-
-		if (unhideAtEnd)
-		  unhideSyntax(unlabeledExamples);
 
 		log.info(String.format("[scanFeatures] Done, scanned %d examples in "
 				+ "%.1f minutes, alphabet size is %d, added %d",
