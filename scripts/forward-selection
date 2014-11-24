@@ -56,26 +56,32 @@ class Feature(CommonEqualityMixin):
     return c
 
   def propose_modification(self, template_info):
-    # the higher the estimated cardinality, the greater the chance of
-    # removing a template
-    # e.g. cardinality = 100  -> p(shrink) = 0.500
-    #      cardinality = 4    -> p(shrink) = 0.167
-    #      cardinality = 400  -> p(shrink) = 0.667
-    #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
-    card = pow(self.estimate_cardinality(template_info), 0.5)
-    p_shrink = card / (card + 10.0)
-    if len(self.templates) > 1 and random.random() < p_shrink:
-      # add a new template
-      xs = [x for x in template_info.basic_templates() if x not in self.templates]
-      if len(xs) > 0:
-        return Feature(self.stage, self.syntax_mode, self.label, self.templates + [random.choice(xs)])
+    def helper():
+      # the higher the estimated cardinality, the greater the chance of
+      # removing a template
+      # e.g. cardinality = 100  -> p(shrink) = 0.500
+      #      cardinality = 4    -> p(shrink) = 0.167
+      #      cardinality = 400  -> p(shrink) = 0.667
+      #      cardinality = 4000 -> p(shrink) = 0.863 (only if #templates > 1 though)
+      card = pow(self.estimate_cardinality(template_info), 0.5)
+      p_shrink = card / (card + 10.0)
+      if len(self.templates) > 1 and random.random() < p_shrink:
+        # remove a template
+        tmpl = random.sample(self.templates, len(self.templates) - 1)
+        return Feature(self.stage, self.syntax_mode, self.label, tmpl)
       else:
-        raise Exception('cant extend this Feature any further')
-    else:
-      # remove a template
-      assert len(self.templates) >= 2
-      tmpl = random.sample(self.templates, len(self.templates) - 1)
-      return Feature(self.stage, self.syntax_mode, self.label, tmpl)
+        # add a new template
+        xs = [x for x in template_info.basic_templates() if x not in self.templates]
+        if len(xs) > 0:
+          return Feature(self.stage, self.syntax_mode, self.label, self.templates + [random.choice(xs)])
+        else:
+          raise Exception('cant extend this Feature any further')
+    for i in range(500):
+      f = helper()
+      if f.estimate_cardinality(template_info) > 0:
+        return f
+    assert False, 'couldn\'t make a new feature with card>0'
+    return None
 
 
 class FeatureSet(object):
@@ -101,6 +107,18 @@ class FeatureSet(object):
     self.features = fs
     print "[FeatureSet restrict_to] only including stages: %s, %d => %d" \
       % (str(stages), n, len(self.features))
+
+  def trim(self, template_info):
+    ''' Removes any features in this set which have cardinality 0 '''
+    n = len(self.features)
+    fs = []
+    for f in self.features:
+      if f.estimate_cardinality(template_info) > 0:
+        fs.append(f)
+      else:
+        print '[FeatureSet trim] removing:', f
+    self.features = fs
+    print "[FeatureSet trim] %d => %d" % (n, len(self.features))
 
   def estimate_cardinality(self, template_info, stage=None):
     ''' Returns a dict with stage names as keys and int/long values '''
@@ -205,7 +223,7 @@ class FeatureSet(object):
     syntax_mode = self.syntax_mode()
     label_template, basic_template = random.choice(template_info.labels_for(stage, syntax_mode))
     f = Feature(stage, syntax_mode, label_template, basic_template)
-    if f in self.features:
+    if f in self.features or f.estimate_cardinality(template_info) == 0:
       return self.new_feature(template_info)
     else:
       print '[new_feature] stage =', stage
@@ -730,7 +748,7 @@ class ConfigJobStarter:
       if f.syntax_mode == 'latent':
         latent_stages.add(f.stage)
     for s in latent_stages:
-      cmd['bpIters.' + s] = '10'
+      cmd['bpIters.' + s] = '2'
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
@@ -1027,8 +1045,10 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1StanfordCategory']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'roleArg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'arg', ['span1StanfordCategory']),
+      Feature(s2, syntax_mode, 'frameRoleArg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'roleArg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'arg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'span1IsConstituent', ['1']),
@@ -1086,6 +1106,8 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'roleArg',      ['Dist(Len5,Head1,Span1.Last)']),
       Feature(s2, syntax_mode, 'arg',          ['Dist(Len5,Head1,Span1.Last)']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1StanfordCategory']),
+      Feature(s2, syntax_mode, 'roleArg', ['span1StanfordCategory']),
+      Feature(s2, syntax_mode, 'arg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'roleArg', ['CfgFeat-CommonParent-Category']),
       Feature(s2, syntax_mode, 'arg', ['CfgFeat-CommonParent-Category']),
@@ -1142,6 +1164,12 @@ def experiments(parser_mode, syntax_mode, template_info_filename, max_train=9999
     template_info.restrict_stages_to([s1, s2])
   """
   sd = list(seeds(parser_mode, syntax_mode, settings))
+
+  # Remove any irrelevant features that are in the seeds
+  for conf in sd:
+    print '[experiments] trimming feature set for', conf.params
+    conf.feature_set.trim(template_info)
+
   # NOTE: I believe this is no longer relied on (check TemplateInfo.restrict_labels_for)
   labels = {
     ('RoleHeadStage', 'regular'): ['frameRole', 'frame', 'role'],
@@ -1159,6 +1187,7 @@ def experiments(parser_mode, syntax_mode, template_info_filename, max_train=9999
   }
   template_info.restrict_labels_for(s1, syntax_mode, labels[(s1, syntax_mode)])
   template_info.restrict_labels_for(s2, syntax_mode, labels[(s2, syntax_mode)])
+
   return (template_info, sd)
 
 def default_config(parser_mode, syntax_mode, template_info_filename):
@@ -1168,10 +1197,11 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
+  n_train = 400
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent', 'none']:
-      template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
+      template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename, max_train=n_train)
       q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
       print 'setting up queue for', q_name
       print template_info
@@ -1304,7 +1334,7 @@ def run_experiments(template_info_filename, where):
 
   # Create the job tracker
   if local:
-    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
+    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=10)
     job_tracker.remove_all_jobs()
   else:
     d = os.path.join(working_dir, 'sge-logs')
