@@ -138,16 +138,14 @@ public class DependencyBasedXuePalmerRolePruning {
    * Returns a map where the keys are spans and the values are the index of
    * the headword of that span.
    */
-  public static Map<Span, Integer> getAllSpansFromDeps(
-      DependencyParse deps,
-      boolean includeHermannStyleExtensions) {
+  public static Map<Span, Integer> getAllSpansFromDeps(DependencyParse deps) {
     if (DEBUG)
       LOG.debug("[getAllSpansFromDeps]");
     Map<Span, Integer> spans = new HashMap<>();
     boolean[] seen = new boolean[deps.size()];
     for (int i = 0; i < deps.size(); i++) {
       if (deps.isRoot(i))
-        helper(deps, i, spans, seen, false);
+        helper(deps, i, spans, seen);
     }
     return spans;
   }
@@ -156,40 +154,14 @@ public class DependencyBasedXuePalmerRolePruning {
       DependencyParse deps,
       int i,
       Map<Span, Integer> addTo,
-      boolean[] seen,
-      boolean includeHermannStyleExtensions) {
-    if (deps.getChildren(i).length == 0)
+      boolean[] seen) {
+    if (seen[i])
       return;
-    int l = i;
-    int r = i;
-    for (int c : deps.getChildren(i)) {
-      if (c < l) l = c;
-      if (c > r) r = c;
-    }
-    if (DEBUG)
-      LOG.debug("[helper] span around " + i + " is [" + l + "," + (r+1) + ")");
-    Span span = Span.getSpan(l, r + 1);
-    Integer iOld = addTo.put(span, i);
-    if (includeHermannStyleExtensions) {
-      if (l < i) {
-        Span sp = Span.getSpan(l, i);
-        iOld = addTo.put(sp, i);
-        if (iOld != null)
-          addTo.put(sp, iOld);
-      }
-      if (i > r) {
-        Span sp = Span.getSpan(i + 1, r + 1);
-        iOld = addTo.put(sp, i);
-        if (iOld != null)
-          addTo.put(sp, iOld);
-      }
-    }
-    for (int c : deps.getChildren(i)) {
-      if (seen[c]) continue;
-      seen[c] = true;
-      if (DEBUG)
-        LOG.debug("[helper] recursing on " + c);
-      helper(deps, c, addTo, seen, false);
-    }
+    seen[i] = true;
+    int l = deps.getProjLeft(i);
+    int r = deps.getProjRight(i);
+    addTo.put(Span.getSpan(l, r + 1), i);
+    for (int c : deps.getChildren(i))
+      helper(deps, c, addTo, seen);
   }
 }
