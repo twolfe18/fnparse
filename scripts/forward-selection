@@ -990,7 +990,7 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 5  # default number of training passes (this value is copied for all runs)
+  p = 10  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1046,7 +1046,6 @@ def seeds(parser_mode, syntax_mode, settings):
       Feature(s2, syntax_mode, 'frameRoleArg', ['Dist(Len5,Span1.Last,Span2.First)']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-LEMMA-DIRECTION-t']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['head1head2Path-POS-DEP-t']),
-      Feature(s2, syntax_mode, 'frameRoleArg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'frameRoleArg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'roleArg', ['span1StanfordCategory']),
       Feature(s2, syntax_mode, 'arg', ['span1StanfordCategory']),
@@ -1219,14 +1218,19 @@ def forward_selection_queue(template_info_filename):
       mq.add_queue(q_name, q)
   return mq
 
-def sweep(starting_config, names_to_values):
-  ''' Returns a Queue representing a parameter sweep
-  NOTE: for now, only supports params_name being a key in config.params
-  '''
+def sweep(starting_config, dimensions_to_sweep):
+  ''' dimensions_to_sweep should be a list of ('param', ['val1', 'val2', ...])
+  where the semantics is that jobs will be launched as if dimension at the
+  start of the loop will be treated as the outermost loop.
+  You can also provide a dict, which will be converted to the first format
+  in an arbitrary order. '''
+  if isinstance(dimensions_to_sweep, dict):
+    return sweep(starting_config, dimensions_to_sweep.items())
+  assert isinstance(dimensions_to_sweep, list)
   jobs = []
   def pair(key, values):  # {k: [x,y,x], ...} => [[(k,x), (k,y), (k,z)], ...]
     return [(key, v) for v in values]
-  flat = [pair(k,v) for k,v in names_to_values.iteritems()]
+  flat = [pair(k,v) for k,v in dimensions_to_sweep]
   for conf in itertools.product(*flat):
     c = starting_config.copy()
     for k, v in conf:
@@ -1248,35 +1252,49 @@ def ab_test_queue(template_info_filename):
   #    {'disallowArgWithoutDepenency.RoleHeadStage': ['true', 'false'],
   #     'MaxTrainSize': ['250', '750', '2250']}))
 
+  # NOTE: MaxTrainSize should always come first so that we can sweep
+  # the parameters over smaller datasets to get some initial results
+  # before wasting a lot of time on the full thing.
+
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('head-latent-s2-argIsCons',
     sweep(default_config('head', 'latent', template_info_filename),
-      {'disallowArgWithoutConstituent.RoleHeadToSpanStage': ['true', 'false'],
-       'MaxTrainSize': ['500', '1500', '99999']}))
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('disallowArgWithoutConstituent.RoleHeadToSpanStage', ['true', 'false'])]))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('span-latent-s1-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
-      {'disallowArgWithoutConstituent.RoleSpanPruningStage': ['true', 'false'],
-       'MaxTrainSize': ['500', '1500', '99999']}))
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('disallowArgWithoutConstituent.RoleSpanPruningStage', ['true', 'false'])]))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('span-latent-s2-argIsCons',
     sweep(default_config('span', 'latent', template_info_filename),
-      {'disallowArgWithoutConstituent.RoleSpanLabelingStage': ['true', 'false'],
-       'MaxTrainSize': ['500', '1500', '99999']}))
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('disallowArgWithoutConstituent.RoleSpanLabelingStage', ['true', 'false'])]))
 
   # IMPLMENTED IN JAVA
   # VISUALLY TESTED
   mq.add_queue('span-regular-s1-pruneMethod',
     sweep(default_config('span', 'regular', template_info_filename),
-      {'deterministicRolePruningMethod':
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('deterministicRolePruningMethod',
         ['STANFORD_CONSTITUENTS', 'DEPENDENCY_SPANS', 'XUE_PALMER',
-          'XUE_PALMER_HERMANN', 'XUE_PALMER_DEP', 'XUE_PALMER_DEP_HERMANN'],
-       'MaxTrainSize': ['500', '1500', '99999']}))
+          'XUE_PALMER_HERMANN', 'XUE_PALMER_DEP', 'XUE_PALMER_DEP_HERMANN'])]))
+
+  mq.add_queue('span-bpIters',
+    sweep(default_config('span', 'latent', template_info_filename),
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('bpIters', ['1', '2', '4', '8', '16'])]))
+
+  mq.add_queue('head-bpIters',
+    sweep(default_config('head', 'latent', template_info_filename),
+      [('MaxTrainSize', ['500', '1500', '99999']),
+       ('bpIters', ['1', '2', '4', '8', '16'])]))
 
   return mq
 
@@ -1320,6 +1338,23 @@ def agiga_model_queue(template_info_filename, run_feature_selection=False):
     q.seed(c)
     return q
 
+def debug_queue(template_info_filename):
+  ''' a queue for whatever issue i'm currently debugging '''
+  n = 1500
+  template_info, configs = experiments('span', 'regular', template_info_filename, max_train=n)
+  c_reg = configs[0]
+  c_dup = c_reg.copy()
+  f = Feature('RoleSpanLabelingStage', 'regular', 'frameRoleArg', ['span1StanfordCategory'])
+  c_dup.feature_set.features.append(f)
+  # NOTE this only works as long as I leave the bug in:
+  # I had a bug in disallowArgWithoutConstituent where i enforced this when
+  # there is no contituency tree and all spans are trivially "not constituents"
+  c_reg_fix = c_reg.copy()
+  c_reg_fix.params['disallowArgWithoutConstituent.RoleSpanLabelingStage'] = 'false'
+  c_dup_fix = c_dup.copy()
+  c_dup_fix.params['disallowArgWithoutConstituent.RoleSpanLabelingStage'] = 'false'
+  return ExplicitQueue([c_reg_fix, c_reg, c_dup_fix, c_dup])
+
 
 def run_experiments(template_info_filename, where):
 
@@ -1327,16 +1362,18 @@ def run_experiments(template_info_filename, where):
   assert local or where == 'grid'
 
   # Work to be done
-  mq = forward_selection_queue(template_info_filename)
-  working_dir = 'experiments/forward-selection/role/omni'
+  #mq = forward_selection_queue(template_info_filename)
+  #working_dir = 'experiments/forward-selection/role/omni'
   #mq = ab_test_queue(template_info_filename)
   #working_dir = 'experiments/ab-test'
   #mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
   #working_dir = 'experiments/agiga'
+  mq = debug_queue(template_info_filename)
+  working_dir = 'experiments/debug'
 
   # Create the job tracker
   if local:
-    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=10)
+    job_tracker = LocalJobTracker(debug=False, max_concurrent_jobs=2)
     job_tracker.remove_all_jobs()
   else:
     d = os.path.join(working_dir, 'sge-logs')

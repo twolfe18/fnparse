@@ -29,12 +29,14 @@ import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
+import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.fnparse.util.SentencePosition;
 
 public class DeterministicRolePruning
     implements Stage<FNTagging, FNParseSpanPruning> {
@@ -133,6 +135,8 @@ public class DeterministicRolePruning
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
+    LOG.info("[setupInference] for " + input.size() + " sentences in "
+      + mode + " mode");
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++)
       data.add(new SD(input.get(i), mode, parser));
@@ -318,7 +322,7 @@ public class DeterministicRolePruning
   }
 
   // shows spans
-  public static void mainOld(String[] args) {
+  public static void main(String[] args) {
     DeterministicRolePruning prune =
         new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN);
     for (FNParse parse : DataUtil.iter2list(
@@ -339,7 +343,7 @@ public class DeterministicRolePruning
   }
 
   // computes recall for each method
-  public static void main(String[] args) {
+  public static void mainNew(String[] args) {
     List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()).subList(0, 500);
     ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
     for (FNParse p : parses) {

@@ -206,6 +206,25 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
+    tokenExtractors.put("WordWnSynset", x -> {
+      if (!x.indexInSent())
+        return null;
+      IWord w = x.sentence.getWnWord(x.index);
+      if (w == null)
+        return "WordWnSynset=FAILED_TO_GET_WN_WORD";
+      ISynset ss = w.getSynset();
+      if (ss == null)
+        return "WordWnSynset=FAILED_TO_GET_SYNSET";
+      ISynsetID id = ss.getID();
+      if (id == null)
+        return "WordWnSynset=NO_SYNSET_ID";
+      return "WordWnSynset=" + id;
+    });
+    tokenExtractors.put("Lemma", x -> {
+      if (!x.indexInSent())
+        return null;
+      return "Lemma=" + x.sentence.getLemma(x.index);
+    });
     tokenExtractors.put("Pos", x -> {
       if (x.indexInSent())
         return "Pos=" + x.sentence.getPos(x.index);

@@ -401,7 +401,8 @@ public class RoleSpanPruningStage
           msg.append(p.getName());
         }
 
-        if (disallowArgWithoutConstituent && keep && !cons && c != null) {
+        if (c != null   // only applies with latent c-parse
+            && disallowArgWithoutConstituent && keep && !cons) {
           phi.setBadConfig(i);
           phi.setFeatures(i, AbstractFeatures.emptyFeatures);
           if (SHOW_FEATURES) {

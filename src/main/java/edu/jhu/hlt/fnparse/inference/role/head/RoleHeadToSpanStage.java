@@ -132,6 +132,9 @@ public class RoleHeadToSpanStage
 			List<? extends FNParse> onlyHeads,
 			List<? extends FNParse> labels) {
     super.setupInferenceHook(onlyHeads, labels);
+    log.info("[setupInfernce] maxArgRoleExpandLeft=" + maxArgRoleExpandLeft);
+    log.info("[setupInfernce] maxArgRoleExpandRight=" + maxArgRoleExpandRight);
+    log.info("[setupInfernce] disallowArgWithoutConstituent=" + disallowArgWithoutConstituent);
 		List<StageDatum<FNParse, FNParse>> data = new ArrayList<>();
 		int n = onlyHeads.size();
 		assert labels == null || labels.size() == n;
@@ -228,7 +231,8 @@ public class RoleHeadToSpanStage
 	        boolean cons = cVar != null && BinaryVarUtil.configToBool(vc.getState(cVar));
 	        context.clear();
 	        context.setStage(RoleHeadToSpanStage.class);
-	        if (disallowArgWithoutConstituent && arg && cVar != null && !cons) {
+	        if (cVar != null // only applies with latent c-parse
+	            && disallowArgWithoutConstituent && arg && !cons) {
 	          phi.setBadConfig(i);
 	          if (SHOW_FEATURES)
 	            LOG.info("CONSTRAINING NEXT CONFIG TO BE -INFINITY");

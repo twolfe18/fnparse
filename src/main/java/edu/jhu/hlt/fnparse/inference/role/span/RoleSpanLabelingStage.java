@@ -139,6 +139,8 @@ public class RoleSpanLabelingStage
       List<? extends FNParseSpanPruning> input,
       List<? extends FNParse> output) {
     super.setupInferenceHook(input, output);
+    log.info("[setupInference] maxSpansPerArg=" + maxSpansPerArg);
+    log.info("[setupInference] disallowArgWithoutConstituent=" + disallowArgWithoutConstituent);
     List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParse gold = output == null ? null : output.get(i);
@@ -384,8 +386,8 @@ public class RoleSpanLabelingStage
               + " spanIsConstit=" + spanIsConstit + "\t" + frame.getName()
               + "." + frame.getRole(role) + " arg=" + arg;
         }
-        if (disallowArgWithoutConstituent
-            && roleIsRealized && !spanIsConstit) {
+        if (spanVar != null // only applies with latent c-parse
+            && disallowArgWithoutConstituent && roleIsRealized && !spanIsConstit) {
           phi.setBadConfig(c);
           phi.setFeatures(c, AbstractFeatures.emptyFeatures);
           if (SHOW_FEATURES) {

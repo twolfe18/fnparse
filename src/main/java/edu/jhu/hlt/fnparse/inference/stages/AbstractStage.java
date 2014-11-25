@@ -241,6 +241,15 @@ public abstract class AbstractStage<I, O extends FNTagging>
       useLatentConstituencies = Boolean.valueOf(value);
     }
 
+    // affects all stages that use bpIters
+    key = "bpIters";
+    value = configuration.get(key);
+    if (value != null) {
+      log.info("[configure] set " + key + " = " + value);
+      bpIters = Integer.parseInt(value);
+    }
+
+    // overrides global setting (by natur of comming second)
     key = "bpIters." + getName();
     value = configuration.get(key);
     if (value != null) {

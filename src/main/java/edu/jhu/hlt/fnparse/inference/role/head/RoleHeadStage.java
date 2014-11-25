@@ -194,6 +194,9 @@ public class RoleHeadStage
       List<? extends FNTagging> input,
       List<? extends FNParse> output) {
     super.setupInferenceHook(input, output);
+    log.info("[setupInfernece] maxSentenceLengthForTraining=" + maxSentenceLengthForTraining);
+    log.info("[setupInfernece] useArgPruner=" + useArgPruner);
+    log.info("[setupInfernece] allowSpanFeatures=" + allowSpanFeatures);
     List<StageDatum<FNTagging, FNParse>> data = new ArrayList<>();
     int n = input.size();
     assert output == null || output.size() == n;
