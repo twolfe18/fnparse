@@ -1550,8 +1550,6 @@ public class BasicFeatureTemplates {
         ? Executors.newSingleThreadScheduledExecutor()
             : Executors.newFixedThreadPool(parallel);
     LOG.info("actually starting work on " + parallel + " threads");
-    if (parallel > 1)
-      LOG.warn("verify this is thread safe, last time it wasn't");
 
     LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
     for (Entry<String, Template> label : labelTemplates.entrySet()) {

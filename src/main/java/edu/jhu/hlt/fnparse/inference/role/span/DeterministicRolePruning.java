@@ -23,8 +23,12 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -168,7 +172,7 @@ public class DeterministicRolePruning
     }
   }
 
-  static class Decodable implements IDecodable<FNParseSpanPruning> {
+  public static class Decodable implements IDecodable<FNParseSpanPruning> {
     private ConcreteStanfordWrapper parser;
     private Mode mode;
     private FNTagging input;
@@ -255,10 +259,19 @@ public class DeterministicRolePruning
         } else if (mode == Mode.DEPENDENCY_SPANS) {
           if (input.getSentence().getBasicDeps() == null)
             parser.parse(input.getSentence(), true);
+//          # basic deps
+//          107931   INFO  DeterministicRolePruning - DEPENDENCY_SPANS recall 0.5688228657389997
+//          108077   INFO  DeterministicRolePruning - XUE_PALMER_DEP recall 0.1855960887551711
+//          108103   INFO  DeterministicRolePruning - XUE_PALMER_DEP_HERMANN recall 0.4672809326814592
+//          # collapsed deps
+//          108448   INFO  DeterministicRolePruning - DEPENDENCY_SPANS recall 0.43249341857841295
+//          108617   INFO  DeterministicRolePruning - XUE_PALMER_DEP recall 0.1855960887551711
+//          108682   INFO  DeterministicRolePruning - XUE_PALMER_DEP_HERMANN recall 0.4672809326814592
           DependencyParse deps = input.getSentence().getBasicDeps();
+          //DependencyParse deps = input.getSentence().getCollapsedDeps();
           Map<Span, Integer> spanMap =
               DependencyBasedXuePalmerRolePruning
-              .getAllSpansFromDeps(deps, true);
+              .getAllSpansFromDeps(deps);
           List<Span> spans = new ArrayList<>();
           spans.add(Span.nullSpan);
           spans.addAll(spanMap.keySet());
@@ -294,7 +307,18 @@ public class DeterministicRolePruning
       xuePalmerHelper(node.getParent(), spans);
   }
 
-  public static void main(String[] args) {
+  @Override
+  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
+    LOG.info("not actually saving anything");
+  }
+
+  @Override
+  public void loadModel(DataInputStream dis, GlobalParameters globals) {
+    LOG.info("not actually loading anything");
+  }
+
+  // shows spans
+  public static void mainOld(String[] args) {
     DeterministicRolePruning prune =
         new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN);
     for (FNParse parse : DataUtil.iter2list(
@@ -314,14 +338,39 @@ public class DeterministicRolePruning
     }
   }
 
-  @Override
-  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
-    LOG.info("not actually saving anything");
-  }
-
-  @Override
-  public void loadModel(DataInputStream dis, GlobalParameters globals) {
-    LOG.info("not actually loading anything");
+  // computes recall for each method
+  public static void main(String[] args) {
+    List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()).subList(0, 500);
+    ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
+    for (FNParse p : parses) {
+      Sentence s = p.getSentence();
+      ConstituencyParse cp = new ConstituencyParse(parser.parse(s, true));
+      s.setStanfordParse(cp);
+    }
+    for (DeterministicRolePruning.Mode mode : DeterministicRolePruning.Mode.values()) {
+      FPR fpr = new FPR(false);
+      for (FNParse p : parses) {
+        DeterministicRolePruning.Decodable dec =
+            new DeterministicRolePruning.Decodable(p, mode, parser);
+        FNParseSpanPruning mask = dec.decode();
+        Map<FrameRoleInstance, Set<Span>> spans = mask.getMapRepresentation();
+        for (FrameInstance fi : p.getFrameInstances()) {
+          Frame f = fi.getFrame();
+          for (int k = 0; k < f.numRoles(); k++) {
+            Span s = fi.getArgument(k);
+            if (s == Span.nullSpan)
+              continue;
+            FrameRoleInstance key = new FrameRoleInstance(f, fi.getTarget(), k);
+            if (spans.get(key).contains(s))
+              fpr.accumTP();
+            else
+              fpr.accumFN();
+          }
+        }
+      }
+      if (fpr.getTP() > 0)
+        LOG.info(mode + " recall " + fpr.recall());
+    }
   }
 }
 
