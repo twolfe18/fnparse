@@ -748,7 +748,9 @@ class ConfigJobStarter:
       if f.syntax_mode == 'latent':
         latent_stages.add(f.stage)
     for s in latent_stages:
-      cmd['bpIters.' + s] = '2'
+      key = 'bpIters.' + s
+      if key not in cmd:
+        cmd[key] = '2'
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
@@ -988,11 +990,11 @@ class TemplateInfo(object):
 
 def seeds(parser_mode, syntax_mode, settings):
   ''' Generator of Configs '''
-  p = 10  # default number of training passes (this value is copied for all runs)
+  p = 5  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
-    reg = {s1: 12, s2: 12}
+    reg = {s1: 12, s2: 13}
     batch_size = {s1: 1, s2: 1}
     passes = {s1: p, s2: p}
     fs = [
@@ -1197,7 +1199,7 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
-  n_train = 400
+  n_train = 2500
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent', 'none']:
