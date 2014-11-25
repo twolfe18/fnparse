@@ -2,7 +2,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=10G
+#$ -l mem_free=6G
 #$ -l num_proc=1
 #$ -o logging/feature-cardinality-estimation
 #$ -S /bin/bash
@@ -11,7 +11,7 @@ CP=`find target -iname '*.jar' | tr '\n' ':'`
 echo "classpath: ${CP}"
 echo "args: $@"
 
-/export/common/tools/jdk1.8.0_25/bin/java -Xmx6G -ea -cp ${CP} \
+/export/common/tools/jdk1.8.0_25/bin/java -Xmx5G -server -ea -cp ${CP} \
   -XX:+UseG1GC -XX:G1ReservePercent=2 -XX:ConcGCThreads=2 -XX:ParallelGCThreads=2 \
   edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates $@
 

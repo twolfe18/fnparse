@@ -257,7 +257,6 @@ public class Sentence implements HasId {
   }
 
   public void setCollapsedDeps(DependencyParse collapedDeps) {
-    assert !hideSyntax;
     this.collapsedDeps = collapedDeps;
   }
 
@@ -271,7 +270,6 @@ public class Sentence implements HasId {
   }
 
   public void setBasicDeps(DependencyParse basicDeps) {
-    assert !hideSyntax;
     this.basicDeps = basicDeps;
   }
 
@@ -285,7 +283,6 @@ public class Sentence implements HasId {
   }
 
   public void setStanfordParse(ConstituencyParse p) {
-    assert !hideSyntax;
     this.stanfordParse = p;
   }
 }
