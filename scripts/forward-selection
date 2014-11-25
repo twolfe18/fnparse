@@ -1335,7 +1335,7 @@ if __name__ == '__main__':
     run_experiments(*(sys.argv[1:]))
   else:
     print 'please provide:'
-    print '1) a path to a basic template cardinality file (e.g. experiments/forward-selection/basic-templates.txt)'
+    print '1) a path to a basic template cardinality file (e.g. experiments/feature-cardinality-estimation/template.real.txt)'
     print '2) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
 
