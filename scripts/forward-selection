@@ -1279,14 +1279,14 @@ def run_experiments(template_info_filename, where):
   assert local or where == 'grid'
 
   # Work to be done
-  #mq = forward_selection_queue(template_info_filename)
-  #working_dir = 'experiments/forward-selection/role/omni'
+  mq = forward_selection_queue(template_info_filename)
+  working_dir = 'experiments/forward-selection/role/omni'
   #mq = ab_test_queue(template_info_filename)
   #working_dir = 'experiments/ab-test'
   #mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
   #working_dir = 'experiments/agiga'
-  mq = debug_queue(template_info_filename)
-  working_dir = 'experiments/debug'
+  #mq = debug_queue(template_info_filename)
+  #working_dir = 'experiments/debug'
 
   # Create the job tracker
   if local:
@@ -1324,23 +1324,4 @@ if __name__ == '__main__':
     print '1) a path to a basic template cardinality file (e.g. experiments/feature-cardinality-estimation/template.real.txt)'
     print '2) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
-
-
-# every experiment gets a human readable, but uniq name, e.g. 'frameId-forwardSelection-2014-10-09'
-# every job gets a uniq id, a UUID
-# the experiment name is used as a key in redis
-# the values associated with it json that represent information about the run
-# e.g. some run might be:
-#{
-#  jobId : '2b26c166-4f56-11e4-99fc-7c7a9146f5f0',
-#  command : 'java -Xmx4G edu.jhu.hlt.fnparse.foo.Bar',
-#  jar_hash : 'a5ff9934d159216c49a2b386edba062a15100907',
-#  completed : '2014-10-09 01:24:09',
-#  host : 'ch12',
-#  params : {foo = 42, bar = 'baz'}
-#  results : {targetMicroF1 = 0.733, runtime : 934.2}
-#}
-
-
-
 
