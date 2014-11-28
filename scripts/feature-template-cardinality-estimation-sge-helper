@@ -2,7 +2,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=6G
+#$ -l mem_free=5G
 #$ -l num_proc=1
 #$ -o logging/feature-cardinality-estimation
 #$ -S /bin/bash

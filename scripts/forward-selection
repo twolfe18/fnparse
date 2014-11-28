@@ -1050,8 +1050,6 @@ def generate_all_features(s1, s2, syntax_mode):
 def seeds(parser_mode, syntax_mode, settings, template_info):
   ''' Generator of Configs '''
   p = 10  # default number of training passes (this value is copied for all runs)
-  batch_size = {s1: 1, s2: 1}
-  passes = {s1: p, s2: p}
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1060,6 +1058,8 @@ def seeds(parser_mode, syntax_mode, settings, template_info):
     s2 = 'RoleHeadToSpanStage'
   else:
     raise Exception('unknown parser_mode: ' + parser_mode)
+  batch_size = {s1: 1, s2: 1}
+  passes = {s1: p, s2: p}
   fs = []
   for f in generate_all_features(s1, s2, syntax_mode):
     if f.estimate_cardinality(template_info) > 0:
@@ -1075,7 +1075,7 @@ def seeds(parser_mode, syntax_mode, settings, template_info):
       # make a few more seeds which are random subsets of those features
       n = 4
       for p_keep in [0.5, 0.2]:
-        for i in range(n)
+        for i in range(n):
           fs_smaller = fs[:]
           random.shuffle(fs_smaller)
           k = int(math.ceil(p_keep * len(fs)))
