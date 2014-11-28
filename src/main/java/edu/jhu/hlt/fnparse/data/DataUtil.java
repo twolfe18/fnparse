@@ -223,6 +223,18 @@ public class DataUtil {
     return m;
   }
 
+  /**
+   * Draw a sample with replacement.
+   */
+  public static <T> List<T> resample(List<T> population, int samples, Random rand) {
+    List<T> l = new ArrayList<>();
+    for (int i = 0; i < samples; i++) {
+      int j = rand.nextInt(population.size());
+      l.add(population.get(j));
+    }
+    return l;
+  }
+
   public static <T> List<T> reservoirSample(
       List<T> all,
       int howMany,

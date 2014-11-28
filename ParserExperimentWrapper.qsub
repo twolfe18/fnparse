@@ -21,7 +21,8 @@ syntaxMode=$2
 
 workingDir=experiments/${mode}-${syntaxMode}/$SGE_TASK_ID
 
-cp="target/fnparse-1.0.0-SNAPSHOT.jar:target/fnparse-1.0.0-SNAPSHOT-jar-with-dependencies.jar"
+#cp="target/fnparse-1.0.0-SNAPSHOT.jar:target/fnparse-1.0.0-SNAPSHOT-jar-with-dependencies.jar"
+cp=`find target -type f -name "*.jar" | tr '\n' ':'`
 jvmOpts="-ea -Xmx7G -XX:ParallelGCThreads=2"
 
 echo "${HOSTNAME}"

@@ -28,9 +28,15 @@ public class Counts<T> {
   }
 
   public int increment(T t) {
-    int c = getCount(t) + 1;
-    counts.put(t, c);
-    total++;
+    return update(t, 1);
+  }
+
+  public int update(T t, int delta) {
+    int c = getCount(t);
+    if (c < 0)
+      throw new RuntimeException("item: " + t);
+    counts.put(t, c + delta);
+    total += delta;
     return c;
   }
 

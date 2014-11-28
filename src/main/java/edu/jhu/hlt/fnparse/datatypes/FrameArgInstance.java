@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
  * @author travis
  */
 public class FrameArgInstance extends FrameRoleInstance {
-  private Span argument;
+  public Span argument;
 
   public FrameArgInstance(Frame f, Span t, int k, Span a) {
     super(f, t, k);
