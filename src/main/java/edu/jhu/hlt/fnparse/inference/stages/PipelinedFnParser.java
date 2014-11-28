@@ -223,6 +223,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 		List<FNTagging> goldTags = DataUtil.convertParsesToTaggings(examples);
 		frameId.train(sentences, goldTags);
 
+		// TODO if a span is not reachable due to argExpansion's pruning,
+		// do not include this as a training variable for argId.
+		// NOTE this CAN NOT be done by switching an arg from spanTooBigNotToBePruned -> nullSpan
+		// because RoleHeadStage would then try to predict false for all heads for that role
+		// Need to pass information about which spans are not reachable directly to RoleHeadStage
+
 		List<FNTagging> frames;
 		/*
 		if (usePredictedFramesToTrainArgId) {
@@ -255,6 +261,53 @@ public class PipelinedFnParser implements Serializable, Parser {
 		return parse(sentences, null);
 	}
 
+	private static void argHeadAccuracy(
+	    List<FNParse> goldHeads,
+	    List<FNParse> hypHeads) {
+	  assert goldHeads.size() == hypHeads.size();
+	  int a = 0, b = 0, c = 0, cc = 0, d = 0, e = 0;
+	  for (int i = 0; i < goldHeads.size(); i++) {
+	    FNParse g = goldHeads.get(i);
+	    FNParse h = hypHeads.get(i);
+	    assert g.numFrameInstances() == h.numFrameInstances();
+	    for (int fi = 0; fi < g.numFrameInstances(); fi++) {
+	      FrameInstance fig = g.getFrameInstance(fi);
+	      FrameInstance fih = h.getFrameInstance(fi);
+	      assert fig.getFrame() == fih.getFrame();
+	      assert fig.getTarget() == fih.getTarget();
+	      int K = fig.getFrame().numRoles();
+	      for (int k = 0; k < K; k++) {
+	        Span gs = fig.getArgument(k);
+	        Span hs = fih.getArgument(k);
+	        assert hs == Span.nullSpan || hs.width() == 1;
+	        assert gs == Span.nullSpan || gs.width() == 1;
+	        if (gs != Span.nullSpan)
+	          e++;
+	        if (gs == Span.nullSpan && hs != Span.nullSpan)
+	          a++;
+	        else if (gs != Span.nullSpan && hs == Span.nullSpan)
+	          b++;
+	        else if (gs == hs) {
+	          c++;
+	          if (gs != Span.nullSpan)
+	            cc++;
+	        } else
+	          d++;
+	      }
+	    }
+	  }
+	  LOG.info("[argHeadAccuracy] correct:           " + c);
+	  LOG.info("[argHeadAccuracy] correct realized:  " + cc);
+	  LOG.info("[argHeadAccuracy] false positive:    " + a);
+	  LOG.info("[argHeadAccuracy] false negative:    " + b);
+	  LOG.info("[argHeadAccuracy] wrong head:        " + d);
+	  LOG.info("[argHeadAccuracy] gold is realized:  " + e);
+	  double acc = ((double) c) / (a + b + c + d);
+	  LOG.info("[argHeadAccuracy] accuracy:          " + acc);
+	  double accR = ((double) cc) / e;
+	  LOG.info("[argHeadAccuracy] accuracy realized: " + accR);
+	}
+
 	@Override
 	public List<FNParse> parse(List<Sentence> sentences, List<FNParse> labels) {
 		if (labels != null && labels.size() != sentences.size())
@@ -280,6 +333,8 @@ public class PipelinedFnParser implements Serializable, Parser {
 				.setupInference(frames, goldArgHeads)
 				.decodeAll();
 		LOG.info("[parse] argId done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
+		if (goldArgHeads != null)
+		  argHeadAccuracy(goldArgHeads, argHeads);
 
 		// Arg spans
 		start = System.currentTimeMillis();
