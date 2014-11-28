@@ -58,6 +58,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
   // RoleSpanPruningStage is.
   private DeterministicRolePruning.Mode pruningMode;
 
+  public static LatentConstituencyPipelinedParser loadFrom(File dir) {
+    throw new RuntimeException("implement me");
+  }
+
   public LatentConstituencyPipelinedParser() {
     this.globals = new GlobalParameters();
     frameId = new OracleStage<>();
@@ -328,6 +332,29 @@ public class LatentConstituencyPipelinedParser implements Parser {
   public static final String ROLE_LABEL_MODEL_NAME = "roleLabel.ser.gz";
   public static String ROLE_PRUNE_HUMAN_READABLE = null;
   public static String ROLE_LABEL_HUMAN_READABLE = null;
+
+  @Override
+  public void loadModel(File directory) {
+    LOG.info("loading model from " + directory.getPath());
+    if (!directory.isDirectory())
+      throw new IllegalArgumentException();
+    DataInputStream dis;
+    try {
+      dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
+      frameId.loadModel(dis, globals);
+      dis.close();
+
+      dis = Parser.getDIStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
+      rolePruning.loadModel(dis, globals);
+      dis.close();
+
+      dis = Parser.getDIStreamFor(directory, ROLE_LABEL_MODEL_NAME);
+      roleLabeling.loadModel(dis, globals);
+      dis.close();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   @Override
   public void saveModel(File directory) {

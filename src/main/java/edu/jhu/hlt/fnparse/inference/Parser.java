@@ -1,11 +1,15 @@
 package edu.jhu.hlt.fnparse.inference;
 
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -46,11 +50,27 @@ public interface Parser extends HasFeatureAlphabet {
     }
   }
 
+  public static DataInputStream getDIStreamFor(File directory, String filename) {
+    if (!directory.isDirectory())
+      throw new RuntimeException();
+    try {
+      File f = new File(directory, filename);
+      InputStream is = new FileInputStream(f);
+      if (filename.toLowerCase().endsWith(".gz"))
+        is = new GZIPInputStream(is);
+      return new DataInputStream(is);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
   public GlobalParameters getGlobalParameters();
 
   public void setFeatures(String featureTemplateDescription);
 
 	public void saveModel(File directory);
+
+	public void loadModel(File directory);
 
   /**
    * NOTE: You could check for pre-computed stages here

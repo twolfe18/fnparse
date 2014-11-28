@@ -18,7 +18,9 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
@@ -302,6 +304,29 @@ public class PipelinedFnParser implements Serializable, Parser {
 
 		return fullParses;
 	}
+
+  @Override
+  public void loadModel(File directory) {
+    LOG.info("loading model from " + directory.getPath());
+    if (!directory.isDirectory())
+      throw new IllegalArgumentException();
+    DataInputStream dis;
+    try {
+      dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
+      frameId.loadModel(dis, globals);
+      dis.close();
+
+      dis = Parser.getDIStreamFor(directory, ARG_ID_MODEL_NAME);
+      argId.loadModel(dis, globals);
+      dis.close();
+
+      dis = Parser.getDIStreamFor(directory, ARG_SPANS_MODEL_NAME);
+      argExpansion.loadModel(dis, globals);
+      dis.close();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
 	@Override
 	public void saveModel(File directory) {
