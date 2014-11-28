@@ -374,7 +374,7 @@ public class RoleHeadStage
       // create factors
       List<Factor> factors = new ArrayList<>();
       ProjDepTreeFactor depTree = null;
-      ConstituencyTreeFactor consTree = null;	// used in RoleSpanStage, not here
+      ConstituencyTreeFactor consTree = null; // used in RoleSpanStage, not here
       if (useLatentDependencies) {
         depTree = new ProjDepTreeFactor(getSentence().size(), VarType.LATENT);
         DepParseFactorFactory depParseFactorTemplate =

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -13,6 +14,8 @@ import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
@@ -44,18 +47,12 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
       Logger.getLogger(DepParseFactorFactory.class);
 
   private DepParseFeatureExtractorPrm fePrm;
-  private CorpusStatistics corpusStats;
-  //private ParserParams params;
   private GlobalParameters globals;
 
   public DepParseFactorFactory(GlobalParameters globals) {
-    //this.params = params;
     this.globals = globals;
     fePrm = new DepParseFeatureExtractorPrm();
     // defaults for fePrm are fine
-
-    corpusStats = new CorpusStatistics(new CorpusStatisticsPrm());
-    // TODO: corpusStats.init(simpleAnnoSentenceIterable);
   }
 
   public static SimpleAnnoSentence toPacayaSentence(Sentence s) {
@@ -76,6 +73,23 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
     return sas;
   }
 
+  private static CorpusStatistics corpusStats;
+  public static CorpusStatistics getCorpusStats() {
+    if (corpusStats == null) {
+      corpusStats = new CorpusStatistics(new CorpusStatisticsPrm());
+      List<SimpleAnnoSentence> corpus = new ArrayList<>();
+      Iterator<? extends FNTagging> iter = null;
+      iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+      while (iter.hasNext())
+        corpus.add(toPacayaSentence(iter.next().getSentence()));
+      iter = FileFrameInstanceProvider.fn15trainFIP.getParsedOrTaggedSentences();
+      while (iter.hasNext())
+        corpus.add(toPacayaSentence(iter.next().getSentence()));
+      corpusStats.init(corpus);
+    }
+    return corpusStats;
+  }
+
   @Override
   public List<Features> getFeatures() {
     return Collections.emptyList();
@@ -89,16 +103,6 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
       ConstituencyTreeFactor c) {
     List<Factor> factors = new ArrayList<Factor>();
 
-    // 3 words + 1 punctuation is about as short as you might ever see as a
-    // legitimate sentence
-    /*
-    if(s.size() < 4) {
-      LOG.debug("[DepParseFactorFactory] really short sentence "
-          + "(skipping): " + s);
-      return factors;
-    }
-    */
-
     // Global/tree factor
     factors.add(d);
 
@@ -106,7 +110,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
     @SuppressWarnings("unchecked")
     Alphabet<Object> alph = (Alphabet<Object>) (Object) globals.getFeatureNames();
     DepParseFeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
-        toPacayaSentence(s), corpusStats, alph);
+        toPacayaSentence(s), getCorpusStats(), alph);
     final int n = s.size();
     for (int i = -1; i < n; i++) {  // Head
       for (int j = 0; j < n; j++) { // Dependent
@@ -118,10 +122,14 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
         FeTypedFactor phi = new FeTypedFactor(new VarSet(ijVar),
             DepParseFactorTemplate.LINK_UNARY, fe);
         factors.add(phi);
-        // TODO grandparent and sibling links
       }
     }
-
     return factors;
+  }
+
+  public static void main(String[] args) {
+    CorpusStatistics cs = getCorpusStats();
+    LOG.info("lang: " + cs.getLanguage());
+    LOG.info("done");
   }
 }
