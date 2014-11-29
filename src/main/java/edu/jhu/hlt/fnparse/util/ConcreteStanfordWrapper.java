@@ -12,8 +12,6 @@ import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Dependency;
 import edu.jhu.hlt.concrete.Section;
-//import edu.jhu.hlt.concrete.SectionSegmentation;
-//import edu.jhu.hlt.concrete.SentenceSegmentation;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
@@ -52,7 +50,7 @@ public class ConcreteStanfordWrapper {
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
   private Map<Sentence, Communication> cache = null;
-  private Timer parseTimer;//, convertTimer;
+  private Timer parseTimer;
 
   public ConcreteStanfordWrapper(boolean cache) {
     aUUID = new UUID();
@@ -62,7 +60,6 @@ public class ConcreteStanfordWrapper {
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = new AnnotateTokenizedConcrete();
     parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 5, false);
-    //convertTimer = new Timer("ConcreteStanfordAnnotator.convert", 75000, false);
     if (cache)
       this.cache = new HashMap<>();
   }
@@ -119,7 +116,6 @@ public class ConcreteStanfordWrapper {
             throw new RuntimeException("couldn't get basic dep parse");
           }
         }
-        //convertTimer.stop();
         return tokenization.getParseList().get(0);
       }
     }
@@ -161,7 +157,8 @@ public class ConcreteStanfordWrapper {
       if (token.length() == 1) {
         return "RLB";
       } else {
-        assert token.startsWith("(");
+        if (!token.startsWith("("))
+          LOG.warn("LRB that is not a left paren? " + token);
         // e.g. "(Hong"
         return token.substring(1, token.length());
       }
@@ -169,7 +166,8 @@ public class ConcreteStanfordWrapper {
       if (token.length() == 1) {
         return "RRB";
       } else {
-        assert token.endsWith(")");
+        if (!token.endsWith(")"))
+          LOG.warn("RRB that is not a right paren? " + token);
         // e.g. "Kong)"
         return token.substring(0, token.length() - 1);
       }

@@ -14,3 +14,6 @@ for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
     ${THREADS} ${OUTPUT} ${i} ${PARALLEL} ${PRE_COMPUTE}
 done
 
+sleep 3
+qinfo
+

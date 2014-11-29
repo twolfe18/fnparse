@@ -38,47 +38,47 @@ import edu.jhu.util.Alphabet;
  * NOTE: weight are stored in each stage, feature alphabet is global
  */
 public class PipelinedFnParser implements Serializable, Parser {
-	private static final long serialVersionUID = 1L;
-	private static final Logger LOG = Logger.getLogger(PipelinedFnParser.class);
+  private static final long serialVersionUID = 1L;
+  private static final Logger LOG = Logger.getLogger(PipelinedFnParser.class);
 
-	// Names of the files that each stage will be serialized to when saveModel
-	// is called.
-	public static final String FRAME_ID_MODEL_NAME = "frameId.ser.gz";
-	public static final String ARG_ID_MODEL_NAME = "argId.ser.gz";
-	public static final String ARG_SPANS_MODEL_NAME = "argSpans.ser.gz";
+  // Names of the files that each stage will be serialized to when saveModel
+  // is called.
+  public static final String FRAME_ID_MODEL_NAME = "frameId.ser.gz";
+  public static final String ARG_ID_MODEL_NAME = "argId.ser.gz";
+  public static final String ARG_SPANS_MODEL_NAME = "argSpans.ser.gz";
 
-	public static String FRAME_ID_MODEL_HUMAN_READABLE = null;
-	public static String ARG_ID_MODEL_HUMAN_READABLE = null;
-	public static String ARG_SPANS_MODEL_HUMAN_READABLE = null;
+  public static String FRAME_ID_MODEL_HUMAN_READABLE = null;
+  public static String ARG_ID_MODEL_HUMAN_READABLE = null;
+  public static String ARG_SPANS_MODEL_HUMAN_READABLE = null;
 
-	private GlobalParameters globals;
-	private Stage<Sentence, FNTagging> frameId;
-	private Stage<FNTagging, FNParse> argId;
-	private Stage<FNParse, FNParse> argExpansion;
+  private GlobalParameters globals;
+  private Stage<Sentence, FNTagging> frameId;
+  private Stage<FNTagging, FNParse> argId;
+  private Stage<FNParse, FNParse> argExpansion;
 
-	public PipelinedFnParser() {
-	  this.globals = new GlobalParameters();
-		frameId = new FrameIdStage(globals, "");
-		argId = new RoleHeadStage(globals, "");
-		argExpansion = new RoleHeadToSpanStage(globals, "");
-	}
+  public PipelinedFnParser() {
+    this.globals = new GlobalParameters();
+    frameId = new FrameIdStage(globals, "");
+    argId = new RoleHeadStage(globals, "");
+    argExpansion = new RoleHeadToSpanStage(globals, "");
+  }
 
-	@Override
-	public void configure(Map<String, String> configuration) {
-	  LOG.info("[configure] " + configuration);
+  @Override
+  public void configure(Map<String, String> configuration) {
+    LOG.info("[configure] " + configuration);
 
-	  String key, value;
-	  key = "features";
-	  value = configuration.get(key);
-	  if (value != null) {
-	    setFeatures(value);
-	    LOG.info("setting " + key + " = " + value);
-	  }
+    String key, value;
+    key = "features";
+    value = configuration.get(key);
+    if (value != null) {
+      setFeatures(value);
+      LOG.info("setting " + key + " = " + value);
+    }
 
-	  frameId.configure(configuration);
-	  argId.configure(configuration);
-	  argExpansion.configure(configuration);
-	}
+    frameId.configure(configuration);
+    argId.configure(configuration);
+    argExpansion.configure(configuration);
+  }
 
   @Override
   public void setFeatures(String featureTemplateDescription) {
