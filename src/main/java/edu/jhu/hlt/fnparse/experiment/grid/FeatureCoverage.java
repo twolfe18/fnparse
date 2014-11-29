@@ -11,6 +11,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -97,6 +98,10 @@ public class FeatureCoverage {
     instances = new ArrayList<>();
     for (FNParse p : DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()))
       instances.addAll(p.getFrameInstances());
+    LOG.info("after fulltext train section, " + instances.size() + " instances");
+    for (FNTagging p : DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences()))
+      instances.addAll(p.getFrameInstances());
+    LOG.info("after lex section, " + instances.size() + " instances");
 
     addCounters();
     count();
