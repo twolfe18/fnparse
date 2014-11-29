@@ -4,7 +4,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -62,7 +64,14 @@ public class FinalResults implements Runnable {
     testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
     //testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
 
-    trainData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+    trainData = new ArrayList<>();
+    Iterator<FNParse> iter;
+    iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+    while (iter.hasNext())
+      trainData.add(iter.next());
+    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+    while (iter.hasNext())
+      trainData.add(iter.next());
   }
 
   public void run() {
@@ -82,6 +91,7 @@ public class FinalResults implements Runnable {
         LOG.info("[run] re-sampling " + numTrain + " examples to re-train on");
         trainSub = DataUtil.resample(trainData, numTrain, rand);
       }
+      parser.configure("bpIters", "1");
       parser.train(trainSub);
     } else {
       LOG.info("[run] just usng loaded model");

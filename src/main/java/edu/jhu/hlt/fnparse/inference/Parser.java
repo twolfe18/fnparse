@@ -72,6 +72,8 @@ public interface Parser extends HasFeatureAlphabet {
 
 	public void loadModel(File directory);
 
+	public void configure(String key, String value);
+
   /**
    * NOTE: You could check for pre-computed stages here
    * 

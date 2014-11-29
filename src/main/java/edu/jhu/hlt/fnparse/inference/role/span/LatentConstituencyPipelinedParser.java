@@ -6,6 +6,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -157,6 +158,13 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   public void useDeterministicPruning(DeterministicRolePruning.Mode mode) {
     rolePruning = new DeterministicRolePruning(mode);
+  }
+
+  @Override
+  public void configure(String key, String value) {
+    Map<String, String> m = new HashMap<>();
+    m.put(key, value);
+    configure(m);
   }
 
   @Override

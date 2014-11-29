@@ -8,6 +8,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.GZIPInputStream;
@@ -61,6 +62,13 @@ public class PipelinedFnParser implements Serializable, Parser {
     frameId = new FrameIdStage(globals, "");
     argId = new RoleHeadStage(globals, "");
     argExpansion = new RoleHeadToSpanStage(globals, "");
+  }
+
+  @Override
+  public void configure(String key, String value) {
+    Map<String, String> m = new HashMap<>();
+    m.put(key, value);
+    configure(m);
   }
 
   @Override
