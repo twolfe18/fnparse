@@ -59,8 +59,8 @@ public class FinalResults implements Runnable {
     this.numTrain = trainSize;
 
     // TODO switch this when you know this works
-//    testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
-    testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
+    testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
+    //testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
 
     trainData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
   }
@@ -109,7 +109,9 @@ public class FinalResults implements Runnable {
     if (mode.equals("span")) {
       parser = new LatentConstituencyPipelinedParser();
     } else if (mode.equals("head")) {
-      parser = new PipelinedFnParser();
+      PipelinedFnParser p = new PipelinedFnParser();
+      p.useGoldFrameId();
+      parser = p;
     } else {
       throw new RuntimeException("mode=" + mode);
     }
@@ -145,7 +147,7 @@ public class FinalResults implements Runnable {
   }
 
   public static void main(String[] args) throws Exception {
-    if (args.length != 2) {
+    if (args.length != 4) {
       System.err.println("please provide:");
       System.err.println("1) a working dir");
       System.err.println("2) a parser mode");

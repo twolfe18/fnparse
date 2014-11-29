@@ -1179,8 +1179,12 @@ public class BasicFeatureTemplates {
                   c2 = temp;
                   rev = true;
                 }
-                assert c1 < context.getSentence().size();
-                assert c2 < context.getSentence().size();
+                if (c1 >= context.getSentence().size()
+                  || c2 >= context.getSentence().size()) {
+                  LOG.warn(String.format("c1=%d c2=%d sent.size=%d rev=%s ext=%s",
+                    c1, c2, context.getSentence().size(), rev, ext.getKey()));
+                  return null;
+                }
                 pos.sentence = context.getSentence();
                 //Collection<String> output = new ArrayList<>();
                 Collection<String> output = new HashSet<>();

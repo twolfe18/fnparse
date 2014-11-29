@@ -61,6 +61,8 @@ public class SemaforicHeadFinder implements HeadFinder {
       throw new IllegalArgumentException();
     if (s.width() == 0)
       throw new IllegalArgumentException();
+    if (s.start < 0 || s.end > sent.size())
+      throw new IllegalArgumentException();
     if (s.width() == 1)
       return s.start;
 

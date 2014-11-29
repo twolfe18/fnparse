@@ -1,33 +1,33 @@
 
-CMD="qsub -q all.q FinalResultsHelper.qub"
+CMD="qsub -q all.q FinalResultsHelper.qsub"
 
-SPAN_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-0"
-SPAN_LATENT="experiments/forward-selection/role/omni/wd-fs-test-0"
-SPAN_NONE="experiments/forward-selection/role/omni/wd-fs-test-0"
-HEAD_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-0"
-HEAD_LATENT="experiments/forward-selection/role/omni/wd-fs-test-0"
-HEAD_NONE="experiments/forward-selection/role/omni/wd-fs-test-0"
+SPAN_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-462"
+SPAN_LATENT="experiments/forward-selection/role/omni/wd-fs-test-331"
+SPAN_NONE="experiments/forward-selection/role/omni/wd-fs-test-1700"
+HEAD_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-285"
+HEAD_LATENT="experiments/forward-selection/role/omni/wd-fs-test-1498"
+HEAD_NONE="experiments/forward-selection/role/omni/wd-fs-test-1751"
 
 SEED="9001"
 
 # Start the sanity check versions (no re-training, just use the model
 # created during feature selection).
-echo "starting simple pre-trained jobs"
-$CMD $SPAN_REGULAR span $SEED -1
-$CMD $SPAN_LATENT span $SEED -1
-$CMD $SPAN_NONE span $SEED -1
-$CMD $HEAD_REGULAR head $SEED -1
-$CMD $HEAD_LATENT head $SEED -1
-$CMD $HEAD_NONE head $SEED -1
-
-# Start the versions that are the full training set (no resampling)
-echo "starting full re-train jobs"
-$CMD $SPAN_REGULAR span $SEED 0
-$CMD $SPAN_LATENT span $SEED 0
-$CMD $SPAN_NONE span $SEED 0
-$CMD $HEAD_REGULAR head $SEED 0
-$CMD $HEAD_LATENT head $SEED 0
-$CMD $HEAD_NONE head $SEED 0
+#echo "starting simple pre-trained jobs"
+#$CMD $SPAN_REGULAR span $SEED -1
+#$CMD $SPAN_LATENT span $SEED -1
+#$CMD $SPAN_NONE span $SEED -1
+#$CMD $HEAD_REGULAR head $SEED -1
+#$CMD $HEAD_LATENT head $SEED -1
+#$CMD $HEAD_NONE head $SEED -1
+#
+## Start the versions that are the full training set (no resampling)
+#echo "starting full re-train jobs"
+#$CMD $SPAN_REGULAR span $SEED 0
+#$CMD $SPAN_LATENT span $SEED 0
+#$CMD $SPAN_NONE span $SEED 0
+#$CMD $HEAD_REGULAR head $SEED 0
+#$CMD $HEAD_LATENT head $SEED 0
+#$CMD $HEAD_NONE head $SEED 0
 
 # Start the learning curve jobs
 for SEED in `seq 100`; do

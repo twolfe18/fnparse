@@ -239,6 +239,14 @@ public class RoleSpanLabelingStage
         }
         total++;
         for (Span s : reachable) {
+          if (s.end > input.getSentence().size()) {
+            LOG.warn("reachable span outside sentence!"
+              + " span: " + s
+              + " sentence size: " + input.getSentence().size()
+              + " sentence id: " + input.getSentence().getId()
+              + " input id: " + input.getId());
+            continue;
+          }
           Boolean isGold = null;
           if (training)
             isGold = (s == g);
