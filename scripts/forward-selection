@@ -386,19 +386,23 @@ class MutatorQueue(Queue):
     self.stopped = False
 
   def _pick(self, greediness):
-    debug = False
-    # Find the max score
-    m = max(self.item2score.values())
-    # Compute regret for the other scores
-    weights = []
-    items = []
+
+
+  def _pick(self, greediness):
+    debug = len(self.item2score) < 25
+    # Sort the items by score, and find the max score
+    x = sorted(self.item2score.items(), lambda kv: kv[1], decreasing=True)
+    m = x[0][1]
     z = 0.0
-    for item, s in self.item2score.iteritems():
-      regret = (m - s) * 10.0
-      w = math.exp(-regret * greediness)
+    rank = 0
+    for item, s in x:
+      regret_a = (m - s) * 10.0
+      regret_b = sqrt(rank) / 10.0
+      w = math.exp(-greediness * (regret_a + regret_b))
       weights.append(w)
       items.append(item)
       z += w
+      rank += 1
     t = random.random() * z
     if debug:
       print '[pick] z =', z, 't =', t
@@ -750,7 +754,7 @@ class ConfigJobStarter:
     for s in latent_stages:
       key = 'bpIters.' + s
       if key not in cmd:
-        cmd[key] = '2'
+        cmd[key] = '1'
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
@@ -1027,15 +1031,21 @@ def generate_all_features(s1, s2, syntax_mode):
   fs.append(('span1IsConstituent', ['frame', 'head1Pos']))
   fs.append(('span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']))
   fs.append(('span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']))
-  fs.append(('span1IsConstituent', ['span1FirstPos', 'span1Width/3']))
-  fs.append(('span1IsConstituent', ['span1FirstPos', 'span1Width/4']))
-  fs.append(('span1IsConstituent', ['span1LastPos', 'span1Width/3']))
-  fs.append(('span1IsConstituent', ['span1LastPos', 'span1Width/4']))
-  fs.append(('span1IsConstituent', ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2']))
-  fs.append(('span1IsConstituent', ['span1Width/2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2']))
-  fs.append(('span1IsConstituent', ['span1LeftPos2', 'span1Width/2', 'span1LastPos2', 'span1RightPos2']))
-  fs.append(('span1IsConstituent', ['span1LeftPos2', 'span1FirstPos2', 'span1Width/2', 'span1RightPos2']))
-  fs.append(('span1IsConstituent', ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1Width/2']))
+  cparts = ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2', 'span1Width/5', 'span1FirstWord', 'span1LastWord']
+  for p1 in cparts:
+    fs.append(('span1IsConstituent', [p1]))
+    for p2 in cparts:
+      if p2 == p1:
+        continue
+      if 'Word' in p1 and 'Word' in p2:
+        continue;
+      fs.append(('span1IsConstituent', [p1, p2]))
+      for p3 in cparts:
+        if p3 == p1 or p3 == p2:
+          continue
+        if 'Word' in p3 and ('Word' in p1 or 'Word' in p2):
+          continue
+        fs.append(('span1IsConstituent', [p1, p2, p3]))
 
   # NOTE: there are already unary dep link factors from pacaya not included here
   fs.append(('head2GovHead1', ['1']))
@@ -1049,7 +1059,7 @@ def generate_all_features(s1, s2, syntax_mode):
 
 def seeds(parser_mode, syntax_mode, settings, template_info):
   ''' Generator of Configs '''
-  p = 10  # default number of training passes (this value is copied for all runs)
+  p = 2  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'

@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -149,8 +150,14 @@ public class Runner {
   }
 
   private List<FNParse> getAllTrain(Random r) {
-    List<FNParse> all = DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+    List<FNParse> all = new ArrayList<>();
+    Iterator<FNParse> iter;
+    iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+    while (iter.hasNext())
+      all.add(iter.next());
+    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+    while (iter.hasNext())
+      all.add(iter.next());
     String lim = config.get("MaxTrainSize");
     if (lim != null) {
       int n = Integer.parseInt(lim);
