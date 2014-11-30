@@ -1,7 +1,9 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -68,6 +70,30 @@ public class ConcreteStanfordWrapper {
     return new ConstituencyParse(parse(s, false));
   }
 
+  /** Makes a parse where everything is a child of root */
+  public edu.jhu.hlt.concrete.Parse dummyParse(Sentence s) {
+    edu.jhu.hlt.concrete.Parse p = new edu.jhu.hlt.concrete.Parse();
+    List<Integer> preterms = new ArrayList<>();
+    List<Constituent> cons = new ArrayList<>();
+    for (int i = 0; i < s.size(); i++) {
+      Constituent c = new Constituent();
+      c.setId(i);
+      c.setTag("X");
+      c.setChildList(new ArrayList<>());
+      cons.add(c);
+      preterms.add(i);
+    }
+    Constituent root = new Constituent();
+    root.setId(s.size());
+    root.setTag("S");
+    root.setChildList(preterms);
+    cons.add(root);
+    p.setConstituentList(cons);
+    p.setUuid(aUUID);
+    p.setMetadata(metadata);
+    return p;
+  }
+
   public synchronized edu.jhu.hlt.concrete.Parse parse(
       Sentence s,
       boolean storeBasicDeps) {
@@ -82,7 +108,13 @@ public class ConcreteStanfordWrapper {
     if (communication == null) {
       parseTimer.start();
       communication = sentenceToConcrete(s);
-      anno.annotateWithStanfordNlp(communication);
+      try {
+        anno.annotateWithStanfordNlp(communication);
+      } catch (Exception e) {
+        LOG.warn("failed to parse " + s.getId());
+        e.printStackTrace();
+        return dummyParse(s);
+      }
       parseTimer.stop();
     }
     if (updateCache) {
