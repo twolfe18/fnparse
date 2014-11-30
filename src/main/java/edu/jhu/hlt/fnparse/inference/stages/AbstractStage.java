@@ -421,19 +421,19 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
 	/** null means auto-select */
 	public Double getLearningRate() {
-		return null;
+		return this.learningRate;
 	}
 
 	public Regularizer getRegularizer() {
-		return new L2(1_000_000d);
+		return this.regularizer;
 	}
 
 	public int getBatchSize() {
-		return 1;
+		return batchSize;
 	}
 
 	public int getNumTrainingPasses() {
-		return 10;
+		return passes;
 	}
 
 	/**
