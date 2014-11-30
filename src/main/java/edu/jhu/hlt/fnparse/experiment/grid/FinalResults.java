@@ -68,13 +68,14 @@ public class FinalResults implements Runnable {
     //testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
 
     trainData = new ArrayList<>();
-    Iterator<FNParse> iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+    Iterator<FNParse> iter;
+    iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
     while (iter.hasNext())
       trainData.add(iter.next());
     LOG.info("[init] after train, trainData.size=" + trainData.size());
-    Iterator<FNTagging> iter2 = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
-    while (iter2.hasNext())
-      trainData.add((FNParse) iter2.next());
+    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+    while (iter.hasNext())
+      trainData.add(iter.next());
     LOG.info("[init] after LEX, trainData.size=" + trainData.size());
   }
 

@@ -204,7 +204,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 			// isFullParse should be false for lexical examples 
 			// from Framenet, and true for the fulltext data
 			if(sentId.startsWith("FNFUTXT")) return true;
-			if(sentId.startsWith("FNLEX")) return false;
+			if(sentId.startsWith("FNLEX")) return true;
 			if(sentId.startsWith("SL")) return true;
 			throw new RuntimeException("unhandled annotationsetid: " + sentId);
 		}
