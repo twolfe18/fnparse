@@ -93,15 +93,22 @@ public class FeatureCoverage {
   private Counts<String> observations;
   private List<Feature> feats;
   private List<FrameInstance> instances; 
+  private boolean includeLEX;
+
+  public FeatureCoverage(boolean includeLEX) {
+    this.includeLEX = includeLEX;
+  }
 
   public void run() {
     instances = new ArrayList<>();
     for (FNParse p : DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()))
       instances.addAll(p.getFrameInstances());
     LOG.info("after fulltext train section, " + instances.size() + " instances");
-    for (FNTagging p : DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences()))
-      instances.addAll(p.getFrameInstances());
-    LOG.info("after lex section, " + instances.size() + " instances");
+    if (includeLEX) {
+      for (FNTagging p : DataUtil.iter2list(FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences()))
+        instances.addAll(p.getFrameInstances());
+      LOG.info("after lex section, " + instances.size() + " instances");
+    }
 
     addCounters();
     count();
@@ -113,11 +120,29 @@ public class FeatureCoverage {
 
   public void addCounters() {
     feats = new ArrayList<>();
+    feats.add(new FeatureAdapter("frameRoleLU", fai -> {
+      Set<String> feats = new HashSet<>();
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
+      int h = hf.head(fai.argument, fai.sentence);
+      String head = fai.sentence.getLemmaLU(h).getFullString();
+      String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
     feats.add(new FeatureAdapter("roleLU", fai -> {
       Set<String> feats = new HashSet<>();
       HeadFinder hf = SemaforicHeadFinder.getInstance();
       int h = hf.head(fai.argument, fai.sentence);
       String head = fai.sentence.getLemmaLU(h).getFullString();
+      String role = fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
+    feats.add(new FeatureAdapter("frameRoleLemma", fai -> {
+      Set<String> feats = new HashSet<>();
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
+      int h = hf.head(fai.argument, fai.sentence);
+      String head = fai.sentence.getLemmaLU(h).word;
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
@@ -127,6 +152,18 @@ public class FeatureCoverage {
       HeadFinder hf = SemaforicHeadFinder.getInstance();
       int h = hf.head(fai.argument, fai.sentence);
       String head = fai.sentence.getLemmaLU(h).word;
+      String role = fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
+    feats.add(new FeatureAdapter("framRoleWnSS", fai -> {
+      Set<String> feats = new HashSet<>();
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
+      int h = hf.head(fai.argument, fai.sentence);
+      IWord word = fai.sentence.getWnWord(h);
+      String head = "???";
+      if (word != null && word.getSynset() != null)
+        head = word.getSynset().getID().toString();
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
@@ -139,6 +176,14 @@ public class FeatureCoverage {
       String head = "???";
       if (word != null && word.getSynset() != null)
         head = word.getSynset().getID().toString();
+      String role = fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
+    feats.add(new FeatureAdapter("frameRolePosPat", fai -> {
+      Set<String> feats = new HashSet<>();
+      PosPatternGenerator pgen = new PosPatternGenerator(0, 0, Mode.COARSE_POS);
+      String head = pgen.extract(fai.argument, fai.sentence);
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
@@ -147,6 +192,15 @@ public class FeatureCoverage {
       Set<String> feats = new HashSet<>();
       PosPatternGenerator pgen = new PosPatternGenerator(0, 0, Mode.COARSE_POS);
       String head = pgen.extract(fai.argument, fai.sentence);
+      String role = fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
+    feats.add(new FeatureAdapter("frameRolePos", fai -> {
+      Set<String> feats = new HashSet<>();
+      HeadFinder hf = SemaforicHeadFinder.getInstance();
+      int h = hf.head(fai.argument, fai.sentence);
+      String head = fai.sentence.getPos(h);
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
@@ -156,6 +210,17 @@ public class FeatureCoverage {
       HeadFinder hf = SemaforicHeadFinder.getInstance();
       int h = hf.head(fai.argument, fai.sentence);
       String head = fai.sentence.getPos(h);
+      String role = fai.frame.getRole(fai.role);
+      feats.add(role + "_" + head);
+      return feats;
+    }));
+    feats.add(new FeatureAdapter("frameRoleDir", fai -> {
+      Set<String> feats = new HashSet<>();
+      String head = fai.argument.after(fai.target)
+          ? "after"
+          : fai.argument.before(fai.target)
+            ? "before"
+            : "other";
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
@@ -167,17 +232,17 @@ public class FeatureCoverage {
           : fai.argument.before(fai.target)
             ? "before"
             : "other";
-      String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
+      String role = fai.frame.getRole(fai.role);
       feats.add(role + "_" + head);
       return feats;
     }));
-    feats.add(new FeatureAdapter("role", fai -> {
+    feats.add(new FeatureAdapter("frameRole", fai -> {
       Set<String> feats = new HashSet<>();
       String role = fai.frame.getName() + "." + fai.frame.getRole(fai.role);
       feats.add(role);
       return feats;
     }));
-    feats.add(new FeatureAdapter("coarseRole", fai -> {
+    feats.add(new FeatureAdapter("role", fai -> {
       Set<String> feats = new HashSet<>();
       String role = fai.frame.getRole(fai.role);
       feats.add(role);
@@ -200,6 +265,7 @@ public class FeatureCoverage {
         update(instances.get(i), f, false);
         for (String s : feats)
           f.observe(s, !seen(s));
+        update(instances.get(i), f, true);
       }
     }
   }
@@ -236,6 +302,7 @@ public class FeatureCoverage {
   }
 
   public static void main(String[] args) {
-    new FeatureCoverage().run();
+    new FeatureCoverage(true).run();
+    new FeatureCoverage(false).run();
   }
 }

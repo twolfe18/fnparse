@@ -25,7 +25,6 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.ParserParams;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
@@ -64,7 +63,6 @@ public class ArgPruner implements Serializable, IArgPruner {
     boolean plain = true;	// just write out the data
 
     File parent = new File("toydata/arg-pruning");
-    ParserParams params = new ParserParams();
     HasFeatureAlphabet featureNames = null;
     FrameIdStage fid = null;  //new FrameIdStage(params, featureNames);
     ArgPruner ap = null;  //new ArgPruner(
@@ -126,7 +124,6 @@ public class ArgPruner implements Serializable, IArgPruner {
     EXACT
   }
 
-  //private ParserParams params;
   private TargetPruningData targetPruningData;
   private HeadFinder headFinder;
   private boolean pruneByPOS;
@@ -136,7 +133,7 @@ public class ArgPruner implements Serializable, IArgPruner {
   private int argsPrunedPos = 0;
   private int argsPrunedLex = 0;
   private int argsFalsePruned = 0;
-  private int argsPruningInterval = 125000;	// <=0 for no reporting
+  private int argsPruningInterval = 125000; // <=0 for no reporting
 
   @Override
   public double pruneRatio() {
