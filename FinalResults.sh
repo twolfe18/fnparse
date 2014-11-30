@@ -14,6 +14,7 @@ echo "WARNING: about to DELETE previous RESULTS"
 echo "you have 10 seconds to CANCEL, ctrl-c"
 sleep 10
 find experiments/forward-selection/role/omni -wholename "*wd-fs-test-*/finalResults.txt" -type f | xargs rm
+rm -f experiments/final-results/sge-logs/FinalResultsHelper.qsub.o*
 
 # Start the sanity check versions (no re-training, just use the model
 # created during feature selection).

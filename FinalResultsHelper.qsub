@@ -2,7 +2,7 @@
 #$ -j y                         # join stderr to stdout
 #$ -V                           # job has the same environment variables as the submission shell
 #$ -l h_rt=72:00:00             # runtime limit
-#$ -l mem_free=8G               # expected amount of mem
+#$ -l mem_free=10G               # expected amount of mem
 #$ -l num_proc=1                # how many processors to use
 #$ -o experiments/final-results/sge-logs     # where to do logging
 #$ -S /bin/bash
@@ -17,6 +17,6 @@ echo "args: $@"
 CP=`find target -type f -name "*.jar" | tr '\n' ':'`
 echo "classpath: $CP"
 
-java -Xmx7G -ea -server -cp $CP \
+java -Xmx9G -ea -server -XX:+UseSerialGC -cp $CP \
   edu.jhu.hlt.fnparse.experiment.grid.FinalResults $@
 

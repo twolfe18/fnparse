@@ -18,6 +18,7 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
@@ -67,13 +68,14 @@ public class FinalResults implements Runnable {
     //testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
 
     trainData = new ArrayList<>();
-    Iterator<FNParse> iter;
-    iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+    Iterator<FNParse> iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
     while (iter.hasNext())
       trainData.add(iter.next());
-    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
-    while (iter.hasNext())
-      trainData.add(iter.next());
+    LOG.info("[init] after train, trainData.size=" + trainData.size());
+    Iterator<FNTagging> iter2 = FileFrameInstanceProvider.fn15lexFIP.getParsedOrTaggedSentences();
+    while (iter2.hasNext())
+      trainData.add((FNParse) iter2.next());
+    LOG.info("[init] after LEX, trainData.size=" + trainData.size());
   }
 
   public void run() {
@@ -171,7 +173,7 @@ public class FinalResults implements Runnable {
       System.err.println("   >0 means take resampled subset of the data");
       return;
     }
-	Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
+    Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
     File workingDir = new File(args[0]);
     String parserMode = args[1];
     Random r = new Random(Integer.valueOf(args[2]));
