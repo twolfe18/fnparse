@@ -31,30 +31,20 @@ import edu.jhu.hlt.fnparse.inference.pruning.IArgPruner;
 public class RoleHeadVars implements FgRelated {
 
   public static final Logger LOG = Logger.getLogger(RoleHeadVars.class);
-
-  //// if you check the pareto frontier in ExpansionPruningExperiment:
-  //// (6,0) gives 77.9 % recall
-  //// (6,3) gives 86.7 % recall
-  //// (8,3) gives 88.4 % recall
-  //// (8,4) gives 90.0 % recall
-  //// (10,5) gives 92.3 % recall
-  //// (12,5) gives 93.2 % recall
-  //public static final int maxArgRoleExpandLeft = 8;
-  //public static final int maxArgRoleExpandRight = 3;
-  //private static int prunedExpansions = 0, totalExpansions = 0;
-
-  public boolean verbose = true;
+  public static boolean VERBOSE = false;
+  public static boolean STORE_VAR_NAMES = false;
+  public static final String DEFAULT_VAR_NAME = "SOME_ROLE_VAR".intern();
 
   // frame-target that this belongs to
   public final Span target;
   public final Frame frame;
 
-  public final int n;	// length of sentence
+  public final int n; // length of sentence
 
   // the indices of r_jk and r_jk_e correspond
   // r_jk[k][N], where N=sentence.size, represents this arg not being realized
   // there will be an Exactly1 factor on each r_jk[j] forall j
-  public Var[][] r_kj;	// [k][j], may contain null values
+  public Var[][] r_kj;  // [k][j], may contain null values
 
   public VarConfig goldConf;
   public FrameInstance gold;
@@ -103,7 +93,7 @@ public class RoleHeadVars implements FgRelated {
         if (argPruner.pruneArgHead(frame, k, j, sent)) {
           if (argRealized) {
             argPruner.falsePrune();
-            if (verbose) {
+            if (VERBOSE) {
               LOG.warn(String.format(
                   "Pruned %s.%s for head \"%s\"",
                   gold.getFrame().getName(),
@@ -114,8 +104,9 @@ public class RoleHeadVars implements FgRelated {
           continue;
         }
 
-        String name = String.format("r_{%s@%s,j=%d,k=%d}",
-            evoked.getName(), target, j, k);
+        String name = STORE_VAR_NAMES
+            ? String.format("r_{%s@%s,j=%d,k=%d}", evoked.getName(), target, j, k)
+            : DEFAULT_VAR_NAME;
         r_kj[k][j] = new Var(
             VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
 
@@ -135,9 +126,9 @@ public class RoleHeadVars implements FgRelated {
         // have a drop method, probably doesn't matter
       } else {
         // There is no expansion variable for null-realized-arg
-        String name = String.format(
-            "r_{%s@%s,k=%d,notRealized}",
-            evoked.getName(), target, k);
+        String name = STORE_VAR_NAMES
+            ? String.format("r_{%s@%s,k=%d,notRealized}", evoked.getName(), target, k)
+            : DEFAULT_VAR_NAME;
         r_kj[k][n] = new Var(
             VarType.PREDICTED, 2, name, BinaryVarUtil.stateNames);
         if (hasGold) {
