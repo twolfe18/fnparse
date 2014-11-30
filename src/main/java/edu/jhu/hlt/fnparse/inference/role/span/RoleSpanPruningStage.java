@@ -301,6 +301,7 @@ public class RoleSpanPruningStage
       int numRoleVars = 0;
       for (int i = 0; i < nFI; i++) {
         FrameInstance fi = input.getFrameInstance(i);
+        assert fi.getSentence().size() == n;
         Set<Span> goldArgs = null;
         if (gold != null) {
           FrameInstance goldFi = gold.getFrameInstance(i);

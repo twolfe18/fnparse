@@ -68,7 +68,7 @@ public class SemaforicHeadFinder implements HeadFinder {
 
     // Not in their paper
     // Strip off quotations if they're present
-    if (isQuote(s.start, sent) && isQuote(s.end-1, sent))
+    if (isQuote(s.start, sent) && isQuote(s.end - 1, sent) && s.width() > 2)
       return head(Span.getSpan(s.start + 1, s.end - 1), sent);
 
     // strip off leading and trailing punctuation
@@ -87,15 +87,13 @@ public class SemaforicHeadFinder implements HeadFinder {
       return head(Span.getSpan(s.start, s.end - 1), sent);
 
     // Removes ambiguity
-    if (s.width() > 1
-        && Arrays.asList("IN", "TO").contains(sent.getPos(s.start))) {
-      return head(Span.getSpan(s.start+1, s.end), sent);
+    if (Arrays.asList("IN", "TO").contains(sent.getPos(s.start))) {
+      return head(Span.getSpan(s.start + 1, s.end), sent);
     }
 
     if(sent.getPos(s.start).startsWith("V"))
       return s.start;
-    if (s.width() > 1
-        && "TO".equals(sent.getPos(s.start))
+    if ("TO".equals(sent.getPos(s.start))
         && sent.getPos(s.start + 1).startsWith("V")) {
       return s.start + 1;
     }
