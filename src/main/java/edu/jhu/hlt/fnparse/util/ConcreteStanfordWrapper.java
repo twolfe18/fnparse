@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 
 import org.apache.log4j.Logger;
 
@@ -18,6 +19,7 @@ import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenList;
+import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.TokenizationKind;
@@ -71,7 +73,7 @@ public class ConcreteStanfordWrapper {
   }
 
   /** Makes a parse where everything is a child of root */
-  public edu.jhu.hlt.concrete.Parse dummyParse(Sentence s) {
+  public edu.jhu.hlt.concrete.Parse dummyParse(Sentence s, boolean setBasicDeps) {
     edu.jhu.hlt.concrete.Parse p = new edu.jhu.hlt.concrete.Parse();
     List<Integer> preterms = new ArrayList<>();
     List<Constituent> cons = new ArrayList<>();
@@ -80,6 +82,10 @@ public class ConcreteStanfordWrapper {
       c.setId(i);
       c.setTag("X");
       c.setChildList(new ArrayList<>());
+      TokenRefSequence trs = new TokenRefSequence();
+      trs.setTokenizationId(aUUID); // TODO this isn't right, but I don't think I ever use it
+      trs.setTokenIndexList(Arrays.asList(i));
+      c.setTokenSequence(trs);
       cons.add(c);
       preterms.add(i);
     }
@@ -87,10 +93,21 @@ public class ConcreteStanfordWrapper {
     root.setId(s.size());
     root.setTag("S");
     root.setChildList(preterms);
+    TokenRefSequence trs = new TokenRefSequence();
+    trs.setTokenizationId(aUUID); // TODO this isn't right, but I don't think I ever use it
+    trs.setTokenIndexList(preterms);
+    root.setTokenSequence(trs);
     cons.add(root);
     p.setConstituentList(cons);
     p.setUuid(aUUID);
     p.setMetadata(metadata);
+    if (setBasicDeps) {
+      int[] heads = new int[s.size()];
+      String[] labels = new String[s.size()];
+      Arrays.fill(heads, -1);
+      Arrays.fill(labels, "DUMMY");
+      s.setBasicDeps(new DependencyParse(heads, labels));
+    }
     return p;
   }
 
@@ -113,7 +130,7 @@ public class ConcreteStanfordWrapper {
       } catch (Exception e) {
         LOG.warn("failed to parse " + s.getId());
         e.printStackTrace();
-        return dummyParse(s);
+        return dummyParse(s, storeBasicDeps);
       }
       parseTimer.stop();
     }
@@ -121,7 +138,6 @@ public class ConcreteStanfordWrapper {
       Communication old = cache.put(s, communication);
       assert old == null;
     }
-    //convertTimer.start();
     for (Section section : communication.getSectionList()) {
       for (edu.jhu.hlt.concrete.Sentence sentence : section.getSentenceList()) {
         Tokenization tokenization = sentence.getTokenization();
