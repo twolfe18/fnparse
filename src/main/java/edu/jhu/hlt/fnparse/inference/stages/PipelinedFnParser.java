@@ -56,6 +56,7 @@ public class PipelinedFnParser implements Serializable, Parser {
   private Stage<Sentence, FNTagging> frameId;
   private Stage<FNTagging, FNParse> argId;
   private Stage<FNParse, FNParse> argExpansion;
+  private boolean useParseSelectionForScanFeatures = false;
 
   public PipelinedFnParser() {
     this.globals = new GlobalParameters();
@@ -207,7 +208,11 @@ public class PipelinedFnParser implements Serializable, Parser {
 			int maxFeaturesAdded) {
 
 	  long start = System.currentTimeMillis();
-		examples = ParseSelector.sort(examples);
+	  if (useParseSelectionForScanFeatures) {
+	    LOG.info("[scanFeatures] using ParseSelector to choose a good subset "
+	        + "of examples to extract features from");
+	    examples = ParseSelector.sort(examples);
+	  }
 
 		getAlphabet().startGrowth();
 
