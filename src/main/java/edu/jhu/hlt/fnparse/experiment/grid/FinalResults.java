@@ -11,8 +11,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -92,6 +94,7 @@ public class FinalResults implements Runnable {
         trainSub = DataUtil.resample(trainData, numTrain, rand);
       }
       parser.configure("bpIters", "1");
+      parser.configure("passes", "2");
       parser.train(trainSub);
     } else {
       LOG.info("[run] just usng loaded model");
@@ -168,6 +171,7 @@ public class FinalResults implements Runnable {
       System.err.println("   >0 means take resampled subset of the data");
       return;
     }
+	Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
     File workingDir = new File(args[0]);
     String parserMode = args[1];
     Random r = new Random(Integer.valueOf(args[2]));

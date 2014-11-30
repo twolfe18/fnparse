@@ -307,6 +307,52 @@ class ConfigMutator(Mutator):
 
   def mutate(self, config):
     ''' Config -> [Config] '''
+
+    # TODO keep track of how many results we've seen so far
+    # every K feature sets we get results for, the training set size should be increased by a factor of G
+    # try K=50, G=3
+    # this would take 5 iterations if N_0=1000 to get the full train set of 169k, 250 jobs (most of which would be quite big)
+    # every time N*=G, consider lowering each stages regularizer (cross prod)
+    # TODO does this mean that we need to block between hitting the limit (#feature-sets per N_train) and receiving all of the results?
+    # could have a var that keeps track of the partition of jobs with the relevant N_train that we're submitting
+    # still wouldn't fix the case of having the best (N-1)_train job occur at the end (we would have started N_train jobs already, which would have better perf... but wouldn't show up until later)
+    # 1) hit num_jobs_at_this_train_size limit
+    # 2) mutate_num_jobs_parent += 1
+    # 3) start mutated jobs coming from *new* n_train limit pool
+
+    # self.n_train_cur = only mutate configs that have n_train == this
+    # self.n_jobs_dispatched = number of jobs submitted with the current setting self.n_train_cur
+    # self.n_jobs_received = number of jobs submitted with the current setting self.n_train_cur
+
+    ### OBSERVE_SCORE
+    # if self.n_jobs_at_n_train_cur >= K:
+    #   self.n_jobs_at_n_train_cur = 0
+    #   self.n_train_cur *= G
+
+    ### MUTATE
+    # find the pool of jobs which match self.n_train_cur
+    # choose one, mutate it, return it
+    # self.n_jobs_at_n_train_cur += 1
+
+
+
+
+    # CONSTRAINT:
+    # We want to have had the chance to mutate every config in a given partition of n_train.
+    # (or almost, we need to be failure resiliant)
+    # if we assume that time(N_0 * G^{n+1}) >> time(N_0 * G^{n})
+    
+    # SOLUTION:
+    # have a set of 'configs we havent tried mutating'
+    # every time we attempt to mutate, we remove all the ones we considered
+    # every time we receive a new score, we add it to this set
+    # these set(s) are indexed by n_train
+    # always try to select from smallest n_train bucket if its not empty
+    # when one is not empty, we consider that example as well as any that we know about that have the same n_train
+
+    # TODO this should not go here, it should go into a new Queue implementation
+    # mutate just mutates, this new queue implementation will tell it what to mutate
+
     next_fs = config.feature_set.propose_modification(self.__template_info)
     cur_card = config.feature_set.estimate_cardinality(self.__template_info)
     next_card = next_fs.estimate_cardinality(self.__template_info)

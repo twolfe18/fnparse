@@ -199,6 +199,13 @@ public abstract class AbstractStage<I, O extends FNTagging>
       batchSize = Integer.parseInt(value);
     }
 
+    key = "passes";
+    value = configuration.get(key);
+    if (value != null) {
+      log.info("[configure] set " + key + " = " + value);
+      this.passes = Integer.parseInt(value);
+    }
+
     key = "passes." + getName();
     value = configuration.get(key);
     if (value != null) {
