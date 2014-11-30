@@ -299,6 +299,15 @@ public class RoleSpanPruningStage
       return new LabeledFgExample(fg, gold);
     }
 
+    private int bigSpansSkipped = 0;
+    private void reportBigSpanSkipped(int start, int end) {
+      if (bigSpansSkipped % 100 == 0) {
+        LOG.warn("[reportBigSpanSkipped] skipping " + bigSpansSkipped
+            + "th long span (" + start +  "," + end + ")");
+      }
+      bigSpansSkipped++;
+    }
+
     private void build(
         FactorGraph fg,
         VarConfig goldConf,
@@ -315,16 +324,25 @@ public class RoleSpanPruningStage
       for (int i = 0; i < nFI; i++) {
         FrameInstance fi = input.getFrameInstance(i);
         assert fi.getSentence().size() == n;
+        int widestGold = 0;
         Set<Span> goldArgs = null;
         if (gold != null) {
           FrameInstance goldFi = gold.getFrameInstance(i);
           assert goldFi.getFrame().equals(fi.getFrame());
           assert goldFi.getTarget().equals(fi.getTarget());
           goldArgs = new HashSet<>();
-          goldArgs.addAll(gold.getPossibleArgs(i));
+          for (Span s : gold.getPossibleArgs(i)) {
+            if (s.width() > widestGold)
+              widestGold = s.width();
+            goldArgs.add(s);
+          }
         }
         for (int start = 0; start < n; start++) {
           for (int end = start + 1; end <= n; end++) {
+            if (end - start > 50 && end - start > widestGold) {
+              reportBigSpanSkipped(start, end);
+              continue;
+            }
             ArgSpanPruningVar p = new ArgSpanPruningVar(
                 Span.getSpan(start, end), fi);
             fg.addFactor(buildFactor(p, cykPhi));
