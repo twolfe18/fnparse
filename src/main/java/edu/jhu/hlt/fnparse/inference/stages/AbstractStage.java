@@ -445,6 +445,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
 	  assert input != null;
 	  assert output == null || output.size() == input.size();
 	  setupSyntax(input);
+	  log.info("[setupInferenceHook] features=" + this.featureTemplatesString);
 	}
 
 	// every time i call setupInference, you have to call
