@@ -211,6 +211,11 @@ public class PipelinedFnParser implements Serializable, Parser {
 	  if (useParseSelectionForScanFeatures) {
 	    LOG.info("[scanFeatures] using ParseSelector to choose a good subset "
 	        + "of examples to extract features from");
+	    if (examples.size() > 5000) {
+	      LOG.warn("[scanFeatures] ParseSelector loads all instances into "
+	          + "memory and should not be used with large training sets");
+	      assert false;
+	    }
 	    examples = ParseSelector.sort(examples);
 	  }
 

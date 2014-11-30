@@ -115,6 +115,7 @@ public class RoleSpanPruningStage
   private boolean allExamplesInMem = false;
   private boolean keepEverything = false;
 	private boolean disallowArgWithoutConstituent = false;
+	private double recallBias = 1d;
 
   public RoleSpanPruningStage(
       GlobalParameters globals,
@@ -129,6 +130,7 @@ public class RoleSpanPruningStage
       dos.writeBoolean(allExamplesInMem);
       dos.writeBoolean(keepEverything);
       dos.writeBoolean(disallowArgWithoutConstituent);
+      // TODO add recallBias (breaking change)
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -141,6 +143,7 @@ public class RoleSpanPruningStage
       allExamplesInMem = dis.readBoolean();
       keepEverything = dis.readBoolean();
       disallowArgWithoutConstituent = dis.readBoolean();
+      // TODO add recallBias (breaking change)
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -149,12 +152,22 @@ public class RoleSpanPruningStage
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
-    String key = "disallowArgWithoutConstituent." + getName();
-    String roleSpanCons = configuration.get(key);
-    if (roleSpanCons != null) {
-      disallowArgWithoutConstituent = Boolean.valueOf(roleSpanCons);
-      LOG.info("setting disallowArgWithoutConstituent="
-          + disallowArgWithoutConstituent);
+
+    String key, value;
+
+    key = "disallowArgWithoutConstituent." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      disallowArgWithoutConstituent = Boolean.valueOf(value);
+    }
+
+    key = "recallBias." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      recallBias = Double.parseDouble(value);
+      assert recallBias > 0d;
     }
   }
 
@@ -451,7 +464,7 @@ public class RoleSpanPruningStage
           return new ThresholdDecodable(
               fg, infFactory(), input, roleVars, decoder);
         } else {
-          return new RankDecodable(fg, infFactory(), input, roleVars);
+          return new RankDecodable(fg, infFactory(), input, roleVars, recallBias);
         }
       }
     }
@@ -464,16 +477,18 @@ public class RoleSpanPruningStage
   class RankDecodable extends Decodable<FNParseSpanPruning> {
     private List<ArgSpanPruningVar> roleVars;
     private FNTagging input;
-    private double recallBias = 2d;
+    private double recallBias;
 
     public RankDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
         FNTagging input,
-        List<ArgSpanPruningVar> roleVars) {
+        List<ArgSpanPruningVar> roleVars,
+        double recallBias) {
       super(fg, infFact);
       this.input = input;
       this.roleVars = roleVars;
+      this.recallBias = recallBias;
       if (roleVars == null || roleVars.size() == 0)
         throw new IllegalArgumentException();
     }

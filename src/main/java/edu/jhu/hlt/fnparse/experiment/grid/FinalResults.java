@@ -18,7 +18,6 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
