@@ -49,6 +49,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
   public static final DeterministicRolePruning.Mode DEFAULT_PRUNING_METHOD =
       Mode.XUE_PALMER_HERMANN;
+  public static boolean SHOW_SPAN_RECALL = true;
 
   private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
@@ -294,8 +295,14 @@ public class LatentConstituencyPipelinedParser implements Parser {
       List<FNParseSpanPruning> goldPrune = null;
       if (gold != null)
         goldPrune = FNParseSpanPruning.optimalPrune(gold);
-      List<FNParseSpanPruning> prunes = rolePruning
-          .setupInference(frames, goldPrune).decodeAll();
+
+      List<FNParseSpanPruning> prunes;
+      if (rolePruning instanceof RoleSpanPruningStage && SHOW_SPAN_RECALL) {
+        prunes = ((RoleSpanPruningStage) rolePruning)
+            .setupInference(frames, goldPrune, true).decodeAll();
+      } else {
+        prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
+      }
 
       parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
@@ -327,6 +334,9 @@ public class LatentConstituencyPipelinedParser implements Parser {
     }
 
     long totalTime = System.currentTimeMillis() - start;
+    if (rolePruning instanceof RoleSpanPruningStage && SHOW_SPAN_RECALL) {
+      ((RoleSpanPruningStage) rolePruning).showSpanRecall();
+    }
     int toks = 0;
     for (Sentence s : sentences) toks += s.size();
 		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
