@@ -19,7 +19,9 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
@@ -74,8 +76,27 @@ public class FinalResults implements Runnable {
       trainData.add(iter.next());
     LOG.info("[init] after train, trainData.size=" + trainData.size());
     iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
-    while (iter.hasNext())
-      trainData.add(iter.next());
+    outer:
+    while (iter.hasNext()) {
+      FNParse p = iter.next();
+      for (FrameInstance fi : p.getFrameInstances()) {
+        for (int k = 0; k < fi.getFrame().numRoles(); k++) {
+          Span arg = fi.getArgument(k);
+          assert arg != null;
+          if (arg == Span.nullSpan)
+            continue;
+          if (arg.start < 0 || arg.end >= p.getSentence().size()) {
+            LOG.info("skipping " + p.getId() + " because "
+              + fi.getFrame().getName() + "." + fi.getFrame().getRole(k)
+              + " has span " + arg
+              + " which is not valid in a sentence of length "
+              + p.getSentence().size());
+            continue outer;
+          }
+        }
+      }
+      trainData.add(p);
+    }
     LOG.info("[init] after LEX, trainData.size=" + trainData.size());
   }
 
@@ -96,8 +117,8 @@ public class FinalResults implements Runnable {
         LOG.info("[run] re-sampling " + numTrain + " examples to re-train on");
         trainSub = DataUtil.resample(trainData, numTrain, rand);
       }
-      parser.configure("bpIters", "1");
-      parser.configure("passes", "2");
+      parser.configure("bpIters", "2");
+      parser.configure("passes", "3");
       parser.train(trainSub);
     } else {
       LOG.info("[run] just usng loaded model");

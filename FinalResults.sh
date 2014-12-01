@@ -38,7 +38,7 @@ $CMD $HEAD_NONE head $SEED 0
 # Start the learning curve jobs
 for SEED in `seq 100`; do
   echo "starting learning curve seed $SEED"
-  for N_TRAIN 153559 56491 20782 7645 2813 1035; do
+  for N_TRAIN in 153559 56491 20782 7645 2813 1035; do
     $CMD $SPAN_REGULAR span $SEED $N_TRAIN
     $CMD $SPAN_LATENT span $SEED $N_TRAIN
     $CMD $SPAN_NONE span $SEED $N_TRAIN
