@@ -167,16 +167,18 @@ class FeatureSet(object):
       assert False
     stage = random.choice(list(rel_stages))
     relevant_feats = [f for f in self.features if f.stage == stage]
-    card = self.estimate_cardinality(template_info, stage)
-    l = 0.3   # interpolation between cardinality (1) and #features (0)
-    alpha = 0.2
-    beta = 500.0
-    gamma = 15.0
-    p_add_feature = l * beta / (beta + pow(card, alpha)) \
-      + (1.0 - l) * (gamma / (gamma + len(self.features)))
+    card = 1
+    #card = self.estimate_cardinality(template_info, stage)
+    #l = 0.3   # interpolation between cardinality (1) and #features (0)
+    #alpha = 0.2
+    #beta = 500.0
+    #gamma = 15.0
+    #p_add_feature = l * beta / (beta + pow(card, alpha)) \
+    #  + (1.0 - l) * (gamma / (gamma + len(self.features)))
+    p_add_feature = 0.4
 
     p_remove_feature = 0.3 if len(relevant_feats) > 0 else 0.0
-    p_mutate_feature = 0.5
+    p_mutate_feature = 0.3
 
     # re-normalize
     z = p_add_feature + p_remove_feature + p_mutate_feature
@@ -432,18 +434,17 @@ class MutatorQueue(Queue):
     self.stopped = False
 
   def _pick(self, greediness):
-
-
-  def _pick(self, greediness):
     debug = len(self.item2score) < 25
     # Sort the items by score, and find the max score
-    x = sorted(self.item2score.items(), lambda kv: kv[1], decreasing=True)
+    weights = []
+    items = []
+    x = sorted(self.item2score.items(), key=lambda kv: kv[1], reverse=True)
     m = x[0][1]
     z = 0.0
     rank = 0
     for item, s in x:
       regret_a = (m - s) * 10.0
-      regret_b = sqrt(rank) / 10.0
+      regret_b = math.sqrt(rank) / 10.0
       w = math.exp(-greediness * (regret_a + regret_b))
       weights.append(w)
       items.append(item)
@@ -800,7 +801,7 @@ class ConfigJobStarter:
     for s in latent_stages:
       key = 'bpIters.' + s
       if key not in cmd:
-        cmd[key] = '1'
+        cmd[key] = '5'
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
@@ -1105,7 +1106,7 @@ def generate_all_features(s1, s2, syntax_mode):
 
 def seeds(parser_mode, syntax_mode, settings, template_info):
   ''' Generator of Configs '''
-  p = 2  # default number of training passes (this value is copied for all runs)
+  p = 10  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1129,7 +1130,7 @@ def seeds(parser_mode, syntax_mode, settings, template_info):
       yield Config(FeatureSet(fs), settings, reg, batch_size, passes)
 
       # make a few more seeds which are random subsets of those features
-      n = 4
+      n = 5
       for p_keep in [0.5, 0.2]:
         for i in range(n):
           fs_smaller = fs[:]
@@ -1171,7 +1172,7 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
-  n_train = 2500
+  n_train = 4000
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent', 'none']:
