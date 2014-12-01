@@ -19,6 +19,7 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
+import edu.jhu.gm.model.ConstituencyTreeFactor.SpanVar;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
@@ -28,12 +29,14 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.BinaryVarUtil;
@@ -44,7 +47,11 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFamFactorWithConstraint;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.parse.cky.ConstituencyTreeFactorParser;
+import edu.jhu.parse.cky.chart.Chart;
+import edu.jhu.parse.cky.data.BinaryTree;
 
 /**
  * This identifies roles (span-valued) given some frames. It has two kinds of
@@ -115,6 +122,12 @@ public class RoleSpanPruningStage
   private boolean allExamplesInMem = false;
   private boolean keepEverything = false;
 	private boolean disallowArgWithoutConstituent = false;
+	private double recallBias = 1d;
+
+	private FPR spanRecallAgainstStanford = new FPR(false);
+	public void showSpanRecall() {
+	  LOG.info("[showSpanRecall] micro recall: " + spanRecallAgainstStanford.recall());
+	}
 
   public RoleSpanPruningStage(
       GlobalParameters globals,
@@ -129,6 +142,7 @@ public class RoleSpanPruningStage
       dos.writeBoolean(allExamplesInMem);
       dos.writeBoolean(keepEverything);
       dos.writeBoolean(disallowArgWithoutConstituent);
+      // TODO add recallBias (breaking change)
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -141,6 +155,7 @@ public class RoleSpanPruningStage
       allExamplesInMem = dis.readBoolean();
       keepEverything = dis.readBoolean();
       disallowArgWithoutConstituent = dis.readBoolean();
+      // TODO add recallBias (breaking change)
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -149,12 +164,22 @@ public class RoleSpanPruningStage
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
-    String key = "disallowArgWithoutConstituent." + getName();
-    String roleSpanCons = configuration.get(key);
-    if (roleSpanCons != null) {
-      disallowArgWithoutConstituent = Boolean.valueOf(roleSpanCons);
-      LOG.info("setting disallowArgWithoutConstituent="
-          + disallowArgWithoutConstituent);
+
+    String key, value;
+
+    key = "disallowArgWithoutConstituent." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      disallowArgWithoutConstituent = Boolean.valueOf(value);
+    }
+
+    key = "recallBias." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      recallBias = Double.parseDouble(value);
+      assert recallBias > 0d;
     }
   }
 
@@ -166,11 +191,18 @@ public class RoleSpanPruningStage
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
+    return setupInference(input, output, false);
+  }
+
+  public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParseSpanPruning> output,
+      boolean showSpanRecall) {
     super.setupInferenceHook(input, output);
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParseSpanPruning g = output == null ? null : output.get(i);
-      data.add(this.new RoleSpanPruningStageDatum(input.get(i), g));
+      data.add(this.new RoleSpanPruningStageDatum(input.get(i), g, showSpanRecall));
     }
     return new StageDatumExampleList<>(data, allExamplesInMem);
   }
@@ -192,6 +224,7 @@ public class RoleSpanPruningStage
     public final Span target;
     public final Span arg;
     private boolean hasGold, gold;  // True if this span should be pruned
+
     public ArgSpanPruningVar(Span arg, FrameInstance fi) {
       this(arg, fi.getFrame(), fi.getTarget());
     }
@@ -253,12 +286,15 @@ public class RoleSpanPruningStage
       implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
     private FNParseSpanPruning gold;
+    private boolean showSpanRecall = false;
 
     public RoleSpanPruningStageDatum(
         FNTagging input,
-        FNParseSpanPruning gold) {
+        FNParseSpanPruning gold,
+        boolean showSpanRecall) {
       this.input = input;
       this.gold = gold;
+      this.showSpanRecall = showSpanRecall;
     }
 
     @Override
@@ -286,10 +322,19 @@ public class RoleSpanPruningStage
       return new LabeledFgExample(fg, gold);
     }
 
+    private int bigSpansSkipped = 0;
+    private void reportBigSpanSkipped(int start, int end) {
+      if (bigSpansSkipped % 100 == 0) {
+        LOG.warn("[reportBigSpanSkipped] skipping " + bigSpansSkipped
+            + "th long span (" + start +  "," + end + ")");
+      }
+      bigSpansSkipped++;
+    }
+
     private void build(
         FactorGraph fg,
         VarConfig goldConf,
-        Collection<ArgSpanPruningVar> roleVars) {
+        PruningVars roleVars) {
 
       final int n = input.getSentence().size();
       ConstituencyTreeFactor cykPhi = null;
@@ -302,16 +347,25 @@ public class RoleSpanPruningStage
       for (int i = 0; i < nFI; i++) {
         FrameInstance fi = input.getFrameInstance(i);
         assert fi.getSentence().size() == n;
+        int widestGold = 0;
         Set<Span> goldArgs = null;
         if (gold != null) {
           FrameInstance goldFi = gold.getFrameInstance(i);
           assert goldFi.getFrame().equals(fi.getFrame());
           assert goldFi.getTarget().equals(fi.getTarget());
           goldArgs = new HashSet<>();
-          goldArgs.addAll(gold.getPossibleArgs(i));
+          for (Span s : gold.getPossibleArgs(i)) {
+            if (s.width() > widestGold)
+              widestGold = s.width();
+            goldArgs.add(s);
+          }
         }
         for (int start = 0; start < n; start++) {
           for (int end = start + 1; end <= n; end++) {
+            if (end - start > 50 && end - start > widestGold) {
+              reportBigSpanSkipped(start, end);
+              continue;
+            }
             ArgSpanPruningVar p = new ArgSpanPruningVar(
                 Span.getSpan(start, end), fi);
             fg.addFactor(buildFactor(p, cykPhi));
@@ -341,6 +395,8 @@ public class RoleSpanPruningStage
               + " span vars for a sentence of length " + n);
         }
       }
+      if (showSpanRecall && roleVars != null && cykPhi != null)
+        roleVars.setCkyFactor(cykPhi);
     }
 
     /**
@@ -357,8 +413,7 @@ public class RoleSpanPruningStage
       if (cykPhi == null) {
         vs = new VarSet(p);
       } else {
-        // -1 because Matt's args are inclusive
-        c = cykPhi.getSpanVar(p.arg.start, p.arg.end - 1);
+        c = cykPhi.getSpanVar(p.arg.start, p.arg.end);
         if (c == null) {
           assert p.arg.width() == 1 :
             "figure out how to handle pruned constituents";
@@ -430,7 +485,7 @@ public class RoleSpanPruningStage
     public IDecodable<FNParseSpanPruning> getDecodable() {
       observeGetDecodable(input.getId());
       FactorGraph fg = new FactorGraph();
-      List<ArgSpanPruningVar> roleVars = new ArrayList<>();
+      PruningVars roleVars = new PruningVars(input.getSentence());
       build(fg, null, roleVars);
       if (roleVars.size() == 0) {
         // If there are no frames, and thus no roles, then return an
@@ -451,9 +506,78 @@ public class RoleSpanPruningStage
           return new ThresholdDecodable(
               fg, infFactory(), input, roleVars, decoder);
         } else {
-          return new RankDecodable(fg, infFactory(), input, roleVars);
+          RankDecodable rd = new RankDecodable(
+              fg, infFactory(), input, roleVars, recallBias);
+          return rd;
         }
       }
+    }
+  }
+
+  class PruningVars extends ArrayList<ArgSpanPruningVar> {
+    private static final long serialVersionUID = 1L;
+    private Sentence sent;
+    private ConstituencyTreeFactor ckyFactor = null;
+    public PruningVars(Sentence sent) {
+      this.sent = sent;
+    }
+    public void setCkyFactor(ConstituencyTreeFactor ckyFactor) {
+      this.ckyFactor = ckyFactor;
+    }
+    public ConstituencyTreeFactor getCkyFactor() {
+      return ckyFactor;
+    }
+    public void showSpanRecall(FgInferencer inf) {
+      if (ckyFactor == null)
+        return;
+
+      // Get the spans from the marginals/beliefs
+      List<SpanVar> sv = new ArrayList<>();
+      List<DenseFactor> beliefs = new ArrayList<>();
+      int n = sent.size();
+      for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j <= n; j++) {
+          SpanVar s = ckyFactor.getSpanVar(i, j);
+          sv.add(s);
+          beliefs.add(inf.getMarginals(s));
+        }
+      }
+      ConstituencyTreeFactorParser parser = new ConstituencyTreeFactorParser();
+      Chart chart = parser.parse(n, sv, beliefs);
+      BinaryTree tree = chart.getViterbiParse().get1();
+      Set<Span> hyp = new HashSet<>();
+      getSpans(tree, hyp);
+
+      // Get the spans from a constituency parser
+      ConstituencyParse cparse = sent.getStanfordParse(false);
+      if (cparse == null) {
+        ConcreteStanfordWrapper stanford =
+            ConcreteStanfordWrapper.getSingleton(false);
+        cparse = stanford.getCParse(sent);
+      }
+      Set<Span> gold = new HashSet<>();
+      cparse.getSpans(gold);
+
+      // Evaluate recall
+      int tp = 0, fn = 0;
+      for (Span s : gold) {
+        if (hyp.contains(s))
+          tp++;
+        else
+          fn++;
+      }
+      double recall = ((double) tp) / (tp + fn);
+      LOG.info("[showSpanRecall] on " + sent.getId() + " recall=" + recall
+          + " tp=" + tp + " fn=" + fn + " sent.size=" + sent.size()
+          + " hyp.size=" + hyp.size() + " gold.size=" + gold.size());
+      spanRecallAgainstStanford.accum(tp, 0, fn);
+    }
+    private void getSpans(BinaryTree tree, Collection<Span> addTo) {
+      if (tree == null)
+        return;
+      addTo.add(Span.getSpan(tree.getStart(), tree.getEnd()));
+      getSpans(tree.getLeftChild(), addTo);
+      getSpans(tree.getRightChild(), addTo);
     }
   }
 
@@ -462,18 +586,21 @@ public class RoleSpanPruningStage
    * the simple score threshold by sorting by rank and taking the top K.
    */
   class RankDecodable extends Decodable<FNParseSpanPruning> {
-    private List<ArgSpanPruningVar> roleVars;
+    private PruningVars roleVars;
     private FNTagging input;
-    private double recallBias = 2d;
+    private double recallBias;
 
     public RankDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
         FNTagging input,
-        List<ArgSpanPruningVar> roleVars) {
+        //List<ArgSpanPruningVar> roleVars,
+        PruningVars roleVars,
+        double recallBias) {
       super(fg, infFact);
       this.input = input;
       this.roleVars = roleVars;
+      this.recallBias = recallBias;
       if (roleVars == null || roleVars.size() == 0)
         throw new IllegalArgumentException();
     }
@@ -481,6 +608,7 @@ public class RoleSpanPruningStage
     @Override
     public FNParseSpanPruning decode() {
       final FgInferencer inf = this.getMargins();
+      roleVars.showSpanRecall(inf);
       // Sort the roleVars by (frame,target) then probability
       Collections.sort(roleVars, new Comparator<ArgSpanPruningVar>() {
         @Override
@@ -598,7 +726,7 @@ public class RoleSpanPruningStage
               df.getValues(), BinaryVarUtil.boolToConfig(false));
         }
         //LOG.debug("[decode] " + rpv + " has beliefs " + df
-        //		+ " and was decoded as " + y);
+        //    + " and was decoded as " + y);
         considered++;
         if (y == BinaryVarUtil.boolToConfig(true)) {
           pruned++;

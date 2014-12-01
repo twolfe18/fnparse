@@ -1,6 +1,9 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import org.apache.log4j.Logger;
+
 public final class Span implements Comparable<Span> {
+  public static final Logger LOG = Logger.getLogger(Span.class);
 
   public int start;  // inclusive
   public int end;    // non-inclusive
@@ -29,8 +32,7 @@ public final class Span implements Comparable<Span> {
       // sanity check
       if(newInternedMaxSentSize > 200) {
         String desc = "(" + start + ", " + end + ")";
-        throw new IllegalStateException(
-            "what are you doing with these huge sentences? " + desc);
+        LOG.warn("what are you doing with these huge sentences? " + desc);
       }
 
       Span[][] newInternedSpans = new Span[newInternedMaxSentSize][];

@@ -23,10 +23,12 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
+import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -48,7 +50,9 @@ import edu.jhu.hlt.fnparse.inference.pruning.NoArgPruner;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadVars.RVar;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.srl.DepParseDecoder;
 
 /**
  * Predicts the heads of roles for frames that appear in a sentence. Also serves
@@ -61,6 +65,7 @@ public class RoleHeadStage
     extends AbstractStage<FNTagging, FNParse> {
   public static final Logger LOG = Logger.getLogger(RoleHeadStage.class);
   public static boolean SHOW_FEATURES = false;
+  public static boolean SHOW_DEPENDENCY_RECALL = true;
 
   private int maxSentenceLengthForTraining = -1;
   private boolean useArgPruner = true;
@@ -81,6 +86,13 @@ public class RoleHeadStage
   // (47.8%) arguments are a child of the target
   // ( 9.9%) arguments are the parent of the target
   //private boolean disallowArgWithoutDependency = false;
+
+  private FPR headBasicRecall = new FPR(false);
+  private FPR headCollapsedRecall = new FPR(false);
+  public void showHeadRecall() {
+    LOG.info("[showHeadRecall] basic     micro recall/accuracy: " + headBasicRecall.recall());
+    LOG.info("[showHeadRecall] collapsed micro recall/accuracy: " + headCollapsedRecall.recall());
+  }
 
   public RoleHeadStage(GlobalParameters globals, String featureTemplateString) {
     super(globals, featureTemplateString);
@@ -193,6 +205,13 @@ public class RoleHeadStage
   public StageDatumExampleList<FNTagging, FNParse> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParse> output) {
+    return setupInference(input, output, false);
+  }
+
+  public StageDatumExampleList<FNTagging, FNParse> setupInference(
+      List<? extends FNTagging> input,
+      List<? extends FNParse> output,
+      boolean showHeadRecall) {
     super.setupInferenceHook(input, output);
     log.info("[setupInfernece] maxSentenceLengthForTraining=" + maxSentenceLengthForTraining);
     log.info("[setupInfernece] useArgPruner=" + useArgPruner);
@@ -203,9 +222,9 @@ public class RoleHeadStage
     for (int i=0; i<n; i++) {
       FNTagging x = input.get(i);
       if (output == null)
-        data.add(new RoleIdStageDatum(x));
+        data.add(new RoleIdStageDatum(x, showHeadRecall));
       else
-        data.add(new RoleIdStageDatum(x, output.get(i)));
+        data.add(new RoleIdStageDatum(x, output.get(i), showHeadRecall));
     }
     return new StageDatumExampleList<>(data);
   }
@@ -288,24 +307,100 @@ public class RoleHeadStage
     return factors;
   }
 
+  class RoleVars extends ArrayList<RoleHeadVars> {
+    private static final long serialVersionUID = 1L;
+    private Sentence sent;
+    private ProjDepTreeFactor deps;
+
+    public RoleVars(Sentence sent) {
+      this.sent = sent;
+    }
+
+    public void setDeps(ProjDepTreeFactor deps) {
+      this.deps = deps;
+    }
+
+    public void showDependencyRecall(FgInferencer inf) {
+      if (deps == null)
+        return;
+
+      // Get the most likely latent parse
+      final int n = sent.size();
+      List<DenseFactor> bel = new ArrayList<>();
+      List<Var> vars = new ArrayList<>();
+      for (int i = 0; i < n; i++) {
+        Var v = deps.getRootVars()[i];
+        assert v != null;
+        vars.add(v);
+        bel.add(inf.getMarginals(v));
+      }
+      for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+          Var v = deps.getLinkVar(i, j);
+          if (v == null)
+            continue;
+          vars.add(v);
+          bel.add(inf.getMarginals(v));
+        }
+      }
+      int[] heads = DepParseDecoder.getParents(bel, vars, n);
+
+      // Measure agreement/recall
+      DependencyParse basic = sent.getBasicDeps(false);
+      if (basic == null) {
+        ConcreteStanfordWrapper stanford =
+            ConcreteStanfordWrapper.getSingleton(false);
+        stanford.parse(sent, true);
+        basic = sent.getBasicDeps(false);
+      }
+      DependencyParse collapsed = sent.getCollapsedDeps(false);
+      assert collapsed != null;
+      showAgreement(heads, basic, "basicDeps", headBasicRecall);
+      showAgreement(heads, collapsed, "collapsedDeps", headCollapsedRecall);
+    }
+
+    private void showAgreement(int[] parents, DependencyParse deps, String name, FPR accum) {
+      if (parents.length != deps.size())
+        throw new IllegalArgumentException();
+      final int n = sent.size();
+      int right = 0, wrong = 0;
+      for (int i = 0; i < n; i++) {
+        if (parents[i] == deps.getHead(i)
+            || parents[i] < 0 && deps.isRoot(i)) {
+          right++;
+        } else {
+          wrong++;
+        }
+      }
+      double a = ((double) right) / (right + wrong);
+      LOG.info("[showHeadRecall] " + sent.getId() + " accuracy=" + a
+          + " n=" + n + " right=" + right + " wrong=" + wrong);
+      accum.accum(right, 0, wrong);
+    }
+  }
+
   class RoleIdStageDatum implements StageDatum<FNTagging, FNParse> {
-    private final List<RoleHeadVars> roleVars;
+    //private final List<RoleHeadVars> roleVars;
+    private final RoleVars roleVars;
     private final FNTagging input;
     private final FNParse gold;
+    private boolean showHeadRecall;
 
     /** you don't know gold */
-    public RoleIdStageDatum(FNTagging frames) {
-      this.roleVars = new  ArrayList<>();
+    public RoleIdStageDatum(FNTagging frames, boolean showHeadRecall) {
+      this.roleVars = new RoleVars(frames.getSentence());
+      this.showHeadRecall = showHeadRecall;
       this.input = frames;
       this.gold = null;
       initHypotheses(frames, null, false);
     }
 
     /** you know gold */
-    public RoleIdStageDatum(FNTagging frames, FNParse gold) {
+    public RoleIdStageDatum(FNTagging frames, FNParse gold, boolean showHeadRecall) {
       if(gold == null)
         throw new IllegalArgumentException();
-      this.roleVars = new  ArrayList<>();
+      this.roleVars = new RoleVars(frames.getSentence());
+      this.showHeadRecall = showHeadRecall;
       this.input = frames;
       this.gold = gold;
       initHypotheses(frames, gold, true);
@@ -381,6 +476,8 @@ public class RoleHeadStage
             new DepParseFactorFactory(globals);
         factors.addAll(depParseFactorTemplate.initFactorsFor(
             getSentence(), Collections.emptyList(), depTree, consTree));
+        if (showHeadRecall)
+          roleVars.setDeps(depTree);
       }
       factors.addAll(
           initFactorsFor(getSentence(), roleVars, depTree, consTree));
@@ -422,13 +519,15 @@ public class RoleHeadStage
     public boolean debug = false;
 
     private final Sentence sent;
-    private final List<RoleHeadVars> hypotheses;
+    //private final List<RoleHeadVars> hypotheses;
+    private final RoleVars hypotheses;
 
     public RoleIdDecodable(
         FactorGraph fg,
         FgInferencerFactory infFact,
         Sentence sent,
-        List<RoleHeadVars> hypotheses) {
+        //List<RoleHeadVars> hypotheses) {
+        RoleVars hypotheses) {
       super(fg, infFact);
       this.sent = sent;
       this.hypotheses = hypotheses;
@@ -437,6 +536,7 @@ public class RoleHeadStage
     @Override
     public FNParse decode() {
       FgInferencer inf = getMargins();
+      hypotheses.showDependencyRecall(inf);
       List<FrameInstance> fis = new ArrayList<FrameInstance>();
       for(RoleHeadVars rv : hypotheses)
         fis.add(decodeRoleVars(rv, inf));
