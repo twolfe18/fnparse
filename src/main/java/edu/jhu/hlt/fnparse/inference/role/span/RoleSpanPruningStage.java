@@ -142,7 +142,7 @@ public class RoleSpanPruningStage
       dos.writeBoolean(allExamplesInMem);
       dos.writeBoolean(keepEverything);
       dos.writeBoolean(disallowArgWithoutConstituent);
-      // TODO add recallBias (breaking change)
+      dos.writeDouble(recallBias);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -155,7 +155,7 @@ public class RoleSpanPruningStage
       allExamplesInMem = dis.readBoolean();
       keepEverything = dis.readBoolean();
       disallowArgWithoutConstituent = dis.readBoolean();
-      // TODO add recallBias (breaking change)
+      recallBias = dis.readDouble();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
