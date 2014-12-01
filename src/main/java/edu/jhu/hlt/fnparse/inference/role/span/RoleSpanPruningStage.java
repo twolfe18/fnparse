@@ -551,7 +551,8 @@ public class RoleSpanPruningStage
       // Get the spans from a constituency parser
       ConstituencyParse cparse = sent.getStanfordParse(false);
       if (cparse == null) {
-        ConcreteStanfordWrapper stanford = ConcreteStanfordWrapper.getSingleton(false);
+        ConcreteStanfordWrapper stanford =
+            ConcreteStanfordWrapper.getSingleton(false);
         cparse = stanford.getCParse(sent);
       }
       Set<Span> gold = new HashSet<>();

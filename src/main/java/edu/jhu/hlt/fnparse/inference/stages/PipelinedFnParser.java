@@ -52,6 +52,8 @@ public class PipelinedFnParser implements Serializable, Parser {
   public static String ARG_ID_MODEL_HUMAN_READABLE = null;
   public static String ARG_SPANS_MODEL_HUMAN_READABLE = null;
 
+  public static boolean SHOW_HEAD_RECALL = true;
+
   private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
   private Stage<FNTagging, FNParse> argId;
@@ -347,9 +349,12 @@ public class PipelinedFnParser implements Serializable, Parser {
 		List<FNParse> goldArgHeads = labels == null
 				? null : DataUtil.convertArgumenSpansToHeads(
 						labels, SemaforicHeadFinder.getInstance());
-		List<FNParse> argHeads = argId
-				.setupInference(frames, goldArgHeads)
-				.decodeAll();
+		List<FNParse> argHeads;
+		if (SHOW_HEAD_RECALL && argId instanceof RoleHeadStage) {
+		  argHeads = ((RoleHeadStage) argId).setupInference(frames, goldArgHeads, true).decodeAll();
+		} else {
+		  argHeads = argId.setupInference(frames, goldArgHeads).decodeAll();
+		}
 		LOG.info("[parse] argId done in " + (System.currentTimeMillis()-start)/1000d + " seconds");
 		if (goldArgHeads != null)
 		  argHeadAccuracy(goldArgHeads, argHeads);
@@ -374,6 +379,8 @@ public class PipelinedFnParser implements Serializable, Parser {
 		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
 		    + sentences.size() + " sentences /" + toks + " tokens, "
 		    + (toks*1000d)/totalTime + " tokens per second");
+		if (SHOW_HEAD_RECALL && argId instanceof RoleHeadStage)
+		  ((RoleHeadStage) argId).showHeadRecall();
 
 		return fullParses;
 	}
