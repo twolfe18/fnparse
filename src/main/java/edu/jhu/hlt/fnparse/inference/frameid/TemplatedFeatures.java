@@ -203,7 +203,7 @@ public class TemplatedFeatures implements Serializable {
   public static List<Template> parseTemplates(String templateDescription)
       throws TemplateDescriptionParsingException {
     assert templateDescription != null;
-    assert templateDescription.length() > 0;
+    assert templateDescription.length() > 0 : "you need to provide some templates";
     List<Template> templates = new ArrayList<>();
     for (String tok : tokenizeTemplates(templateDescription))
       templates.add(parseTemplateToken(tok));

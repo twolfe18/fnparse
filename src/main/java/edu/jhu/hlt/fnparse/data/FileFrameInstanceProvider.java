@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public class FileFrameInstanceProvider implements FrameInstanceProvider {
+  public static final Logger LOG = Logger.getLogger(FileFrameInstanceProvider.class);
 
 	public static final class FIIterator implements Iterator<FNTagging> {
 		public static final Logger LOG = Logger.getLogger(FIIterator.class);
@@ -278,5 +279,27 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 	@Override
 	public Iterator<FNTagging> getParsedOrTaggedSentences() {
 		return new FNIterFilters.SkipExceptions(new FIIterator(frameFile, conllFile));
+	}
+
+	private static void countStuff(String name, Iterator<FNParse> parses) {
+	  int nFI = 0, nSent = 0, nArg = 0;
+	  while (parses.hasNext()) {
+	    FNParse p = parses.next();
+	    for (FrameInstance fi : p.getFrameInstances()) {
+	      nFI++;
+	      nArg += fi.numRealizedArguments();
+	    }
+	    nSent++;
+	  }
+	  LOG.info(String.format(
+	      "%s has %.2f fi/sent, %.2f arg/sent, %.2f arg/fi, nFI=%d, nArg=%d nSent=%d",
+	      name, ((double) nFI) / nSent, ((double) nArg) / nSent, ((double) nArg) / nFI, nFI, nArg, nSent));
+
+	}
+
+	public static void main(String[] args) {
+	  countStuff("LEX", fn15lexFIP.getParsedSentences());
+	  countStuff("train", dipanjantrainFIP.getParsedSentences());
+	  countStuff("test", dipanjantestFIP.getParsedSentences());
 	}
 }

@@ -1032,22 +1032,7 @@ class TemplateInfo(object):
 def generate_all_features(s1, s2, syntax_mode):
   fs = []
 
-  for prune in ['framePrune', 'prune']:
-    fs.append((prune, ['1']))
-    fs.append((prune, ['span1span2Overlap']))
-    fs.append((prune, ['span1LeftWord']))
-    fs.append((prune, ['span1FirstWord']))
-    fs.append((prune, ['span1LastWord']))
-    fs.append((prune, ['span1RightWord']))
-    fs.append((prune, ['span1Width/1']))
-    fs.append((prune, ['span1Width/2']))
-    fs.append((prune, ['span1Width/3']))
-    fs.append((prune, ['span1Width/4']))
-    fs.append((prune, ['span1Width/5']))
-    fs.append((prune, ['span1LastPos2', 'span1Width/3']))
-    fs.append((prune, ['Dist(Len5,Span1.Last,Span2.First)']))
-
-  for fra in ['frameRoleArg', 'roleArg', 'arg']:
+  for fra in ['frameRoleArg', 'roleArg', 'arg', 'framePrune', 'prune']:
     fs.append((fra, ['1']))
     fs.append((fra, ['head1Word']))
     fs.append((fra, ['head1Pos2']))
@@ -1058,37 +1043,36 @@ def generate_all_features(s1, s2, syntax_mode):
     fs.append((fra, ['span1FirstPos2']))
     fs.append((fra, ['span1LastPos2']))
     fs.append((fra, ['span1RightPos2']))
-    fs.append((fra, ['span1Width/1']))
     fs.append((fra, ['span1Width/3']))
     fs.append((fra, ['span1Width/5']))
-    fs.append((fra, ['Word-1-grams-between-Span1.First-and-Span1.Last']))
-    fs.append((fra, ['Word-1-grams-between-Span1.Last-and-Span2.First']))
-    fs.append((fra, ['head1Pos', 'head2Pos']))
-    fs.append((fra, ['Dist(Len5,Span1.Last,Span2.First)']))
+    fs.append((fra, ['Dist(SemaforPathLengths,Head1,Head2)']))
+    fs.append((fra, ['head1CollapsedLabel']))
+    fs.append((fra, ['head1CollapsedParentDir', 'Dist(Direction,Head1,Head2)']))
     fs.append((fra, ['head1head2Path-LEMMA-DIRECTION-t']))
     fs.append((fra, ['head1head2Path-POS-DEP-t']))
     fs.append((fra, ['span1StanfordCategory']))
+    fs.append((fra, ['span1StanfordRule']))
     fs.append((fra, ['CfgFeat-CommonParent-Category']))
+    fs.append((fra, ['CfgFeat-CommonParent-DeltaDepth']))
 
   fs.append(('span1IsConstituent', ['1']))
   fs.append(('span1IsConstituent', ['frameRoleArg']))
   fs.append(('span1IsConstituent', ['roleArg']))
-  fs.append(('span1IsConstituent', ['arg']))
+  fs.append(('span1IsConstituent', ['frame']))
   fs.append(('span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']))
-  fs.append(('span1IsConstituent', ['frame', 'head1Pos']))
   fs.append(('span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']))
   fs.append(('span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']))
   cparts = ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2', 'span1Width/5', 'span1FirstWord', 'span1LastWord']
   for p1 in cparts:
     fs.append(('span1IsConstituent', [p1]))
     for p2 in cparts:
-      if p2 == p1:
+      if p2 <= p1:
         continue
       if 'Word' in p1 and 'Word' in p2:
         continue;
       fs.append(('span1IsConstituent', [p1, p2]))
       for p3 in cparts:
-        if p3 == p1 or p3 == p2:
+        if p3 <= p2:
           continue
         if 'Word' in p3 and ('Word' in p1 or 'Word' in p2):
           continue
