@@ -127,7 +127,7 @@ public class RoleSpanPruningStage
 	private boolean disallowArgWithoutConstituent = false;
 	private double recallBias = 0.5d;
 
-	private int tooBigForArg = 20;
+	private int tooBigForArg = 15;
 
 	private FPR spanRecallAgainstStanford = new FPR(false);
 	public void showSpanRecall() {
@@ -787,7 +787,7 @@ public class RoleSpanPruningStage
     Random r = new Random(9001);
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-    parses = DataUtil.reservoirSample(parses, 200, r);
+    parses = DataUtil.reservoirSample(parses, 250, r);
     List<FNParse> train = new ArrayList<>(), test = new ArrayList<>();
     for (FNParse p : parses)
       (r.nextBoolean() ? train : test).add(p);
