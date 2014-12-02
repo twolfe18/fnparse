@@ -666,6 +666,8 @@ public class BasicFeatureTemplates {
               Span s = context.getSpan1();
               if (s == null)
                 return null;
+              if (s.width() > 15 + tagsLeft + tagsRight)
+                return name + "=TOO_BIG";
               return name + "=" + pat.extract(s, context.getSentence());
             }
           });
