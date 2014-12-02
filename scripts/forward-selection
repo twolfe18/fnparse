@@ -1156,7 +1156,7 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
-  n_train = 4000
+  n_train = 2500
   mq = MultiQueue()
   for parser_mode in ['span', 'head']:
     for syntax_mode in ['regular', 'latent', 'none']:

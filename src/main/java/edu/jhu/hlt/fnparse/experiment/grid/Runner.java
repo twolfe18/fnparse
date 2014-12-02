@@ -51,6 +51,8 @@ import edu.jhu.prim.util.math.FastMath;
 public class Runner {
   public static Logger LOG = Logger.getLogger(Runner.class);
 
+  public static boolean TAKE_LEX = false;
+
   public static void main(String[] args) {
     FastMath.useLogAddTable = false;  // saw about 8% improvement, not worth it
     FrameIdStage.SHOW_FEATURES = false;
@@ -155,9 +157,11 @@ public class Runner {
     iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
     while (iter.hasNext())
       all.add(iter.next());
-    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
-    while (iter.hasNext())
-      all.add(iter.next());
+    if (TAKE_LEX) {
+      iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+      while (iter.hasNext())
+        all.add(iter.next());
+    }
     String lim = config.get("MaxTrainSize");
     if (lim != null) {
       int n = Integer.parseInt(lim);
