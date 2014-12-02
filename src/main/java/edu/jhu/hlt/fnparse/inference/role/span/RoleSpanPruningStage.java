@@ -797,7 +797,7 @@ public class RoleSpanPruningStage
     RoleSpanPruningStage rsp = new RoleSpanPruningStage(globals, featureTemplateString);
     rsp.setSyntaxMode("latent");
     rsp.configure("passes", "3");
-    rsp.configure("bpIters", "2");
+    rsp.configure("bpIters", "1");
     rsp.scanFeatures(train);
     List<FNTagging> trainX = DataUtil.convertParsesToTaggings(train);
     List<FNParseSpanPruning> trainY =

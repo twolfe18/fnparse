@@ -52,7 +52,7 @@ public class ConcreteStanfordWrapper {
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
-  private Map<Sentence, Communication> cache = null;
+  private Map<String, Communication> cache = null;  // key is sentence id
   private Timer parseTimer;
 
   public ConcreteStanfordWrapper(boolean cache) {
@@ -116,7 +116,7 @@ public class ConcreteStanfordWrapper {
     Communication communication = null;
     boolean updateCache = false;
     if (cache != null) {
-      communication = cache.get(s);
+      communication = cache.get(s.getId());
       if (communication == null)
         LOG.info("cache miss for " + s.getId());
       updateCache = communication == null;
@@ -134,7 +134,7 @@ public class ConcreteStanfordWrapper {
       parseTimer.stop();
     }
     if (updateCache) {
-      Communication old = cache.put(s, communication);
+      Communication old = cache.put(s.getId(), communication);
       assert old == null;
     }
     for (Section section : communication.getSectionList()) {
@@ -150,10 +150,16 @@ public class ConcreteStanfordWrapper {
           if (deps.isPresent()) {
             int n = s.size();
             int[] heads = new int[n];
-            Arrays.fill(heads, DependencyParse.PUNC);
+            Arrays.fill(heads, DependencyParse.ROOT);
             String[] labels = new String[n];
+            boolean[] set = new boolean[n];
             for (Dependency e : deps.get().getDependencyList()) {
-              assert heads[e.getDep()] == DependencyParse.PUNC;
+              if (!set[e.getDep()]) {
+                set[e.getDep()] = true;
+              } else {
+                LOG.warn("this token has more than one head!");
+                continue;
+              }
               heads[e.getDep()] = e.isSetGov()
                   ? e.getGov() : DependencyParse.ROOT;
               labels[e.getDep()] = e.getEdgeType();
