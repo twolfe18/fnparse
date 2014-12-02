@@ -10,8 +10,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.data.LabeledFgExample;
@@ -29,6 +31,7 @@ import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -122,7 +125,9 @@ public class RoleSpanPruningStage
   private boolean allExamplesInMem = false;
   private boolean keepEverything = false;
 	private boolean disallowArgWithoutConstituent = false;
-	private double recallBias = 1d;
+	private double recallBias = 0.5d;
+
+	private int tooBigForArg = 20;
 
 	private FPR spanRecallAgainstStanford = new FPR(false);
 	public void showSpanRecall() {
@@ -275,6 +280,7 @@ public class RoleSpanPruningStage
   }
 
   private int buildCtr = 0, buildCtrInterval = 100;
+  private int bigSpansSkipped = 0;
   /**
    * An example for this stage which holds a latent constituency tree and a
    * bunch of pruning variables for the roles/args.
@@ -322,9 +328,8 @@ public class RoleSpanPruningStage
       return new LabeledFgExample(fg, gold);
     }
 
-    private int bigSpansSkipped = 0;
     private void reportBigSpanSkipped(int start, int end) {
-      if (bigSpansSkipped % 100 == 0) {
+      if (bigSpansSkipped % 50000 == 0) {
         LOG.warn("[reportBigSpanSkipped] skipping " + bigSpansSkipped
             + "th long span (" + start +  "," + end + ")");
       }
@@ -362,7 +367,8 @@ public class RoleSpanPruningStage
         }
         for (int start = 0; start < n; start++) {
           for (int end = start + 1; end <= n; end++) {
-            if (end - start > 50 && end - start > widestGold) {
+            if (end - start > tooBigForArg
+                && widestGold > 0 && end - start > widestGold) {
               reportBigSpanSkipped(start, end);
               continue;
             }
@@ -483,6 +489,8 @@ public class RoleSpanPruningStage
 
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
+      if (input.getSentence().size() < 5)
+        LOG.info("test");
       observeGetDecodable(input.getId());
       FactorGraph fg = new FactorGraph();
       PruningVars roleVars = new PruningVars(input.getSentence());
@@ -594,7 +602,6 @@ public class RoleSpanPruningStage
         FactorGraph fg,
         FgInferencerFactory infFact,
         FNTagging input,
-        //List<ArgSpanPruningVar> roleVars,
         PruningVars roleVars,
         double recallBias) {
       super(fg, infFact);
@@ -664,11 +671,8 @@ public class RoleSpanPruningStage
     }
 
     public int spansToTakeFor(Frame f) {
-      int numCore = 0;
-      for (int k = 0; k < f.numRoles(); k++)
-        if (f.getRole(k).toLowerCase().indexOf("core") >= 0)
-          numCore++;
-      return (int) (recallBias * (input.getSentence().size() + numCore + 5d));
+      int n = input.getSentence().size();
+      return (int) (recallBias * n + 0.5d);
     }
     @Override
     public FgModel getWeights() {
@@ -775,5 +779,43 @@ public class RoleSpanPruningStage
     public boolean logDomain() {
       return RoleSpanPruningStage.this.logDomain();
     }
+  }
+
+  public static void main(String[] args) {
+    Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
+
+    Random r = new Random(9001);
+    List<FNParse> parses = DataUtil.iter2list(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+    parses = DataUtil.reservoirSample(parses, 200, r);
+    List<FNParse> train = new ArrayList<>(), test = new ArrayList<>();
+    for (FNParse p : parses)
+      (r.nextBoolean() ? train : test).add(p);
+
+    GlobalParameters globals = new GlobalParameters();
+    String featureTemplateString = "RoleSpanPruningStage-latent*frameRoleArg*head1WordWnSynset+RoleSpanPruningStage-latent*frameRoleArg*head1Lemma+RoleSpanPruningStage-latent*roleArg*head1WordWnSynset+RoleSpanPruningStage-latent*roleArg*head1Lemma+RoleSpanPruningStage-latent*arg*head1WordWnSynset+RoleSpanPruningStage-latent*arg*head1Lemma+RoleSpanPruningStage-latent*framePrune*1+RoleSpanPruningStage-latent*framePrune*head1Word+RoleSpanPruningStage-latent*framePrune*head1Pos2+RoleSpanPruningStage-latent*framePrune*head1WordWnSynset+RoleSpanPruningStage-latent*framePrune*head1Lemma+RoleSpanPruningStage-latent*framePrune*span1span2Overlap+RoleSpanPruningStage-latent*framePrune*span1LeftPos2+RoleSpanPruningStage-latent*framePrune*span1FirstPos2+RoleSpanPruningStage-latent*framePrune*span1LastPos2+RoleSpanPruningStage-latent*framePrune*span1RightPos2+RoleSpanPruningStage-latent*framePrune*span1Width/3+RoleSpanPruningStage-latent*framePrune*span1Width/5+RoleSpanPruningStage-latent*framePrune*Dist(SemaforPathLengths,Head1,Head2)+RoleSpanPruningStage-latent*framePrune*head1CollapsedLabel+RoleSpanPruningStage-latent*framePrune*Dist(Direction,Head1,Head2)*head1CollapsedParentDir+RoleSpanPruningStage-latent*prune*1+RoleSpanPruningStage-latent*prune*head1Word+RoleSpanPruningStage-latent*prune*head1Pos2+RoleSpanPruningStage-latent*prune*head1WordWnSynset+RoleSpanPruningStage-latent*prune*head1Lemma+RoleSpanPruningStage-latent*prune*span1span2Overlap+RoleSpanPruningStage-latent*prune*span1LeftPos2+RoleSpanPruningStage-latent*prune*span1FirstPos2+RoleSpanPruningStage-latent*prune*span1LastPos2+RoleSpanPruningStage-latent*prune*span1RightPos2+RoleSpanPruningStage-latent*prune*span1Width/3+RoleSpanPruningStage-latent*prune*span1Width/5+RoleSpanPruningStage-latent*prune*Dist(SemaforPathLengths,Head1,Head2)+RoleSpanPruningStage-latent*prune*head1CollapsedLabel+RoleSpanPruningStage-latent*prune*Dist(Direction,Head1,Head2)*head1CollapsedParentDir+RoleSpanPruningStage-latent*span1IsConstituent*1+RoleSpanPruningStage-latent*span1IsConstituent*frame+RoleSpanPruningStage-latent*span1IsConstituent*Dist(Direction,Head1,Head2)*frame+RoleSpanPruningStage-latent*span1IsConstituent*span1PosPat-COARSE_POS-1-1+RoleSpanPruningStage-latent*span1IsConstituent*span1PosPat-WORD_SHAPE-1-1+RoleSpanPruningStage-latent*span1IsConstituent*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LeftPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LeftPos2*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LeftPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1LastWord+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1LastPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LastWord+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1FirstWord*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1RightPos2+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1RightPos2*span1Width/5+RoleSpanPruningStage-latent*span1IsConstituent*span1LastWord*span1Width/5+RoleSpanLabelingStage-latent*frameRoleArg*1+RoleSpanLabelingStage-latent*frameRoleArg*head1Word+RoleSpanLabelingStage-latent*frameRoleArg*head1Pos2+RoleSpanLabelingStage-latent*frameRoleArg*head1WordWnSynset+RoleSpanLabelingStage-latent*frameRoleArg*head1Lemma+RoleSpanLabelingStage-latent*frameRoleArg*span1span2Overlap+RoleSpanLabelingStage-latent*frameRoleArg*span1LeftPos2+RoleSpanLabelingStage-latent*frameRoleArg*span1FirstPos2+RoleSpanLabelingStage-latent*frameRoleArg*span1LastPos2+RoleSpanLabelingStage-latent*frameRoleArg*span1RightPos2+RoleSpanLabelingStage-latent*frameRoleArg*span1Width/3+RoleSpanLabelingStage-latent*frameRoleArg*span1Width/5+RoleSpanLabelingStage-latent*frameRoleArg*Dist(SemaforPathLengths,Head1,Head2)+RoleSpanLabelingStage-latent*frameRoleArg*head1CollapsedLabel+RoleSpanLabelingStage-latent*frameRoleArg*Dist(Direction,Head1,Head2)*head1CollapsedParentDir+RoleSpanLabelingStage-latent*roleArg*1+RoleSpanLabelingStage-latent*roleArg*head1Word+RoleSpanLabelingStage-latent*roleArg*head1Pos2+RoleSpanLabelingStage-latent*roleArg*head1WordWnSynset+RoleSpanLabelingStage-latent*roleArg*head1Lemma+RoleSpanLabelingStage-latent*roleArg*span1span2Overlap+RoleSpanLabelingStage-latent*roleArg*span1LeftPos2+RoleSpanLabelingStage-latent*roleArg*span1FirstPos2+RoleSpanLabelingStage-latent*roleArg*span1LastPos2+RoleSpanLabelingStage-latent*roleArg*span1RightPos2+RoleSpanLabelingStage-latent*roleArg*span1Width/3+RoleSpanLabelingStage-latent*roleArg*span1Width/5+RoleSpanLabelingStage-latent*roleArg*Dist(SemaforPathLengths,Head1,Head2)+RoleSpanLabelingStage-latent*roleArg*head1CollapsedLabel+RoleSpanLabelingStage-latent*roleArg*Dist(Direction,Head1,Head2)*head1CollapsedParentDir+RoleSpanLabelingStage-latent*arg*1+RoleSpanLabelingStage-latent*arg*head1Word+RoleSpanLabelingStage-latent*arg*head1Pos2+RoleSpanLabelingStage-latent*arg*head1WordWnSynset+RoleSpanLabelingStage-latent*arg*head1Lemma+RoleSpanLabelingStage-latent*arg*span1span2Overlap+RoleSpanLabelingStage-latent*arg*span1LeftPos2+RoleSpanLabelingStage-latent*arg*span1FirstPos2+RoleSpanLabelingStage-latent*arg*span1LastPos2+RoleSpanLabelingStage-latent*arg*span1RightPos2+RoleSpanLabelingStage-latent*arg*span1Width/3+RoleSpanLabelingStage-latent*arg*span1Width/5+RoleSpanLabelingStage-latent*arg*Dist(SemaforPathLengths,Head1,Head2)+RoleSpanLabelingStage-latent*arg*head1CollapsedLabel+RoleSpanLabelingStage-latent*arg*Dist(Direction,Head1,Head2)*head1CollapsedParentDir+RoleSpanLabelingStage-latent*framePrune*head1WordWnSynset+RoleSpanLabelingStage-latent*framePrune*head1Lemma+RoleSpanLabelingStage-latent*prune*head1WordWnSynset+RoleSpanLabelingStage-latent*prune*head1Lemma+RoleSpanLabelingStage-latent*span1IsConstituent*1+RoleSpanLabelingStage-latent*span1IsConstituent*frameRoleArg+RoleSpanLabelingStage-latent*span1IsConstituent*roleArg+RoleSpanLabelingStage-latent*span1IsConstituent*frame+RoleSpanLabelingStage-latent*span1IsConstituent*Dist(Direction,Head1,Head2)*frame+RoleSpanLabelingStage-latent*span1IsConstituent*span1PosPat-COARSE_POS-1-1+RoleSpanLabelingStage-latent*span1IsConstituent*span1PosPat-WORD_SHAPE-1-1+RoleSpanLabelingStage-latent*span1IsConstituent*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LeftPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LeftPos2*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LeftPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LeftPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastPos2*span1LastWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1LastPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1FirstWord*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstPos2*span1LastWord*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LeftPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LastWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastPos2*span1LastWord*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LeftPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1LastPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1FirstWord*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1LeftPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1RightPos2+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1RightPos2*span1Width/5+RoleSpanLabelingStage-latent*span1IsConstituent*span1LastWord*span1Width/5";
+    RoleSpanPruningStage rsp = new RoleSpanPruningStage(globals, featureTemplateString);
+    rsp.setSyntaxMode("latent");
+    rsp.configure("passes", "3");
+    rsp.configure("bpIters", "2");
+    rsp.scanFeatures(train);
+    List<FNTagging> trainX = DataUtil.convertParsesToTaggings(train);
+    List<FNParseSpanPruning> trainY =
+        FNParseSpanPruning.optimalPrune(train);
+    rsp.train(trainX, trainY);
+    List<FNParseSpanPruning> yhat =
+        rsp.setupInference(DataUtil.convertParsesToTaggings(test), null).decodeAll();
+    FPR perf = new FPR(false);
+    int argsLetThrough = 0, nFI = 0;
+    for (int i = 0; i < yhat.size(); i++) {
+      FNParseSpanPruning prune = yhat.get(i);
+      FNParse p = test.get(i);
+      nFI += p.numFrameInstances();
+      argsLetThrough += prune.numPossibleArgs();
+      prune.perf(p, perf);
+    }
+    double ns = ((double) argsLetThrough) / yhat.size();
+    double nf = ((double) argsLetThrough) / nFI;
+    LOG.info("recall=" + perf.recall() + " n/s=" + ns + " n/FI=" + nf);
   }
 }
