@@ -229,22 +229,8 @@ public class SemaforEval {
 
   private void write(List<FNParse> parses, File fePredictionsFile, boolean prependTwoZeros) {
     LOG.info("writing " + parses.size() + " parses to " + fePredictionsFile.getPath());
-    /*
-     * # I can dump my predictions to the same format as ${fePredictionsFile}                                                                                                                                           
- 47 # but i need to reverse-engineer the format from PrepareFullAnnotationXML                                                                                                                                        
- 48 "4       Economy economy.n       7       economy 1       Political_region        3:4     Descriptor      5:6     Economy 7"                                                                                      
- 49 appears to be                                                                                                                                                                                                    
- 50 - ??? (I believe this is just the length of the sentence)                                                                                                                                                        
- 51 - frame name                                                                                                                                                                                                     
- 52 - LU of target                                                                                                                                                                                                   
- 53 - index of target word (this can be a string like "20_21" if not just one token)                                                                                                                                 
- 54 - word of target                                                                                                                                                                                                 
- 55 - sentence number                                                                                                                                                                                                
- 56 - (                                                                                                                                                                                                              
- 57   - FE name                                                                                                                                                                                                      
- 58   - FE span                                                                                                                                                                                                      
- 59 )+ 
-     */
+    // see /home/travis/Dropbox/research/framenet-parsing/evaluation.txt
+    // for details on how this format was reverse-engineered.
     try (FileWriter fw = new FileWriter(fePredictionsFile)) {
       for (int parseNum = 0; parseNum < parses.size(); parseNum++) {
         FNParse p = parses.get(parseNum);
@@ -253,7 +239,7 @@ public class SemaforEval {
           Span t = fi.getTarget();
           Frame f = fi.getFrame();
           String numItems = String.valueOf(1 + fi.numRealizedArguments());
-          String luStr = "foo"; // This *nearly* didn't make a difference in the evaluation script
+          String luStr = "foo"; // This didn't make a difference to the evaluation script
           String luLoc = spanLocStr(t);
           String targetWord = s.getWord(t.start);  // see if this makes a difference
           assert t.start < s.size();

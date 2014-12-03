@@ -104,7 +104,6 @@ public class ConcreteStanfordWrapper {
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
   private Timer parseTimer;
-  //private Map<String, Communication> cache = null;  // key is sentence id
   private Map<String, DependencyParse> bdParseCache;
   private Map<String, ConstituencyParse> cParseCache;
 
@@ -119,7 +118,6 @@ public class ConcreteStanfordWrapper {
     if (cache) {
       bdParseCache = new HashMap<>();
       cParseCache = new HashMap<>();
-      //this.cache = new HashMap<>();
     }
   }
   
@@ -150,10 +148,12 @@ public class ConcreteStanfordWrapper {
     root.setId(s.size());
     root.setTag("S");
     root.setChildList(preterms);
+    /*
     TokenRefSequence trs = new TokenRefSequence();
     trs.setTokenizationId(aUUID); // TODO this isn't right, but I don't think I ever use it
     trs.setTokenIndexList(preterms);
     root.setTokenSequence(trs);
+    */
     cons.add(root);
     p.setConstituentList(cons);
     p.setUuid(aUUID);
@@ -198,8 +198,7 @@ public class ConcreteStanfordWrapper {
     Optional<edu.jhu.hlt.concrete.DependencyParse> maybeDeps =
         tokenization.getDependencyParseList()
         .stream()
-        .filter(dp ->
-        dp.getMetadata().getTool().contains("basic"))
+        .filter(dp -> dp.getMetadata().getTool().contains("basic"))
         .findFirst();
     if (!maybeDeps.isPresent())
       throw new RuntimeException("couldn't get basic dep parse");
@@ -238,79 +237,25 @@ public class ConcreteStanfordWrapper {
    Section section = communication.getSectionList().get(0);
    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
    Tokenization tokenization = sentence.getTokenization();
-   cons = new ConstituencyParse(tokenization.getParseList().get(0));
+   int n = tokenization.getTokenList().getTokenListSize();
+   for (Constituent c : tokenization.getParseList().get(0).getConstituentList()) {
+     if (!c.isSetTokenSequence())
+       continue;
+     for (int t : c.getTokenSequence().getTokenIndexList()) {
+       if (t >= n) {
+         for (Constituent cc : tokenization.getParseList().get(0).getConstituentList())
+           LOG.fatal(cc);
+         LOG.fatal("there are " + n + " tokens in the tokenization");
+         throw new RuntimeException("concrete-stanford messed up");
+       }
+     }
+   }
+   cons = new ConstituencyParse(tokenization.getParseList().get(0), s.size());
 
     if (cParseCache != null)
       cParseCache.put(s.getId(), cons);
     return cons;
   }
-
-  /*
-  public synchronized edu.jhu.hlt.concrete.Parse parse(
-      Sentence s,
-      boolean storeBasicDeps) {
-    Communication communication = null;
-    boolean updateCache = false;
-    if (cache != null) {
-      communication = cache.get(s.getId());
-      if (communication == null)
-        LOG.info("cache miss for " + s.getId());
-      updateCache = communication == null;
-    }
-    if (communication == null) {
-      parseTimer.start();
-      communication = sentenceToConcrete(s);
-      try {
-        getAnno().annotateWithStanfordNlp(communication);
-      } catch (Exception e) {
-        LOG.warn("failed to parse " + s.getId());
-        e.printStackTrace();
-        return dummyParse(s, storeBasicDeps);
-      }
-      parseTimer.stop();
-    }
-    if (updateCache) {
-      Communication old = cache.put(s.getId(), communication);
-      assert old == null;
-    }
-    for (Section section : communication.getSectionList()) {
-      for (edu.jhu.hlt.concrete.Sentence sentence : section.getSentenceList()) {
-        Tokenization tokenization = sentence.getTokenization();
-        if (storeBasicDeps) {
-          Optional<edu.jhu.hlt.concrete.DependencyParse> deps =
-              tokenization.getDependencyParseList()
-              .stream()
-              .filter(dp ->
-              dp.getMetadata().getTool().contains("basic"))
-              .findFirst();
-          if (deps.isPresent()) {
-            int n = s.size();
-            int[] heads = new int[n];
-            Arrays.fill(heads, DependencyParse.ROOT);
-            String[] labels = new String[n];
-            boolean[] set = new boolean[n];
-            for (Dependency e : deps.get().getDependencyList()) {
-              if (!set[e.getDep()]) {
-                set[e.getDep()] = true;
-              } else {
-                LOG.warn("this token has more than one head!");
-                continue;
-              }
-              heads[e.getDep()] = e.isSetGov()
-                  ? e.getGov() : DependencyParse.ROOT;
-              labels[e.getDep()] = e.getEdgeType();
-            }
-            s.setBasicDeps(new DependencyParse(heads, labels));
-          } else {
-            throw new RuntimeException("couldn't get basic dep parse");
-          }
-        }
-        return tokenization.getParseList().get(0);
-      }
-    }
-    throw new RuntimeException();
-  }
-  */
 
   public Map<Span, String> parseSpans(Sentence s) {
     Map<Span, String> constiuents = new HashMap<>();

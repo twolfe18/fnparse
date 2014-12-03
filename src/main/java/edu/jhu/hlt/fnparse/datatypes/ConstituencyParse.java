@@ -26,7 +26,6 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
  */
 public class ConstituencyParse {
   public static Logger LOG = Logger.getLogger(ConstituencyParse.class);
-  //public static Timer TIMER = new Timer("ConstituencyParse.buildPointers", 1_500_000, false);
 
   public static class NodePathPiece {
     private Node node;
@@ -49,7 +48,7 @@ public class ConstituencyParse {
 
     public Node(edu.jhu.hlt.concrete.Constituent c) {
       base = c;
-      span = ConcreteStanfordWrapper.constituentToSpan(c);
+      span = null;
       parent = null;
       children = new ArrayList<>();
     }
@@ -61,6 +60,10 @@ public class ConstituencyParse {
 
     public Node getParent() {
       return parent;
+    }
+
+    public boolean isLeaf() {
+      return children.size() == 0;
     }
 
     public List<Node> getChildren() {
@@ -157,6 +160,22 @@ public class ConstituencyParse {
       addConstituent(c);
   }
 
+  public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse, int n) {
+    this.createdFrom = parse;
+    for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
+      addConstituent(c);
+    checkSpans(n);
+  }
+
+  public void checkSpans(int sentSize) {
+    buildPointers();
+    for (Node n : nodes) {
+      assert n.getSpan().end <= sentSize;
+      assert n.getSpan().start >= 0;
+      assert n.getSpan().start < n.getSpan().end;
+    }
+  }
+
   public void addConstituent(edu.jhu.hlt.concrete.Constituent c) {
     if (nodes == null)
       nodes = new Node[c.getId() + 1];
@@ -172,6 +191,7 @@ public class ConstituencyParse {
   }
 
   public void getSpans(Collection<Span> addTo) {
+    buildPointers();
     for (Node n : nodes)
       addTo.add(n.span);
   }
@@ -214,6 +234,22 @@ public class ConstituencyParse {
     }
   }
 
+  private void percolateUp(Node n) {
+    if (n.parent == null)
+      return;
+    if (n.isLeaf())
+      n.span = ConcreteStanfordWrapper.constituentToSpan(n.base);
+    if (n.parent.span == null) {
+      assert n.span != null;
+      n.parent.span = n.span;
+    } else {
+      int s = Math.min(n.span.start, n.parent.span.start);
+      int e = Math.max(n.span.end, n.parent.span.end);
+      n.parent.span = Span.getSpan(s, e);
+    }
+    percolateUp(n.parent);
+  }
+
   public void buildPointers() {
     if (builtPointers)
       return;
@@ -236,6 +272,13 @@ public class ConstituencyParse {
         cur.children.add(child);
       }
     }
+
+    // Propagate spans (TokenRefSequence)
+    for (Node n : nodes)
+      if (n.isLeaf())
+        percolateUp(n);
+
+    // Sort children into sentence order
     Comparator<Node> order = new Comparator<Node>() {
       public int compare(Node o1, Node o2) {
         return o1.getSpan().start - o2.getSpan().start;
@@ -243,6 +286,7 @@ public class ConstituencyParse {
     };
     for (Node n : nodes)
       Collections.sort(n.children, order);
+
     builtPointers = true;
     //TIMER.stop();
   }
