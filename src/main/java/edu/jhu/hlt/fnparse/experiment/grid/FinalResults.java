@@ -23,7 +23,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
-import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
@@ -84,7 +83,7 @@ public class FinalResults implements Runnable {
           assert arg != null;
           if (arg == Span.nullSpan)
             continue;
-          if (arg.start < 0 || arg.end >= p.getSentence().size()) {
+          if (arg.start < 0 || arg.end > p.getSentence().size()) {
             LOG.info("skipping " + p.getId() + " because "
               + fi.getFrame().getName() + "." + fi.getFrame().getRole(k)
               + " has span " + arg
@@ -116,7 +115,7 @@ public class FinalResults implements Runnable {
         LOG.info("[run] re-sampling " + numTrain + " examples to re-train on");
         trainSub = DataUtil.resample(trainData, numTrain, rand);
       }
-      parser.configure("bpIters", "2");
+      parser.configure("bpIters", "1");
       parser.configure("passes", "3");
       parser.train(trainSub);
     } else {
@@ -137,11 +136,13 @@ public class FinalResults implements Runnable {
       throw new RuntimeException(e);
     }
 
+    /*
     LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
     File sewd = new File(workingDir, "semeval");
     if (!sewd.isDirectory()) sewd.mkdir();
     SemaforEval se = new SemaforEval(sewd);
     se.evaluate(testData, hyp, new File(workingDir, SEMEVAL_RESULTS_FILE));
+    */
 
     LOG.info("[run] done");
   }

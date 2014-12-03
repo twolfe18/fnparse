@@ -136,6 +136,7 @@ public class DependencyParse {
       }
       projLeft[i] = l;
     }
+    assert projLeft[i] < projLeft.length;
     return projLeft[i];
   }
 
@@ -152,6 +153,7 @@ public class DependencyParse {
       }
       projRight[i] = r;
     }
+    assert projRight[i] < projRight.length;
     return projRight[i];
   }
 

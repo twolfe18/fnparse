@@ -44,8 +44,16 @@ public class FNParseSpanPruning extends FNTagging {
       // and will only represent a (frame,target) pair.
       FrameInstance key = FrameInstance.frameMention(
           fi.getFrame(), fi.getTarget(), sent);
-      if (!possibleArgs.containsKey(key))
-        assert false;
+      //if (!possibleArgs.containsKey(key))
+      //  assert false;
+      List<Span> spans = possibleArgs.get(key);
+      assert spans != null; // see above
+      boolean foundNS = false;
+      for (Span sp : spans) {
+        foundNS |= sp == Span.nullSpan;
+        assert sp.end <= s.size();
+      }
+      assert foundNS;
     }
   }
 

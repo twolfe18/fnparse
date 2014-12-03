@@ -212,6 +212,7 @@ public class DeterministicRolePruning
         } else if (mode == Mode.XUE_PALMER
             || mode == Mode.XUE_PALMER_HERMANN) {
           ConstituencyParse parse = getConstituencyParse();
+          parse.checkSpans(sent.size());
           for (FrameInstance fi : input.getFrameInstances()) {
             ConstituencyParse.Node pred =
                 parse.getConstituent(fi.getTarget());
@@ -248,6 +249,8 @@ public class DeterministicRolePruning
             List<Span> spans = new ArrayList<>();
             spans.add(Span.nullSpan);
             spans.addAll(spanSet);
+            for (Span s : spanSet)
+              assert s.end <= sent.size();
             FrameInstance key = FrameInstance.frameMention(
                 fi.getFrame(), fi.getTarget(), fi.getSentence());
             possibleSpans.put(key, spans);
