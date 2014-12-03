@@ -369,6 +369,14 @@ public class LatentConstituencyPipelinedParser implements Parser {
       dis = Parser.getDIStreamFor(directory, ROLE_LABEL_MODEL_NAME);
       roleLabeling.loadModel(dis, globals);
       dis.close();
+
+      if (frameId instanceof AbstractStage)
+        ((AbstractStage) frameId).showExtremeFeatures(30);
+      if (rolePruning instanceof AbstractStage)
+        ((AbstractStage) rolePruning).showExtremeFeatures(30);
+      if (roleLabeling instanceof AbstractStage)
+        ((AbstractStage) roleLabeling).showExtremeFeatures(30);
+
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

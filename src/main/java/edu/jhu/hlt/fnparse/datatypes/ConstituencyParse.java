@@ -201,8 +201,8 @@ public class ConstituencyParse {
    * shallower (closer to root) node in the tree.
    */
   public Node getConstituent(Span s) {
-    indexBySpan();
     buildPointers();
+    indexBySpan();
     List<Node> nodes = index.get(s);
     if (nodes == null)
       return null;
@@ -219,6 +219,7 @@ public class ConstituencyParse {
   }
 
   public void indexBySpan() {
+    assert builtPointers;
     if (index != null)
       return;
     index = new HashMap<>();

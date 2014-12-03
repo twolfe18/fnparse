@@ -35,8 +35,6 @@ public class FNTagging implements HasId, HasSentence {
       if (collision != null) {
         LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
             + ":" + collision + ", " + fi);
-        if (!collision.equals(fi))
-          throw new IllegalArgumentException();
         // Keep the one with more arguments
         if (fi.numRealizedArguments() > collision.numRealizedArguments()) {
           seenTargets.put(fi.getTarget(), fi);

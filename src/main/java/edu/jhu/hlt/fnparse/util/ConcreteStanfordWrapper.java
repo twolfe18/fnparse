@@ -120,7 +120,7 @@ public class ConcreteStanfordWrapper {
       cParseCache = new HashMap<>();
     }
   }
-  
+
   private AnnotateTokenizedConcrete getAnno() {
     if (anno == null)
       anno = new AnnotateTokenizedConcrete();

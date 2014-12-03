@@ -23,10 +23,12 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
  * Given a working directory made by Runner, this loads the parser and can be
@@ -65,10 +67,13 @@ public class FinalResults implements Runnable {
     this.mode = mode;
     this.numTrain = trainSize;
 
-    testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
+    Iterator<FNParse> iter;
+    iter = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+    testData = new ArrayList<>();
+    while (iter.hasNext())
+      testData.add(iter.next());
 
     trainData = new ArrayList<>();
-    Iterator<FNParse> iter;
     iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
     while (iter.hasNext())
       trainData.add(iter.next());
@@ -136,15 +141,26 @@ public class FinalResults implements Runnable {
       throw new RuntimeException(e);
     }
 
-    /*
     LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
     File sewd = new File(workingDir, "semeval");
     if (!sewd.isDirectory()) sewd.mkdir();
     SemaforEval se = new SemaforEval(sewd);
     se.evaluate(testData, hyp, new File(workingDir, SEMEVAL_RESULTS_FILE));
-    */
+    dumpPlaintextPredictions(hyp);
 
     LOG.info("[run] done");
+  }
+
+  private void dumpPlaintextPredictions(List<FNParse> hyp) {
+    File output = new File(workingDir, "predictions.txt");
+    try (FileWriter fw = new FileWriter(output)) {
+      for (FNParse p : hyp) {
+        fw.write(Describe.fnParse(p));
+        fw.write("\n");
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private void loadModel() {
