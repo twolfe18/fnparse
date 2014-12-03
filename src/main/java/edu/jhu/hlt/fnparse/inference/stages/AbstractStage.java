@@ -23,7 +23,6 @@ import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
 import edu.jhu.gm.train.CrfTrainer.CrfTrainerPrm;
-import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -458,8 +457,8 @@ public abstract class AbstractStage<I, O extends FNTagging>
 		  for (I in : input) {
 		    Sentence s = getSentence(in);
 		    if (s.getStanfordParse(false) == null || s.getBasicDeps(false) == null) {
-		      ConstituencyParse cp = new ConstituencyParse(parser.parse(s, true));
-		      s.setStanfordParse(cp);
+		      s.setStanfordParse(parser.getCParse(s));
+		      s.setBasicDeps(parser.getBasicDParse(s));
 		      assert s.getBasicDeps(false) != null;
 		    }
 		    s.hideSyntax(false);

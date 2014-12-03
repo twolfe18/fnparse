@@ -350,8 +350,7 @@ public class RoleHeadStage
       if (basic == null) {
         ConcreteStanfordWrapper stanford =
             ConcreteStanfordWrapper.getSingleton(false);
-        stanford.parse(sent, true);
-        basic = sent.getBasicDeps(false);
+        basic = stanford.getBasicDParse(sent);
       }
       DependencyParse collapsed = sent.getCollapsedDeps(false);
       assert collapsed != null;

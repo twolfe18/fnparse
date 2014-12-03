@@ -1,8 +1,10 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,8 +41,10 @@ public class ConcreteStanfordWrapper {
 
   public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
     if (caching) {
-      if (cachingSingleton == null)
+      if (cachingSingleton == null) {
         cachingSingleton = new ConcreteStanfordWrapper(true);
+        cachingSingleton.loadCache();
+      }
       return cachingSingleton;
     } else {
       if (nonCachingSingleton == null)
@@ -49,11 +53,60 @@ public class ConcreteStanfordWrapper {
     }
   }
 
+  public void loadCache() {
+    bdParseCache = new HashMap<>();
+    cParseCache = new HashMap<>();
+    if (bdParseCacheFile.isFile()) {
+      LOG.info("loading from bdParseCache");
+      CacheSerUtil.load(bdParseCacheFile, bdParseCache, DependencyParse.DESERIALIZATION_FUNC);
+    } else {
+      LOG.info("no bdParseCache file: " + bdParseCacheFile.getPath());
+    }
+    if (cParseCacheFile.isFile()) {
+      LOG.info("loading from cParseCache");
+      CacheSerUtil.load(cParseCacheFile, cParseCache, ConstituencyParse.DESERIALIZATION_FUNC);
+    } else {
+      LOG.info("no cParseCache file: " + cParseCacheFile.getPath());
+    }
+    LOG.info("done loading from caches");
+  }
+
+  public void saveCache() {
+    LOG.info("saving to bdParseCache");
+    CacheSerUtil.save(
+        bdParseCacheFile, bdParseCache, DependencyParse.SERIALIZATION_FUNC);
+    LOG.info("saving to cParseCache");
+    CacheSerUtil.save(
+        cParseCacheFile, cParseCache, ConstituencyParse.SERIALIZATION_FUNC);
+    LOG.info("done saving to caches");
+  }
+
+  public static final File bdParseCacheFile = new File("data/cache/parses/bcParseCache");
+  public static final File cParseCacheFile = new File("data/cache/parses/cParseCache");
+
+  public static void buildCacheAndSaveToDisk() {
+    ConcreteStanfordWrapper parser = getSingleton(true);
+    for (FileFrameInstanceProvider fip : Arrays.asList(
+        FileFrameInstanceProvider.dipanjantrainFIP,
+        FileFrameInstanceProvider.dipanjantestFIP)) {
+        //FileFrameInstanceProvider.fn15lexFIP)) {  // TODO compute this later
+      Iterator<FNParse> iter = fip.getParsedSentences();
+      while (iter.hasNext()) {
+        FNParse p = iter.next();
+        parser.getBasicDParse(p.getSentence());
+        parser.getCParse(p.getSentence());
+      }
+    }
+    parser.saveCache();
+  }
+
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
-  private Map<String, Communication> cache = null;  // key is sentence id
   private Timer parseTimer;
+  //private Map<String, Communication> cache = null;  // key is sentence id
+  private Map<String, DependencyParse> bdParseCache;
+  private Map<String, ConstituencyParse> cParseCache;
 
   public ConcreteStanfordWrapper(boolean cache) {
     aUUID = new UUID();
@@ -61,18 +114,23 @@ public class ConcreteStanfordWrapper {
     metadata = new AnnotationMetadata();
     metadata.setTool("fnparse");
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
-    anno = new AnnotateTokenizedConcrete();
+    anno = null;
     parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 5, false);
-    if (cache)
-      this.cache = new HashMap<>();
+    if (cache) {
+      bdParseCache = new HashMap<>();
+      cParseCache = new HashMap<>();
+      //this.cache = new HashMap<>();
+    }
   }
-
-  public ConstituencyParse getCParse(Sentence s) {
-    return new ConstituencyParse(parse(s, false));
+  
+  private AnnotateTokenizedConcrete getAnno() {
+    if (anno == null)
+      anno = new AnnotateTokenizedConcrete();
+    return anno;
   }
 
   /** Makes a parse where everything is a child of root */
-  public edu.jhu.hlt.concrete.Parse dummyParse(Sentence s, boolean setBasicDeps) {
+  public ConstituencyParse dummyCParse(Sentence s) {
     edu.jhu.hlt.concrete.Parse p = new edu.jhu.hlt.concrete.Parse();
     List<Integer> preterms = new ArrayList<>();
     List<Constituent> cons = new ArrayList<>();
@@ -100,16 +158,94 @@ public class ConcreteStanfordWrapper {
     p.setConstituentList(cons);
     p.setUuid(aUUID);
     p.setMetadata(metadata);
-    if (setBasicDeps) {
-      int[] heads = new int[s.size()];
-      String[] labels = new String[s.size()];
-      Arrays.fill(heads, -1);
-      Arrays.fill(labels, "DUMMY");
-      s.setBasicDeps(new DependencyParse(heads, labels));
-    }
-    return p;
+    return new ConstituencyParse(p);
   }
 
+  public DependencyParse dummyDParse(Sentence s) {
+    int[] heads = new int[s.size()];
+    String[] labels = new String[s.size()];
+    Arrays.fill(heads, -1);
+    Arrays.fill(labels, "DUMMY");
+    return new DependencyParse(heads, labels);
+  }
+
+  private synchronized Communication parse(Sentence s) {
+    parseTimer.start();
+    Communication communication = sentenceToConcrete(s);
+    try {
+      getAnno().annotateWithStanfordNlp(communication);
+      parseTimer.stop();
+      return communication;
+    } catch (Exception e) {
+      LOG.warn("failed to parse " + s.getId());
+      e.printStackTrace();
+      parseTimer.stop();
+      return null;
+    }
+  }
+
+  public DependencyParse getBasicDParse(Sentence s) {
+    DependencyParse deps = null;
+    if (bdParseCache != null && (deps = bdParseCache.get(s.getId())) != null)
+      return deps;
+
+    Communication communication = parse(s);
+    if (communication == null)
+      return dummyDParse(s);
+    Section section = communication.getSectionList().get(0);
+    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
+    Tokenization tokenization = sentence.getTokenization();
+    Optional<edu.jhu.hlt.concrete.DependencyParse> maybeDeps =
+        tokenization.getDependencyParseList()
+        .stream()
+        .filter(dp ->
+        dp.getMetadata().getTool().contains("basic"))
+        .findFirst();
+    if (!maybeDeps.isPresent())
+      throw new RuntimeException("couldn't get basic dep parse");
+    int n = s.size();
+    int[] heads = new int[n];
+    String[] labels = new String[n];
+    Arrays.fill(heads, DependencyParse.ROOT);
+    Arrays.fill(labels, "UNK");
+    boolean[] set = new boolean[n];
+    for (Dependency e : maybeDeps.get().getDependencyList()) {
+      if (!set[e.getDep()]) {
+        set[e.getDep()] = true;
+      } else {
+        LOG.warn("this token has more than one head!");
+        continue;
+      }
+      heads[e.getDep()] = e.isSetGov()
+          ? e.getGov() : DependencyParse.ROOT;
+          labels[e.getDep()] = e.getEdgeType();
+    }
+    deps = new DependencyParse(heads, labels);
+
+    if (bdParseCache != null)
+      bdParseCache.put(s.getId(), deps);
+    return deps;
+  }
+
+  public ConstituencyParse getCParse(Sentence s) {
+   ConstituencyParse cons = null;
+   if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
+     return cons;
+
+   Communication communication = parse(s);
+   if (communication == null)
+     return dummyCParse(s);
+   Section section = communication.getSectionList().get(0);
+   edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
+   Tokenization tokenization = sentence.getTokenization();
+   cons = new ConstituencyParse(tokenization.getParseList().get(0));
+
+    if (cParseCache != null)
+      cParseCache.put(s.getId(), cons);
+    return cons;
+  }
+
+  /*
   public synchronized edu.jhu.hlt.concrete.Parse parse(
       Sentence s,
       boolean storeBasicDeps) {
@@ -125,7 +261,7 @@ public class ConcreteStanfordWrapper {
       parseTimer.start();
       communication = sentenceToConcrete(s);
       try {
-        anno.annotateWithStanfordNlp(communication);
+        getAnno().annotateWithStanfordNlp(communication);
       } catch (Exception e) {
         LOG.warn("failed to parse " + s.getId());
         e.printStackTrace();
@@ -174,10 +310,11 @@ public class ConcreteStanfordWrapper {
     }
     throw new RuntimeException();
   }
+  */
 
   public Map<Span, String> parseSpans(Sentence s) {
     Map<Span, String> constiuents = new HashMap<>();
-    edu.jhu.hlt.concrete.Parse parse = parse(s, false);
+    edu.jhu.hlt.concrete.Parse parse = getCParse(s).getConcreteParse();
     for (Constituent c : parse.getConstituentList()) {
       Span mySpan = constituentToSpan(c);
       String tag = c.getTag();
@@ -284,6 +421,9 @@ public class ConcreteStanfordWrapper {
 
   // Sanity check
   public static void main(String[] args) {
+
+    buildCacheAndSaveToDisk();
+
     ConcreteStanfordWrapper wrapper = new ConcreteStanfordWrapper(false);
     for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       Sentence s = parse.getSentence();
@@ -297,7 +437,8 @@ public class ConcreteStanfordWrapper {
             Arrays.toString(s.getWordFor(c.getKey())));
       }
       // Dependencies
-      wrapper.parse(s, true);
+      DependencyParse basicDeps = wrapper.getBasicDParse(s);
+      s.setBasicDeps(basicDeps);
       System.out.println("collapsed deps:\n" + Describe.sentenceWithDeps(s, false));
       System.out.println("basic deps:\n" + Describe.sentenceWithDeps(s, true));
     }

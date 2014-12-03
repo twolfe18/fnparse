@@ -1,10 +1,14 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * Note: Punctuation is not parsed in the Stanford parser, so we mark its' head
@@ -23,6 +27,33 @@ public class DependencyParse {
   private transient int[] depths;
   private transient int[][] children;
   private transient int hashCode = 0;
+
+  public static final BiConsumer<DependencyParse, DataOutputStream> SERIALIZATION_FUNC = (deps, dos) -> {
+    int n = deps.heads.length;
+    try {
+      dos.writeInt(n);
+      for (int i = 0; i < n; i++)
+        dos.writeInt(deps.heads[i]);
+      for (int i = 0; i < n; i++) 
+        dos.writeUTF(deps.labels[i]);
+    } catch (Exception e) {
+     throw new RuntimeException(e);
+    }
+  };
+  public static final Function<DataInputStream, DependencyParse> DESERIALIZATION_FUNC = dis -> {
+    try {
+      int n = dis.readInt();
+      int[] heads = new int[n];
+      String[] labels = new String[n];
+      for (int i = 0; i < n; i++)
+        heads[i] = dis.readInt();
+      for (int i = 0; i < n; i++)
+        labels[i] = dis.readUTF();
+      return new DependencyParse(heads, labels);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  };
 
   public DependencyParse(int[] heads, String[] labels) {
     if (heads.length != labels.length)

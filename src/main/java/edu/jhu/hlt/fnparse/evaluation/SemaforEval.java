@@ -22,22 +22,24 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 
 /**
- * A wrapper around Semafor's wrapper around SemEval'07 evaluation script.
+ * A wrapper around SEMAFOR's wrapper around SemEval'07 evaluation script.
  *
  * @author travis
  */
 public class SemaforEval {
   public static final Logger LOG = Logger.getLogger(SemaforEval.class);
+
+  // Make sure SEMAFOR is symlinked in a directory in the root of this project
   public static File SEMEVAL07_SCRIPT =
-      new File("/home/travis/code/semafor/scripts/scoring/fnSemScore_modified.pl");
+      new File("semafor/scripts/scoring/fnSemScore_modified.pl");
   public static File SEMAFOR_PREPARE_ANNO_SCRIPT =
-      new File("/home/travis/code/semafor/prepare_xml_anno.sh");
+      new File("semafor/prepare_xml_anno.sh");
+
+  // Make sure these files are checked in/available
   public static File FRAMES_SINGLE_FILE =
-      new File("/home/travis/Desktop/code/fnparse/from-CMU/framenet15/"
-          + "framesSingleFile.xml");
+      new File("from-CMU/framenet15/framesSingleFile.xml");
   public static File RELATION_MODIFIED_FILE =
-      new File("/home/travis/Desktop/code/fnparse/from-CMU/framenet15/"
-          + "frRelationModified.xml");
+      new File("from-CMU/framenet15/frRelationModified.xml");
 
   private File workingDir;
 
@@ -51,7 +53,8 @@ public class SemaforEval {
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
     SemaforEval eval = new SemaforEval(new File("/tmp"));
-    LOG.info(eval.evaluate(parses, parses));
+    File output = new File("/tmp/output.txt");
+    eval.evaluate(parses, parses, output);
   }
 
   public static <T> void writeByLine(List<T> items, Function<T, String> show, File f) {
@@ -83,8 +86,7 @@ public class SemaforEval {
         sb.append(s.getPos(i));
       }
       ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(false);
-      parser.parse(s, true);
-      DependencyParse deps = s.getBasicDeps(false);
+      DependencyParse deps = parser.getBasicDParse(s);
       assert deps != null;
       for (int i = 0; i < n; i++) {   // dep label
         sb.append(sep);
@@ -128,25 +130,19 @@ public class SemaforEval {
     writeByLine(sentences, show, f);
   }
 
-  public String evaluate(List<FNParse> gold, List<FNParse> hyp) {
+  public void evaluate(List<FNParse> gold, List<FNParse> hyp, File dumpOutput) {
     if (gold.size() != hyp.size())
       throw new IllegalArgumentException();
 
-    // Write out needed data
+    // Write out the annotations in a format SEMAFOR likes
     File goldTSV = new File(workingDir, "gold.elements");
     File hypTSV = new File(workingDir, "hyp.elements");
     write(gold, goldTSV, true);
     write(hyp, hypTSV, true);
 
-    // TODO figure out relationship between these and the given dataset
+    // Write out the sentences in a format SEMAFOR likes
     File processedFile = new File(workingDir, "sentences.all.lemma.tags");
     File tokenizedFile = new File(workingDir, "sentences.tokenized");
-    /*
-//    String processedfile = "/home/travis/Desktop/code/fnparse/from-CMU/naacl2012_splits/"
-        + "cv.train.sentences.all.lemma.tags";
-    String tokenizedfile = "/home/travis/Desktop/code/fnparse/from-CMU/naacl2012_splits/"
-        + "cv.train.sentences.tokenized";
-     */
     List<Sentence> sentences = DataUtil.stripAnnotations(gold);
     generateAllLemmaTagsFile(sentences, processedFile);
     generateTokenizedFile(sentences, tokenizedFile);
@@ -169,7 +165,14 @@ public class SemaforEval {
         goldXML.getPath(),
         hypXML.getPath()
     });
-    return r.get(r.size() - 1);
+    try (FileWriter fw = new FileWriter(dumpOutput)) {
+      for (String line : r) {
+        fw.write(line);
+        fw.write("\n");
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   private void tsvToXmlViaSemafor(File tsv, File xml, File parseFile, File tokenFile) {

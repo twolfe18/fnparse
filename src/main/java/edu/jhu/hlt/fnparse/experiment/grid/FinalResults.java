@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
@@ -38,6 +39,7 @@ import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 public class FinalResults implements Runnable {
   public static final Logger LOG = Logger.getLogger(FinalResults.class);
   public static final String RESULTS_FILE = "finalResults.txt";
+  public static final String SEMEVAL_RESULTS_FILE = "semevalResults.txt";
 
   public static void removeOldResults(File workingDir) {
     File f = new File(workingDir, RESULTS_FILE);
@@ -64,9 +66,7 @@ public class FinalResults implements Runnable {
     this.mode = mode;
     this.numTrain = trainSize;
 
-    // TODO switch this when you know this works
     testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
-    //testData = DataUtil.reservoirSample(DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()), 100, rand);
 
     trainData = new ArrayList<>();
     Iterator<FNParse> iter;
@@ -136,6 +136,12 @@ public class FinalResults implements Runnable {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+
+    LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
+    File sewd = new File(workingDir, "semeval");
+    if (!sewd.isDirectory()) sewd.mkdir();
+    SemaforEval se = new SemaforEval(sewd);
+    se.evaluate(testData, hyp, new File(workingDir, SEMEVAL_RESULTS_FILE));
 
     LOG.info("[run] done");
   }
