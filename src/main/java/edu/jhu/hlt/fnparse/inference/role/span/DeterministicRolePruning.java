@@ -186,15 +186,15 @@ public class DeterministicRolePruning
       this.parser = parser;
     }
     public ConstituencyParse getConstituencyParse() {
-      ConstituencyParse cp = input.getSentence().getStanfordParse();
-      if (cp != null)
-        return cp;
-      cp = new ConstituencyParse(parser.parse(input.getSentence(), false));
-      return cp;
+      Sentence s = input.getSentence();
+      if (s.getStanfordParse() != null)
+        return s.getStanfordParse();
+      return parser.getCParse(s);
     }
     @Override
     public FNParseSpanPruning decode() {
       if (output == null) {
+        Sentence sent = input.getSentence();
         Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
         if (mode == Mode.STANFORD_CONSTITUENTS) {
           Set<Span> cons = new HashSet<>();
@@ -254,13 +254,13 @@ public class DeterministicRolePruning
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
-          if (input.getSentence().getBasicDeps() == null)
-            parser.parse(input.getSentence(), true);
+          if (sent.getBasicDeps() == null)
+            sent.setBasicDeps(parser.getBasicDParse(sent));
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {
-          if (input.getSentence().getBasicDeps() == null)
-            parser.parse(input.getSentence(), true);
+          if (sent.getBasicDeps() == null)
+            sent.setBasicDeps(parser.getBasicDParse(sent));
 //          # basic deps
 //          107931   INFO  DeterministicRolePruning - DEPENDENCY_SPANS recall 0.5688228657389997
 //          108077   INFO  DeterministicRolePruning - XUE_PALMER_DEP recall 0.1855960887551711
@@ -269,8 +269,8 @@ public class DeterministicRolePruning
 //          108448   INFO  DeterministicRolePruning - DEPENDENCY_SPANS recall 0.43249341857841295
 //          108617   INFO  DeterministicRolePruning - XUE_PALMER_DEP recall 0.1855960887551711
 //          108682   INFO  DeterministicRolePruning - XUE_PALMER_DEP_HERMANN recall 0.4672809326814592
-          DependencyParse deps = input.getSentence().getBasicDeps();
-          //DependencyParse deps = input.getSentence().getCollapsedDeps();
+          DependencyParse deps = sent.getBasicDeps();
+          //DependencyParse deps = sent.getCollapsedDeps();
           Map<Span, Integer> spanMap =
               DependencyBasedXuePalmerRolePruning
               .getAllSpansFromDeps(deps);
@@ -346,8 +346,7 @@ public class DeterministicRolePruning
     ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
     for (FNParse p : parses) {
       Sentence s = p.getSentence();
-      ConstituencyParse cp = new ConstituencyParse(parser.parse(s, true));
-      s.setStanfordParse(cp);
+      s.setStanfordParse(parser.getCParse(s));
     }
     for (DeterministicRolePruning.Mode mode : DeterministicRolePruning.Mode.values()) {
       FPR fpr = new FPR(false);

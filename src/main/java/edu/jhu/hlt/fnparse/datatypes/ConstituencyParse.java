@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -8,8 +10,12 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 import org.apache.log4j.Logger;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.transport.TIOStreamTransport;
 
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 
@@ -126,8 +132,27 @@ public class ConstituencyParse {
   private Node[] nodes;
   private Map<Span, List<Node>> index;
   private boolean builtPointers = false;
+  private transient edu.jhu.hlt.concrete.Parse createdFrom;
+
+  public static final Function<DataInputStream, ConstituencyParse> DESERIALIZATION_FUNC = dis -> {
+    edu.jhu.hlt.concrete.Parse parse = new edu.jhu.hlt.concrete.Parse();
+    try {
+      parse.read(new TBinaryProtocol(new TIOStreamTransport(dis)));
+      return new ConstituencyParse(parse);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  };
+  public static final BiConsumer<ConstituencyParse, DataOutputStream> SERIALIZATION_FUNC = (cparse, dos) -> {
+    try {
+      cparse.createdFrom.write(new TBinaryProtocol(new TIOStreamTransport(dos)));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  };
 
   public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse) {
+    this.createdFrom = parse;
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
   }
@@ -140,6 +165,10 @@ public class ConstituencyParse {
     Node n = new Node(c);
     //LOG.info("[addConstituent] " + c.getId() + " = " + n);
     nodes[c.getId()] = n;
+  }
+
+  public edu.jhu.hlt.concrete.Parse getConcreteParse() {
+    return createdFrom;
   }
 
   public void getSpans(Collection<Span> addTo) {
