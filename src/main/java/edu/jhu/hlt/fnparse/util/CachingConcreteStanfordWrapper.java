@@ -35,31 +35,31 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
     if (bdParseCache != null && (deps = bdParseCache.get(s.getId())) != null)
       return deps;
     deps = super.getBasicDParse(s);
-   if (this.addToCache)
+    if (this.addToCache)
       bdParseCache.put(s.getId(), deps);
     return deps;
   }
 
   @Override
   public ConstituencyParse getCParse(Sentence s) {
-   ConstituencyParse cons = null;
-   if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
-     return cons;
-   cons = super.getCParse(s);
-   if (this.addToCache)
-     cParseCache.put(s.getId(), cons);
-   return cons;
+    ConstituencyParse cons = null;
+    if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
+      return cons;
+    cons = super.getCParse(s);
+    if (this.addToCache)
+      cParseCache.put(s.getId(), cons);
+    return cons;
   }
 
   public void load() {
     if (bdParseCacheFile.isFile()) {
-      LOG.info("loading from bdParseCache");
+      LOG.info("loading from " + bdParseCacheFile.getPath());
       CacheSerUtil.load(bdParseCacheFile, bdParseCache, DependencyParse.DESERIALIZATION_FUNC);
     } else {
       LOG.info("no bdParseCache file: " + bdParseCacheFile.getPath());
     }
     if (cParseCacheFile.isFile()) {
-      LOG.info("loading from cParseCache");
+      LOG.info("loading from " + cParseCacheFile.getPath());
       CacheSerUtil.load(cParseCacheFile, cParseCache, ConstituencyParse.DESERIALIZATION_FUNC);
     } else {
       LOG.info("no cParseCache file: " + cParseCacheFile.getPath());
@@ -68,17 +68,19 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
   }
 
   public void saveCache() {
-    LOG.info("saving to bdParseCache");
+    LOG.info("saving to " + bdParseCache.size() + " items to " + bdParseCacheFile.getPath());
     CacheSerUtil.save(
         bdParseCacheFile, bdParseCache, DependencyParse.SERIALIZATION_FUNC);
-    LOG.info("saving to cParseCache");
+    LOG.info("saving to " + cParseCache.size() + " items to " + cParseCacheFile.getPath());
     CacheSerUtil.save(
         cParseCacheFile, cParseCache, ConstituencyParse.SERIALIZATION_FUNC);
     LOG.info("done saving to caches");
   }
 
   public void absorb(CachingConcreteStanfordWrapper other) {
+    LOG.info("absorbing " + other.bdParseCache.size() + " items into bdParseCache");
     this.bdParseCache.putAll(other.bdParseCache);
+    LOG.info("absorbing " + other.cParseCache.size() + " items into cParseCache");
     this.cParseCache.putAll(other.cParseCache);
   }
 
@@ -86,6 +88,7 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
       int part, int numParts, CachingConcreteStanfordWrapper parser) {
     if (part >= numParts || part < 0)
       throw new IllegalArgumentException();
+    int n = 0;
     Timer t = new Timer();
     t.setPrintInterval(50);
     for (FileFrameInstanceProvider fip : Arrays.asList(
@@ -99,17 +102,20 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
         if (h < 0) h = -h;
         if (h % numParts != part)
           continue;
+        n++;
         t.start();
         parser.getBasicDParse(p.getSentence());
         parser.getCParse(p.getSentence());
         t.stop();
       }
     }
+    LOG.info("parsed " + n + " sentences, about to save");
     parser.saveCache();
+    LOG.info("done");
   }
 
   public static void main(String[] args) {
-    if (args.length != 3) {
+    if (args.length != 4) {
       System.out.println("please provide:");
       System.out.println("1) A directory to store cache pieces in");
       System.out.println("2) either \"map\" or \"reduce\" if you want to compute the first or second stage of the job"); 
@@ -141,8 +147,15 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
       CachingConcreteStanfordWrapper all =
           new CachingConcreteStanfordWrapper(bdParseCache, cParseCache, true);
       for (int i = 0; i < numPieces; i++) {
+        if (!bdc.get(i).isFile() || !cc.get(i).isFile()) {
+          LOG.warn("can't find files for piece " + i);
+          continue;
+        }
         LOG.info("absorbing " + i);
-        all.absorb(new CachingConcreteStanfordWrapper(bdc.get(i), cc.get(i), true));
+        CachingConcreteStanfordWrapper a =
+            new CachingConcreteStanfordWrapper(bdc.get(i), cc.get(i), true);
+        a.load();
+        all.absorb(a);
       }
       LOG.info("saving");
       all.saveCache();

@@ -1,0 +1,23 @@
+#$ -cwd                         # run from current working directory
+#$ -j y                         # join stderr to stdout
+#$ -V                           # job has the same environment variables as the submission shell
+#$ -l h_rt=72:00:00             # runtime limit
+#$ -l mem_free=3G               # expected amount of mem
+#$ -l num_proc=1                # how many processors to use
+#$ -o experiments/cache-parses/sge-logs     # where to do logging
+#$ -S /bin/bash
+# -M twolfe18@gmail.com
+# -m as                         # a=aborted b=begining e=end s=suspended
+
+date
+echo "hostname: $HOSTNAME"
+echo "num args: $#"
+echo "args: $@"
+
+#CP=`find target -type f -name "*.jar" | tr '\n' ':'`
+CP=`find temptarget -type f -name "*.jar" | tr '\n' ':'`
+echo "classpath: $CP"
+
+java -Xmx2G -ea -server -XX:+UseSerialGC -cp $CP \
+  edu.jhu.hlt.fnparse.util.CachingConcreteStanfordWrapper $@
+
