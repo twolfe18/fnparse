@@ -185,9 +185,11 @@ public class ConcreteStanfordWrapper {
      for (int t : c.getTokenSequence().getTokenIndexList()) {
        if (t >= n) {
          for (Constituent cc : tokenization.getParseList().get(0).getConstituentList())
-           LOG.fatal(cc);
-         LOG.fatal("there are " + n + " tokens in the tokenization");
-         throw new RuntimeException("concrete-stanford messed up");
+           LOG.warn(cc);
+         LOG.warn("there are " + n + " tokens in the tokenization");
+         //throw new RuntimeException("concrete-stanford messed up");
+         LOG.warn("concrete-stanford messed up");
+         return dummyCParse(s);
        }
      }
    }

@@ -1,12 +1,19 @@
 
 CMD="qsub -q all.q FinalResultsHelper.qsub"
 
-SPAN_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-462"
-SPAN_LATENT="experiments/forward-selection/role/omni/wd-fs-test-331"
-SPAN_NONE="experiments/forward-selection/role/omni/wd-fs-test-1700"
-HEAD_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-285"
-HEAD_LATENT="experiments/forward-selection/role/omni/wd-fs-test-1498"
-HEAD_NONE="experiments/forward-selection/role/omni/wd-fs-test-1751"
+#SPAN_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-462"
+#SPAN_LATENT="experiments/forward-selection/role/omni/wd-fs-test-331"
+#SPAN_NONE="experiments/forward-selection/role/omni/wd-fs-test-1700"
+#HEAD_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-285"
+#HEAD_LATENT="experiments/forward-selection/role/omni/wd-fs-test-1498"
+#HEAD_NONE="experiments/forward-selection/role/omni/wd-fs-test-1751"
+
+SPAN_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-366"
+SPAN_LATENT="experiments/forward-selection/role/omni/wd-fs-test-193"
+SPAN_NONE="experiments/forward-selection/role/omni/wd-fs-test-452"
+HEAD_REGULAR="experiments/forward-selection/role/omni/wd-fs-test-261"
+HEAD_LATENT="experiments/forward-selection/role/omni/wd-fs-test-466"
+HEAD_NONE="experiments/forward-selection/role/omni/wd-fs-test-425"
 
 SEED="9001"
 
