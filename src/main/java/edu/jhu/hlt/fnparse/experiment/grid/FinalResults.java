@@ -203,7 +203,7 @@ public class FinalResults implements Runnable {
 
     // Evaluate the model (SEMAFOR/SemEval'07)
     LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
-    File sewd = new File(workingDir, "semeval");
+    File sewd = new File(resultsDir, "semeval");
     if (!sewd.isDirectory()) sewd.mkdir();
     SemaforEval se = new SemaforEval(sewd);
     se.evaluate(testData, hyp, new File(resultsDir, SEMEVAL_RESULTS_FILE));
