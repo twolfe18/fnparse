@@ -4,7 +4,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -37,77 +36,35 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 public class ConcreteStanfordWrapper {
   public static final Logger LOG = Logger.getLogger(ConcreteStanfordWrapper.class);
 
-  private static ConcreteStanfordWrapper nonCachingSingleton, cachingSingleton;
-
-  public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
-    if (caching) {
-      if (cachingSingleton == null) {
-        cachingSingleton = new ConcreteStanfordWrapper(true);
-        cachingSingleton.loadCache();
-      }
-      return cachingSingleton;
-    } else {
-      if (nonCachingSingleton == null)
-        nonCachingSingleton = new ConcreteStanfordWrapper(false);
-      return nonCachingSingleton;
-    }
-  }
-
-  public void loadCache() {
-    bdParseCache = new HashMap<>();
-    cParseCache = new HashMap<>();
-    if (bdParseCacheFile.isFile()) {
-      LOG.info("loading from bdParseCache");
-      CacheSerUtil.load(bdParseCacheFile, bdParseCache, DependencyParse.DESERIALIZATION_FUNC);
-    } else {
-      LOG.info("no bdParseCache file: " + bdParseCacheFile.getPath());
-    }
-    if (cParseCacheFile.isFile()) {
-      LOG.info("loading from cParseCache");
-      CacheSerUtil.load(cParseCacheFile, cParseCache, ConstituencyParse.DESERIALIZATION_FUNC);
-    } else {
-      LOG.info("no cParseCache file: " + cParseCacheFile.getPath());
-    }
-    LOG.info("done loading from caches");
-  }
-
-  public void saveCache() {
-    LOG.info("saving to bdParseCache");
-    CacheSerUtil.save(
-        bdParseCacheFile, bdParseCache, DependencyParse.SERIALIZATION_FUNC);
-    LOG.info("saving to cParseCache");
-    CacheSerUtil.save(
-        cParseCacheFile, cParseCache, ConstituencyParse.SERIALIZATION_FUNC);
-    LOG.info("done saving to caches");
-  }
+  private static CachingConcreteStanfordWrapper nonCachingSingleton;
+  private static CachingConcreteStanfordWrapper cachingSingleton;
 
   public static final File bdParseCacheFile = new File("data/cache/parses/bcParseCache");
   public static final File cParseCacheFile = new File("data/cache/parses/cParseCache");
 
-  public static void buildCacheAndSaveToDisk() {
-    ConcreteStanfordWrapper parser = getSingleton(true);
-    for (FileFrameInstanceProvider fip : Arrays.asList(
-        FileFrameInstanceProvider.dipanjantrainFIP,
-        FileFrameInstanceProvider.dipanjantestFIP)) {
-        //FileFrameInstanceProvider.fn15lexFIP)) {  // TODO compute this later
-      Iterator<FNParse> iter = fip.getParsedSentences();
-      while (iter.hasNext()) {
-        FNParse p = iter.next();
-        parser.getBasicDParse(p.getSentence());
-        parser.getCParse(p.getSentence());
+  public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
+    if (caching) {
+      if (cachingSingleton == null) {
+        cachingSingleton = new CachingConcreteStanfordWrapper(bdParseCacheFile, cParseCacheFile, true);
+        cachingSingleton.load();
       }
+      return cachingSingleton;
+    } else {
+      if (nonCachingSingleton == null) {
+        nonCachingSingleton = new CachingConcreteStanfordWrapper(bdParseCacheFile, cParseCacheFile, false);
+        if (bdParseCacheFile.isFile() && cParseCacheFile.isFile())
+          nonCachingSingleton.load();
+      }
+      return nonCachingSingleton;
     }
-    parser.saveCache();
   }
 
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
   private Timer parseTimer;
-  private Map<String, DependencyParse> bdParseCache;
-  private Map<String, ConstituencyParse> cParseCache;
 
-  public ConcreteStanfordWrapper(boolean cache) {
+  public ConcreteStanfordWrapper() {
     aUUID = new UUID();
     aUUID.setUuidString("some uuid");
     metadata = new AnnotationMetadata();
@@ -115,10 +72,6 @@ public class ConcreteStanfordWrapper {
     metadata.setTimestamp(System.currentTimeMillis() / 1000);
     anno = null;
     parseTimer = new Timer("ConcreteStanfordAnnotator.parse", 5, false);
-    if (cache) {
-      bdParseCache = new HashMap<>();
-      cParseCache = new HashMap<>();
-    }
   }
 
   private AnnotateTokenizedConcrete getAnno() {
@@ -185,10 +138,6 @@ public class ConcreteStanfordWrapper {
   }
 
   public DependencyParse getBasicDParse(Sentence s) {
-    DependencyParse deps = null;
-    if (bdParseCache != null && (deps = bdParseCache.get(s.getId())) != null)
-      return deps;
-
     Communication communication = parse(s);
     if (communication == null)
       return dummyDParse(s);
@@ -219,18 +168,10 @@ public class ConcreteStanfordWrapper {
           ? e.getGov() : DependencyParse.ROOT;
           labels[e.getDep()] = e.getEdgeType();
     }
-    deps = new DependencyParse(heads, labels);
-
-    if (bdParseCache != null)
-      bdParseCache.put(s.getId(), deps);
-    return deps;
+    return new DependencyParse(heads, labels);
   }
 
   public ConstituencyParse getCParse(Sentence s) {
-   ConstituencyParse cons = null;
-   if (cParseCache != null && (cons = cParseCache.get(s.getId())) != null)
-     return cons;
-
    Communication communication = parse(s);
    if (communication == null)
      return dummyCParse(s);
@@ -252,11 +193,7 @@ public class ConcreteStanfordWrapper {
        }
      }
    }
-   cons = new ConstituencyParse(tokenization.getParseList().get(0), s.size());
-
-    if (cParseCache != null)
-      cParseCache.put(s.getId(), cons);
-    return cons;
+   return new ConstituencyParse(tokenization.getParseList().get(0), s.size());
   }
 
   public Map<Span, String> parseSpans(Sentence s) {
@@ -368,10 +305,7 @@ public class ConcreteStanfordWrapper {
 
   // Sanity check
   public static void main(String[] args) {
-
-    buildCacheAndSaveToDisk();
-
-    ConcreteStanfordWrapper wrapper = new ConcreteStanfordWrapper(false);
+    ConcreteStanfordWrapper wrapper = getSingleton(false);
     for (FNParse parse : DataUtil.iter2list(FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       Sentence s = parse.getSentence();
       System.out.println(s.getId() + "==============================================================");
