@@ -390,6 +390,7 @@ public class PipelinedFnParser implements Serializable, Parser {
     LOG.info("loading model from " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();
+    globals.getFeatureNames().startGrowth();
     DataInputStream dis;
     try {
       dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
@@ -403,9 +404,18 @@ public class PipelinedFnParser implements Serializable, Parser {
       dis = Parser.getDIStreamFor(directory, ARG_SPANS_MODEL_NAME);
       argExpansion.loadModel(dis, globals);
       dis.close();
+
+      if (frameId instanceof AbstractStage)
+        ((AbstractStage) frameId).showExtremeFeatures(30);
+      if (argId instanceof AbstractStage)
+        ((AbstractStage) argId).showExtremeFeatures(30);
+      if (argExpansion instanceof AbstractStage)
+        ((AbstractStage) argExpansion).showExtremeFeatures(30);
+
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    globals.getFeatureNames().stopGrowth();
   }
 
 	@Override

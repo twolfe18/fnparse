@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -22,11 +23,11 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
-import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
  * Given a working directory made by Runner, this loads the parser and can be
@@ -37,14 +38,16 @@ import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
  */
 public class FinalResults implements Runnable {
   public static final Logger LOG = Logger.getLogger(FinalResults.class);
-  public static final String RESULTS_FILE = "finalResults.txt";
-  public static final String SEMEVAL_RESULTS_FILE = "semevalResults.txt";
 
-  public static void removeOldResults(File workingDir) {
-    File f = new File(workingDir, RESULTS_FILE);
-    if (f.isFile())
-      f.delete();
-  }
+  // Stores just the arg F1 score for all models
+  // (this is meant for multiple jobs to append to this)
+  public static final String RESULT_ACCUM_FILE = "allPerformance.txt";
+
+  // These are retrain specific.
+  // The non-retrain version (numTrain=-1) gets put in workingDir
+  public static final String ALL_RESULTS_FILE = "performance.txt";
+  public static final String SEMEVAL_RESULTS_FILE = "semevalPerformance.txt";
+  public static final String PLAINTEXT_PREDICTIONS = "predictions.txt";
 
   // How many examples to retrain the model on.
   // -1 indicates that no model should be retrained, just use the loaded model.
@@ -55,47 +58,105 @@ public class FinalResults implements Runnable {
   private Parser parser;
   private List<FNParse> testData;
   private List<FNParse> trainData;
-  private EvalFunc evaluationFunc = BasicEvaluation.argOnlyMicroF1;
 
   public FinalResults(File workingDir, Random rand, String mode, int trainSize) {
     if (!mode.equals("span") && !mode.equals("head"))
+      throw new IllegalArgumentException();
+    if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
     this.workingDir = workingDir;
     this.rand = rand;
     this.mode = mode;
     this.numTrain = trainSize;
 
-    testData = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
-
-    trainData = new ArrayList<>();
     Iterator<FNParse> iter;
+    iter = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+    testData = new ArrayList<>();
+    while (iter.hasNext())
+      testData.add(iter.next());
+
+    // NOTE: fulltext (train) data should come first here
+    // Later I'll take from this first, before LEX instances, as I don't think
+    // they work as well.
+    trainData = new ArrayList<>();
     iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
     while (iter.hasNext())
       trainData.add(iter.next());
     LOG.info("[init] after train, trainData.size=" + trainData.size());
     iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
-    outer:
     while (iter.hasNext()) {
       FNParse p = iter.next();
-      for (FrameInstance fi : p.getFrameInstances()) {
-        for (int k = 0; k < fi.getFrame().numRoles(); k++) {
-          Span arg = fi.getArgument(k);
-          assert arg != null;
-          if (arg == Span.nullSpan)
-            continue;
-          if (arg.start < 0 || arg.end > p.getSentence().size()) {
-            LOG.info("skipping " + p.getId() + " because "
+      if (!valid(p)) continue;
+      trainData.add(p);
+    }
+    LOG.info("[init] after LEX, trainData.size=" + trainData.size());
+  }
+
+  private static boolean valid(FNParse p) {
+    for (FrameInstance fi : p.getFrameInstances()) {
+      for (int k = 0; k < fi.getFrame().numRoles(); k++) {
+        Span arg = fi.getArgument(k);
+        assert arg != null;
+        if (arg == Span.nullSpan)
+          continue;
+        if (arg.start < 0 || arg.end > p.getSentence().size()) {
+          LOG.info("skipping " + p.getId() + " because "
               + fi.getFrame().getName() + "." + fi.getFrame().getRole(k)
               + " has span " + arg
               + " which is not valid in a sentence of length "
               + p.getSentence().size());
-            continue outer;
-          }
+          return false;
         }
       }
-      trainData.add(p);
     }
-    LOG.info("[init] after LEX, trainData.size=" + trainData.size());
+    return true;
+  }
+
+  /**
+   * returns a directory to dump results in
+   * if nTrain==-1, this is workingDir, otherwise it is nTrain-specific dir
+   */
+  private File train() {
+    if (numTrain < 0) {
+      LOG.info("[train] just usng loaded model");
+      return workingDir;
+    }
+
+    // Choose the subset of the data to train on
+    List<FNParse> trainSub;
+    if (numTrain == 0) {
+      LOG.info("[train] re-training on all " + trainData.size() + " examples");
+      trainSub = trainData;
+    } else {
+      //LOG.info("[run] re-sampling " + numTrain + " examples to re-train on");
+      //trainSub = DataUtil.resample(trainData, numTrain, rand);
+      LOG.info("[train] takinig the first " + numTrain + " examples to "
+          + "re-train on, first from fulltext, then LEX");
+      trainSub = trainData.subList(0, numTrain);
+    }
+
+    // Where the model and results will go
+    File resultsDir = new File(workingDir, "retrain-" + numTrain);
+    if (!resultsDir.isDirectory()) resultsDir.mkdir();
+    File retrainModelDir = new File(resultsDir, "model");
+
+    // Train the model
+    if (retrainModelDir.isDirectory()) {
+      LOG.info("[train] since " + retrainModelDir.getPath()
+          + " is a directory, loading the model from there instead of re-training");
+      parser.loadModel(retrainModelDir);
+    } else {
+      LOG.info("[train] actually training on " + trainSub.size() + " examples");
+      parser.configure("bpIters", "1");
+      parser.configure("passes", "5");
+      parser.train(trainSub);
+
+      // Save the model
+      LOG.info("[train] saving model to " + retrainModelDir.getPath());
+      retrainModelDir.mkdir();
+      parser.saveModel(retrainModelDir);
+    }
+    return resultsDir;
   }
 
   public void run() {
@@ -106,45 +167,62 @@ public class FinalResults implements Runnable {
 
     loadModel();
 
-    if (numTrain >= 0) {
-      List<FNParse> trainSub;
-      if (numTrain == 0) {
-        LOG.info("[run] re-training on all " + trainData.size() + " examples");
-        trainSub = trainData;
-      } else {
-        LOG.info("[run] re-sampling " + numTrain + " examples to re-train on");
-        trainSub = DataUtil.resample(trainData, numTrain, rand);
-      }
-      parser.configure("bpIters", "1");
-      parser.configure("passes", "3");
-      parser.train(trainSub);
-    } else {
-      LOG.info("[run] just usng loaded model");
-    }
+    File resultsDir = train();
 
-    LOG.info("[run] evaluating on " + testData.size()
-        + " examples with " + evaluationFunc.getName());;
+    // Evaluate the model (my evaluation)
+    LOG.info("[run] predicting");
     List<Sentence> sentences = DataUtil.stripAnnotations(testData);
     List<FNParse> hyp = parser.parse(sentences, testData);
+    /* The only reason to report one result is if you're stacking results from
+     * multiple jobs into one file... and even then.
+    LOG.info("[run] evaluating on " + testData.size()
+        + " examples with " + evaluationFunc.getName());;
     double perf = evaluationFunc.evaluate(SentenceEval.zip(testData, hyp));
-    File f = new File(workingDir, RESULTS_FILE);
+    File f = new File(resultsDir, RESULT_ACCUM_FILE);
     LOG.info("[run] writing perf=" + perf + " numTrain=" + numTrain
         + " to " + f.getPath());
     try (FileWriter w = new FileWriter(f, true)) {
       w.append(String.format("%f\t%d\n", perf, numTrain));
     } catch (Exception e) {
-      throw new RuntimeException(e);
+      e.printStackTrace();
+    }
+    */
+    LOG.info("[run] evaluating");
+    Map<String, Double> results = BasicEvaluation.evaluate(testData, hyp);
+    File f = new File(resultsDir, ALL_RESULTS_FILE);
+    LOG.info("[run] writing all eval metrics to " + f.getPath());
+    try (FileWriter w = new FileWriter(f)) {
+      List<String> keys = new ArrayList<>();
+      keys.addAll(results.keySet());
+      Collections.sort(keys);
+      for (String k : keys)
+        w.append(String.format("%f\t%s\n", results.get(k), k));
+    } catch (Exception e) {
+      e.printStackTrace();
     }
 
-    /*
+    // Evaluate the model (SEMAFOR/SemEval'07)
     LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
     File sewd = new File(workingDir, "semeval");
     if (!sewd.isDirectory()) sewd.mkdir();
     SemaforEval se = new SemaforEval(sewd);
-    se.evaluate(testData, hyp, new File(workingDir, SEMEVAL_RESULTS_FILE));
-    */
+    se.evaluate(testData, hyp, new File(resultsDir, SEMEVAL_RESULTS_FILE));
+
+    // Dump predictions, for visual inspection
+    dumpPlaintextPredictions(hyp, new File(resultsDir, PLAINTEXT_PREDICTIONS));
 
     LOG.info("[run] done");
+  }
+
+  private void dumpPlaintextPredictions(List<FNParse> hyp, File f) {
+    try (FileWriter fw = new FileWriter(f)) {
+      for (FNParse p : hyp) {
+        fw.write(Describe.fnParse(p));
+        fw.write("\n");
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private void loadModel() {
@@ -167,6 +245,11 @@ public class FinalResults implements Runnable {
     // Now load the data for each stage
     // (given the correct stages have been configured)
     parser.loadModel(new File(workingDir, "trainDevModel"));
+
+    // I think train forgets to turn this off
+    // Don't want prediction adding features (memory leak)
+    parser.getAlphabet().stopGrowth();
+
     LOG.info("[loadModel] done");
   }
 

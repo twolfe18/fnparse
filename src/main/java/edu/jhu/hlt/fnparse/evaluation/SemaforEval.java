@@ -2,7 +2,9 @@ package edu.jhu.hlt.fnparse.evaluation;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
 import java.io.FileWriter;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -52,6 +54,7 @@ public class SemaforEval {
   public static void main(String[] args) {
     List<FNParse> parses = DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+    parses = parses.subList(0, 300);
     SemaforEval eval = new SemaforEval(new File("/tmp"));
     File output = new File("/tmp/output.txt");
     eval.evaluate(parses, parses, output);
@@ -85,7 +88,7 @@ public class SemaforEval {
         sb.append(sep);
         sb.append(s.getPos(i));
       }
-      ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(false);
+      ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
       DependencyParse deps = parser.getBasicDParse(s);
       assert deps != null;
       for (int i = 0; i < n; i++) {   // dep label
@@ -192,38 +195,59 @@ public class SemaforEval {
   }
 
   private int wcDashL(File f) {
-    List<String> r = execAndGetResults(new String[] {
-        "wc", "-l", f.getPath(),
-    });
-    return Integer.parseInt(r.get(0).split("\\s+")[0]);
+    int lines = 0;
+    try (BufferedReader r = new BufferedReader(new FileReader(f))) {
+      while (r.ready()) {
+        lines++;
+        r.readLine();
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return lines;
   }
 
   private static List<String> execAndGetResults(String[] command) {
     LOG.info("exec: " + Arrays.toString(command));
     try {
-      Process p = Runtime.getRuntime().exec(command);
-      BufferedReader stdout =
-          new BufferedReader(new InputStreamReader(p.getInputStream()));
-      List<String> l = new ArrayList<>();
-      while (stdout.ready()) {
-        String line = stdout.readLine();
-        LOG.info(line);
-        l.add(line);
-      }
-      stdout.close();
+      ProcessBuilder pb = new ProcessBuilder(command);
+      Process p = pb.start();
 
-      BufferedReader stderr =
-          new BufferedReader(new InputStreamReader(p.getErrorStream()));
-      while (stderr.ready())
-        LOG.info(stderr.readLine());
-      stderr.close();
+      Gobbler stdout = new Gobbler(p.getInputStream());
+      Gobbler stderr = new Gobbler(p.getErrorStream());
+
+      stdout.start();
+      stderr.start();
 
       int r = p.waitFor();
       if (r != 0)
         throw new RuntimeException("exit value: " + r);
-      return l;
+
+      return stdout.getLines();
     } catch (Exception e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  static class Gobbler extends Thread {
+    private InputStream is;
+    private List<String> lines;
+    public Gobbler(InputStream is) {
+      this.is = is;
+      this.lines = new ArrayList<>();
+    }
+    @Override
+    public void run() {
+      try (BufferedReader r = new BufferedReader(new InputStreamReader(is))) {
+        String line;
+        while ((line = r.readLine()) != null)
+          lines.add(line);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    public List<String> getLines() {
+      return lines;
     }
   }
 

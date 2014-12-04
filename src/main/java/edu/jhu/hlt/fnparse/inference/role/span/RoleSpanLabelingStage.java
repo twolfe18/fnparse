@@ -523,8 +523,8 @@ public class RoleSpanLabelingStage
         totalArgs += wfi.numRealizedArguments();
         totalTheories += wfi.numRealizedTheories();
       }
-      LOG.info(String.format("[decode] realized %d theories and %d arguments on %d targets",
-          totalTheories, totalArgs, totalTargets));
+      //LOG.debug(String.format("[decode] realized %d theories and %d arguments on %d targets",
+      //    totalTheories, totalArgs, totalTargets));
       return new FNParse(pruneMask.getSentence(), fis);
     }
 

@@ -212,7 +212,7 @@ public class DeterministicRolePruning
         } else if (mode == Mode.XUE_PALMER
             || mode == Mode.XUE_PALMER_HERMANN) {
           ConstituencyParse parse = getConstituencyParse();
-          parse.checkSpans(sent.size());
+          //parse.checkSpans(sent.size());
           for (FrameInstance fi : input.getFrameInstances()) {
             ConstituencyParse.Node pred =
                 parse.getConstituent(fi.getTarget());
@@ -248,9 +248,15 @@ public class DeterministicRolePruning
             }
             List<Span> spans = new ArrayList<>();
             spans.add(Span.nullSpan);
-            spans.addAll(spanSet);
-            for (Span s : spanSet)
-              assert s.end <= sent.size();
+            //spans.addAll(spanSet);
+            for (Span s : spanSet) {
+              if (s.end > sent.size() || s.start < 0 || s.start >= s.end) {
+                LOG.warn("bad span: " + s + " vs " + sent.size());
+                continue;
+              }
+              assert s != Span.nullSpan;
+              spans.add(s);
+            }
             FrameInstance key = FrameInstance.frameMention(
                 fi.getFrame(), fi.getTarget(), fi.getSentence());
             possibleSpans.put(key, spans);
@@ -293,6 +299,8 @@ public class DeterministicRolePruning
             input.getFrameInstances(),
             possibleSpans);
       }
+      //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
+      //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
       return output;
     }
   }
