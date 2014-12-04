@@ -356,6 +356,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     LOG.info("loading model from " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();
+    globals.getFeatureNames().startGrowth();
     DataInputStream dis;
     try {
       dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
@@ -380,6 +381,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    globals.getFeatureNames().stopGrowth();
   }
 
   @Override

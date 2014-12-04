@@ -299,8 +299,8 @@ public class DeterministicRolePruning
             input.getFrameInstances(),
             possibleSpans);
       }
-      LOG.info(String.format("[decode] possible args for n=%d nFI=%d is %d",
-          input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
+      //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
+      //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
       return output;
     }
   }
