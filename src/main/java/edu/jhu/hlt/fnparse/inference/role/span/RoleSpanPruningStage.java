@@ -295,7 +295,7 @@ public class RoleSpanPruningStage
       implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
     private FNParseSpanPruning gold;
-    private boolean showSpanRecall = false;
+    private boolean showSpanRecall;
 
     public RoleSpanPruningStageDatum(
         FNTagging input,
@@ -495,8 +495,6 @@ public class RoleSpanPruningStage
 
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
-      if (input.getSentence().size() < 5)
-        LOG.info("test");
       observeGetDecodable(input.getId());
       FactorGraph fg = new FactorGraph();
       PruningVars roleVars = new PruningVars(input.getSentence());
@@ -533,15 +531,19 @@ public class RoleSpanPruningStage
     private static final long serialVersionUID = 1L;
     private Sentence sent;
     private ConstituencyTreeFactor ckyFactor = null;
+
     public PruningVars(Sentence sent) {
       this.sent = sent;
     }
+
     public void setCkyFactor(ConstituencyTreeFactor ckyFactor) {
       this.ckyFactor = ckyFactor;
     }
+
     public ConstituencyTreeFactor getCkyFactor() {
       return ckyFactor;
     }
+
     public BinaryTree getMaxRecallParse(FgInferencer inf) {
       List<SpanVar> sv = new ArrayList<>();
       List<DenseFactor> beliefs = new ArrayList<>();
@@ -557,6 +559,10 @@ public class RoleSpanPruningStage
       Chart chart = parser.parse(n, sv, beliefs);
       return chart.getViterbiParse().get1();
     }
+    
+    /**
+     * Measures span recall against the Stanford constituency parser.
+     */
     public void showSpanRecall(FgInferencer inf) {
       if (ckyFactor == null)
         return;
@@ -590,6 +596,7 @@ public class RoleSpanPruningStage
           + " hyp.size=" + hyp.size() + " gold.size=" + gold.size());
       spanRecallAgainstStanford.accum(tp, 0, fn);
     }
+
     public void getSpans(BinaryTree tree, Collection<Span> addTo) {
       if (tree == null)
         return;

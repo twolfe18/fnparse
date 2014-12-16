@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
@@ -35,6 +36,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.fnparse.util.RandomBracketing;
 
 public class DeterministicRolePruning
     implements Stage<FNTagging, FNParseSpanPruning> {
@@ -69,6 +71,9 @@ public class DeterministicRolePruning
     // Algorithm 2 in Johansson and Nuges (2008)
     // http://www.aclweb.org/anthology/D08-1008
     XUE_PALMER_DEP_HERMANN,
+
+    // Bottom up random merges (baseline)
+    RANDOM,
   }
 
   private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
@@ -78,6 +83,10 @@ public class DeterministicRolePruning
 
   public DeterministicRolePruning(Mode mode) {
     this.mode = mode;
+  }
+
+  public Mode getMode() {
+    return mode;
   }
 
   public void configure(java.util.Map<String,String> configuration) {
@@ -196,7 +205,20 @@ public class DeterministicRolePruning
       if (output == null) {
         Sentence sent = input.getSentence();
         Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
-        if (mode == Mode.STANFORD_CONSTITUENTS) {
+        if (mode == Mode.RANDOM) {
+          Set<Span> cons = new HashSet<>();
+          RandomBracketing brack = new RandomBracketing(new Random(9001));
+          brack.bracket(input.getSentence().size(), cons);
+          List<Span> consSpans = new ArrayList<>();
+          consSpans.addAll(cons);
+          consSpans.add(Span.nullSpan);
+          for (FrameInstance fi : input.getFrameInstances()) {
+            FrameInstance key = FrameInstance.frameMention(
+                fi.getFrame(), fi.getTarget(), fi.getSentence());
+            List<Span> old = possibleSpans.put(key, consSpans);
+            assert old == null;
+          }
+        } else if (mode == Mode.STANFORD_CONSTITUENTS) {
           Set<Span> cons = new HashSet<>();
           ConstituencyParse cp = getConstituencyParse();
           cp.getSpans(cons);

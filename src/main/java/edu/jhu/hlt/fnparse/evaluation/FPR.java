@@ -24,6 +24,14 @@ public final class FPR {
   public FPR(boolean macro) {
     this.macro = macro;
   }
+  
+  public double tpPlusFp() {
+    return tp + fp;
+  }
+  
+  public double tpPlusFn() {
+    return tp + fn;
+  }
 
   public void accum(double tp, double fp, double fn) {
     if(tp < 0d || fp < 0d || fn < 0d)

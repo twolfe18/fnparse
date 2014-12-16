@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
 import java.util.Arrays;
+import java.util.Collection;
 
 /**
  * This class should represent all details of the data
@@ -89,10 +90,18 @@ public class FrameInstance {
     return c;
   }
 
-  public String[] getArgumentTokens(int roleIdx) { return sentence.getWordFor(arguments[roleIdx]); }
+  public String[] getArgumentTokens(int roleIdx) {
+    return sentence.getWordFor(arguments[roleIdx]);
+  }
 
   public void setArgument(int roleIdx, Span extent) {
     arguments[roleIdx] = extent;
+  }
+  
+  public void getRealizedArgs(Collection<Span> addTo) {
+    for (int k = 0; k < arguments.length; k++)
+      if (arguments[k] != Span.nullSpan)
+        addTo.add(arguments[k]);
   }
 
   @Override

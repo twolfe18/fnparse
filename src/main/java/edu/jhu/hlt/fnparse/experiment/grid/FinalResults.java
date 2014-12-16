@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -52,12 +53,12 @@ public class FinalResults implements Runnable {
   // How many examples to retrain the model on.
   // -1 indicates that no model should be retrained, just use the loaded model.
   private int numTrain;
-  private Random rand;      // vary this to get different bootstrap samples
   private String mode;      // i.e. "span" or "head"
   private File workingDir;
   private Parser parser;
   private List<FNParse> testData;
   private List<FNParse> trainData;
+  private Random rand = new Random(9001);
 
   public FinalResults(File workingDir, Random rand, String mode, int trainSize) {
     if (!mode.equals("span") && !mode.equals("head"))
@@ -65,7 +66,6 @@ public class FinalResults implements Runnable {
     if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
     this.workingDir = workingDir;
-    this.rand = rand;
     this.mode = mode;
     this.numTrain = trainSize;
 
@@ -167,6 +167,11 @@ public class FinalResults implements Runnable {
 
     loadModel();
 
+    if (true) {
+      compareLatentToSupervisedSyntax();
+      return;
+    }
+
     File resultsDir = train();
 
     // Evaluate the model (my evaluation)
@@ -213,8 +218,32 @@ public class FinalResults implements Runnable {
 
     // Dump predictions, for visual inspection
     dumpPlaintextPredictions(hyp, new File(resultsDir, PLAINTEXT_PREDICTIONS));
+    
+    compareLatentToSupervisedSyntax();
 
     LOG.info("[run] done");
+  }
+  
+  private void compareLatentToSupervisedSyntax() {
+    if (!(parser instanceof LatentConstituencyPipelinedParser)) {
+      LOG.info("[compareLatentToSupervisedSyntax] unsupported parser type: "
+          + parser.getClass().getName());
+      return;
+    }
+    LatentConstituencyPipelinedParser p = (LatentConstituencyPipelinedParser) parser;
+    final int k = 500;  // upper bound on how many parses to run this on
+    List<FNParse> runOn = testData;
+    if (runOn.size() > k)
+      runOn = DataUtil.reservoirSample(runOn, k, rand);
+
+    Mode m1 = Mode.STANFORD_CONSTITUENTS;
+    p.compareLatentToSupervisedSyntax(runOn, m1);
+
+    Mode m2 = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
+    if (m2 != m1)
+      p.compareLatentToSupervisedSyntax(runOn, m2);
+    
+    p.compareLatentToSupervisedSyntax(runOn, Mode.RANDOM);
   }
 
   private void dumpPlaintextPredictions(List<FNParse> hyp, File f) {

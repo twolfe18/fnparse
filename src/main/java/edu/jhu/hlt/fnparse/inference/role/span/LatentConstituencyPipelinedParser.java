@@ -7,9 +7,12 @@ import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
+import java.util.Set;
 import java.util.zip.GZIPInputStream;
 
 import org.apache.log4j.Level;
@@ -22,7 +25,9 @@ import edu.jhu.hlt.fnparse.data.FNIterFilters;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.Parser;
@@ -32,6 +37,7 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
@@ -69,6 +75,16 @@ public class LatentConstituencyPipelinedParser implements Parser {
     frameId = new OracleStage<>();
     setPruningMethod(DEFAULT_PRUNING_METHOD);
     roleLabeling = new RoleSpanLabelingStage(globals, "");
+  }
+
+  /**
+   * Returns the DeterministicRolePruning.Mode if relevant, else null.
+   */
+  public DeterministicRolePruning.Mode getPruningMode() {
+    if (rolePruning instanceof DeterministicRolePruning)
+      return ((DeterministicRolePruning) rolePruning).getMode();
+    else
+      return null;
   }
 
   @Override
@@ -281,6 +297,121 @@ public class LatentConstituencyPipelinedParser implements Parser {
     LOG.info("[learnWeights] done training");
   }
 
+  private static void showPruningProperties(String identifier, List<FNParseSpanPruning> prunes, List<FNParse> hyp, List<FNParse> gold) {
+
+    // What is the distribution over widths of the spans that weren't pruned
+    // and their relation to the predicate
+    final int maxWidth = 18;  // upper bound, rest are bucketed together
+    Counts<Integer> widths = new Counts<>();
+    Counts<String> relToPred = new Counts<>();
+    for (FNParseSpanPruning prune : prunes) {
+      for (Entry<FrameRoleInstance, Set<Span>> fip : prune.getMapRepresentation().entrySet()) {
+        Span target = fip.getKey().target;
+        for (Span s : fip.getValue()) {
+          int w = Math.min(s.width(), maxWidth);
+          widths.increment(w);
+          if (target.before(s))
+            relToPred.increment("right");
+          else if (target.after(s))
+            relToPred.increment("left");
+          else if (target == s)
+            relToPred.increment("same");
+          else if (target.overlaps(s))
+            relToPred.increment("overlap");
+          else
+            relToPred.increment("??? WARNING!");
+        }
+      }
+    }
+    for (int w : widths.getKeysSorted()) {
+      LOG.info(String.format("[showPruningProperties] %s maskSpanWidth=%2d N=%7d",
+          identifier, w, widths.getCount(w)));
+    }
+    for (String r : relToPred.getKeysSortedByCount(true)) {
+      LOG.info(String.format("[showPruningProperties] %s maskArg2pred=%9s N=%7d",
+          identifier, r, relToPred.getCount(r)));
+    }
+
+    // Compute recall/F1 for pruning stage
+    if (gold != null) {
+      FPR prunePerf = new FPR(false);
+      for (int i = 0; i < gold.size(); i++) {
+        FNParseSpanPruning mask = prunes.get(i);
+        mask.perf(gold.get(i), prunePerf);
+      }
+      LOG.info("[showPruningProperties] " + identifier
+          + " pruning recall=" + prunePerf.recall()
+          + " f1*=" + prunePerf.f1()
+          + " precision*=" + prunePerf.precision()
+          + " tp+fp=" + prunePerf.tpPlusFp());
+    }
+
+    // For each FrameRoleInstance, if we included the correct span, what was
+    // the precision?
+    if (hyp != null) {
+      FPR labelPerf = new FPR(false);
+      for (int i = 0; i < gold.size(); i++) {
+        FNParseSpanPruning mask = prunes.get(i);
+        FNParseSpanPruning.precisionOnProperlyPrunedFrameRoleInstances(
+            mask, hyp.get(i), gold.get(i), labelPerf);
+      }
+      LOG.info("[showPruningProperties] " + identifier
+          + " labeling precision=" + labelPerf.precision()
+          + " (" + labelPerf.getTP() + " / "
+          + (labelPerf.getTP() + labelPerf.getFP())
+          + ") tp+fp=" + labelPerf.tpPlusFp());
+    }
+  }
+
+  /**
+   * Takes some parses and for each realized argument a asks: which pruning methods
+   * (either the latent model -- this, or a supvervised method) would have come up
+   * with this span?
+   *
+   * The goal is to identify if there are cases where the latent syntax will recall
+   * a span correctly when the supervised syntax will not.
+   *
+   * I'm going to flatten the representation to ignore role for now (just union over
+   * all roles), but keep it sensitive to each frame/target/predicate.
+   */
+  public void compareLatentToSupervisedSyntax(List<FNParse> parses, DeterministicRolePruning.Mode mode) {
+    if (rolePruning == null || !(rolePruning instanceof RoleSpanPruningStage))
+      throw new RuntimeException("only call this using a pre-trained latent model");
+    Counts<String> counts = new Counts<>();
+    Set<Span> g = new HashSet<>();  // gold
+    Set<Span> h = new HashSet<>();  // hyp (latent)
+    Set<Span> s = new HashSet<>();  // supervised (regular)
+    List<FNParseSpanPruning> hypLatent = rolePruning.setupInference(parses, null).decodeAll();
+    DeterministicRolePruning drp = new DeterministicRolePruning(mode);
+    List<FNParseSpanPruning> hypSupervised = drp.setupInference(parses, null).decodeAll();
+    for (int i = 0; i < parses.size(); i++) {
+      FNParse p = parses.get(i);
+      FNParseSpanPruning hl = hypLatent.get(i);
+      FNParseSpanPruning hs = hypSupervised.get(i);
+      for (int fi = 0; fi < p.numFrameInstances(); fi++) {
+        g.clear();
+        h.clear();
+        s.clear();
+        p.getFrameInstance(fi).getRealizedArgs(g);
+        h.addAll(hl.getPossibleArgs(fi));
+        s.addAll(hs.getPossibleArgs(fi));
+        for (Span a : g) {
+          counts.increment(String.format(
+              "latent=%s regular=%s",
+              h.contains(a) ? "Y" : "N",
+              s.contains(a) ? "Y" : "N"));
+        }
+      }
+    }
+    for (String rel : counts.getKeysSorted()) {
+      LOG.info(String.format(
+          "[compareLatentToSupervisedSyntax] %-15s  % 5d",
+          rel, counts.getCount(rel)));
+    }
+    showPruningProperties("latent", hypLatent, null, parses);
+    showPruningProperties(mode.toString(), hypSupervised, null, parses);
+  }
+
   @Override
   public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold) {
 
@@ -306,31 +437,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
       parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
-      if (gold != null) {
-        start = System.currentTimeMillis();
-        // Compute recall/F1 for pruning stage
-        FPR prunePerf = new FPR(false);
-        for (int i = 0; i < gold.size(); i++) {
-          FNParseSpanPruning mask = prunes.get(i);
-          mask.perf(gold.get(i), prunePerf);
-        }
-        LOG.info("[parse] pruning recall=" + prunePerf.recall()
-            + " f1=" + prunePerf.f1() + " precision*=" + prunePerf.precision());
-
-        // For each FrameRoleInstance, if we included the correct span, what was
-        // the precision?
-        FPR labelPerf = new FPR(false);
-        for (int i = 0; i < gold.size(); i++) {
-          FNParseSpanPruning mask = prunes.get(i);
-          FNParseSpanPruning.precisionOnProperlyPrunedFrameRoleInstances(
-              mask, parses.get(i), gold.get(i), labelPerf);
-        }
-        LOG.info("[parse] labeling precision=" + labelPerf.precision()
-            + " (" + labelPerf.getTP() + " / "
-            + (labelPerf.getTP() + labelPerf.getFP()) + ")");
-        LOG.info("[parse] extra diagnostics took "
-            + (System.currentTimeMillis()-start)/1000d + " seconds");
-      }
+      showPruningProperties(rolePruning.getName(), prunes, parses, gold);
     }
 
     long totalTime = System.currentTimeMillis() - start;

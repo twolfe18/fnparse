@@ -225,6 +225,16 @@ public class BasicFeatureTemplates {
         return null;
       return "Lemma=" + x.sentence.getLemma(x.index);
     });
+    tokenExtractors.put("Shape", x -> {
+      if (!x.indexInSent())
+        return null;
+      String shape = x.sentence.getShape(x.index);
+      if (shape == null) {
+        shape = PosPatternGenerator.shapeNormalize(x.sentence.getWord(x.index));
+        x.sentence.setShape(x.index, shape);
+      }
+      return "Shape=" + shape;
+    });
     tokenExtractors.put("Pos", x -> {
       if (x.indexInSent())
         return "Pos=" + x.sentence.getPos(x.index);
