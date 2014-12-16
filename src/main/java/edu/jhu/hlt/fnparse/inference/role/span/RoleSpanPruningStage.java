@@ -51,6 +51,7 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFa
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.parse.cky.ConstituencyTreeFactorParser;
 import edu.jhu.parse.cky.chart.Chart;
@@ -126,6 +127,8 @@ public class RoleSpanPruningStage
   private boolean keepEverything = false;
 	private boolean disallowArgWithoutConstituent = false;
 	private double recallBias = 0.5d;
+
+	private boolean useMaxRecallDecoder = true;
 
 	private int tooBigForArg = 15;
 
@@ -324,6 +327,9 @@ public class RoleSpanPruningStage
       observeGetExample(input.getId());
       FactorGraph fg = new FactorGraph();
       VarConfig gold = new VarConfig();
+      // Previously I didn't need the RoleVars because they (or their factor)
+      // was directly added to fg; they were only used for decoding.
+      // The same is true now.
       build(fg, gold, null);
       return new LabeledFgExample(fg, gold);
     }
@@ -401,7 +407,7 @@ public class RoleSpanPruningStage
               + " span vars for a sentence of length " + n);
         }
       }
-      if (showSpanRecall && roleVars != null && cykPhi != null)
+      if (roleVars != null && cykPhi != null)
         roleVars.setCkyFactor(cykPhi);
     }
 
@@ -514,9 +520,10 @@ public class RoleSpanPruningStage
           return new ThresholdDecodable(
               fg, infFactory(), input, roleVars, decoder);
         } else {
-          RankDecodable rd = new RankDecodable(
-              fg, infFactory(), input, roleVars, recallBias);
-          return rd;
+          if (useMaxRecallDecoder)
+            return new MaxRecallParseDecodable(fg, infFactory(), input, roleVars);
+          else
+            return new RankDecodable(fg, infFactory(), input, roleVars, recallBias);
         }
       }
     }
@@ -535,11 +542,7 @@ public class RoleSpanPruningStage
     public ConstituencyTreeFactor getCkyFactor() {
       return ckyFactor;
     }
-    public void showSpanRecall(FgInferencer inf) {
-      if (ckyFactor == null)
-        return;
-
-      // Get the spans from the marginals/beliefs
+    public BinaryTree getMaxRecallParse(FgInferencer inf) {
       List<SpanVar> sv = new ArrayList<>();
       List<DenseFactor> beliefs = new ArrayList<>();
       int n = sent.size();
@@ -552,7 +555,14 @@ public class RoleSpanPruningStage
       }
       ConstituencyTreeFactorParser parser = new ConstituencyTreeFactorParser();
       Chart chart = parser.parse(n, sv, beliefs);
-      BinaryTree tree = chart.getViterbiParse().get1();
+      return chart.getViterbiParse().get1();
+    }
+    public void showSpanRecall(FgInferencer inf) {
+      if (ckyFactor == null)
+        return;
+
+      // Get the spans from the marginals/beliefs
+      BinaryTree tree = getMaxRecallParse(inf);
       Set<Span> hyp = new HashSet<>();
       getSpans(tree, hyp);
 
@@ -580,12 +590,77 @@ public class RoleSpanPruningStage
           + " hyp.size=" + hyp.size() + " gold.size=" + gold.size());
       spanRecallAgainstStanford.accum(tp, 0, fn);
     }
-    private void getSpans(BinaryTree tree, Collection<Span> addTo) {
+    public void getSpans(BinaryTree tree, Collection<Span> addTo) {
       if (tree == null)
         return;
       addTo.add(Span.getSpan(tree.getStart(), tree.getEnd()));
       getSpans(tree.getLeftChild(), addTo);
       getSpans(tree.getRightChild(), addTo);
+    }
+  }
+
+  /**
+   * Computes the max recall parse of the entire sentence, using the beliefs/probabilities
+   * learned/inferred from training.
+   */
+  class MaxRecallParseDecodable extends Decodable<FNParseSpanPruning> {
+    private PruningVars roleVars;
+    private FNTagging input;
+    private FNParseSpanPruning output;  // cache this
+
+    public MaxRecallParseDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
+      super(fg, infFact);
+      this.input = input;
+      this.roleVars = roleVars;
+    }
+
+    private void showSpans(Collection<Span> spans) {
+      Sentence sent = input.getSentence();
+      LOG.info("[MaxRecallDecodable showSpans] n=" + sent.size());
+      for (Span s : spans) {
+        if (s == Span.nullSpan) continue;
+        LOG.info("[MaxRecallDecodable showSpans] " + Describe.span(s, sent));
+      }
+      LOG.info("");
+    }
+
+    @Override
+    public FNParseSpanPruning decode() {
+      if (output == null) {
+        FgInferencer margins = getMargins();
+        BinaryTree parse = roleVars.getMaxRecallParse(margins);
+        Set<Span> constituents = new HashSet<>();
+        roleVars.getSpans(parse, constituents);
+        assert !constituents.contains(Span.nullSpan);
+        List<Span> options = new ArrayList<>();
+        options.add(Span.nullSpan);
+        options.addAll(constituents);
+        LOG.info("[MaxRecallParseDecodable] found " + options.size()
+            + " spans (including nullSpan) possible for each of the "
+            + input.numFrameInstances() + " frame instances a sentence of length "
+            + input.getSentence().size() + " (" + input.getSentence().getId() + ")");
+        Map<FrameInstance, List<Span>> possibleArgs = new HashMap<>();
+        for (FrameInstance fi : input.getFrameInstances()) {
+          FrameInstance key = FrameInstance.frameMention(
+              fi.getFrame(), fi.getTarget(), input.getSentence());
+          possibleArgs.put(key, options);
+        }
+        output = new FNParseSpanPruning(input.getSentence(), input.getFrameInstances(), possibleArgs);
+      }
+      return output;
+    }
+
+    @Override
+    public FgModel getWeights() {
+      return RoleSpanPruningStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleSpanPruningStage.this.logDomain();
     }
   }
 

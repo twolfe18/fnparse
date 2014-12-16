@@ -148,7 +148,7 @@ public class FinalResults implements Runnable {
     } else {
       LOG.info("[train] actually training on " + trainSub.size() + " examples");
       parser.configure("bpIters", "1");
-      parser.configure("passes", "5");
+      parser.configure("passes", "1");
       parser.train(trainSub);
 
       // Save the model
@@ -195,8 +195,11 @@ public class FinalResults implements Runnable {
       List<String> keys = new ArrayList<>();
       keys.addAll(results.keySet());
       Collections.sort(keys);
-      for (String k : keys)
-        w.append(String.format("%f\t%s\n", results.get(k), k));
+      for (String k : keys) {
+        double v = results.get(k);
+        LOG.info(String.format("[evaluate] %100s %f", k, v));
+        w.append(String.format("%f\t%s\n", v, k));
+      }
     } catch (Exception e) {
       e.printStackTrace();
     }
