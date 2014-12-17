@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -27,6 +28,7 @@ import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Describe;
 
@@ -167,10 +169,11 @@ public class FinalResults implements Runnable {
 
     loadModel();
 
-    if (true) {
-      compareLatentToSupervisedSyntax();
-      return;
-    }
+//    if (true) {
+//      parser.configure("bpIters", "2");
+//      compareLatentToSupervisedSyntax();
+//      return;
+//    }
 
     File resultsDir = train();
 
@@ -218,12 +221,12 @@ public class FinalResults implements Runnable {
 
     // Dump predictions, for visual inspection
     dumpPlaintextPredictions(hyp, new File(resultsDir, PLAINTEXT_PREDICTIONS));
-    
+
     compareLatentToSupervisedSyntax();
 
     LOG.info("[run] done");
   }
-  
+
   private void compareLatentToSupervisedSyntax() {
     if (!(parser instanceof LatentConstituencyPipelinedParser)) {
       LOG.info("[compareLatentToSupervisedSyntax] unsupported parser type: "
@@ -236,14 +239,21 @@ public class FinalResults implements Runnable {
     if (runOn.size() > k)
       runOn = DataUtil.reservoirSample(runOn, k, rand);
 
-    Mode m1 = Mode.STANFORD_CONSTITUENTS;
-    p.compareLatentToSupervisedSyntax(runOn, m1);
+    RoleSpanPruningStage pruning = (RoleSpanPruningStage) p.getPruningStage();
+    boolean useMaxRecallOrig = pruning.useMaxRecallDecoder();
+    for (boolean useMaxRecall : Arrays.asList(true, false)) {
+      pruning.useMaxRecallDecoder(useMaxRecall);
 
-    Mode m2 = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
-    if (m2 != m1)
-      p.compareLatentToSupervisedSyntax(runOn, m2);
-    
-    p.compareLatentToSupervisedSyntax(runOn, Mode.RANDOM);
+      Mode m1 = Mode.STANFORD_CONSTITUENTS;
+      p.compareLatentToSupervisedSyntax(runOn, m1, true);
+
+      Mode m2 = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
+      if (m2 != m1)
+        p.compareLatentToSupervisedSyntax(runOn, m2, false);
+
+      p.compareLatentToSupervisedSyntax(runOn, Mode.RANDOM, false);
+    }
+    pruning.useMaxRecallDecoder(useMaxRecallOrig);
   }
 
   private void dumpPlaintextPredictions(List<FNParse> hyp, File f) {

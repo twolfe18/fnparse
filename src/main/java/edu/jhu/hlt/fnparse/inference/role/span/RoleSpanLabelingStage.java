@@ -257,65 +257,6 @@ public class RoleSpanLabelingStage
               s, spanVar, isGold, fg, goldConf, vars);
         }
       }
-
-      /*
-      for (int i = 0; i < input.numFrameInstances(); i++) {
-        Frame f = input.getFrame(i);
-        Span target = input.getTarget(i);
-
-        FrameInstance goldFi = null;
-        if (training) {
-          assert gold != null;
-          goldFi = gold.getFrameInstance(i);
-          assert goldFi.getFrame().equals(f);
-          assert goldFi.getTarget().equals(target);
-        }
-
-        List<Span> possibleArgs = input.getPossibleArgs(i);
-        for (int k = 0; k < f.numRoles(); k++) {
-
-          // Get the gold label
-          Span goldArg = null;
-          if (training) {
-            FrameRoleInstance key = new FrameRoleInstance(f, target, k);
-            goldArg = goldSpans.get(key);
-          }
-
-          if (goldFi != null) {
-            goldArg = goldFi.getArgument(k);
-            int goldArgIdx = input.getPossibleArgs(i).indexOf(goldArg);
-            if (goldArgIdx < 0) {
-              LOG.warn("pruned the gold label for "
-                  + f.getName() + "." + f.getRole(k));
-              LOG.warn("not including this as a training example");
-              assert goldArg != Span.nullSpan :
-                "did you include nullSpan as an possible span?";
-              prunedGold++;
-              continue;
-            }
-          }
-          total++;
-          if (goldArg != null && goldArg != Span.nullSpan)
-            totalRealized++;
-          boolean foundNullSpan = false;
-          for (Span arg : input.getPossibleArgs(i)) {
-            // Non-null span variables
-            Boolean spanIsGold = null;
-            if (goldArg != null)
-              spanIsGold = (goldArg == arg);
-            SpanVar spanVar = null;
-            if (consTree != null && arg.width() > 1)
-              spanVar = consTree.getSpanVar(arg.start, arg.end - 1);
-            buildSpanVar(f, target, k, arg, spanVar, spanIsGold, fg, goldConf, vars);
-            if (arg == Span.nullSpan) {
-              assert !foundNullSpan;
-              foundNullSpan = true;
-            }
-          }
-          assert foundNullSpan;
-        }
-      }
-      */
       if (buildCtr++ % buildCtrInterval == 0) {
         if (training) {
           LOG.info(String.format(
@@ -450,11 +391,9 @@ public class RoleSpanLabelingStage
       extends RoleSpanPruningStage.ArgSpanPruningVar {
     private static final long serialVersionUID = 1L;
     public final int role;
-    public final Span arg;
     public ArgSpanLabelVar(Span arg, Frame frame, Span target, int role) {
       super(arg, frame, target);
       this.role = role;
-      this.arg = arg;
     }
   }
 

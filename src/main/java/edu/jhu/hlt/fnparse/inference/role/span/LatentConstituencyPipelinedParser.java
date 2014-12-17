@@ -39,6 +39,7 @@ import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
@@ -75,6 +76,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
     frameId = new OracleStage<>();
     setPruningMethod(DEFAULT_PRUNING_METHOD);
     roleLabeling = new RoleSpanLabelingStage(globals, "");
+  }
+
+  public Stage<FNTagging, FNParseSpanPruning> getPruningStage() {
+    return rolePruning;
   }
 
   /**
@@ -332,6 +337,16 @@ public class LatentConstituencyPipelinedParser implements Parser {
           identifier, r, relToPred.getCount(r)));
     }
 
+    // How many elements did we let through the pruning mask?
+    int totalLetThrough = 0, totalPossible = 0;
+    for (FNParseSpanPruning p : prunes) {
+      totalLetThrough += p.numPossibleArgs();
+      totalPossible += p.numPossibleArgsNaive();
+    }
+    LOG.info(String.format(
+        "[showPruningProperties] let through %d of %d possible arguments, %.2f%%",
+        totalLetThrough, totalPossible, (100d * totalLetThrough) / totalPossible));
+
     // Compute recall/F1 for pruning stage
     if (gold != null) {
       FPR prunePerf = new FPR(false);
@@ -374,9 +389,13 @@ public class LatentConstituencyPipelinedParser implements Parser {
    * I'm going to flatten the representation to ignore role for now (just union over
    * all roles), but keep it sensitive to each frame/target/predicate.
    */
-  public void compareLatentToSupervisedSyntax(List<FNParse> parses, DeterministicRolePruning.Mode mode) {
+  public void compareLatentToSupervisedSyntax(List<FNParse> parses, DeterministicRolePruning.Mode mode, boolean verbose) {
     if (rolePruning == null || !(rolePruning instanceof RoleSpanPruningStage))
       throw new RuntimeException("only call this using a pre-trained latent model");
+    LOG.info("[compareLatentToSupervisedSyntaxDebug] parses.size=" + parses.size());
+    boolean mr = ((RoleSpanPruningStage) rolePruning).useMaxRecallDecoder();
+    String name = "latent-" + (mr ? "maxRecall" : "naive");
+    name += " vs " + mode;
     Counts<String> counts = new Counts<>();
     Set<Span> g = new HashSet<>();  // gold
     Set<Span> h = new HashSet<>();  // hyp (latent)
@@ -388,7 +407,21 @@ public class LatentConstituencyPipelinedParser implements Parser {
       FNParse p = parses.get(i);
       FNParseSpanPruning hl = hypLatent.get(i);
       FNParseSpanPruning hs = hypSupervised.get(i);
+      assert hl.getSentence() == p.getSentence();
+      assert hs.getSentence() == p.getSentence();
+      if (verbose) {
+        LOG.info("[compareLatentToSupervisedSyntax] (" + name + ") sentence: "
+            + p.getSentence());
+      }
       for (int fi = 0; fi < p.numFrameInstances(); fi++) {
+        if (verbose) {
+          LOG.info("[compareLatentToSupervisedSyntax] (" + name + ")   frameInst: "
+              + Describe.frameInstance(p.getFrameInstance(fi)));
+        }
+        assert hl.getFrame(fi) == p.getFrameInstance(fi).getFrame();
+        assert hs.getFrame(fi) == p.getFrameInstance(fi).getFrame();
+        assert hl.getTarget(fi) == p.getFrameInstance(fi).getTarget();
+        assert hs.getTarget(fi) == p.getFrameInstance(fi).getTarget();
         g.clear();
         h.clear();
         s.clear();
@@ -396,20 +429,34 @@ public class LatentConstituencyPipelinedParser implements Parser {
         h.addAll(hl.getPossibleArgs(fi));
         s.addAll(hs.getPossibleArgs(fi));
         for (Span a : g) {
-          counts.increment(String.format(
+          String x = String.format(
               "latent=%s regular=%s",
               h.contains(a) ? "Y" : "N",
-              s.contains(a) ? "Y" : "N"));
+              s.contains(a) ? "Y" : "N");
+          counts.increment(x);
+          counts.increment("latent=" + (h.contains(a) ? "Y" : "N"));
+          counts.increment("regular=" + (s.contains(a) ? "Y" : "N"));
+          if (verbose) {
+            LOG.info("[compareLatentToSupervisedSyntax] (" + name + ")     "
+                + x + "\t"
+                + Arrays.toString(p.getSentence().getWordFor(a)));
+          }
         }
       }
     }
     for (String rel : counts.getKeysSorted()) {
       LOG.info(String.format(
-          "[compareLatentToSupervisedSyntax] %-15s  % 5d",
-          rel, counts.getCount(rel)));
+          "[compareLatentToSupervisedSyntax relCount] %-12s %-15s  % 5d",
+          name, rel, counts.getCount(rel)));
     }
-    showPruningProperties("latent", hypLatent, null, parses);
+    LOG.info(String.format(
+        "[compareLatentToSupervisedSyntax relCount] %-12s %-15s  % 5d",
+        name, "everything", counts.getTotalCount()));
+    LOG.info("");
+    showPruningProperties(name, hypLatent, null, parses);
+    LOG.info("");
     showPruningProperties(mode.toString(), hypSupervised, null, parses);
+    LOG.info("");
   }
 
   @Override
@@ -427,13 +474,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
       if (gold != null)
         goldPrune = FNParseSpanPruning.optimalPrune(gold);
 
-      List<FNParseSpanPruning> prunes;
-      if (rolePruning instanceof RoleSpanPruningStage && SHOW_SPAN_RECALL) {
-        prunes = ((RoleSpanPruningStage) rolePruning)
-            .setupInference(frames, goldPrune, true).decodeAll();
-      } else {
-        prunes = rolePruning.setupInference(frames, goldPrune).decodeAll();
-      }
+      List<FNParseSpanPruning> prunes =
+          rolePruning.setupInference(frames, goldPrune).decodeAll();
 
       parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
@@ -446,9 +488,9 @@ public class LatentConstituencyPipelinedParser implements Parser {
     }
     int toks = 0;
     for (Sentence s : sentences) toks += s.size();
-		LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
-		    + sentences.size() + " sentences /" + toks + " tokens, "
-		    + (toks*1000d)/totalTime + " tokens per second");
+    LOG.info("[parse] " + (totalTime/1000d) + " sec total for "
+        + sentences.size() + " sentences /" + toks + " tokens, "
+        + (toks*1000d)/totalTime + " tokens per second");
     return parses;
   }
 
