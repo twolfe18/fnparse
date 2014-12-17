@@ -74,7 +74,7 @@ public class DeterministicRolePruning
   private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
   private final FgModel weights = new FgModel(0);
   private ConcreteStanfordWrapper parser =
-      ConcreteStanfordWrapper.getSingleton(true);
+      ConcreteStanfordWrapper.getSingleton(false);
 
   public DeterministicRolePruning(Mode mode) {
     this.mode = mode;
