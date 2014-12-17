@@ -51,7 +51,10 @@ public class FNParseSpanPruning extends FNTagging {
       boolean foundNS = false;
       for (Span sp : spans) {
         foundNS |= sp == Span.nullSpan;
-        assert sp.end <= s.size();
+        if (sp.end > s.size()) {
+          LOG.warn(sp + " cannot fit in a sentence of length "+ s.size() + " (" + s.getId() + ")");
+          //assert false;
+        }
       }
       assert foundNS;
     }

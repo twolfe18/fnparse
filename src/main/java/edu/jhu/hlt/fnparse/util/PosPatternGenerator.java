@@ -27,7 +27,7 @@ public class PosPatternGenerator {
   private int tagsRight = 1;
   private Mode mode;
 
-  private static String shapeNormalize(String s) {
+  public static String shapeNormalize(String s) {
     return s.replaceAll("[A-Z]", "X")
         .replaceAll("[a-z]", "x")
         .replaceAll("\\d", "0")
@@ -121,8 +121,14 @@ public class PosPatternGenerator {
       return s.getPos(i);
     if (mode == Mode.COARSE_POS)
       return s.getPos(i).substring(0, 1);
-    if (mode == Mode.WORD_SHAPE)
-      return shapeNormalize(s.getWord(i));
+    if (mode == Mode.WORD_SHAPE) {
+      String shape = s.getShape(i);
+      if (shape == null) {
+        shape = shapeNormalize(s.getWord(i));
+        s.setShape(i, shape);
+      }
+      return shape;
+    }
     throw new RuntimeException();
   }
 

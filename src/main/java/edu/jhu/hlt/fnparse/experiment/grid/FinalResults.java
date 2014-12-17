@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -25,7 +26,9 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
+import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Describe;
 
@@ -52,12 +55,12 @@ public class FinalResults implements Runnable {
   // How many examples to retrain the model on.
   // -1 indicates that no model should be retrained, just use the loaded model.
   private int numTrain;
-  private Random rand;      // vary this to get different bootstrap samples
   private String mode;      // i.e. "span" or "head"
   private File workingDir;
   private Parser parser;
   private List<FNParse> testData;
   private List<FNParse> trainData;
+  private Random rand = new Random(9001);
 
   public FinalResults(File workingDir, Random rand, String mode, int trainSize) {
     if (!mode.equals("span") && !mode.equals("head"))
@@ -65,7 +68,6 @@ public class FinalResults implements Runnable {
     if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
     this.workingDir = workingDir;
-    this.rand = rand;
     this.mode = mode;
     this.numTrain = trainSize;
 
@@ -148,7 +150,7 @@ public class FinalResults implements Runnable {
     } else {
       LOG.info("[train] actually training on " + trainSub.size() + " examples");
       parser.configure("bpIters", "1");
-      parser.configure("passes", "5");
+      parser.configure("passes", "1");
       parser.train(trainSub);
 
       // Save the model
@@ -166,6 +168,12 @@ public class FinalResults implements Runnable {
     LOG.info("[run] testData.size=" + testData.size());
 
     loadModel();
+
+//    if (true) {
+//      parser.configure("bpIters", "2");
+//      compareLatentToSupervisedSyntax();
+//      return;
+//    }
 
     File resultsDir = train();
 
@@ -195,15 +203,18 @@ public class FinalResults implements Runnable {
       List<String> keys = new ArrayList<>();
       keys.addAll(results.keySet());
       Collections.sort(keys);
-      for (String k : keys)
-        w.append(String.format("%f\t%s\n", results.get(k), k));
+      for (String k : keys) {
+        double v = results.get(k);
+        LOG.info(String.format("[evaluate] %100s %f", k, v));
+        w.append(String.format("%f\t%s\n", v, k));
+      }
     } catch (Exception e) {
       e.printStackTrace();
     }
 
     // Evaluate the model (SEMAFOR/SemEval'07)
     LOG.info("[run] running SemEval'07 evaluation (via Semafor)");
-    File sewd = new File(workingDir, "semeval");
+    File sewd = new File(resultsDir, "semeval");
     if (!sewd.isDirectory()) sewd.mkdir();
     SemaforEval se = new SemaforEval(sewd);
     se.evaluate(testData, hyp, new File(resultsDir, SEMEVAL_RESULTS_FILE));
@@ -211,7 +222,38 @@ public class FinalResults implements Runnable {
     // Dump predictions, for visual inspection
     dumpPlaintextPredictions(hyp, new File(resultsDir, PLAINTEXT_PREDICTIONS));
 
+    compareLatentToSupervisedSyntax();
+
     LOG.info("[run] done");
+  }
+
+  private void compareLatentToSupervisedSyntax() {
+    if (!(parser instanceof LatentConstituencyPipelinedParser)) {
+      LOG.info("[compareLatentToSupervisedSyntax] unsupported parser type: "
+          + parser.getClass().getName());
+      return;
+    }
+    LatentConstituencyPipelinedParser p = (LatentConstituencyPipelinedParser) parser;
+    final int k = 500;  // upper bound on how many parses to run this on
+    List<FNParse> runOn = testData;
+    if (runOn.size() > k)
+      runOn = DataUtil.reservoirSample(runOn, k, rand);
+
+    RoleSpanPruningStage pruning = (RoleSpanPruningStage) p.getPruningStage();
+    boolean useMaxRecallOrig = pruning.useMaxRecallDecoder();
+    for (boolean useMaxRecall : Arrays.asList(true, false)) {
+      pruning.useMaxRecallDecoder(useMaxRecall);
+
+      Mode m1 = Mode.STANFORD_CONSTITUENTS;
+      p.compareLatentToSupervisedSyntax(runOn, m1, true);
+
+      Mode m2 = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
+      if (m2 != m1)
+        p.compareLatentToSupervisedSyntax(runOn, m2, false);
+
+      p.compareLatentToSupervisedSyntax(runOn, Mode.RANDOM, false);
+    }
+    pruning.useMaxRecallDecoder(useMaxRecallOrig);
   }
 
   private void dumpPlaintextPredictions(List<FNParse> hyp, File f) {

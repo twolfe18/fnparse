@@ -37,5 +37,4 @@ public class ParseSelectorTests {
 			System.out.println("\n\tvalue: " + v + "\n");
 		}
 	}
-
 }

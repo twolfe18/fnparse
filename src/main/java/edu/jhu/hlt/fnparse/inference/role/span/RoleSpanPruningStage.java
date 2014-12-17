@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.inference.role.span;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -24,8 +25,10 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.ConstituencyTreeFactor.SpanVar;
 import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
+import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.gm.model.GlobalFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
@@ -51,7 +54,9 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage.ExplicitExpFa
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.fnparse.util.RandomBracketing;
 import edu.jhu.parse.cky.ConstituencyTreeFactorParser;
 import edu.jhu.parse.cky.chart.Chart;
 import edu.jhu.parse.cky.data.BinaryTree;
@@ -124,15 +129,25 @@ public class RoleSpanPruningStage
 
   private boolean allExamplesInMem = false;
   private boolean keepEverything = false;
-	private boolean disallowArgWithoutConstituent = false;
-	private double recallBias = 0.5d;
+  private boolean disallowArgWithoutConstituent = false;
+  private double recallBias = 0.5d;
 
-	private int tooBigForArg = 15;
+  private boolean useMaxRecallDecoder = false;
 
-	private FPR spanRecallAgainstStanford = new FPR(false);
-	public void showSpanRecall() {
-	  LOG.info("[showSpanRecall] micro recall: " + spanRecallAgainstStanford.recall());
-	}
+  private int tooBigForArg = 15;
+
+  public boolean useMaxRecallDecoder() {
+    return useMaxRecallDecoder;
+  }
+  public void useMaxRecallDecoder(boolean cky) {
+    this.useMaxRecallDecoder = cky;
+  }
+
+  private FPR spanRecallAgainstStanford = new FPR(false);
+  public void showSpanRecall() {
+    LOG.info("[showSpanRecall] micro recall: "
+        + spanRecallAgainstStanford.recall());
+  }
 
   public RoleSpanPruningStage(
       GlobalParameters globals,
@@ -196,18 +211,11 @@ public class RoleSpanPruningStage
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
-    return setupInference(input, output, false);
-  }
-
-  public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
-      List<? extends FNTagging> input,
-      List<? extends FNParseSpanPruning> output,
-      boolean showSpanRecall) {
     super.setupInferenceHook(input, output);
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParseSpanPruning g = output == null ? null : output.get(i);
-      data.add(this.new RoleSpanPruningStageDatum(input.get(i), g, showSpanRecall));
+      data.add(this.new RoleSpanPruningStageDatum(input.get(i), g));
     }
     return new StageDatumExampleList<>(data, allExamplesInMem);
   }
@@ -292,15 +300,12 @@ public class RoleSpanPruningStage
       implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
     private FNParseSpanPruning gold;
-    private boolean showSpanRecall = false;
 
     public RoleSpanPruningStageDatum(
         FNTagging input,
-        FNParseSpanPruning gold,
-        boolean showSpanRecall) {
+        FNParseSpanPruning gold) {
       this.input = input;
       this.gold = gold;
-      this.showSpanRecall = showSpanRecall;
     }
 
     @Override
@@ -324,6 +329,9 @@ public class RoleSpanPruningStage
       observeGetExample(input.getId());
       FactorGraph fg = new FactorGraph();
       VarConfig gold = new VarConfig();
+      // Previously I didn't need the RoleVars because they (or their factor)
+      // was directly added to fg; they were only used for decoding.
+      // The same is true now.
       build(fg, gold, null);
       return new LabeledFgExample(fg, gold);
     }
@@ -401,7 +409,7 @@ public class RoleSpanPruningStage
               + " span vars for a sentence of length " + n);
         }
       }
-      if (showSpanRecall && roleVars != null && cykPhi != null)
+      if (roleVars != null && cykPhi != null)
         roleVars.setCkyFactor(cykPhi);
     }
 
@@ -489,8 +497,6 @@ public class RoleSpanPruningStage
 
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
-      if (input.getSentence().size() < 5)
-        LOG.info("test");
       observeGetDecodable(input.getId());
       FactorGraph fg = new FactorGraph();
       PruningVars roleVars = new PruningVars(input.getSentence());
@@ -498,27 +504,32 @@ public class RoleSpanPruningStage
       if (roleVars.size() == 0) {
         // If there are no frames, and thus no roles, then return an
         // empty decodable.
-        final FNParseSpanPruning empty = new FNParseSpanPruning(
-            input.getSentence(),
-            Collections.<FrameInstance>emptyList(),
-            Collections.<FrameInstance, List<Span>>emptyMap());
-        return new IDecodable<FNParseSpanPruning>() {
-          @Override
-          public FNParseSpanPruning decode() {
-            return empty;
-          }
-        };
+        return new NoFramesToPruneDecodable(input.getSentence());
       } else {
         if (keepEverything) {
           ApproxF1MbrDecoder decoder = null;
           return new ThresholdDecodable(
               fg, infFactory(), input, roleVars, decoder);
         } else {
-          RankDecodable rd = new RankDecodable(
-              fg, infFactory(), input, roleVars, recallBias);
-          return rd;
+          if (useMaxRecallDecoder)
+            return new MaxRecallParseDecodable(fg, infFactory(), input, roleVars);
+          else
+            return new RankDecodable(fg, infFactory(), input, roleVars, recallBias);
         }
       }
+    }
+  }
+
+  static class NoFramesToPruneDecodable implements IDecodable<FNParseSpanPruning> {
+    private final FNParseSpanPruning empty;
+    public NoFramesToPruneDecodable(Sentence s) {
+      empty = new FNParseSpanPruning(s,
+          Collections.<FrameInstance>emptyList(),
+          Collections.<FrameInstance, List<Span>>emptyMap());
+    }
+    @Override
+    public FNParseSpanPruning decode() {
+      return empty;
     }
   }
 
@@ -526,20 +537,20 @@ public class RoleSpanPruningStage
     private static final long serialVersionUID = 1L;
     private Sentence sent;
     private ConstituencyTreeFactor ckyFactor = null;
+
     public PruningVars(Sentence sent) {
       this.sent = sent;
     }
+
     public void setCkyFactor(ConstituencyTreeFactor ckyFactor) {
       this.ckyFactor = ckyFactor;
     }
+
     public ConstituencyTreeFactor getCkyFactor() {
       return ckyFactor;
     }
-    public void showSpanRecall(FgInferencer inf) {
-      if (ckyFactor == null)
-        return;
 
-      // Get the spans from the marginals/beliefs
+    public BinaryTree getMaxRecallParse(FgInferencer inf) {
       List<SpanVar> sv = new ArrayList<>();
       List<DenseFactor> beliefs = new ArrayList<>();
       int n = sent.size();
@@ -547,12 +558,25 @@ public class RoleSpanPruningStage
         for (int j = i + 1; j <= n; j++) {
           SpanVar s = ckyFactor.getSpanVar(i, j);
           sv.add(s);
-          beliefs.add(inf.getMarginals(s));
+          DenseFactor df = inf.getMarginals(s);
+          df.logNormalize();
+          beliefs.add(df);
         }
       }
       ConstituencyTreeFactorParser parser = new ConstituencyTreeFactorParser();
       Chart chart = parser.parse(n, sv, beliefs);
-      BinaryTree tree = chart.getViterbiParse().get1();
+      return chart.getViterbiParse().get1();
+    }
+
+    /**
+     * Measures span recall against the Stanford constituency parser.
+     */
+    public void showCkySpanRecallAgainstStanford(FgInferencer inf) {
+      if (ckyFactor == null)
+        return;
+
+      // Get the spans from the marginals/beliefs
+      BinaryTree tree = getMaxRecallParse(inf);
       Set<Span> hyp = new HashSet<>();
       getSpans(tree, hyp);
 
@@ -575,17 +599,224 @@ public class RoleSpanPruningStage
           fn++;
       }
       double recall = ((double) tp) / (tp + fn);
-      LOG.info("[showSpanRecall] on " + sent.getId() + " recall=" + recall
+      LOG.info("[showCkySpanRecallAgainstStanford] on " + sent.getId()
+          + " recall=" + recall
           + " tp=" + tp + " fn=" + fn + " sent.size=" + sent.size()
           + " hyp.size=" + hyp.size() + " gold.size=" + gold.size());
       spanRecallAgainstStanford.accum(tp, 0, fn);
     }
-    private void getSpans(BinaryTree tree, Collection<Span> addTo) {
+
+    public void getSpans(BinaryTree tree, Collection<Span> addTo) {
       if (tree == null)
         return;
       addTo.add(Span.getSpan(tree.getStart(), tree.getEnd()));
       getSpans(tree.getLeftChild(), addTo);
       getSpans(tree.getRightChild(), addTo);
+    }
+  }
+
+  /**
+   * Computes the max recall parse of the entire sentence, using the beliefs/probabilities
+   * learned/inferred from training.
+   *
+   * Currently only supports one best parse, but I believe that I find a way to
+   * extends the Gumbel-max trick to get proper samples from the posterior.
+   * This paper describes the behavior of sums of Gumbels, which is needed to
+   * use the trick (because the weights are distributed across all factors in
+   * the tree rather than in one log-potential per outcome):
+   *   Linear combination of Gumbel random variables (2006)
+   *   Saralees Nadarajah
+   *   http://download.springer.com/static/pdf/778/art%253A10.1007%252Fs00477-006-0063-4.pdf?auth66=1418766985_fc06cbfecf19d097103c8a6d6855d856&ext=.pdf
+   *
+   * Ah, a very stupid, but I believe correct, way of getting samples is to pick
+   * a single factor in the tree and add a Gumbel(0,1) to it.
+   *
+   * NOTE: THIS WILL NOT WORK. The Gumbels need to be IID, which means that even
+   * if you could decompose to edge perterbations, the final result would not be
+   * IID. There was a NIPS paper that did this (approximation).
+   */
+  class MaxRecallParseDecodable extends Decodable<FNParseSpanPruning> {
+    private PruningVars roleVars;
+    private FNTagging input;
+    private FNParseSpanPruning output;  // cache this
+
+    private boolean testCky = false;
+    private boolean showSpans = false;
+
+    public MaxRecallParseDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
+      super(fg, infFact);
+      this.input = input;
+      this.roleVars = roleVars;
+    }
+
+    @Override
+    public FNParseSpanPruning decode() {
+      if (output == null) {
+        FgInferencer margins = getMargins();
+        if (showSpans) {
+          LOG.info("[ckyDecode] factor margins:");
+          for (Factor phi : this.fg.getFactors()) {
+            if (phi instanceof GlobalFactor)
+              LOG.info(phi);
+            else
+              LOG.info(margins.getMarginals(phi));
+          }
+          LOG.info("");
+        }
+        BinaryTree parse = roleVars.getMaxRecallParse(margins);
+        Set<Span> constituents = new HashSet<>();
+        roleVars.getSpans(parse, constituents);
+        assert !constituents.contains(Span.nullSpan);
+        List<Span> options = new ArrayList<>();
+        options.add(Span.nullSpan);
+        options.addAll(constituents);
+        if (showSpans) {
+          Map<Span, Double> beliefs = new HashMap<>();
+          for (Span s : constituents) {
+            SpanVar sv = roleVars.ckyFactor.getSpanVar(s.start, s.end);
+            DenseFactor df = margins.getMarginals(sv);
+            Double old = beliefs.put(s, df.getValue(SpanVar.TRUE));
+            assert old == null;
+          }
+          LOG.info("AFTER CKY PARSING, CHOOSING THE FOLLOWING SPANS:");
+          showSpans("[ckyDecode]", constituents, beliefs, input.getSentence());
+          LOG.info("");
+          // I don't have access to the gold label here...
+    /*
+     * The CKY decoding doesn't seem to be working at all. Perhaps this is
+     * because all of the signal is in the role pruning variables and none in
+     * the constituency variables. To test this, I'm going to compute the
+     * average log-belief of the constituency variables for A) the spans which
+     * are arguments vs B) the spans which are not.
+     */
+        }
+        LOG.info("[MaxRecallParseDecodable] found " + options.size()
+            + " spans (including nullSpan) possible for each of the "
+            + input.numFrameInstances() + " frame instances a sentence of length "
+            + input.getSentence().size() + " (" + input.getSentence().getId() + ")");
+        Map<FrameInstance, List<Span>> possibleArgs = new HashMap<>();
+        for (FrameInstance fi : input.getFrameInstances()) {
+          FrameInstance key = FrameInstance.frameMention(
+              fi.getFrame(), fi.getTarget(), input.getSentence());
+          possibleArgs.put(key, options);
+        }
+        output = new FNParseSpanPruning(input.getSentence(), input.getFrameInstances(), possibleArgs);
+
+        // lets practice adding to a gumbel to the margins
+        // TODO how about I do some sanity checking to make sure that I'm not
+        // mis-using Matt's CKY parser before doing all this Gumbel madness...
+
+        // Here's a test I can run to make sure things are working:
+        // No matter how many random tree's I draw, they should all have a lower
+        // potential than the tree returned by the argmax (CKY).
+        if (testCky) {
+          // score the tree returned by CKY
+          int n = input.getSentence().size();
+          double ckyPotential = potential(
+              constituents, n, input.getSentence(), roleVars.ckyFactor, margins);
+
+          RandomBracketing rbrack = new RandomBracketing(new Random(9001));
+          Set<Span> bracks = new HashSet<>();
+          for (int i = 0; i < 500; i++) {
+            bracks.clear();
+            rbrack.bracket(n, bracks);
+            double randPotential = potential(
+                bracks, n, input.getSentence(), roleVars.ckyFactor, margins);
+            if (ckyPotential + 1e-5 < randPotential) {
+              LOG.info("[MaxRecall decode test] ckyPotential=" + ckyPotential
+                  + " randPotential=" + randPotential);
+              throw new RuntimeException("didn't find best parse...");
+            }
+          }
+        }
+      }
+      return output;
+    }
+
+    /**
+     * I'm cheating here a bit...
+     * I'm not actually using the factors that are touching the constituency
+     * variables, because that information is difficult to get here, but rather
+     * using the beliefs that were computed for the constituency variables,
+     * which should be equivalent (using the assumptions that you always make
+     * for loopy BP).
+     * @param n is the length of the sentence
+     * @param sent can be null
+     */
+    public double potential(
+        Set<Span> constituents,
+        int n,
+        Sentence sent,
+        ConstituencyTreeFactor factors,
+        FgInferencer margins) {
+      VarConfig conf = new VarConfig();
+      double p = 0d;
+      for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j <= n; j++) {
+          SpanVar sv = factors.getSpanVar(i, j);
+          DenseFactor df = margins.getMarginals(sv);
+          double d;
+          if (constituents.contains(Span.getSpan(i, j))) {
+            d = df.getValue(SpanVar.TRUE) - df.getValue(SpanVar.FALSE);
+            conf.put(sv, SpanVar.TRUE);
+          } else {
+            d = df.getValue(SpanVar.FALSE) - df.getValue(SpanVar.TRUE);
+            conf.put(sv, SpanVar.FALSE);
+          }
+          if (Double.isFinite(d)) {
+            p += d;
+          } else if (j - i > 1 && !(i == 0 && j == n)){
+            LOG.warn("infinite potential: " + df);
+            assert false;
+          }
+        }
+      }
+      double t = factors.getUnormalizedScore(conf);
+      if (t != 0d) {
+        LOG.warn("not a tree: " + factors.getUnormalizedScore(conf));
+        showSpans("[potential]", constituents, null, sent);
+        LOG.warn("not a tree? " + t);
+      }
+      p += t;
+      return p;
+    }
+
+    /**
+     * @param beliefs can be null
+     * @param sent can be null
+     */
+    private void showSpans(String msg, Collection<Span> spans, Map<Span, Double> beliefs, Sentence sent) {
+      List<Span> byWidth = new ArrayList<>();
+      byWidth.addAll(spans);
+      Collections.sort(byWidth, new Comparator<Span>() {
+        @Override
+        public int compare(Span o1, Span o2) {
+          if (o1.width() != o2.width())
+            return o1.width() - o2.width();
+          return o1.start - o2.start;
+        }
+      });
+      for (Span s : byWidth) {
+        double w = 0d;
+        if (beliefs != null)
+          w = beliefs.get(s);
+        LOG.info(String.format("%-12s %-12s  %.3f  %d  %s",
+            msg, s, w, s.width(), sent == null ? "???" : Describe.span(s, sent)));
+      }
+      LOG.info(sent);
+    }
+
+    @Override
+    public FgModel getWeights() {
+      return RoleSpanPruningStage.this.getWeights();
+    }
+    @Override
+    public void setWeights(FgModel weights) {
+      throw new UnsupportedOperationException();
+    }
+    @Override
+    public boolean logDomain() {
+      return RoleSpanPruningStage.this.logDomain();
     }
   }
 
@@ -597,6 +828,9 @@ public class RoleSpanPruningStage
     private PruningVars roleVars;
     private FNTagging input;
     private double recallBias;
+
+    private boolean compareRecallAgainstStanford = false;
+    private boolean showSpans = false;
 
     public RankDecodable(
         FactorGraph fg,
@@ -615,7 +849,8 @@ public class RoleSpanPruningStage
     @Override
     public FNParseSpanPruning decode() {
       final FgInferencer inf = this.getMargins();
-      roleVars.showSpanRecall(inf);
+      if (compareRecallAgainstStanford)
+        roleVars.showCkySpanRecallAgainstStanford(inf);
       // Sort the roleVars by (frame,target) then probability
       Collections.sort(roleVars, new Comparator<ArgSpanPruningVar>() {
         @Override
@@ -658,12 +893,17 @@ public class RoleSpanPruningStage
         }
         //LOG.debug(rpv + " has p(prune)=" + inf.getMarginals(rpv).getValue(BinaryVarUtil.boolToConfig(true)));
         if (curKeep.size() < spansToTakeFor(cur.getFrame())) {
-          //LOG.info("KEEP");
+          if (showSpans) {
+            LOG.info("keeping: " + rpv.arg + "\t"
+                + Arrays.toString(input.getSentence().getWordFor(rpv.arg)));
+          }
           curKeep.add(rpv.arg);
         } else {
           //LOG.info("DROP");
         }
       }
+      if (showSpans)
+        LOG.info("thats all folks, full sentence: " + input.getSentence() + "\n");
       List<Span> old = kept.put(cur, curKeep);
       assert old == null;
       return new FNParseSpanPruning(

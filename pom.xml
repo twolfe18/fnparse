@@ -38,7 +38,7 @@
     <dependency>
       <groupId>edu.jhu.hlt.concrete</groupId>
       <artifactId>concrete-stanford</artifactId>
-      <version>3.10.0</version>
+      <version>3.10.1-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>redis.clients</groupId>

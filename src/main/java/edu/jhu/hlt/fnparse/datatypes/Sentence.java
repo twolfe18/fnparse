@@ -38,6 +38,8 @@ public class Sentence implements HasId {
   private String[] pos;
   private String[] lemmas;
 
+  private String[] shapes;
+
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
   private ConstituencyParse stanfordParse;
@@ -134,31 +136,31 @@ public class Sentence implements HasId {
   }
 
   private transient IWord[] wnWords = null;
-	public IWord getWnWord(int i) {
-	  if (wnWords == null) {
-	    wnWords = new IWord[tokens.length];
-	    TargetPruningData tpd = TargetPruningData.getInstance();
-	    IRAMDictionary dict = tpd.getWordnetDict();
-	    WordnetStemmer stemmer = tpd.getStemmer();
-	    for (int idx = 0; idx < tokens.length; idx++) {
-	      edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(idx));
-	      if (tag == null)
-	        continue;
-	      String w = getWord(idx).trim().replace("_", "");
-	      if (w.length() == 0)
-	        continue;
-	      List<String> stems = stemmer.findStems(w, tag);
-	      if (stems == null || stems.size() == 0)
-	        continue;
-	      IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
-	      if (ti == null || ti.getWordIDs().isEmpty())
-	        continue;
-	      IWordID t = ti.getWordIDs().get(0);
-	      wnWords[idx] = dict.getWord(t);
-	    }
-	  }
-	  return wnWords[i];
-	}
+  public IWord getWnWord(int i) {
+    if (wnWords == null) {
+      wnWords = new IWord[tokens.length];
+      TargetPruningData tpd = TargetPruningData.getInstance();
+      IRAMDictionary dict = tpd.getWordnetDict();
+      WordnetStemmer stemmer = tpd.getStemmer();
+      for (int idx = 0; idx < tokens.length; idx++) {
+        edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(idx));
+        if (tag == null)
+          continue;
+        String w = getWord(idx).trim().replace("_", "");
+        if (w.length() == 0)
+          continue;
+        List<String> stems = stemmer.findStems(w, tag);
+        if (stems == null || stems.size() == 0)
+          continue;
+        IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+        if (ti == null || ti.getWordIDs().isEmpty())
+          continue;
+        IWordID t = ti.getWordIDs().get(0);
+        wnWords[idx] = dict.getWord(t);
+      }
+    }
+    return wnWords[i];
+  }
 
   public String[] getWords() {return Arrays.copyOf(tokens, tokens.length);}
   public String getWord(int i) { return tokens[i]; }
@@ -200,6 +202,19 @@ public class Sentence implements HasId {
     for(int i=s.start; i<s.end; i++)
       l.add(tokens[i]);
     return l;
+  }
+
+  public String getShape(int i) {
+    if (shapes == null)
+      return null;
+    return shapes[i];
+  }
+
+  public void setShape(int i, String shape) {
+    if (shapes == null)
+      shapes = new String[this.size()];
+    assert shapes[i] == null : "you would be over-writing a previous shape!";
+    shapes[i] = shape;
   }
 
   public List<String> posIn(Span s) {

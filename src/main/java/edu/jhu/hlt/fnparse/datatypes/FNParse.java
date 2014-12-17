@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,5 +47,24 @@ public class FNParse extends FNTagging {
       }
     }
     return explicit;
+  }
+
+  /**
+   * Convenience method. Doesn't cache/memoize or mutate this instance.
+   *
+   * Only includes non-null roles/args in keys.
+   */
+  public List<FrameArgInstance> getListRepresentation() {
+    List<FrameArgInstance> l = new ArrayList<>();
+    for (FrameInstance fi : this.frameInstances) {
+      Span t = fi.getTarget();
+      Frame f = fi.getFrame();
+      for (int k = 0; k < f.numRoles(); k++) {
+        Span s = fi.getArgument(k);
+        if (s == Span.nullSpan) continue;
+        l.add(new FrameArgInstance(f, t, k, s));
+      }
+    }
+    return l;
   }
 }
