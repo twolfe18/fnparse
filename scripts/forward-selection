@@ -801,7 +801,7 @@ class ConfigJobStarter:
     for s in latent_stages:
       key = 'bpIters.' + s
       if key not in cmd:
-        cmd[key] = '1'
+        cmd[key] = '5'
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
