@@ -307,6 +307,21 @@ public class Runner {
       for (ResultReporter r : reporters)
         r.reportResult(perf, name, config);
     }
+
+    // This runs a more exhaustive set of evaluation criteria
+    String value = config.get("FinalResults");
+    if (value != null) {
+      LOG.info("[run] running FinalResults");
+      String mode = config.get(Parser.PARSER_MODE.getName());
+      int numTrain = -1;
+      try {
+        numTrain = Integer.parseInt(value);
+      } catch (Exception e) {
+        LOG.warn("[run] couldn't convert " + value + " into numTrain (int)");
+      }
+      new FinalResults(workingDir, new Random(9001), mode, numTrain).run();
+    }
+
     LOG.info("[run] done");
   }
 }
