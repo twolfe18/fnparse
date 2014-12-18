@@ -9,6 +9,9 @@
 # -M twolfe18@gmail.com
 # -m as                         # a=aborted b=begining e=end s=suspended
 
+
+# NOTE set this to -Xmx5G for reduce
+
 date
 echo "hostname: $HOSTNAME"
 echo "num args: $#"

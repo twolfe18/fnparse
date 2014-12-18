@@ -52,6 +52,13 @@ $CMD $HEAD_REGULAR head $SEED 0
 $CMD $HEAD_LATENT head $SEED 0
 $CMD $HEAD_NONE head $SEED 0
 
+$CMD $SPAN_REGULAR span $SEED 25000
+$CMD $SPAN_LATENT span $SEED 25000
+$CMD $SPAN_NONE span $SEED 25000
+$CMD $HEAD_REGULAR head $SEED 25000
+$CMD $HEAD_LATENT head $SEED 25000
+$CMD $HEAD_NONE head $SEED 25000
+
 # Start the learning curve jobs
 #for SEED in `seq 100`; do
 #  echo "starting learning curve seed $SEED"
