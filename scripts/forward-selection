@@ -1090,7 +1090,7 @@ def generate_all_features(s1, s2, syntax_mode):
 
 def seeds(parser_mode, syntax_mode, settings, template_info):
   ''' Generator of Configs '''
-  p = 10  # default number of training passes (this value is copied for all runs)
+  p = 5  # default number of training passes (this value is copied for all runs)
   if parser_mode == 'span':
     s1 = 'RoleSpanPruningStage'
     s2 = 'RoleSpanLabelingStage'
@@ -1123,7 +1123,7 @@ def seeds(parser_mode, syntax_mode, settings, template_info):
           fs_smaller = fs_smaller[:k]
           yield Config(FeatureSet(fs_smaller), settings, reg, batch_size, passes)
 
-def experiments(parser_mode, syntax_mode, template_info_filename, max_train=99999):
+def experiments(parser_mode, syntax_mode, template_info_filename, max_train=99999, extra_settings=None):
   ''' Returns a (TemplateInfo, [Config]) '''
   assert parser_mode in ['span', 'head']
   assert syntax_mode in ['regular', 'latent', 'none']
@@ -1139,6 +1139,8 @@ def experiments(parser_mode, syntax_mode, template_info_filename, max_train=9999
     'MaxTrainSize': str(max_train),
     'KpTrainDev': '1\t0.3',
   }
+  if extra_settings:
+    settings.update(extra_settings)
   s1, s2 = stages[parser_mode]
   sd = list(seeds(parser_mode, syntax_mode, settings, template_info))
 
@@ -1156,24 +1158,30 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
-  n_train = 2500
+  #n_train = 2500
   mq = MultiQueue()
-  for parser_mode in ['span', 'head']:
-    for syntax_mode in ['regular', 'latent', 'none']:
-      template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename, max_train=n_train)
-      q_name = "Q_%s_%s" % (parser_mode, syntax_mode)
-      print 'setting up queue for', q_name
-      print template_info
-      print '\n\t'.join(str(c) for c in configs)
+  for n_train in [1000, 2500]:
+    #for parser_mode in ['span', 'head']:
+    for parser_mode in ['span']:
+      for use_cky_decoder in ['true', 'false']:
+        if parser_mode != span and use_cky_decoder != 'false':
+          continue
+        for syntax_mode in ['regular', 'latent', 'none']:
+          template_info, configs = experiments(parser_mode, syntax_mode, \
+            template_info_filename, max_train=n_train, extra_settings={'useCkyDecoder': use_cky_decoder})
+          q_name = "Q_%s_%s_%d" % (parser_mode, syntax_mode, n_train)
+          print 'setting up queue for', q_name
+          print template_info
+          print '\n\t'.join(str(c) for c in configs)
 
-      # Create the config queue
-      max_fs = 5000   # number of feature sets to try
-      mutator = ConfigMutator(template_info)
-      q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
-      assert len(configs) > 0
-      for conf in configs:
-        q.seed(conf)
-      mq.add_queue(q_name, q)
+          # Create the config queue
+          max_fs = 5000   # number of feature sets to try
+          mutator = ConfigMutator(template_info)
+          q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
+          assert len(configs) > 0
+          for conf in configs:
+            q.seed(conf)
+          mq.add_queue(q_name, q)
   return mq
 
 def sweep(starting_config, dimensions_to_sweep):

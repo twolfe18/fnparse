@@ -14,8 +14,8 @@ echo "hostname: $HOSTNAME"
 echo "num args: $#"
 echo "args: $@"
 
-#CP=`find target -type f -name "*.jar" | tr '\n' ':'`
-CP=`find temptarget -type f -name "*.jar" | tr '\n' ':'`
+CP=`find target -type f -name "*.jar" | tr '\n' ':'`
+#CP=`find temptarget -type f -name "*.jar" | tr '\n' ':'`
 echo "classpath: $CP"
 
 java -Xmx11G -ea -server -XX:+UseSerialGC -cp $CP \
