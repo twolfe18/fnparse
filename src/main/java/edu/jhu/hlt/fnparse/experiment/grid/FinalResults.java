@@ -240,9 +240,9 @@ public class FinalResults implements Runnable {
       runOn = DataUtil.reservoirSample(runOn, k, rand);
 
     RoleSpanPruningStage pruning = (RoleSpanPruningStage) p.getPruningStage();
-    boolean useMaxRecallOrig = pruning.useMaxRecallDecoder();
+    boolean useMaxRecallOrig = pruning.useCkyDecoder();
     for (boolean useMaxRecall : Arrays.asList(true, false)) {
-      pruning.useMaxRecallDecoder(useMaxRecall);
+      pruning.useCkyDecoder(useMaxRecall);
 
       Mode m1 = Mode.STANFORD_CONSTITUENTS;
       p.compareLatentToSupervisedSyntax(runOn, m1, true);
@@ -253,7 +253,7 @@ public class FinalResults implements Runnable {
 
       p.compareLatentToSupervisedSyntax(runOn, Mode.RANDOM, false);
     }
-    pruning.useMaxRecallDecoder(useMaxRecallOrig);
+    pruning.useCkyDecoder(useMaxRecallOrig);
   }
 
   private void dumpPlaintextPredictions(List<FNParse> hyp, File f) {

@@ -132,15 +132,15 @@ public class RoleSpanPruningStage
   private boolean disallowArgWithoutConstituent = false;
   private double recallBias = 0.5d;
 
-  private boolean useMaxRecallDecoder = false;
+  private boolean useCkyDecoder = false;
 
   private int tooBigForArg = 15;
 
-  public boolean useMaxRecallDecoder() {
-    return useMaxRecallDecoder;
+  public boolean useCkyDecoder() {
+    return useCkyDecoder;
   }
-  public void useMaxRecallDecoder(boolean cky) {
-    this.useMaxRecallDecoder = cky;
+  public void useCkyDecoder(boolean cky) {
+    this.useCkyDecoder = cky;
   }
 
   private FPR spanRecallAgainstStanford = new FPR(false);
@@ -200,6 +200,13 @@ public class RoleSpanPruningStage
       LOG.info("[configure] set " + key + " = " + value);
       recallBias = Double.parseDouble(value);
       assert recallBias > 0d;
+    }
+
+    key = "useCkyDecoder";
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("[configure] set " + key + " = " + value);
+      useCkyDecoder = Boolean.valueOf(value);
     }
   }
 
@@ -511,8 +518,8 @@ public class RoleSpanPruningStage
           return new ThresholdDecodable(
               fg, infFactory(), input, roleVars, decoder);
         } else {
-          if (useMaxRecallDecoder)
-            return new MaxRecallParseDecodable(fg, infFactory(), input, roleVars);
+          if (useCkyDecoder)
+            return new CkyDecodable(fg, infFactory(), input, roleVars);
           else
             return new RankDecodable(fg, infFactory(), input, roleVars, recallBias);
         }
@@ -616,26 +623,10 @@ public class RoleSpanPruningStage
   }
 
   /**
-   * Computes the max recall parse of the entire sentence, using the beliefs/probabilities
-   * learned/inferred from training.
-   *
-   * Currently only supports one best parse, but I believe that I find a way to
-   * extends the Gumbel-max trick to get proper samples from the posterior.
-   * This paper describes the behavior of sums of Gumbels, which is needed to
-   * use the trick (because the weights are distributed across all factors in
-   * the tree rather than in one log-potential per outcome):
-   *   Linear combination of Gumbel random variables (2006)
-   *   Saralees Nadarajah
-   *   http://download.springer.com/static/pdf/778/art%253A10.1007%252Fs00477-006-0063-4.pdf?auth66=1418766985_fc06cbfecf19d097103c8a6d6855d856&ext=.pdf
-   *
-   * Ah, a very stupid, but I believe correct, way of getting samples is to pick
-   * a single factor in the tree and add a Gumbel(0,1) to it.
-   *
-   * NOTE: THIS WILL NOT WORK. The Gumbels need to be IID, which means that even
-   * if you could decompose to edge perterbations, the final result would not be
-   * IID. There was a NIPS paper that did this (approximation).
+   * Computes the max recall parse of the entire sentence, using the
+   * beliefs/probabilities on the constituency variables learned from training.
    */
-  class MaxRecallParseDecodable extends Decodable<FNParseSpanPruning> {
+  class CkyDecodable extends Decodable<FNParseSpanPruning> {
     private PruningVars roleVars;
     private FNTagging input;
     private FNParseSpanPruning output;  // cache this
@@ -643,7 +634,7 @@ public class RoleSpanPruningStage
     private boolean testCky = false;
     private boolean showSpans = false;
 
-    public MaxRecallParseDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
+    public CkyDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
       super(fg, infFact);
       this.input = input;
       this.roleVars = roleVars;
