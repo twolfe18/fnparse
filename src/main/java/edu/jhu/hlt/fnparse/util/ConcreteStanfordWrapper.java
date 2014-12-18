@@ -40,7 +40,7 @@ public class ConcreteStanfordWrapper {
   private static CachingConcreteStanfordWrapper cachingSingleton;
 
   public static final File cacheDir = new File("experiments/cache-parses");
-  public static final File bdParseCacheFile = new File(cacheDir, "bcParseCache-all.bin");
+  public static final File bdParseCacheFile = new File(cacheDir, "bdParseCache-all.bin");
   public static final File cParseCacheFile = new File(cacheDir, "cParseCache-all.bin");
 
   public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
