@@ -101,9 +101,9 @@ public class RoleSpanLabelingStage
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
     String key = "disallowArgWithoutConstituent." + getName();
-    String c = configuration.get(key);
-    if (c != null) {
-      disallowArgWithoutConstituent = Boolean.valueOf(c);
+    String value = configuration.get(key);
+    if (value != null) {
+      disallowArgWithoutConstituent = Boolean.valueOf(value);
       LOG.info("setting disallowArgWithoutConstituent to "
           + disallowArgWithoutConstituent);
     }

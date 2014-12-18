@@ -191,46 +191,46 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public void configure(Map<String, String> configuration) {
-	  LOG.info("[configure] " + configuration);
-	  String key, value;
+    LOG.info("[configure] " + configuration);
+    String key, value;
 
-	  key = "syntaxMode";
-	  value = configuration.get(key);
-	  if (value != null) {
-	    if ("regular".equals(value)) {
-	      setPruningMethod(DEFAULT_PRUNING_METHOD);
-	    } else {
-	      rolePruning = new RoleSpanPruningStage(globals, "");
-	    }
-	    LOG.info("setting " + key + " = " + value);
-	  }
+    key = "syntaxMode";
+    value = configuration.get(key);
+    if (value != null) {
+      if ("regular".equals(value)) {
+        setPruningMethod(DEFAULT_PRUNING_METHOD);
+      } else {
+        rolePruning = new RoleSpanPruningStage(globals, "");
+      }
+      LOG.info("setting " + key + " = " + value);
+    }
 
-	  key = "learnFrameId";
-	  value = configuration.get(key);
-	  if (value != null) {
-	    LOG.info("setting " + key + " = " + value);
-	    if (Boolean.valueOf(value))
-	      frameId = new FrameIdStage(globals, null);
-	    else
-	      frameId = new OracleStage<>();
-	  }
+    key = "learnFrameId";
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("setting " + key + " = " + value);
+      if (Boolean.valueOf(value))
+        frameId = new FrameIdStage(globals, null);
+      else
+        frameId = new OracleStage<>();
+    }
 
-	  key = "skipArgId";
-	  value = configuration.get(key);
-	  if (value != null) {
-	    LOG.info("setting " + key + " = " + value);
-	    if (Boolean.valueOf(value))
-	      dontDoAnyArgId();
-	    else
-	      LOG.warn(key + " should never have a false value!");
-	  }
+    key = "skipArgId";
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("setting " + key + " = " + value);
+      if (Boolean.valueOf(value))
+        dontDoAnyArgId();
+      else
+        LOG.warn(key + " should never have a false value!");
+    }
 
-	  key = "features";
-	  value = configuration.get(key);
-	  if (value != null) {
-	    setFeatures(value);
-	    LOG.info("setting " + key + " = " + value);
-	  }
+    key = "features";
+    value = configuration.get(key);
+    if (value != null) {
+      setFeatures(value);
+      LOG.info("setting " + key + " = " + value);
+    }
 
     frameId.configure(configuration);
     rolePruning.configure(configuration);
@@ -393,7 +393,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     if (rolePruning == null || !(rolePruning instanceof RoleSpanPruningStage))
       throw new RuntimeException("only call this using a pre-trained latent model");
     LOG.info("[compareLatentToSupervisedSyntaxDebug] parses.size=" + parses.size());
-    boolean mr = ((RoleSpanPruningStage) rolePruning).useMaxRecallDecoder();
+    boolean mr = ((RoleSpanPruningStage) rolePruning).useCkyDecoder();
     String name = "latent-" + (mr ? "maxRecall" : "naive");
     name += " vs " + mode;
     Counts<String> counts = new Counts<>();
