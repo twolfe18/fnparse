@@ -656,7 +656,7 @@ class SgeJobTracker(object):
 
   def can_submit_more_jobs(self):
     try:
-      return len(self.jobs_queued()) < 30
+      return len(self.jobs_queued()) < 10
     except subprocess.CalledProcessError:
       return False
 
@@ -1161,16 +1161,20 @@ def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
   #n_train = 2500
   mq = MultiQueue()
-  for n_train in [1000, 2500]:
-    #for parser_mode in ['span', 'head']:
-    for parser_mode in ['span']:
-      for use_cky_decoder in ['true', 'false']:
-        if parser_mode != span and use_cky_decoder != 'false':
-          continue
-        for syntax_mode in ['regular', 'latent', 'none']:
+  #for parser_mode in ['span', 'head']:
+  for parser_mode in ['span']:
+    q_name = parser_mode
+    for use_cky_decoder in ['true', 'false']:
+      if parser_mode == 'span':
+        q_name += '_cky' + str(use_cky_decoder)
+      elif use_cky_decoder != 'false':
+        continue
+      for syntax_mode in ['regular', 'latent', 'none']:
+        q_name += '_' + syntax_mode
+        for n_train in [1000, 2500]:
+          q_name += '_' + str(n_train)
           template_info, configs = experiments(parser_mode, syntax_mode, \
             template_info_filename, max_train=n_train, extra_settings={'useCkyDecoder': use_cky_decoder})
-          q_name = "Q_%s_%s_%d" % (parser_mode, syntax_mode, n_train)
           print 'setting up queue for', q_name
           print template_info
           print '\n\t'.join(str(c) for c in configs)
