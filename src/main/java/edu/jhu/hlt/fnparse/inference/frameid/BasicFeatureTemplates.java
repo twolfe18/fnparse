@@ -68,9 +68,11 @@ public class BasicFeatureTemplates {
   private static String discretizeWidth(String name, int divisor, int maxCardinality, int width) {
     int w = width / divisor;
     if (w >= maxCardinality-1)
-      return String.format("%s>%d", name, maxCardinality-1);
+      return name + ">" + (maxCardinality-1);
+      //return String.format("%s>%d", name, maxCardinality-1);
     else
-      return String.format("%s=%d", name, w);
+      return name + "=" + w;
+      //return String.format("%s=%d", name, w);
   }
 
   /**
@@ -1084,8 +1086,9 @@ public class BasicFeatureTemplates {
         Span s2 = context.getSpan2();
         if (s2 == null || s2 == Span.nullSpan)
           return null;
-        return String.format("overlap=%s-%s",
-            rel(s1.start, s2.start), rel(s1.end, s2.end));
+        return "overlap=" + rel(s1.start, s2.start) + "-" + rel(s1.end, s2.end);
+        //return String.format("overlap=%s-%s",
+        //    rel(s1.start, s2.start), rel(s1.end, s2.end));
       }
       private String rel(int i, int j) {
         if (i == j) return "E";
