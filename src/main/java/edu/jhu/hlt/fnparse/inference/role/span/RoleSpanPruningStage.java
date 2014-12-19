@@ -11,8 +11,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -132,7 +134,7 @@ public class RoleSpanPruningStage
   private boolean disallowArgWithoutConstituent = false;
   private double recallBias = 0.5d;
 
-  private boolean useCkyDecoder = false;
+  private boolean useCkyDecoder = true;
 
   private int tooBigForArg = 15;
 
@@ -219,6 +221,7 @@ public class RoleSpanPruningStage
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
     super.setupInferenceHook(input, output);
+    LOG.info("[setupInference] useCkyDecoder=" + useCkyDecoder);
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParseSpanPruning g = output == null ? null : output.get(i);
@@ -237,6 +240,9 @@ public class RoleSpanPruningStage
   /**
    * A variable that indicates whether a particular span could potentially be
    * an argument to a given frame (instance/target).
+   *
+   * The semantics of this variable are whether to prune (i.e. if its true, then
+   * this span cannot be an arg).
    */
   static class ArgSpanPruningVar extends Var {
     private static final long serialVersionUID = 1L;
@@ -557,6 +563,23 @@ public class RoleSpanPruningStage
       return ckyFactor;
     }
 
+    /**
+     * More general than the other version, this one lets you pass in arbitrary
+     * beliefs to be used in CKY.
+     */
+    public BinaryTree getMaxRecallParse(Map<Span, DenseFactor> beliefs) {
+      ConstituencyTreeFactorParser parser = new ConstituencyTreeFactorParser();
+      int n = sent.size();
+      List<SpanVar> sv = new ArrayList<>();
+      List<DenseFactor> belList = new ArrayList<>();
+      for (Entry<Span, DenseFactor> x : beliefs.entrySet()) {
+        sv.add(ckyFactor.getSpanVar(x.getKey().start, x.getKey().end));
+        belList.add(x.getValue());
+      }
+      Chart chart = parser.parse(n, sv, belList);
+      return chart.getViterbiParse().get1();
+    }
+
     public BinaryTree getMaxRecallParse(FgInferencer inf) {
       List<SpanVar> sv = new ArrayList<>();
       List<DenseFactor> beliefs = new ArrayList<>();
@@ -614,17 +637,74 @@ public class RoleSpanPruningStage
     }
 
     public void getSpans(BinaryTree tree, Collection<Span> addTo) {
+      getSpans(tree, addTo, null);
+    }
+
+    public void getSpans(BinaryTree tree, Collection<Span> addTo, Set<Span> seen) {
       if (tree == null)
         return;
-      addTo.add(Span.getSpan(tree.getStart(), tree.getEnd()));
-      getSpans(tree.getLeftChild(), addTo);
-      getSpans(tree.getRightChild(), addTo);
+      Span c = Span.getSpan(tree.getStart(), tree.getEnd());
+      if (seen == null || seen.add(c))
+        addTo.add(c);
+      getSpans(tree.getLeftChild(), addTo, seen);
+      getSpans(tree.getRightChild(), addTo, seen);
+    }
+
+    /** returns true if this subtree contains needle */
+    public boolean getSpansXuePalmer(BinaryTree tree, Span needle, Collection<Span> addTo) {
+      BinaryTree l = tree.getLeftChild();
+      BinaryTree r = tree.getRightChild();
+      if (tree.getStart() == needle.start && tree.getEnd() == needle.end) {
+        addTo.add(needle);
+        return true;
+      }
+      if (l != null && l.getStart() <= needle.start && l.getEnd() >= needle.end && getSpansXuePalmer(l, needle, addTo)) {
+        addTo.add(Span.getSpan(r.getStart(), r.getEnd()));
+        return true;
+      }
+      if (r != null && r.getStart() <= needle.start && r.getEnd() >= needle.end && getSpansXuePalmer(r, needle, addTo)) {
+        addTo.add(Span.getSpan(l.getStart(), l.getEnd()));
+        return true;
+      }
+      return false;
     }
   }
+
+  public static final Function<List<DenseFactor>, DenseFactor> BINARY_BELIEF_MAX = dfs -> {
+    DenseFactor accum = new DenseFactor(dfs.get(0));
+    double p = accum.getValue(BinaryVarUtil.boolToConfig(true))
+        - accum.getValue(BinaryVarUtil.boolToConfig(false));
+    for (int i = 1; i < dfs.size(); i++) {
+      DenseFactor df = dfs.get(i);
+      double pa = df.getValue(BinaryVarUtil.boolToConfig(true))
+          - df.getValue(BinaryVarUtil.boolToConfig(false));
+      if (pa > p) {
+        accum.setValue(0, dfs.get(i).getValue(0));
+        accum.setValue(1, dfs.get(i).getValue(1));
+        p = pa;
+      }
+    }
+    accum.logNormalize();
+    return accum;
+  };
+  public static final Function<List<DenseFactor>, DenseFactor> BINARY_BELIEF_AVG = dfs -> {
+    DenseFactor accum = new DenseFactor(dfs.get(0));
+    for (int i = 1; i < dfs.size(); i++) {
+      accum.setValue(0, accum.getValue(0) + dfs.get(i).getValue(0));
+      accum.setValue(1, accum.getValue(1) + dfs.get(i).getValue(1));
+    }
+    accum.logNormalize();
+    return accum;
+  };
 
   /**
    * Computes the max recall parse of the entire sentence, using the
    * beliefs/probabilities on the constituency variables learned from training.
+   *
+   * It appears that the margins on the span variables is not very informative,
+   * and the parses are no better than drawing a random tree. I'm going to try
+   * to push some of that information from the observed variables into the
+   * constituency beliefs.
    */
   class CkyDecodable extends Decodable<FNParseSpanPruning> {
     private PruningVars roleVars;
@@ -633,6 +713,12 @@ public class RoleSpanPruningStage
 
     private boolean testCky = false;
     private boolean showSpans = false;
+    private boolean showFactors = false;
+
+    // If this is null, then use only the beliefs from the constituency vars
+    // NOTE: max does a little better than just span beliefs, but worse than avg
+    private Function<List<DenseFactor>, DenseFactor> beliefAccumulator = BINARY_BELIEF_AVG;
+    private boolean useXuePalmer = false; // doesn't appear to work
 
     public CkyDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
       super(fg, infFact);
@@ -643,8 +729,29 @@ public class RoleSpanPruningStage
     @Override
     public FNParseSpanPruning decode() {
       if (output == null) {
+
+        // Get margins and normalize them
         FgInferencer margins = getMargins();
-        if (showSpans) {
+        for (ArgSpanPruningVar aspv : roleVars) {
+          DenseFactor df = margins.getMarginals(aspv);
+          //if (verbose) LOG.info("[aspv] before: " + df);
+          df.logNormalize();
+          //if (verbose) LOG.info("[aspv] after: " + df);
+        }
+        SpanVar[][] svars = roleVars.ckyFactor.getSpanVars();
+        for (int i = 0; i < svars.length; i++) {
+          for (int j = 0; j < svars[i].length; j++) {
+            SpanVar sv = svars[i][j];
+            if (sv != null) {
+              DenseFactor df = margins.getMarginals(sv);
+              //if (verbose) LOG.info("[sv] before: " + df);
+              df.logNormalize();
+              //if (verbose) LOG.info("[sv] after: " + df);
+            }
+          }
+        }
+
+        if (showFactors) {
           LOG.info("[ckyDecode] factor margins:");
           for (Factor phi : this.fg.getFactors()) {
             if (phi instanceof GlobalFactor)
@@ -654,54 +761,84 @@ public class RoleSpanPruningStage
           }
           LOG.info("");
         }
-        BinaryTree parse = roleVars.getMaxRecallParse(margins);
-        Set<Span> constituents = new HashSet<>();
-        roleVars.getSpans(parse, constituents);
-        assert !constituents.contains(Span.nullSpan);
-        List<Span> options = new ArrayList<>();
-        options.add(Span.nullSpan);
-        options.addAll(constituents);
-        if (showSpans) {
-          Map<Span, Double> beliefs = new HashMap<>();
-          for (Span s : constituents) {
-            SpanVar sv = roleVars.ckyFactor.getSpanVar(s.start, s.end);
-            DenseFactor df = margins.getMarginals(sv);
-            Double old = beliefs.put(s, df.getValue(SpanVar.TRUE));
-            assert old == null;
+
+        BinaryTree parse;
+        if (beliefAccumulator != null) {
+          // Add constituency beliefs
+          Map<Span, List<DenseFactor>> spanBeliefs = new HashMap<>();
+          for (int i = 0; i < svars.length; i++) {
+            for (int j = 0; j < svars[i].length; j++) {
+              SpanVar sv = svars[i][j];
+              if (sv != null) {
+                Span s = Span.getSpan(sv.getStart(), sv.getEnd());
+                DenseFactor df = margins.getMarginals(sv);
+                assert df.size() == 2;
+                List<DenseFactor> bel = new ArrayList<>();
+                bel.add(df);
+                spanBeliefs.put(s, bel);
+              }
+            }
           }
-          LOG.info("AFTER CKY PARSING, CHOOSING THE FOLLOWING SPANS:");
-          showSpans("[ckyDecode]", constituents, beliefs, input.getSentence());
-          LOG.info("");
-          // I don't have access to the gold label here...
-    /*
-     * The CKY decoding doesn't seem to be working at all. Perhaps this is
-     * because all of the signal is in the role pruning variables and none in
-     * the constituency variables. To test this, I'm going to compute the
-     * average log-belief of the constituency variables for A) the spans which
-     * are arguments vs B) the spans which are not.
-     */
+          // Add role var beliefs
+          for (ArgSpanPruningVar aspv : roleVars) {
+            DenseFactor df = margins.getMarginals(aspv);
+            assert df.size() == 2;
+            DenseFactor dfFlip = new DenseFactor(df);
+            dfFlip.setValue(0, df.getValue(1));
+            dfFlip.setValue(1, df.getValue(0));
+            spanBeliefs.get(aspv.arg).add(dfFlip);
+          }
+          // Accumulate
+          Map<Span, DenseFactor> accumulated = new HashMap<>();
+          for (Entry<Span, List<DenseFactor>> x : spanBeliefs.entrySet()) {
+            DenseFactor accum = beliefAccumulator.apply(x.getValue());
+            accumulated.put(x.getKey(), accum);
+            if (showSpans) {
+              LOG.info(String.format("[ckyDecode accum] %s %s => %s", x.getKey(),
+                  Arrays.toString(input.getSentence().getWordFor(x.getKey())), accum.toString()));
+            }
+          }
+          parse = roleVars.getMaxRecallParse(accumulated);
+        } else {
+          // Let roleVars use the margins on the span vars
+          parse = roleVars.getMaxRecallParse(margins);
         }
-        LOG.info("[MaxRecallParseDecodable] found " + options.size()
-            + " spans (including nullSpan) possible for each of the "
-            + input.numFrameInstances() + " frame instances a sentence of length "
-            + input.getSentence().size() + " (" + input.getSentence().getId() + ")");
+
         Map<FrameInstance, List<Span>> possibleArgs = new HashMap<>();
         for (FrameInstance fi : input.getFrameInstances()) {
           FrameInstance key = FrameInstance.frameMention(
               fi.getFrame(), fi.getTarget(), input.getSentence());
+
+          List<Span> options = new ArrayList<>();
+          options.add(Span.nullSpan);
+          if (useXuePalmer)
+            roleVars.getSpansXuePalmer(parse, fi.getTarget(), options);
+          else
+            roleVars.getSpans(parse, options, new HashSet<>());
+
           possibleArgs.put(key, options);
+
+          if (showSpans && beliefAccumulator == null) {
+            // Show beliefs of constituency variables
+            Map<Span, Double> beliefs = new HashMap<>();
+            for (Span s : options) {
+              if (s == Span.nullSpan) continue;
+              SpanVar sv = roleVars.ckyFactor.getSpanVar(s.start, s.end);
+              DenseFactor df = margins.getMarginals(sv);
+              Double old = beliefs.put(s, df.getValue(SpanVar.TRUE));
+              assert old == null;
+            }
+            LOG.info("AFTER CKY PARSING, CHOOSING THE FOLLOWING SPANS:");
+            showSpans("[ckyDecode]", options, beliefs, input.getSentence());
+            LOG.info("");
+          }
         }
         output = new FNParseSpanPruning(input.getSentence(), input.getFrameInstances(), possibleArgs);
 
-        // lets practice adding to a gumbel to the margins
-        // TODO how about I do some sanity checking to make sure that I'm not
-        // mis-using Matt's CKY parser before doing all this Gumbel madness...
-
-        // Here's a test I can run to make sure things are working:
-        // No matter how many random tree's I draw, they should all have a lower
-        // potential than the tree returned by the argmax (CKY).
         if (testCky) {
           // score the tree returned by CKY
+          Set<Span> constituents = new HashSet<>();
+          roleVars.getSpans(parse, constituents);
           int n = input.getSentence().size();
           double ckyPotential = potential(
               constituents, n, input.getSentence(), roleVars.ckyFactor, margins);
@@ -789,7 +926,7 @@ public class RoleSpanPruningStage
       });
       for (Span s : byWidth) {
         double w = 0d;
-        if (beliefs != null)
+        if (beliefs != null && s != Span.nullSpan)
           w = beliefs.get(s);
         LOG.info(String.format("%-12s %-12s  %.3f  %d  %s",
             msg, s, w, s.width(), sent == null ? "???" : Describe.span(s, sent)));
