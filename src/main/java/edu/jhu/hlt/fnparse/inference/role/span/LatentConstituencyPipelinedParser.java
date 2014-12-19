@@ -225,11 +225,24 @@ public class LatentConstituencyPipelinedParser implements Parser {
         LOG.warn(key + " should never have a false value!");
     }
 
+    key = "oneStage";
+    value = configuration.get(key);
+    if (value != null) {
+      LOG.info("setting " + key + " = " + value);
+      if (rolePruning instanceof RoleSpanPruningStage) {
+        ((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
+      } else {
+        RoleSpanPruningStage rp = new RoleSpanPruningStage(globals, "");
+        rp.dontDoAnyPruning();
+        rolePruning = rp;
+      }
+    }
+
     key = "features";
     value = configuration.get(key);
     if (value != null) {
-      setFeatures(value);
       LOG.info("setting " + key + " = " + value);
+      setFeatures(value);
     }
 
     frameId.configure(configuration);

@@ -1164,27 +1164,31 @@ def forward_selection_queue(template_info_filename):
   #for parser_mode in ['span', 'head']:
   for parser_mode in ['span']:
     for use_cky_decoder in ['true', 'false']:
-      for syntax_mode in ['regular', 'latent', 'none']:
-        for n_train in [1000, 2500]:
-          q_name = "%s-%s-%d" % (parser_mode, syntax_mode, n_train)
-          if parser_mode == 'span' and syntax_mode == 'latent':
-            q_name = "%s-%s-%s-%d" % (parser_mode, syntax_mode, use_cky_decoder, n_train)
-          elif use_cky_decoder != 'false':
+      for one_stage in ['true', 'false']:
+        for syntax_mode in ['regular', 'latent', 'none']:
+          if one_stage == 'true' and syntax_mode == 'regular':
             continue
-          template_info, configs = experiments(parser_mode, syntax_mode, \
-            template_info_filename, max_train=n_train, extra_settings={'useCkyDecoder': use_cky_decoder})
-          print 'setting up queue for', q_name
-          print template_info
-          print '\n\t'.join(str(c) for c in configs)
+          for n_train in [1000, 3000]:
+            q_name = "%s-%s-%s-%s-%d" % (parser_mode, syntax_mode, one_stage, use_cky_decoder, n_train)
+            if not (parser_mode == 'span' and syntax_mode == 'latent') and use_cky_decoder != 'false':
+              continue
+            template_info, configs = experiments(parser_mode, syntax_mode, \
+              template_info_filename, max_train=n_train, \
+              extra_settings={ \
+                'useCkyDecoder': use_cky_decoder, \
+                'oneStage': one_stage})
+            print 'setting up queue for', q_name
+            print template_info
+            print '\n\t'.join(str(c) for c in configs)
 
-          # Create the config queue
-          max_fs = 5000   # number of feature sets to try
-          mutator = ConfigMutator(template_info)
-          q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
-          assert len(configs) > 0
-          for conf in configs:
-            q.seed(conf)
-          mq.add_queue(q_name, q)
+            # Create the config queue
+            max_fs = 5000   # number of feature sets to try
+            mutator = ConfigMutator(template_info)
+            q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
+            assert len(configs) > 0
+            for conf in configs:
+              q.seed(conf)
+            mq.add_queue(q_name, q)
   return mq
 
 def sweep(starting_config, dimensions_to_sweep):
