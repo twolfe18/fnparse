@@ -48,6 +48,7 @@ public class FNParseSpanPruning extends FNTagging {
       //  assert false;
       List<Span> spans = possibleArgs.get(key);
       assert spans != null; // see above
+      Set<Span> seen = new HashSet<>();
       boolean foundNS = false;
       for (Span sp : spans) {
         foundNS |= sp == Span.nullSpan;
@@ -55,6 +56,7 @@ public class FNParseSpanPruning extends FNTagging {
           LOG.warn(sp + " cannot fit in a sentence of length "+ s.size() + " (" + s.getId() + ")");
           //assert false;
         }
+        assert seen.add(sp);
       }
       assert foundNS;
     }

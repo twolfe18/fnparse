@@ -53,8 +53,12 @@ public class ConcreteStanfordWrapper {
     } else {
       if (nonCachingSingleton == null) {
         nonCachingSingleton = new CachingConcreteStanfordWrapper(bdParseCacheFile, cParseCacheFile, false);
-        if (bdParseCacheFile.isFile() && cParseCacheFile.isFile())
+        if (bdParseCacheFile.isFile() && cParseCacheFile.isFile()) {
           nonCachingSingleton.load();
+        } else {
+          LOG.warn("[load] not loading because one of the following doesn't exist:\n"
+              + bdParseCacheFile.getPath() + "\n" + cParseCacheFile.getPath());
+        }
       }
       return nonCachingSingleton;
     }
