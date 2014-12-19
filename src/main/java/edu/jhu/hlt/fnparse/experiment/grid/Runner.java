@@ -283,8 +283,14 @@ public class Runner {
         perfSum += perf;
       }
       double perf = perfSum / K;
-      for (ResultReporter r : reporters)
-        r.reportResult(perf, name, config);
+      for (ResultReporter r : reporters) {
+        try {
+          r.reportResult(perf, name, config);
+        } catch (Exception e) {
+          e.printStackTrace();
+          LOG.warn("failed to report " + perf + " to " + r);
+        }
+      }
       File trainDevModelDir = new File(workingDir, "trainDevModel");
       if (!trainDevModelDir.isDirectory())
         trainDevModelDir.mkdir();

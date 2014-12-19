@@ -128,6 +128,7 @@ public class RoleSpanPruningStage
   public static final Logger LOG = Logger.getLogger(RoleSpanPruningStage.class);
 
   public static boolean SHOW_FEATURES = false;
+  public static String DUMMY_VAR_NAME = "".intern();
 
   private boolean allExamplesInMem = false;
   private boolean keepEverything = false;
@@ -215,6 +216,9 @@ public class RoleSpanPruningStage
   public void dontDoAnyPruning() {
     keepEverything = true;
   }
+  public boolean keepingEverything() {
+    return keepEverything;
+  }
 
   @Override
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
@@ -256,6 +260,7 @@ public class RoleSpanPruningStage
     }
     public ArgSpanPruningVar(Span arg, Frame frame, Span target) {
       super(VarType.PREDICTED, 2,
+          DUMMY_VAR_NAME != null ? DUMMY_VAR_NAME :
           String.format("r_{%s @ %d-%d has arg @ %d-%d}",
               frame.getName(), target.start, target.end,
               arg.start, arg.end),
