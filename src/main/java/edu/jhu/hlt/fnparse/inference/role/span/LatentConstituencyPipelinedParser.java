@@ -229,12 +229,17 @@ public class LatentConstituencyPipelinedParser implements Parser {
     value = configuration.get(key);
     if (value != null) {
       LOG.info("setting " + key + " = " + value);
-      if (rolePruning instanceof RoleSpanPruningStage) {
-        ((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
+      if (Boolean.valueOf(value)) {
+        if (rolePruning instanceof RoleSpanPruningStage) {
+          ((RoleSpanPruningStage) rolePruning).dontDoAnyPruning();
+        } else {
+          RoleSpanPruningStage rp = new RoleSpanPruningStage(globals, "");
+          rp.dontDoAnyPruning();
+          rolePruning = rp;
+        }
       } else {
-        RoleSpanPruningStage rp = new RoleSpanPruningStage(globals, "");
-        rp.dontDoAnyPruning();
-        rolePruning = rp;
+        assert !(rolePruning instanceof RoleSpanPruningStage)
+          || !((RoleSpanPruningStage) rolePruning).keepingEverything();
       }
     }
 

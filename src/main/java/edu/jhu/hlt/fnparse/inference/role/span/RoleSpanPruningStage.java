@@ -215,6 +215,9 @@ public class RoleSpanPruningStage
   public void dontDoAnyPruning() {
     keepEverything = true;
   }
+  public boolean keepingEverything() {
+    return keepEverything;
+  }
 
   @Override
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
