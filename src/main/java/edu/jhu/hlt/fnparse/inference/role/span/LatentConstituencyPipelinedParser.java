@@ -56,7 +56,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
       Logger.getLogger(LatentConstituencyPipelinedParser.class);
   public static final DeterministicRolePruning.Mode DEFAULT_PRUNING_METHOD =
       Mode.XUE_PALMER_HERMANN;
-  public static boolean SHOW_SPAN_RECALL = true;
+  public boolean SHOW_SPAN_RECALL = true;
+  public boolean SHOW_PRUNING_PROPERTIES = true;
 
   private GlobalParameters globals;
   private Stage<Sentence, FNTagging> frameId;
@@ -76,6 +77,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
     frameId = new OracleStage<>();
     setPruningMethod(DEFAULT_PRUNING_METHOD);
     roleLabeling = new RoleSpanLabelingStage(globals, "");
+  }
+
+  public void quiet() {
+    SHOW_PRUNING_PROPERTIES = false;
+    SHOW_SPAN_RECALL = false;
   }
 
   public Stage<FNTagging, FNParseSpanPruning> getPruningStage() {
@@ -381,7 +387,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
     // For each FrameRoleInstance, if we included the correct span, what was
     // the precision?
-    if (hyp != null) {
+    if (hyp != null && gold != null) {
       FPR labelPerf = new FPR(false);
       for (int i = 0; i < gold.size(); i++) {
         FNParseSpanPruning mask = prunes.get(i);
@@ -497,7 +503,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
       parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
-      showPruningProperties(rolePruning.getName(), prunes, parses, gold);
+      if (SHOW_PRUNING_PROPERTIES)
+        showPruningProperties(rolePruning.getName(), prunes, parses, gold);
     }
 
     long totalTime = System.currentTimeMillis() - start;

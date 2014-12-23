@@ -32,20 +32,28 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 
 /**
- * TODO add 1-best annotations.
- * TODO define and add "high recall" annotations.
+ * Runs the fnparse model to annotate (input and output) Concrete Communications
  * 
  * @author travis
  */
 public class FNAnnotator implements DummyAnnotator {
   public static final Logger LOG = Logger.getLogger(FNAnnotator.class);
 
-  public static File frameIdModel =
-      new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/frameId.ser.gz");
-  public static File roleLabelingModel =
-      new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/roleLabel.ser.gz");
-  public static int kBest = 5;
-  public static boolean includeSituationMentionText = true;
+  // Location of the model to use (should be span-regular)
+  public File bestRegularModelDir = new File(
+      "/home/hltcoe/twolfe/fnparse/saved-models/agiga/best-regular-model/trainDevModel");
+
+  // If 1, then only add the 1-best parse, otherwise take the top kBest spans
+  // for every (frame,target,role). The frameId model is also set to have higher
+  // recall, but does so based on score rather than taking a true top-k.
+  // This can lead to a lot of annotations!
+  public int kBest = 5;
+
+  // If true, will set the text field for SitutationMentions
+  public boolean includeSituationMentionText = true;
+
+  // Will front-load some loading from disk into init()
+  public boolean attemptToPreloadResources = false;
 
   private LatentConstituencyPipelinedParser parser;
   private ConcreteUUIDFactory uuidFactory;
@@ -56,13 +64,15 @@ public class FNAnnotator implements DummyAnnotator {
 
     LOG.info("loading models...");
     parser = new LatentConstituencyPipelinedParser();
-    parser.loadFrameIdStage(frameIdModel);
-    parser.loadRoleSpanLabelingStage(roleLabelingModel);
+    parser.quiet();
+    parser.setFrameIdStage(new FrameIdStage(parser.getGlobalParameters(), ""));
+    parser.loadModel(bestRegularModelDir);
 
     if (kBest > 1) {
-      LOG.info("setting high recall mode on");
+      LOG.info("setting high recall mode on, kBest=" + kBest);
       FrameIdStage fid = (FrameIdStage) parser.getFrameIdStage();
-      double recallBias = 8d / (10d + kBest);
+      double smooth = 8d;
+      double recallBias = ((kBest + smooth) / smooth) * fid.getDecoder().getRecallBias();
       fid.configure("recallBias.FrameIdStage", String.valueOf(recallBias));
       RoleSpanLabelingStage rsl = parser.getRoleLabelingStage();
       rsl.maxSpansPerArg = kBest;
@@ -170,13 +180,11 @@ public class FNAnnotator implements DummyAnnotator {
   }
 
   public static void main(String[] args) throws Exception {
-    if (args.length == 2) {
-      frameIdModel = new File(args[0]);
-      roleLabelingModel = new File(args[1]);
-      assert frameIdModel.isFile();
-      assert roleLabelingModel.isFile();
-    }
     FNAnnotator anno = new FNAnnotator();
+    if (args.length == 1) {
+      anno.bestRegularModelDir = new File(args[0]);
+      assert anno.bestRegularModelDir.isDirectory();
+    }
     anno.init();
     File f = new File("agiga2/input-data/concrete-3.8.0-post-stanford");
     assert f.isDirectory();

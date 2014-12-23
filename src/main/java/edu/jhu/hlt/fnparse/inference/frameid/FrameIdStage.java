@@ -57,6 +57,10 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
     super(globals, featureTemplateString);
   }
 
+  public ApproxF1MbrDecoder getDecoder() {
+    return decoder;
+  }
+
   @Override
   public void loadModel(DataInputStream dis, GlobalParameters globals) {
     super.loadModel(dis, globals);
