@@ -33,8 +33,8 @@ public class FNTagging implements HasId, HasSentence {
     for(FrameInstance fi : frameMentions) {
       FrameInstance collision = seenTargets.get(fi.getTarget());
       if (collision != null) {
-        LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
-            + ":" + collision + ", " + fi);
+        //LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
+        //    + ":" + collision + ", " + fi);
         // Keep the one with more arguments
         if (fi.numRealizedArguments() > collision.numRealizedArguments()) {
           seenTargets.put(fi.getTarget(), fi);
