@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.rl;
 
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -74,103 +74,55 @@ public class State {
     }
   }
 
-  private FNTagging frames;
-  private Span[][] committed;       // indexed by [frameIndex][role]
-  private boolean[][][][] possible; // indexed by [frameIndex][role][start][end]
-  private int numPossible;
-  private int movesApplied;
-
-  public State(State copy) {
-    frames = copy.frames;
-    committed = new Span[copy.committed.length][];
-    for (int i = 0; i < committed.length; i++) {
-      if (copy.committed[i] == null) continue;
-      committed[i] = Arrays.copyOf(copy.committed[i], copy.committed[i].length);
-    }
-    int I = copy.possible.length;
-    possible = new boolean[I][][][];
-    for (int i = 0; i < possible.length; i++) {
-      int J = copy.possible[i].length;
-      possible[i] = new boolean[J][][];
-      for (int j = 0; j < J; j++) {
-        if (copy.possible[i][j] == null)
-          continue;
-        int K = copy.possible[i][j].length;
-        possible[i][j] = new boolean[K][];
-        for (int k = 0; k < K; k++) {
-          int L = copy.possible[i][j][k].length;
-          possible[i][j][k] = new boolean[L];
-          System.arraycopy(copy.possible[i][j][k], 0, possible[i][j][k], 0, L);
-        }
+  interface StateIndex {
+    public int index(int t, int k, int start, int end);
+    // TODO include other methods like eliminate all possibilities that match
+    // pieces of (t,k,start,end), e.g. "all spans more than 10 words from t"
+    // TODO this means that the bitset will need to be internal to this class.
+  }
+  static class SpanMajorStateIndex implements StateIndex {
+    private int n;
+    private int TK;
+    private int[] Toffset;
+    public SpanMajorStateIndex(List<FrameInstance> fis, int n) {
+      this.n = n;
+      Toffset = new int[fis.size()];
+      TK = 0;
+      for (int i = 0; i < Toffset.length; i++) {
+        Toffset[i] = TK;
+        int k = fis.get(i).getFrame().numRoles();
+        TK += k;
       }
     }
-    numPossible = copy.numPossible;
-    movesApplied = copy.movesApplied;
+    @Override
+    public int index(int t, int k, int start, int end) {
+      assert start >= 0 && start < end && end <= n;
+      int tk = Toffset[t] + k;
+      int sk = n * start + end;
+      return sk * TK + tk;
+    }
+    // TODO inverse
+  }
+
+  private FNTagging frames;
+  private int movesApplied;
+  private StateIndex stateIndex;
+  private BitSet possible;
+
+  public State(State copy) {
+    this.frames = copy.frames;
+    this.movesApplied = copy.movesApplied;
+    this.stateIndex = copy.stateIndex;
+    this.possible = new BitSet(copy.possible.size());
+    this.possible.or(copy.possible);
   }
 
   public State(FNTagging frames) {
-    this.movesApplied = 0;
     this.frames = frames;
-    int t = frames.numFrameInstances();
+    this.movesApplied = 0;
     int n = frames.getSentence().size();
-    numPossible++;
-    possible = new boolean[t][][][];
-    committed = new Span[t][];
-    for (int fi = 0; fi < t; fi++) {
-      Frame f = frames.getFrameInstance(fi).getFrame();
-      int K = f.numRoles();
-      possible[fi] = new boolean[K][n][n+1];
-      committed[fi] = new Span[K];
-      for (int k = 0; k < K; k++) {
-        for (int i = 0; i < n; i++) {
-          for (int j = 0; j <= n; j++) {
-            boolean poss = i < j && !overlapsATarget(i, j);
-            possible[fi][k][i][j] = poss;
-            if (poss) numPossible++;
-          }
-        }
-      }
-    }
-  }
-
-  /** TODO rebuild one of these with a BitSet */
-  interface StateIndex {
-    public boolean possible(int t, int k, int start, int end);
-    // ah, i should make this one big bitset
-    // that doesn't solve the problem of how to find the next 1, oh wait, yes it does
-    // N^2 * T * K
-    // lets say for a big sentence: 50^2 * 30 * 10 bits < 94 kbytes
-    // L1 cache is typically 64 kbytes, L2 is ~256K-1M
-
-    // While this is nice, it is not the solution to my problems!
-    // The only thing that is going to make the slightest of differences is how
-    // many function evaluations I make.
-    // Since the number of options is very large, I either need to make coarser
-    // decisions OR know which decisions can be ignored at first.
-    // state: {possible actions}
-    // HOME: {open(t), finalize(t)}
-    // ok, i sketched these and there are many ways to decompose the action space
-    //
-    // i think the real question is how to train this damn thing!
-    // even if I give a value for every state (no learning there), and I do
-    // epsilon-greedy action selection, it will take an extremely long time for
-    // the model to learn that there are any other useful actions than
-    // "predict nullSpan for all t and k"
-    // I need to be able to show the model what the good choices are, and make
-    // sure that it attempts to learn them.
-    // I'm not comfortable with my ability to write an oracle that can always
-    // choose the best action (I would prefer to learn this), but perhaps I'm
-    // more comfortable with writing a state value function.
-    // If I could give an oracle that gives a diverse set of actions to apply,
-    // then score them with the state value function, then write a loss function
-    // such that the model has to reproduce those values/relations/ranking...
-
-    // I think what I'm onto is a little bit like NCE for a larger state space.
-    // NCE was made for cases where there are a lot of states to normalize over
-    // do do proper MLE. This RL business is worse than structured prediction
-    // though, because you not only have the same large state space (in the
-    // sense of space of labelings) that you had before you also have a huge
-    // number of ways to get to each label.
+    this.stateIndex = new SpanMajorStateIndex(frames.getFrameInstances(), n);
+    this.possible = new BitSet();
   }
 
   public FNParse decode() {

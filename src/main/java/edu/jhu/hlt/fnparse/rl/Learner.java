@@ -21,11 +21,18 @@ import edu.jhu.hlt.fnparse.util.DataSplitter;
 public class Learner {
   public static final Logger LOG = Logger.getLogger(Learner.class);
 
+  /**
+   * wraps the result of a forward pass, which is often needed for computing a
+   * gradient.
+   */
   public interface Adjoints {
     public double getScore();
     public Action getAction();
   }
 
+  /**
+   * parameterizes a score function on (state,action) pairs
+   */
   public interface Params {
     /**
      * Q-function, score of a action from a state
