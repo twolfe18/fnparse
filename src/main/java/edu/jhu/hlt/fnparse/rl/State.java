@@ -101,7 +101,19 @@ public class State {
       int sk = n * start + end;
       return sk * TK + tk;
     }
-    // TODO inverse
+    // TODO inverse of index.
+  }
+
+  public static class StateWithBackPointer extends State {
+    private StateWithBackPointer prev;
+    public StateWithBackPointer(FNTagging frames) {
+      super(frames);
+      prev = null;
+    }
+    public StateWithBackPointer(StateWithBackPointer prev) {
+      super(prev);
+      this.prev = prev;
+    }
   }
 
   private FNTagging frames;
