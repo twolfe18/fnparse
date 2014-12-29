@@ -49,7 +49,17 @@ public class ASpan {
     this.start = start;
     this.end = end;
   }
-  
+
+  public ASpan(Span s) {
+    if (s == Span.nullSpan) {
+      start = NULL_SPAN;
+      end = -999;
+    } else {
+      start = s.start;
+      end = s.end;
+    }
+  }
+
   public String toString() {
     if (isNormalSpan())
       return start + "-" + end;

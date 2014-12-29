@@ -27,101 +27,28 @@ import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
  */
 public class State {
 
-  /**
-   * represents a constraint on the set of arguments a particular
-   * (frame,target,role) can take on.
-   * 
-   * TODO generalize this further, but for now I want to get it working with
-   * only COMMIT actions (i.e. choosing a span -- including nullSpan -- for a 
-   * frame-role).
-   */
-  public static class Action {
-    public static final int COMMIT = 0;   // use the span value of aspan
-    //public static final int KEEP = 1;     // exclude all spans in aspan
-    //public static final int PRUNE = 2;    // include all spans in aspan
-
-    public int t;          // (frame,target)
-    public int k;          // role
-    public int mode;
-    public ASpan aspan;
-
-    public Action(int t, int k, int mode, ASpan aspan) {
-      this.t = t;
-      this.k = k;
-      this.mode = mode;
-      this.aspan = aspan;
-    }
-
-    public boolean includes(Span s) {
-      assert aspan.start >= 0 : "add special semantics versions";
-      return aspan.start <= s.start && aspan.end >= s.end;
-    }
-
-    public boolean matches(Span s) {
-      return s.start == aspan.end && s.end == s.end;
-    }
-
-    public String toString() {
-      String m = mode == COMMIT ? "COMMIT" : "???";
-      return String.format("[Action(%s) t=%d k=%d %s]", m, t, k, aspan);
-    }
-
-    public String toString(State s) {
-      FrameInstance fi = s.getFrameInstance(t);
-      Frame f = fi.getFrame();
-      String m = mode == COMMIT ? "COMMIT" : "???";
-      return String.format("[Action(%s) frame=%s@%d role=%s: %s]",
-          m, f.getName(), fi.getTarget().start, f.getRole(k), aspan);
-    }
-  }
-
-  interface StateIndex {
-    public int index(int t, int k, int start, int end);
-    // TODO include other methods like eliminate all possibilities that match
-    // pieces of (t,k,start,end), e.g. "all spans more than 10 words from t"
-    // TODO this means that the bitset will need to be internal to this class.
-  }
-  static class SpanMajorStateIndex implements StateIndex {
-    private int n;
-    private int TK;
-    private int[] Toffset;
-    public SpanMajorStateIndex(List<FrameInstance> fis, int n) {
-      this.n = n;
-      Toffset = new int[fis.size()];
-      TK = 0;
-      for (int i = 0; i < Toffset.length; i++) {
-        Toffset[i] = TK;
-        int k = fis.get(i).getFrame().numRoles();
-        TK += k;
-      }
-    }
-    @Override
-    public int index(int t, int k, int start, int end) {
-      assert start >= 0 && start < end && end <= n;
-      int tk = Toffset[t] + k;
-      int sk = n * start + end;
-      return sk * TK + tk;
-    }
-    // TODO inverse of index.
-  }
-
-  public static class StateSequence extends State {
+  public static class StateSequence {
 
     private StateSequence prev, next;
+    private State cur;
     private int movesApplied;
 
-    // The action + features + computation performed when leaving this state
-    // and transitioning to next.
-    private Adjoints aNext;
+    // The action + features + computation
+    // either (cur -> action -> next) if next != null
+    // or     (prev -> action -> cur) if prev != null
+    private Action action;
+    // TODO maybe make Adjoint an abstract subtype of Action?
+    // going to want Adjoints here eventually...
 
-    public StateSequence(FNTagging frames) {
-      super(frames);
-      prev = null;
+    public StateSequence(StateSequence prev, StateSequence next, State cur, Action action) {
+      this.prev = prev;
+      this.next = next;
+      this.cur = cur;
+      this.action = action;
     }
 
-    public StateSequence(StateSequence prev) {
-      super(prev);
-      this.prev = prev;
+    public State getCur() {
+      return cur;
     }
 
     public FNParse decode() {
@@ -139,7 +66,7 @@ public class State {
     }
   }
 
-  private FNTagging frames;
+  protected FNTagging frames;
   private StateIndex stateIndex;
   private BitSet possible;
 
@@ -174,19 +101,29 @@ public class State {
     return ((double) recalled) / total;
   }
 
-  public boolean possible(int fiIdx, int role, Span s) {
-    Span c = committed[fiIdx][role];
-    if (c != null)
-      return c == s;
-    return possible[fiIdx][role][s.start][s.end];
+  /**
+   * Returns a span if one has been chosen for this role, or null otherwise.
+   */
+  public Span committed(int t, int k) {
+    // TODO may want to push this into a sub-class, might be various impls
+    throw new RuntimeException("implement me");
+  }
+
+  public Iterable<Span> allowableSpans(int t, int k) {
+    // TODO may want to push this into a sub-class, might be various impls
+    throw new RuntimeException("implement me");
+  }
+
+  public Frame getFrame(int t) {
+    return frames.getFrameInstance(t).getFrame();
+  }
+
+  public int numFrameInstance() {
+    return frames.numFrameInstances();
   }
 
   public FrameInstance getFrameInstance(int i) {
     return frames.getFrameInstance(i);
-  }
-
-  public int movesApplied() {
-    return movesApplied;
   }
 
   public Sentence getSentence() {

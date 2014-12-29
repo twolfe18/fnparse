@@ -1,25 +1,29 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Random;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
+import edu.jhu.hlt.fnparse.experiment.grid.FinalResults;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
+import edu.jhu.hlt.fnparse.util.HasId;
 
 public interface ItemProvider {
   public int size();
@@ -40,15 +44,34 @@ public interface ItemProvider {
         items[i] = wrap.items(i);
       }
     }
-    public Caching(File f) {
+    public Caching(File f, FrameInstanceProvider superset) {
       try {
         InputStream is = new FileInputStream(f);
         if (f.getName().toLowerCase().endsWith(".gz"))
           is = new GZIPInputStream(is);
-        ObjectInputStream ois = new ObjectInputStream(is);
-        labels = (FNParse[]) ois.readObject();
-        items = (List<Item>[]) ois.readObject();
-        ois.close();
+        DataInputStream dis = new DataInputStream(is);
+
+        // items
+        int n = dis.readInt();
+        items = new List[n];
+        for (int i = 0; i < n; i++) {
+          int m = dis.readInt();
+          items[i] = new ArrayList<Item>(m);
+          for (int j = 0; j < m; j++) {
+            Item itj = new Item(-1, -2, null, Double.NaN);
+            itj.deserialize(dis);
+            items[i].add(itj);
+          }
+        }
+
+        // labels
+        List<FNParse> ss = DataUtil.iter2list(superset.getParsedSentences());
+        List<FNParse> labelsL = HasId.readItemsById(ss, dis, n);
+        assert labelsL.size() == n;
+        labels = new FNParse[n];
+        for (int i = 0; i < n; i++) labels[i] = labelsL.get(i);
+
+        dis.close();
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -57,10 +80,20 @@ public interface ItemProvider {
       OutputStream os = new FileOutputStream(f);
       if (f.getName().toLowerCase().endsWith(".gz"))
         os = new GZIPOutputStream(os);
-      ObjectOutputStream oos = new ObjectOutputStream(os);
-      oos.writeObject(labels);
-      oos.writeObject(items);
-      oos.close();
+      DataOutputStream dos = new DataOutputStream(os);
+
+      // items
+      dos.writeInt(items.length);     // how many items/labels
+      for (List<Item> li : items) {
+        dos.writeInt(li.size());      // how many items for this label
+        for (Item i : li)
+          i.serialize(dos);           // each item
+      }
+
+      // labels
+      HasId.writeItemsById(Arrays.asList(labels), dos);
+
+      dos.close();
     }
     @Override
     public int size() {
@@ -81,18 +114,20 @@ public interface ItemProvider {
     private FNParse[] labels;
     private List<Item>[] items;
     private LatentConstituencyPipelinedParser parser;
-    private File modelDir = new File("saved-models/good-latent-span");
+    private File modelDir = new File("saved-models/good-latent-span/");
     public Slow(List<FNParse> parses) {
       if (!modelDir.isDirectory())
         throw new RuntimeException("model dir doesn't exist: " + modelDir.getPath());
 
-      parser = new LatentConstituencyPipelinedParser();
-      parser.loadModel(modelDir);
+      FinalResults hasParser = new FinalResults(modelDir, new Random(9001), "span", 0, false);
+      hasParser.loadModel();
+      parser = (LatentConstituencyPipelinedParser) hasParser.getParser();
+      hasParser = null;
       RoleSpanLabelingStage rsls = (RoleSpanLabelingStage) parser.getRoleLabelingStage();
       rsls.maxSpansPerArg = 10;
 
       // will return FNParses with WeightedFrameInstances
-      List<FNParse> hyp = parser.parse(DataUtil.stripAnnotations(parses), null);
+      List<FNParse> hyp = parser.parse(DataUtil.stripAnnotations(parses), parses);
       assert hyp.size() == parses.size();
 
       int n = parses.size();

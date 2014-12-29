@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.rl;
 
 import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
 import edu.jhu.hlt.fnparse.rl.Learner.Params;
-import edu.jhu.hlt.fnparse.rl.State.Action;
 
 public class CompositeParams implements Params {
 

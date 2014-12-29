@@ -7,7 +7,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.ContextEmbedding.CtxEmb;
 import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
 import edu.jhu.hlt.fnparse.rl.Learner.Params;
-import edu.jhu.hlt.fnparse.rl.State.Action;
 
 /**
  * implements e(f,r)' \theta \phi(t,a,s,x)

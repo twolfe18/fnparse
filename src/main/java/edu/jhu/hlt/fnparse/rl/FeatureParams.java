@@ -10,7 +10,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
 import edu.jhu.hlt.fnparse.rl.Learner.Params;
-import edu.jhu.hlt.fnparse.rl.State.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 

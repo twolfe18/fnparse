@@ -1,16 +1,25 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.TransitionFunction;
 import edu.jhu.hlt.fnparse.rl.State.StateSequence;
+import edu.jhu.hlt.fnparse.util.Beam;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -36,6 +45,7 @@ import edu.jhu.hlt.fnparse.rl.State.StateSequence;
  * towards the uniform distribution.
  */
 public class Reranker {
+  public static final Logger LOG = Logger.getLogger(Reranker.class);
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -77,26 +87,54 @@ public class Reranker {
     }
   }
 
-  public StateSequence problem1(FNParse y) {
-
-    throw new RuntimeException("implement me");
-  }
-
   public ItemProvider getItemProvider() {
-    File cache = new File("/tmp/items");
+    int n = 1000;
+    File cache = new File("data/rl/items." + n + ".train");
+    FrameInstanceProvider fip = FileFrameInstanceProvider.dipanjantrainFIP;
     ItemProvider items;
     if (cache.isFile()) {
-      items = new ItemProvider.Caching(cache);
+      LOG.info("[getItemProvider] getting cached items from " + cache.getPath());
+      items = new ItemProvider.Caching(cache, fip);
     } else {
-      List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+      LOG.info("[getItemProvider] parsing to get items...");
+      List<FNParse> parses = DataUtil.iter2list(fip.getParsedSentences());
+      parses = parses.subList(0, n);
       ItemProvider.Caching c = new ItemProvider.Caching(new ItemProvider.Slow(parses));
+      LOG.info("[getItemProvider] saving cached items to " + cache.getPath());
       try { c.save(cache); }
       catch (Exception e) {
         throw new RuntimeException(e);
       }
       items = c;
     }
+    LOG.info("[getItemProvider] done");
     return items;
+  }
+
+  /**
+   * Solves problem 1: \max_z s(y,z) = \max_z \sum_i s(y,z_i)
+   * 
+   * This is accomplished through beam search, starting at y and performing
+   * "undo"s on potential actions that would lead to a starting point (empty
+   * parse or initial decoder state).
+   * 
+   * @param y
+   */
+  public StateSequence backward(FNParse y) {
+
+    Beam<StateSequence> beam = new Beam<>(500);
+    TransitionFunction trans = new TransitionFunction.Simple(y);
+    StateSequence init = new StateSequence(null, null, new State(y), null);
+    beam.push(init, 0d);
+    // TODO StateSequence or State needs an accumulated score
+    // TODO how to score the states?
+    
+    while (true) {
+      // Choose an item to extend
+      // For each of its extensions, check if they should be put on the beam.
+    }
+
+    throw new RuntimeException("implement me");
   }
 
   public void train() {
@@ -275,4 +313,13 @@ public class Reranker {
      */
   }
 
+  public static void main(String[] args) {
+    Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
+    Reranker r = new Reranker();
+    ItemProvider ip = r.getItemProvider();
+    for (int i = 0; i < ip.size(); i++) {
+      for (Item it : ip.items(i))
+        System.out.println(ip.label(i).getId() + "\t" + it);
+    }
+  }
 }
