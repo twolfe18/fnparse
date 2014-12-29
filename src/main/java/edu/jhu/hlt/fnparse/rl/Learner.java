@@ -16,8 +16,20 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.rl.State.Action;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.DataSplitter;
 
+/**
+ * @deprecated This class will be returned to, current efforts will focus on
+ * {@link edu.jhu.hlt.fnparse.rl.Reranker}, which is less ambitious and only
+ * considers COMMIT actions.
+ *
+ * This class needs work on action generation and rules.
+ *
+ * NOTE: Internal classes are not deprecated, and may be moved out.
+ *
+ * @author travis
+ */
 public class Learner {
   public static final Logger LOG = Logger.getLogger(Learner.class);
 
@@ -52,6 +64,12 @@ public class Learner {
    * OK, I'm sufficiently confused to know that I'm out of my depths. I'm going
    * to do a very simple reward function that I can understand the semantics of
    * the hack for.
+   * 
+   * @deprecated This is a bad idea. This stuff that looks like reward shaping
+   * should not be in the reward function. I'm fuzzy on the mapping of structured
+   * prediction to RL, and I think it is more natural for me to talk about loss
+   * functions (on states), making a reward function maybe a delta of loss between
+   * two states... but then why would we discount the rewards?...
    */
   static class RewardFunction {
     /*

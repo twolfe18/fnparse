@@ -6,6 +6,10 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 
+/**
+ * @deprecated I'm going back to rl.State
+ * @author travis
+ */
 class DecoderState {
 
   private FNTagging frames;

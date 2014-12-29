@@ -16,6 +16,8 @@ import edu.jhu.util.Alphabet;
  * 3) span right context        (k-words)
  * 4) entire sentence
  * 
+ * TODO this can be cached on span (will be computed many times for each (t,k))
+ * 
  * @author travis
  */
 public class ContextEmbedding {

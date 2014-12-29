@@ -10,7 +10,7 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.rl.State.StateWithBackPointer;
+import edu.jhu.hlt.fnparse.rl.State.StateSequence;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -76,13 +76,13 @@ public class Reranker {
       i.setFeatureScore(fv.dot(theta));
     }
   }
-  
-  public StateWithBackPointer problem1(FNParse y) {
+
+  public StateSequence problem1(FNParse y) {
 
     throw new RuntimeException("implement me");
   }
 
-  public void train() {
+  public ItemProvider getItemProvider() {
     File cache = new File("/tmp/items");
     ItemProvider items;
     if (cache.isFile()) {
@@ -96,6 +96,10 @@ public class Reranker {
       }
       items = c;
     }
+    return items;
+  }
+
+  public void train() {
 
     /*
      * So I never resolved the issue of how to train this thing...

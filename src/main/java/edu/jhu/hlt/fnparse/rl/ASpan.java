@@ -36,6 +36,13 @@ public class ASpan {
   public static final int CROSSING = -6;
   public static final int NULL_SPAN = -7;
 
+  // TODO could generate these from POS regex expressions
+  // e.g. I could write one by hand for non-recursive NPs.
+  // TODO could get some supervision for these regexes by looking at distant
+  // supervision like "in a corpus of (tagged) web documents, does this regex
+  // match many italicized, quoted, anchored (text), or other marked up sequence
+  // of text?".
+
   public final int start, end;
 
   public ASpan(int start, int end) {

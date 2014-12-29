@@ -10,6 +10,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
 
 /**
  * Represents a sentence, the frame-targets realized, and the constraints on the
@@ -104,40 +105,27 @@ public class State {
     // TODO inverse of index.
   }
 
-  public static class StateWithBackPointer extends State {
-    private StateWithBackPointer prev;
-    public StateWithBackPointer(FNTagging frames) {
+  public static class StateSequence extends State {
+
+    private StateSequence prev, next;
+    private int movesApplied;
+
+    // The action + features + computation performed when leaving this state
+    // and transitioning to next.
+    private Adjoints aNext;
+
+    public StateSequence(FNTagging frames) {
       super(frames);
       prev = null;
     }
-    public StateWithBackPointer(StateWithBackPointer prev) {
+
+    public StateSequence(StateSequence prev) {
       super(prev);
       this.prev = prev;
     }
-  }
 
-  private FNTagging frames;
-  private int movesApplied;
-  private StateIndex stateIndex;
-  private BitSet possible;
-
-  public State(State copy) {
-    this.frames = copy.frames;
-    this.movesApplied = copy.movesApplied;
-    this.stateIndex = copy.stateIndex;
-    this.possible = new BitSet(copy.possible.size());
-    this.possible.or(copy.possible);
-  }
-
-  public State(FNTagging frames) {
-    this.frames = frames;
-    this.movesApplied = 0;
-    int n = frames.getSentence().size();
-    this.stateIndex = new SpanMajorStateIndex(frames.getFrameInstances(), n);
-    this.possible = new BitSet();
-  }
-
-  public FNParse decode() {
+    public FNParse decode() {
+      /*
     List<FrameInstance> fis = new ArrayList<>();
     for (int t = 0; t < frames.numFrameInstances(); t++) {
       FrameInstance fi = frames.getFrameInstance(t);
@@ -145,6 +133,28 @@ public class State {
       fis.add(FrameInstance.newFrameInstance(f, fi.getTarget(), committed[t], getSentence()));
     }
     return new FNParse(getSentence(), fis);
+       */
+      // TODO this will be implemented as 
+      throw new RuntimeException("implement me");
+    }
+  }
+
+  private FNTagging frames;
+  private StateIndex stateIndex;
+  private BitSet possible;
+
+  public State(State copy) {
+    this.frames = copy.frames;
+    this.stateIndex = copy.stateIndex;
+    this.possible = new BitSet(copy.possible.size());
+    this.possible.or(copy.possible);
+  }
+
+  public State(FNTagging frames) {
+    this.frames = frames;
+    int n = frames.getSentence().size();
+    this.stateIndex = new SpanMajorStateIndex(frames.getFrameInstances(), n);
+    this.possible = new BitSet();
   }
 
   public double recall() {
