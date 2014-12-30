@@ -8,8 +8,6 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
-import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
-import edu.jhu.hlt.fnparse.rl.Learner.Params;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
@@ -57,6 +55,15 @@ public class FeatureParams implements Params {
 
   @Override
   public Adjoints score(State s, Action a) {
+
+    // TODO:
+    // Does this item overlap with a previously-committed-to item? Its score?
+    // How many items have been committed to for this frame instance?
+    // How many items have been committed to for this (frame,role)?
+    // Set of roles committed to for this frame (unigrams, pairs, and count)
+    // Does this item overlap with a target?
+    // Number of items committed to on this side of the target.
+
     //LOG.info("[score] starting ");// + a.toString(s));
     cache = new Adj(new FeatureVector(), a);
     FrameInstance fi = s.getFrameInstance(a.t);
@@ -66,10 +73,10 @@ public class FeatureParams implements Params {
     String fr = f + "." + r;
     String m = a.mode == Action.COMMIT ? "mode=COMMIT" : "mode=unknown";
     bb(m, f, fr, r);
-    if (a.aspan.isNormalSpan()) {
-      Span arg = a.aspan.getSpan();
+    if (a.hasSpan()) {
+      Span arg = a.getSpan();
 
-      String w = "width=" + BasicFeatureTemplates.sentenceLengthBuckets(a.aspan.width());
+      String w = "width=" + BasicFeatureTemplates.sentenceLengthBuckets(a.width());
       bb(w, f, fr, r);
 
       String rel = "rel=" + BasicFeatureTemplates.spanPosRel(t, arg);

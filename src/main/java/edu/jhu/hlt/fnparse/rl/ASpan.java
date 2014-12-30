@@ -2,6 +2,10 @@ package edu.jhu.hlt.fnparse.rl;
 
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
+/**
+ * @deprecated this has been folded into Action
+ * @author travis
+ */
 public class ASpan {
   /**
    * Special values for the start position which have non-standard semantics.
@@ -35,6 +39,13 @@ public class ASpan {
   public static final int ENDING_AT = -5;
   public static final int CROSSING = -6;
   public static final int NULL_SPAN = -7;
+
+  // TODO reconcile Action.mode with these special spans that are only prune.
+  // probably just want to fold Action.mode into this class.
+  // mark each of these special semantics with whether they are just prune, add, or both
+  public static final int PRUNE_SPANS_WIDER_THAN = -8;
+  public static final int PRUNE_SPANS_STARTING_WITH_POS = -9;
+  public static final int PRUNE_SPANS_ENDING_WITH_POS = -10;
 
   // TODO could generate these from POS regex expressions
   // e.g. I could write one by hand for non-recursive NPs.

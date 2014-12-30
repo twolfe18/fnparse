@@ -145,10 +145,11 @@ public class ContextEmbedding {
     EmbAvg eRight;
     EmbAvg eSent;
     double[] stacked;
-    public CtxEmb(Sentence sent, Span target, ASpan arg, State state) {
+    public CtxEmb(Sentence sent, Span target, Action action, State state) {
       int D = wordEmb.getDimension();
       stacked = new double[4 * D];
-      if (arg.isNormalSpan()) {
+      if (action.hasSpan()) {
+        Span arg = action.getSpan();
         eSpan = EmbAvg.unif(arg.start, arg.end, sent, wordEmb);
         eLeft = EmbAvg.unif(arg.start - contextWordsLeft, arg.start, sent, wordEmb);
         eRight = EmbAvg.unif(arg.end, arg.end + contextWordsRight, sent, wordEmb);
@@ -195,8 +196,8 @@ public class ContextEmbedding {
     return 4 * wordEmb.getDimension();
   }
 
-  public CtxEmb embed(Sentence sent, Span target, ASpan arg, State state) {
-    return new CtxEmb(sent, target, arg, state);
+  public CtxEmb embed(Sentence sent, Span target, Action action, State state) {
+    return new CtxEmb(sent, target, action, state);
   }
 
   public void update(CtxEmb adjoints, double[] dErr_dEmbedding, double learningRate) {

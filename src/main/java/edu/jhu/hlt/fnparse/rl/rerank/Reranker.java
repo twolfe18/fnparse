@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -16,9 +15,11 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.rl.FeatureParams;
+import edu.jhu.hlt.fnparse.rl.Params;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
-import edu.jhu.hlt.fnparse.rl.State.StateSequence;
 import edu.jhu.hlt.fnparse.util.Beam;
 
 /**
@@ -59,36 +60,16 @@ public class Reranker {
     }
   };
 
-  private RerankingFeatures features;
-  private double[] theta;
+  private Params theta;
 
-  public FNParse decode(FNTagging frames, List<Item> items) {
-    DecoderState s = new DecoderState(frames);
-    while (items.size() > 0) {
-      Collections.sort(items, byScore);
-      Item best = items.remove(items.size() - 1);
-      if (best.getScore() > 0) {
-        // keep this item
-        s.addItem(best);
-        rescore(items, s);
-      } else {
-        // done
-        break;
-      }
-    }
-    return s.getParse();
-  }
-
-  private void rescore(List<Item> items, DecoderState s) {
-    FeatureVector fv = new FeatureVector();
-    for (Item i : items) {
-      features.featurize(fv, s, i);
-      i.setFeatureScore(fv.dot(theta));
-    }
+  public Reranker() {
+    this.theta = new FeatureParams();
+    //this.theta = new EmbeddingParams(2);
+    //this.theta = new CompositeParams(new EmbeddingParams(1), new FeatureParams());
   }
 
   public ItemProvider getItemProvider() {
-    int n = 1000;
+    int n = 100;
     File cache = new File("data/rl/items." + n + ".train");
     FrameInstanceProvider fip = FileFrameInstanceProvider.dipanjantrainFIP;
     ItemProvider items;
@@ -121,24 +102,34 @@ public class Reranker {
    * @param y
    */
   public StateSequence backward(FNParse y) {
-
+    LOG.info("[backwards] starting " + y.getId());
     Beam<StateSequence> beam = new Beam<>(500);
-    TransitionFunction trans = new TransitionFunction.Simple(y);
-    StateSequence init = new StateSequence(null, null, new State(y), null);
+    TransitionFunction trans = new TransitionFunction.Simple(y, theta);
+    State finalState = State.finalState(y);
+    StateSequence init = new StateSequence(null, null, finalState, null);
     beam.push(init, 0d);
-    // TODO StateSequence or State needs an accumulated score
-    // TODO how to score the states?
-    
     while (true) {
       // Choose an item to extend
+      StateSequence frontier = beam.pop();
       // For each of its extensions, check if they should be put on the beam.
+      int added = 0;
+      for (StateSequence ss : trans.previousStates(frontier)) {
+        // TODO since all the weights are 0, all the actoins are 0, and the
+        // ordering on the beam is arbitrary, and we have no hope of finding an
+        // initial State unless we initialize the parameters intelligently.
+        added++;
+        beam.push(ss, ss.getScore());
+      }
+      LOG.debug("[backwards] added=" + added);
+      if (added == 0) {
+        // There were no previous states, so frontier must be the empty parse,
+        // or initial state.
+        return frontier;
+      }
     }
-
-    throw new RuntimeException("implement me");
   }
 
   public void train() {
-
     /*
      * So I never resolved the issue of how to train this thing...
      *
@@ -317,9 +308,10 @@ public class Reranker {
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
     Reranker r = new Reranker();
     ItemProvider ip = r.getItemProvider();
-    for (int i = 0; i < ip.size(); i++) {
-      for (Item it : ip.items(i))
-        System.out.println(ip.label(i).getId() + "\t" + it);
-    }
+//    for (int i = 0; i < ip.size(); i++) {
+//      for (Item it : ip.items(i))
+//        System.out.println(ip.label(i).getId() + "\t" + it);
+//    }
+    StateSequence ss = r.backward(ip.label(1));
   }
 }

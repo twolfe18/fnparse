@@ -5,8 +5,6 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.ContextEmbedding.CtxEmb;
-import edu.jhu.hlt.fnparse.rl.Learner.Adjoints;
-import edu.jhu.hlt.fnparse.rl.Learner.Params;
 
 /**
  * implements e(f,r)' \theta \phi(t,a,s,x)
@@ -126,7 +124,7 @@ public class EmbeddingParams implements Params {
     FrameInstance fi = s.getFrameInstance(a.t);
     double[] fr = frE.embed(fi.getFrame(), a.k);
     //long t1 = System.currentTimeMillis();
-    CtxEmb ctx = ctxE.embed(fi.getSentence(), fi.getTarget(), a.aspan, s);
+    CtxEmb ctx = ctxE.embed(fi.getSentence(), fi.getTarget(), a, s);
     //long t2 = System.currentTimeMillis();
     QuadAdjoints adj = new QuadAdjoints(s, a, fr, ctx);
     adj.compute(theta);
