@@ -42,12 +42,9 @@ public interface StateIndex {
 
       // Commit to this (t,k)
       int n = si.sentenceSize();
-      for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j <= n; j++) {
-          boolean b = i == a.start && j == a.end;
-          next.set(si.index(a.t, a.k, i, j), b);
-        }
-      }
+      for (int i = 0; i < n; i++)
+        for (int j = i + 1; j <= n; j++)
+          next.set(si.index(a.t, a.k, i, j), false);
 
       // Rule out other spans
       if (a.mode == Action.COMMIT_AND_PRUNE_OVERLAPPING) {
@@ -55,12 +52,17 @@ public interface StateIndex {
         assert a.width() > 1;
         for (int t = 0; t < si.numFrameInstances(); t++) {
           for (int k = 0; k < si.numRoles(t); k++) {
+
+            if (t == a.t && k == a.k)
+              continue;
+
             // Spans that end in this span.
             for (int i = 0; i < a.start; i++) {
               for (int j = a.start; j < a.end; j++) {
                 next.set(si.index(t, k, i, j), false);
               }
             }
+
             // Spans that start in this span.
             for (int i = a.start + 1; i < a.end; i++) {
               for (int j = a.end; j <= n; j++) {

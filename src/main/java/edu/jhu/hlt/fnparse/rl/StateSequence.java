@@ -1,16 +1,15 @@
 package edu.jhu.hlt.fnparse.rl;
 
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-
 public class StateSequence {
 
   private StateSequence prev, next;
   private State cur;
-  private int movesApplied;
+//  private int movesApplied;
 
   // The action + features + computation
   // either (cur -> action -> next) if next != null
   // or     (prev -> action -> cur) if prev != null
+  // TODO this definition is not compatible with neighbor(), choose one version
   private Adjoints action;
 
   public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
@@ -25,7 +24,8 @@ public class StateSequence {
     if (cur == null) {
       // Lazily compute States
       StateSequence n = neighbor();
-      cur = n.getCur().resultingFrom(action.getAction());
+      boolean forwards = (n == prev);
+      cur = n.getCur().apply(action.getAction(), forwards);
     }
     return cur;
   }
@@ -50,17 +50,11 @@ public class StateSequence {
     return action.getScore() +  (n == null ? 0d : n.getScore());
   }
 
-  public FNParse decode() {
-    /*
-  List<FrameInstance> fis = new ArrayList<>();
-  for (int t = 0; t < frames.numFrameInstances(); t++) {
-    FrameInstance fi = frames.getFrameInstance(t);
-    Frame f = fi.getFrame();
-    fis.add(FrameInstance.newFrameInstance(f, fi.getTarget(), committed[t], getSentence()));
+  public Adjoints getAdjoints() {
+    return action;
   }
-  return new FNParse(getSentence(), fis);
-     */
-    // TODO this will be implemented as 
-    throw new RuntimeException("implement me");
+
+  public Action getAction() {
+    return action.getAction();
   }
 }

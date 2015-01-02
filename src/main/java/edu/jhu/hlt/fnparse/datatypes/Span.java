@@ -89,6 +89,10 @@ public final class Span implements Comparable<Span> {
     return String.format("<Span %d-%d>", start, end);
   }
 
+  public String shortString() {
+    return start + "-" + end;
+  }
+
   public int hashCode() { return (start<<16) | end; }
 
   public boolean equals(Object other) {

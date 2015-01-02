@@ -18,12 +18,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * Represents a sentence, the frame-targets realized, and the constraints on the
  * frame-elements to be labeled. In this implementation, the frame-targets are
  * assumed given.
- *
- * AH, I think I know how to do this, index actions on (frame.getId, role).
- * I only ever plan to have a few of those actions, so this should be fine.
- * BUT this violates what I had planned for actions, namely the generalization
- * where actions can apply to all role (e.g. first pick the set of arguments
- * for *all* roles, then assign args).
  * 
  * @author travis
  */
@@ -31,9 +25,9 @@ public class State {
   public static final Logger LOG = Logger.getLogger(State.class);
 
   protected FNTagging frames;
-  private StateIndex stateIndex;
+  private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
   private BitSet possible;
-  private Span[][] committed; // TODO where to put? hopefully not in StateIndex
+  private Span[][] committed;
 
   public State(FNTagging frames, StateIndex stateIndex, BitSet possible, Span[][] committed) {
     this.frames = frames;
@@ -99,6 +93,10 @@ public class State {
       }
     }
     return ((double) recalled) / total;
+  }
+
+  public BitSet getPossible() {
+    return possible;
   }
 
   /**
@@ -176,70 +174,22 @@ public class State {
    * Returns the state resulting from applying the given action to this state.
    * Doesn't modify this state.
    */
-  public State resultingFrom(Action a) {
+  public State apply(Action a, boolean forwards) {
     BitSet n = stateIndex.update(a, possible);
     int T = committed.length;
     Span[][] c = new Span[T][];
     for (int t = 0; t < T; t++)
       c[t] = Arrays.copyOf(committed[t], committed[t].length);
+    if (forwards) {
+      if (a.mode != Action.COMMIT && a.mode != Action.COMMIT_AND_PRUNE_OVERLAPPING)
+        throw new RuntimeException("not yet supported");
+      assert c[a.t][a.k] == null;
+      c[a.t][a.k] = a.getSpan();
+    } else {
+      assert committed[a.t][a.k] == a.getSpan();
+      c[a.t][a.k] = null;
+    }
     return new State(frames, stateIndex, n, c);
   }
-
-//  public boolean overlapsAnArg(int start, int end) {
-//    Span s = Span.getSpan(start, end);
-//    for (int t = 0; t < frames.numFrameInstances(); t++) {
-//      Frame f = getFrameInstance(t).getFrame();
-//      int K = f.numRoles();
-//      for (int k = 0; k < K; k++) {
-//        Span c = committed[t][k];
-//        if (c != null && c != Span.nullSpan) {
-//          if (s.overlaps(c) && !s.equals(c))
-//            return true;
-//        }
-//      }
-//    }
-//    return false;
-//  }
-
-  // goes to the next state
-//  public void apply(Action a) {
-//    if (a.mode != Action.COMMIT)
-//      throw new RuntimeException("implement me");
-//
-//    // NOTE: can't really do efficient unapply because a location may have been
-//    // made illegal by some action other than the one you're trying to undo
-//
-//    if (a.aspan.isNullSpan()) {
-//      committed[a.t][a.k] = Span.nullSpan;
-//    } else {
-//      committed[a.t][a.k] = a.aspan.getSpan();
-//    }
-//    int n = getSentence().size();
-//    for (int i = 0; i < n; i++)
-//      for (int j = i + 1; j <= n; j++)
-//        if (possible[a.t][a.k][i][j])
-//          numPossible--;
-//    possible[a.t][a.k] = null;
-//
-//    // TODO precompute the set of spans that overlap with...
-//    for (int i = 0; i < n; i++) {
-//      for (int j = i + 1; j <= n; j++) {
-//        if (overlapsAnArg(i, j)) {
-//          for (int t = 0; t < frames.numFrameInstances(); t++) {
-//            int K = getFrameInstance(t).getFrame().numRoles();
-//            for (int k = 0; k < K; k++) {
-//              if (committed[t][k] != null)
-//                continue;
-//              if (possible[t][k][i][j])
-//                numPossible--;
-//              possible[t][k][i][j] = false;
-//            }
-//          }
-//        }
-//      }
-//    }
-//
-//    movesApplied++;
-//  }
 
 }

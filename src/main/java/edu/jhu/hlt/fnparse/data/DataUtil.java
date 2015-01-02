@@ -239,8 +239,19 @@ public class DataUtil {
     return l;
   }
 
+  public static <T> T reservoirSampleOne(Iterable<T> all, Random rand) {
+    T res = null;
+    int seen = 0;
+    for (T t : all) {
+      seen++;
+      if (rand.nextInt(seen) == 0)
+        res = t;
+    }
+    return res;
+  }
+
   public static <T> List<T> reservoirSample(
-      List<T> all,
+      Iterable<T> all,
       int howMany,
       Random rand) {
     List<T> reservoir = new ArrayList<T>();

@@ -114,7 +114,7 @@ public class Reranker {
       // For each of its extensions, check if they should be put on the beam.
       int added = 0;
       for (StateSequence ss : trans.previousStates(frontier)) {
-        // TODO since all the weights are 0, all the actoins are 0, and the
+        // TODO since all the weights are 0, all the actions are 0, and the
         // ordering on the beam is arbitrary, and we have no hope of finding an
         // initial State unless we initialize the parameters intelligently.
         added++;
