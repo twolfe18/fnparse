@@ -106,6 +106,33 @@ public class State {
     return committed[t][k];
   }
 
+  public int numCommitted() {
+    int comm = 0;
+    for (Span[] c : committed)
+      for (Span s : c)
+        if (s != null)
+          comm++;
+    return comm;
+  }
+
+  /**
+   * If this State is a final state (all (t,k) are committed), then this will
+   * return the parse represented by this parse.
+   */
+  public FNParse decode() {
+    Sentence s = getSentence();
+    List<FrameInstance> fis = new ArrayList<>();
+    int T = numFrameInstance();
+    for (int t = 0; t < T; t++) {
+      int K = committed[t].length;
+      for (int k = 0; k < K; k++)
+        if (committed[t][k] == null)
+          return null;
+      fis.add(FrameInstance.newFrameInstance(getFrame(t), getTarget(t), committed[t], s));
+    }
+    return new FNParse(s, fis);
+  }
+
   /**
    * For now just returns all spans (with a couple simple pruning heuristics).
    *
@@ -158,6 +185,10 @@ public class State {
     return frames.getFrameInstance(t).getFrame();
   }
 
+  public Span getTarget(int t) {
+    return frames.getFrameInstance(t).getTarget();
+  }
+
   public int numFrameInstance() {
     return frames.numFrameInstances();
   }
@@ -186,7 +217,8 @@ public class State {
       assert c[a.t][a.k] == null;
       c[a.t][a.k] = a.getSpan();
     } else {
-      assert committed[a.t][a.k] == a.getSpan();
+      assert (committed[a.t][a.k] == Span.nullSpan && !a.hasSpan())
+          || (committed[a.t][a.k] == a.getSpan());
       c[a.t][a.k] = null;
     }
     return new State(frames, stateIndex, n, c);

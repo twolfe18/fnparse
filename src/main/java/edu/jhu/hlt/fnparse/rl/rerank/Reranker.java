@@ -1,21 +1,20 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.rl.Adjoints;
 import edu.jhu.hlt.fnparse.rl.FeatureParams;
+import edu.jhu.hlt.fnparse.rl.NumCommittedParamsWrapper;
 import edu.jhu.hlt.fnparse.rl.Params;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
@@ -103,8 +102,16 @@ public class Reranker {
    */
   public StateSequence backward(FNParse y) {
     LOG.info("[backwards] starting " + y.getId());
+
+    // Right now I'm adding this as a search heuristic, but perhaps I should
+    // include it always... TODO think this through!
+    // TODO when I include actions other than COMMIT, I should change this from
+    // numCommitted to numPossible
+    Params p = new NumCommittedParamsWrapper(1d, theta);
+    //Params p = theta;
+    TransitionFunction trans = new TransitionFunction.Simple(y, p);
+
     Beam<StateSequence> beam = new Beam<>(500);
-    TransitionFunction trans = new TransitionFunction.Simple(y, theta);
     State finalState = State.finalState(y);
     StateSequence init = new StateSequence(null, null, finalState, null);
     beam.push(init, 0d);
@@ -117,6 +124,41 @@ public class Reranker {
         // TODO since all the weights are 0, all the actions are 0, and the
         // ordering on the beam is arbitrary, and we have no hope of finding an
         // initial State unless we initialize the parameters intelligently.
+
+        // If I set value(state) = const - epsilon * state.movesApplied then there
+        // should be a slight preference to get to early states, which will at
+        // least make this backwards pass succeed.
+        
+        // But later in learning, when we have non-zero parameters, what will
+        // enforce that we actually get from y_0 to y?
+        
+        // As long as all of the paths from y_0 to y have the same number of
+        // steps in them, then we should be able to give arbitrary reward to
+        // decreasing movesApplied.
+        
+        // I can actually put whatever biases in this step that I want, because
+        // this is basically the oracle.
+        // But the original spirit of this step was to search over all paths to
+        // find the least costly one according to the model.
+        
+        // I can think of movesApplied as a partition of the state space, and
+        // we're giving a slight preference over all states in a given equivalence
+        // class.
+        // You can generalize this to additive features pretty easily to encode
+        // a prior on what a good state is.
+        // But if we do this, what is the semantics of what we're doing?
+        // We could say that s(y,z) is a sum of a prior model and a learned model.
+        // and that s.prior(y,z_i) = 1 if z_i.mode == COMMIT
+
+        // None of this guarantees that we're going to be able to find s(y,z)
+        // via beam search...
+        // Perhaps the way to think of this is that by adding epsilon perturbations
+        // to s(y,z), we will do no worse than O(epsilon) from the best solution.
+        // But what if s(y,z) is maximal for sequences of actions that do not
+        // form a path from y_0 to y?
+        // 1) All of our actions are monotonic in |possible|
+        // 2) All of our actions are consistent with y
+
         added++;
         beam.push(ss, ss.getScore());
       }
@@ -312,6 +354,16 @@ public class Reranker {
 //      for (Item it : ip.items(i))
 //        System.out.println(ip.label(i).getId() + "\t" + it);
 //    }
+    int i = 0;
     StateSequence ss = r.backward(ip.label(1));
+    while (ss != null) {
+      Adjoints a = ss.getAdjoints();
+      if (a == null)
+        LOG.info(String.format("[main] i=%d null", i));
+      else
+        LOG.info(String.format("[main] i=%d %s %.3f", i, a.getAction(), a.getScore()));
+      ss = ss.neighbor();
+      i++;
+    }
   }
 }

@@ -4,7 +4,7 @@ public class StateSequence {
 
   private StateSequence prev, next;
   private State cur;
-//  private int movesApplied;
+  private int movesApplied = -1;
 
   // The action + features + computation
   // either (cur -> action -> next) if next != null
@@ -30,7 +30,13 @@ public class StateSequence {
     return cur;
   }
 
-  private StateSequence neighbor() {
+  public int getMovesApplied() {
+    if (movesApplied < 0)
+      movesApplied = 1 + neighbor().getMovesApplied();
+    return movesApplied;
+  }
+
+  public StateSequence neighbor() {
     if (next == null && prev == null)
       return null;
     else if (next == null && prev != null)
@@ -56,5 +62,19 @@ public class StateSequence {
 
   public Action getAction() {
     return action.getAction();
+  }
+
+  public StateSequence getLast() {
+    StateSequence cur = this;
+    while (cur.next != null)
+      cur = cur.next;
+    return cur;
+  }
+
+  public StateSequence getFirst() {
+    StateSequence cur = this;
+    while (cur.prev != null)
+      cur = cur.prev;
+    return cur;
   }
 }

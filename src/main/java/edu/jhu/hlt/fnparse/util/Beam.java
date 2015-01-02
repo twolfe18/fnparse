@@ -34,6 +34,16 @@ public class Beam<T> implements Iterable<T> {
     this.beam = new TreeSet<>();
   }
 
+  /**
+   * How many items are on the beam.
+   */
+  public int getSize() {
+    return beam.size();
+  }
+
+  /**
+   * Maximum number of items allowed on the beam.
+   */
   public int getWidth() {
     return width;
   }
@@ -45,11 +55,18 @@ public class Beam<T> implements Iterable<T> {
       beam.remove(beam.last());
   }
 
-  public void pop(Collection<T> addTo, int max) {
-    for (int i = 0; i < max && beam.size() > 0; i++)
+  /**
+   * Returns the k item with the highest scores and adds them to addTo.
+   * Highest score items are added to addTo first.
+   */
+  public void pop(Collection<T> addTo, int k) {
+    for (int i = 0; i < k && beam.size() > 0; i++)
       addTo.add(pop());
   }
 
+  /**
+   * Returns the item with the highest score.
+   */
   public T pop() {
     if (beam.size() == 0)
       return null;

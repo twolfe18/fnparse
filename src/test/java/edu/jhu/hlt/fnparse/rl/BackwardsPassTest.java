@@ -16,6 +16,7 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 /**
  * Ensures that the backwards pass (from a final state working its way back to
@@ -53,9 +54,9 @@ public class BackwardsPassTest {
       @Override public void update(Adjoints a, double reward) {}
     };
 
-    for (int iter = 0; iter < thoroughness * 10; iter++) {
-      for (FNParse y : testParses()) {
-        LOG.info("[noBranching] " + y.getId() + " iter " + iter);
+    for (FNParse y : testParses()) {
+      for (int iter = 0; iter < thoroughness * 10; iter++) {
+        //LOG.info("[noBranching] " + y.getId() + " iter " + iter);
         TransitionFunction trans = new TransitionFunction.Simple(y, theta);
         State finalState = State.finalState(y);
         StateSequence init = new StateSequence(null, null, finalState, null);
@@ -74,13 +75,9 @@ public class BackwardsPassTest {
           frontier = DataUtil.reservoirSampleOne(prev, rand);
           assertNotNull(frontier);
           Action a = frontier.getAction();
-          LOG.info("[noBranching] \t" + i + "/" + TK + ": " + a);
+          //LOG.info("[noBranching] \t" + i + "/" + TK + ": " + a);
           String appSite = "t=" + a.t + " k=" + a.k;
           assertTrue(appSite, applicationSites.add(appSite));  // Simple only allows commits
-
-          // TODO AHHH, the problem is the directionality of apply
-          // I'm applying actions as if they are forward applies, and this
-          // is doing backwards applies.
         }
 
         // Check that frontier is an initial state.
@@ -99,6 +96,26 @@ public class BackwardsPassTest {
           }
         }
       }
+    }
+  }
+
+  /**
+   * When we run backward() we should get a valid path from an empty parse
+   * (initial state) to the final parse.
+   */
+  @Test
+  public void validPath() {
+    Reranker r = new Reranker();
+    for (FNParse y : testParses()) {
+      if (y.numFrameInstances() == 0)
+        continue;
+      StateSequence pathStart = r.backward(y);
+      assertEquals(0, pathStart.getCur().numCommitted());
+      StateSequence pathEnd = pathStart.getLast();
+      State finalState = pathEnd.getCur();
+      FNParse yy = finalState.decode();
+      assertNotNull(yy);
+      assertEquals(y, yy);
     }
   }
 
