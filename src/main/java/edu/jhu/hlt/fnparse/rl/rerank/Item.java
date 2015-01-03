@@ -21,6 +21,10 @@ public class Item implements DataStreamSerializable {
     this.priorScore = priorScore;
   }
 
+  public int t() { return t; }
+  public int k() { return k; }
+  public Span getSpan() { return span; }
+
   public String toString() {
     String ss = span == Span.nullSpan ? "nullSpan" : span.start + "-" + span.end;
     return String.format(

@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -16,19 +17,22 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 /**
- * Ensures that the backwards pass (from a final state working its way back to
+ * Ensures that the oracle problem (from a final state working its way back to
  * an initial state) is a finite set of steps.
  *
  * Tests are similar to
- * {@link edu.jhu.hlt.fnparse.rl.rerank.Reranker#backward}
+ * {@link edu.jhu.hlt.fnparse.rl.rerank.Reranker#oracle}
  *
  * @author travis
  */
-public class BackwardsPassTest {
-  public static final Logger LOG = Logger.getLogger(BackwardsPassTest.class);
+public class OracleTest {
+  public static final Logger LOG = Logger.getLogger(OracleTest.class);
 
   private Random rand = new Random(9001);
   private int thoroughness = 1;
@@ -109,13 +113,29 @@ public class BackwardsPassTest {
     for (FNParse y : testParses()) {
       if (y.numFrameInstances() == 0)
         continue;
-      StateSequence pathStart = r.backward(y);
+      StateSequence pathStart = r.oracle(y);
       assertEquals(0, pathStart.getCur().numCommitted());
       StateSequence pathEnd = pathStart.getLast();
       State finalState = pathEnd.getCur();
       FNParse yy = finalState.decode();
       assertNotNull(yy);
       assertEquals(y, yy);
+    }
+  }
+
+  @Test
+  public void testMostViolated() {
+    StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
+    Reranker r = new Reranker();
+    for (FNParse y : testParses()) {
+      if (y.numFrameInstances() == 0)
+        continue;
+      StateSequence mv = r.mostViolated(y, y);
+      assertEquals(mv, mv.getLast());
+      FNParse yMV = mv.getCur().decode();
+      //FNParse yEmpty = new FNParse(y.getSentence(), Collections.emptyList());
+      double loss = 1d - eval.evaluate(new SentenceEval(y, yMV));
+      LOG.info("[testMostViolated] " + y.getId() + " loss=" + loss);
     }
   }
 

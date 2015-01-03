@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.rerank.Item;
 
 /**
  * Represents a sentence, the frame-targets realized, and the constraints on the
@@ -49,6 +50,23 @@ public class State {
         for (int i = 0; i < n; i++)
           for (int j = i + 1; j <= n; j++)
             possible.set(stateIndex.index(t, k, i, j), true);
+    }
+    return new State(frames, stateIndex, possible, committed);
+  }
+
+  public static State initialState(FNTagging frames, List<Item> rerank) {
+    int n = frames.getSentence().size();
+    StateIndex stateIndex = new StateIndex.SpanMajor(frames.getFrameInstances(), n);
+    BitSet possible = new BitSet();
+    int T = frames.numFrameInstances();
+    Span[][] committed = new Span[T][];
+    for (int t = 0; t < T; t++) {
+      int K = frames.getFrameInstance(t).getFrame().numRoles();
+      committed[t] = new Span[K];
+    }
+    for (Item i : rerank) {
+      Span s = i.getSpan();
+      possible.set(stateIndex.index(i.t(), i.k(), s.start, s.end));
     }
     return new State(frames, stateIndex, possible, committed);
   }
@@ -143,6 +161,7 @@ public class State {
     // to argument (this can be done with features, but is much slower).
     // NOTE this is not really an issue with targets, because there are almost
     // always width 1, which means they don't tell you anything about spans.
+    boolean verbose = false;
     int pruned = 0;
     List<Span> spans = new ArrayList<>();
     spans.add(Span.nullSpan);
@@ -176,8 +195,10 @@ public class State {
         spans.add(Span.getSpan(i, j));
       }
     }
+    if (verbose) {
     LOG.warn("[naiveAllowableSpans] pruned " + pruned
         + " spans, REMOVE this and support a richer set of Actions!");
+    }
     return spans;
   }
 
@@ -215,7 +236,7 @@ public class State {
       if (a.mode != Action.COMMIT && a.mode != Action.COMMIT_AND_PRUNE_OVERLAPPING)
         throw new RuntimeException("not yet supported");
       assert c[a.t][a.k] == null;
-      c[a.t][a.k] = a.getSpan();
+      c[a.t][a.k] = a.hasSpan() ? a.getSpan() : Span.nullSpan;
     } else {
       assert (committed[a.t][a.k] == Span.nullSpan && !a.hasSpan())
           || (committed[a.t][a.k] == a.getSpan());
