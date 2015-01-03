@@ -222,6 +222,10 @@ public class State {
     return frames.getSentence();
   }
 
+  public FNTagging getFrames() {
+    return frames;
+  }
+
   /**
    * Returns the state resulting from applying the given action to this state.
    * Doesn't modify this state.

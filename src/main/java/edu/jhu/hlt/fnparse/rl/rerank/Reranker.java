@@ -20,8 +20,8 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.Adjoints;
+import edu.jhu.hlt.fnparse.rl.CompositeParams;
 import edu.jhu.hlt.fnparse.rl.DenseFastFeatures;
-import edu.jhu.hlt.fnparse.rl.FeatureParams;
 import edu.jhu.hlt.fnparse.rl.Params;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
@@ -50,6 +50,8 @@ import edu.jhu.hlt.fnparse.util.Beam;
  * improve it. Probably with just the decoder, but if not, we can start throwing
  * in more realistic scoring features (e.g. embedding stuff) and anneal p(i)
  * towards the uniform distribution.
+ *
+ * NOTE: ^^^I totally didn't do this^^^
  */
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
@@ -71,12 +73,17 @@ public class Reranker {
   private Random rand;
 
   public Reranker() {
-    this.theta = new DenseFastFeatures();
-    //this.theta = new FeatureParams();
-    //this.theta = new EmbeddingParams(2);
-    //this.theta = new CompositeParams(new EmbeddingParams(1), new FeatureParams());
-    beamWidth = 1000;
-    rand = new Random(9001);
+    this(new CompositeParams(
+          new DenseFastFeatures(),
+          new PriorScoreParams(getItemProvider())),
+        1000,
+        new Random(9001));
+  }
+
+  public Reranker(Params theta, int beamWidth, Random rand) {
+    this.theta = theta;
+    this.beamWidth = beamWidth;
+    this.rand = rand;
   }
 
   public static ItemProvider getItemProvider() {
@@ -248,7 +255,7 @@ public class Reranker {
       while (cur != null) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          theta.update(a, -l);
+          theta.update(a, l);
         else
           LOG.warn("null adjoints in oracle");
         cur = cur.neighbor();
@@ -257,7 +264,7 @@ public class Reranker {
       while (cur != null) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          theta.update(a, l);
+          theta.update(a, -l);
         else
           LOG.warn("null adjoints in mv");
         cur = cur.neighbor();

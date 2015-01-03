@@ -2,26 +2,6 @@ package edu.jhu.hlt.fnparse.rl;
 
 public class DenseFastFeatures implements Params {
 
-  class Adj implements Adjoints {
-    private double[] features;
-    private Action action;
-    public Adj(double[] f, Action a) {
-      features = f;
-      action = a;
-    }
-    @Override
-    public double getScore() {
-      double s = 0d;
-      for (int i = 0; i < features.length; i++)
-        s += features[i] * theta[i];
-      return s;
-    }
-    @Override
-    public Action getAction() {
-      return action;
-    }
-  }
-
   private double[] theta;
   private double learningRate;
 
@@ -38,14 +18,11 @@ public class DenseFastFeatures implements Params {
     f[2] = a.hasSpan() ? 1d : 0d;
     f[3] = !a.hasSpan() ? 1d : 0d;
     // TODO more
-    return new Adj(f, a);
+    return new Adjoints.DenseFeatures(f, theta, a);
   }
 
   @Override
   public void update(Adjoints a, double reward) {
-    Adj adj = (Adj) a;
-    for (int i = 0; i < theta.length; i++) {
-      theta[i] += learningRate * reward * adj.features[i];
-    }
+    ((Adjoints.DenseFeatures) a).update(reward, learningRate);
   }
 }

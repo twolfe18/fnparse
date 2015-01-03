@@ -8,36 +8,15 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
-import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class FeatureParams implements Params {
   public static final Logger LOG = Logger.getLogger(FeatureParams.class);
 
-  class Adj implements Adjoints {
-    private final FeatureVector features;
-    private final Action action;
-    public Adj(FeatureVector features, Action action) {
-      assert features != null;
-      assert action != null;
-      this.features = features;
-      this.action = action;
-    }
-    @Override
-    public double getScore() {
-      // NOTE: don't bother caching here, I'm going to cache at StateSequence
-      return features.dot(theta);
-    }
-    @Override
-    public Action getAction() {
-      return action;
-    }
-  }
-
   private Alphabet<String> features;
   private double[] theta;
   private double learningRate = 0.1d;
-  private Adj cache;
+  private Adjoints.SparseFeatures cache;
 
   public FeatureParams() {
     features = new Alphabet<>();
@@ -47,7 +26,7 @@ public class FeatureParams implements Params {
   private void b(String featureName) {
     //LOG.info("[b] adding: " + featureName);
     int i = features.lookupIndex(featureName, true);
-    cache.features.add(i, 1d);
+    cache.add(i, 1d);
   }
 
   private void bb(String featureName, String... backoffs) {
@@ -68,7 +47,7 @@ public class FeatureParams implements Params {
     // Number of items committed to on this side of the target.
 
     //LOG.info("[score] starting ");// + a.toString(s));
-    cache = new Adj(new FeatureVector(), a);
+    cache = new Adjoints.SparseFeatures(new FeatureVector(), theta, a);
     FrameInstance fi = s.getFrameInstance(a.t);
     Span t = fi.getTarget();
     String f = fi.getFrame().getName();
@@ -111,15 +90,7 @@ public class FeatureParams implements Params {
   @Override
   public void update(Adjoints adj, double reward) {
     //LOG.info("[update] starting ");// + a.toString(s) + " has reward " + reward);
-    FeatureVector fv = ((Adj) adj).features;
-    assert fv != null;
-    fv.apply(new FnIntDoubleToDouble() {
-      @Override
-      public double call(int arg0, double arg1) {
-        theta[arg0] += learningRate * reward * arg1;
-        return arg1;
-      }
-    });
+    ((Adjoints.SparseFeatures) adj).update(reward, learningRate);;
   }
 
 }
