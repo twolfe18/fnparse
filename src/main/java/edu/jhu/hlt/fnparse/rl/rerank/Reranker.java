@@ -75,8 +75,8 @@ public class Reranker {
   public Reranker() {
     this(new CompositeParams(
           new DenseFastFeatures(),
-          new PriorScoreParams(getItemProvider())),
-        1000,
+          new PriorScoreParams(getItemProvider(), true)),
+        100,
         new Random(9001));
   }
 
@@ -249,6 +249,7 @@ public class Reranker {
     LOG.info(String.format(
         "[updateParams] items.size=%d -hinge(%s) = %.3f = oracle.score=%.3f - [mv.score=%.3f + loss=%.3f]",
         rerank.size(), y.getId(), negHinge, oracle.getScore(), mv.getScore(), l));
+    assert Double.isFinite(negHinge) && !Double.isNaN(negHinge);
     if (negHinge < 0) {
       StateSequence cur;
       cur = oracle;
@@ -294,7 +295,7 @@ public class Reranker {
   public static void main(String[] args) {
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
     Reranker r = new Reranker();
-    ItemProvider ip = r.getItemProvider();
+    ItemProvider ip = getItemProvider();
     r.train(ip);
   }
 }

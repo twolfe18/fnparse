@@ -22,8 +22,18 @@ public class PriorScoreParams implements Params {
   public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
 
   private Map<String, Double> index;
+  private double[] theta;
+  private double learningRate = 0.05d;
 
-  public PriorScoreParams(ItemProvider ip) {
+  /**
+   * If featureMode = true, then this will learn weights for two features:
+   *  [I(item was in k-best list), logProb(item)]
+   * Otherwise, it will not learn any parameters and add the log prob of the
+   * item to the score (-infinity if it was not in the k-best list).
+   */
+  public PriorScoreParams(ItemProvider ip, boolean featureMode) {
+    if (featureMode)
+      theta = new double[3];
     index = new HashMap<>();
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
@@ -47,13 +57,30 @@ public class PriorScoreParams implements Params {
     Span arg = a.hasSpan() ? a.getSpan() : Span.nullSpan;
     String key = key(id, a.t, a.k, arg);
     Double score = index.get(key);
-    if (score == null)
-      score = Double.NEGATIVE_INFINITY;
-    return new Adjoints.Explicit(score, a, "priorScore");
+    if (theta != null) {
+      double[] feats = new double[theta.length];
+      if (score == null)
+        feats[0] = 1d;
+      else
+        feats[1] = score;
+      feats[2] = 1d;
+      return new Adjoints.DenseFeatures(feats, theta, a);
+    } else {
+      if (score == null)
+        score = Double.NEGATIVE_INFINITY;
+      return new Adjoints.Explicit(score, a, "priorScore");
+    }
   }
 
   @Override
   public void update(Adjoints a, double reward) {
-    LOG.debug("[update] not doing anything");
+    if (theta != null) {
+      ((Adjoints.DenseFeatures) a).update(reward, learningRate);
+      LOG.debug("[update] theta(not-in-k-best) = " + theta[0]);
+      LOG.debug("[update] theta(item-log-prob) = " + theta[1]);
+      LOG.debug("[update] theta(intercept) = " + theta[2]);
+    } else {
+      LOG.debug("[update] not doing anything");
+    }
   }
 }
