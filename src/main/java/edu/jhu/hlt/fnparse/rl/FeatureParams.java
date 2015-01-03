@@ -18,11 +18,14 @@ public class FeatureParams implements Params {
     private final FeatureVector features;
     private final Action action;
     public Adj(FeatureVector features, Action action) {
+      assert features != null;
+      assert action != null;
       this.features = features;
       this.action = action;
     }
     @Override
     public double getScore() {
+      // NOTE: don't bother caching here, I'm going to cache at StateSequence
       return features.dot(theta);
     }
     @Override
@@ -98,7 +101,8 @@ public class FeatureParams implements Params {
     }
     // Check that theta is big enough
     if (features.size() > theta.length) {
-      int n = (int) (features.size() * 1.25d + 0.5d);
+      int n = (int) (features.size() * 1.6d + 0.5d);
+      LOG.info("[score] resizing theta: " + theta.length + " => " + n);
       theta = Arrays.copyOf(theta, n);
     }
     return cache;
@@ -107,7 +111,9 @@ public class FeatureParams implements Params {
   @Override
   public void update(Adjoints adj, double reward) {
     //LOG.info("[update] starting ");// + a.toString(s) + " has reward " + reward);
-    ((Adj) adj).features.apply(new FnIntDoubleToDouble() {
+    FeatureVector fv = ((Adj) adj).features;
+    assert fv != null;
+    fv.apply(new FnIntDoubleToDouble() {
       @Override
       public double call(int arg0, double arg1) {
         theta[arg0] += learningRate * reward * arg1;

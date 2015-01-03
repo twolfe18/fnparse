@@ -19,6 +19,8 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.Adjoints;
+import edu.jhu.hlt.fnparse.rl.DenseFastFeatures;
 import edu.jhu.hlt.fnparse.rl.FeatureParams;
 import edu.jhu.hlt.fnparse.rl.Params;
 import edu.jhu.hlt.fnparse.rl.State;
@@ -69,7 +71,8 @@ public class Reranker {
   private Random rand;
 
   public Reranker() {
-    this.theta = new FeatureParams();
+    this.theta = new DenseFastFeatures();
+    //this.theta = new FeatureParams();
     //this.theta = new EmbeddingParams(2);
     //this.theta = new CompositeParams(new EmbeddingParams(1), new FeatureParams());
     beamWidth = 1000;
@@ -135,7 +138,7 @@ public class Reranker {
         added++;
         beam.push(ss, ss.getScore());
       }
-      LOG.debug("[oracle] added=" + added);
+      //LOG.debug("[oracle] added=" + added);
       if (added == 0) {
         // There were no previous states, so frontier must be the empty parse,
         // or initial state.
@@ -180,7 +183,7 @@ public class Reranker {
           score += deltaLoss(ss, y);
         beam.push(ss, score);
       }
-      LOG.debug("[mostViolated] added=" + added);
+      //LOG.debug("[mostViolated] added=" + added);
       if (added == 0) {
         LOG.info("[mostViolated] done");
         return frontier;
@@ -225,25 +228,42 @@ public class Reranker {
    *
    * @return the hinge loss
    */
-  private double updateParams(FNParse y, List<Item> rerank, StdEvalFunc loss) {
+  private double updateParams(FNParse y, List<Item> rerank, StdEvalFunc eval) {
+    if (y.numFrameInstances() == 0)
+      return 0d;
+    if (rerank == null || rerank.size() == 0)
+      throw new IllegalArgumentException();
     StateSequence oracle = oracle(y);
     StateSequence mv = mostViolated(rerank, y);
-    double l = loss.evaluate(new SentenceEval(y, mv.getCur().decode()));
-    double hinge = oracle.getScore() - (mv.getScore() + l);
-    if (hinge > 0) {
+    double l = eval.evaluate(new SentenceEval(y, mv.getCur().decode()));
+    assert l >= 0d && l <= 1d;
+    l = 1d - l; // Convert from score => loss
+    double negHinge = oracle.getScore() - (mv.getScore() + l);
+    LOG.info(String.format(
+        "[updateParams] items.size=%d -hinge(%s) = %.3f = oracle.score=%.3f - [mv.score=%.3f + loss=%.3f]",
+        rerank.size(), y.getId(), negHinge, oracle.getScore(), mv.getScore(), l));
+    if (negHinge < 0) {
       StateSequence cur;
       cur = oracle;
       while (cur != null) {
-        theta.update(cur.getAdjoints(), -l);
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          theta.update(a, -l);
+        else
+          LOG.warn("null adjoints in oracle");
         cur = cur.neighbor();
       }
       cur = mv;
       while (cur != null) {
-        theta.update(cur.getAdjoints(), l);
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          theta.update(a, l);
+        else
+          LOG.warn("null adjoints in mv");
         cur = cur.neighbor();
       }
     }
-    return hinge;
+    return negHinge;
   }
 
   public void train(ItemProvider ip) {

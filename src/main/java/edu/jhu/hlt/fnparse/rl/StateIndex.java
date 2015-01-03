@@ -4,6 +4,7 @@ import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 
 /**
  * A dense and efficient bijection between the integers and (t,k,span).
@@ -100,7 +101,8 @@ public interface StateIndex {
     }
     @Override
     public int index(int t, int k, int start, int end) {
-      assert start >= 0 && start < end && end <= n;
+      assert (start >= 0 && start < end && end <= n)
+          || (start == Span.nullSpan.start && end == Span.nullSpan.end);
       int tk = Toffset[t] + k;
       int sk = n * start + end;
       return sk * TK + tk;

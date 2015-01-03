@@ -47,13 +47,16 @@ public class StateSequence {
       throw new RuntimeException("ambiguous");
   }
 
-  // TODO memoize this
+  private double score = Double.NaN;  // memo
   public double getScore() {
-    StateSequence n = neighbor();
-    if (action == null) {
-      return 0d;
+    if (Double.isNaN(score)) {
+      StateSequence n = neighbor();
+      if (action == null) {
+        return 0d;
+      }
+      score = action.getScore() +  (n == null ? 0d : n.getScore());
     }
-    return action.getScore() +  (n == null ? 0d : n.getScore());
+    return score;
   }
 
   public Adjoints getAdjoints() {

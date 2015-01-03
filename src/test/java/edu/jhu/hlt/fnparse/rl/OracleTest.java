@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 /**
@@ -122,6 +123,12 @@ public class OracleTest {
       assertEquals(y, yy);
     }
   }
+
+//  public void oracleWorksOnItemProvider() {
+//    ItemProvider ip = Reranker.getItemProvider();
+//    Reranker r = new Reranker();
+//    r.or``
+//  }
 
   @Test
   public void testMostViolated() {
