@@ -1,9 +1,15 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -235,6 +241,7 @@ public class Reranker {
    *
    * @return the hinge loss
    */
+  /*
   private double updateParams(FNParse y, List<Item> rerank, StdEvalFunc eval) {
     if (y.numFrameInstances() == 0)
       return 0d;
@@ -273,29 +280,101 @@ public class Reranker {
     }
     return negHinge;
   }
+  */
 
-  public void train(ItemProvider ip) {
+  class Update {
+    public StateSequence oracle, mostViolated;
+    public double negHinge;
+    public Update(FNParse y, List<Item> rerank, StdEvalFunc eval) {
+      if (y.numFrameInstances() == 0) {
+        negHinge = 0d;
+        return;
+      }
+      if (rerank == null || rerank.size() == 0)
+        throw new IllegalArgumentException();
+      oracle = oracle(y);
+      mostViolated = mostViolated(rerank, y);
+      double l = eval.evaluate(new SentenceEval(y, mostViolated.getCur().decode()));
+      assert l >= 0d && l <= 1d;
+      l = 1d - l; // Convert from score => loss
+      negHinge = oracle.getScore() - (mostViolated.getScore() + l);
+    }
+    public boolean apply() {
+      if (negHinge >= 0d)
+        return false;
+      StateSequence cur;
+      cur = oracle;
+      while (cur != null) {
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          theta.update(a, negHinge);
+        else
+          LOG.warn("null adjoints in oracle");
+        cur = cur.neighbor();
+      }
+      cur = mostViolated;
+      while (cur != null) {
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          theta.update(a, -negHinge);
+        else
+          LOG.warn("null adjoints in mv");
+        cur = cur.neighbor();
+      }
+      return true;
+    }
+  }
+
+  public int trainBatch(int batchSize, ExecutorService es, ItemProvider ip, StdEvalFunc eval) throws InterruptedException, ExecutionException {
+    List<Future<Update>> updates = new ArrayList<>();
+    int n = ip.size();
+    for (int i = 0; i < batchSize; i++) {
+      int idx = rand.nextInt(n);
+      FNParse y = ip.label(idx);
+      List<Item> rerank = ip.items(idx);
+      LOG.info("[trainBatch] submitting " + idx);
+      updates.add(es.submit(() -> new Update(y, rerank, eval)));
+    }
+    //es.awaitTermination(99, TimeUnit.HOURS);
+    LOG.info("[trainBatch] applying updates");
+    int updated = 0;
+    for (Future<Update> u : updates)
+      if (u.get().apply())
+        updated++;
+    return updated;
+  }
+
+  public void train(ItemProvider ip, int threads, int batchSize) {
+    ExecutorService es = Executors.newWorkStealingPool(threads);
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
     int n = ip.size();
     for (int epoch = 0; epoch < 10; epoch++) {
       int updated = 0;
-      for (int i = 0; i < n; i++) {
-        int idx = rand.nextInt(n);
-        FNParse y = ip.label(idx);
-        List<Item> items = ip.items(idx);
-        if (updateParams(y, items, eval) > 0)
-          updated++;
+      for (int i = 0; i < n; i += batchSize) {
+//        int idx = rand.nextInt(n);
+//        FNParse y = ip.label(idx);
+//        List<Item> items = ip.items(idx);
+//        if (updateParams(y, items, eval) > 0)
+//          updated++;
+        try {
+          updated += trainBatch(batchSize, es, ip, eval);
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
       }
       LOG.info("[train] updated " + updated);
       if (updated == 0)
         break;  // unlikely...
     }
+    es.shutdown();
   }
 
   public static void main(String[] args) {
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
     Reranker r = new Reranker();
     ItemProvider ip = getItemProvider();
-    r.train(ip);
+    int threads = 1;
+    int batchSize = 1;
+    r.train(ip, threads, batchSize);
   }
 }
