@@ -1,10 +1,13 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.rl.ContextEmbedding.CtxEmb;
+import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.FrameRoleFeatures;
+import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.params.ContextEmbedding.CtxEmb;
 
 /**
  * implements e(f,r)' \theta \phi(t,a,s,x)

@@ -95,6 +95,10 @@ public final class Span implements Comparable<Span> {
 
   public int hashCode() { return (start<<16) | end; }
 
+  public boolean equals(int start, int end) {
+    return start == this.start && end == this.end;
+  }
+
   public boolean equals(Object other) {
     if(other instanceof Span) {
       Span s = (Span) other;

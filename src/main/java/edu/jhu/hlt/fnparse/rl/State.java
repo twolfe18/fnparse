@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -13,6 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.StateIndex.TKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Item;
 
 /**
@@ -117,6 +119,11 @@ public class State {
     return possible;
   }
 
+  /** Doesn't return a copy! Make sure you don't modify this! */
+  public Span[][] getCommitted() {
+    return committed;
+  }
+
   /**
    * Returns a span if one has been chosen for this role, or null otherwise.
    */
@@ -131,6 +138,20 @@ public class State {
         if (s != null)
           comm++;
     return comm;
+  }
+
+  /**
+   * Adds all committed spans that are not nullSpan to addTo and returns it.
+   */
+  public <T extends Collection<Span>> T getCommittedSpans(T addTo) {
+    int T = committed.length;
+    for (int t = 0; t < T; t++) {
+      for (Span s : committed[t]) {
+        if (s != null && s != Span.nullSpan)
+          addTo.add(s);
+      }
+    }
+    return addTo;
   }
 
   /**
@@ -214,6 +235,14 @@ public class State {
     return frames.numFrameInstances();
   }
 
+  /** aka TK */
+  public int numFrameRoleInstances() {
+    int TK = 0;
+    for (FrameInstance fi : frames.getFrameInstances())
+      TK += fi.getFrame().numRoles();
+    return TK;
+  }
+
   public FrameInstance getFrameInstance(int i) {
     return frames.getFrameInstance(i);
   }
@@ -226,27 +255,52 @@ public class State {
     return frames;
   }
 
+  public StateIndex getStateIndex() {
+    return stateIndex;
+  }
+
+  public Span[][] copyOfCommitted() {
+    int T = committed.length;
+    Span[][] c = new Span[T][];
+    for (int t = 0; t < T; t++)
+      c[t] = Arrays.copyOf(committed[t], committed[t].length);
+    return c;
+  }
+
   /**
    * Returns the state resulting from applying the given action to this state.
    * Doesn't modify this state.
    */
   public State apply(Action a, boolean forwards) {
-    BitSet n = stateIndex.update(a, possible);
-    int T = committed.length;
-    Span[][] c = new Span[T][];
-    for (int t = 0; t < T; t++)
-      c[t] = Arrays.copyOf(committed[t], committed[t].length);
-    if (forwards) {
-      if (a.mode != Action.COMMIT && a.mode != Action.COMMIT_AND_PRUNE_OVERLAPPING)
-        throw new RuntimeException("not yet supported");
-      assert c[a.t][a.k] == null;
-      c[a.t][a.k] = a.hasSpan() ? a.getSpan() : Span.nullSpan;
-    } else {
-      assert (committed[a.t][a.k] == Span.nullSpan && !a.hasSpan())
-          || (committed[a.t][a.k] == a.getSpan());
-      c[a.t][a.k] = null;
-    }
-    return new State(frames, stateIndex, n, c);
+    ActionType at = ActionType.ACTION_TYPES[a.mode];
+    if (forwards)
+      return at.apply(a, this);
+    else
+      return at.unapply(a, this);
   }
 
+  public static String possibleDiff(State a, State b) {
+    if (a.stateIndex != b.stateIndex)
+      throw new IllegalArgumentException();
+    return possibleDiff(a.possible, b.possible, a.stateIndex);
+  }
+
+  public static String possibleDiff(BitSet a, BitSet b, StateIndex si) {
+    StringBuilder sb = new StringBuilder("diff:\n");
+    if (a.cardinality() != b.cardinality()) {
+      sb.append("using closed world assumption because cardinalities differ: "
+          + a.cardinality() + " vs " + b.cardinality() + "\n");
+    }
+    BitSet diff = new BitSet(a.cardinality());
+    diff.xor(a);  // diff = a
+    diff.xor(b);  // diff = a ^ b
+    for (int i = diff.nextSetBit(0); i >= 0; i = diff.nextSetBit(i+1)) {
+      TKS d = si.lookup(i);
+      //sb.append("diff@" + i + ": ");
+      sb.append(a.get(i) ? "- " : "+ ");
+      sb.append(d.toString());
+      sb.append('\n');
+    }
+    return sb.toString();
+  }
 }

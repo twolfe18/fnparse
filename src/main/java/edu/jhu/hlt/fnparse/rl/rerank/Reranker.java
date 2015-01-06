@@ -5,33 +5,24 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
 
-import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.Adjoints;
-import edu.jhu.hlt.fnparse.rl.CompositeParams;
-import edu.jhu.hlt.fnparse.rl.DenseFastFeatures;
-import edu.jhu.hlt.fnparse.rl.Params;
+import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
+import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.util.Beam;
 
 /**
@@ -75,21 +66,22 @@ public class Reranker {
   };
 
   private Params theta;
+  private ActionType[] actionTypes;
   private int beamWidth;
-  private Random rand;
+  public boolean logOracle = false;
+  public boolean logMostViolated = false;
 
-  public Reranker() {
-    this(new CompositeParams(
-          new DenseFastFeatures(),
-          new PriorScoreParams(getItemProvider(), true)),
-        100,
-        new Random(9001));
-  }
-
-  public Reranker(Params theta, int beamWidth, Random rand) {
+  public Reranker(Params theta, int beamWidth) {
     this.theta = theta;
     this.beamWidth = beamWidth;
-    this.rand = rand;
+    this.actionTypes = new ActionType[] {
+        //ActionType.COMMIT,
+        ActionType.COMMIT_AND_PRUNE,
+    };
+  }
+
+  public String toString() {
+    return "<Reranker beam=" + beamWidth + " theta=" + theta.toString() + ">";
   }
 
   public static ItemProvider getItemProvider() {
@@ -130,15 +122,11 @@ public class Reranker {
    * @param y
    */
   public StateSequence oracle(FNParse y) {
-    LOG.info("[oracle] starting " + y.getId());
-
-    // TODO this can be used to bias the search to find certain paths which you
-    // a priori think are good.
-    //Params p = new NumCommittedParamsWrapper(0d, theta);
-    Params p = theta;
-    TransitionFunction trans = new TransitionFunction.Simple(y, p);
-
+    if (logOracle)
+      LOG.info("[oracle] starting " + y.getId());
     Beam<StateSequence> beam = new Beam<>(beamWidth);
+    TransitionFunction transF =
+        new ActionDrivenTransitionFunction(theta, y, actionTypes);
     State finalState = State.finalState(y);
     StateSequence init = new StateSequence(null, null, finalState, null);
     beam.push(init, 0d);
@@ -147,7 +135,7 @@ public class Reranker {
       StateSequence frontier = beam.pop();
       // For each of its extensions, check if they should be put on the beam.
       int added = 0;
-      for (StateSequence ss : trans.previousStates(frontier)) {
+      for (StateSequence ss : transF.previousStates(frontier)) {
         added++;
         beam.push(ss, ss.getScore());
       }
@@ -155,7 +143,8 @@ public class Reranker {
       if (added == 0) {
         // There were no previous states, so frontier must be the empty parse,
         // or initial state.
-        LOG.debug("[oracle] done");
+        if (logOracle)
+          LOG.debug("[oracle] done");
         return frontier;
       }
     }
@@ -168,67 +157,67 @@ public class Reranker {
     return st.decode();
   }
 
+  public <T extends FNTagging> List<FNParse> predict(List<T> frames) {
+    List<FNParse> r = new ArrayList<>();
+    for (T t : frames)
+      r.add(predict(t));
+    return r;
+  }
+
   /**
    * if y is null, then do decoding.
    */
   public StateSequence mostViolated(FNTagging frames, FNParse y) {
-    LOG.warn("[mostViolated] don't use this version");
+    if (logMostViolated)
+      LOG.warn("[mostViolated] using exhaustive version (not reranking)");
     State init = State.initialState(frames);
     return mostViolatedHelper(init, y);
   }
   public StateSequence mostViolated(List<Item> rerank, FNParse y) {
+    if (logMostViolated)
+      LOG.warn("[mostViolated] using reranking version");
     State init = State.initialState(y, rerank);
     return mostViolatedHelper(init, y);
   }
   private StateSequence mostViolatedHelper(State init, FNParse y) {
-    LOG.info("[mostViolated] starting " + y.getId());
-    TransitionFunction trans = new TransitionFunction.Simple(null, theta);
+    if (logMostViolated) {
+      if (y == null)
+        LOG.info("[mostViolated] decoding " + init.getFrames().getId());
+      else
+        LOG.info("[mostViolated] starting " + y.getId());
+      int n = init.getSentence().size();
+      LOG.info("[mostViolated] T=" + init.numFrameInstance()
+          + " TK=" + init.numFrameRoleInstances()
+          + " O(n^2)=" + (n*(n-1)/2));
+    }
+    TransitionFunction transF =
+        new ActionDrivenTransitionFunction(theta, y, actionTypes);
     StateSequence frontier = new StateSequence(null, null, init, null);
     Beam<StateSequence> beam = new Beam<>(beamWidth);
     beam.push(frontier, 0d);
     while (true) {
       frontier = beam.pop();
       int added = 0;
-      for (StateSequence ss : trans.nextStates(frontier)) {
+      for (StateSequence ss : transF.nextStates(frontier)) {
         added++;
+        // Model score
         double score = ss.getScore();
-        if (y != null)
-          score += deltaLoss(ss, y);
+        if (y != null) {
+          // Add in a reward for increasing the loss
+          Action a = ss.getAction();
+          ActionType at = a.getActionType();
+          State s = ss.getCur();
+          score += at.deltaLoss(s, a, y);
+        }
         beam.push(ss, score);
       }
       //LOG.debug("[mostViolated] added=" + added);
       if (added == 0) {
-        LOG.info("[mostViolated] done");
+        if (logMostViolated)
+          LOG.info("[mostViolated] done");
         return frontier;
       }
     }
-  }
-
-  private static double deltaLoss(StateSequence next, FNParse y) {
-    final double costFP = 1d;
-    final double costFN = 1d;
-    double cost = 0;
-    Action a = next.getAction();
-    if (a.mode == Action.COMMIT || a.mode == Action.COMMIT_AND_PRUNE_OVERLAPPING) {
-      // Check for false positives (proposing a bad argument)
-      if (a.hasSpan()) {
-        Span hyp = a.getSpan();
-        Span gold = y.getFrameInstance(a.t).getArgument(a.k);
-        if (hyp != gold)
-          cost += costFP;
-      }
-
-      // Check for false negatives (pruning a gold argument)
-      if (!a.hasSpan()) {
-        assert a.start == Span.nullSpan.start && a.end == Span.nullSpan.end;
-        Span gold = y.getFrameInstance(a.t).getArgument(a.k);
-        if (gold != Span.nullSpan)
-          cost += costFN;
-      }
-    } else {
-      throw new RuntimeException("not supported yet");
-    }
-    return cost;
   }
 
   /**
@@ -241,64 +230,29 @@ public class Reranker {
    *
    * @return the hinge loss
    */
-  /*
-  private double updateParams(FNParse y, List<Item> rerank, StdEvalFunc eval) {
-    if (y.numFrameInstances() == 0)
-      return 0d;
-    if (rerank == null || rerank.size() == 0)
-      throw new IllegalArgumentException();
-    StateSequence oracle = oracle(y);
-    StateSequence mv = mostViolated(rerank, y);
-    double l = eval.evaluate(new SentenceEval(y, mv.getCur().decode()));
-    assert l >= 0d && l <= 1d;
-    l = 1d - l; // Convert from score => loss
-    double negHinge = oracle.getScore() - (mv.getScore() + l);
-    LOG.info(String.format(
-        "[updateParams] items.size=%d -hinge(%s) = %.3f = oracle.score=%.3f - [mv.score=%.3f + loss=%.3f]",
-        rerank.size(), y.getId(), negHinge, oracle.getScore(), mv.getScore(), l));
-    assert Double.isFinite(negHinge) && !Double.isNaN(negHinge);
-    if (negHinge < 0) {
-      StateSequence cur;
-      cur = oracle;
-      while (cur != null) {
-        Adjoints a = cur.getAdjoints();
-        if (a != null)
-          theta.update(a, l);
-        else
-          LOG.warn("null adjoints in oracle");
-        cur = cur.neighbor();
-      }
-      cur = mv;
-      while (cur != null) {
-        Adjoints a = cur.getAdjoints();
-        if (a != null)
-          theta.update(a, -l);
-        else
-          LOG.warn("null adjoints in mv");
-        cur = cur.neighbor();
-      }
-    }
-    return negHinge;
-  }
-  */
+  public class Update {
 
-  class Update {
-    public StateSequence oracle, mostViolated;
-    public double negHinge;
+    public final StateSequence oracle;
+    public final StateSequence mostViolated;
+    public final double negHinge;
+
     public Update(FNParse y, List<Item> rerank, StdEvalFunc eval) {
       if (y.numFrameInstances() == 0) {
+        oracle = null;
+        mostViolated = null;
         negHinge = 0d;
-        return;
+      } else {
+        if (rerank == null || rerank.size() == 0)
+          throw new IllegalArgumentException();
+        oracle = oracle(y);
+        mostViolated = mostViolated(rerank, y);
+        double l = eval.evaluate(new SentenceEval(y, mostViolated.getCur().decode()));
+        assert l >= 0d && l <= 1d;
+        l = 1d - l; // Convert from score => loss
+        negHinge = oracle.getScore() - (mostViolated.getScore() + l);
       }
-      if (rerank == null || rerank.size() == 0)
-        throw new IllegalArgumentException();
-      oracle = oracle(y);
-      mostViolated = mostViolated(rerank, y);
-      double l = eval.evaluate(new SentenceEval(y, mostViolated.getCur().decode()));
-      assert l >= 0d && l <= 1d;
-      l = 1d - l; // Convert from score => loss
-      negHinge = oracle.getScore() - (mostViolated.getScore() + l);
     }
+
     public boolean apply() {
       if (negHinge >= 0d)
         return false;
@@ -308,8 +262,8 @@ public class Reranker {
         Adjoints a = cur.getAdjoints();
         if (a != null)
           theta.update(a, negHinge);
-        else
-          LOG.warn("null adjoints in oracle");
+//        else
+//          LOG.warn("null adjoints in oracle");
         cur = cur.neighbor();
       }
       cur = mostViolated;
@@ -317,64 +271,25 @@ public class Reranker {
         Adjoints a = cur.getAdjoints();
         if (a != null)
           theta.update(a, -negHinge);
-        else
-          LOG.warn("null adjoints in mv");
+//        else
+//          LOG.warn("null adjoints in mv");
         cur = cur.neighbor();
       }
       return true;
     }
   }
 
-  public int trainBatch(int batchSize, ExecutorService es, ItemProvider ip, StdEvalFunc eval) throws InterruptedException, ExecutionException {
-    List<Future<Update>> updates = new ArrayList<>();
-    int n = ip.size();
-    for (int i = 0; i < batchSize; i++) {
-      int idx = rand.nextInt(n);
-      FNParse y = ip.label(idx);
-      List<Item> rerank = ip.items(idx);
-      LOG.info("[trainBatch] submitting " + idx);
-      updates.add(es.submit(() -> new Update(y, rerank, eval)));
-    }
-    //es.awaitTermination(99, TimeUnit.HOURS);
-    LOG.info("[trainBatch] applying updates");
-    int updated = 0;
-    for (Future<Update> u : updates)
-      if (u.get().apply())
-        updated++;
-    return updated;
-  }
-
-  public void train(ItemProvider ip, int threads, int batchSize) {
-    ExecutorService es = Executors.newWorkStealingPool(threads);
-    StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
-    int n = ip.size();
-    for (int epoch = 0; epoch < 10; epoch++) {
-      int updated = 0;
-      for (int i = 0; i < n; i += batchSize) {
-//        int idx = rand.nextInt(n);
-//        FNParse y = ip.label(idx);
-//        List<Item> items = ip.items(idx);
-//        if (updateParams(y, items, eval) > 0)
-//          updated++;
-        try {
-          updated += trainBatch(batchSize, es, ip, eval);
-        } catch (Exception e) {
-          throw new RuntimeException(e);
-        }
-      }
-      LOG.info("[train] updated " + updated);
-      if (updated == 0)
-        break;  // unlikely...
-    }
-    es.shutdown();
-  }
-
-  public static void main(String[] args) {
-    Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
-    Reranker r = new Reranker();
-    ItemProvider ip = getItemProvider();
-    int threads = 1;
-    int batchSize = 1;
-    r.train(ip, threads, batchSize);
+  public State randomDecodingState(FNTagging frames, Random rand) {
+    TransitionFunction transF =
+        new ActionDrivenTransitionFunction(theta, null, actionTypes);
+    State init = State.initialState(frames);
+    StateSequence frontier = new StateSequence(null, null, init, null);
+    int TK = init.numFrameRoleInstances();
+    if (TK == 0)
+      throw new IllegalArgumentException("only works when there are frameInstances");
+    int tkStop = rand.nextInt(TK);
+    for (int i = 0; i < tkStop; i++)
+      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+    return frontier.getCur();
   }
 }

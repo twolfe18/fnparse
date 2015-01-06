@@ -1,4 +1,7 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
+
+import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.State;
 
 
 public class CompositeParams implements Params {

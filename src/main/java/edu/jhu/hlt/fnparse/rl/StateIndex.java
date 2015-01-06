@@ -1,8 +1,13 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
@@ -16,6 +21,8 @@ public interface StateIndex {
 
   /**
    * Returns a BitSet which reflects the state after applying the given action.
+   * 
+   * @deprecated this has now moved to ActionType.apply and unapply
    */
   public BitSet update(Action a, BitSet currentState);
 
@@ -26,7 +33,24 @@ public interface StateIndex {
    * must be valid spans.
    */
   public int index(int t, int k, int start, int end);
-  // TODO inverse
+
+  /**
+   * Inverse of index()
+   */
+  public TKS lookup(int index);
+
+  public static class TKS {
+    public final int t, k, start, end;
+    public TKS(int t, int k, int start, int end) {
+      this.t = t;
+      this.k = k;
+      this.start = start;
+      this.end = end;
+    }
+    public String toString() {
+      return "t=" + t + " k=" + k + " start=" + start + " end=" + end;
+    }
+  }
 
   public int sentenceSize();
   public int numFrameInstances();
@@ -36,10 +60,14 @@ public interface StateIndex {
   // pieces of (t,k,start,end), e.g. "all spans more than 10 words from t"
   // TODO this means that the bitset will need to be internal to this class.
 
+  /**
+   * @deprecated
+   */
   public static BitSet naiveUpdate(Action a, BitSet currentState, StateIndex si) {
+    assert false : "use ActionType.apply";
     BitSet next = new BitSet(currentState.cardinality());
     next.xor(currentState);
-    if (a.mode == Action.COMMIT || a.mode == Action.COMMIT_AND_PRUNE_OVERLAPPING) {
+    if (a.mode == ActionType.COMMIT.getIndex() || a.mode == ActionType.COMMIT_AND_PRUNE.getIndex()) {
 
       // Commit to this (t,k)
       int n = si.sentenceSize();
@@ -48,7 +76,7 @@ public interface StateIndex {
           next.set(si.index(a.t, a.k, i, j), false);
 
       // Rule out other spans
-      if (a.mode == Action.COMMIT_AND_PRUNE_OVERLAPPING) {
+      if (a.mode == ActionType.COMMIT_AND_PRUNE.getIndex()) {
         assert a.start >= 0;
         assert a.width() > 1;
         for (int t = 0; t < si.numFrameInstances(); t++) {
@@ -86,6 +114,14 @@ public interface StateIndex {
     private int[] Toffset;
     private int[] K;
     private int T;
+
+    public boolean debug = false;
+    public Logger LOG = Logger.getLogger(SpanMajor.class);
+
+    public SpanMajor(FNTagging frames) {
+      this(frames.getFrameInstances(), frames.getSentence().size());
+    }
+
     public SpanMajor(List<FrameInstance> fis, int n) {
       this.n = n;
       T = fis.size();
@@ -99,26 +135,74 @@ public interface StateIndex {
         K[t] = k;
       }
     }
+
     @Override
     public int index(int t, int k, int start, int end) {
       assert (start >= 0 && start < end && end <= n)
           || (start == Span.nullSpan.start && end == Span.nullSpan.end);
+
+      // NOTE: It would be nice if we could, for the purpose of this encoding,
+      // use [start,end] instead of [start,end), so that end < n.
+      // HOWEVER, we want to support nullSpan=(0,0), so instead we'll pretend
+      // n is really n+1.
+
       int tk = Toffset[t] + k;
-      int sk = n * start + end;
-      return sk * TK + tk;
+      // TODO come up with a dense packing for n*(n-1)/2
+      int sk = (n+1) * start + end;
+      int index = sk * TK + tk;
+      if (debug) {
+        LOG.info("[index] t=" + t + " k=" + k + " start=" + start + " end=" + end);
+        LOG.info("[index] Toffset=" + Arrays.toString(Toffset));
+        LOG.info("[index] TK=" + TK + " tk=" + tk);
+        LOG.info("[index] (n+1)=" + (n+1) + " sk=" + sk);
+        LOG.info("[index] index=" + index);
+      }
+      return index;
     }
+
+    @Override
+    public TKS lookup(int index) {
+      int tk = index % TK;
+      int sk = index / TK;
+
+      int start = sk / (n+1);
+      int end = sk % (n+1);
+
+      int t = 0;
+      while (t < Toffset.length - 1
+          && !(Toffset[t] <= tk && tk < Toffset[t + 1])) {
+        t++;
+      }
+      assert Toffset[t] <= tk && (t == Toffset.length - 1 || tk < Toffset[t + 1]);
+      int k = tk - Toffset[t];
+      assert k < numRoles(t);
+
+      if (debug) {
+        LOG.info("[lookup] index=" + index);
+        LOG.info("[lookup] Toffset=" + Arrays.toString(Toffset));
+        LOG.info("[lookup] TK=" + TK + " tk=" + tk);
+        LOG.info("[lookup] (n+1)=" + (n+1) + " sk=" + sk);
+        LOG.info("[lookup] t=" + t + " k=" + k + " start=" + start + " end=" + end);
+      }
+
+      return new TKS(t, k, start, end);
+    }
+
     @Override
     public BitSet update(Action a, BitSet currentState) {
       return naiveUpdate(a, currentState, this);
     }
+
     @Override
     public int sentenceSize() {
       return n;
     }
+
     @Override
     public int numFrameInstances() {
       return T;
     }
+
     @Override
     public int numRoles(int t) {
       return K[t];

@@ -1,6 +1,7 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 
 /**

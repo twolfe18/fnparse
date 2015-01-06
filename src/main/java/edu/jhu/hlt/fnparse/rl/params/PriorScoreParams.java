@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl.rerank;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.HashMap;
 import java.util.List;
@@ -9,9 +9,9 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.Adjoints;
-import edu.jhu.hlt.fnparse.rl.Params;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.rerank.Item;
+import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 
 /**
  * Stores the prior score for an item in a HashMap keyed on (t,k,span)
@@ -39,7 +39,7 @@ public class PriorScoreParams implements Params {
       FNParse y = ip.label(i);
       List<Item> items = ip.items(i);
       for (Item it : items) {
-        String k = key(y.getId(), it.t(), it.k(), it.getSpan());
+        String k = itemKey(y.getId(), it.t(), it.k(), it.getSpan());
         Double old = index.put(k, it.getScore());
         assert old == null;
       }
@@ -47,15 +47,19 @@ public class PriorScoreParams implements Params {
     LOG.info("[init] index contains " + index.size() + " items");
   }
 
-  public static String key(String parseId, int t, int k, Span s) {
+  public static String itemKey(String parseId, int t, int k, Span s) {
     return parseId + " " + t + " " + k + " " + s.shortString();
+  }
+
+  public static String itemKey(State s, Action a) {
+    String id = s.getFrames().getId();
+    Span arg = a.hasSpan() ? a.getSpan() : Span.nullSpan;
+    return itemKey(id, a.t, a.k, arg);
   }
 
   @Override
   public Adjoints score(State s, Action a) {
-    String id = s.getFrames().getId();
-    Span arg = a.hasSpan() ? a.getSpan() : Span.nullSpan;
-    String key = key(id, a.t, a.k, arg);
+    String key = itemKey(s, a);
     Double score = index.get(key);
     if (theta != null) {
       double[] feats = new double[theta.length];

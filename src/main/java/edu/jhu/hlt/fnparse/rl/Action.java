@@ -8,32 +8,16 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  */
 public class Action {
 
-  // NOTE: Keep these as ints, as I may want to pack them into start
+  public int t;     // (frame,target), i.e. frameInstance index
+  public int k;     // role
+  public int mode;  // see ActionType.getIndex and ActionType.ACTION_TYPES
+  public int start;
+  public int end;
 
-  public static final int COMMIT = 0;   // assign a span or nullSpan
-
-  // Prune any spans that partially overlap with the span being added.
-  // Not compatible with nullSpan.
-  public static final int COMMIT_AND_PRUNE_OVERLAPPING = 1;
-
-  public static final int PRUNE_ENTIRE_SENTENCE = -1;
-  public static final int PRUNE_LEFT_OF_TARGET = -2;
-  public static final int PRUNE_RIGHT_OF_TARGET = -3;
-  public static final int PRUNE_SPANS_WIDER_THAN = -8;
-  public static final int PRUNE_SPANS_STARTING_WITH_POS = -9;
-  public static final int PRUNE_SPANS_ENDING_WITH_POS = -10;
-
-
-  public final int t;     // (frame,target), i.e. frameInstance index
-  public final int k;     // role
-  public final int mode;  // see above, most common is COMMIT
-  public final int start;
-  public final int end;
-
-  public Action(int t, int k, Span s) {
+  public Action(int t, int k, int mode, Span s) {
     this.t = t;
     this.k = k;
-    this.mode = COMMIT;
+    this.mode = mode;
     this.start = s.start;
     this.end = s.end;
     assert start >= 0;
@@ -41,14 +25,7 @@ public class Action {
   }
 
   public boolean hasSpan() {
-    if (mode == COMMIT) {
-      return start < end; // else its nullSpan
-    }
-    if (mode == COMMIT_AND_PRUNE_OVERLAPPING) {
-      assert start < end;
-      return true;
-    }
-    return false;
+    return start < end; // else its nullSpan
   }
 
   public Span getSpan() {
@@ -64,8 +41,12 @@ public class Action {
     return s.start == start && s.end == end;
   }
 
+  public ActionType getActionType() {
+    return ActionType.ACTION_TYPES[mode];
+  }
+
   public String toString() {
-    String m = mode == COMMIT ? "COMMIT" : "???";
+    String m = ActionType.ACTION_TYPES[mode].getName();
     return String.format("[Action(%s) t=%d k=%d %d-%d]", m, t, k, start, end);
   }
 }

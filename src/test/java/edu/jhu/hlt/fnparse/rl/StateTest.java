@@ -49,8 +49,7 @@ public class StateTest {
           for (int k = 0; k < K; k++) {
             assertTrue(s.committed(t, k) == null);
             Span span = randSpan(n);
-            // TODO change to COMMIT action when API changes
-            Action a = new Action(t, k, span);
+            Action a = new Action(t, k, ActionType.COMMIT.getIndex(), span);
             State s2 = s.apply(a, true);
             assertEquals(span, s2.committed(t, k));
           }

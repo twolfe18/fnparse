@@ -4,7 +4,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -20,7 +19,9 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.params.DenseFastFeatures;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 /**
@@ -110,7 +111,7 @@ public class OracleTest {
    */
   @Test
   public void validPath() {
-    Reranker r = new Reranker();
+    Reranker r = new Reranker(new DenseFastFeatures(), 100);
     for (FNParse y : testParses()) {
       if (y.numFrameInstances() == 0)
         continue;
@@ -124,16 +125,10 @@ public class OracleTest {
     }
   }
 
-//  public void oracleWorksOnItemProvider() {
-//    ItemProvider ip = Reranker.getItemProvider();
-//    Reranker r = new Reranker();
-//    r.or``
-//  }
-
   @Test
   public void testMostViolated() {
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
-    Reranker r = new Reranker();
+    Reranker r = new Reranker(new DenseFastFeatures(), 100);
     for (FNParse y : testParses()) {
       if (y.numFrameInstances() == 0)
         continue;

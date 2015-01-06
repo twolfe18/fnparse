@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.Arrays;
 
@@ -8,6 +8,8 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.util.Alphabet;
 
 public class FeatureParams implements Params {
@@ -53,7 +55,7 @@ public class FeatureParams implements Params {
     String f = fi.getFrame().getName();
     String r = fi.getFrame().getRole(a.k);
     String fr = f + "." + r;
-    String m = a.mode == Action.COMMIT ? "mode=COMMIT" : "mode=unknown";
+    String m = a.getActionType().getName();
     bb(m, f, fr, r);
     if (a.hasSpan()) {
       Span arg = a.getSpan();

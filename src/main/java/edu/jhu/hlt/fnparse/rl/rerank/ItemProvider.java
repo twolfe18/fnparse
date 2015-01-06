@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Random;
 import java.util.zip.GZIPInputStream;
@@ -29,6 +30,16 @@ public interface ItemProvider {
   public int size();
   public FNParse label(int i);
   public List<Item> items(int i);
+
+  /**
+   * returns and adds to addTo all of the labels in ip
+   */
+  public static <T extends Collection<FNParse>> T allLabels(ItemProvider ip, T addTo) {
+    int n = ip.size();
+    for (int i = 0; i < n; i++)
+      addTo.add(ip.label(i));
+    return addTo;
+  }
 
   public static class Caching implements ItemProvider {
     private FNParse[] labels;
@@ -115,6 +126,7 @@ public interface ItemProvider {
     private List<Item>[] items;
     private LatentConstituencyPipelinedParser parser;
     private File modelDir = new File("saved-models/good-latent-span/");
+    @SuppressWarnings("unchecked")
     public Slow(List<FNParse> parses) {
       if (!modelDir.isDirectory())
         throw new RuntimeException("model dir doesn't exist: " + modelDir.getPath());

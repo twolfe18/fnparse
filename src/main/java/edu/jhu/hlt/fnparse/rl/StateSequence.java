@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+
 public class StateSequence {
 
   private StateSequence prev, next;
