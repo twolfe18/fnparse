@@ -46,7 +46,7 @@ public interface Adjoints {
     public DenseFeatures(double[] features, double[] theta, Action a) {
       if (theta.length != features.length)
         throw new IllegalArgumentException();
-      action = a;
+      this.action = a;
       this.features = features;
       this.theta = theta;
     }

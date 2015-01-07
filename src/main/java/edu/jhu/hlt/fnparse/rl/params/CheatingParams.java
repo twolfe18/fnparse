@@ -6,12 +6,12 @@ import java.util.Set;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.State;
 
-public class CheatingParams implements Params {
+public class CheatingParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(CheatingParams.class);
 
   private Set<String> goldItems;
@@ -57,10 +57,10 @@ public class CheatingParams implements Params {
   }
 
   @Override
-  public Adjoints score(State s, Action a) {
-    if (!goldParseIds.contains(s.getFrames().getId()))
+  public Adjoints score(FNTagging frames, Action a) {
+    if (!goldParseIds.contains(frames.getId()))
       throw new IllegalStateException("this parse is unknown, can't cheat");
-    boolean isGold = goldItems.contains(PriorScoreParams.itemKey(s, a));
+    boolean isGold = goldItems.contains(PriorScoreParams.itemKey(frames, a));
     double[] f = new double[theta.length];
     f[0] = 1d;
     f[1] = isGold ? 1d : 0d;

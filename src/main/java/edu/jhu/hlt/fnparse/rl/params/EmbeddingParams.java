@@ -2,11 +2,11 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.FrameRoleFeatures;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.ContextEmbedding.CtxEmb;
 
 /**
@@ -25,11 +25,11 @@ import edu.jhu.hlt.fnparse.rl.params.ContextEmbedding.CtxEmb;
  * 
  * @author travis
  */
-public class EmbeddingParams implements Params {
+public class EmbeddingParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(EmbeddingParams.class);
 
   static class QuadAdjoints implements Adjoints {
-    public final State state;
+    public final FNTagging frames;
     public final Action action;
     public final double[] fr;
     public final CtxEmb ctx;
@@ -39,9 +39,9 @@ public class EmbeddingParams implements Params {
     private double[] prodColSums;
     private double prodSum;
 
-    public QuadAdjoints(State s, Action a, double[] fr, CtxEmb ctx) {
-      state = s;
-      action = a;
+    public QuadAdjoints(FNTagging frames, Action a, double[] fr, CtxEmb ctx) {
+      this.frames = frames;
+      this.action = a;
       this.fr = fr;
       this.ctx = ctx;
     }
@@ -100,9 +100,9 @@ public class EmbeddingParams implements Params {
       return action;
     }
 
-    public boolean matches(State s, Action a) {
-      return s == state && a == action;
-    }
+//    public boolean matches(State s, Action a) {
+//      return s == state && a == action;
+//    }
   }
 
   private FrameRoleFeatures frE;
@@ -122,14 +122,14 @@ public class EmbeddingParams implements Params {
   }
 
   @Override
-  public QuadAdjoints score(State s, Action a) {
+  public QuadAdjoints score(FNTagging frames, Action a) {
     //long t0 = System.currentTimeMillis();
-    FrameInstance fi = s.getFrameInstance(a.t);
+    FrameInstance fi = frames.getFrameInstance(a.t);
     double[] fr = frE.embed(fi.getFrame(), a.k);
     //long t1 = System.currentTimeMillis();
-    CtxEmb ctx = ctxE.embed(fi.getSentence(), fi.getTarget(), a, s);
+    CtxEmb ctx = ctxE.embed(fi.getSentence(), fi.getTarget(), a);
     //long t2 = System.currentTimeMillis();
-    QuadAdjoints adj = new QuadAdjoints(s, a, fr, ctx);
+    QuadAdjoints adj = new QuadAdjoints(frames, a, fr, ctx);
     adj.compute(theta);
     //long t3 = System.currentTimeMillis();
     //LOG.info("[score] frE=" + (t1-t0) + " ctxE=" + (t2-t1) + " quad=" + (t3-t2));
@@ -141,7 +141,7 @@ public class EmbeddingParams implements Params {
     QuadAdjoints adj = (QuadAdjoints) adjoints;
     Action a = adj.getAction();
     double learningRate = 0.1d;
-    Frame f = adj.state.getFrameInstance(a.t).getFrame();
+    Frame f = adj.frames.getFrameInstance(a.t).getFrame();
     frE.update(f, a.k, adj.getCtxTimesTheta(), learningRate);
     ctxE.update(adj.ctx, adj.getFrTimesTheta(), learningRate);
     double[][] prod = adj.getProd();

@@ -12,7 +12,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.util.Alphabet;
 
-public class FeatureParams implements Params {
+public class FeatureParams implements Params.Stateful {
   public static final Logger LOG = Logger.getLogger(FeatureParams.class);
 
   private Alphabet<String> features;

@@ -63,19 +63,19 @@ public interface TransitionFunction {
     // or generate transition code.
 
     private ActionType[] actionTypes;
-    private Params theta;
+    private Params.Stateful theta;
     private FNParse y;
 
     /**
      * @deprecated Should not really need y, use the constructor without it.
      */
-    public ActionDrivenTransitionFunction(Params theta, FNParse y, ActionType... actionTypes) {
+    public ActionDrivenTransitionFunction(Params.Stateful theta, FNParse y, ActionType... actionTypes) {
       this.actionTypes = actionTypes;
       this.theta = theta;
       this.y = y;
     }
 
-    public ActionDrivenTransitionFunction(Params theta, ActionType... actionTypes) {
+    public ActionDrivenTransitionFunction(Params.Stateful theta, ActionType... actionTypes) {
       this.actionTypes = actionTypes;
       this.theta = theta;
       this.y = null;
@@ -132,9 +132,9 @@ public interface TransitionFunction {
      * If not null, then all next state transitions must be consistent with y.
      */
     private FNParse y;
-    private Params params;
+    private Params.Stateful params;
 
-    public Simple(FNParse goal, Params params) {
+    public Simple(FNParse goal, Params.Stateful params) {
       this.y = goal;
       this.params = params;
       assert false : "don't use this anymore";

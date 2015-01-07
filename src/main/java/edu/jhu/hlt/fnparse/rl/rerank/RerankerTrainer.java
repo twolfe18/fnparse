@@ -12,6 +12,8 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 
 /**
@@ -39,8 +41,14 @@ public class RerankerTrainer {
     this.batchSize = batchSize;
   }
 
-  public Reranker train(Params theta, int beamWidth, ItemProvider ip) {
-    Reranker r = new Reranker(theta, beamWidth);
+  public Reranker train(Params.Stateful thetaStateful, int beamWidth, ItemProvider ip) {
+    return train(thetaStateful, Stateless.NONE, beamWidth, ip);
+  }
+  public Reranker train(Params.Stateless thetaStateless, int beamWidth, ItemProvider ip) {
+    return train(Stateful.NONE, thetaStateless, beamWidth, ip);
+  }
+  public Reranker train(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth, ItemProvider ip) {
+    Reranker r = new Reranker(thetaStateful, thetaStateless, beamWidth);
     ExecutorService es = Executors.newWorkStealingPool(threads);
     int n = ip.size();
     for (int epoch = 0; epoch < epochs; epoch++) {

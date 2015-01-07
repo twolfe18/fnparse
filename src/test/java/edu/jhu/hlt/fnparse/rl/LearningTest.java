@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
@@ -98,8 +99,9 @@ public class LearningTest {
   //@Test
   public void noTrainPrereq() {
     List<FNParse> parses = testParses();
-    CheatingParams theta = new CheatingParams(parses);
-    theta.setWeightsByHand();
+    CheatingParams thetaCheat = new CheatingParams(parses);
+    thetaCheat.setWeightsByHand();
+    Params.Stateful theta = Params.Stateful.lift(thetaCheat);
     for (double probRecurse : Arrays.asList(0d, 0.01d, 0.03d)) {
       for (FNParse y : parses) {
         LOG.info("[noTrainPrereq] testing " + y.getId() + " probRecurse=" + probRecurse);
@@ -142,7 +144,7 @@ public class LearningTest {
     theta.setWeightsByHand();
 
     int beamWidth = 10;
-    Reranker model = new Reranker(theta, beamWidth);
+    Reranker model = new Reranker(null, theta, beamWidth);
     model.logMostViolated = true;
 
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;

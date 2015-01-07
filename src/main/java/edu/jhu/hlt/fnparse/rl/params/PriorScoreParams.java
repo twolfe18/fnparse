@@ -7,9 +7,9 @@ import java.util.Map;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.rerank.Item;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 
@@ -18,7 +18,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
  * 
  * @author travis
  */
-public class PriorScoreParams implements Params {
+public class PriorScoreParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
 
   private Map<String, Double> index;
@@ -51,15 +51,15 @@ public class PriorScoreParams implements Params {
     return parseId + " " + t + " " + k + " " + s.shortString();
   }
 
-  public static String itemKey(State s, Action a) {
-    String id = s.getFrames().getId();
+  public static String itemKey(FNTagging f, Action a) {
+    String id = f.getId();
     Span arg = a.hasSpan() ? a.getSpan() : Span.nullSpan;
     return itemKey(id, a.t, a.k, arg);
   }
 
   @Override
-  public Adjoints score(State s, Action a) {
-    String key = itemKey(s, a);
+  public Adjoints score(FNTagging f, Action a) {
+    String key = itemKey(f, a);
     Double score = index.get(key);
     if (theta != null) {
       double[] feats = new double[theta.length];

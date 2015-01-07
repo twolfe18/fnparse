@@ -65,17 +65,21 @@ public class Reranker {
     }
   };
 
-  private Params theta;
+  //private Params theta;
+  private Params.Stateful thetaStateful;
+  private Params.Stateless thetaStateless;
+
   private ActionType[] actionTypes;
   private int beamWidth;
   private boolean useItemsForPruning; // Otherwise use them as features, via
   // Params, e.g. PriorScoreParams
 
-  public boolean logOracle = false;
-  public boolean logMostViolated = false;
+  public boolean logOracle = true;
+  public boolean logMostViolated = true;
 
-  public Reranker(Params theta, int beamWidth) {
-    this.theta = theta;
+  public Reranker(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth) {
+    this.thetaStateful = thetaStateful;
+    this.thetaStateless = thetaStateless;
     this.beamWidth = beamWidth;
     this.actionTypes = new ActionType[] {
         ActionType.COMMIT,
@@ -84,7 +88,7 @@ public class Reranker {
   }
 
   public String toString() {
-    return "<Reranker beam=" + beamWidth + " theta=" + theta.toString() + ">";
+    return "<Reranker beam=" + beamWidth + " " + thetaStateful + " " + thetaStateless + ">";
   }
 
   public static ItemProvider getItemProvider() {
@@ -128,6 +132,7 @@ public class Reranker {
     boolean verbose = true;
     String desc = "[oracle]";
     Beam<StateSequence> beam = new Beam<>(beamWidth);
+    Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, actionTypes);
     State finalState = State.finalState(y);
@@ -204,6 +209,12 @@ public class Reranker {
     LOG.info(sb.toString());
   }
 
+  private Params.Stateful getCachingParams() {
+    Params.Stateless thetaBaseCache = new Params.Stateless.Caching(thetaStateless);
+    Params.Stateful theta = new Params.SumMixed(thetaStateful, thetaBaseCache);
+    return theta;
+  }
+
   /**
    * if y is null, then do decoding.
    */
@@ -229,12 +240,13 @@ public class Reranker {
     if (logMostViolated)
       logStateInfo(desc, init);
     boolean verbose = true;
+    Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, actionTypes);
     StateSequence frontier = new StateSequence(null, null, init, null);
     Beam<StateSequence> beam = new Beam<>(beamWidth);
     beam.push(frontier, 0d);
-    for (int iter = 0; true; iter++) {
+    for (int iter = 0; true; iter++) {  // while (true)
       frontier = beam.pop();
       if (verbose && logMostViolated)
         LOG.info("[mostViolated] popped: " + frontier.getCur().show());
@@ -324,13 +336,14 @@ public class Reranker {
       StateSequence cur;
       if (LOG_UPDATE)
         LOG.info("[apply] pushing up the oracle answer, hinge=" + hinge);
+      // Have to use this so that the Adjoint's class matches what it was when
+      // they were computed.
+      Params.Stateful justForUpdate = getCachingParams();
       cur = oracle;
       while (cur != null) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          theta.update(a, -hinge);
-//        else
-//          LOG.warn("null adjoints in oracle");
+          justForUpdate.update(a, -hinge);
         cur = cur.neighbor();
       }
       if (LOG_UPDATE)
@@ -339,9 +352,7 @@ public class Reranker {
       while (cur != null) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          theta.update(a, hinge);
-//        else
-//          LOG.warn("null adjoints in mv");
+          justForUpdate.update(a, hinge);
         cur = cur.neighbor();
       }
       return true;
@@ -349,6 +360,7 @@ public class Reranker {
   }
 
   public State randomDecodingState(FNTagging frames, Random rand) {
+    Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, actionTypes);
     State init = State.initialState(frames);

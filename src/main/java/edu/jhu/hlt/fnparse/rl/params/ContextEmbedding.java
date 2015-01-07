@@ -9,7 +9,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -19,6 +18,7 @@ import edu.jhu.util.Alphabet;
  * 4) entire sentence
  * 
  * TODO this can be cached on span (will be computed many times for each (t,k))
+ * (this is even more extreme caching that Params.Stateless.Caching)
  * 
  * @author travis
  */
@@ -147,7 +147,7 @@ public class ContextEmbedding {
     EmbAvg eRight;
     EmbAvg eSent;
     double[] stacked;
-    public CtxEmb(Sentence sent, Span target, Action action, State state) {
+    public CtxEmb(Sentence sent, Span target, Action action) {
       int D = wordEmb.getDimension();
       stacked = new double[4 * D];
       if (action.hasSpan()) {
@@ -198,8 +198,8 @@ public class ContextEmbedding {
     return 4 * wordEmb.getDimension();
   }
 
-  public CtxEmb embed(Sentence sent, Span target, Action action, State state) {
-    return new CtxEmb(sent, target, action, state);
+  public CtxEmb embed(Sentence sent, Span target, Action action) {
+    return new CtxEmb(sent, target, action);
   }
 
   public void update(CtxEmb adjoints, double[] dErr_dEmbedding, double learningRate) {

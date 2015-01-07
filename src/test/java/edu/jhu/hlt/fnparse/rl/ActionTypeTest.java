@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.DenseFastFeatures;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 public class ActionTypeTest {
@@ -57,7 +58,7 @@ public class ActionTypeTest {
       return; // No (t,k) to test on
 
     // Weights are 0 (no training), so features don't really matter
-    Reranker r = new Reranker(new DenseFastFeatures(), 1);
+    Reranker r = new Reranker(new DenseFastFeatures(), Stateless.NONE, 1);
     State st0 = r.randomDecodingState(frames, rand);
 
     // Shouldn't matter if apply or unapply is called first,

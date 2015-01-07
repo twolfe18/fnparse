@@ -3,7 +3,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.State;
 
-public class DenseFastFeatures implements Params {
+public class DenseFastFeatures implements Params.Stateful {
 
   private double[] theta;
   private double learningRate;
