@@ -11,8 +11,6 @@ import java.util.concurrent.Future;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 
@@ -44,7 +42,6 @@ public class RerankerTrainer {
   public Reranker train(Params theta, int beamWidth, ItemProvider ip) {
     Reranker r = new Reranker(theta, beamWidth);
     ExecutorService es = Executors.newWorkStealingPool(threads);
-    StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
     int n = ip.size();
     for (int epoch = 0; epoch < epochs; epoch++) {
       int updated = 0;
@@ -52,7 +49,7 @@ public class RerankerTrainer {
           + " which will have " + (n/batchSize) + " updates");
       for (int i = 0; i < n; i += batchSize) {
         try {
-          updated += trainBatch(r, es, ip, eval);
+          updated += trainBatch(r, es, ip);
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
@@ -67,7 +64,7 @@ public class RerankerTrainer {
     return r;
   }
 
-  private int trainBatch(Reranker r, ExecutorService es, ItemProvider ip, StdEvalFunc eval) throws InterruptedException, ExecutionException {
+  private int trainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
     boolean verbose = false;
     List<Future<Update>> updates = new ArrayList<>();
     int n = ip.size();
@@ -77,7 +74,7 @@ public class RerankerTrainer {
       List<Item> rerank = ip.items(idx);
       if (verbose)
         LOG.info("[trainBatch] submitting " + idx);
-      updates.add(es.submit(() -> r.new Update(y, rerank, eval)));
+      updates.add(es.submit(() -> r.new Update(y, rerank)));
     }
     //es.awaitTermination(99, TimeUnit.HOURS);
     if (verbose)

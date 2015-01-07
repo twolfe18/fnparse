@@ -13,7 +13,6 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -199,6 +198,7 @@ public class Reranker {
       State s = ss.getCur();
       double dl = at.deltaLoss(s, a, y);
       sb.append(" deltaLoss=" + dl);
+      //sb.append(" totalLoss=" + ss.getLoss(y));
     }
     sb.append(" totalScore=" + ss.getScore());
     LOG.info(sb.toString());
@@ -291,10 +291,7 @@ public class Reranker {
     public final StateSequence mostViolated;
     public final double hinge;
 
-    /**
-     * @param eval should be Hamming loss (costFP=1,costFN=1)
-     */
-    public Update(FNParse y, List<Item> rerank, StdEvalFunc eval) {
+    public Update(FNParse y, List<Item> rerank) {
       if (y.numFrameInstances() == 0) {
         oracle = null;
         mostViolated = null;
@@ -308,14 +305,15 @@ public class Reranker {
         mostViolated = mostViolated(rerank, y);
         FNParse yHat = mostViolated.getCur().decode();
         assert yHat != null : "mostViolated returned non-terminal state?";
-        double l = eval.evaluate(new SentenceEval(y, yHat));
-        assert l >= 0d && l <= 1d;
-        l = 1d - l; // Convert from score => loss
+        SentenceEval se = new SentenceEval(y, yHat);
+        double l = se.argOnlyFP() + se.argOnlyFN();
+        assert l >= 0d;
         hinge = oracle.getScore() - (mostViolated.getScore() + l);
         if (LOG_UPDATE) {
           LOG.info(String.format(
               "[init] hinge=%.2f = s(oracle)=%.2f - [s(mv)=%.2f + loss=%.2f]",
               hinge, oracle.getScore(), mostViolated.getScore(), l));
+          LOG.info("[init] fp=" + se.argOnlyFP() + " fn=" + se.argOnlyFN() + " tp=" + se.argOnlyTP());
         }
       }
     }

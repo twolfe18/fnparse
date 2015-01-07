@@ -45,6 +45,7 @@ public interface ItemProvider {
     private FNParse[] labels;
     private List<Item>[] items;
     private ItemProvider base;
+    @SuppressWarnings("unchecked")
     public Caching(ItemProvider wrap) {
       int n = wrap.size();
       base = wrap;
@@ -55,6 +56,10 @@ public interface ItemProvider {
         items[i] = wrap.items(i);
       }
     }
+    public ItemProvider getBase() {
+      return base;
+    }
+    @SuppressWarnings("unchecked")
     public Caching(File f, FrameInstanceProvider superset) {
       try {
         InputStream is = new FileInputStream(f);

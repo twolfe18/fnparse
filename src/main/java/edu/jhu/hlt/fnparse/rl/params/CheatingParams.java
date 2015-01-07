@@ -21,7 +21,7 @@ public class CheatingParams implements Params {
   public boolean showOnUpdate = false;
 
   public CheatingParams(Iterable<FNParse> parses) {
-    learningRate = 0.05d;
+    learningRate = 0.01d;
     theta = new double[2];
     goldItems = new HashSet<>();
     goldParseIds = new HashSet<>();

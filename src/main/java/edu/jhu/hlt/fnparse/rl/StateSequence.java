@@ -64,14 +64,30 @@ public class StateSequence {
    */
   public double getScore() {
     if (Double.isNaN(score)) {
-      StateSequence n = neighbor();
-      if (action == null) {
+      if (action == null)
         return 0d;
-      }
+      StateSequence n = neighbor();
       score = action.getScore() +  (n == null ? 0d : n.getScore());
     }
     return score;
   }
+
+  /*
+  private double loss = Double.NaN;   // memo
+   * Returns the accumulated loss of every action in this sequence.
+   * TODO you can add this back when you test it.
+  public double getLoss(FNParse y) {
+    if (Double.isNaN(loss)) {
+      if (action == null)
+        return 0d;
+      Action a = action.getAction();
+      double dl = a.getActionType().deltaLoss(getCur(), a, y);
+      StateSequence n = neighbor();
+      loss = dl +  (n == null ? 0d : n.getLoss(y));
+    }
+    return loss;
+  }
+   */
 
   public Adjoints getAdjoints() {
     return action;

@@ -95,7 +95,7 @@ public class LearningTest {
   /**
    * Ensures that every state has an optimal action according the gold parse.
    */
-  @Test
+  //@Test
   public void noTrainPrereq() {
     List<FNParse> parses = testParses();
     CheatingParams theta = new CheatingParams(parses);
@@ -133,7 +133,7 @@ public class LearningTest {
   }
 
   /** Set CheatingParams weights by hand */
-  @Test
+  //@Test
   public void getsItRightWithNoTraining() {
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
@@ -164,7 +164,7 @@ public class LearningTest {
     getsItRight(20);
   }
 
-  //@Test
+  @Test
   public void getsItRightQuickly() {
     getsItRight(1);
   }
@@ -176,7 +176,7 @@ public class LearningTest {
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
-    //theta.showOnUpdate = true;
+    theta.showOnUpdate = true;
     LOG.info("[getsItRight] before: " + theta.showWeights());
     Reranker model = trainer.train(theta, beamWidth, ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
