@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.Item;
  */
 public class State {
   public static final Logger LOG = Logger.getLogger(State.class);
+  public static boolean PRUNE_SPANS = true;
 
   protected FNTagging frames;
   private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
@@ -140,6 +141,16 @@ public class State {
     return comm;
   }
 
+  public int numUncommitted() {
+    int uncomm = 0;
+    for (Span[] c : committed)
+      for (Span s : c)
+        if (s == null)
+          uncomm++;
+    return uncomm;
+  }
+
+
   /**
    * Adds all committed spans that are not nullSpan to addTo and returns it.
    */
@@ -195,17 +206,18 @@ public class State {
         // action modes (other than COMMIT) are added,
         // e.g. PRUNE_WIDER_THAN(k) and PRUNE_ENDING_IN_POS(s)
         int width = j - i;
-        if (width > 10) {
+        if (PRUNE_SPANS && width > 10) {
           pruned++;
           continue;
         }
 
         // there are certain POS that cannot end a span
         String lastPos = s.getPos(j - 1);
-        if ("CC".equals(lastPos)
+        if (PRUNE_SPANS &&
+            ("CC".equals(lastPos)
             || "DT".equals(lastPos)
             || "IN".equals(lastPos)
-            || "POS".equals(lastPos)) {
+            || "POS".equals(lastPos))) {
           // TODO test recall of this against actual arguments
           // TODO consider putting this into a pruning model
           pruned++;
@@ -277,6 +289,20 @@ public class State {
       return at.apply(a, this);
     else
       return at.unapply(a, this);
+  }
+
+  public String show() {
+    StringBuilder sb = new StringBuilder("State of " + frames.getId() + "\n");
+    int T = committed.length;
+    for (int t = 0; t < T; t++) {
+      for (int k = 0; k < committed[t].length; k++) {
+        Span a = committed[t][k];
+        String as = a == null ? "NULL" : a.shortString();
+        String gs = frames.getFrameInstance(t).getArgument(k).shortString();
+        sb.append("(" + t + "," + k + ") = " + as + "\t" + gs + "\n");
+      }
+    }
+    return sb.toString();
   }
 
   public static String possibleDiff(State a, State b) {

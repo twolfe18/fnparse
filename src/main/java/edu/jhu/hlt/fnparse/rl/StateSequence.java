@@ -32,6 +32,14 @@ public class StateSequence {
     return cur;
   }
 
+  public StateSequence getPrev() {
+    return prev;
+  }
+
+  public StateSequence getNext() {
+    return next;
+  }
+
   public int getMovesApplied() {
     if (movesApplied < 0)
       movesApplied = 1 + neighbor().getMovesApplied();
@@ -50,6 +58,10 @@ public class StateSequence {
   }
 
   private double score = Double.NaN;  // memo
+  /**
+   * Returns the sum of the Actions' scores in this sequence.
+   * @return
+   */
   public double getScore() {
     if (Double.isNaN(score)) {
       StateSequence n = neighbor();

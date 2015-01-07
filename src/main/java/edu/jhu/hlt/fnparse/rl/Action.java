@@ -25,7 +25,7 @@ public class Action {
   }
 
   public boolean hasSpan() {
-    return start < end; // else its nullSpan
+    return !Span.nullSpan.equals(start, end);
   }
 
   public Span getSpan() {

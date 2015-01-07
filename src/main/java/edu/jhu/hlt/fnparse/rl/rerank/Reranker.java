@@ -75,7 +75,7 @@ public class Reranker {
     this.theta = theta;
     this.beamWidth = beamWidth;
     this.actionTypes = new ActionType[] {
-        //ActionType.COMMIT,
+        ActionType.COMMIT,
         ActionType.COMMIT_AND_PRUNE,
     };
   }
@@ -189,14 +189,21 @@ public class Reranker {
       LOG.info("[mostViolated] T=" + init.numFrameInstance()
           + " TK=" + init.numFrameRoleInstances()
           + " O(n^2)=" + (n*(n-1)/2));
+      StringBuilder sb = new StringBuilder("action types:");
+      for (ActionType at : actionTypes) sb.append(" " + at.getName());
+      LOG.info("[mostViolated] " + sb.toString());
     }
+    boolean verbose = false;
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, y, actionTypes);
     StateSequence frontier = new StateSequence(null, null, init, null);
     Beam<StateSequence> beam = new Beam<>(beamWidth);
     beam.push(frontier, 0d);
-    while (true) {
+    for (int iter = 0; true; iter++) {
       frontier = beam.pop();
+      if (verbose && logMostViolated) {
+        LOG.info("[mostViolated] popped: " + frontier.getCur().show());
+      }
       int added = 0;
       for (StateSequence ss : transF.nextStates(frontier)) {
         added++;
@@ -209,12 +216,29 @@ public class Reranker {
           State s = ss.getCur();
           score += at.deltaLoss(s, a, y);
         }
-        beam.push(ss, score);
+        boolean onBeam = beam.push(ss, score);
+        if (verbose && onBeam && logMostViolated) {
+          LOG.info("[mostViolated] " + ss.getAction()
+              + " has actionScore=" + ss.getAdjoints().getScore()
+              + " and totalScore=" + ss.getScore()
+              + " and was added to the beam");
+        }
       }
       //LOG.debug("[mostViolated] added=" + added);
       if (added == 0) {
-        if (logMostViolated)
-          LOG.info("[mostViolated] done");
+        if (logMostViolated) {
+          LOG.info("[mostViolated] done on iteration " + iter);
+          if (verbose) {
+            StateSequence cur = frontier;
+            while (cur != null) {
+              Adjoints a = cur.getAdjoints();
+              if (a != null)
+                LOG.info("[mostViolated] " + a.getAction() + " with score " + a.getScore());
+              cur = cur.getPrev();
+            }
+          }
+        }
+        assert 0 == frontier.getCur().numUncommitted();
         return frontier;
       }
     }
@@ -246,7 +270,9 @@ public class Reranker {
           throw new IllegalArgumentException();
         oracle = oracle(y);
         mostViolated = mostViolated(rerank, y);
-        double l = eval.evaluate(new SentenceEval(y, mostViolated.getCur().decode()));
+        FNParse yHat = mostViolated.getCur().decode();
+        assert yHat != null : "mostViolated returned non-terminal state?";
+        double l = eval.evaluate(new SentenceEval(y, yHat));
         assert l >= 0d && l <= 1d;
         l = 1d - l; // Convert from score => loss
         negHinge = oracle.getScore() - (mostViolated.getScore() + l);

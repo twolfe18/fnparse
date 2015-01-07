@@ -48,11 +48,19 @@ public class Beam<T> implements Iterable<T> {
     return width;
   }
 
-  public void push(T item, double score) {
+  /**
+   * Returns true if this item was added to the beam.
+   */
+  public boolean push(T item, double score) {
     Item<T> i = new Item<>(item, score);
     beam.add(i);
-    if (beam.size() > width)
-      beam.remove(beam.last());
+    if (beam.size() > width) {
+      Item<T> evict = beam.last();
+      beam.remove(evict);
+      return evict.item != item;
+    } else {
+      return true;
+    }
   }
 
   /**

@@ -34,8 +34,7 @@ public class CheatingParams implements Params {
         int K = fi.getFrame().numRoles();
         for (int k = 0; k < K; k++) {
           Span arg = fi.getArgument(k);
-          if (arg != Span.nullSpan)
-            goldItems.add(PriorScoreParams.itemKey(parseId, t, k, arg));
+          goldItems.add(PriorScoreParams.itemKey(parseId, t, k, arg));
         }
       }
     }
