@@ -51,6 +51,24 @@ public class Action {
     return ActionType.ACTION_TYPES[mode];
   }
 
+  @Override
+  public int hashCode() {
+    return start
+      | ((end - start) << 6)
+      | (mode << 12)
+      | (k << 18)
+      | (t << 24);
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof Action) {
+      Action a = (Action) other;
+      return t == a.t && k == a.k && mode == a.mode && start == a.start && end == a.end;
+    }
+    return false;
+  }
+
   public String toString() {
     String m = ActionType.ACTION_TYPES[mode].getName();
     return String.format("[Action(%s) t=%d k=%d %d-%d]", m, t, k, start, end);
