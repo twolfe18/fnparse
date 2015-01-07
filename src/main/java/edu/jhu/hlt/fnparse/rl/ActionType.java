@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import com.google.common.base.Function;
@@ -10,6 +11,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 
 public interface ActionType {
@@ -27,7 +29,7 @@ public interface ActionType {
   /**
    * Given action a (of this action type), and a current State's possible items
    * b, return the BitSet resulting from applying the given action.
-   * 
+   *
    * Remember, this must be monotonic in State.possible, so this could be
    * represented as a bitwise &=
    */
@@ -36,7 +38,7 @@ public interface ActionType {
   /**
    * Given action a (of this action type), and a current State's possible items
    * b, return the BitSet that would have lead to s under a.
-   * 
+   *
    * You can assume this action came from next().
    */
   public State unapply(Action a, State s);
@@ -44,9 +46,12 @@ public interface ActionType {
   /**
    * Return a list of actions of this type that are possible according to the
    * given State.
-   * 
+   *
    * If y != null, then only return actions that are compatible with eventually
    * reaching a State corresponding to the parse y.
+   *
+   * TODO Do we actually ever need to intersect with actions that are consistent
+   * with y? I'll leave it for now, but probably should be removed.
    */
   public Iterable<Action> next(State s, FNParse y);
 
@@ -171,15 +176,18 @@ public interface ActionType {
 
     @Override
     public double deltaLoss(State s, Action a, FNParse y) {
-      // Check for false positives (proposing a bad argument)
       final double costFP = 1d;
-      if (a.hasSpan()) {
-        Span hyp = a.getSpan();
-        Span gold = y.getFrameInstance(a.t).getArgument(a.k);
-        if (hyp != gold)
+      final double costFN = 1d;
+      Span hyp = a.getSpanSafe();
+      Span gold = y.getFrameInstance(a.t).getArgument(a.k);
+      if (hyp != gold) {
+        if (gold == Span.nullSpan)
           return costFP;
+        else
+          return costFN;
+      } else {
+        return 0d;
       }
-      return 0d;
     }
   };
 
@@ -232,7 +240,8 @@ public interface ActionType {
 
     @Override
     public State unapply(Action a, State s) {
-      throw new RuntimeException("implement me");
+      throw new RuntimeException("This is an impossible task, and a design flaw."
+          + " This ActionType should never propose previous actions.");
     }
 
     @Override
@@ -242,7 +251,8 @@ public interface ActionType {
 
     @Override
     public Iterable<Action> prev(State st) {
-      return prune(COMMIT.prev(st), st);
+      //return prune(COMMIT.prev(st), st);
+      return Collections.emptyList();
     }
 
     private Iterable<Action> prune(Iterable<Action> itr, State st) {
@@ -256,15 +266,22 @@ public interface ActionType {
 
     @Override
     public double deltaLoss(State s, Action a, FNParse y) {
-      // Cost of false positives
       double cost = COMMIT.deltaLoss(s, a, y);
-      // Check for false negatives (pruning a gold argument)
+      // COMMIT checks for false negatives for this (t,k), here we need to check
+      // for additional false negatives for all roles that might have a span
+      // that overlaps with this action.
       final double costFN = 1d;
-      if (!a.hasSpan()) {
-        assert a.start == Span.nullSpan.start && a.end == Span.nullSpan.end;
-        Span gold = y.getFrameInstance(a.t).getArgument(a.k);
-        if (gold != Span.nullSpan)
-          cost += costFN;
+      assert a.hasSpan();
+      Span arg = a.getSpan();
+      final int T = s.numFrameInstance();
+      for (int t = 0; t < T; t++) {
+        FrameInstance fi = s.getFrameInstance(t);
+        final int K = fi.getFrame().numRoles();
+        for (int k = 0; k < K; k++) {
+          Span c = s.committed(t, k);
+          if (c != null && c.overlaps(arg) && c != arg)
+            cost += costFN;
+        }
       }
       return cost;
     }

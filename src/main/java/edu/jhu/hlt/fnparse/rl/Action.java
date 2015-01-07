@@ -28,6 +28,12 @@ public class Action {
     return !Span.nullSpan.equals(start, end);
   }
 
+  public Span getSpanSafe() {
+    if (Span.nullSpan.equals(start, end))
+      return Span.nullSpan;
+    return getSpan();
+  }
+
   public Span getSpan() {
     assert hasSpan();
     return Span.getSpan(start, end);

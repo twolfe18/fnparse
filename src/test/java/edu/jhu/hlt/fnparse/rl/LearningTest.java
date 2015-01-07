@@ -92,6 +92,9 @@ public class LearningTest {
     }
   }
 
+  /**
+   * Ensures that every state has an optimal action according the gold parse.
+   */
   @Test
   public void noTrainPrereq() {
     List<FNParse> parses = testParses();
@@ -103,7 +106,7 @@ public class LearningTest {
         State init = State.initialState(y);
         StateSequence ss = new StateSequence(null, null, init, null);
         ActionDrivenTransitionFunction oracleScoreTf =
-            new ActionDrivenTransitionFunction(theta, null, ActionType.COMMIT);
+            new ActionDrivenTransitionFunction(theta, ActionType.COMMIT);
 
         // Initial state should have an Action that is consistent with the label
         // Recursively?
@@ -167,19 +170,25 @@ public class LearningTest {
   }
 
   public void getsItRight(int iters) {
-    int beamWidth = 100;
+    Reranker.LOG_UPDATE = true;
+    int beamWidth = 10;
     RerankerTrainer trainer = new RerankerTrainer(rand, iters, 1, 1);
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
-    Reranker model = trainer.train(new CheatingParams(gold), beamWidth, ip);
+    CheatingParams theta = new CheatingParams(gold);
+    //theta.showOnUpdate = true;
+    LOG.info("[getsItRight] before: " + theta.showWeights());
+    Reranker model = trainer.train(theta, beamWidth, ip);
+    LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
 
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
     for (FNParse g : gold) {
       FNTagging frames = DataUtil.convertParseToTagging(g);
       FNParse h = model.predict(frames);
       double perf = eval.evaluate(new SentenceEval(g, h));
+      LOG.info("[getsItRight] after " + iters + ": perf=" + perf);
       if (perf < 0.99d)
-        LOG.info(FNDiff.diffArgs(g, h, false));
+        LOG.info(FNDiff.diffArgs(g, h, true));
       Assert.assertTrue(perf > 0.99d);
     }
   }

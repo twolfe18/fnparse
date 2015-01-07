@@ -83,9 +83,11 @@ public class RerankerTrainer {
     if (verbose)
       LOG.info("[trainBatch] applying updates");
     int updated = 0;
-    for (Future<Update> u : updates)
-      if (u.get().apply())
+    for (Future<Update> u : updates) {
+      Update up = u.get();
+      if (up.apply())
         updated++;
+    }
     return updated;
   }
 

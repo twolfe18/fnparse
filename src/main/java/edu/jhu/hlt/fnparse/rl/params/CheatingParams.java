@@ -18,6 +18,7 @@ public class CheatingParams implements Params {
   private Set<String> goldParseIds;
   private double[] theta;
   private double learningRate;
+  public boolean showOnUpdate = false;
 
   public CheatingParams(Iterable<FNParse> parses) {
     learningRate = 0.05d;
@@ -47,6 +48,14 @@ public class CheatingParams implements Params {
     theta[1] =  2d;
   }
 
+  public String showWeights() {
+    StringBuilder sb = new StringBuilder("[CheatingParams weights:\n");
+    sb.append("intercept = " + theta[0] + "\n");
+    sb.append("isGold    = " + theta[1] + "\n");
+    sb.append("]");
+    return sb.toString();
+  }
+
   @Override
   public Adjoints score(State s, Action a) {
     if (!goldParseIds.contains(s.getFrames().getId()))
@@ -61,5 +70,7 @@ public class CheatingParams implements Params {
   @Override
   public void update(Adjoints a, double reward) {
     ((Adjoints.DenseFeatures) a).update(reward, learningRate);
+    if (showOnUpdate)
+      LOG.info("[update] afterwards: " + showWeights());
   }
 }

@@ -67,14 +67,18 @@ public interface TransitionFunction {
     private FNParse y;
 
     /**
-     * @param theta
-     * @param y may be null if decoding
-     * @param actionTypes
+     * @deprecated Should not really need y, use the constructor without it.
      */
     public ActionDrivenTransitionFunction(Params theta, FNParse y, ActionType... actionTypes) {
       this.actionTypes = actionTypes;
       this.theta = theta;
       this.y = y;
+    }
+
+    public ActionDrivenTransitionFunction(Params theta, ActionType... actionTypes) {
+      this.actionTypes = actionTypes;
+      this.theta = theta;
+      this.y = null;
     }
 
     @Override
@@ -87,7 +91,7 @@ public interface TransitionFunction {
         Iterable<StateSequence> itss = Iterables.transform(ita, new Function<Action, StateSequence>() {
           @Override
           public StateSequence apply(Action input) {
-            Adjoints adj = theta.score(null, input);
+            Adjoints adj = theta.score(st, input);
             return new StateSequence(null, s, null, adj);
           }
         });
