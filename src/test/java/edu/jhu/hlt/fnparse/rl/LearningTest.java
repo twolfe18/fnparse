@@ -17,7 +17,6 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
@@ -31,7 +30,7 @@ import edu.jhu.hlt.fnparse.util.FNDiff;
 
 /**
  * If the algorithm is given an indicator feature for whether an item is in the
- * gold parse, it should be able to get 100% accuracy (quickly).
+ * gold parse (CheatingParams), it should be able to get 100% accuracy (quickly)
  *
  * @author travis
  */
@@ -154,15 +153,7 @@ public class LearningTest {
     Reranker model = new Reranker(Stateful.NONE, theta, beamWidth);
     Reranker.LOG_MOST_VIOLATED = false;
 
-    StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
-    for (FNParse g : gold) {
-      FNParse h = model.predict(g);
-      double perf = eval.evaluate(new SentenceEval(g, h));
-      LOG.info("perf=" + perf);
-      if (perf < 0.99d)
-         LOG.info("diff:\n" + FNDiff.diffArgs(g, h, true));
-      Assert.assertTrue(perf > 0.99d);
-    }
+    evaluate(model, ip, 0.99d, 0.99d);
   }
 
   @Test
@@ -181,20 +172,10 @@ public class LearningTest {
     LOG.info("[getsItRight] before: " + theta.showWeights());
     Reranker model = trainer.train(theta, beamWidth, ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
-
-    StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
-    for (FNParse g : gold) {
-      FNTagging frames = DataUtil.convertParseToTagging(g);
-      FNParse h = model.predict(frames);
-      double perf = eval.evaluate(new SentenceEval(g, h));
-      LOG.info("[getsItRight] after " + iters + ": perf=" + perf);
-      if (perf < 0.99d)
-        LOG.info("diff:\n" + FNDiff.diffArgs(g, h, true));
-      Assert.assertTrue(perf > 0.99d);
-    }
+    evaluate(model, ip, 0.99d, 0.99d);
   }
 
-  private void evaluate(Reranker model, ItemProvider ip) {
+  private void evaluate(Reranker model, ItemProvider ip, double f1ThreshForEachParse, double f1ThreshAggregate) {
     // Show the parses one by one
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
@@ -211,6 +192,7 @@ public class LearningTest {
       double rec = BasicEvaluation.argOnlyMicroRecall.evaluate(se);
       LOG.info("f1=" + f1 + " p=" + prec + " r=" + rec
           + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
+      Assert.assertTrue(f1 >= f1ThreshForEachParse);
     }
 
     // Evaluate performance on all parses
@@ -220,6 +202,7 @@ public class LearningTest {
         ? model.predict(ip) : model.predict(frames);
     Map<String, Double> perf = BasicEvaluation.evaluate(gold, hyp);
     BasicEvaluation.showResults("[using PriorScoreParams]", perf);
+    Assert.assertTrue(perf.get(BasicEvaluation.argOnlyMicroF1.getName()) >= f1ThreshAggregate);
   }
 
   public void fromPriorScores() {
@@ -255,7 +238,7 @@ public class LearningTest {
       model.useItemsForPruning = true;
     }
 
-    evaluate(model, ip);
+    evaluate(model, ip, 0d, 0d);
   }
 
   public static void main(String[] args) {
