@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.util.Beam;
+import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -52,6 +53,8 @@ import edu.jhu.hlt.fnparse.util.Beam;
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
   public static boolean LOG_UPDATE = false;
+  public static boolean LOG_ORACLE = false;
+  public static boolean LOG_MOST_VIOLATED = false;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -72,10 +75,9 @@ public class Reranker {
   private ActionType[] actionTypes;
   private int beamWidth;
   private boolean useItemsForPruning; // Otherwise use them as features, via
-  // Params, e.g. PriorScoreParams
+  // Params, in e.g. PriorScoreParams
 
-  public boolean logOracle = false;
-  public boolean logMostViolated = false;
+  private MultiTimer timer = new MultiTimer();
 
   public Reranker(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth) {
     this.thetaStateful = thetaStateful;
@@ -122,43 +124,42 @@ public class Reranker {
    * "undo"s on potential actions that would lead to a starting point (empty
    * parse or initial decoder state).
    * 
-   * TODO this doesn't need to work backwards at all. Perhaps it even should be
-   * a forward pass to mimic how the decoder would work at test time. IDK though,
-   * backwards might find better solutions due to the strong global features.
+   * NOTE: The reason this beam search works "backwards" (from the label with
+   * undo operations) is to enforce the constraint that we're only considering
+   * z that lead to y. However, this is not impossible to do in a forwards pass.
    * 
    * @param y
    */
   public StateSequence oracle(FNParse y) {
-    boolean verbose = true;
+    boolean verbose = false;
     String desc = "[oracle]";
     Beam<StateSequence> beam = new Beam<>(beamWidth);
     Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, actionTypes);
     State finalState = State.finalState(y);
-    if (logOracle)
-      logStateInfo(desc, finalState);
     StateSequence init = new StateSequence(null, null, finalState, null);
     beam.push(init, 0d);
     for (int iter = 0; true; iter++) {
       // Choose an item to extend
       StateSequence frontier = beam.pop();
-      if (verbose && logOracle)
-        LOG.info(desc + " popped: " + frontier.getCur().show());
+      boolean verboseThisIter = verbose || iter % 500000 == 0;
+      if (LOG_ORACLE && verboseThisIter)
+        logStateInfo("[oracle]", frontier.getCur());
       // For each of its extensions, check if they should be put on the beam.
       int added = 0;
       for (StateSequence ss : transF.previousStates(frontier)) {
         added++;
         double score = ss.getScore();
         boolean onBeam = beam.push(ss, score);
-        if (verbose && onBeam && logOracle)
-          logAction(desc, score, ss, y);
+        if (LOG_ORACLE && verboseThisIter && onBeam )
+          logAction(desc, iter, score, ss, y, false);
       }
       //LOG.debug(desc + " added=" + added);
       if (added == 0) {
         // There were no previous states, so frontier must be the empty parse,
         // or initial state.
-        if (logOracle)
+        if (LOG_ORACLE)
           LOG.debug(desc + " done after " + iter + " iterations");
         return frontier;
       }
@@ -181,23 +182,28 @@ public class Reranker {
 
   /** Shows some info about the given state */
   private void logStateInfo(String desc, State init) {
-    int n = init.getSentence().size();
+    LOG.info("");
     LOG.info(desc + " working on " + init.getFrames().getId());
+    int n = init.getSentence().size();
     LOG.info(desc + " T=" + init.numFrameInstance()
         + " TK=" + init.numFrameRoleInstances()
         + " O(n^2)=" + (n*(n-1)/2));
+    LOG.info(desc + " #committed=" + init.numCommitted()
+        + " #unCommitted=" + init.numUncommitted());
     StringBuilder sb = new StringBuilder("action types:");
     for (ActionType at : actionTypes) sb.append(" " + at.getName());
     LOG.info(desc + " " + sb.toString());
   }
 
   /** Shows some info about the Action (wrapped in a StateSequence for ancillary info) */
-  private void logAction(String desc, double score, StateSequence ss, FNParse y) {
+  private void logAction(String desc, int iteration, double score, StateSequence ss, FNParse y, boolean showDeltaLoss) {
     StringBuilder sb = new StringBuilder(desc);
+    if (iteration >= 0)
+      sb.append(" iter=" + iteration);
     sb.append(" " + ss.getAction());
     sb.append(" score=" + score);
     sb.append(" actionScore=" + ss.getAdjoints().getScore());
-    if (y != null) {
+    if (showDeltaLoss) {
       Action a = ss.getAction();
       ActionType at = a.getActionType();
       //State s = ss.getCur();          // State after applying a
@@ -228,7 +234,7 @@ public class Reranker {
    * if y is null, then do decoding.
    */
   public StateSequence mostViolated(FNTagging frames, FNParse y) {
-    if (logMostViolated)
+    if (LOG_MOST_VIOLATED)
       LOG.warn("[mostViolated] using exhaustive version (not reranking)");
     assert !useItemsForPruning;
     State init = State.initialState(frames);
@@ -236,7 +242,7 @@ public class Reranker {
   }
   public StateSequence mostViolated(List<Item> rerank, FNParse y) {
     if (useItemsForPruning) {
-      if (logMostViolated)
+      if (LOG_MOST_VIOLATED)
         LOG.warn("[mostViolated] using reranking version");
       State init = State.initialState(y, rerank);
       return mostViolatedHelper(init, y);
@@ -246,7 +252,7 @@ public class Reranker {
   }
   private StateSequence mostViolatedHelper(State init, FNParse y) {
     String desc = (y == null) ? "[decode]" : "[mostViolated]";
-    if (logMostViolated)
+    if (LOG_MOST_VIOLATED)
       logStateInfo(desc, init);
     boolean verbose = true;
     Params.Stateful theta = getCachingParams();
@@ -257,8 +263,8 @@ public class Reranker {
     beam.push(frontier, 0d);
     for (int iter = 0; true; iter++) {  // while (true)
       frontier = beam.pop();
-      if (verbose && logMostViolated)
-        LOG.info("[mostViolated] popped: " + frontier.getCur().show());
+      if (verbose && LOG_MOST_VIOLATED)
+        logStateInfo(desc, frontier.getCur());
       int added = 0;
       for (StateSequence ss : transF.nextStates(frontier)) {
         added++;
@@ -273,12 +279,12 @@ public class Reranker {
           score += at.deltaLoss(s, a, y);
         }
         boolean onBeam = beam.push(ss, score);
-        if (verbose && onBeam && logMostViolated)
-          logAction(desc, score, ss, y);
+        if (verbose && onBeam && LOG_MOST_VIOLATED)
+          logAction(desc, iter, score, ss, y, true);
       }
       //LOG.debug("[mostViolated] added=" + added);
       if (added == 0) {
-        if (logMostViolated) {
+        if (LOG_MOST_VIOLATED) {
           LOG.info("[mostViolated] done on iteration " + iter);
           if (verbose) {
             StateSequence cur = frontier;
@@ -323,9 +329,22 @@ public class Reranker {
       } else {
         if (rerank == null || rerank.size() == 0)
           throw new IllegalArgumentException();
+
+        if (LOG_UPDATE) LOG.info("[init] solving oracle for " + y.getId());
+        timer.start("udpate.oracle");
         oracle = oracle(y);
+        timer.stop("udpate.oracle");
+
+        if (LOG_UPDATE) LOG.info("[init] solving mostViolated for " + y.getId());
+        timer.start("udpate.mostViolated");
         mostViolated = mostViolated(rerank, y);
+        timer.stop("udpate.mostViolated");
+
+        if (LOG_UPDATE) LOG.info("[init] decoding for " + y.getId());
+        timer.start("udpate.decode");
         FNParse yHat = mostViolated.getCur().decode();
+        timer.stop("udpate.decode");
+
         assert yHat != null : "mostViolated returned non-terminal state?";
         SentenceEval se = new SentenceEval(y, yHat);
         double l = se.argOnlyFP() + se.argOnlyFN();
@@ -333,16 +352,27 @@ public class Reranker {
         hinge = oracle.getScore() - (mostViolated.getScore() + l);
         if (LOG_UPDATE) {
           LOG.info(String.format(
-              "[init] hinge=%.2f = s(oracle)=%.2f - [s(mv)=%.2f + loss=%.2f]",
-              hinge, oracle.getScore(), mostViolated.getScore(), l));
-          LOG.info("[init] fp=" + se.argOnlyFP() + " fn=" + se.argOnlyFN() + " tp=" + se.argOnlyTP());
+              "[init] y=%s hinge=%.2f = s(oracle)=%.2f - [s(mv)=%.2f + loss=%.2f]",
+              y.getId(), hinge, oracle.getScore(), mostViolated.getScore(), l));
+          LOG.info("[init] in MV solution:     fp=" + se.argOnlyFP() + " fn=" + se.argOnlyFN() + " tp=" + se.argOnlyTP());
+
+          // See if the oracle is finding the perfect answer
+          FNParse oracleDecode = oracle.getLast().getCur().decode();
+          assert oracleDecode != null : "oracle didn't even find a parse?";
+          SentenceEval se2 = new SentenceEval(y, oracleDecode);
+          LOG.info("[init] in oracle solution: fp=" + se2.argOnlyFP() + " fn=" + se2.argOnlyFN() + " tp=" + se2.argOnlyTP());
+
+          LOG.info("[init] timer: " + timer);
         }
       }
     }
 
     public boolean apply() {
-      if (hinge >= 0)
+      timer.start("update.apply");
+      if (hinge >= 0) {
+        timer.stop("update.apply");
         return false;
+      }
       StateSequence cur;
       if (LOG_UPDATE)
         LOG.info("[apply] pushing up the oracle answer, hinge=" + hinge);
@@ -365,6 +395,7 @@ public class Reranker {
           justForUpdate.update(a, hinge);
         cur = cur.neighbor();
       }
+      timer.stop("update.apply");
       return true;
     }
   }

@@ -14,6 +14,10 @@ public class Item implements DataStreamSerializable {
   private double priorScore;
   private double featureScore;
 
+  // Rank of this item by score when grouped by (t,k)
+  // TODO this is currently computed after serialization, put it before
+  public int rank = -1;
+
   public Item(int t, int k, Span s, double priorScore) {
     this.t = t;
     this.k = k;

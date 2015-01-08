@@ -112,10 +112,10 @@ public interface Params {
         if (adj == null) {
           adj = wrapping.score(f, a);
           cache.put(a, adj);
-        } else {
-          //LOG.info("[score] cache hit, size=" + size());
-          if (seenTags.add(f))
-            estimateCollisions();
+//        } else {
+//          //LOG.info("[score] cache hit, size=" + size());
+//          if (seenTags.add(f))
+//            estimateCollisions();
         }
         return adj;
       }

@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -21,9 +23,75 @@ import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 public class PriorScoreParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
 
-  private Map<String, Double> index;
+  /**
+   * You give this class items via store(), and this will set the rank field
+   * in Item for you after you call computeRanks().
+   */
+  static class ItemRanker {
+    static class Key {
+      public String parseId;
+      public int t, k;
+      public Key(String parseId, int t, int k) {
+        this.parseId = parseId;
+        this.t = t;
+        this.k = k;
+      }
+      @Override
+      public int hashCode() {
+        int tk = (t << 16) ^ k;
+        return parseId.hashCode() ^ tk;
+      }
+      @Override
+      public boolean equals(Object other) {
+        if (other instanceof Key) {
+          Key k = (Key) other;
+          return t == k.t && this.k == k.k && parseId.equals(k.parseId);
+        }
+        return false;
+      }
+    }
+    private Map<Key, List<Item>> byTK;
+    public ItemRanker() {
+      byTK = new HashMap<>();
+    }
+    public void store(ItemProvider ip) {
+      int n = ip.size();
+      for (int i = 0; i < n; i++) {
+        List<Item> items = ip.items(i);
+        String parseId = ip.label(i).getId();
+        for (Item it : items) {
+          Key k = new Key(parseId, it.t(), it.k());
+          List<Item> value = byTK.get(k);
+          if (value == null) {
+            value = new ArrayList<>();
+            byTK.put(k, value);
+          }
+          value.add(it);
+        }
+      }
+    }
+    public void computeRanks() {
+      for (List<Item> items : byTK.values()) {
+        items.sort(new Comparator<Item>() {
+          @Override
+          public int compare(Item o1, Item o2) {
+            if (o1.getScore() > o2.getScore())
+              return 1;
+            if (o1.getScore() < o2.getScore())
+              return -1;
+            return 0;
+          }
+        });
+        int n = items.size();
+        for (int i = 0; i < n; i++)
+          items.get(i).rank = i + 1;
+      }
+    }
+  }
+
+  private Map<String, Item> index;
   private double[] theta;
-  private double learningRate = 0.05d;
+  private double learningRate = 0.01d;
 
   /**
    * If featureMode = true, then this will learn weights for two features:
@@ -33,17 +101,20 @@ public class PriorScoreParams implements Params.Stateless {
    */
   public PriorScoreParams(ItemProvider ip, boolean featureMode) {
     if (featureMode)
-      theta = new double[3];
+      theta = new double[9 * 2];
     index = new HashMap<>();
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
       List<Item> items = ip.items(i);
       for (Item it : items) {
         String k = itemKey(y.getId(), it.t(), it.k(), it.getSpan());
-        Double old = index.put(k, it.getScore());
+        Item old = index.put(k, it);
         assert old == null;
       }
     }
+    ItemRanker ir = new ItemRanker();
+    ir.store(ip);
+    ir.computeRanks();
     LOG.info("[init] index contains " + index.size() + " items");
   }
 
@@ -60,19 +131,29 @@ public class PriorScoreParams implements Params.Stateless {
   @Override
   public Adjoints score(FNTagging f, Action a) {
     String key = itemKey(f, a);
-    Double score = index.get(key);
+    Item score = index.get(key);
+    int offset = 0;
+    if (a.hasSpan())
+      offset = theta.length / 2;
     if (theta != null) {
       double[] feats = new double[theta.length];
-      if (score == null)
-        feats[0] = 1d;
-      else
-        feats[1] = score;
-      feats[2] = 1d;
+      feats[offset + 0] = 1d;
+      if (score == null) {
+        feats[offset + 1] = 1d;
+      } else {
+        feats[offset + 2] = score.getScore();
+        assert score.rank > 0;
+        if (score.rank == 1) feats[offset + 3] = 1d;
+        if (score.rank == 2) feats[offset + 4] = 1d;
+        if (score.rank == 3) feats[offset + 5] = 1d;
+        if (score.rank == 4) feats[offset + 6] = 1d;
+        if (score.rank == 5) feats[offset + 7] = 1d;
+        if (score.rank > 5)  feats[offset + 8] = 1d;
+      }
       return new Adjoints.DenseFeatures(feats, theta, a);
     } else {
-      if (score == null)
-        score = Double.NEGATIVE_INFINITY;
-      return new Adjoints.Explicit(score, a, "priorScore");
+      double s = score == null ? Double.NEGATIVE_INFINITY : score.getScore();
+      return new Adjoints.Explicit(s, a, "priorScore");
     }
   }
 
@@ -80,9 +161,28 @@ public class PriorScoreParams implements Params.Stateless {
   public void update(Adjoints a, double reward) {
     if (theta != null) {
       ((Adjoints.DenseFeatures) a).update(reward, learningRate);
-      LOG.debug("[update] theta(not-in-k-best) = " + theta[0]);
-      LOG.debug("[update] theta(item-log-prob) = " + theta[1]);
-      LOG.debug("[update] theta(intercept) = " + theta[2]);
+
+      LOG.debug(String.format("[update] NS theta(intercept)     = %+.3f", theta[0]));
+      LOG.debug(String.format("[update] NS theta(not-in-k-best) = %+.3f", theta[1]));
+      LOG.debug(String.format("[update] NS theta(item-log-prob) = %+.3f", theta[2]));
+      LOG.debug(String.format("[update] NS theta(rank==1)       = %+.3f", theta[3]));
+      LOG.debug(String.format("[update] NS theta(rank==2)       = %+.3f", theta[4]));
+      LOG.debug(String.format("[update] NS theta(rank==3)       = %+.3f", theta[5]));
+      LOG.debug(String.format("[update] NS theta(rank==4)       = %+.3f", theta[6]));
+      LOG.debug(String.format("[update] NS theta(rank==5)       = %+.3f", theta[7]));
+      LOG.debug(String.format("[update] NS theta(rank>5)        = %+.3f", theta[8]));
+
+      LOG.debug(String.format("[update] theta(intercept)        = %+.3f", theta[9 + 0]));
+      LOG.debug(String.format("[update] theta(not-in-k-best)    = %+.3f", theta[9 + 1]));
+      LOG.debug(String.format("[update] theta(item-log-prob)    = %+.3f", theta[9 + 2]));
+      LOG.debug(String.format("[update] theta(rank==1)          = %+.3f", theta[9 + 3]));
+      LOG.debug(String.format("[update] theta(rank==2)          = %+.3f", theta[9 + 4]));
+      LOG.debug(String.format("[update] theta(rank==3)          = %+.3f", theta[9 + 5]));
+      LOG.debug(String.format("[update] theta(rank==4)          = %+.3f", theta[9 + 6]));
+      LOG.debug(String.format("[update] theta(rank==5)          = %+.3f", theta[9 + 7]));
+      LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
+
+      LOG.debug("");
     } else {
       LOG.debug("[update] not doing anything");
     }

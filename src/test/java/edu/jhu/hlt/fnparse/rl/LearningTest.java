@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 
 import org.apache.log4j.Logger;
@@ -22,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
+import edu.jhu.hlt.fnparse.rl.params.PriorScoreParams;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
@@ -155,9 +157,9 @@ public class LearningTest {
       FNTagging frames = DataUtil.convertParseToTagging(g);
       FNParse h = model.predict(frames);
       double perf = eval.evaluate(new SentenceEval(g, h));
-      if (perf < 0.99d) {
-        LOG.info("perf=" + perf + "\n" + FNDiff.diffArgs(g, h, false));
-      }
+      LOG.info("perf=" + perf);
+      if (perf < 0.99d)
+         LOG.info("diff:\n" + FNDiff.diffArgs(g, h, true));
       Assert.assertTrue(perf > 0.99d);
     }
   }
@@ -191,9 +193,39 @@ public class LearningTest {
     }
   }
 
+  public void fromPriorScores() {
+    // Train a model using PriorScoreParams
+    Reranker.LOG_UPDATE = true;
+    Reranker.LOG_ORACLE = true;
+    int beamWidth = 1;
+    int iters = 2;
+    int batchSize = 10;
+    int threads = 1;
+    RerankerTrainer trainer = new RerankerTrainer(rand, iters, threads, batchSize);
+    ItemProvider ip = Reranker.getItemProvider();
+    PriorScoreParams theta = new PriorScoreParams(ip, true);
+    Reranker model = trainer.train(theta, beamWidth, ip);
+
+    // Show the parses one by one
+    for (int i = 0; i < ip.size(); i++) {
+      FNParse y = ip.label(i);
+      FNParse yhat = model.predict(DataUtil.convertParseToTagging(y));
+      double perf = BasicEvaluation.argOnlyMicroF1.evaluate(new SentenceEval(y, yhat));
+      LOG.info("perf=" + perf + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
+    }
+
+    // Evaluate performance on all parses
+    List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
+    List<FNTagging> frames = DataUtil.convertParsesToTaggings(gold);
+    List<FNParse> hyp = model.predict(frames);
+    Map<String, Double> perf = BasicEvaluation.evaluate(gold, hyp);
+    BasicEvaluation.showResults("[using PriorScoreParams]", perf);
+  }
+
   public static void main(String[] args) {
     LearningTest lt = new LearningTest();
     lt.turnOffPruning();
-    lt.getsItRight(1);
+    //lt.getsItRight(1);
+    lt.fromPriorScores();
   }
 }
