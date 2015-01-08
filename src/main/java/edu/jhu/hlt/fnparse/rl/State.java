@@ -46,6 +46,7 @@ public class State {
     BitSet possible = new BitSet();
     int T = frames.numFrameInstances();
     Span[][] committed = new Span[T][];
+    // Allow every possible Span for every (t,k)
     for (int t = 0; t < T; t++) {
       int K = frames.getFrameInstance(t).getFrame().numRoles();
       committed[t] = new Span[K];
@@ -54,6 +55,8 @@ public class State {
           for (int j = i + 1; j <= n; j++)
             possible.set(stateIndex.index(t, k, i, j), true);
     }
+    // Always allow nullSpan
+    allowNullSpanForEveryRole(possible, stateIndex, committed);
     return new State(frames, stateIndex, possible, committed);
   }
 
@@ -67,11 +70,27 @@ public class State {
       int K = frames.getFrameInstance(t).getFrame().numRoles();
       committed[t] = new Span[K];
     }
+    // Allow each of the items
     for (Item i : rerank) {
       Span s = i.getSpan();
       possible.set(stateIndex.index(i.t(), i.k(), s.start, s.end));
     }
+    // Always allow nullSpan
+    allowNullSpanForEveryRole(possible, stateIndex, committed);
     return new State(frames, stateIndex, possible, committed);
+  }
+
+  /** Sets nullSpan to be possible for all (t,k) */
+  private static void allowNullSpanForEveryRole(
+      BitSet possible, StateIndex stateIndex, Span[][] committed) {
+    final int T = committed.length;
+    final int s = Span.nullSpan.start;
+    final int e = Span.nullSpan.end;
+    for (int t = 0; t < T; t++) {
+      final int K = committed[t].length;
+      for (int k = 0; k < K; k++)
+        possible.set(stateIndex.index(t, k, s, e));
+    }
   }
 
   public static State finalState(FNParse parse) {
