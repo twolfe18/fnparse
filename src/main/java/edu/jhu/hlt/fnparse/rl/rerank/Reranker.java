@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -56,6 +57,8 @@ public class Reranker {
   public static boolean LOG_ORACLE = false;
   public static boolean LOG_MOST_VIOLATED = false;
 
+  public static final double COST_FN = 1d;
+
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
     @Override
@@ -68,14 +71,13 @@ public class Reranker {
     }
   };
 
-  //private Params theta;
   private Params.Stateful thetaStateful;
   private Params.Stateless thetaStateless;
 
   private ActionType[] actionTypes;
   private int beamWidth;
-  private boolean useItemsForPruning; // Otherwise use them as features, via
-  // Params, in e.g. PriorScoreParams
+  public boolean useItemsForPruning = false; // Otherwise use them as features
+  // via Params, in e.g. PriorScoreParams
 
   private MultiTimer timer = new MultiTimer();
 
@@ -167,16 +169,39 @@ public class Reranker {
   }
 
   public FNParse predict(FNTagging frames) {
+    assert !useItemsForPruning : "need the items then!";
+    if (frames.numFrameInstances() == 0)
+      return new FNParse(frames.getSentence(), Collections.emptyList());
     StateSequence ss = mostViolated(frames, null);
+    State st = ss.getCur();
+    assert ss == ss.getLast();
+    return st.decode();
+  }
+  public FNParse predict(FNTagging frames, List<Item> items) {
+    assert useItemsForPruning : "probably should use the other one";
+    if (frames.numFrameInstances() == 0)
+      return new FNParse(frames.getSentence(), Collections.emptyList());
+    StateSequence ss = mostViolated(items, frames, null);
     State st = ss.getCur();
     assert ss == ss.getLast();
     return st.decode();
   }
 
   public <T extends FNTagging> List<FNParse> predict(List<T> frames) {
+    assert !useItemsForPruning : "need the items then!";
     List<FNParse> r = new ArrayList<>();
     for (T t : frames)
       r.add(predict(t));
+    return r;
+  }
+  public List<FNParse> predict(ItemProvider ip) {
+    assert useItemsForPruning : "probably should use the other one";
+    List<FNParse> r = new ArrayList<>();
+    int n = ip.size();
+    for (int i = 0; i < n; i++) {
+      FNTagging frames = DataUtil.convertParseToTagging(ip.label(i));
+      r.add(predict(frames, ip.items(i)));
+    }
     return r;
   }
 
@@ -193,6 +218,7 @@ public class Reranker {
     StringBuilder sb = new StringBuilder("action types:");
     for (ActionType at : actionTypes) sb.append(" " + at.getName());
     LOG.info(desc + " " + sb.toString());
+    LOG.info(desc + " " + init.show());
   }
 
   /** Shows some info about the Action (wrapped in a StateSequence for ancillary info) */
@@ -236,15 +262,14 @@ public class Reranker {
   public StateSequence mostViolated(FNTagging frames, FNParse y) {
     if (LOG_MOST_VIOLATED)
       LOG.warn("[mostViolated] using exhaustive version (not reranking)");
-    assert !useItemsForPruning;
-    State init = State.initialState(frames);
+    State init = State.initialState(y != null ? y : frames);
     return mostViolatedHelper(init, y);
   }
-  public StateSequence mostViolated(List<Item> rerank, FNParse y) {
+  public StateSequence mostViolated(List<Item> rerank, FNTagging frames, FNParse y) {
     if (useItemsForPruning) {
       if (LOG_MOST_VIOLATED)
         LOG.warn("[mostViolated] using reranking version");
-      State init = State.initialState(y, rerank);
+      State init = State.initialState(y != null ? y : frames, rerank);
       return mostViolatedHelper(init, y);
     } else {
       return mostViolated(y, y);
@@ -252,8 +277,6 @@ public class Reranker {
   }
   private StateSequence mostViolatedHelper(State init, FNParse y) {
     String desc = (y == null) ? "[decode]" : "[mostViolated]";
-    if (LOG_MOST_VIOLATED)
-      logStateInfo(desc, init);
     boolean verbose = true;
     Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
@@ -280,7 +303,7 @@ public class Reranker {
         }
         boolean onBeam = beam.push(ss, score);
         if (verbose && onBeam && LOG_MOST_VIOLATED)
-          logAction(desc, iter, score, ss, y, true);
+          logAction(desc, iter, score, ss, y, y != null);
       }
       //LOG.debug("[mostViolated] added=" + added);
       if (added == 0) {
@@ -337,7 +360,7 @@ public class Reranker {
 
         if (LOG_UPDATE) LOG.info("[init] solving mostViolated for " + y.getId());
         timer.start("udpate.mostViolated");
-        mostViolated = mostViolated(rerank, y);
+        mostViolated = mostViolated(rerank, y, y);
         timer.stop("udpate.mostViolated");
 
         if (LOG_UPDATE) LOG.info("[init] decoding for " + y.getId());
@@ -347,7 +370,7 @@ public class Reranker {
 
         assert yHat != null : "mostViolated returned non-terminal state?";
         SentenceEval se = new SentenceEval(y, yHat);
-        double l = se.argOnlyFP() + se.argOnlyFN();
+        double l = se.argOnlyFP() + se.argOnlyFN() * COST_FN;
         assert l >= 0d;
         hinge = oracle.getScore() - (mostViolated.getScore() + l);
         if (LOG_UPDATE) {

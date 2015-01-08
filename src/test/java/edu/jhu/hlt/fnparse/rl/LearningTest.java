@@ -98,6 +98,10 @@ public class LearningTest {
 
   /**
    * Ensures that every state has an optimal action according the gold parse.
+   *
+   * NOTE: Previously I had a bug in State.initial where I didn't allow nullSpans
+   * in State.possible. When I fixed it the runtime of this test went from like
+   * 1 second to like 17. This test passes before and after. Why the slowdown?
    */
   @Test
   public void noTrainPrereq() {
@@ -148,14 +152,11 @@ public class LearningTest {
 
     int beamWidth = 10;
     Reranker model = new Reranker(Stateful.NONE, theta, beamWidth);
-    //model.logMostViolated = true;
+    Reranker.LOG_MOST_VIOLATED = false;
 
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
     for (FNParse g : gold) {
-      if (g.numFrameInstances() == 0)
-        continue;
-      FNTagging frames = DataUtil.convertParseToTagging(g);
-      FNParse h = model.predict(frames);
+      FNParse h = model.predict(g);
       double perf = eval.evaluate(new SentenceEval(g, h));
       LOG.info("perf=" + perf);
       if (perf < 0.99d)
@@ -193,33 +194,68 @@ public class LearningTest {
     }
   }
 
-  public void fromPriorScores() {
-    // Train a model using PriorScoreParams
-    Reranker.LOG_UPDATE = true;
-    Reranker.LOG_ORACLE = true;
-    int beamWidth = 1;
-    int iters = 2;
-    int batchSize = 10;
-    int threads = 1;
-    RerankerTrainer trainer = new RerankerTrainer(rand, iters, threads, batchSize);
-    ItemProvider ip = Reranker.getItemProvider();
-    PriorScoreParams theta = new PriorScoreParams(ip, true);
-    Reranker model = trainer.train(theta, beamWidth, ip);
-
+  private void evaluate(Reranker model, ItemProvider ip) {
     // Show the parses one by one
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
-      FNParse yhat = model.predict(DataUtil.convertParseToTagging(y));
-      double perf = BasicEvaluation.argOnlyMicroF1.evaluate(new SentenceEval(y, yhat));
-      LOG.info("perf=" + perf + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
+      FNParse yhat;
+      if (model.useItemsForPruning) {
+        FNTagging frames = DataUtil.convertParseToTagging(ip.label(i));
+        yhat = model.predict(frames, ip.items(i));
+      } else {
+        yhat = model.predict(DataUtil.convertParseToTagging(y));
+      }
+      SentenceEval se = new SentenceEval(y, yhat);
+      double f1 = BasicEvaluation.argOnlyMicroF1.evaluate(se);
+      double prec = BasicEvaluation.argOnlyMicroPrecision.evaluate(se);
+      double rec = BasicEvaluation.argOnlyMicroRecall.evaluate(se);
+      LOG.info("f1=" + f1 + " p=" + prec + " r=" + rec
+          + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
     }
 
     // Evaluate performance on all parses
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     List<FNTagging> frames = DataUtil.convertParsesToTaggings(gold);
-    List<FNParse> hyp = model.predict(frames);
+    List<FNParse> hyp = model.useItemsForPruning
+        ? model.predict(ip) : model.predict(frames);
     Map<String, Double> perf = BasicEvaluation.evaluate(gold, hyp);
     BasicEvaluation.showResults("[using PriorScoreParams]", perf);
+  }
+
+  public void fromPriorScores() {
+    // Train a model using PriorScoreParams
+    Reranker.LOG_UPDATE = true;
+    Reranker.LOG_ORACLE = true;
+    Reranker.LOG_MOST_VIOLATED = false;
+    ItemProvider ip = Reranker.getItemProvider();
+    int beamWidth = 1;
+    boolean train = true;
+    Reranker model;
+
+    // Train a model based on the items
+    if (train) {
+      boolean byHand = false;
+      PriorScoreParams theta = new PriorScoreParams(ip, true);
+      if (byHand) {
+        theta.setParamsByHand();
+        model = new Reranker(Stateful.NONE, theta, beamWidth);
+      } else {
+        int iters = 2;
+        int batchSize = 20;
+        int threads = 1;
+        RerankerTrainer trainer = new RerankerTrainer(rand, iters, threads, batchSize);
+        model = trainer.train(theta, beamWidth, ip);
+      }
+    } else {
+      // Intersect the items dumped to disk with oracle parameters,
+      // check how good the score can be.
+      CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
+      oracle.setWeightsByHand();
+      model = new Reranker(Stateful.NONE, oracle, beamWidth);
+      model.useItemsForPruning = true;
+    }
+
+    evaluate(model, ip);
   }
 
   public static void main(String[] args) {

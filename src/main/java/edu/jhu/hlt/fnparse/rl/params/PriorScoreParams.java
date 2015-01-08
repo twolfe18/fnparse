@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -22,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
  */
 public class PriorScoreParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
+  public static boolean SHOW_PARAMS_AFTER_UPDATE = true;
 
   /**
    * You give this class items via store(), and this will set the rank field
@@ -157,32 +159,49 @@ public class PriorScoreParams implements Params.Stateless {
     }
   }
 
+  public void setParamsByHand() {
+    double recallBias = 2d;
+    theta[0] = FastMath.sqrt(1d / recallBias);
+    theta[2] = 1d;
+    theta[3] = 1d;
+    theta[9 + 0] = FastMath.sqrt(recallBias);
+    theta[9 + 1] = -999d;
+    theta[9 + 2] = 1d;
+    theta[9 + 3] = 1d;
+    if (SHOW_PARAMS_AFTER_UPDATE)
+      logParams();
+  }
+
+  public void logParams() {
+    LOG.debug(String.format("[update] NS theta(intercept)     = %+.3f", theta[0]));
+    LOG.debug(String.format("[update] NS theta(not-in-k-best) = %+.3f", theta[1]));
+    LOG.debug(String.format("[update] NS theta(item-log-prob) = %+.3f", theta[2]));
+    LOG.debug(String.format("[update] NS theta(rank==1)       = %+.3f", theta[3]));
+    LOG.debug(String.format("[update] NS theta(rank==2)       = %+.3f", theta[4]));
+    LOG.debug(String.format("[update] NS theta(rank==3)       = %+.3f", theta[5]));
+    LOG.debug(String.format("[update] NS theta(rank==4)       = %+.3f", theta[6]));
+    LOG.debug(String.format("[update] NS theta(rank==5)       = %+.3f", theta[7]));
+    LOG.debug(String.format("[update] NS theta(rank>5)        = %+.3f", theta[8]));
+
+    LOG.debug(String.format("[update] theta(intercept)        = %+.3f", theta[9 + 0]));
+    LOG.debug(String.format("[update] theta(not-in-k-best)    = %+.3f", theta[9 + 1]));
+    LOG.debug(String.format("[update] theta(item-log-prob)    = %+.3f", theta[9 + 2]));
+    LOG.debug(String.format("[update] theta(rank==1)          = %+.3f", theta[9 + 3]));
+    LOG.debug(String.format("[update] theta(rank==2)          = %+.3f", theta[9 + 4]));
+    LOG.debug(String.format("[update] theta(rank==3)          = %+.3f", theta[9 + 5]));
+    LOG.debug(String.format("[update] theta(rank==4)          = %+.3f", theta[9 + 6]));
+    LOG.debug(String.format("[update] theta(rank==5)          = %+.3f", theta[9 + 7]));
+    LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
+
+    LOG.debug("");
+  }
+
   @Override
   public void update(Adjoints a, double reward) {
     if (theta != null) {
       ((Adjoints.DenseFeatures) a).update(reward, learningRate);
-
-      LOG.debug(String.format("[update] NS theta(intercept)     = %+.3f", theta[0]));
-      LOG.debug(String.format("[update] NS theta(not-in-k-best) = %+.3f", theta[1]));
-      LOG.debug(String.format("[update] NS theta(item-log-prob) = %+.3f", theta[2]));
-      LOG.debug(String.format("[update] NS theta(rank==1)       = %+.3f", theta[3]));
-      LOG.debug(String.format("[update] NS theta(rank==2)       = %+.3f", theta[4]));
-      LOG.debug(String.format("[update] NS theta(rank==3)       = %+.3f", theta[5]));
-      LOG.debug(String.format("[update] NS theta(rank==4)       = %+.3f", theta[6]));
-      LOG.debug(String.format("[update] NS theta(rank==5)       = %+.3f", theta[7]));
-      LOG.debug(String.format("[update] NS theta(rank>5)        = %+.3f", theta[8]));
-
-      LOG.debug(String.format("[update] theta(intercept)        = %+.3f", theta[9 + 0]));
-      LOG.debug(String.format("[update] theta(not-in-k-best)    = %+.3f", theta[9 + 1]));
-      LOG.debug(String.format("[update] theta(item-log-prob)    = %+.3f", theta[9 + 2]));
-      LOG.debug(String.format("[update] theta(rank==1)          = %+.3f", theta[9 + 3]));
-      LOG.debug(String.format("[update] theta(rank==2)          = %+.3f", theta[9 + 4]));
-      LOG.debug(String.format("[update] theta(rank==3)          = %+.3f", theta[9 + 5]));
-      LOG.debug(String.format("[update] theta(rank==4)          = %+.3f", theta[9 + 6]));
-      LOG.debug(String.format("[update] theta(rank==5)          = %+.3f", theta[9 + 7]));
-      LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
-
-      LOG.debug("");
+      if (SHOW_PARAMS_AFTER_UPDATE)
+        logParams();
     } else {
       LOG.debug("[update] not doing anything");
     }

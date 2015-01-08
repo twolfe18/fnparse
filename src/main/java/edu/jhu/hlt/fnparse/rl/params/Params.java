@@ -1,10 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.BitSet;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -109,16 +106,18 @@ public interface Params {
         }
         // Get or compute the adjoints
         Adjoints adj = cache.get(a);
-        if (adj == null) {
-          adj = wrapping.score(f, a);
-          cache.put(a, adj);
-//        } else {
-//          //LOG.info("[score] cache hit, size=" + size());
-//          if (seenTags.add(f))
-//            estimateCollisions();
-        }
+        if (adj == null)
+          adj = cacheMiss(wrapping, f, a, cache);
         return adj;
       }
+      /** This only exists to let VisualVM know the difference between cache hits and misses */
+      private static Adjoints cacheMiss(Stateless wrapping,
+          FNTagging f, Action a, Map<Action, Adjoints> cache) {
+        Adjoints adj = wrapping.score(f, a);
+        cache.put(a, adj);
+        return adj;
+      }
+      /*
       public static Set<Object> seenTags = new HashSet<>();
       public void estimateCollisions() {
         int c1 = 0, c2 = 0, n = 0;
@@ -139,6 +138,7 @@ public interface Params {
         }
         LOG.info("[estimateCollisions] c1=" + c1 + " c2=" + c2 + " n=" + n);
       }
+      */
     }
   }
 

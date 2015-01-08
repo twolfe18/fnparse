@@ -14,7 +14,7 @@ public class Action {
   public int start;
   public int end;
 
-  private int hc;   // hashcode
+  private int hashcode;
 
   public Action(int t, int k, int mode, Span s) {
     this.t = t;
@@ -26,8 +26,8 @@ public class Action {
     assert start < end || s == Span.nullSpan;
 
     // Must be last
-    this.hc = hc1();
-    //this.hc = hc2();
+    this.hashcode = hc1();
+    //this.hashcode = hc2();
   }
 
   public boolean hasSpan() {
@@ -59,7 +59,7 @@ public class Action {
 
   @Override
   public int hashCode() {
-    return hc;
+    return hashcode;
   }
 
   /** WAYY better than hc2 */

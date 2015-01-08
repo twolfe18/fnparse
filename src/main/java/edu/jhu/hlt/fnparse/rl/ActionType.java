@@ -13,6 +13,7 @@ import com.google.common.collect.Iterables;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 
 public interface ActionType {
 
@@ -87,7 +88,10 @@ public interface ActionType {
     public String getName() {
       return "COMMIT";
     }
-
+    @Override
+    public String toString() {
+      return getName();
+    }
     @Override
     public State apply(Action a, State s) {
       // Copy the possible BitSet
@@ -179,6 +183,8 @@ public interface ActionType {
 
     @Override
     public double deltaLoss(State s, Action a, FNParse y) {
+      if (y == null)
+        throw new IllegalArgumentException("you need a label!");
       final double costFP = 1d;
       final double costFN = 1d;
       Span hyp = a.getSpanSafe();
@@ -202,6 +208,10 @@ public interface ActionType {
     @Override
     public String getName() {
       return "COMMIT_AND_PRUNE";
+    }
+    @Override
+    public String toString() {
+      return getName();
     }
     @Override
     public State apply(Action a, State s) {
@@ -254,6 +264,7 @@ public interface ActionType {
 
     @Override
     public Iterable<Action> prev(State st) {
+      // TODO figure this out.
       //return prune(COMMIT.prev(st), st);
       return Collections.emptyList();
     }
@@ -273,7 +284,6 @@ public interface ActionType {
       // COMMIT checks for false negatives for this (t,k), here we need to check
       // for additional false negatives for all roles that might have a span
       // that overlaps with this action.
-      final double costFN = 1d;
       assert a.hasSpan();
       Span arg = a.getSpan();
       final int T = s.numFrameInstance();
@@ -283,7 +293,7 @@ public interface ActionType {
         for (int k = 0; k < K; k++) {
           Span c = s.committed(t, k);
           if (c != null && c.overlaps(arg) && c != arg)
-            cost += costFN;
+            cost += Reranker.COST_FN;
         }
       }
       return cost;

@@ -41,6 +41,12 @@ public interface ItemProvider {
     return addTo;
   }
 
+  public static List<FNParse> allLabels(ItemProvider ip) {
+    List<FNParse> l = new ArrayList<>();
+    allLabels(ip, l);
+    return l;
+  }
+
   public static class Caching implements ItemProvider {
     private FNParse[] labels;
     private List<Item>[] items;

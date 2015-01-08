@@ -26,7 +26,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.Item;
  */
 public class State {
   public static final Logger LOG = Logger.getLogger(State.class);
-  public static boolean PRUNE_SPANS = true;
+  public static boolean PRUNE_SPANS = false;
 
   protected FNTagging frames;
   private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
@@ -133,6 +133,15 @@ public class State {
       }
     }
     return ((double) recalled) / total;
+  }
+
+  public boolean possible(int t, int k, Span a) {
+    return possible(t, k, a.start, a.end);
+  }
+
+  public boolean possible(int t, int k, int start, int end) {
+    int idx = stateIndex.index(t, k, start, end);
+    return possible.get(idx);
   }
 
   public BitSet getPossible() {
