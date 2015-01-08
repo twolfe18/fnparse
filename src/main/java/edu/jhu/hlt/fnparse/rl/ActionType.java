@@ -145,11 +145,14 @@ public interface ActionType {
           if (a != null) continue;
           if (y == null) {
             // Consider all possible actions
-            for (Span arg : st.naiveAllowableSpans(t, k))
-              actions.add(new Action(t, k, getIndex(), arg));
+            for (Span arg : st.naiveAllowableSpans(t, k)) {
+              if (st.possible(t, k, arg))
+                actions.add(new Action(t, k, getIndex(), arg));
+            }
           } else {
             // Only consider actions that will lead to y (there is only one)
             Span yArg = y.getFrameInstance(t).getArgument(k);
+            assert st.possible(t, k, yArg);
             actions.add(new Action(t, k, getIndex(), yArg));
           }
         }
