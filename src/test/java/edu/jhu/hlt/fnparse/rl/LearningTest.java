@@ -21,6 +21,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
@@ -96,7 +97,7 @@ public class LearningTest {
   /**
    * Ensures that every state has an optimal action according the gold parse.
    */
-  //@Test
+  @Test
   public void noTrainPrereq() {
     List<FNParse> parses = testParses();
     CheatingParams thetaCheat = new CheatingParams(parses);
@@ -135,7 +136,7 @@ public class LearningTest {
   }
 
   /** Set CheatingParams weights by hand */
-  //@Test
+  @Test
   public void getsItRightWithNoTraining() {
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
@@ -144,8 +145,8 @@ public class LearningTest {
     theta.setWeightsByHand();
 
     int beamWidth = 10;
-    Reranker model = new Reranker(null, theta, beamWidth);
-    model.logMostViolated = true;
+    Reranker model = new Reranker(Stateful.NONE, theta, beamWidth);
+    //model.logMostViolated = true;
 
     StdEvalFunc eval = BasicEvaluation.argOnlyMicroF1;
     for (FNParse g : gold) {
@@ -161,11 +162,6 @@ public class LearningTest {
     }
   }
 
-  //@Test
-  public void getsItRightAtAll() {
-    getsItRight(20);
-  }
-
   @Test
   public void getsItRightQuickly() {
     getsItRight(1);
@@ -173,12 +169,12 @@ public class LearningTest {
 
   public void getsItRight(int iters) {
     Reranker.LOG_UPDATE = true;
+    CheatingParams.SHOW_ON_UPDATE = true;
     int beamWidth = 10;
     RerankerTrainer trainer = new RerankerTrainer(rand, iters, 1, 1);
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
-    theta.showOnUpdate = true;
     LOG.info("[getsItRight] before: " + theta.showWeights());
     Reranker model = trainer.train(theta, beamWidth, ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
@@ -190,8 +186,14 @@ public class LearningTest {
       double perf = eval.evaluate(new SentenceEval(g, h));
       LOG.info("[getsItRight] after " + iters + ": perf=" + perf);
       if (perf < 0.99d)
-        LOG.info(FNDiff.diffArgs(g, h, true));
+        LOG.info("diff:\n" + FNDiff.diffArgs(g, h, true));
       Assert.assertTrue(perf > 0.99d);
     }
+  }
+
+  public static void main(String[] args) {
+    LearningTest lt = new LearningTest();
+    lt.turnOffPruning();
+    lt.getsItRight(1);
   }
 }

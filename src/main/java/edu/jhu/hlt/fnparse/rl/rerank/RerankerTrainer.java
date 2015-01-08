@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
  * Training logic can get out of hand (e.g. checking against dev data, etc).
@@ -29,6 +30,7 @@ public class RerankerTrainer {
   private int epochs;
   private int threads;
   private int batchSize;
+  private MultiTimer timer = new MultiTimer();
 
   public RerankerTrainer() {
     this(new Random(9001), 3, 1, 1);
@@ -48,51 +50,90 @@ public class RerankerTrainer {
     return train(Stateful.NONE, thetaStateless, beamWidth, ip);
   }
   public Reranker train(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth, ItemProvider ip) {
+    LOG.info("[train] batchSize=" + batchSize + " epochs=" + epochs + " threads=" + threads);
+
+    // If you don't make an update after this many batches, exit learning early
+    final int inARow = 5;
+
     Reranker r = new Reranker(thetaStateful, thetaStateless, beamWidth);
-    ExecutorService es = Executors.newWorkStealingPool(threads);
+    ExecutorService es = null;
+    if (threads > 1)
+      es = Executors.newWorkStealingPool(threads);
     int n = ip.size();
-    for (int epoch = 0; epoch < epochs; epoch++) {
-      int updated = 0;
-      LOG.info("[train] startring epoch " + (epoch+1) + "/" + epochs
-          + " which will have " + (n/batchSize) + " updates");
-      for (int i = 0; i < n; i += batchSize) {
-        try {
-          updated += trainBatch(r, es, ip);
-        } catch (Exception e) {
-          throw new RuntimeException(e);
+    int curRun = 0;
+    try {
+      for (int epoch = 0; epoch < epochs; epoch++) {
+        int updated = 0;
+        LOG.info("[train] startring epoch " + (epoch+1) + "/" + epochs
+            + " which will have " + (n/batchSize) + " updates");
+        for (int i = 0; i < n; i += batchSize) {
+          int u = trainBatch(r, es, ip);
+          updated += u;
+          System.out.print("*");
+          if (u == 0) {
+            curRun++;
+            if (curRun == inARow) {
+              System.out.println();
+              LOG.info("[train] exiting early in the middle of epoch " + (epoch+1)
+                  + " of " + epochs + " because we made an entire pass over " + n
+                  + " data points without making a single subgradient step");
+              break;
+            }
+          } else {
+            curRun = 0;
+          }
         }
-        System.out.print("*");
+
+        System.out.println();
+        LOG.info("[train] updated " + updated);
       }
-      System.out.println();
-      LOG.info("[train] updated " + updated);
-      if (updated == 0)
-        break;  // unlikely...
+      if (es != null)
+        es.shutdown();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
     }
-    es.shutdown();
+    LOG.info("[train] times:\n" + timer);
     return r;
   }
 
   private int trainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
+    timer.start("trainBatch");
     boolean verbose = false;
-    List<Future<Update>> updates = new ArrayList<>();
     int n = ip.size();
-    for (int i = 0; i < batchSize; i++) {
-      int idx = rand.nextInt(n);
-      FNParse y = ip.label(idx);
-      List<Item> rerank = ip.items(idx);
-      if (verbose)
-        LOG.info("[trainBatch] submitting " + idx);
-      updates.add(es.submit(() -> r.new Update(y, rerank)));
+    List<Update> finishedUpdates = new ArrayList<>();
+    if (es == null) {
+      LOG.info("[trainBatch] running serial");
+      for (int i = 0; i < batchSize; i++) {
+        int idx = rand.nextInt(n);
+        FNParse y = ip.label(idx);
+        List<Item> rerank = ip.items(idx);
+        if (verbose)
+          LOG.info("[trainBatch] submitting " + idx);
+        finishedUpdates.add(r.new Update(y, rerank));
+      }
+    } else {
+      LOG.info("[trainBatch] running with ExecutorService");
+      List<Future<Update>> updates = new ArrayList<>();
+      for (int i = 0; i < batchSize; i++) {
+        int idx = rand.nextInt(n);
+        FNParse y = ip.label(idx);
+        List<Item> rerank = ip.items(idx);
+        if (verbose)
+          LOG.info("[trainBatch] submitting " + idx);
+        updates.add(es.submit(() -> r.new Update(y, rerank)));
+      }
+      for (Future<Update> u : updates)
+        finishedUpdates.add(u.get());
     }
-    //es.awaitTermination(99, TimeUnit.HOURS);
     if (verbose)
       LOG.info("[trainBatch] applying updates");
+    assert finishedUpdates.size() == batchSize;
     int updated = 0;
-    for (Future<Update> u : updates) {
-      Update up = u.get();
-      if (up.apply())
+    for (Update u : finishedUpdates) {
+      if (u.apply())
         updated++;
     }
+    timer.stop("trainBatch");
     return updated;
   }
 

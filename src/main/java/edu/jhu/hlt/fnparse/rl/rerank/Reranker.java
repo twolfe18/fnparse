@@ -74,8 +74,8 @@ public class Reranker {
   private boolean useItemsForPruning; // Otherwise use them as features, via
   // Params, e.g. PriorScoreParams
 
-  public boolean logOracle = true;
-  public boolean logMostViolated = true;
+  public boolean logOracle = false;
+  public boolean logMostViolated = false;
 
   public Reranker(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth) {
     this.thetaStateful = thetaStateful;
@@ -83,7 +83,7 @@ public class Reranker {
     this.beamWidth = beamWidth;
     this.actionTypes = new ActionType[] {
         ActionType.COMMIT,
-        ActionType.COMMIT_AND_PRUNE,
+        //ActionType.COMMIT_AND_PRUNE,
     };
   }
 
@@ -200,7 +200,8 @@ public class Reranker {
     if (y != null) {
       Action a = ss.getAction();
       ActionType at = a.getActionType();
-      State s = ss.getCur();
+      //State s = ss.getCur();          // State after applying a
+      State s = ss.neighbor().getCur(); // State before applying a
       double dl = at.deltaLoss(s, a, y);
       sb.append(" deltaLoss=" + dl);
       //sb.append(" totalLoss=" + ss.getLoss(y));
@@ -209,6 +210,14 @@ public class Reranker {
     LOG.info(sb.toString());
   }
 
+  /**
+   * Returns parameters which cache the stateless features, but not the stateful
+   * ones (obviously...).
+   *
+   * Right now this only caches for a single FNTagging, and it will likely have
+   * to stay this way, because otherwise it would need to cache for an entire
+   * dataset, which is likley too much.
+   */
   private Params.Stateful getCachingParams() {
     Params.Stateless thetaBaseCache = new Params.Stateless.Caching(thetaStateless);
     Params.Stateful theta = new Params.SumMixed(thetaStateful, thetaBaseCache);
@@ -259,7 +268,8 @@ public class Reranker {
           // Add in a reward for increasing the loss
           Action a = ss.getAction();
           ActionType at = a.getActionType();
-          State s = ss.getCur();
+          //State s = ss.getCur();        // State after applying a (slow)
+          State s = frontier.getCur();  // State before applying a (fast)
           score += at.deltaLoss(s, a, y);
         }
         boolean onBeam = beam.push(ss, score);

@@ -65,7 +65,7 @@ public interface Adjoints {
       double s = reward * learningRate;
       for (int i = 0; i < theta.length; i++)
         theta[i] += s * features[i];
-      projectL2(1d);
+      projectL2(maxNorm);
     }
     public void projectL2(double maxNorm) {
       double l2 = 0d;

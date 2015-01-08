@@ -13,12 +13,12 @@ import edu.jhu.hlt.fnparse.rl.Action;
 
 public class CheatingParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(CheatingParams.class);
+  public static boolean SHOW_ON_UPDATE = false;
 
   private Set<String> goldItems;
   private Set<String> goldParseIds;
   private double[] theta;
   private double learningRate;
-  public boolean showOnUpdate = false;
 
   public CheatingParams(Iterable<FNParse> parses) {
     learningRate = 0.01d;
@@ -70,7 +70,7 @@ public class CheatingParams implements Params.Stateless {
   @Override
   public void update(Adjoints a, double reward) {
     ((Adjoints.DenseFeatures) a).update(reward, learningRate);
-    if (showOnUpdate)
+    if (SHOW_ON_UPDATE)
       LOG.info("[update] afterwards: " + showWeights());
   }
 }

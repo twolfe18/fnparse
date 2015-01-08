@@ -1,7 +1,12 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.BitSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+
+import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
@@ -11,6 +16,7 @@ import edu.jhu.hlt.fnparse.rl.State;
  * Parameterizes a score function on (state,action) pairs
  */
 public interface Params {
+  public static final Logger LOG = Logger.getLogger(Params.class);
 
   public void update(Adjoints a, double reward);
 
@@ -95,17 +101,43 @@ public interface Params {
       @Override
       public Adjoints score(FNTagging f, Action a) {
         // Check that this is caching the right thing.
-        if (tag == null)
+        if (tag == null) {
+          assert f != null;
           tag = f;
-        else if (tag != f)
+        } else if (tag != f) {
           throw new RuntimeException("forget to flush?");
+        }
         // Get or compute the adjoints
         Adjoints adj = cache.get(a);
         if (adj == null) {
           adj = wrapping.score(f, a);
           cache.put(a, adj);
+        } else {
+          //LOG.info("[score] cache hit, size=" + size());
+          if (seenTags.add(f))
+            estimateCollisions();
         }
         return adj;
+      }
+      public static Set<Object> seenTags = new HashSet<>();
+      public void estimateCollisions() {
+        int c1 = 0, c2 = 0, n = 0;
+        BitSet seen1 = new BitSet();
+        BitSet seen2 = new BitSet();
+        for (Action a : cache.keySet()) {
+          n++;
+
+          int hc1 = a.hc1();
+          if (seen1.get(hc1))
+            c1++;
+          seen1.set(hc1);
+
+          int hc2 = a.hc2();
+          if (seen2.get(hc2))
+            c2++;
+          seen2.set(hc2);
+        }
+        LOG.info("[estimateCollisions] c1=" + c1 + " c2=" + c2 + " n=" + n);
       }
     }
   }

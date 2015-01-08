@@ -14,6 +14,8 @@ public class Action {
   public int start;
   public int end;
 
+  private int hc;   // hashcode
+
   public Action(int t, int k, int mode, Span s) {
     this.t = t;
     this.k = k;
@@ -22,6 +24,10 @@ public class Action {
     this.end = s.end;
     assert start >= 0;
     assert start < end || s == Span.nullSpan;
+
+    // Must be last
+    this.hc = hc1();
+    //this.hc = hc2();
   }
 
   public boolean hasSpan() {
@@ -53,11 +59,21 @@ public class Action {
 
   @Override
   public int hashCode() {
+    return hc;
+  }
+
+  /** WAYY better than hc2 */
+  public int hc1() {
     return start
-      | ((end - start) << 6)
-      | (mode << 12)
-      | (k << 18)
-      | (t << 24);
+      ^ ((end - start) << 8)
+      ^ (mode << 14)
+      ^ (k << 18)
+      ^ (t << 24);
+  }
+  /** @deprecated */
+  public int hc2() {
+    // 17 103 211 331 449 587 709 853 991 1117 1270
+    return start + (end - start) * 17 + mode * 331 + k * 700 + t * 1279;
   }
 
   @Override
