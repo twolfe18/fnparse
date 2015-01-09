@@ -164,13 +164,14 @@ public class LearningTest {
   public void getsItRight(int iters) {
     Reranker.LOG_UPDATE = true;
     CheatingParams.SHOW_ON_UPDATE = true;
-    int beamWidth = 10;
-    RerankerTrainer trainer = new RerankerTrainer(rand, iters, 1, 1);
+    RerankerTrainer trainer = new RerankerTrainer(rand);
+    trainer.epochs = iters;
+    trainer.beamSize = 10;
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
     LOG.info("[getsItRight] before: " + theta.showWeights());
-    Reranker model = trainer.train(theta, beamWidth, ip);
+    Reranker model = trainer.train(ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
     evaluate(model, ip, 0.99d, 0.99d);
   }
@@ -196,13 +197,10 @@ public class LearningTest {
     }
 
     // Evaluate performance on all parses
-    List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
-    List<FNTagging> frames = DataUtil.convertParsesToTaggings(gold);
-    List<FNParse> hyp = model.useItemsForPruning
-        ? model.predict(ip) : model.predict(frames);
-    Map<String, Double> perf = BasicEvaluation.evaluate(gold, hyp);
-    BasicEvaluation.showResults("[using PriorScoreParams]", perf);
-    Assert.assertTrue(perf.get(BasicEvaluation.argOnlyMicroF1.getName()) >= f1ThreshAggregate);
+    Map<String, Double> results =
+        RerankerTrainer.eval(model, ip, "[using PriorScoreParams]");
+    Assert.assertTrue(results.get(BasicEvaluation.argOnlyMicroF1.getName())
+        >= f1ThreshAggregate);
   }
 
   public void fromPriorScores() {
@@ -223,11 +221,10 @@ public class LearningTest {
         theta.setParamsByHand();
         model = new Reranker(Stateful.NONE, theta, beamWidth);
       } else {
-        int iters = 2;
-        int batchSize = 20;
-        int threads = 1;
-        RerankerTrainer trainer = new RerankerTrainer(rand, iters, threads, batchSize);
-        model = trainer.train(theta, beamWidth, ip);
+        RerankerTrainer trainer = new RerankerTrainer(rand);
+        trainer.epochs = 2;
+        trainer.batchSize = 20;
+        model = trainer.train(ip);
       }
     } else {
       // Intersect the items dumped to disk with oracle parameters,

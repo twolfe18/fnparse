@@ -95,6 +95,22 @@ public class Reranker {
     return "<Reranker beam=" + beamWidth + " " + thetaStateful + " " + thetaStateless + ">";
   }
 
+  public Params.Stateless getStatelessParams() {
+    return thetaStateless;
+  }
+
+  public Params.Stateful getStatefulParams() {
+    return thetaStateful;
+  }
+
+  public void setStatelessParams(Params.Stateless theta) {
+    this.thetaStateless = theta;
+  }
+
+  public void setStatefulParams(Params.Stateful theta) {
+    this.thetaStateful = theta;
+  }
+
   public static ItemProvider getItemProvider() {
     int n = 100;
     File cache = new File("data/rl/items." + n + ".train");

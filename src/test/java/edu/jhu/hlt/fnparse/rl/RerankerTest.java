@@ -24,7 +24,7 @@ public class RerankerTest {
   public void oracleCanFindPathThroughSubsetOfItems() {
     int beamWidth = 10;
     PriorScoreParams theta = new PriorScoreParams(ip, true);
-    Reranker r = new RerankerTrainer().train(Stateful.NONE, theta, beamWidth, ip);
+    Reranker r = new RerankerTrainer().hammingTrain(Stateful.NONE, theta, beamWidth, ip);
     int n = Math.min(k, ip.size());
     for (int i = 0; i < n; i++) {
       FNParse y = ip.label(i);

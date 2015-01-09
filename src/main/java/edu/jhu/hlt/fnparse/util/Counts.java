@@ -52,6 +52,7 @@ public class Counts<T> {
     return counts.toString();
   }
 
+  @SuppressWarnings({ "unchecked", "rawtypes" })
   public List<T> getKeysSorted() {
     List<T> items = new ArrayList<>();
     items.addAll(counts.keySet());
