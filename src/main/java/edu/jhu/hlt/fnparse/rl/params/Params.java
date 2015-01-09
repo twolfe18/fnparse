@@ -142,27 +142,28 @@ public interface Params {
     }
   }
 
+  static class SumAdj implements Adjoints {
+    private final Adjoints left, right;
+    public SumAdj(Adjoints stateful, Adjoints stateless) {
+      assert stateful.getAction() == stateless.getAction()
+          || stateful.getAction().equals(stateless.getAction());
+      this.left = stateful;
+      this.right = stateless;
+    }
+    @Override
+    public double getScore() {
+      return left.getScore() + right.getScore();
+    }
+    @Override
+    public Action getAction() {
+      assert left.getAction() == right.getAction()
+          || left.getAction().equals(right.getAction());
+      return left.getAction();
+    }
+  }
+
   /** Params is closed under addition */
   public static class SumMixed implements Stateful {
-    private static class SumAdj implements Adjoints {
-      private final Adjoints stateful, stateless;
-      public SumAdj(Adjoints stateful, Adjoints stateless) {
-        assert stateful.getAction() == stateless.getAction()
-            || stateful.getAction().equals(stateless.getAction());
-        this.stateful = stateful;
-        this.stateless = stateless;
-      }
-      @Override
-      public double getScore() {
-        return stateful.getScore() + stateless.getScore();
-      }
-      @Override
-      public Action getAction() {
-        assert stateful.getAction() == stateless.getAction()
-            || stateful.getAction().equals(stateless.getAction());
-        return stateful.getAction();
-      }
-    }
     private final Stateful stateful;
     private final Stateless stateless;
     public SumMixed(Stateful stateful, Stateless stateless) {
@@ -177,10 +178,29 @@ public interface Params {
     @Override
     public void update(Adjoints a, double reward) {
       SumAdj sa = (SumAdj) a;
-      stateful.update(sa.stateful, reward);
-      stateless.update(sa.stateless, reward);
+      stateful.update(sa.left, reward);
+      stateless.update(sa.right, reward);
     }
   }
 
-  // TODO SumStateful and SumStateless?
+  /** Params is closed under addition */
+  public static class SumStateless implements Stateless {
+    private final Stateless left, right;
+    public SumStateless(Stateless left, Stateless right) {
+      this.left = left;
+      this.right = right;
+    }
+    @Override
+    public void update(Adjoints a, double reward) {
+      SumAdj sa = (SumAdj) a;
+      left.update(sa.left, reward);
+      right.update(sa.right, reward);
+    }
+    @Override
+    public Adjoints score(FNTagging f, Action a) {
+      return new SumAdj(left.score(f, a), right.score(f, a));
+    }
+  }
+
+  // TODO SumStateful?
 }
