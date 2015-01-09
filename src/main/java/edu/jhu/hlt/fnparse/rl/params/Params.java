@@ -75,25 +75,36 @@ public interface Params {
      */
     public static class Caching implements Stateless {
       private Stateless wrapping;
-      private Map<Action, Adjoints> cache;
+      //private Map<Action, Adjoints> cache;
+      private Adjoints[][][][] cache2; // [t][k][start][end]
       private Object tag;
       public Caching(Stateless wrapping) {
         this.wrapping = wrapping;
-        this.cache = new HashMap<>();
+        //this.cache = new HashMap<>();
       }
       public Stateless getWrapped() {
         return wrapping;
       }
-      public int size() {
-        return cache.size();
-      }
+//      public int size() {
+//        return cache.size();
+//      }
       public void flush() {
-        cache.clear();
+        //cache.clear();
+        cache2 = null;
         tag = null;
       }
       @Override
       public void update(Adjoints a, double reward) {
         wrapping.update(a, reward);
+      }
+      private void initCache2(FNTagging f) {
+        int T = f.numFrameInstances();
+        int N = f.getSentence().size();
+        cache2 = new Adjoints[T][][][];
+        for (int t = 0; t < T; t++) {
+          int K = f.getFrameInstance(t).getFrame().numRoles();
+          cache2[t] = new Adjoints[K][N][N+1];
+        }
       }
       @Override
       public Adjoints score(FNTagging f, Action a) {
@@ -101,20 +112,25 @@ public interface Params {
         if (tag == null) {
           assert f != null;
           tag = f;
+          initCache2(f);
         } else if (tag != f) {
           throw new RuntimeException("forget to flush?");
         }
         // Get or compute the adjoints
-        Adjoints adj = cache.get(a);
+        //Adjoints adj = cache.get(a);
+        Adjoints adj = cache2[a.t][a.k][a.start][a.end];
         if (adj == null)
-          adj = cacheMiss(wrapping, f, a, cache);
+          adj = cacheMiss(wrapping, f, a, cache2);
         return adj;
       }
       /** This only exists to let VisualVM know the difference between cache hits and misses */
       private static Adjoints cacheMiss(Stateless wrapping,
-          FNTagging f, Action a, Map<Action, Adjoints> cache) {
+          FNTagging f, Action a,
+          Adjoints[][][][] cache2) {
+          //Map<Action, Adjoints> cache) {
         Adjoints adj = wrapping.score(f, a);
-        cache.put(a, adj);
+        //cache.put(a, adj);
+        cache2[a.t][a.k][a.start][a.end] = adj;
         return adj;
       }
       /*
