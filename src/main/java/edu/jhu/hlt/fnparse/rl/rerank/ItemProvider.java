@@ -11,6 +11,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 import java.util.zip.GZIPInputStream;
@@ -30,6 +31,56 @@ public interface ItemProvider {
   public int size();
   public FNParse label(int i);
   public List<Item> items(int i);
+
+  /** View of a subset of the indices of a given ItemProvider */
+  public static class Slice implements ItemProvider {
+    private int[] redirect;
+    private ItemProvider wrapped;
+    public Slice(ItemProvider wrap, int[] indices) {
+      this.wrapped = wrap;
+      this.redirect = indices;
+    }
+    @Override
+    public int size() {
+      return redirect.length;
+    }
+    @Override
+    public FNParse label(int i) {
+      return wrapped.label(redirect[i]);
+    }
+    @Override
+    public List<Item> items(int i) {
+      return wrapped.items(redirect[i]);
+    }
+  }
+
+  /** Can also be used for train-dev splits */
+  public static class TrainTestSplit {
+    private Slice train, test;
+    public TrainTestSplit(ItemProvider base, double propTest, int maxTest, Random rand) {
+      List<Integer> idx = new ArrayList<>();
+      int n = base.size();
+      for (int i = 0; i < n; i++) idx.add(i);
+      Collections.shuffle(idx, rand);
+      int nTest = Math.min(maxTest, (int) (propTest * n));
+      int[] testIdx = new int[nTest];
+      int[] trainIdx = new int[n - nTest];
+      for (int i = 0; i < n; i++) {
+        if (i < nTest)
+          testIdx[i] = idx.get(i);
+        else
+          trainIdx[i - nTest] = idx.get(i);
+      }
+      train = new Slice(base, trainIdx);
+      test = new Slice(base, testIdx);
+    }
+    public ItemProvider getTrain() {
+      return train;
+    }
+    public ItemProvider getTest() {
+      return test;
+    }
+  }
 
   /**
    * returns and adds to addTo all of the labels in ip
