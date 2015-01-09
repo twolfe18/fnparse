@@ -1,6 +1,10 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
  * represents a constraint on the set of arguments a particular
@@ -88,5 +92,15 @@ public class Action {
   public String toString() {
     String m = ActionType.ACTION_TYPES[mode].getName();
     return String.format("[Action(%s) t=%d k=%d %d-%d]", m, t, k, start, end);
+  }
+
+  public String show(FNTagging frames) {
+    FrameInstance fi = frames.getFrameInstance(t);
+    Frame f = fi.getFrame();
+    String arg = "nullSpan";
+    if (hasSpan())
+      arg = Describe.span(getSpan(), frames.getSentence());
+    return String.format("%s(%s.%s, %s)",
+        getActionType().getName(), f.getName(), f.getRole(k), arg);
   }
 }

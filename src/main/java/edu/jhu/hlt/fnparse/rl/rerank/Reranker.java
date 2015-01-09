@@ -112,7 +112,7 @@ public class Reranker {
   }
 
   public static ItemProvider getItemProvider() {
-    int n = 100;
+    int n = 1000;
     File cache = new File("data/rl/items." + n + ".train");
     FrameInstanceProvider fip = FileFrameInstanceProvider.dipanjantrainFIP;
     ItemProvider items;
@@ -179,6 +179,7 @@ public class Reranker {
         // or initial state.
         if (LOG_ORACLE)
           LOG.debug(desc + " done after " + iter + " iterations");
+        LOG.info(desc + " solution: " + frontier.showActions());
         return frontier;
       }
     }
@@ -336,6 +337,7 @@ public class Reranker {
           }
         }
         assert 0 == frontier.getCur().numUncommitted();
+        LOG.info(desc + " solution: " + frontier.showActions());
         return frontier;
       }
     }
@@ -406,34 +408,31 @@ public class Reranker {
       }
     }
 
-    public boolean apply() {
+    public boolean apply(int batchSize) {
       timer.start("update.apply");
+
       if (hinge >= 0) {
         timer.stop("update.apply");
         return false;
+      } else if (LOG_UPDATE) {
+        LOG.info("[apply] hinge=" + hinge + " batchSize=" + batchSize);
       }
-      StateSequence cur;
-      if (LOG_UPDATE)
-        LOG.info("[apply] pushing up the oracle answer, hinge=" + hinge);
+
       // Have to use this so that the Adjoint's class matches what it was when
       // they were computed.
       Params.Stateful justForUpdate = getCachingParams();
-      cur = oracle;
-      while (cur != null) {
-        Adjoints a = cur.getAdjoints();
-        if (a != null)
-          justForUpdate.update(a, -hinge);
-        cur = cur.neighbor();
-      }
+      double up;
+
+      up = -hinge / (batchSize * oracle.length());
       if (LOG_UPDATE)
-        LOG.info("[apply] pushing down the most violated answer, hinge=" + hinge);
-      cur = mostViolated;
-      while (cur != null) {
-        Adjoints a = cur.getAdjoints();
-        if (a != null)
-          justForUpdate.update(a, hinge);
-        cur = cur.neighbor();
-      }
+        LOG.info("[apply] pushing up the oracle answer, update=" + up + " oracle.length=" + oracle.length());
+      oracle.updateAllAdjoints(justForUpdate, up);
+
+      up = hinge / (batchSize * mostViolated.length());
+      if (LOG_UPDATE)
+        LOG.info("[apply] pushing down the most violated answer, update=" + up + " mostViolated.length=" + mostViolated.length());
+      mostViolated.updateAllAdjoints(justForUpdate, up);
+
       timer.stop("update.apply");
       return true;
     }

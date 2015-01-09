@@ -170,6 +170,7 @@ public class LearningTest {
     ItemProvider ip = Reranker.getItemProvider();
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
+    trainer.statelessParams = theta;
     LOG.info("[getsItRight] before: " + theta.showWeights());
     Reranker model = trainer.train(ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());

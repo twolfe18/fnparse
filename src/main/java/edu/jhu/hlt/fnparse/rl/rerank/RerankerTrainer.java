@@ -17,8 +17,9 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
-import edu.jhu.hlt.fnparse.rl.params.DenseFastFeatures;
+import edu.jhu.hlt.fnparse.rl.params.OldFeatureParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
@@ -31,24 +32,25 @@ import edu.jhu.hlt.fnparse.util.MultiTimer;
  */
 public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
+  public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
 
   // General parameters
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
   public int epochs = 1;
   public int threads = 1;
-  public int batchSize = 10;
+  public int batchSize = 4;
 
   // Tuning parameters
   public double propDev = 0.25d;
   public int maxDev = 100;
   public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
   public double recallBiasLo = -5, recallBiasHi = 5;
-  public int tuneSteps = 12;
+  public int tuneSteps = 6;
 
   // Model parameters
-  public int beamSize = 50;
-  public Params.Stateful statefulParams = new DenseFastFeatures();
+  public int beamSize = 1;
+  public Params.Stateful statefulParams = Stateful.NONE;
   public Params.Stateless statelessParams = Stateless.NONE;
 
   public RerankerTrainer(Random rand) {
@@ -88,12 +90,18 @@ public class RerankerTrainer {
     double bestPerf = 0d;
     double bestRecallBias = 0d;
     for (int i = 0; i < tuneSteps; i++) {
+      timer.start("tuneModelForF1.eval");
       bias.setRecallBias(recallBiasLo + step * i);
-      double perf = eval(model, dev, objective);
+      Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
+          ? "[tune recallBias=" + bias.getRecallBias() + "]" : null);
+      double perf = results.get(objective.getName());
       if (i == 0 || perf > bestPerf) {
         bestPerf = perf;
         bestRecallBias = bias.getRecallBias();
       }
+      LOG.info(String.format("[tuneModelFoF1] recallBias=%+5.2f perf=%.3f",
+          bias.getRecallBias(), perf));
+      timer.stop("tuneModelForF1.eval");
     }
     LOG.info("[tuneModelForF1] chose recallBias=" + bestRecallBias
         + " with " + objective.getName() + "=" + bestPerf);
@@ -102,6 +110,9 @@ public class RerankerTrainer {
 
   /** Trains and tunes a full model */
   public Reranker train(ItemProvider ip) {
+    if (statefulParams == Stateful.NONE && statelessParams == Stateless.NONE)
+      throw new IllegalStateException("you need to set the params");
+
     // Split the data
     LOG.info("[train] starting, splitting data");
     ItemProvider.TrainTestSplit trainDev =
@@ -118,11 +129,13 @@ public class RerankerTrainer {
     LOG.info("[train] tuning model for F1 loss");
     tuneModelForF1(m, dev);
 
+    LOG.info("[train] times:\n" + timer);
     return m;
   }
 
   public Reranker hammingTrain(ItemProvider ip) {
-    LOG.info("[train] batchSize=" + batchSize + " epochs=" + epochs + " threads=" + threads);
+    LOG.info("[hammingTrain] batchSize=" + batchSize + " epochs=" + epochs + " threads=" + threads);
+    timer.start("hammingTrain");
 
     // If you don't make an update after this many batches, exit learning early
     final int inARow = 5;
@@ -136,7 +149,7 @@ public class RerankerTrainer {
     try {
       for (int epoch = 0; epoch < epochs; epoch++) {
         int updated = 0;
-        LOG.info("[train] startring epoch " + (epoch+1) + "/" + epochs
+        LOG.info("[hammingTrain] startring epoch " + (epoch+1) + "/" + epochs
             + " which will have " + (n/batchSize) + " updates");
         for (int i = 0; i < n; i += batchSize) {
           int u = hammingTrainBatch(r, es, ip);
@@ -146,7 +159,7 @@ public class RerankerTrainer {
             curRun++;
             if (curRun == inARow) {
               System.out.println();
-              LOG.info("[train] exiting early in the middle of epoch " + (epoch+1)
+              LOG.info("[hammingTrain] exiting early in the middle of epoch " + (epoch+1)
                   + " of " + epochs + " because we made an entire pass over " + n
                   + " data points without making a single subgradient step");
               break;
@@ -157,55 +170,56 @@ public class RerankerTrainer {
         }
 
         System.out.println();
-        LOG.info("[train] updated " + updated);
+        LOG.info("[hammingTrain] updated " + updated);
       }
       if (es != null)
         es.shutdown();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    LOG.info("[train] times:\n" + timer);
+    LOG.info("[hammingTrain] times:\n" + timer);
+    timer.stop("hammingTrain");
     return r;
   }
 
   private int hammingTrainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
-    timer.start("trainBatch");
+    timer.start("hammingTrainBatch");
     boolean verbose = false;
     int n = ip.size();
     List<Update> finishedUpdates = new ArrayList<>();
     if (es == null) {
-      LOG.info("[trainBatch] running serial");
+      LOG.info("[hammingTrainBatch] running serial");
       for (int i = 0; i < batchSize; i++) {
         int idx = rand.nextInt(n);
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
         if (verbose)
-          LOG.info("[trainBatch] submitting " + idx);
+          LOG.info("[hammingTrainBatch] submitting " + idx);
         finishedUpdates.add(r.new Update(y, rerank));
       }
     } else {
-      LOG.info("[trainBatch] running with ExecutorService");
+      LOG.info("[hammingTrainBatch] running with ExecutorService");
       List<Future<Update>> updates = new ArrayList<>();
       for (int i = 0; i < batchSize; i++) {
         int idx = rand.nextInt(n);
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
         if (verbose)
-          LOG.info("[trainBatch] submitting " + idx);
+          LOG.info("[hammingTrainBatch] submitting " + idx);
         updates.add(es.submit(() -> r.new Update(y, rerank)));
       }
       for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
     }
     if (verbose)
-      LOG.info("[trainBatch] applying updates");
+      LOG.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batchSize;
     int updated = 0;
     for (Update u : finishedUpdates) {
-      if (u.apply())
+      if (u.apply(batchSize))
         updated++;
     }
-    timer.stop("trainBatch");
+    timer.stop("hammingTrainBatch");
     return updated;
   }
 
@@ -220,9 +234,26 @@ public class RerankerTrainer {
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size());
 
     RerankerTrainer trainer = new RerankerTrainer(rand);
+    trainer.beamSize = 1;
+    trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(50 * 1000);
     Reranker model = trainer.train(train);
 
     LOG.info("[main] done training, evaluating");
     eval(model, test, "[main]");
   }
+  private static final String featureTemplates =
+      "frameRole * 1"
+      + " + frameRoleArg * 1"
+      + " + role * 1"
+      + " + roleArg * 1"
+      + " + frameRole * head1Lemma"
+      + " + frameRole * head1ParentLemma"
+      + " + frameRole * head1WordWnSynset"
+      + " + frameRole * head1Shape"
+      + " + frameRole * head1Pos"
+      + " + frameRole * span1StanfordRule"
+      + " + frameRole * span1PosPat-COARSE_POS-1-1"
+      + " + frameRole * span1PosPat-WORD_SHAPE-1-1"
+      + " + frameRole * span1span2Overlap"
+      + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 }

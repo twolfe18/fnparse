@@ -240,8 +240,7 @@ public class TemplatedFeatures implements Serializable {
   public static void showContext(TemplateContext ctx) {
     Sentence s = ctx.getSentence();
     Frame f = ctx.getFrame();
-    assert ctx.getStage() != null;
-    LOG.debug("[context] stage=" + ctx.getStage());
+    LOG.debug("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
     LOG.debug("[context] sentence=" + s);
     LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
     LOG.debug("[context] role=" + ctx.getRoleStrDebug());

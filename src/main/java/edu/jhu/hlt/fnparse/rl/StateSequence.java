@@ -1,6 +1,8 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 
 public class StateSequence {
 
@@ -20,6 +22,50 @@ public class StateSequence {
     this.next = next;
     this.cur = cur;
     this.action = action;
+  }
+
+  /** You can only call this from a node which has a pointer out of it */
+  public String showActions() {
+    FNTagging frames = getCur().getFrames();
+    StringBuilder sb = null;
+    StateSequence cur = this;
+    while (cur != null) {
+      String a = (cur.action == null) ? "???" : cur.getAction().show(frames);
+      if (sb == null) {
+        sb = new StringBuilder(a);
+      } else {
+        sb.append(", ");
+        sb.append(a);
+      }
+      cur = cur.neighbor();
+    }
+    return sb.toString();
+  }
+
+  /** You can only call this from a node which has a pointer out of it */
+  public int length() {
+    StateSequence l = this;
+    int len = 0;
+    while (l != null) {
+      len++;
+      l = l.neighbor();
+    }
+    return len;
+  }
+
+  /** You can only call this from a node which has a pointer out of it */
+  public void updateAllAdjoints(Params params, double reward) {
+    int nulls = 0;
+    StateSequence l = this;
+    while (l != null) {
+      Adjoints a = l.action;
+      if (a == null)
+        nulls++;
+      else
+        params.update(a, reward);
+      l = l.neighbor();
+    }
+    assert nulls <= 1;
   }
 
   public State getCur() {

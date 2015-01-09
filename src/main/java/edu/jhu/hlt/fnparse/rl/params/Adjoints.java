@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.rl.params;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
-import edu.jhu.prim.util.math.FastMath;
 
 /**
  * wraps the result of a forward pass, which is often needed for computing a
@@ -42,7 +41,6 @@ public interface Adjoints {
     private double[] features;
     private double[] theta;
     private Action action;
-    public double maxNorm = 10d;
     public DenseFeatures(double[] features, double[] theta, Action a) {
       if (theta.length != features.length)
         throw new IllegalArgumentException();
@@ -65,17 +63,6 @@ public interface Adjoints {
       double s = reward * learningRate;
       for (int i = 0; i < theta.length; i++)
         theta[i] += s * features[i];
-      projectL2(maxNorm);
-    }
-    public void projectL2(double maxNorm) {
-      double l2 = 0d;
-      for (double d : theta) l2 += d * d;
-      l2 = FastMath.sqrt(l2);
-      if (l2 > maxNorm) {
-        double scale = maxNorm / l2;
-        for (int i = 0; i < theta.length; i++)
-          theta[i] *= scale;
-      }
     }
   }
 

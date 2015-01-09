@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -30,16 +32,36 @@ public class ModelViewer {
 
     @Override
     public String toString() {
-      return String.format("%120s %.4f", name, weight);
+      return String.format("%130s %+8.3f", name, weight);
     }
+  }
+
+  public static void showBiggestWeights(List<FeatureWeight> sortedWeights, int k, String desc, Logger log) {
+    int n = Math.min(k, sortedWeights.size());
+    log.info(desc + " " + k + " most negative weights:");
+    for (int i = 0; i < n; i++)
+      log.info(desc + " " + sortedWeights.get(i));
+    log.info(desc + " " + k + " most positive weights:");
+    for (int i = 0; i < n; i++)
+      log.info(desc + " " + sortedWeights.get(sortedWeights.size() - (i + 1)));
+  }
+
+  public static List<FeatureWeight> getSortedWeights(double[] weights, Alphabet<String> names) {
+    FgModel model = new FgModel(weights.length);
+    model.updateModelFromDoubles(weights);
+    return getSortedWeights(model, names);
   }
 
   public static List<FeatureWeight> getSortedWeights(FgModel weights, Alphabet<String> names) {
     List<FeatureWeight> w = new ArrayList<>();
+    assert names.size() <= weights.getNumParams()
+        : "weights should be able to accomodate all the features in the alphabet!";
+    final int n = Math.min(weights.getNumParams(), names.size());
     weights.apply(new FnIntDoubleToDouble() {
       @Override
       public double call(int arg0, double arg1) {
-        w.add(new FeatureWeight(names.lookupObject(arg0), arg1));
+        if (arg0 < n)
+          w.add(new FeatureWeight(names.lookupObject(arg0), arg1));
         return arg1;
       }
     });
