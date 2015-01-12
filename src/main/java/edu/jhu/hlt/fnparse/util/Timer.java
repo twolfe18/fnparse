@@ -77,6 +77,17 @@ public class Timer {
     return (time/1000d) / count;
   }
 
+  public double minutesUntil(int iterations) {
+    int remaining = iterations - count;
+    double rate = secPerCall() / 60d;
+    return rate * remaining;
+  }
+
+  /** How many times start/stop has been called */
+  public int getCount() {
+    return count;
+  }
+
   public double totalTimeInSeconds() { return time / 1000d; }
 
   public static final class NoOp extends Timer {

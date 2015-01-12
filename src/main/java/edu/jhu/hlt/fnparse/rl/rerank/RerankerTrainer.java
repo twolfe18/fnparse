@@ -47,7 +47,7 @@ public class RerankerTrainer {
   public int maxDev = 100;
   public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
   public double recallBiasLo = -5, recallBiasHi = 5;
-  public int tuneSteps = 6;
+  public int tuneSteps = 7;
 
   // Model parameters
   public int beamSize = 1;
@@ -124,7 +124,12 @@ public class RerankerTrainer {
 
     // Train the model
     LOG.info("[train] training original model on Hamming loss");
-    Reranker m = hammingTrain(train);
+    Reranker m;
+    try {
+      m = hammingTrain(train);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
 
     // Tune the model
     LOG.info("[train] tuning model for F1 loss");
@@ -134,7 +139,7 @@ public class RerankerTrainer {
     return m;
   }
 
-  public Reranker hammingTrain(ItemProvider ip) {
+  public Reranker hammingTrain(ItemProvider ip) throws InterruptedException, ExecutionException {
     LOG.info("[hammingTrain] batchSize=" + batchSize + " epochs=" + epochs + " threads=" + threads);
     timer.start("hammingTrain");
 
@@ -145,39 +150,44 @@ public class RerankerTrainer {
     ExecutorService es = null;
     if (threads > 1)
       es = Executors.newWorkStealingPool(threads);
-    int n = ip.size();
+    final int n = ip.size();
+    final boolean showTime = true;
+    final int totalUpdates = (n / batchSize) * epochs;
     int curRun = 0;
-    try {
-      for (int epoch = 0; epoch < epochs; epoch++) {
-        int updated = 0;
-        LOG.info("[hammingTrain] startring epoch " + (epoch+1) + "/" + epochs
-            + " which will have " + (n/batchSize) + " updates");
-        for (int i = 0; i < n; i += batchSize) {
-          int u = hammingTrainBatch(r, es, ip);
-          updated += u;
-          System.out.print("*");
-          if (u == 0) {
-            curRun++;
-            if (curRun == inARow) {
-              System.out.println();
-              LOG.info("[hammingTrain] exiting early in the middle of epoch " + (epoch+1)
-                  + " of " + epochs + " because we made an entire pass over " + n
-                  + " data points without making a single subgradient step");
-              break;
-            }
-          } else {
-            curRun = 0;
+    for (int epoch = 0; epoch < epochs; epoch++) {
+      int updatedThisEpoch = 0;
+      LOG.info("[hammingTrain] startring epoch " + (epoch+1) + "/" + epochs
+          + " which will have " + (n/batchSize) + " updates");
+      for (int i = 0; i < n; i += batchSize) {
+        int u = hammingTrainBatch(r, es, ip);
+        updatedThisEpoch += u;
+        System.out.print("*");
+        if (u == 0) {
+          curRun++;
+          if (curRun == inARow) {
+            System.out.println();
+            LOG.info("[hammingTrain] exiting early in the middle of epoch " + (epoch+1)
+                + " of " + epochs + " because we made an entire pass over " + n
+                + " data points without making a single subgradient step");
+            break;
           }
+        } else {
+          curRun = 0;
         }
+        if (showTime) {
+          Timer t = timer.get("hammingTrainBatch");
+          LOG.info("[hammingTrain] completed " + t.getCount() + " of "
+              + totalUpdates + ", estimated "
+              + t.minutesUntil(totalUpdates) + " minutes remaining");
+        }
+      }
 
         System.out.println();
-        LOG.info("[hammingTrain] updated " + updated);
+        LOG.info("[hammingTrain] updated " + updatedThisEpoch);
       }
       if (es != null)
         es.shutdown();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+
     LOG.info("[hammingTrain] times:\n" + timer);
     timer.stop("hammingTrain");
     return r;
