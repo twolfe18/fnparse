@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
  * Training logic can get out of hand (e.g. checking against dev data, etc).
@@ -183,7 +184,9 @@ public class RerankerTrainer {
   }
 
   private int hammingTrainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
-    timer.start("hammingTrainBatch");
+    Timer t = timer.get("hammingTrainBatch", true);
+    t.setPrintInterval(1);
+    t.start();
     boolean verbose = false;
     int n = ip.size();
     List<Update> finishedUpdates = new ArrayList<>();
@@ -219,7 +222,7 @@ public class RerankerTrainer {
       if (u.apply(batchSize))
         updated++;
     }
-    timer.stop("hammingTrainBatch");
+    t.stop();
     return updated;
   }
 
@@ -233,9 +236,13 @@ public class RerankerTrainer {
     ItemProvider test = trainTest.getTest();
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size());
 
+    boolean useFeatureHashing = true;
     RerankerTrainer trainer = new RerankerTrainer(rand);
     trainer.beamSize = 1;
-    trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(50 * 1000);
+    if (useFeatureHashing)
+      trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
+    else
+      trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(250 * 1000);
     Reranker model = trainer.train(train);
 
     LOG.info("[main] done training, evaluating");
@@ -252,8 +259,10 @@ public class RerankerTrainer {
       + " + frameRole * head1Shape"
       + " + frameRole * head1Pos"
       + " + frameRole * span1StanfordRule"
-      + " + frameRole * span1PosPat-COARSE_POS-1-1"
-      + " + frameRole * span1PosPat-WORD_SHAPE-1-1"
+      + " + roleArg * span1PosPat-COARSE_POS-1-1"
+      + " + roleArg * span1PosPat-WORD_SHAPE-1-1"
+      + " + arg * span1PosPat-COARSE_POS-1-1"
+      + " + arg * span1PosPat-WORD_SHAPE-1-1"
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 }

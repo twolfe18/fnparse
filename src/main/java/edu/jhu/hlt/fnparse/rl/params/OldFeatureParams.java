@@ -28,24 +28,47 @@ public class OldFeatureParams implements Params.Stateless {
   private String featureTemplateString;
   private TemplatedFeatures features;
   private HeadFinder headFinder;
-  private Alphabet<String> featureIndices;
   private double[] theta;
   private double l2Radius;
   private double learningRate;
 
+  private Alphabet<String> featureIndices;
+  private int numBuckets;
+
   private boolean printedSinceUpdate = false;
 
+  /** For AlphabetBased implementation */
   public OldFeatureParams(String featureTemplateString) {
+    this();
     featureIndices = new Alphabet<>();
     featureIndices.startGrowth();       // always growing
+    numBuckets = -1;
     theta = new double[1024];
-    l2Radius = -1d;  // project theta to be in L2 ball of this radius, <=0 means don't project
-    learningRate = 1d;
-    headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
 
+  /** For HashBased implementation */
+  public OldFeatureParams(String featureTemplateString, int numBuckets) {
+    this();
+    featureIndices = null;
+    this.numBuckets = numBuckets;
+    theta = new double[numBuckets];
+    setFeatures(featureTemplateString);
+  }
+
+  private OldFeatureParams() {
+    l2Radius = -1d;  // project theta to be in L2 ball of this radius, <=0 means don't project
+    learningRate = 1d;
+    headFinder = new SemaforicHeadFinder();
+  }
+
+  public boolean isAlphabetBased() {
+    assert (numBuckets <= 0) != (featureIndices == null);
+    return numBuckets <= 0;
+  }
+
   public OldFeatureParams sizeHint(int size) {
+    assert isAlphabetBased() : "size must match numBuckets, don't use this method";
     if (size > theta.length)
       theta = Arrays.copyOf(theta, size);
     return this;
@@ -53,7 +76,13 @@ public class OldFeatureParams implements Params.Stateless {
 
   public void setFeatures(String desc) {
     featureTemplateString = desc;
-    features = new TemplatedFeatures(getClass().getName(), desc, featureIndices);
+    if (isAlphabetBased()) {
+      features = new TemplatedFeatures.AlphabetBased(
+          getClass().getName(), desc, featureIndices);
+    } else {
+      features = new TemplatedFeatures.HashBased(
+          getClass().getName(), desc, numBuckets);
+    }
   }
 
   public String getFeatureDescription() {
@@ -67,7 +96,7 @@ public class OldFeatureParams implements Params.Stateless {
   @Override
   public void update(Adjoints a, double reward) {
     assert theta != null && theta.length > 0;
-    assert featureIndices.size() > 0;
+    assert !isAlphabetBased() || featureIndices.size() > 0;
     ((Adjoints.SparseFeatures) a).update(reward, learningRate);
     if (l2Radius > 0d)
       Projections.l2Ball(theta, l2Radius);
@@ -76,7 +105,7 @@ public class OldFeatureParams implements Params.Stateless {
 
   @Override
   public Adjoints score(FNTagging f, Action a) {
-    if (SHOW_ON_UPDATE && !printedSinceUpdate) {
+    if (SHOW_ON_UPDATE && !printedSinceUpdate && isAlphabetBased()) {
       List<FeatureWeight> w = ModelViewer.getSortedWeights(theta, featureIndices);
       ModelViewer.showBiggestWeights(w, 15, "[update]", LOG);
       printedSinceUpdate = true;
@@ -108,7 +137,8 @@ public class OldFeatureParams implements Params.Stateless {
       features.featurize(fv, context);
 
     // Make sure that theta is big enough
-    checkSize();
+    if (isAlphabetBased())
+      checkSize();
 
     return new Adjoints.SparseFeatures(fv, theta, a);
   }

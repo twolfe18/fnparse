@@ -101,7 +101,7 @@ implements Stage<I, O> {
 
   public TemplatedFeatures getFeatures() {
     if (featureTemplates == null) {
-      featureTemplates = new TemplatedFeatures(
+      featureTemplates = new TemplatedFeatures.AlphabetBased(
           getName(), featureTemplatesString, globals.getFeatureNames());
     }
     return featureTemplates;
