@@ -8,9 +8,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -94,13 +96,13 @@ public class RerankerTrainer {
       timer.start("tuneModelForF1.eval");
       bias.setRecallBias(recallBiasLo + step * i);
       Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
-          ? "[tune recallBias=" + bias.getRecallBias() + "]" : null);
+          ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null);
       double perf = results.get(objective.getName());
       if (i == 0 || perf > bestPerf) {
         bestPerf = perf;
         bestRecallBias = bias.getRecallBias();
       }
-      LOG.info(String.format("[tuneModelFoF1] recallBias=%+5.2f perf=%.3f",
+      LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
           bias.getRecallBias(), perf));
       timer.stop("tuneModelForF1.eval");
     }
@@ -176,9 +178,9 @@ public class RerankerTrainer {
         }
         if (showTime) {
           Timer t = timer.get("hammingTrainBatch");
-          LOG.info("[hammingTrain] completed " + t.getCount() + " of "
-              + totalUpdates + ", estimated "
-              + t.minutesUntil(totalUpdates) + " minutes remaining");
+          LOG.info(String.format(
+              "[hammingTrain] completed %d of %d updates, estimated %.1f minutes remaining",
+              t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
         }
       }
 
@@ -194,8 +196,7 @@ public class RerankerTrainer {
   }
 
   private int hammingTrainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
-    Timer t = timer.get("hammingTrainBatch", true);
-    t.setPrintInterval(1);
+    Timer t = timer.get("hammingTrainBatch", true).setPrintInterval(1);
     t.start();
     boolean verbose = false;
     int n = ip.size();
@@ -258,21 +259,35 @@ public class RerankerTrainer {
     LOG.info("[main] done training, evaluating");
     eval(model, test, "[main]");
   }
-  private static final String featureTemplates =
-      "frameRole * 1"
+  private static final String featureTemplates = "1"
+      + " + frameRole * 1"
       + " + frameRoleArg * 1"
       + " + role * 1"
       + " + roleArg * 1"
+      + " + frameRole * span1FirstWord"
+      + " + frameRole * span1FirstPos"
+      + " + frameRole * span1LastWord"
+      + " + frameRole * span1LastPos"
       + " + frameRole * head1Lemma"
       + " + frameRole * head1ParentLemma"
       + " + frameRole * head1WordWnSynset"
       + " + frameRole * head1Shape"
       + " + frameRole * head1Pos"
       + " + frameRole * span1StanfordRule"
+      + " + frameRole * span1PosPat-COARSE_POS-1-1"
+      + " + frameRole * span1PosPat-WORD_SHAPE-1-1"
+
+      + " + frameRole * span1StanfordCategory"
+      + " + frameRole * span1StanfordRule"
+      + " + frameRole * head1CollapsedParentDir"
+      + " + frameRole * head1CollapsedLabel"
+
+      /* These seem to hurt performance ???
       + " + roleArg * span1PosPat-COARSE_POS-1-1"
       + " + roleArg * span1PosPat-WORD_SHAPE-1-1"
       + " + arg * span1PosPat-COARSE_POS-1-1"
       + " + arg * span1PosPat-WORD_SHAPE-1-1"
+      */
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 }

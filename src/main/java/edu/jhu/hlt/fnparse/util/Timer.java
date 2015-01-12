@@ -28,9 +28,10 @@ public class Timer {
     return t;
   }
 
-  public void setPrintInterval(int interval) {
+  public Timer setPrintInterval(int interval) {
     if(interval <= 0) throw new IllegalArgumentException();
     this.printIterval = interval;
+    return this;
   }
 
   public void disablePrinting() {
