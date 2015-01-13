@@ -23,6 +23,7 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -65,6 +66,13 @@ public class RoleSpanLabelingStage
   private boolean allExamplesInMem = false;
   private boolean disallowArgWithoutConstituent = true;
 
+  /**
+   * If true parses will be converted the their "unlabeled" versions.
+   * For constituency parses all categories are converted to X.
+   * For dependency parses all edge labes are converted to the direction of the head.
+   */
+  private boolean stripSyntaxDown = false;
+
   // If 1, perform regular max_{frame,target,role} decoding
   // If >1, take the top-K roles per {frame,target,role}, ignoring decoder
   // TODO add configure/saveModel/loadModel support
@@ -100,12 +108,22 @@ public class RoleSpanLabelingStage
   @Override
   public void configure(java.util.Map<String,String> configuration) {
     super.configure(configuration);
-    String key = "disallowArgWithoutConstituent." + getName();
-    String value = configuration.get(key);
+
+    String key, value;
+
+    key = "disallowArgWithoutConstituent." + getName();
+    value = configuration.get(key);
     if (value != null) {
       disallowArgWithoutConstituent = Boolean.valueOf(value);
       LOG.info("setting disallowArgWithoutConstituent to "
           + disallowArgWithoutConstituent);
+    }
+
+    key = "stripSyntaxDown." + getName();
+    value = configuration.get(key);
+    if (value != null) {
+      stripSyntaxDown = Boolean.valueOf(value);
+      LOG.info("setting stripSyntaxDown to " + stripSyntaxDown);
     }
   }
 
@@ -144,6 +162,8 @@ public class RoleSpanLabelingStage
     List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParse gold = output == null ? null : output.get(i);
+      if (stripSyntaxDown)
+        input.get(i).getSentence().stripSyntaxDown();
       data.add(this.new RoleSpanLabelingStageDatum(input.get(i), gold));
     }
     return new StageDatumExampleList<>(data, allExamplesInMem);

@@ -74,6 +74,15 @@ public class Sentence implements HasId {
     throw new RuntimeException("this is not up to date!");
   }
 
+  public void stripSyntaxDown() {
+    if (collapsedDeps != null)
+      collapsedDeps.stripEdgeLabels();
+    if (basicDeps != null)
+      basicDeps.stripEdgeLabels();
+    if (stanfordParse != null)
+      stanfordParse.stripCategories();
+  }
+
   public int size() { return tokens.length; }
 
   public String getDataset() { return dataset; }
