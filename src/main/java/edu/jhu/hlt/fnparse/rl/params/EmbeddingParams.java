@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Collection;
+
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -100,9 +102,11 @@ public class EmbeddingParams implements Params.Stateless {
       return action;
     }
 
-//    public boolean matches(State s, Action a) {
-//      return s == state && a == action;
-//    }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      throw new RuntimeException("i don't quite know how to do this, "
+          + "code changes have confused me");
+    }
   }
 
   private FrameRoleFeatures frE;
@@ -136,8 +140,7 @@ public class EmbeddingParams implements Params.Stateless {
     return adj;
   }
 
-  @Override
-  public void update(Adjoints adjoints, double reward) {
+  private void update(Adjoints adjoints, double reward) {
     QuadAdjoints adj = (QuadAdjoints) adjoints;
     Action a = adj.getAction();
     double learningRate = 0.1d;
@@ -155,4 +158,12 @@ public class EmbeddingParams implements Params.Stateless {
     }
   }
 
+  @Override
+  public <T extends HasUpdate> void update(Collection<T> batch) {
+    final double s = 1d / batch.size();
+    for (T up : batch) {
+      QuadAdjoints qa = (QuadAdjoints) up;
+      update(qa, s);  // TODO is this right?
+    }
+  }
 }

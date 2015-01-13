@@ -1,12 +1,14 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Collection;
+
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.State;
 
 public class DenseFastFeatures implements Params.Stateful {
 
   private double[] theta;
-  private double learningRate;
+  private double learningRate;    // TODO in perceptron this doesn't matter!
 
   public DenseFastFeatures() {
     theta = new double[4];
@@ -25,7 +27,9 @@ public class DenseFastFeatures implements Params.Stateful {
   }
 
   @Override
-  public void update(Adjoints a, double reward) {
-    ((Adjoints.DenseFeatures) a).update(reward, learningRate);
+  public <T extends HasUpdate> void update(Collection<T> batch) {
+    final double s = learningRate / batch.size();
+    for (T up : batch)
+      up.getUpdate(theta, s);
   }
 }

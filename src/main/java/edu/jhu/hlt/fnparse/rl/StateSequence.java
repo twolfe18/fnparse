@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.rl;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.hlt.fnparse.rl.params.Params;
 
 public class StateSequence {
 
@@ -53,20 +52,20 @@ public class StateSequence {
     return len;
   }
 
-  /** You can only call this from a node which has a pointer out of it */
-  public void updateAllAdjoints(Params params, double reward) {
-    int nulls = 0;
-    StateSequence l = this;
-    while (l != null) {
-      Adjoints a = l.action;
-      if (a == null)
-        nulls++;
-      else
-        params.update(a, reward);
-      l = l.neighbor();
-    }
-    assert nulls <= 1;
-  }
+//  /** You can only call this from a node which has a pointer out of it */
+//  public void updateAllAdjoints(Params params, double reward) {
+//    int nulls = 0;
+//    StateSequence l = this;
+//    while (l != null) {
+//      Adjoints a = l.action;
+//      if (a == null)
+//        nulls++;
+//      else
+//        params.update(a, reward);
+//      l = l.neighbor();
+//    }
+//    assert nulls <= 1;
+//  }
 
   public State getCur() {
     if (cur == null) {

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -18,7 +19,7 @@ public class CheatingParams implements Params.Stateless {
   private Set<String> goldItems;
   private Set<String> goldParseIds;
   private double[] theta;
-  private double learningRate;
+  private double learningRate;  // TODO remove, doesn't matter for perceptron
 
   public CheatingParams(Iterable<FNParse> parses) {
     learningRate = 0.01d;
@@ -68,8 +69,10 @@ public class CheatingParams implements Params.Stateless {
   }
 
   @Override
-  public void update(Adjoints a, double reward) {
-    ((Adjoints.DenseFeatures) a).update(reward, learningRate);
+  public <T extends HasUpdate> void update(Collection<T> batch) {
+    double s = learningRate / batch.size();
+    for (T up : batch)
+      up.getUpdate(theta, s);
     if (SHOW_ON_UPDATE)
       LOG.info("[update] afterwards: " + showWeights());
   }

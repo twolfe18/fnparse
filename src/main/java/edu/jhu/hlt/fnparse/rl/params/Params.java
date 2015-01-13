@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -15,7 +16,11 @@ import edu.jhu.hlt.fnparse.rl.State;
 public interface Params {
   public static final Logger LOG = Logger.getLogger(Params.class);
 
-  public void update(Adjoints a, double reward);
+  public <T extends HasUpdate> void update(Collection<T> batch);
+
+  // score is the other method
+  // because its signature differs between Stateful and Stateless,
+  // its not listed here.
 
 
   /**
@@ -25,24 +30,31 @@ public interface Params {
     public Adjoints score(State s, Action a);
 
     public static final Stateful NONE = new Stateful() {
-      @Override public void update(Adjoints a, double reward) {}
       @Override public Adjoints score(State s, final Action a) {
         return new Adjoints() {
           @Override public double getScore() { return 0d; }
           @Override public Action getAction() {
             return a;
           }
+          @Override public void getUpdate(double[] addTo, double scale) {
+            // no-op
+          }
         };
+      }
+      @Override
+      public <T extends HasUpdate> void update(Collection<T> batch) {
+        // no-op
       }
     };
 
     public static Stateful lift(final Stateless theta) {
       return new Stateful() {
-        @Override public void update(Adjoints a, double reward) {
-          theta.update(a, reward);
-        }
         @Override public Adjoints score(State s, Action a) {
           return theta.score(s.getFrames(), a);
+        }
+        @Override
+        public <T extends HasUpdate> void update(Collection<T> batch) {
+          theta.update(batch);
         }
       };
     }
@@ -55,14 +67,20 @@ public interface Params {
     public Adjoints score(FNTagging f, Action a);
 
     public static final Stateless NONE = new Stateless() {
-      @Override public void update(Adjoints a, double reward) {}
       @Override public Adjoints score(FNTagging frames, final Action a) {
         return new Adjoints() {
           @Override public double getScore() { return 0d; }
           @Override public Action getAction() {
             return a;
           }
+          @Override public void getUpdate(double[] addTo, double scale) {
+            // no-op
+          }
         };
+      }
+      @Override
+      public <T extends HasUpdate> void update(Collection<T> batch) {
+        // no-op
       }
     };
 
@@ -86,19 +104,12 @@ public interface Params {
       public Stateless getWrapped() {
         return wrapping;
       }
-//      public int size() {
-//        return cache.size();
-//      }
       public void flush() {
         cache1.clear();
         cache2 = null;
         tag = null;
       }
-      @Override
-      public void update(Adjoints a, double reward) {
-        wrapping.update(a, reward);
-      }
-      private void initCache2(FNTagging f) {
+     private void initCache2(FNTagging f) {
         int T = f.numFrameInstances();
         int N = f.getSentence().size();
         cache2 = new Adjoints[T][][][];
@@ -162,6 +173,10 @@ public interface Params {
         LOG.info("[estimateCollisions] c1=" + c1 + " c2=" + c2 + " n=" + n);
       }
       */
+      @Override
+      public <T extends HasUpdate> void update(Collection<T> batch) {
+        wrapping.update(batch);
+      }
     }
   }
 
@@ -183,6 +198,11 @@ public interface Params {
           || left.getAction().equals(right.getAction());
       return left.getAction();
     }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      left.getUpdate(addTo, scale);
+      right.getUpdate(addTo, scale);
+    }
   }
 
   /** Params is closed under addition */
@@ -199,10 +219,9 @@ public interface Params {
       return new SumAdj(stateful.score(s, a), stateless.score(f, a));
     }
     @Override
-    public void update(Adjoints a, double reward) {
-      SumAdj sa = (SumAdj) a;
-      stateful.update(sa.left, reward);
-      stateless.update(sa.right, reward);
+    public <T extends HasUpdate> void update(Collection<T> batch) {
+      stateful.update(batch);
+      stateless.update(batch);
     }
   }
 
@@ -214,14 +233,13 @@ public interface Params {
       this.right = right;
     }
     @Override
-    public void update(Adjoints a, double reward) {
-      SumAdj sa = (SumAdj) a;
-      left.update(sa.left, reward);
-      right.update(sa.right, reward);
-    }
-    @Override
     public Adjoints score(FNTagging f, Action a) {
       return new SumAdj(left.score(f, a), right.score(f, a));
+    }
+    @Override
+    public <T extends HasUpdate> void update(Collection<T> batch) {
+      left.update(batch);
+      right.update(batch);
     }
   }
 

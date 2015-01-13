@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -15,7 +16,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.rerank.Item;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
-import edu.jhu.hlt.fnparse.util.Projections;
 
 /**
  * Stores the prior score for an item in a HashMap keyed on (t,k,span)
@@ -94,8 +94,7 @@ public class PriorScoreParams implements Params.Stateless {
 
   private Map<String, Item> index;
   private double[] theta;
-  private double learningRate = 0.01d;
-  private double l2Radius = 10d;
+  private double learningRate = 0.01d;  // TODO remove, not needed in perceptron
 
   /**
    * If featureMode = true, then this will learn weights for two features:
@@ -199,10 +198,11 @@ public class PriorScoreParams implements Params.Stateless {
   }
 
   @Override
-  public void update(Adjoints a, double reward) {
+  public <T extends HasUpdate> void update(Collection<T> batch) {
     if (theta != null) {
-      ((Adjoints.DenseFeatures) a).update(reward, learningRate);
-      Projections.l2Ball(theta, l2Radius);
+      final double s = learningRate / batch.size();
+      for (T up : batch)
+        up.getUpdate(theta, s);
       if (SHOW_PARAMS_AFTER_UPDATE)
         logParams();
     } else {

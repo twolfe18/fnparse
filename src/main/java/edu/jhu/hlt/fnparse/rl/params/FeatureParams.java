@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.Arrays;
+import java.util.Collection;
 
 import org.apache.log4j.Logger;
 
@@ -17,7 +18,7 @@ public class FeatureParams implements Params.Stateful {
 
   private Alphabet<String> features;
   private double[] theta;
-  private double learningRate = 0.1d;
+  private double learningRate = 0.1d;     // TODO remove, not needed for perceptron
   private Adjoints.SparseFeatures cache;
 
   public FeatureParams() {
@@ -90,9 +91,16 @@ public class FeatureParams implements Params.Stateful {
   }
 
   @Override
-  public void update(Adjoints adj, double reward) {
-    //LOG.info("[update] starting ");// + a.toString(s) + " has reward " + reward);
-    ((Adjoints.SparseFeatures) adj).update(reward, learningRate);;
+  public <T extends HasUpdate> void update(Collection<T> batch) {
+    final double s = learningRate / batch.size();
+    for (T up : batch)
+      up.getUpdate(theta, s);
   }
+
+//  @Override
+//  public void update(Adjoints adj, double reward) {
+//    //LOG.info("[update] starting ");// + a.toString(s) + " has reward " + reward);
+//    ((Adjoints.SparseFeatures) adj).update(reward, learningRate);;
+//  }
 
 }

@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.params.HasUpdate;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
@@ -353,7 +354,7 @@ public class Reranker {
    *
    * @return the hinge loss
    */
-  public class Update {
+  public class Update implements HasUpdate {
     private final Logger LOG = Logger.getLogger(Update.class);
 
     public final StateSequence oracle;
@@ -435,6 +436,26 @@ public class Reranker {
 
       timer.stop("update.apply");
       return true;
+    }
+
+    public boolean isViolated() {
+      return hinge < 0d;
+    }
+
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      // TODO Auto-generated method stub
+      
+    }
+  }
+
+  public static class UpdateBatch implements HasUpdate {
+    private List<Update> elements;
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      double s = scale / elements.size();
+      for (Update u : elements)
+        u.getUpdate(addTo, s);
     }
   }
 

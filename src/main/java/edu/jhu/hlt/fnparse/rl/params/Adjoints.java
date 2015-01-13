@@ -8,9 +8,11 @@ import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
  * wraps the result of a forward pass, which is often needed for computing a
  * gradient.
  */
-public interface Adjoints {
+public interface Adjoints extends HasUpdate {
+
   public double getScore();
   public Action getAction();
+  //public void update(double reward, double learningRate, AveragedWeights addTo);
 
   public static class Explicit implements Adjoints {
     private String tag;     // for storing providence info if desired
@@ -35,10 +37,14 @@ public interface Adjoints {
     public Action getAction() {
       return action;
     }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      // no-op
+    }
   }
 
   public static class DenseFeatures implements Adjoints {
-    private double[] features;
+    protected double[] features;
     private double[] theta;
     private Action action;
     public DenseFeatures(double[] features, double[] theta, Action a) {
@@ -59,10 +65,15 @@ public interface Adjoints {
     public Action getAction() {
       return action;
     }
-    public void update(double reward, double learningRate) {
-      double s = reward * learningRate;
+//    public void update(double reward, double learningRate) {
+//      double s = reward * learningRate;
+//      for (int i = 0; i < theta.length; i++)
+//        theta[i] += s * features[i];
+//    }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
       for (int i = 0; i < theta.length; i++)
-        theta[i] += s * features[i];
+        addTo[i] += scale * features[i];
     }
   }
 
@@ -86,11 +97,22 @@ public interface Adjoints {
     public Action getAction() {
       return action;
     }
-    public void update(double reward, double learningRate) {
+//    public void update(double reward, double learningRate) {
+//      features.apply(new FnIntDoubleToDouble() {
+//        private final double s = learningRate * reward;
+//        @Override
+//        public double call(int arg0, double arg1) {
+//          theta[arg0] += s * arg1;
+//          return arg1;
+//        }
+//      });
+//    }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
       features.apply(new FnIntDoubleToDouble() {
         @Override
         public double call(int arg0, double arg1) {
-          theta[arg0] += learningRate * reward * arg1;
+          addTo[arg0] += scale * arg1;
           return arg1;
         }
       });
