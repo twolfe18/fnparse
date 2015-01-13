@@ -169,11 +169,11 @@ public class FinalResults implements Runnable {
 
     loadModel();
 
-//    if (true) {
-//      parser.configure("bpIters", "2");
-//      compareLatentToSupervisedSyntax();
-//      return;
-//    }
+    if (System.getProperty("compareLatentToSupervisedSyntax") != null) {
+      LOG.info("[run] comparing latent to supervised syntax with loaded model (no retraining)");
+      compareLatentToSupervisedSyntax();
+      return;
+    }
 
     File resultsDir = train();
 
