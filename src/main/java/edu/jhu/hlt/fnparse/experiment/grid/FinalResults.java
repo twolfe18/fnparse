@@ -288,6 +288,16 @@ public class FinalResults implements Runnable {
     // (given the correct stages have been configured)
     parser.loadModel(new File(workingDir, "trainDevModel"));
 
+    if (System.getProperty("pruneCfgFeats") != null) {
+      final String key = "features";
+      String fs = configuration.get(key);
+      LOG.info("[loadMode] before CFG feature pruning: " + fs);
+      String fs2 = fs.replaceAll("\\*CfgFeat-[A-Za-z]+-[A-Za-z]+", "");
+      configuration.put(key, fs2);
+      LOG.info("[loadMode] after CFG feature pruning: " + fs2);
+      parser.configure(configuration);
+    }
+
     // I think train forgets to turn this off
     // Don't want prediction adding features (memory leak)
     parser.getAlphabet().stopGrowth();
