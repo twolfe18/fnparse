@@ -1,13 +1,10 @@
 package edu.jhu.hlt.fnparse.experiment.grid;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -30,6 +27,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.util.Config;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
@@ -51,6 +49,8 @@ public class FinalResults implements Runnable {
   public static final String ALL_RESULTS_FILE = "performance.txt";
   public static final String SEMEVAL_RESULTS_FILE = "semevalPerformance.txt";
   public static final String PLAINTEXT_PREDICTIONS = "predictions.txt";
+
+  public static final boolean READ_JAVA_PROPERTIES_INTO_CONFIG = true;
 
   // How many examples to retrain the model on.
   // -1 indicates that no model should be retrained, just use the loaded model.
@@ -280,8 +280,8 @@ public class FinalResults implements Runnable {
     }
 
     // Read the config used to create this parser
-    Map<String, String> configuration =
-        readConfig(new File(workingDir, "results.txt"));
+    Map<String, String> configuration = Config.readConfig(
+        new File(workingDir, "results.txt"), READ_JAVA_PROPERTIES_INTO_CONFIG);
     parser.configure(configuration);
 
     // Now load the data for each stage
@@ -303,25 +303,6 @@ public class FinalResults implements Runnable {
     parser.getAlphabet().stopGrowth();
 
     LOG.info("[loadModel] done");
-  }
-
-  private static Map<String, String> readConfig(File f) {
-    LOG.info("[readConfig] from " + f.getPath());
-    if (!f.isFile())
-      throw new IllegalArgumentException(f.getPath() + " is not a file");
-    Map<String, String> configuration = new HashMap<>();
-    try (BufferedReader r = new BufferedReader(new FileReader(f))) {
-      String result = r.readLine(); // see ResultReporter
-      LOG.info("[readConfig] result line: \"" + result + "\"");
-      while (r.ready()) {
-        String[] tok = r.readLine().split("\t", 2);
-        String old = configuration.put(tok[0], tok[1]);
-        assert old == null;
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    return configuration;
   }
 
   public static void main(String[] args) throws Exception {

@@ -32,6 +32,7 @@ import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
+import edu.jhu.hlt.fnparse.util.Config;
 import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
@@ -49,7 +50,9 @@ import edu.jhu.prim.util.math.FastMath;
  * @author travis
  */
 public class Runner {
-  public static Logger LOG = Logger.getLogger(Runner.class);
+  public static final Logger LOG = Logger.getLogger(Runner.class);
+
+  public static final boolean READ_JAVA_PROPERTIES_INTO_CONFIG = true;
 
   public static boolean TAKE_LEX = false;
 
@@ -73,20 +76,6 @@ public class Runner {
 
     Runner r = new Runner(args);
     r.run();
-  }
-
-  private static String parseIntoMap(String[] args, Map<String, String> config) {
-    assert config.size() == 0;
-    assert args.length % 2 == 1;
-    String name = args[0];
-    for (int i = 1; i < args.length; i += 2) {
-      String oldValue = config.put(args[i], args[i + 1]);
-      if (oldValue != null) {
-        throw new RuntimeException(args[i] + " has at least two values: "
-            + args[2] + " and " + oldValue);
-      }
-    }
-    return name;
   }
 
   /**
@@ -126,7 +115,7 @@ public class Runner {
 
   public Runner(String[] args) {
     config = new HashMap<>();
-    name = parseIntoMap(args, config);
+    name = Config.parseIntoMap(args, config, READ_JAVA_PROPERTIES_INTO_CONFIG);
   }
 
   // TODO compute statistics like:

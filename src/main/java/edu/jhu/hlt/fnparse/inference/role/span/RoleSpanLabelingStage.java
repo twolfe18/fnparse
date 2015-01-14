@@ -23,7 +23,6 @@ import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
-import edu.jhu.hlt.concrete.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -159,6 +158,7 @@ public class RoleSpanLabelingStage
     super.setupInferenceHook(input, output);
     log.info("[setupInference] maxSpansPerArg=" + maxSpansPerArg);
     log.info("[setupInference] disallowArgWithoutConstituent=" + disallowArgWithoutConstituent);
+    log.info("[setupInference] stripSyntaxDown=" + stripSyntaxDown);
     List<StageDatum<FNParseSpanPruning, FNParse>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++) {
       FNParse gold = output == null ? null : output.get(i);
