@@ -84,9 +84,11 @@ public class SentenceEval {
     this.hyp = hyp;
 
     if (storeDebugInfo) {
+      targetTruePos = new ArrayList<>();
       targetFalsePos = new ArrayList<>();
       targetFalseNeg = new ArrayList<>();
       if (!onlyTagging) {
+        fullTruePos = new ArrayList<>();
         fullFalsePos = new ArrayList<>();
         fullFalseNeg = new ArrayList<>();
       }
