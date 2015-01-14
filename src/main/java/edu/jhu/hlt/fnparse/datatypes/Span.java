@@ -89,7 +89,16 @@ public final class Span implements Comparable<Span> {
     return String.format("<Span %d-%d>", start, end);
   }
 
-  public int hashCode() { return (start<<16) | end; }
+  public int hashCode() {
+    int w = end - start;
+    return (w << 16) ^ start;
+  }
+
+  /** Puts a hash in the lower 16 bits of the returned int (may overflow) */
+  public int hashCode16() {
+    int w = end - start;
+    return (w << 9) ^ start;
+  }
 
   public boolean equals(Object other) {
     if(other instanceof Span) {

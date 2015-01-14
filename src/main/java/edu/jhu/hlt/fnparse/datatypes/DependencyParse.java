@@ -62,6 +62,20 @@ public class DependencyParse {
     this.labels = labels;
   }
 
+  /**
+   * Strips label information and converts them to head direction (i.e. L and R)
+   */
+  public void stripEdgeLabels() {
+    for (int i = 0; i < labels.length; i++) {
+      if (heads[i] < 0)
+        labels[i] = "X";
+      else if (heads[i] < i)
+        labels[i] = "L";
+      else
+        labels[i] = "R";
+    }
+  }
+
   public int hashCode() {
     if (hashCode == 0) {
       int n = size();

@@ -1,8 +1,6 @@
 package edu.jhu.hlt.fnparse.experiment.grid;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,16 +18,21 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.FrameRoleEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.util.Config;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
@@ -51,6 +54,9 @@ public class FinalResults implements Runnable {
   public static final String ALL_RESULTS_FILE = "performance.txt";
   public static final String SEMEVAL_RESULTS_FILE = "semevalPerformance.txt";
   public static final String PLAINTEXT_PREDICTIONS = "predictions.txt";
+  public static final String TRAIN_SET_STATS = "trainSetStats.txt";
+
+  public static final boolean READ_JAVA_PROPERTIES_INTO_CONFIG = true;
 
   // How many examples to retrain the model on.
   // -1 indicates that no model should be retrained, just use the loaded model.
@@ -148,17 +154,47 @@ public class FinalResults implements Runnable {
           + " is a directory, loading the model from there instead of re-training");
       parser.loadModel(retrainModelDir);
     } else {
+      retrainModelDir.mkdir();
       LOG.info("[train] actually training on " + trainSub.size() + " examples");
       parser.configure("bpIters", "1");
       parser.configure("passes", "1");
+
+      // Save statistics of the training set
+      recordTrainSetStats(trainSub, retrainModelDir);
+
+      // Train
       parser.train(trainSub);
 
       // Save the model
       LOG.info("[train] saving model to " + retrainModelDir.getPath());
-      retrainModelDir.mkdir();
       parser.saveModel(retrainModelDir);
     }
     return resultsDir;
+  }
+
+  private static void recordTrainSetStats(List<FNParse> trainingSet, File outputDir) {
+    // Counts of frame-roles
+    Counts<String> frCounts = new Counts<>();
+    for (FNParse p : trainingSet) {
+      for (FrameInstance fi : p.getFrameInstances()) {
+        Frame f = fi.getFrame();
+        frCounts.increment(f.getName() + "-TARGET");
+        int K = f.numRoles();
+        for (int k = 0; k < K; k++) {
+          Span arg = fi.getArgument(k);
+          if (arg == Span.nullSpan) continue;
+          frCounts.increment(f.getName() + "." + f.getRole(k));
+        }
+      }
+    }
+    // Save to file
+    File outputFile = new File(outputDir, TRAIN_SET_STATS);
+    try (FileWriter fw = new FileWriter(outputFile)) {
+      for (String fr : frCounts.getKeysSortedByCount(true))
+        fw.write(fr + "\t" + frCounts.getCount(fr) + "\n");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public void run() {
@@ -169,38 +205,30 @@ public class FinalResults implements Runnable {
 
     loadModel();
 
-//    if (true) {
-//      parser.configure("bpIters", "2");
-//      compareLatentToSupervisedSyntax();
-//      return;
-//    }
+    if (System.getProperty("compareLatentToSupervisedSyntax") != null) {
+      LOG.info("[run] comparing latent to supervised syntax with loaded model (no retraining)");
+      compareLatentToSupervisedSyntax();
+      return;
+    }
 
+    // Train
     File resultsDir = train();
 
-    // Evaluate the model (my evaluation)
+    // Make predictions
     LOG.info("[run] predicting");
     List<Sentence> sentences = DataUtil.stripAnnotations(testData);
     List<FNParse> hyp = parser.parse(sentences, testData);
-    /* The only reason to report one result is if you're stacking results from
-     * multiple jobs into one file... and even then.
-    LOG.info("[run] evaluating on " + testData.size()
-        + " examples with " + evaluationFunc.getName());;
-    double perf = evaluationFunc.evaluate(SentenceEval.zip(testData, hyp));
-    File f = new File(resultsDir, RESULT_ACCUM_FILE);
-    LOG.info("[run] writing perf=" + perf + " numTrain=" + numTrain
-        + " to " + f.getPath());
-    try (FileWriter w = new FileWriter(f, true)) {
-      w.append(String.format("%f\t%d\n", perf, numTrain));
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
-    */
+
+    // Evaluate the model (my evaluation)
     LOG.info("[run] evaluating");
-    Map<String, Double> results = BasicEvaluation.evaluate(testData, hyp);
     File f = new File(resultsDir, ALL_RESULTS_FILE);
     LOG.info("[run] writing all eval metrics to " + f.getPath());
     try (FileWriter w = new FileWriter(f)) {
+
+      // Basic evaluation
       List<String> keys = new ArrayList<>();
+      List<SentenceEval> toEvaluate = BasicEvaluation.zip(testData, hyp);
+      Map<String, Double> results = BasicEvaluation.evaluate(toEvaluate);
       keys.addAll(results.keySet());
       Collections.sort(keys);
       for (String k : keys) {
@@ -208,6 +236,15 @@ public class FinalResults implements Runnable {
         LOG.info(String.format("[evaluate] %100s %f", k, v));
         w.append(String.format("%f\t%s\n", v, k));
       }
+
+      // Evaluation for each frame-role
+      for (FrameRoleEvaluation.FREvalFunc ef : FrameRoleEvaluation.getAllFrameRoleEvalFuncs()) {
+        double v = ef.evaluate(toEvaluate);
+        String k = ef.getName();
+        LOG.info(String.format("[evaluate] %100s %f", k, v));
+        w.append(String.format("%f\t%s\n", v, k));
+      }
+
     } catch (Exception e) {
       e.printStackTrace();
     }
@@ -280,13 +317,30 @@ public class FinalResults implements Runnable {
     }
 
     // Read the config used to create this parser
-    Map<String, String> configuration =
-        readConfig(new File(workingDir, "results.txt"));
-    parser.configure(configuration);
+    File configFile = new File(workingDir, "results.txt");
+    Map<String, String> configuration = new HashMap<>();
+    if (configFile.isFile()) {
+      configuration = Config.readConfig(
+          configFile, READ_JAVA_PROPERTIES_INTO_CONFIG);
+      parser.configure(configuration);
+    } else {
+      LOG.warn("");
+      LOG.warn("[loadMode] COULD NOT READ CONFIG. CORRECTNESS IS ON YOU.");
+      LOG.warn("");
+    }
 
     // Now load the data for each stage
     // (given the correct stages have been configured)
-    parser.loadModel(new File(workingDir, "trainDevModel"));
+    File modelDir = new File(workingDir, "trainDevModel");
+    if (modelDir.isDirectory()) {
+      parser.loadModel(modelDir);
+    } else {
+      LOG.warn("[loadModel] found no model in " + modelDir.getPath());
+      modelDir = new File(workingDir, "model");
+      LOG.warn("[loadModel] using backup: " + modelDir.getPath());
+      assert modelDir.isDirectory();
+      parser.loadModel(modelDir);
+    }
 
     if (System.getProperty("pruneCfgFeats") != null) {
       final String key = "features";
@@ -303,25 +357,6 @@ public class FinalResults implements Runnable {
     parser.getAlphabet().stopGrowth();
 
     LOG.info("[loadModel] done");
-  }
-
-  private static Map<String, String> readConfig(File f) {
-    LOG.info("[readConfig] from " + f.getPath());
-    if (!f.isFile())
-      throw new IllegalArgumentException(f.getPath() + " is not a file");
-    Map<String, String> configuration = new HashMap<>();
-    try (BufferedReader r = new BufferedReader(new FileReader(f))) {
-      String result = r.readLine(); // see ResultReporter
-      LOG.info("[readConfig] result line: \"" + result + "\"");
-      while (r.ready()) {
-        String[] tok = r.readLine().split("\t", 2);
-        String old = configuration.put(tok[0], tok[1]);
-        assert old == null;
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    return configuration;
   }
 
   public static void main(String[] args) throws Exception {

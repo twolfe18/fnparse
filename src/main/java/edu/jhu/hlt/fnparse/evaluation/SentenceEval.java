@@ -43,8 +43,8 @@ public class SentenceEval {
   private final FNTagging gold, hyp;
 
   // Not always populated
-  private List<FrameArgInstance> targetFalsePos, targetFalseNeg;
-  private List<FrameArgInstance> fullFalsePos, fullFalseNeg;
+  private List<FrameArgInstance> targetTruePos, targetFalsePos, targetFalseNeg;
+  private List<FrameArgInstance> fullTruePos, fullFalsePos, fullFalseNeg;
 
   public static <T extends FNTagging> List<SentenceEval> zip(
       List<T> gold,
@@ -84,9 +84,11 @@ public class SentenceEval {
     this.hyp = hyp;
 
     if (storeDebugInfo) {
+      targetTruePos = new ArrayList<>();
       targetFalsePos = new ArrayList<>();
       targetFalseNeg = new ArrayList<>();
       if (!onlyTagging) {
+        fullTruePos = new ArrayList<>();
         fullFalsePos = new ArrayList<>();
         fullFalseNeg = new ArrayList<>();
       }
@@ -109,15 +111,15 @@ public class SentenceEval {
     fillPredictions(hyp.getFrameInstances(),
         hypTargets, hypTargetRoles, hypRoles);
 
-    fillConfusionTable(goldTargets, hypTargets,
-        targetConfusion, targetFalsePos, targetFalseNeg);
+    fillConfusionTable(goldTargets, hypTargets, targetConfusion,
+        targetTruePos, targetFalsePos, targetFalseNeg);
     if (goldTargetRoles != null) {
-      fillConfusionTable(goldTargetRoles, hypTargetRoles,
-          fullConfusion, fullFalsePos, targetFalseNeg);
+      fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion,
+          fullTruePos, fullFalsePos, targetFalseNeg);
     }
     if (goldRoles != null) {
       fillConfusionTable(goldRoles, hypRoles,
-          argOnlyConfusion, null, null);
+          argOnlyConfusion, null, null, null);
     }
   }
 
@@ -133,8 +135,13 @@ public class SentenceEval {
     assert !onlyTagging;
     return (FNParse) hyp;
   }
+  public List<FrameArgInstance> getTargetTruePos() { return targetTruePos; }
   public List<FrameArgInstance> getTargetFalsePos() { return targetFalsePos; }
   public List<FrameArgInstance> getTargetFalseNeg() { return targetFalseNeg; }
+  public List<FrameArgInstance> getFullTruePos() {
+    assert !onlyTagging;
+    return fullTruePos;
+  }
   public List<FrameArgInstance> getFullFalsePos() {
     assert !onlyTagging;
     return fullFalsePos;
@@ -185,6 +192,7 @@ public class SentenceEval {
       Collection<FrameArgInstance> gold,
       Collection<FrameArgInstance> hyp,
       int[][] confusion,
+      List<FrameArgInstance> tpStore,
       List<FrameArgInstance> fpStore,
       List<FrameArgInstance> fnStore) {
     Set<FrameArgInstance> s = new HashSet<>();
@@ -194,6 +202,8 @@ public class SentenceEval {
     s.addAll(gold);
     s.retainAll(hyp);
     confusion[1][1] = s.size();
+    if (tpStore != null)
+      tpStore.addAll(s);
 
     // FP = H -- G
     s.clear();

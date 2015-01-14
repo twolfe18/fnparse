@@ -78,6 +78,11 @@ public class ConstituencyParse {
       return span;
     }
 
+    public void clearTag() {
+      base.setTag("X");
+      rule = null;
+    }
+
     public String getTag() {
       return base.getTag();
     }
@@ -165,6 +170,16 @@ public class ConstituencyParse {
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
     checkSpans(n);
+  }
+
+  /**
+   * Converts a labeled parse tree to an unlabeled one.
+   * Before: (S (NP John) (VP (V loves) (NP Mary)))
+   * After:  (X (X John) (X (X loves) (X Mary)))
+   */
+  public void stripCategories() {
+    for (Node n : nodes)
+      n.clearTag();
   }
 
   public void checkSpans(int sentSize) {
