@@ -129,7 +129,9 @@ public class BasicEvaluation {
 
   public static Map<String, Double> evaluate(
       List<FNParse> gold, List<FNParse> hyp) {
-    List<SentenceEval> se = zip(gold, hyp);
+    return evaluate(zip(gold, hyp));
+  }
+  public static Map<String, Double> evaluate(List<SentenceEval> se) {
     Map<String, Double> results = new HashMap<String, Double>();
     int n = evaluationFunctions.length;
     for(int i=0; i<n; i++) {

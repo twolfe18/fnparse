@@ -17,17 +17,21 @@ import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.FrameRoleEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Config;
+import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
@@ -49,6 +53,7 @@ public class FinalResults implements Runnable {
   public static final String ALL_RESULTS_FILE = "performance.txt";
   public static final String SEMEVAL_RESULTS_FILE = "semevalPerformance.txt";
   public static final String PLAINTEXT_PREDICTIONS = "predictions.txt";
+  public static final String TRAIN_SET_STATS = "trainSetStats.txt";
 
   public static final boolean READ_JAVA_PROPERTIES_INTO_CONFIG = true;
 
@@ -148,17 +153,47 @@ public class FinalResults implements Runnable {
           + " is a directory, loading the model from there instead of re-training");
       parser.loadModel(retrainModelDir);
     } else {
+      retrainModelDir.mkdir();
       LOG.info("[train] actually training on " + trainSub.size() + " examples");
       parser.configure("bpIters", "1");
       parser.configure("passes", "1");
+
+      // Save statistics of the training set
+      recordTrainSetStats(trainSub, retrainModelDir);
+
+      // Train
       parser.train(trainSub);
 
       // Save the model
       LOG.info("[train] saving model to " + retrainModelDir.getPath());
-      retrainModelDir.mkdir();
       parser.saveModel(retrainModelDir);
     }
     return resultsDir;
+  }
+
+  private static void recordTrainSetStats(List<FNParse> trainingSet, File outputDir) {
+    // Counts of frame-roles
+    Counts<String> frCounts = new Counts<>();
+    for (FNParse p : trainingSet) {
+      for (FrameInstance fi : p.getFrameInstances()) {
+        Frame f = fi.getFrame();
+        frCounts.increment(f.getName() + "-TARGET");
+        int K = f.numRoles();
+        for (int k = 0; k < K; k++) {
+          Span arg = fi.getArgument(k);
+          if (arg == Span.nullSpan) continue;
+          frCounts.increment(f.getName() + "." + f.getRole(k));
+        }
+      }
+    }
+    // Save to file
+    File outputFile = new File(outputDir, TRAIN_SET_STATS);
+    try (FileWriter fw = new FileWriter(outputFile)) {
+      for (String fr : frCounts.getKeysSortedByCount(true))
+        fw.write(fr + "\t" + frCounts.getCount(fr) + "\n");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public void run() {
@@ -196,11 +231,14 @@ public class FinalResults implements Runnable {
     }
     */
     LOG.info("[run] evaluating");
-    Map<String, Double> results = BasicEvaluation.evaluate(testData, hyp);
     File f = new File(resultsDir, ALL_RESULTS_FILE);
     LOG.info("[run] writing all eval metrics to " + f.getPath());
     try (FileWriter w = new FileWriter(f)) {
+
+      // Basic evaluation
       List<String> keys = new ArrayList<>();
+      List<SentenceEval> toEvaluate = BasicEvaluation.zip(testData, hyp);
+      Map<String, Double> results = BasicEvaluation.evaluate(toEvaluate);
       keys.addAll(results.keySet());
       Collections.sort(keys);
       for (String k : keys) {
@@ -208,6 +246,15 @@ public class FinalResults implements Runnable {
         LOG.info(String.format("[evaluate] %100s %f", k, v));
         w.append(String.format("%f\t%s\n", v, k));
       }
+
+      // Evaluation for each frame-role
+      for (FrameRoleEvaluation.FREvalFunc ef : FrameRoleEvaluation.getAllFrameRoleEvalFuncs()) {
+        double v = ef.evaluate(toEvaluate);
+        String k = ef.getName();
+        LOG.info(String.format("[evaluate] %100s %f", k, v));
+        w.append(String.format("%f\t%s\n", v, k));
+      }
+
     } catch (Exception e) {
       e.printStackTrace();
     }

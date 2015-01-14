@@ -11,7 +11,7 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
   public final int role;
 
   public FrameRoleInstance(Frame frame, Span target, int role) {
-    if (target == null || frame == null)
+    if (frame == null)
       throw new IllegalArgumentException();
     if (role >= frame.numRoles())
       throw new IllegalArgumentException();
@@ -22,9 +22,10 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
 
   @Override
   public int hashCode() {
-    return 197 * frame.hashCode()
-        + 199 * target.hashCode()
-        + 211 * role;
+    int h = (role << 11) ^ frame.getId();
+    if (target != null)
+      h ^= (target.hashCode16() << 16);
+    return h;
   }
 
   @Override
@@ -32,12 +33,13 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
     if (other instanceof FrameRoleInstance) {
       FrameRoleInstance fri = (FrameRoleInstance) other;
       return role == fri.role
-          && target.equals(fri.target)
-          && frame.equals(fri.frame);
+          && frame.equals(fri.frame)
+          && (target == fri.target || (target != null && target.equals(fri.target)));
     }
     return false;
   }
 
+  /** Only really defined if target is not null */
   @Override
   public int compareTo(FrameRoleInstance arg0) {
     int c1 = frame.getName().compareTo(arg0.frame.getName());
