@@ -5,6 +5,7 @@ import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -210,26 +211,15 @@ public class FinalResults implements Runnable {
       return;
     }
 
+    // Train
     File resultsDir = train();
 
-    // Evaluate the model (my evaluation)
+    // Make predictions
     LOG.info("[run] predicting");
     List<Sentence> sentences = DataUtil.stripAnnotations(testData);
     List<FNParse> hyp = parser.parse(sentences, testData);
-    /* The only reason to report one result is if you're stacking results from
-     * multiple jobs into one file... and even then.
-    LOG.info("[run] evaluating on " + testData.size()
-        + " examples with " + evaluationFunc.getName());;
-    double perf = evaluationFunc.evaluate(SentenceEval.zip(testData, hyp));
-    File f = new File(resultsDir, RESULT_ACCUM_FILE);
-    LOG.info("[run] writing perf=" + perf + " numTrain=" + numTrain
-        + " to " + f.getPath());
-    try (FileWriter w = new FileWriter(f, true)) {
-      w.append(String.format("%f\t%d\n", perf, numTrain));
-    } catch (Exception e) {
-      e.printStackTrace();
-    }
-    */
+
+    // Evaluate the model (my evaluation)
     LOG.info("[run] evaluating");
     File f = new File(resultsDir, ALL_RESULTS_FILE);
     LOG.info("[run] writing all eval metrics to " + f.getPath());
@@ -327,13 +317,30 @@ public class FinalResults implements Runnable {
     }
 
     // Read the config used to create this parser
-    Map<String, String> configuration = Config.readConfig(
-        new File(workingDir, "results.txt"), READ_JAVA_PROPERTIES_INTO_CONFIG);
-    parser.configure(configuration);
+    File configFile = new File(workingDir, "results.txt");
+    Map<String, String> configuration = new HashMap<>();
+    if (configFile.isFile()) {
+      configuration = Config.readConfig(
+          configFile, READ_JAVA_PROPERTIES_INTO_CONFIG);
+      parser.configure(configuration);
+    } else {
+      LOG.warn("");
+      LOG.warn("[loadMode] COULD NOT READ CONFIG. CORRECTNESS IS ON YOU.");
+      LOG.warn("");
+    }
 
     // Now load the data for each stage
     // (given the correct stages have been configured)
-    parser.loadModel(new File(workingDir, "trainDevModel"));
+    File modelDir = new File(workingDir, "trainDevModel");
+    if (modelDir.isDirectory()) {
+      parser.loadModel(modelDir);
+    } else {
+      LOG.warn("[loadModel] found no model in " + modelDir.getPath());
+      modelDir = new File(workingDir, "model");
+      LOG.warn("[loadModel] using backup: " + modelDir.getPath());
+      assert modelDir.isDirectory();
+      parser.loadModel(modelDir);
+    }
 
     if (System.getProperty("pruneCfgFeats") != null) {
       final String key = "features";
