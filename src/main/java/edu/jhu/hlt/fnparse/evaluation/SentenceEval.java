@@ -115,7 +115,7 @@ public class SentenceEval {
         targetTruePos, targetFalsePos, targetFalseNeg);
     if (goldTargetRoles != null) {
       fillConfusionTable(goldTargetRoles, hypTargetRoles, fullConfusion,
-          fullTruePos, fullFalsePos, targetFalseNeg);
+          fullTruePos, fullFalsePos, fullFalseNeg);
     }
     if (goldRoles != null) {
       fillConfusionTable(goldRoles, hypRoles,

@@ -241,7 +241,7 @@ public class FinalResults implements Runnable {
       for (FrameRoleEvaluation.FREvalFunc ef : FrameRoleEvaluation.getAllFrameRoleEvalFuncs()) {
         double v = ef.evaluate(toEvaluate);
         String k = ef.getName();
-        LOG.info(String.format("[evaluate] %100s %f", k, v));
+        //LOG.info(String.format("[evaluate] %100s %f", k, v));
         w.append(String.format("%f\t%s\n", v, k));
       }
 

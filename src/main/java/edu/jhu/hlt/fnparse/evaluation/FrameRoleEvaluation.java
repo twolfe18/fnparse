@@ -65,16 +65,16 @@ public class FrameRoleEvaluation {
   }
 
   public static class FREvalFunc implements EvalFunc {
-    private Frame frame;
-    private int role;
-    private FPR.Mode mode;
-    private String name;
+    private final Frame frame;
+    private final int role;
+    private final FPR.Mode mode;
+    private final String name;
 
     public FREvalFunc(Frame frame, int role, FPR.Mode mode) {
       this.frame = frame;
       this.role = role;
       this.mode = mode;
-      this.name = String.format("%s.%s-Micro%s", mode, frame.getName(), frame.getRole(role));
+      this.name = String.format("Micro%s-%s.%s", mode, frame.getName(), frame.getRole(role));
     }
 
     @Override
