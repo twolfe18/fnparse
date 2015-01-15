@@ -8,24 +8,24 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.data.simple.SimpleAnnoSentence;
-import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.srl.CorpusStatistics;
-import edu.jhu.srl.CorpusStatistics.CorpusStatisticsPrm;
-import edu.jhu.srl.DepParseFactorGraphBuilder.DepParseFactorTemplate;
-import edu.jhu.srl.DepParseFeatureExtractor;
-import edu.jhu.srl.DepParseFeatureExtractor.DepParseFeatureExtractorPrm;
-import edu.jhu.srl.FeTypedFactor;
-import edu.jhu.util.Alphabet;
+import edu.jhu.nlp.CorpusStatistics;
+import edu.jhu.nlp.CorpusStatistics.CorpusStatisticsPrm;
+import edu.jhu.nlp.FeTypedFactor;
+import edu.jhu.nlp.data.simple.AnnoSentence;
+import edu.jhu.nlp.depparse.DepParseFactorGraphBuilder.DepParseFactorTemplate;
+import edu.jhu.nlp.depparse.DepParseFeatureExtractor;
+import edu.jhu.nlp.depparse.DepParseFeatureExtractor.DepParseFeatureExtractorPrm;
+import edu.jhu.util.FeatureNames;
 
 /**
  * This factory adds:
@@ -55,8 +55,8 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
     // defaults for fePrm are fine
   }
 
-  public static SimpleAnnoSentence toPacayaSentence(Sentence s) {
-    SimpleAnnoSentence sas = new SimpleAnnoSentence();
+  public static AnnoSentence toPacayaSentence(Sentence s) {
+    AnnoSentence sas = new AnnoSentence();
     sas.setWords(Arrays.asList(s.getWords()));
     sas.setPosTags(Arrays.asList(s.getPos()));
     sas.setLemmas(Arrays.asList(s.getLemmas()));
@@ -77,7 +77,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
   public static CorpusStatistics getCorpusStats() {
     if (corpusStats == null) {
       corpusStats = new CorpusStatistics(new CorpusStatisticsPrm());
-      List<SimpleAnnoSentence> corpus = new ArrayList<>();
+      List<AnnoSentence> corpus = new ArrayList<>();
       Iterator<? extends FNTagging> iter = null;
       iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
       while (iter.hasNext())
@@ -107,8 +107,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
     factors.add(d);
 
     // Unary factors on edge variables
-    @SuppressWarnings("unchecked")
-    Alphabet<Object> alph = (Alphabet<Object>) (Object) globals.getFeatureNames();
+    FeatureNames alph = (FeatureNames) ((Object) globals.getFeatureNames());
     DepParseFeatureExtractor fe = new DepParseFeatureExtractor(fePrm,
         toPacayaSentence(s), getCorpusStats(), alph);
     final int n = s.size();

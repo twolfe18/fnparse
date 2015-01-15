@@ -6,7 +6,7 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.data.FgExample;
+import edu.jhu.gm.data.LFgExample;
 import edu.jhu.gm.data.FgExampleList;
 import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
 
@@ -17,9 +17,9 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
  */
 public class StageDatumExampleList<I, O> implements FgExampleList {
   public static final Logger LOG = Logger.getLogger(StageDatumExampleList.class);
-  
+
   private final List<StageDatum<I, O>> data;
-  private FgExample[] cache;
+  private LFgExample[] cache;
 
   // TODO
   // 1) add an option to see if i can flat out just fit everything in memory
@@ -34,19 +34,19 @@ public class StageDatumExampleList<I, O> implements FgExampleList {
   public StageDatumExampleList(List<StageDatum<I, O>> data, boolean keepAllInMemory) {
     this.data = data;
     if (keepAllInMemory)
-      cache = new FgExample[data.size()];
+      cache = new LFgExample[data.size()];
   }
 
   @Override
-  public Iterator<FgExample> iterator() {
-    return new Iterator<FgExample>() {
+  public Iterator<LFgExample> iterator() {
+    return new Iterator<LFgExample>() {
       private Iterator<StageDatum<I, O>> iter = data.iterator();
       @Override
       public boolean hasNext() {
         return iter.hasNext();
       }
       @Override
-      public FgExample next() {
+      public LFgExample next() {
         return iter.next().getExample();
       }
       @Override
@@ -58,7 +58,7 @@ public class StageDatumExampleList<I, O> implements FgExampleList {
 
   private static int inMem = 0;
   @Override
-  public FgExample get(int index) {
+  public LFgExample get(int index) {
     if (cache != null) {
       if (cache[index] == null) {
         cache[index] = data.get(index).getExample();

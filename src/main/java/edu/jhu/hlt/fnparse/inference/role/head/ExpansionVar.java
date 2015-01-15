@@ -4,11 +4,11 @@ import java.util.Arrays;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.DenseFactor;
 import edu.jhu.gm.model.Var;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.Var.VarType;
+import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.datatypes.Expansion;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -102,14 +102,16 @@ public class ExpansionVar {
     return e.upon(j);
   }
 
+  public static void normalize(Tensor t) {
+    throw new RuntimeException("figure out how to normalize");
+  }
+
   public Span decodeSpan(FgInferencer hasMargins) {
-    boolean log = hasMargins.isLogDomain();
     Span bestSpan = null;
     double bestScore = 0d;
     for (int i = 0; i < vars.length; i++) {
-      DenseFactor df = hasMargins.getMarginals(vars[i]);
-      if (log) df.logNormalize();
-      else df.normalize();
+      Tensor df = hasMargins.getMarginals(vars[i]);
+      normalize(df);
       double p = df.getValue(BinaryVarUtil.boolToConfig(true));
       Span s = getSpan(i);
       if (i == 0 || p > bestScore) {

@@ -11,22 +11,22 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.ConstituencyTreeFactor;
-import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.ProjDepTreeFactor;
-import edu.jhu.gm.model.ProjDepTreeFactor.LinkVar;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.LinkVar;
+import edu.jhu.gm.model.globalfac.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -52,7 +52,8 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.srl.DepParseDecoder;
+import edu.jhu.nlp.depparse.DepParseDecoder;
+import edu.jhu.parse.dep.EdgeScores;
 
 /**
  * Predicts the heads of roles for frames that appear in a sentence. Also serves
@@ -326,24 +327,31 @@ public class RoleHeadStage
 
       // Get the most likely latent parse
       final int n = sent.size();
-      List<DenseFactor> bel = new ArrayList<>();
-      List<Var> vars = new ArrayList<>();
+//      List<Tensor> bel = new ArrayList<>();
+//      List<Var> vars = new ArrayList<>();
+      double[] rootBel = new double[n];
+      double[][] childBel = new double[n][n];
       for (int i = 0; i < n; i++) {
         Var v = deps.getRootVars()[i];
         assert v != null;
-        vars.add(v);
-        bel.add(inf.getMarginals(v));
+//        vars.add(v);
+//        bel.add(inf.getMarginals(v));
+        Tensor t = inf.getMarginals(v);
+        rootBel[i] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
       }
       for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
           Var v = deps.getLinkVar(i, j);
           if (v == null)
             continue;
-          vars.add(v);
-          bel.add(inf.getMarginals(v));
+//          vars.add(v);
+//          bel.add(inf.getMarginals(v));
+          Tensor t = inf.getMarginals(v);
+          childBel[i][j] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
         }
       }
-      int[] heads = DepParseDecoder.getParents(bel, vars, n);
+      EdgeScores edgeScores = new EdgeScores(rootBel, childBel);
+      int[] heads = DepParseDecoder.getParents(edgeScores);//bel, vars, n);
 
       // Measure agreement/recall
       DependencyParse basic = sent.getBasicDeps(false);
@@ -560,7 +568,7 @@ public class RoleHeadStage
       Iterator<RVar> iter = rv.getVars();
       while (iter.hasNext()) {
         RVar rvar = iter.next();
-        DenseFactor df = inf.getMarginals(rvar.roleVar);
+        Tensor df = inf.getMarginals(rvar.roleVar);
         beliefs[rvar.k][rvar.j] = df.getValue(
             BinaryVarUtil.boolToConfig(true));
         considered[rvar.k] = true; 

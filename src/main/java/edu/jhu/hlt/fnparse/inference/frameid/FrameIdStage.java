@@ -13,21 +13,21 @@ import java.util.Set;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.ConstituencyTreeFactor;
-import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.ProjDepTreeFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -408,11 +408,10 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
         final int T = fvars.numFrames();
         double[] beliefs = new double[T];
         for (int t = 0; t < T; t++) {
-          DenseFactor df =
+          Tensor df =
               hasMargins.getMarginals(fvars.getVariable(t));
           // TODO Exactly1 factor removes the need for this
-          if (logDomain()) df.logNormalize();
-          else df.normalize();
+          normalize(df);
           beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
         }
         normalize(beliefs);
@@ -442,5 +441,9 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
     public boolean logDomain() {
       return FrameIdStage.this.logDomain();
     }
+  }
+
+  public static void normalize(Tensor t) {
+    throw new RuntimeException("figure out how to do this");
   }
 }

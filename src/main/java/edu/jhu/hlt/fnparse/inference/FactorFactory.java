@@ -3,9 +3,9 @@ package edu.jhu.hlt.fnparse.inference;
 import java.io.Serializable;
 import java.util.List;
 
-import edu.jhu.gm.model.ConstituencyTreeFactor;
 import edu.jhu.gm.model.Factor;
-import edu.jhu.gm.model.ProjDepTreeFactor;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ProjDepTreeFactor;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Features;
 

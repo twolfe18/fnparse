@@ -9,11 +9,11 @@ import java.util.Map;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
@@ -112,7 +112,7 @@ public class RoleSequenceStage extends AbstractStage<FNTagging, FNParse> {
       int K = frame.numRoles() + 1;
       double[][] probs = new double[labels.length][];
       for (int i = 0; i < labels.length; i++) {
-        DenseFactor perWord = hasMarginals.getMarginals(labels[i]);
+        Tensor perWord = hasMarginals.getMarginals(labels[i]);
         probs[i] = perWord.getValues();
         assert probs[i].length == K;
       }

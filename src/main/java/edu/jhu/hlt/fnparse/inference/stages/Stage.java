@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.gm.data.LabeledFgExample;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
@@ -165,11 +165,8 @@ public interface Stage<Input, Output> extends HasFgModel {
         // We need to compute the scores for ExpFamFactors at some point
         // and way I can think to choose where that should happen is
         // that it should happen as late as possible, which is here.
-        for(Factor f : fg.getFactors()) {
-          f.updateFromModel(
-              getWeights(),
-              logDomain());
-        }
+        for(Factor f : fg.getFactors())
+          f.updateFromModel(getWeights());
         inf = infFact.getInferencer(fg);
         inf.run();
       }

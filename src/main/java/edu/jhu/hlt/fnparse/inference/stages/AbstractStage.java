@@ -17,8 +17,8 @@ import org.apache.log4j.Logger;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
 import edu.jhu.gm.train.CrfTrainer;
@@ -42,8 +42,10 @@ import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.hlt.fnparse.util.Timer;
-import edu.jhu.hlt.optimize.AdaGrad;
-import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
+//import edu.jhu.hlt.optimize.AdaGrad;
+//import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
+import edu.jhu.hlt.optimize.AdaGradSchedule;
+import edu.jhu.hlt.optimize.AdaGradSchedule.AdaGradSchedulePrm;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.hlt.optimize.function.Regularizer;
@@ -51,6 +53,8 @@ import edu.jhu.hlt.optimize.functions.L2;
 import edu.jhu.prim.arrays.Multinomials;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
+import edu.jhu.util.semiring.Algebra;
+import edu.jhu.util.semiring.Algebras;
 
 /**
  * Some helper code on top of Stage
@@ -368,10 +372,14 @@ implements Stage<I, O> {
     bpParams.maxIterations = bpIters;
     return new FgInferencerFactory() {
       @Override
-      public boolean isLogDomain() { return bpParams.isLogDomain(); }
-      @Override
       public FgInferencer getInferencer(FactorGraph fg) {
         return new BeliefPropagation(fg, bpParams);
+      }
+      @Override
+      public Algebra getAlgebra() {
+        if (bpParams.logDomain)
+          return Algebras.LOG_SEMIRING;
+        throw new RuntimeException("ask matt about semiring vs algebra");
       }
     };
   }
@@ -535,7 +543,7 @@ implements Stage<I, O> {
 
     CrfTrainerPrm trainerParams = new CrfTrainerPrm();
     SGDPrm sgdParams = new SGDPrm();
-    AdaGradPrm adagParams = new AdaGradPrm();
+    AdaGradSchedulePrm adagParams = new AdaGradSchedulePrm();
     if (learningRate == null) {
       log.info("[train] automatically selecting learning rate");
       sgdParams.autoSelectLr = true;
@@ -546,12 +554,12 @@ implements Stage<I, O> {
     }
     sgdParams.batchSize = batchSize;
     sgdParams.numPasses = passes;
-    sgdParams.sched = new AdaGrad(adagParams);
+    sgdParams.sched = new AdaGradSchedule(adagParams);
     log.info("[train] passes=" + passes + " batchSize=" + batchSize);
     log.info("[train] regularizer=" + regularizer);
 
-    trainerParams.maximizer = null;
-    trainerParams.batchMaximizer = new SGD(sgdParams);
+    trainerParams.optimizer = null;
+    trainerParams.batchOptimizer = new SGD(sgdParams);
     trainerParams.infFactory = infFactory();
     trainerParams.numThreads = 1; //globalParams.threads;
     trainerParams.regularizer = regularizer;
@@ -569,6 +577,8 @@ implements Stage<I, O> {
     // Setup model and train
     CrfTrainer trainer = new CrfTrainer(trainerParams);
     try {
+      // TODO the reason that this is deprecated is because it wants a validator
+      // function, presumably for knowning when to stop.
       weights = trainer.train(weights, exs);
     } catch(cc.mallet.optimize.OptimizationException oe) {
       oe.printStackTrace();

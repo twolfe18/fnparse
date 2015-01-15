@@ -18,7 +18,7 @@ import java.util.zip.GZIPInputStream;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
 import edu.jhu.gm.train.CrfObjective;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FNIterFilters;

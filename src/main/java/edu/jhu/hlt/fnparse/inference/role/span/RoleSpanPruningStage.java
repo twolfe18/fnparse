@@ -19,22 +19,22 @@ import java.util.function.Function;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.data.LabeledFgExample;
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.gm.inf.BeliefPropagation.FgInferencerFactory;
 import edu.jhu.gm.inf.FgInferencer;
-import edu.jhu.gm.model.ConstituencyTreeFactor;
-import edu.jhu.gm.model.ConstituencyTreeFactor.SpanVar;
-import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.gm.inf.FgInferencerFactory;
 import edu.jhu.gm.model.ExplicitExpFamFactor;
 import edu.jhu.gm.model.Factor;
 import edu.jhu.gm.model.FactorGraph;
 import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.GlobalFactor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.gm.model.Var.VarType;
 import edu.jhu.gm.model.VarConfig;
 import edu.jhu.gm.model.VarSet;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor.SpanVar;
+import edu.jhu.gm.model.globalfac.GlobalFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -572,12 +572,12 @@ public class RoleSpanPruningStage
      * More general than the other version, this one lets you pass in arbitrary
      * beliefs to be used in CKY.
      */
-    public BinaryTree getMaxRecallParse(Map<Span, DenseFactor> beliefs) {
+    public BinaryTree getMaxRecallParse(Map<Span, Tensor> beliefs) {
       ConstituencyTreeFactorParser parser = new ConstituencyTreeFactorParser();
       int n = sent.size();
       List<SpanVar> sv = new ArrayList<>();
-      List<DenseFactor> belList = new ArrayList<>();
-      for (Entry<Span, DenseFactor> x : beliefs.entrySet()) {
+      List<Tensor> belList = new ArrayList<>();
+      for (Entry<Span, Tensor> x : beliefs.entrySet()) {
         sv.add(ckyFactor.getSpanVar(x.getKey().start, x.getKey().end));
         belList.add(x.getValue());
       }
@@ -587,14 +587,14 @@ public class RoleSpanPruningStage
 
     public BinaryTree getMaxRecallParse(FgInferencer inf) {
       List<SpanVar> sv = new ArrayList<>();
-      List<DenseFactor> beliefs = new ArrayList<>();
+      List<Tensor> beliefs = new ArrayList<>();
       int n = sent.size();
       for (int i = 0; i < n; i++) {
         for (int j = i + 1; j <= n; j++) {
           SpanVar s = ckyFactor.getSpanVar(i, j);
           sv.add(s);
-          DenseFactor df = inf.getMarginals(s);
-          df.logNormalize();
+          Tensor df = inf.getMarginals(s);
+          normalize(df);
           beliefs.add(df);
         }
       }
@@ -675,12 +675,17 @@ public class RoleSpanPruningStage
     }
   }
 
-  public static final Function<List<DenseFactor>, DenseFactor> BINARY_BELIEF_MAX = dfs -> {
-    DenseFactor accum = new DenseFactor(dfs.get(0));
+  public static void normalize(Tensor t) {
+    // Used to be Tensor.logNormalize
+    throw new RuntimeException("figure out how to normalize");
+  }
+
+  public static final Function<List<Tensor>, Tensor> BINARY_BELIEF_MAX = dfs -> {
+    Tensor accum = new Tensor(dfs.get(0));
     double p = accum.getValue(BinaryVarUtil.boolToConfig(true))
         - accum.getValue(BinaryVarUtil.boolToConfig(false));
     for (int i = 1; i < dfs.size(); i++) {
-      DenseFactor df = dfs.get(i);
+      Tensor df = dfs.get(i);
       double pa = df.getValue(BinaryVarUtil.boolToConfig(true))
           - df.getValue(BinaryVarUtil.boolToConfig(false));
       if (pa > p) {
@@ -689,16 +694,16 @@ public class RoleSpanPruningStage
         p = pa;
       }
     }
-    accum.logNormalize();
+    normalize(accum);
     return accum;
   };
-  public static final Function<List<DenseFactor>, DenseFactor> BINARY_BELIEF_AVG = dfs -> {
-    DenseFactor accum = new DenseFactor(dfs.get(0));
+  public static final Function<List<Tensor>, Tensor> BINARY_BELIEF_AVG = dfs -> {
+    Tensor accum = new Tensor(dfs.get(0));
     for (int i = 1; i < dfs.size(); i++) {
       accum.setValue(0, accum.getValue(0) + dfs.get(i).getValue(0));
       accum.setValue(1, accum.getValue(1) + dfs.get(i).getValue(1));
     }
-    accum.logNormalize();
+    normalize(accum);
     return accum;
   };
 
@@ -722,7 +727,7 @@ public class RoleSpanPruningStage
 
     // If this is null, then use only the beliefs from the constituency vars
     // NOTE: max does a little better than just span beliefs, but worse than avg
-    private Function<List<DenseFactor>, DenseFactor> beliefAccumulator = BINARY_BELIEF_AVG;
+    private Function<List<Tensor>, Tensor> beliefAccumulator = BINARY_BELIEF_AVG;
     private boolean useXuePalmer = false; // doesn't appear to work
 
     public CkyDecodable(FactorGraph fg, FgInferencerFactory infFact, FNTagging input, PruningVars roleVars) {
@@ -738,9 +743,9 @@ public class RoleSpanPruningStage
         // Get margins and normalize them
         FgInferencer margins = getMargins();
         for (ArgSpanPruningVar aspv : roleVars) {
-          DenseFactor df = margins.getMarginals(aspv);
+          Tensor df = margins.getMarginals(aspv);
           //if (verbose) LOG.info("[aspv] before: " + df);
-          df.logNormalize();
+          normalize(df);
           //if (verbose) LOG.info("[aspv] after: " + df);
         }
         SpanVar[][] svars = roleVars.ckyFactor.getSpanVars();
@@ -748,9 +753,9 @@ public class RoleSpanPruningStage
           for (int j = 0; j < svars[i].length; j++) {
             SpanVar sv = svars[i][j];
             if (sv != null) {
-              DenseFactor df = margins.getMarginals(sv);
+              Tensor df = margins.getMarginals(sv);
               //if (verbose) LOG.info("[sv] before: " + df);
-              df.logNormalize();
+              normalize(df);
               //if (verbose) LOG.info("[sv] after: " + df);
             }
           }
@@ -770,15 +775,15 @@ public class RoleSpanPruningStage
         BinaryTree parse;
         if (beliefAccumulator != null) {
           // Add constituency beliefs
-          Map<Span, List<DenseFactor>> spanBeliefs = new HashMap<>();
+          Map<Span, List<Tensor>> spanBeliefs = new HashMap<>();
           for (int i = 0; i < svars.length; i++) {
             for (int j = 0; j < svars[i].length; j++) {
               SpanVar sv = svars[i][j];
               if (sv != null) {
                 Span s = Span.getSpan(sv.getStart(), sv.getEnd());
-                DenseFactor df = margins.getMarginals(sv);
+                Tensor df = margins.getMarginals(sv);
                 assert df.size() == 2;
-                List<DenseFactor> bel = new ArrayList<>();
+                List<Tensor> bel = new ArrayList<>();
                 bel.add(df);
                 spanBeliefs.put(s, bel);
               }
@@ -786,17 +791,17 @@ public class RoleSpanPruningStage
           }
           // Add role var beliefs
           for (ArgSpanPruningVar aspv : roleVars) {
-            DenseFactor df = margins.getMarginals(aspv);
+            Tensor df = margins.getMarginals(aspv);
             assert df.size() == 2;
-            DenseFactor dfFlip = new DenseFactor(df);
+            Tensor dfFlip = new Tensor(df);
             dfFlip.setValue(0, df.getValue(1));
             dfFlip.setValue(1, df.getValue(0));
             spanBeliefs.get(aspv.arg).add(dfFlip);
           }
           // Accumulate
-          Map<Span, DenseFactor> accumulated = new HashMap<>();
-          for (Entry<Span, List<DenseFactor>> x : spanBeliefs.entrySet()) {
-            DenseFactor accum = beliefAccumulator.apply(x.getValue());
+          Map<Span, Tensor> accumulated = new HashMap<>();
+          for (Entry<Span, List<Tensor>> x : spanBeliefs.entrySet()) {
+            Tensor accum = beliefAccumulator.apply(x.getValue());
             accumulated.put(x.getKey(), accum);
             if (showSpans) {
               LOG.info(String.format("[ckyDecode accum] %s %s => %s", x.getKey(),
@@ -829,7 +834,7 @@ public class RoleSpanPruningStage
             for (Span s : options) {
               if (s == Span.nullSpan) continue;
               SpanVar sv = roleVars.ckyFactor.getSpanVar(s.start, s.end);
-              DenseFactor df = margins.getMarginals(sv);
+              Tensor df = margins.getMarginals(sv);
               Double old = beliefs.put(s, df.getValue(SpanVar.TRUE));
               assert old == null;
             }
@@ -887,7 +892,7 @@ public class RoleSpanPruningStage
       for (int i = 0; i < n; i++) {
         for (int j = i + 1; j <= n; j++) {
           SpanVar sv = factors.getSpanVar(i, j);
-          DenseFactor df = margins.getMarginals(sv);
+          Tensor df = margins.getMarginals(sv);
           double d;
           if (constituents.contains(Span.getSpan(i, j))) {
             d = df.getValue(SpanVar.TRUE) - df.getValue(SpanVar.FALSE);
@@ -904,9 +909,9 @@ public class RoleSpanPruningStage
           }
         }
       }
-      double t = factors.getUnormalizedScore(conf);
+      double t = factors.getLogUnormalizedScore(conf);
       if (t != 0d) {
-        LOG.warn("not a tree: " + factors.getUnormalizedScore(conf));
+        LOG.warn("not a tree: " + factors.getLogUnormalizedScore(conf));
         showSpans("[potential]", constituents, null, sent);
         LOG.warn("not a tree? " + t);
       }
@@ -995,11 +1000,11 @@ public class RoleSpanPruningStage
           int tc = arg0.target.compareTo(arg1.target);
           if (tc != 0)
             return tc;
-          DenseFactor df0 = inf.getMarginals(arg0);
-          df0.logNormalize();
+          Tensor df0 = inf.getMarginals(arg0);
+          normalize(df0);
           double p0 = df0.getValue(BinaryVarUtil.boolToConfig(true));
-          DenseFactor df1 = inf.getMarginals(arg1);
-          df1.logNormalize();
+          Tensor df1 = inf.getMarginals(arg1);
+          normalize(df1);
           double p1 = df1.getValue(BinaryVarUtil.boolToConfig(true));
           if (p0 > p1)
             return 1;
@@ -1096,7 +1101,7 @@ public class RoleSpanPruningStage
       Map<FrameInstance, List<Span>> kept = new HashMap<>();
       int pruned = 0, considered = 0;
       for (ArgSpanPruningVar rpv : roleVars) {
-        DenseFactor df = inf.getMarginals(rpv);
+        Tensor df = inf.getMarginals(rpv);
         int y = BinaryVarUtil.boolToConfig(false);
         if (decoder != null) {
           y = decoder.decode(

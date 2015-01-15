@@ -1,9 +1,11 @@
 package edu.jhu.hlt.fnparse.inference;
 
 import java.io.Serializable;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-import edu.jhu.gm.model.DenseFactor;
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.model.Var;
 import edu.jhu.prim.util.math.FastMath;
 
@@ -52,9 +54,9 @@ public class ApproxF1MbrDecoder implements Serializable {
 
   public boolean isLogSpace() { return logSpace; }
 
-  public Map<Var, Integer> decode(Map<Var, DenseFactor> margins, int nullIndex) {
+  public Map<Var, Integer> decode(Map<Var, Tensor> margins, int nullIndex) {
     Map<Var, Integer> m = new HashMap<Var, Integer>();
-    for (Map.Entry<Var, DenseFactor> x : margins.entrySet()) {
+    for (Map.Entry<Var, Tensor> x : margins.entrySet()) {
       int i = decode(x.getValue().getValues(), nullIndex);
       m.put(x.getKey(), i);
     }

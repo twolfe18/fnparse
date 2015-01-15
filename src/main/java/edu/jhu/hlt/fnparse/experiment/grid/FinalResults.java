@@ -14,7 +14,7 @@ import java.util.Random;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.ConstituencyTreeFactor;
+import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
