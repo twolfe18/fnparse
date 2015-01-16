@@ -593,8 +593,8 @@ public class RoleSpanPruningStage
         for (int j = i + 1; j <= n; j++) {
           SpanVar s = ckyFactor.getSpanVar(i, j);
           sv.add(s);
-          Tensor df = inf.getMarginals(s);
-          normalize(df);
+          Tensor df = logDomain() ? inf.getLogMarginals(s) : inf.getMarginals(s);
+          df.normalize();
           beliefs.add(df);
         }
       }
@@ -675,11 +675,6 @@ public class RoleSpanPruningStage
     }
   }
 
-  public static void normalize(Tensor t) {
-    // Used to be Tensor.logNormalize
-    throw new RuntimeException("figure out how to normalize");
-  }
-
   public static final Function<List<Tensor>, Tensor> BINARY_BELIEF_MAX = dfs -> {
     Tensor accum = new Tensor(dfs.get(0));
     double p = accum.getValue(BinaryVarUtil.boolToConfig(true))
@@ -694,7 +689,7 @@ public class RoleSpanPruningStage
         p = pa;
       }
     }
-    normalize(accum);
+    accum.normalize();
     return accum;
   };
   public static final Function<List<Tensor>, Tensor> BINARY_BELIEF_AVG = dfs -> {
@@ -703,7 +698,7 @@ public class RoleSpanPruningStage
       accum.setValue(0, accum.getValue(0) + dfs.get(i).getValue(0));
       accum.setValue(1, accum.getValue(1) + dfs.get(i).getValue(1));
     }
-    normalize(accum);
+    accum.normalize();
     return accum;
   };
 
@@ -743,9 +738,11 @@ public class RoleSpanPruningStage
         // Get margins and normalize them
         FgInferencer margins = getMargins();
         for (ArgSpanPruningVar aspv : roleVars) {
-          Tensor df = margins.getMarginals(aspv);
+          Tensor df = logDomain()
+              ? margins.getLogMarginals(aspv)
+              : margins.getMarginals(aspv);
           //if (verbose) LOG.info("[aspv] before: " + df);
-          normalize(df);
+          df.normalize();
           //if (verbose) LOG.info("[aspv] after: " + df);
         }
         SpanVar[][] svars = roleVars.ckyFactor.getSpanVars();
@@ -753,9 +750,11 @@ public class RoleSpanPruningStage
           for (int j = 0; j < svars[i].length; j++) {
             SpanVar sv = svars[i][j];
             if (sv != null) {
-              Tensor df = margins.getMarginals(sv);
+              Tensor df = logDomain()
+                  ? margins.getLogMarginals(sv)
+                  : margins.getMarginals(sv);
               //if (verbose) LOG.info("[sv] before: " + df);
-              normalize(df);
+              df.normalize();
               //if (verbose) LOG.info("[sv] after: " + df);
             }
           }
@@ -767,7 +766,9 @@ public class RoleSpanPruningStage
             if (phi instanceof GlobalFactor)
               LOG.info(phi);
             else
-              LOG.info(margins.getMarginals(phi));
+              LOG.info(logDomain()
+                  ? margins.getLogMarginals(phi)
+                  : margins.getMarginals(phi));
           }
           LOG.info("");
         }
@@ -781,7 +782,9 @@ public class RoleSpanPruningStage
               SpanVar sv = svars[i][j];
               if (sv != null) {
                 Span s = Span.getSpan(sv.getStart(), sv.getEnd());
-                Tensor df = margins.getMarginals(sv);
+                Tensor df = logDomain()
+                    ? margins.getLogMarginals(sv)
+                    : margins.getMarginals(sv);
                 assert df.size() == 2;
                 List<Tensor> bel = new ArrayList<>();
                 bel.add(df);
@@ -791,7 +794,9 @@ public class RoleSpanPruningStage
           }
           // Add role var beliefs
           for (ArgSpanPruningVar aspv : roleVars) {
-            Tensor df = margins.getMarginals(aspv);
+            Tensor df = logDomain()
+                ? margins.getLogMarginals(aspv)
+                : margins.getMarginals(aspv);
             assert df.size() == 2;
             Tensor dfFlip = new Tensor(df);
             dfFlip.setValue(0, df.getValue(1));
@@ -834,7 +839,9 @@ public class RoleSpanPruningStage
             for (Span s : options) {
               if (s == Span.nullSpan) continue;
               SpanVar sv = roleVars.ckyFactor.getSpanVar(s.start, s.end);
-              Tensor df = margins.getMarginals(sv);
+              Tensor df = logDomain()
+                  ? margins.getLogMarginals(sv)
+                  : margins.getMarginals(sv);
               Double old = beliefs.put(s, df.getValue(SpanVar.TRUE));
               assert old == null;
             }
@@ -892,7 +899,9 @@ public class RoleSpanPruningStage
       for (int i = 0; i < n; i++) {
         for (int j = i + 1; j <= n; j++) {
           SpanVar sv = factors.getSpanVar(i, j);
-          Tensor df = margins.getMarginals(sv);
+          Tensor df = logDomain()
+              ? margins.getLogMarginals(sv)
+              : margins.getMarginals(sv);
           double d;
           if (constituents.contains(Span.getSpan(i, j))) {
             d = df.getValue(SpanVar.TRUE) - df.getValue(SpanVar.FALSE);
@@ -1001,10 +1010,10 @@ public class RoleSpanPruningStage
           if (tc != 0)
             return tc;
           Tensor df0 = inf.getMarginals(arg0);
-          normalize(df0);
+          df0.normalize();
           double p0 = df0.getValue(BinaryVarUtil.boolToConfig(true));
           Tensor df1 = inf.getMarginals(arg1);
-          normalize(df1);
+          df1.normalize();
           double p1 = df1.getValue(BinaryVarUtil.boolToConfig(true));
           if (p0 > p1)
             return 1;
@@ -1029,7 +1038,6 @@ public class RoleSpanPruningStage
           curKeep = new ArrayList<>();
           curKeep.add(Span.nullSpan);
         }
-        //LOG.debug(rpv + " has p(prune)=" + inf.getMarginals(rpv).getValue(BinaryVarUtil.boolToConfig(true)));
         if (curKeep.size() < spansToTakeFor(cur.getFrame())) {
           if (showSpans) {
             LOG.info("keeping: " + rpv.arg + "\t"
@@ -1101,7 +1109,8 @@ public class RoleSpanPruningStage
       Map<FrameInstance, List<Span>> kept = new HashMap<>();
       int pruned = 0, considered = 0;
       for (ArgSpanPruningVar rpv : roleVars) {
-        Tensor df = inf.getMarginals(rpv);
+        Tensor df = logDomain()
+            ? inf.getLogMarginals(rpv) : inf.getMarginals(rpv);
         int y = BinaryVarUtil.boolToConfig(false);
         if (decoder != null) {
           y = decoder.decode(

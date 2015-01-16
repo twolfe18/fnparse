@@ -273,7 +273,7 @@ extends AbstractStage<FNParse, FNParse> {
   }
 
   public static class ExplicitExpFamFactorWithConstraint
-  extends ExplicitExpFamFactor {
+      extends ExplicitExpFamFactor {
     private static final long serialVersionUID = 1L;
     private int badConfig = -1;
     public ExplicitExpFamFactorWithConstraint(VarSet vars, int badConfig) {
@@ -497,7 +497,7 @@ extends AbstractStage<FNParse, FNParse> {
 
       // Update arguments with full spans
       for(ExpansionVar ev : this.vars) {
-        Span s = ev.decodeSpan(margins);
+        Span s = ev.decodeSpan(margins, logDomain());
         fis.get(ev.fiIdx).setArgument(ev.getRole(), s);
       }
 

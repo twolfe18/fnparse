@@ -44,6 +44,7 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasFgModel;
+import edu.jhu.util.semiring.Algebras;
 
 /**
  * This stage takes a list of frame instances, each of which has a pruned set of
@@ -410,20 +411,19 @@ public class RoleSpanLabelingStage
   public static class ArgSpanLabelVar
       extends RoleSpanPruningStage.ArgSpanPruningVar {
     private static final long serialVersionUID = 1L;
+
     public final int role;
+
     public ArgSpanLabelVar(Span arg, Frame frame, Span target, int role) {
       super(arg, frame, target);
       this.role = role;
     }
   }
 
-  public static void normalize(Tensor t) {
-    throw new RuntimeException("figure out how to normalize");
-  }
-
   class Decoder extends Decodable<FNParse> {
     private Map<FrameRoleInstance, List<ArgSpanLabelVar>> vars;
     private FNParseSpanPruning pruneMask;
+
     public Decoder(
         FactorGraph fg,
         FgInferencerFactory infFact,
@@ -465,8 +465,9 @@ public class RoleSpanLabelingStage
           best.put(key, value);
         }
         for (ArgSpanLabelVar aslv : argVars) {
-          Tensor df = inf.getMarginals(aslv);
-          normalize(df);
+          Tensor df = logDomain() ? inf.getLogMarginals(aslv) : inf.getMarginals(aslv);
+          assert correctSemiring(df);
+          df.normalize();
           double w = df.getValue(BinaryVarUtil.boolToConfig(true));
           value.addArgumentTheory(aslv.role, aslv.arg, w);
         }

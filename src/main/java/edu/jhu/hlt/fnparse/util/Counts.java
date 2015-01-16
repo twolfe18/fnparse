@@ -52,6 +52,8 @@ public class Counts<T> {
     return counts.toString();
   }
 
+  /** Will hit a runtime error if keys is not comparable */
+  @SuppressWarnings({ "unchecked", "rawtypes" })
   public List<T> getKeysSorted() {
     List<T> items = new ArrayList<>();
     items.addAll(counts.keySet());

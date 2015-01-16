@@ -102,16 +102,14 @@ public class ExpansionVar {
     return e.upon(j);
   }
 
-  public static void normalize(Tensor t) {
-    throw new RuntimeException("figure out how to normalize");
-  }
-
-  public Span decodeSpan(FgInferencer hasMargins) {
+  public Span decodeSpan(FgInferencer hasMargins, boolean logDomain) {
     Span bestSpan = null;
     double bestScore = 0d;
     for (int i = 0; i < vars.length; i++) {
-      Tensor df = hasMargins.getMarginals(vars[i]);
-      normalize(df);
+      Tensor df = logDomain
+          ? hasMargins.getLogMarginals(vars[i])
+          : hasMargins.getMarginals(vars[i]);
+      df.normalize();
       double p = df.getValue(BinaryVarUtil.boolToConfig(true));
       Span s = getSpan(i);
       if (i == 0 || p > bestScore) {

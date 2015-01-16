@@ -14,6 +14,7 @@ import java.util.Set;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.autodiff.Tensor;
 import edu.jhu.gm.inf.BeliefPropagation;
 import edu.jhu.gm.inf.BeliefPropagation.BeliefPropagationPrm;
 import edu.jhu.gm.inf.BeliefPropagation.BpScheduleType;
@@ -65,7 +66,7 @@ import edu.jhu.util.semiring.Algebras;
  * @param <O> output of this stage
  */
 public abstract class AbstractStage<I, O extends FNTagging>
-implements Stage<I, O> {
+    implements Stage<I, O> {
   protected transient Logger log = Logger.getLogger(this.getClass());
 
   protected FgModel weights;
@@ -332,6 +333,13 @@ implements Stage<I, O> {
       Multinomials.normalizeLogProps(proportions);
     else
       Multinomials.normalizeProps(proportions);
+  }
+
+  public boolean correctSemiring(Tensor t) {
+    if (logDomain())
+      return t.getAlgebra() == Algebras.LOG_SEMIRING;
+    else
+      return t.getAlgebra() == Algebras.REAL_ALGEBRA;
   }
 
   public String getName() {

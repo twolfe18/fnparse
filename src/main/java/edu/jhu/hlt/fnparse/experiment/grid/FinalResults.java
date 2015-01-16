@@ -15,6 +15,7 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
+import edu.jhu.hlt.concrete.stanford.InMemoryAnnoPipeline;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -82,6 +83,7 @@ public class FinalResults implements Runnable {
     testData = new ArrayList<>();
     while (iter.hasNext())
       testData.add(iter.next());
+    LOG.info("[init] testData.size=" + testData.size());
 
     // NOTE: fulltext (train) data should come first here
     // Later I'll take from this first, before LEX instances, as I don't think
@@ -271,12 +273,18 @@ public class FinalResults implements Runnable {
       return;
     }
     LatentConstituencyPipelinedParser p = (LatentConstituencyPipelinedParser) parser;
+    if (!(p.getPruningStage() instanceof RoleSpanPruningStage)) {
+      LOG.info("[compareLatentToSupervisedSyntax] unsupported pruning stage type: "
+          + p.getPruningStage().getName());
+      return;
+    }
+    RoleSpanPruningStage pruning = (RoleSpanPruningStage) p.getPruningStage();
+
     final int k = 500;  // upper bound on how many parses to run this on
     List<FNParse> runOn = testData;
     if (runOn.size() > k)
       runOn = DataUtil.reservoirSample(runOn, k, rand);
 
-    RoleSpanPruningStage pruning = (RoleSpanPruningStage) p.getPruningStage();
     boolean useMaxRecallOrig = pruning.useCkyDecoder();
     for (boolean useMaxRecall : Arrays.asList(true, false)) {
       pruning.useCkyDecoder(useMaxRecall);
@@ -372,6 +380,7 @@ public class FinalResults implements Runnable {
       return;
     }
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
+    Logger.getLogger(InMemoryAnnoPipeline.class).setLevel(Level.INFO);
     File workingDir = new File(args[0]);
     String parserMode = args[1];
     Random r = new Random(Integer.valueOf(args[2]));

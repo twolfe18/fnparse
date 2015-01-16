@@ -408,10 +408,11 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
         final int T = fvars.numFrames();
         double[] beliefs = new double[T];
         for (int t = 0; t < T; t++) {
-          Tensor df =
-              hasMargins.getMarginals(fvars.getVariable(t));
+          Tensor df = logDomain()
+              ? hasMargins.getLogMarginals(fvars.getVariable(t))
+              : hasMargins.getMarginals(fvars.getVariable(t));
           // TODO Exactly1 factor removes the need for this
-          normalize(df);
+          df.normalize();
           beliefs[t] = df.getValue(BinaryVarUtil.boolToConfig(true));
         }
         normalize(beliefs);
@@ -441,9 +442,5 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
     public boolean logDomain() {
       return FrameIdStage.this.logDomain();
     }
-  }
-
-  public static void normalize(Tensor t) {
-    throw new RuntimeException("figure out how to do this");
   }
 }

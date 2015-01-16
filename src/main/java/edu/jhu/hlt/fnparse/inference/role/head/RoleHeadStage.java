@@ -327,31 +327,35 @@ public class RoleHeadStage
 
       // Get the most likely latent parse
       final int n = sent.size();
-//      List<Tensor> bel = new ArrayList<>();
-//      List<Var> vars = new ArrayList<>();
       double[] rootBel = new double[n];
       double[][] childBel = new double[n][n];
       for (int i = 0; i < n; i++) {
         Var v = deps.getRootVars()[i];
         assert v != null;
-//        vars.add(v);
-//        bel.add(inf.getMarginals(v));
-        Tensor t = inf.getMarginals(v);
-        rootBel[i] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
+        if (logDomain()) {
+          Tensor t = inf.getLogMarginals(v);
+          rootBel[i] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
+        } else {
+          Tensor t = inf.getMarginals(v);
+          rootBel[i] = t.get(LinkVar.TRUE) / t.get(LinkVar.FALSE);
+        }
       }
       for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
           Var v = deps.getLinkVar(i, j);
           if (v == null)
             continue;
-//          vars.add(v);
-//          bel.add(inf.getMarginals(v));
-          Tensor t = inf.getMarginals(v);
-          childBel[i][j] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
+          if (logDomain()) {
+            Tensor t = inf.getLogMarginals(v);
+            childBel[i][j] = t.get(LinkVar.TRUE) - t.get(LinkVar.FALSE);
+          } else {
+            Tensor t = inf.getMarginals(v);
+            childBel[i][j] = t.get(LinkVar.TRUE) / t.get(LinkVar.FALSE);
+          }
         }
       }
       EdgeScores edgeScores = new EdgeScores(rootBel, childBel);
-      int[] heads = DepParseDecoder.getParents(edgeScores);//bel, vars, n);
+      int[] heads = DepParseDecoder.getParents(edgeScores);
 
       // Measure agreement/recall
       DependencyParse basic = sent.getBasicDeps(false);
@@ -568,7 +572,9 @@ public class RoleHeadStage
       Iterator<RVar> iter = rv.getVars();
       while (iter.hasNext()) {
         RVar rvar = iter.next();
-        Tensor df = inf.getMarginals(rvar.roleVar);
+        Tensor df = logDomain()
+            ? inf.getLogMarginals(rvar.roleVar)
+            : inf.getMarginals(rvar.roleVar);
         beliefs[rvar.k][rvar.j] = df.getValue(
             BinaryVarUtil.boolToConfig(true));
         considered[rvar.k] = true; 

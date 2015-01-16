@@ -299,7 +299,7 @@ public class TemplatedFeatures implements Serializable {
       try {
         templates = parseTemplates(templateString);
       } catch (Exception e) {
-        System.err.println("problem parsing: " + templateString);
+        System.err.println("problem parsing template string: " + templateString);
         throw new RuntimeException(e);
       }
     }
