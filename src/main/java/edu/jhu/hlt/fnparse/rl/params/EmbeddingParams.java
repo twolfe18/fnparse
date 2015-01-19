@@ -166,4 +166,9 @@ public class EmbeddingParams implements Params.Stateless {
       update(qa, s);  // TODO is this right?
     }
   }
+
+  @Override
+  public void doneTraining() {
+    LOG.info("[doneTraining] currently doesn't support weight averaging");
+  }
 }

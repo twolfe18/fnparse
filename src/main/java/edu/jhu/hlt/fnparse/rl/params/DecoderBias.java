@@ -36,4 +36,11 @@ public class DecoderBias implements Params.Stateless {
   public <T extends HasUpdate> void update(Collection<T> batch) {
     // No-op. You don't learn these Params like other params.
   }
+
+  @Override
+  public void doneTraining() {
+    LOG.warn("this should probably never be called because this should be "
+        + "added after hamminTrain");
+    assert false;
+  }
 }

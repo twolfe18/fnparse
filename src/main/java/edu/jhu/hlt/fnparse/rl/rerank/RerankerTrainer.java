@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -8,22 +9,22 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.function.Function;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
+import edu.jhu.hlt.fnparse.rl.params.HasUpdate;
 import edu.jhu.hlt.fnparse.rl.params.OldFeatureParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker.UpdateBatch;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 
@@ -154,7 +155,7 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(threads);
     final int n = ip.size();
     final boolean showTime = true;
-    final int totalUpdates = (n / batchSize) * epochs;
+    final int totalUpdates = (n / batchSize + 1) * epochs;
     int curRun = 0;
     for (int epoch = 0; epoch < epochs; epoch++) {
       int updatedThisEpoch = 0;
@@ -184,11 +185,15 @@ public class RerankerTrainer {
         }
       }
 
-        System.out.println();
-        LOG.info("[hammingTrain] updated " + updatedThisEpoch);
-      }
-      if (es != null)
-        es.shutdown();
+      System.out.println();
+      LOG.info("[hammingTrain] updated " + updatedThisEpoch);
+    }
+    if (es != null)
+      es.shutdown();
+
+    LOG.info("[hammingTrain] telling Params that training is over");
+    r.getStatefulParams().doneTraining();
+    r.getStatelessParams().doneTraining();
 
     LOG.info("[hammingTrain] times:\n" + timer);
     timer.stop("hammingTrain");
@@ -228,11 +233,12 @@ public class RerankerTrainer {
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batchSize;
-    int updated = 0;
-    for (Update u : finishedUpdates) {
-      if (u.apply(batchSize))
-        updated++;
-    }
+
+    List<HasUpdate> batch = Arrays.asList(new UpdateBatch(finishedUpdates));
+    r.getStatefulParams().update(batch);
+    r.getStatelessParams().update(batch);
+    int updated = 1; // TODO pull through update
+
     t.stop();
     return updated;
   }
@@ -250,6 +256,7 @@ public class RerankerTrainer {
     boolean useFeatureHashing = true;
     RerankerTrainer trainer = new RerankerTrainer(rand);
     trainer.beamSize = 1;
+    trainer.epochs = 1;
     if (useFeatureHashing)
       trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
     else
@@ -259,6 +266,7 @@ public class RerankerTrainer {
     LOG.info("[main] done training, evaluating");
     eval(model, test, "[main]");
   }
+
   private static final String featureTemplates = "1"
       + " + frameRole * 1"
       + " + frameRoleArg * 1"

@@ -32,4 +32,9 @@ public class DenseFastFeatures implements Params.Stateful {
     for (T up : batch)
       up.getUpdate(theta, s);
   }
+
+  @Override
+  public void doneTraining() {
+    LOG.info("[doneTraining] currently doesn't support weight averaging");
+  }
 }

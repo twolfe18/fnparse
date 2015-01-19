@@ -76,4 +76,9 @@ public class CheatingParams implements Params.Stateless {
     if (SHOW_ON_UPDATE)
       LOG.info("[update] afterwards: " + showWeights());
   }
+
+  @Override
+  public void doneTraining() {
+    LOG.info("[doneTraining] currently doesn't support weight averaging");
+  }
 }

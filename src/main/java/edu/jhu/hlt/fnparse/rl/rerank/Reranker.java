@@ -2,6 +2,8 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -180,7 +182,11 @@ public class Reranker {
         // or initial state.
         if (LOG_ORACLE)
           LOG.debug(desc + " done after " + iter + " iterations");
-        LOG.info(desc + " solution: " + frontier.showActions());
+        String actions = frontier.showActions();
+        int k = 250;  // max characters to display of solution action sequence
+        if (actions.length() > k)
+          actions = actions.substring(0, k) + "...";
+        LOG.info(desc + " solution: " + actions);
         return frontier;
       }
     }
@@ -344,6 +350,21 @@ public class Reranker {
     }
   }
 
+  public State randomDecodingState(FNTagging frames, Random rand) {
+    Params.Stateful theta = getCachingParams();
+    TransitionFunction transF =
+        new ActionDrivenTransitionFunction(theta, actionTypes);
+    State init = State.initialState(frames);
+    StateSequence frontier = new StateSequence(null, null, init, null);
+    int TK = init.numFrameRoleInstances();
+    if (TK == 0)
+      throw new IllegalArgumentException("only works when there are frameInstances");
+    int tkStop = rand.nextInt(TK);
+    for (int i = 0; i < tkStop; i++)
+      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+    return frontier.getCur();
+  }
+
   /**
    * subgradient step on loss of:
    * max(0, s(y,z) - [s(y',z') + loss(y,y')])
@@ -409,68 +430,63 @@ public class Reranker {
       }
     }
 
-    public boolean apply(int batchSize) {
-      timer.start("update.apply");
-
-      if (hinge >= 0) {
-        timer.stop("update.apply");
-        return false;
-      } else if (LOG_UPDATE) {
-        LOG.info("[apply] hinge=" + hinge + " batchSize=" + batchSize);
-      }
-
-      // Have to use this so that the Adjoint's class matches what it was when
-      // they were computed.
-      Params.Stateful justForUpdate = getCachingParams();
-      double up;
-
-      up = -hinge / (batchSize * oracle.length());
-      if (LOG_UPDATE)
-        LOG.info("[apply] pushing up the oracle answer, update=" + up + " oracle.length=" + oracle.length());
-      oracle.updateAllAdjoints(justForUpdate, up);
-
-      up = hinge / (batchSize * mostViolated.length());
-      if (LOG_UPDATE)
-        LOG.info("[apply] pushing down the most violated answer, update=" + up + " mostViolated.length=" + mostViolated.length());
-      mostViolated.updateAllAdjoints(justForUpdate, up);
-
-      timer.stop("update.apply");
-      return true;
-    }
-
     public boolean isViolated() {
       return hinge < 0d;
     }
 
     @Override
     public void getUpdate(double[] addTo, double scale) {
-      // TODO Auto-generated method stub
-      
+      timer.start("Update.getUpdate");
+
+      if (!isViolated()) {
+        timer.stop("Update.getUpdate");
+        return;
+      }
+
+      int skipped;
+
+      skipped = 0;
+      final double upOracle = scale * -hinge / oracle.length();
+      for (StateSequence cur = oracle; cur != null; cur = cur.neighbor()) {
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          a.getUpdate(addTo, upOracle);
+        else
+          skipped++;
+      }
+      assert skipped <= 1;
+
+      skipped = 0;
+      final double upMV = scale * hinge / mostViolated.length();
+      for (StateSequence cur = mostViolated; cur != null; cur = cur.neighbor()) {
+        Adjoints a = cur.getAdjoints();
+        if (a != null)
+          a.getUpdate(addTo, upMV);
+        else
+          skipped++;
+      }
+      assert skipped <= 1;
+
+      timer.stop("Update.getUpdate");
     }
   }
 
+  /**
+   * Averages the updates in the given batch.
+   */
   public static class UpdateBatch implements HasUpdate {
-    private List<Update> elements;
+    private Collection<Update> elements;
+    public UpdateBatch(Update... elements) {
+      this.elements = Arrays.asList(elements);
+    }
+    public UpdateBatch(Collection<Update> elements) {
+      this.elements = elements;
+    }
     @Override
     public void getUpdate(double[] addTo, double scale) {
       double s = scale / elements.size();
       for (Update u : elements)
         u.getUpdate(addTo, s);
     }
-  }
-
-  public State randomDecodingState(FNTagging frames, Random rand) {
-    Params.Stateful theta = getCachingParams();
-    TransitionFunction transF =
-        new ActionDrivenTransitionFunction(theta, actionTypes);
-    State init = State.initialState(frames);
-    StateSequence frontier = new StateSequence(null, null, init, null);
-    int TK = init.numFrameRoleInstances();
-    if (TK == 0)
-      throw new IllegalArgumentException("only works when there are frameInstances");
-    int tkStop = rand.nextInt(TK);
-    for (int i = 0; i < tkStop; i++)
-      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
-    return frontier.getCur();
   }
 }

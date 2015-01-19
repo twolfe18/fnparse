@@ -18,7 +18,13 @@ public interface Params {
 
   public <T extends HasUpdate> void update(Collection<T> batch);
 
-  // score is the other method
+  /**
+   * This is called after training is complete. This is a useful hook for
+   * switching from regular perceptron weights to averaged ones.
+   */
+  public void doneTraining();
+
+  // score is in an extending class
   // because its signature differs between Stateful and Stateless,
   // its not listed here.
 
@@ -36,13 +42,18 @@ public interface Params {
           @Override public Action getAction() {
             return a;
           }
-          @Override public void getUpdate(double[] addTo, double scale) {
+          @Override
+          public void getUpdate(double[] addTo, double scale) {
             // no-op
           }
         };
       }
       @Override
       public <T extends HasUpdate> void update(Collection<T> batch) {
+        // no-op
+      }
+      @Override
+      public void doneTraining() {
         // no-op
       }
     };
@@ -55,6 +66,10 @@ public interface Params {
         @Override
         public <T extends HasUpdate> void update(Collection<T> batch) {
           theta.update(batch);
+        }
+        @Override
+        public void doneTraining() {
+          theta.doneTraining();
         }
       };
     }
@@ -69,17 +84,26 @@ public interface Params {
     public static final Stateless NONE = new Stateless() {
       @Override public Adjoints score(FNTagging frames, final Action a) {
         return new Adjoints() {
-          @Override public double getScore() { return 0d; }
-          @Override public Action getAction() {
+          @Override
+          public double getScore() {
+            return 0d;
+          }
+          @Override
+          public Action getAction() {
             return a;
           }
-          @Override public void getUpdate(double[] addTo, double scale) {
+          @Override
+          public void getUpdate(double[] addTo, double scale) {
             // no-op
           }
         };
       }
       @Override
       public <T extends HasUpdate> void update(Collection<T> batch) {
+        // no-op
+      }
+      @Override
+      public void doneTraining() {
         // no-op
       }
     };
@@ -177,6 +201,10 @@ public interface Params {
       public <T extends HasUpdate> void update(Collection<T> batch) {
         wrapping.update(batch);
       }
+      @Override
+      public void doneTraining() {
+        wrapping.doneTraining();
+      }
     }
   }
 
@@ -223,6 +251,11 @@ public interface Params {
       stateful.update(batch);
       stateless.update(batch);
     }
+    @Override
+    public void doneTraining() {
+      stateful.doneTraining();
+      stateless.doneTraining();
+    }
   }
 
   /** Params is closed under addition */
@@ -240,6 +273,11 @@ public interface Params {
     public <T extends HasUpdate> void update(Collection<T> batch) {
       left.update(batch);
       right.update(batch);
+    }
+    @Override
+    public void doneTraining() {
+      left.doneTraining();
+      right.doneTraining();
     }
   }
 

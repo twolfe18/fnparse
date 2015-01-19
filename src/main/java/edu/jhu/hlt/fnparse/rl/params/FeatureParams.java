@@ -103,4 +103,8 @@ public class FeatureParams implements Params.Stateful {
 //    ((Adjoints.SparseFeatures) adj).update(reward, learningRate);;
 //  }
 
+  @Override
+  public void doneTraining() {
+    LOG.info("[doneTraining] currently doesn't support weight averaging");
+  }
 }
