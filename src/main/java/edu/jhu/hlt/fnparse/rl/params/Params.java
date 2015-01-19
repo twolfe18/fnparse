@@ -60,7 +60,8 @@ public interface Params {
 
     public static Stateful lift(final Stateless theta) {
       return new Stateful() {
-        @Override public Adjoints score(State s, Action a) {
+        @Override
+        public Adjoints score(State s, Action a) {
           return theta.score(s.getFrames(), a);
         }
         @Override

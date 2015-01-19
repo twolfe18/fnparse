@@ -52,21 +52,6 @@ public class StateSequence {
     return len;
   }
 
-//  /** You can only call this from a node which has a pointer out of it */
-//  public void updateAllAdjoints(Params params, double reward) {
-//    int nulls = 0;
-//    StateSequence l = this;
-//    while (l != null) {
-//      Adjoints a = l.action;
-//      if (a == null)
-//        nulls++;
-//      else
-//        params.update(a, reward);
-//      l = l.neighbor();
-//    }
-//    assert nulls <= 1;
-//  }
-
   public State getCur() {
     if (cur == null) {
       // Lazily compute States
@@ -104,8 +89,7 @@ public class StateSequence {
 
   private double score = Double.NaN;  // memo
   /**
-   * Returns the sum of the Actions' scores in this sequence.
-   * @return
+   * @return the sum of the Actions' scores in this sequence.
    */
   public double getScore() {
     if (Double.isNaN(score)) {
@@ -116,23 +100,6 @@ public class StateSequence {
     }
     return score;
   }
-
-  /*
-  private double loss = Double.NaN;   // memo
-   * Returns the accumulated loss of every action in this sequence.
-   * TODO you can add this back when you test it.
-  public double getLoss(FNParse y) {
-    if (Double.isNaN(loss)) {
-      if (action == null)
-        return 0d;
-      Action a = action.getAction();
-      double dl = a.getActionType().deltaLoss(getCur(), a, y);
-      StateSequence n = neighbor();
-      loss = dl +  (n == null ? 0d : n.getLoss(y));
-    }
-    return loss;
-  }
-   */
 
   public Adjoints getAdjoints() {
     return action;

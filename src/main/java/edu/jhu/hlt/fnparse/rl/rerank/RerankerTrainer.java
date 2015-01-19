@@ -78,8 +78,11 @@ public class RerankerTrainer {
     return results.get(objective.getName());
   }
 
-  /** Inserts an extra bias Param.Stateless into the given model and tunes it */
-  private void tuneModelForF1(Reranker model, ItemProvider dev) {
+  /**
+   * Inserts an extra bias Param.Stateless into the given model and tunes it
+   * @return the F1 on the dev set of the selected recall bias.
+   */
+  private double tuneModelForF1(Reranker model, ItemProvider dev) {
     // Insert the bias into the model
     Params.Stateless theta = model.getStatelessParams();
     DecoderBias bias = new DecoderBias();
@@ -110,6 +113,7 @@ public class RerankerTrainer {
     LOG.info("[tuneModelForF1] chose recallBias=" + bestRecallBias
         + " with " + objective.getName() + "=" + bestPerf);
     bias.setRecallBias(bestRecallBias);
+    return bestPerf;
   }
 
   /** Trains and tunes a full model */

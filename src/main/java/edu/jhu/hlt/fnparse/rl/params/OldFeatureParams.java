@@ -103,6 +103,10 @@ public class OldFeatureParams implements Params.Stateless {
   }
 
   public void showFeatures(String msg) {
+    if (featureIndices == null) {
+      LOG.info("[showFeatures] can't show features because we're using feature hashing");
+      return;
+    }
     int k = 12; // how many of the most extreme features to show
     List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
     ModelViewer.showBiggestWeights(w, k, msg, LOG);

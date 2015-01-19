@@ -315,16 +315,20 @@ public class Reranker {
       int added = 0;
       for (StateSequence ss : transF.nextStates(frontier)) {
         added++;
+
         // Model score
         double score = ss.getScore();
+
+        // Add in a reward for increasing the loss
         if (y != null) {
-          // Add in a reward for increasing the loss
           Action a = ss.getAction();
           ActionType at = a.getActionType();
           //State s = ss.getCur();        // State after applying a (slow)
-          State s = frontier.getCur();  // State before applying a (fast)
+          State s = frontier.getCur();    // State before applying a (fast)
           score += at.deltaLoss(s, a, y);
         }
+
+        // Add to the beam
         boolean onBeam = beam.push(ss, score);
         if (verbose && onBeam && LOG_MOST_VIOLATED)
           logAction(desc, iter, score, ss, y, y != null);
