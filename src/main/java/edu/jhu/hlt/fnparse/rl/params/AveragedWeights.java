@@ -34,6 +34,8 @@ public class AveragedWeights {
     theta = new double[dimension];
     if (average)
       thetaSum = new double[dimension];
+    else
+      thetaSum = null;
   }
 
   public AveragedWeights(AveragedWeights weights, boolean average) {

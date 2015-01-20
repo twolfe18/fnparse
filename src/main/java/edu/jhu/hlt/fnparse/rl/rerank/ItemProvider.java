@@ -20,17 +20,59 @@ import java.util.zip.GZIPOutputStream;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
 import edu.jhu.hlt.fnparse.experiment.grid.FinalResults;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.HasId;
 
 public interface ItemProvider {
   public int size();
   public FNParse label(int i);
   public List<Item> items(int i);
+
+  public static List<Item> allItems(FNParse y) {
+    List<Item> l = new ArrayList<>();
+    State s = State.initialState(y);
+    int T = y.numFrameInstances();
+    for (int t = 0; t < T; t++) {
+      int K = y.getFrameInstance(t).getFrame().numRoles();
+      for (int k = 0; k < K; k++)
+        for (Span arg : s.naiveAllowableSpans(t, k))
+          l.add(new Item(t, k, arg, 0d));
+    }
+    return l;
+  }
+
+  public static class ParseWrapper implements ItemProvider {
+    private FNParse[] parses;
+    private List<Item>[] items;
+    @SuppressWarnings("unchecked")
+    public ParseWrapper(List<FNParse> parses) {
+      int n = parses.size();
+      this.parses = new FNParse[n];
+      this.items = new List[n];
+      for (int i = 0; i < n; i++) {
+        this.parses[i] = parses.get(i);
+        this.items[i] = allItems(parses.get(i));
+      }
+    }
+    @Override
+    public int size() {
+      return parses.length;
+    }
+    @Override
+    public FNParse label(int i) {
+      return parses[i];
+    }
+    @Override
+    public List<Item> items(int i) {
+      return items[i];
+    }
+  }
 
   /** View of a subset of the indices of a given ItemProvider */
   public static class Slice implements ItemProvider {
@@ -39,6 +81,10 @@ public interface ItemProvider {
     public Slice(ItemProvider wrap, int[] indices) {
       this.wrapped = wrap;
       this.redirect = indices;
+    }
+    /** Initializes a random slice of size numIndices */
+    public Slice(ItemProvider wrap, int numIndices, Random rand) {
+      this(wrap, randomSubset(wrap.size(), numIndices, rand));
     }
     @Override
     public int size() {
@@ -51,6 +97,20 @@ public interface ItemProvider {
     @Override
     public List<Item> items(int i) {
       return wrapped.items(redirect[i]);
+    }
+
+    /**
+     * @return a length r array of indices randomly sampled from [0..n)
+     */
+    public static int[] randomSubset(int n, int r, Random rand) {
+      if (r > n) throw new IllegalArgumentException();
+      List<Integer> idx = new ArrayList<>();
+      for (int i = 0; i < n; i++) idx.add(i);
+      Collections.shuffle(idx, rand);
+      int[] indices = new int[r];
+      for (int i = 0; i < r; i++)
+        indices[i] = idx.get(i);
+      return indices;
     }
   }
 

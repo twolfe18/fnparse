@@ -70,6 +70,16 @@ public class StateSequence {
     return next;
   }
 
+  public void setPrev(StateSequence prev) {
+    assert this.prev == null && this.next == null;
+    this.prev = prev;
+  }
+
+  public void setNext(StateSequence next) {
+    assert this.prev == null && this.next == null;
+    this.next = next;
+  }
+
   public int getMovesApplied() {
     if (movesApplied < 0)
       movesApplied = 1 + neighbor().getMovesApplied();

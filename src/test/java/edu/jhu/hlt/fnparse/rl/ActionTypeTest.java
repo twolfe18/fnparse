@@ -61,7 +61,7 @@ public class ActionTypeTest {
       return; // No (t,k) to test on
 
     // Weights are 0 (no training), so features don't really matter
-    Reranker r = new Reranker(new DenseFastFeatures(), Stateless.NONE, 1);
+    Reranker r = new Reranker(new DenseFastFeatures(), Stateless.NONE, 1, rand);
     State st0 = r.randomDecodingState(frames, rand);
 
     // Shouldn't matter if apply or unapply is called first,

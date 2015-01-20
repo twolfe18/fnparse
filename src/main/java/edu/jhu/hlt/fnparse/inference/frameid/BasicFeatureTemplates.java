@@ -245,6 +245,8 @@ public class BasicFeatureTemplates {
         shape = PosPatternGenerator.shapeNormalize(x.sentence.getWord(x.index));
         x.sentence.setShape(x.index, shape);
       }
+      if (shape == null)
+        return null;
       return "Shape=" + shape;
     });
     tokenExtractors.put("Pos", x -> {

@@ -143,14 +143,14 @@ public class LearningTest {
   /** Set CheatingParams weights by hand */
   @Test
   public void getsItRightWithNoTraining() {
-    ItemProvider ip = Reranker.getItemProvider();
+    ItemProvider ip = Reranker.getItemProvider(100, false);
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
 
     CheatingParams theta = new CheatingParams(gold);
     theta.setWeightsByHand();
 
     int beamWidth = 10;
-    Reranker model = new Reranker(Stateful.NONE, theta, beamWidth);
+    Reranker model = new Reranker(Stateful.NONE, theta, beamWidth, rand);
     Reranker.LOG_MOST_VIOLATED = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
@@ -165,9 +165,8 @@ public class LearningTest {
     Reranker.LOG_UPDATE = true;
     CheatingParams.SHOW_ON_UPDATE = true;
     RerankerTrainer trainer = new RerankerTrainer(rand);
-    trainer.epochs = iters;
     trainer.beamSize = 10;
-    ItemProvider ip = Reranker.getItemProvider();
+    ItemProvider ip = Reranker.getItemProvider(100, false);
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
     trainer.statelessParams = theta;
@@ -209,7 +208,7 @@ public class LearningTest {
     Reranker.LOG_UPDATE = true;
     Reranker.LOG_ORACLE = true;
     Reranker.LOG_MOST_VIOLATED = false;
-    ItemProvider ip = Reranker.getItemProvider();
+    ItemProvider ip = Reranker.getItemProvider(100, false);
     int beamWidth = 1;
     boolean train = true;
     Reranker model;
@@ -220,10 +219,10 @@ public class LearningTest {
       PriorScoreParams theta = new PriorScoreParams(ip, true);
       if (byHand) {
         theta.setParamsByHand();
-        model = new Reranker(Stateful.NONE, theta, beamWidth);
+        model = new Reranker(Stateful.NONE, theta, beamWidth, rand);
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand);
-        trainer.epochs = 2;
+        trainer.statelessParams = theta;
         trainer.batchSize = 20;
         model = trainer.train(ip);
       }
@@ -232,7 +231,7 @@ public class LearningTest {
       // check how good the score can be.
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
-      model = new Reranker(Stateful.NONE, oracle, beamWidth);
+      model = new Reranker(Stateful.NONE, oracle, beamWidth, rand);
       model.useItemsForPruning = true;
     }
 

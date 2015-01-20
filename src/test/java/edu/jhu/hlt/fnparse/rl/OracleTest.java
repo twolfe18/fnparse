@@ -18,8 +18,10 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.params.DenseFastFeatures;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
-import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
+import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
+import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition;
 
 /**
  * Ensures that the oracle problem (from a final state working its way back to
@@ -97,7 +99,11 @@ public class OracleTest {
    */
   @Test
   public void validPath() {
-    Reranker r = new Reranker(new DenseFastFeatures(), Stateless.NONE, 100);
+    RerankerTrainer trainer = new RerankerTrainer(rand);
+    trainer.statefulParams = new DenseFastFeatures();
+    trainer.stoppingTrain = new StoppingCondition.Fixed(1);
+    ItemProvider ip = new ItemProvider.ParseWrapper(testParses());
+    Reranker r = trainer.train(ip);
     for (FNParse y : testParses()) {
       if (y.numFrameInstances() == 0)
         continue;

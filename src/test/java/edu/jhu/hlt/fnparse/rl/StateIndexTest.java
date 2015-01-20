@@ -16,25 +16,13 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.StateIndex.TKS;
+import edu.jhu.hlt.fnparse.util.RandomSpan;
 
 public class StateIndexTest {
   public static final Logger LOG = Logger.getLogger(StateIndexTest.class);
 
   private Random rand = new Random(9001);
   private int thoroughness = 1;
-
-  private Span randSpan(int n) {
-    int l = rand.nextInt(n);
-    int r = rand.nextInt(n);
-    if (l == r) {
-      r = l + 1;
-    } else if (l > r) {
-      int t = l;
-      l = r;
-      r = t;
-    }
-    return Span.getSpan(l, r);
-  }
 
   // TODO similar to testParses(), have a method called testIndices() which returns
   // a list of StateIndex's that should be tested (right now there is only one
@@ -95,7 +83,7 @@ public class StateIndexTest {
         for (int t = 0; t < T; t++) {
           int K = y.getFrameInstance(t).getFrame().numRoles();
           for (int k = 0; k < K; k++) {
-            Span span = randSpan(n);
+            Span span = RandomSpan.draw(n, rand);
             Action a = new Action(t, k, ActionType.COMMIT.getIndex(), span);
             BitSet poss = State.initialState(y).getPossible();
             int idx = si.index(t, k, span.start, span.end);

@@ -27,7 +27,7 @@ public class RerankerTest {
     RerankerTrainer trainer = new RerankerTrainer(new Random(9001));
     trainer.beamSize = beamWidth;
     trainer.statelessParams = new PriorScoreParams(ip, true);
-    Reranker r = trainer.hammingTrain(ip);
+    Reranker r = trainer.train(ip);
     int n = Math.min(k, ip.size());
     for (int i = 0; i < n; i++) {
       FNParse y = ip.label(i);

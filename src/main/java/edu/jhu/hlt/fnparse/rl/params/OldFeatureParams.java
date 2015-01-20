@@ -21,7 +21,7 @@ import edu.jhu.util.Alphabet;
  * @author travis
  */
 public class OldFeatureParams implements Params.Stateless {
-  public static boolean SHOW_ON_UPDATE = true;
+  public static boolean SHOW_ON_UPDATE = false;
   public static boolean SHOW_FEATURES = false;
   public static boolean AVERAGE_FEATURES = false;  // only applies upon construction
 
@@ -171,8 +171,10 @@ public class OldFeatureParams implements Params.Stateless {
 
   @Override
   public void doneTraining() {
-    LOG.info("[doneTraining] setting theta to averaged value");
+    if (featureIndices != null)
+      featureIndices.stopGrowth();
     if (theta.hasAverage()) {
+      LOG.info("[doneTraining] setting theta to averaged value");
       if (SHOW_ON_UPDATE)
         showFeatures("[doneTraining] averaged:");
       theta.setAveragedWeights();
