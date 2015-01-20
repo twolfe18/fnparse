@@ -41,7 +41,7 @@ public class RerankerTrainer {
   // General parameters
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
-  public int epochs = 1;
+  public StoppingCondition stoppingCondition = new Fixed(100);
   public int threads = 1;
   public int batchSize = 4;
 
@@ -146,12 +146,110 @@ public class RerankerTrainer {
     return m;
   }
 
-  public Reranker hammingTrain(ItemProvider ip) throws InterruptedException, ExecutionException {
-    LOG.info("[hammingTrain] batchSize=" + batchSize + " epochs=" + epochs + " threads=" + threads);
-    timer.start("hammingTrain");
+  /** Exponentially weighted moving average */
+  public static class EMA {
+    private double history;
+    private double avg;
+    private int updates;
+    public EMA(double history) {
+      if (history <= 0d || history >= 1d)
+        throw new IllegalArgumentException();
+      this.history = history;
+      this.avg = 0d;
+      this.updates = 0;
+    }
+    public EMA(double history, double startingValue) {
+      if (history <= 0d || history >= 1d)
+        throw new IllegalArgumentException();
+      this.history = history;
+      this.avg = startingValue;
+      this.updates = 1;
+    }
+    public double getHistory() {
+      return history;
+    }
+    public void update(double value) {
+      if (updates == 0)
+        avg = value;
+      else
+        avg = history * avg + (1d - history) * value;
+      updates++;
+    }
+    public double getAverage() {
+      return avg;
+    }
+    public int getNumUpdates() {
+      return updates;
+    }
+  }
 
-    // If you don't make an update after this many batches, exit learning early
-    final int inARow = 5;
+  public static interface StoppingCondition {
+    public boolean stop(int iter, double violation);
+  }
+  public static class Fixed implements StoppingCondition {
+    private int maxIter;
+    public Fixed(int maxIter) {
+      this.maxIter = maxIter;
+    }
+    public String toString() {
+      return "MaxIter(" + maxIter + ")";
+    }
+    public int getMaxIterations() {
+      return maxIter;
+    }
+    public boolean stop(int iter, double violation) {
+      return iter >= maxIter;
+    }
+  }
+  /**
+   * Keeps two exponentially weighted moving averages, one fast and one slow,
+   * and when they converge (stay within a given tolerance for a certain number
+   * of iterations), stops the learning.
+   */
+  public static class HammingConvergence implements StoppingCondition {
+    private final EMA slow, fast;
+    private final double tol;
+    private final int inARow;
+    private int curRun;
+    public HammingConvergence() {
+      slow = new EMA(0.9);
+      fast = new EMA(0.1);
+      tol = 5.0;
+      inARow = 5;
+      curRun = 0;
+    }
+    public String toString() {
+      return String.format("HammingConvergence(%.2f,%.2f,%.2f,%d)",
+          slow.getHistory(), fast.getHistory(), tol, inARow);
+    }
+    @Override
+    public boolean stop(int iter, double violation) {
+      slow.update(violation);
+      fast.update(violation);
+      double red = slow.getAverage() - fast.getAverage();
+      LOG.info("[HammingConvergence] iter=" + iter + " tol=" + tol
+          + " slow=" + slow.getAverage() + " fast=" + fast.getAverage()
+          + " violation=" + violation + " red=" + red);
+      if (Math.abs(red) < tol && red > 0d && fast.getNumUpdates() > 1) {
+        curRun++;
+        if (curRun == inARow) {
+//          LOG.info("[hammingTrain] exiting early in the middle of epoch " + (epoch+1)
+//              + " of " + epochs + " because we made an entire pass over " + n
+//              + " data points without making a single subgradient step");
+          return true;
+        }
+      } else {
+        curRun = 0;
+      }
+      return false;
+    }
+  }
+
+  public Reranker hammingTrain(ItemProvider ip) throws InterruptedException, ExecutionException {
+    LOG.info("[hammingTrain] batchSize=" + batchSize
+        + " threads=" + threads
+        + " stopping=" + stoppingCondition);
+    timer.start("hammingTrain");
 
     Reranker r = new Reranker(statefulParams, statelessParams, beamSize);
     ExecutorService es = null;
@@ -159,38 +257,26 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(threads);
     final int n = ip.size();
     final boolean showTime = true;
-    final int totalUpdates = (n / batchSize + 1) * epochs;
-    int curRun = 0;
-    for (int epoch = 0; epoch < epochs; epoch++) {
-      int updatedThisEpoch = 0;
-      LOG.info("[hammingTrain] startring epoch " + (epoch+1) + "/" + epochs
+    outer:
+    for (int epoch = 0; true; epoch++) {
+      LOG.info("[hammingTrain] startring epoch " + (epoch+1)
           + " which will have " + (n/batchSize) + " updates");
       for (int i = 0; i < n; i += batchSize) {
-        int u = hammingTrainBatch(r, es, ip);
-        updatedThisEpoch += u;
-        System.out.print("*");
-        if (u == 0) {
-          curRun++;
-          if (curRun == inARow) {
-            System.out.println();
-            LOG.info("[hammingTrain] exiting early in the middle of epoch " + (epoch+1)
-                + " of " + epochs + " because we made an entire pass over " + n
-                + " data points without making a single subgradient step");
-            break;
-          }
-        } else {
-          curRun = 0;
+
+        double violation = hammingTrainBatch(r, es, ip);
+        if (stoppingCondition.stop(n * epoch + i, violation)) {
+          LOG.info("[hammingTrain] stopping");
+          break outer;
         }
-        if (showTime) {
+
+        if (showTime && stoppingCondition instanceof Fixed) {
           Timer t = timer.get("hammingTrainBatch");
+          int totalUpdates = ((Fixed) stoppingCondition).getMaxIterations();
           LOG.info(String.format(
               "[hammingTrain] completed %d of %d updates, estimated %.1f minutes remaining",
               t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
         }
       }
-
-      System.out.println();
-      LOG.info("[hammingTrain] updated " + updatedThisEpoch);
     }
     if (es != null)
       es.shutdown();
@@ -204,7 +290,11 @@ public class RerankerTrainer {
     return r;
   }
 
-  private int hammingTrainBatch(Reranker r, ExecutorService es, ItemProvider ip) throws InterruptedException, ExecutionException {
+  /**
+   * Returns the average violation over this batch.
+   */
+  private double hammingTrainBatch(Reranker r, ExecutorService es, ItemProvider ip)
+      throws InterruptedException, ExecutionException {
     Timer t = timer.get("hammingTrainBatch", true).setPrintInterval(1);
     t.start();
     boolean verbose = false;
@@ -238,13 +328,13 @@ public class RerankerTrainer {
       LOG.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batchSize;
 
-    List<HasUpdate> batch = Arrays.asList(new UpdateBatch(finishedUpdates));
+    UpdateBatch ub = new UpdateBatch(finishedUpdates);
+    List<HasUpdate> batch = Arrays.asList(ub);
     r.getStatefulParams().update(batch);
     r.getStatelessParams().update(batch);
-    int updated = 1; // TODO pull through update
 
     t.stop();
-    return updated;
+    return ub.violation();
   }
 
   public static void main(String[] args) {
@@ -254,13 +344,15 @@ public class RerankerTrainer {
     ItemProvider.TrainTestSplit trainTest =
         new ItemProvider.TrainTestSplit(Reranker.getItemProvider(), 0.25, 100, rand);
     ItemProvider train = trainTest.getTrain();
-    ItemProvider test = trainTest.getTest();
+    //ItemProvider test = trainTest.getTest();
+    ItemProvider test = train;
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size());
 
     boolean useFeatureHashing = true;
+    OldFeatureParams.AVERAGE_FEATURES = false;
     RerankerTrainer trainer = new RerankerTrainer(rand);
     trainer.beamSize = 1;
-    trainer.epochs = 1;
+    trainer.stoppingCondition = new HammingConvergence();
     if (useFeatureHashing)
       trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
     else
@@ -276,23 +368,38 @@ public class RerankerTrainer {
       + " + frameRoleArg * 1"
       + " + role * 1"
       + " + roleArg * 1"
+
       + " + frameRole * span1FirstWord"
+      + " + frameRole * span1FirstShape"
       + " + frameRole * span1FirstPos"
+
       + " + frameRole * span1LastWord"
+      + " + frameRole * span1LastShape"
       + " + frameRole * span1LastPos"
+
+      + " + frameRole * span1LeftShape"
+      + " + frameRole * span1LeftPos"
+
+      + " + frameRole * span1RightShape"
+      + " + frameRole * span1RightPos"
+
       + " + frameRole * head1Lemma"
       + " + frameRole * head1ParentLemma"
       + " + frameRole * head1WordWnSynset"
       + " + frameRole * head1Shape"
       + " + frameRole * head1Pos"
-      + " + frameRole * span1StanfordRule"
+
       + " + frameRole * span1PosPat-COARSE_POS-1-1"
       + " + frameRole * span1PosPat-WORD_SHAPE-1-1"
 
       + " + frameRole * span1StanfordCategory"
       + " + frameRole * span1StanfordRule"
+
       + " + frameRole * head1CollapsedParentDir"
       + " + frameRole * head1CollapsedLabel"
+
+      + " + frameRole * head1head2Path-POS-DEP-t"
+      + " + role * head1head2Path-POS-DEP-t"
 
       /* These seem to hurt performance ???
       + " + roleArg * span1PosPat-COARSE_POS-1-1"

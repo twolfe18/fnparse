@@ -16,6 +16,7 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -27,6 +28,7 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.HasUpdate;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.util.Beam;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
@@ -115,7 +117,10 @@ public class Reranker {
   }
 
   public static ItemProvider getItemProvider() {
-    int n = 1000;
+    return getItemProvider(100, true);
+  }
+
+  public static ItemProvider getItemProvider(int n, boolean addParses) {
     File cache = new File("data/rl/items." + n + ".train");
     FrameInstanceProvider fip = FileFrameInstanceProvider.dipanjantrainFIP;
     ItemProvider items;
@@ -134,6 +139,20 @@ public class Reranker {
       }
       items = c;
     }
+
+    // Add parses
+    if (addParses) {
+      LOG.info("[getItemProvider] adding parses to " + items.size() + " sentences");
+      ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
+      for (int i = 0; i < items.size(); i++) {
+        Sentence s = items.label(i).getSentence();
+        if (s.getBasicDeps() == null)
+          s.setBasicDeps(parser.getBasicDParse(s));
+        if (s.getStanfordParse() == null)
+          s.setStanfordParse(parser.getCParse(s));
+      }
+    }
+
     LOG.info("[getItemProvider] done");
     return items;
   }
@@ -182,11 +201,7 @@ public class Reranker {
         // or initial state.
         if (LOG_ORACLE)
           LOG.debug(desc + " done after " + iter + " iterations");
-        String actions = frontier.showActions();
-        int k = 250;  // max characters to display of solution action sequence
-        if (actions.length() > k)
-          actions = actions.substring(0, k) + "...";
-        LOG.info(desc + " solution: " + actions);
+        logSolution(desc, frontier);
         return frontier;
       }
     }
@@ -264,6 +279,15 @@ public class Reranker {
     }
     sb.append(" totalScore=" + ss.getScore());
     LOG.info(sb.toString());
+  }
+
+  /** Shows the action sequence of a StateSequence given */
+  private void logSolution(String desc, StateSequence frontier) {
+    String actions = frontier.showActions();
+    int k = 250;  // max characters to display of solution action sequence
+    if (actions.length() > k)
+      actions = actions.substring(0, k) + "...";
+    LOG.info(desc + " solution: " + actions);
   }
 
   /**
@@ -348,7 +372,7 @@ public class Reranker {
           }
         }
         assert 0 == frontier.getCur().numUncommitted();
-        LOG.info(desc + " solution: " + frontier.showActions());
+        logSolution(desc, frontier);
         return frontier;
       }
     }
@@ -438,6 +462,13 @@ public class Reranker {
       return hinge < 0d;
     }
 
+    public double violation() {
+      if (hinge < 0d)
+        return -hinge;
+      else
+        return 0d;
+    }
+
     @Override
     public void getUpdate(double[] addTo, double scale) {
       timer.start("Update.getUpdate");
@@ -491,6 +522,12 @@ public class Reranker {
       double s = scale / elements.size();
       for (Update u : elements)
         u.getUpdate(addTo, s);
+    }
+    public double violation() {
+      double v = 0d;
+      for (Update u : elements)
+        v += u.violation();
+      return v;
     }
   }
 }

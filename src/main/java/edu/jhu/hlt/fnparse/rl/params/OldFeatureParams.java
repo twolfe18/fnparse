@@ -23,7 +23,7 @@ import edu.jhu.util.Alphabet;
 public class OldFeatureParams implements Params.Stateless {
   public static boolean SHOW_ON_UPDATE = true;
   public static boolean SHOW_FEATURES = false;
-  public static boolean AVERAGE_FEATURES = true;  // only applies upon construction
+  public static boolean AVERAGE_FEATURES = false;  // only applies upon construction
 
   private String featureTemplateString;
   private TemplatedFeatures features;
@@ -176,6 +176,7 @@ public class OldFeatureParams implements Params.Stateless {
       if (SHOW_ON_UPDATE)
         showFeatures("[doneTraining] averaged:");
       theta.setAveragedWeights();
+      printedSinceUpdate = false;
     }
   }
 }
