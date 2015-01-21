@@ -178,6 +178,7 @@ public class Reranker {
   public StateSequence oracle(FNParse y) {
     boolean verbose = false;
     String desc = "[oracle]";
+    LOG.info(desc + " starting with beamWidth=" + beamWidth);
     Beam<StateSequence> beam = new Beam<>(beamWidth);
     Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
@@ -216,7 +217,7 @@ public class Reranker {
     assert !useItemsForPruning : "need the items then!";
     if (frames.numFrameInstances() == 0)
       return new FNParse(frames.getSentence(), Collections.emptyList());
-    StateSequence ss = mostViolated(frames, null);
+    StateSequence ss = mostViolated(frames, null, Double.POSITIVE_INFINITY);
     State st = ss.getCur();
     assert ss == ss.getLast();
     return st.decode();
@@ -225,7 +226,7 @@ public class Reranker {
     assert useItemsForPruning : "probably should use the other one";
     if (frames.numFrameInstances() == 0)
       return new FNParse(frames.getSentence(), Collections.emptyList());
-    StateSequence ss = mostViolated(items, frames, null);
+    StateSequence ss = mostViolated(items, frames, null, Double.POSITIVE_INFINITY);
     State st = ss.getCur();
     assert ss == ss.getLast();
     return st.decode();
@@ -270,6 +271,7 @@ public class Reranker {
     StringBuilder sb = new StringBuilder(desc);
     if (iteration >= 0)
       sb.append(" iter=" + iteration);
+    sb.append(" id=" + ss.getCur().getFrames().getId());
     sb.append(" " + ss.getAction());
     sb.append(" score=" + score);
     sb.append(" actionScore=" + ss.getAdjoints().getScore());
@@ -310,118 +312,27 @@ public class Reranker {
   }
 
   /**
-   * Special implementation of oracle for cases where you only have
-   * Stateless params (Stateful == None).
-   */
-  public StateSequence simpleOracle(FNParse y) {
-    // Used for all actions
-    final int COMMIT = ActionType.COMMIT.getIndex();
-
-    final int T = y.numFrameInstances();
-    StateSequence cur = new StateSequence(null, null, State.finalState(y), null);
-    // One COMMIT action for every (t,k)
-    for (int t = 0; t < T; t++) {
-      final FrameInstance fi = y.getFrameInstance(t);
-      final int K = fi.getFrame().numRoles();
-      for (int k = 0; k < K; k++) {
-        Span arg = fi.getArgument(k);
-        Action a = new Action(t, k, COMMIT, arg);
-        State prev = cur.getCur().apply(a, false);
-        Adjoints adj = thetaStateless.score(y, a);
-        StateSequence prevSS = new StateSequence(null, cur, prev, adj);
-        cur = prevSS;
-      }
-    }
-    logSolution("[simpleOracle]", cur);
-    return cur;
-  }
-
-  /**
-   * Special implementation of mostViolated for cases where you only have
-   * Stateless params (Stateful == None).
-   */
-  public StateSequence simpleMostViolated(State init, FNParse y) {
-    // The key here is that order doesn't matter for solving the max over z
-    // when you don't have any Stateful params.
-
-    // Sane implementations:
-    // 1) Only use COMMIT, choose nullSpan for every realized arg, choose a random span for every unrealized arg
-    // 2) Like 1 but instead take the argmax by the current score function of every span for each unrealized arg
-    boolean maxOverSpans = rand.nextInt(30) == 0;
-
-    // Used for all actions
-    final int COMMIT = ActionType.COMMIT.getIndex();
-
-    final int T = y.numFrameInstances();
-    StateSequence cur = new StateSequence(null, null, init, null);
-    // One COMMIT action for every (t,k)
-    for (int t = 0; t < T; t++) {
-      final FrameInstance fi = y.getFrameInstance(t);
-      final int K = fi.getFrame().numRoles();
-      for (int k = 0; k < K; k++) {
-        Span arg = fi.getArgument(k);
-        Action a;
-        if (arg == Span.nullSpan) {
-          // Choose a span other than nullSpan
-          if (!maxOverSpans) {
-            // be lazy: choose a random span
-            Iterable<Span> possible = cur.getCur().naiveAllowableSpans(t, k);
-            Span randArg = RandomSpan.draw(possible, rand);
-            //Span randArg = RandomSpan.draw(n, rand);
-            a = new Action(t, k, COMMIT, randArg);
-          } else {
-            // correct(-ish) training: take the highest scoring span.
-            // (not fully-correct because we're only considering COMMIT)
-            Span bestSpan = null;
-            double bestScore = 0d;
-            for (Span s : cur.getCur().naiveAllowableSpans(t, k)) {
-              Action as = new Action(t, k, COMMIT, s);
-              Adjoints adj = thetaStateless.score(y, as);
-              double score = adj.getScore();
-              if (bestSpan == null || score > bestScore) {
-                bestSpan = s;
-                bestScore = score;
-              }
-            }
-            assert bestSpan != null;
-            a = new Action(t, k, COMMIT, bestSpan);
-          }
-        } else {
-          // Choose nullSpan
-          a = new Action(t, k, COMMIT, Span.nullSpan);
-        }
-        // Move forward one state and set a backpointer
-        State next = cur.getCur().apply(a, true);
-        Adjoints adj = thetaStateless.score(y, a);
-        StateSequence nextSS = new StateSequence(cur, null, next, adj);
-        cur = nextSS;
-      }
-    }
-    assert 0 == cur.getCur().numUncommitted();
-    logSolution("[simpleMostViolated]", cur);
-    return cur;
-  }
-
-  /**
    * if y is null, then do decoding.
    */
-  public StateSequence mostViolated(FNTagging frames, FNParse y) {
+  public StateSequence mostViolated(FNTagging frames, FNParse y, double keepFactor) {
     if (LOG_MOST_VIOLATED)
       LOG.warn("[mostViolated] using exhaustive version (not reranking)");
     State init = State.initialState(y != null ? y : frames);
-    return mostViolatedHelper(init, y);
+    return mostViolatedHelper(init, y, keepFactor);
   }
-  public StateSequence mostViolated(List<Item> rerank, FNTagging frames, FNParse y) {
+  public StateSequence mostViolated(List<Item> rerank, FNTagging frames, FNParse y, double keepFactor) {
     if (useItemsForPruning) {
       if (LOG_MOST_VIOLATED)
         LOG.warn("[mostViolated] using reranking version");
       State init = State.initialState(y != null ? y : frames, rerank);
-      return mostViolatedHelper(init, y);
+      return mostViolatedHelper(init, y, keepFactor);
     } else {
-      return mostViolated(y, y);
+      return mostViolated(y, y, keepFactor);
     }
   }
-  private StateSequence mostViolatedHelper(State init, FNParse y) {
+  private StateSequence mostViolatedHelper(State init, FNParse y, double keepFactor) {
+    if (keepFactor < 0d)
+      throw new IllegalArgumentException("skipProb=" + keepFactor);
     String desc = (y == null) ? "[decode]" : "[mostViolated]";
     boolean verbose = true;
     Params.Stateful theta = getCachingParams();
@@ -435,8 +346,16 @@ public class Reranker {
       if (verbose && LOG_MOST_VIOLATED)
         logStateInfo(desc, frontier.getCur());
       int added = 0;
-      for (StateSequence ss : transF.nextStates(frontier)) {
-        added++;
+
+      // As skipProb -> 1, the behavior of this method starts to look like
+      // "choose a random span for every (t,k)" as the negative evidence.
+      int reservoirSize = (int) (keepFactor * init.getSentence().size()) + 1;
+      LOG.info(desc + " keepFactor=" + keepFactor + " reservoirSize=" + reservoirSize);
+      List<StateSequence> consider = DataUtil.reservoirSample(
+          transF.nextStates(frontier), reservoirSize, rand);
+
+      //for (StateSequence ss : transF.nextStates(frontier)) {
+      for (StateSequence ss : consider) {
 
         // Model score
         double score = ss.getScore();
@@ -451,6 +370,7 @@ public class Reranker {
         }
 
         // Add to the beam
+        added++;
         boolean onBeam = beam.push(ss, score);
         if (verbose && onBeam && LOG_MOST_VIOLATED)
           logAction(desc, iter, score, ss, y, y != null);
@@ -492,7 +412,7 @@ public class Reranker {
   }
 
   /**
-   * subgradient step on loss of:
+   * Sub-gradient step on loss of:
    * max(0, s(y,z) - [s(y',z') + loss(y,y')])
    * 
    * where (y,z) = oracle
@@ -507,38 +427,26 @@ public class Reranker {
     public final StateSequence oracle;
     public final StateSequence mostViolated;
     public final double hinge;
-    public final boolean onlyStateless;
+    public final double keepFactor;
 
     private StateSequence oracle(FNParse y, List<Item> rerank) {
       StateSequence oracle;
-      if (onlyStateless) {
-        timer.start("udpate.simpleOracle");
-        oracle = Reranker.this.simpleOracle(y);
-        timer.stop("udpate.simpleOracle");
-      } else {
-        timer.start("udpate.oracle");
-        oracle = Reranker.this.oracle(y);
-        timer.stop("udpate.oracle");
-      }
+      timer.start("udpate.oracle");
+      oracle = Reranker.this.oracle(y);
+      timer.stop("udpate.oracle");
       return oracle;
     }
 
     private StateSequence mostViolated(FNParse y, List<Item> rerank) {
       StateSequence mv;
-      if (onlyStateless) {
-        timer.start("udpate.simpleMostViolated");
-        mv = simpleMostViolated(State.initialState(y, rerank), y);
-        timer.stop("udpate.simpleMostViolated");
-      } else {
-        timer.start("udpate.mostViolated");
-        mv = Reranker.this.mostViolated(rerank, y, y);
-        timer.stop("udpate.mostViolated");
-      }
+      timer.start("udpate.mostViolated");
+      mv = Reranker.this.mostViolated(rerank, y, y, keepFactor);
+      timer.stop("udpate.mostViolated");
       return mv;
     }
 
-    public Update(FNParse y, List<Item> rerank, boolean onlyStateless) {
-      this.onlyStateless = onlyStateless;
+    public Update(FNParse y, List<Item> rerank, double skipProb) {//, boolean onlyStateless) {
+      this.keepFactor = skipProb;
       if (y.numFrameInstances() == 0) {
         oracle = null;
         mostViolated = null;

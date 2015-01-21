@@ -68,17 +68,6 @@ public interface ActionType {
   public double deltaLoss(State s, Action a, FNParse y);
 
 
-  /* Don't use this, it may introduce non-determinism across runs
-  public static class ActionTypeIndex {
-    private static Alphabet<ActionType> alph = new Alphabet<>();
-    public static int getIndex(ActionType newActionType) {
-      return alph.lookupIndex(newActionType, true);
-    }
-    public ActionType getActionType(int i) {
-      return alph.lookupObject(i);
-    }
-  } */
-
   public static final ActionType COMMIT = new ActionType() {
     @Override
     public int getIndex() {

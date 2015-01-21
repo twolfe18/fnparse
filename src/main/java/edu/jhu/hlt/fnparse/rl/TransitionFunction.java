@@ -92,6 +92,12 @@ public interface TransitionFunction {
           @Override
           public StateSequence apply(Action input) {
             Adjoints adj = theta.score(st, input);
+            //Adjoints adj = new Adjoints.Lazy(() -> theta.score(st, input));
+            
+            // lskdjflkds
+            // how was this working before?
+            
+            
             return new StateSequence(null, s, null, adj);
           }
         });
@@ -112,7 +118,8 @@ public interface TransitionFunction {
         Iterable<StateSequence> itss = Iterables.transform(ita, new Function<Action, StateSequence>() {
           @Override
           public StateSequence apply(Action input) {
-            Adjoints adj = theta.score(st, input);
+            //Adjoints adj = theta.score(st, input);
+            Adjoints adj = new Adjoints.Lazy(() -> theta.score(st, input));
             return new StateSequence(s, null, null, adj);
           }
         });

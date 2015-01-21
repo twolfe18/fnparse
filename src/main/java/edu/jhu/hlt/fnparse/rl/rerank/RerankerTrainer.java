@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -142,9 +143,18 @@ public class RerankerTrainer {
     LOG.info("[train] training original model on Hamming loss");
     Reranker m = new Reranker(statefulParams, statelessParams, beamSize, rand);
     try {
+
+      // For Stateless train, you don't need a beam
+      int tempBeamSize = beamSize;
+      beamSize = 1;
       hammingTrain(m, train, true);
+      beamSize = tempBeamSize;
+
       if (m.getStatefulParams() != Stateful.NONE)
         hammingTrain(m, train, false);
+      else
+        LOG.info("[train] skipping Stateful train because no Stateful params were given");
+
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -184,8 +194,9 @@ public class RerankerTrainer {
           + " which will have " + (n/batchSize) + " updates");
       for (int i = 0; i < n; i += batchSize) {
 
-        double violation = hammingTrainBatch(r, es, ip, onlyStateless, timerStr);
         iter++;
+        double keepFactor = FastMath.pow(iter, 0.5) / 10d;
+        double violation = hammingTrainBatch(r, es, ip, keepFactor, timerStr);
         if (stoppingCond.stop(iter, violation)) {
           LOG.info("[hammingTrain] stopping due to " + stoppingCond);
           break outer;
@@ -218,7 +229,7 @@ public class RerankerTrainer {
       Reranker r,
       ExecutorService es,
       ItemProvider ip,
-      boolean onlyStateless,
+      double keepFactor,
       String timerStrPartial) throws InterruptedException, ExecutionException {
     String timerStr = timerStrPartial + ".batch";
     Timer t = timer.get(timerStr, true).setPrintInterval(1);
@@ -234,7 +245,7 @@ public class RerankerTrainer {
         List<Item> rerank = ip.items(idx);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        finishedUpdates.add(r.new Update(y, rerank, onlyStateless));
+        finishedUpdates.add(r.new Update(y, rerank, keepFactor));
       }
     } else {
       LOG.info("[hammingTrainBatch] running with ExecutorService");
@@ -245,7 +256,7 @@ public class RerankerTrainer {
         List<Item> rerank = ip.items(idx);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        updates.add(es.submit(() -> r.new Update(y, rerank, onlyStateless)));
+        updates.add(es.submit(() -> r.new Update(y, rerank, keepFactor)));
       }
       for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
@@ -269,7 +280,7 @@ public class RerankerTrainer {
 
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand);
-    ItemProvider ip = Reranker.getItemProvider(100, true);
+    ItemProvider ip = Reranker.getItemProvider(10, true);
 
     ItemProvider train, test;
     if (testOnTrain) {
@@ -286,9 +297,10 @@ public class RerankerTrainer {
 
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
+    Reranker.LOG_ORACLE = true;
     OldFeatureParams.AVERAGE_FEATURES = false;
     OldFeatureParams.SHOW_ON_UPDATE = true;
-    trainer.beamSize = 1;
+    trainer.beamSize = 50;
     trainer.stoppingPretrain = new StoppingCondition.HammingConvergence(0.1, 500);
     if (useFeatureHashing)
       trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);

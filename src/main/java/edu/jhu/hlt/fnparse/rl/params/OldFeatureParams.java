@@ -40,7 +40,7 @@ public class OldFeatureParams implements Params.Stateless {
   public OldFeatureParams(String featureTemplateString) {
     this();
     featureIndices = new Alphabet<>();
-    featureIndices.startGrowth();       // always growing
+    featureIndices.startGrowth(); // stops growing when doneTraining is called
     numBuckets = -1;
     theta = new AveragedWeights(1024, AVERAGE_FEATURES);
     setFeatures(featureTemplateString);
