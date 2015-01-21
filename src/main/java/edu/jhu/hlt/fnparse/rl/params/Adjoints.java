@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.function.Supplier;
+
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
@@ -14,6 +16,42 @@ public interface Adjoints extends HasUpdate {
 
   public double getScore();
   public Action getAction();
+
+  /**
+   * Must provide a Supplier<Adjoints> that returns a non-null Adjoints.
+   */
+  public static class Lazy implements Adjoints {
+    private Supplier<Adjoints> thunk;
+    private Adjoints value;
+    public Lazy(Supplier<Adjoints> thunk) {
+      this.thunk = thunk;
+      this.value = null;
+    }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      if (value == null) {
+        value = thunk.get();
+        assert value != null;
+      }
+      value.getUpdate(addTo, scale);
+    }
+    @Override
+    public double getScore() {
+      if (value == null) {
+        value = thunk.get();
+        assert value != null;
+      }
+      return value.getScore();
+    }
+    @Override
+    public Action getAction() {
+      if (value == null) {
+        value = thunk.get();
+        assert value != null;
+      }
+      return value.getAction();
+    }
+  }
 
   /**
    * No parameters (to be updated) -- just a partial score to be added in.
