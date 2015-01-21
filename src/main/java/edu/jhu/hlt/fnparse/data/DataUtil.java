@@ -248,11 +248,15 @@ public class DataUtil {
     return res;
   }
 
+  /**
+   * If howMany turns out to be larger than the number of elements in all, then
+   * every element in all is returned.
+   */
   public static <T> List<T> reservoirSample(
       Iterable<T> all,
       int howMany,
       Random rand) {
-    List<T> reservoir = new ArrayList<T>();
+    List<T> reservoir = new ArrayList<T>(howMany);
     int i = 0;
     for (T t : all) {
       if (i < howMany) {
