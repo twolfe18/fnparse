@@ -1,12 +1,87 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.util.EMA;
 
 
 public interface StoppingCondition {
+  public static final Logger LOG = Logger.getLogger(StoppingCondition.class);
 
   public boolean stop(int iter, double violation);
   public int estimatedNumberOfIterations();
+
+  public static class Conjunction implements StoppingCondition {
+    private StoppingCondition left, right;
+    public Conjunction(StoppingCondition a, StoppingCondition b) {
+      left = a;
+      right = b;
+    }
+    @Override
+    public String toString() {
+      return "Conjunction(" + left + ", " + right + ")";
+    }
+    @Override
+    public boolean stop(int iter, double violation) {
+      if (left.stop(iter, violation)) {
+        LOG.info(toString() + " stopping because of " + left);
+        return true;
+      }
+      if (right.stop(iter, violation)) {
+        LOG.info(toString() + " stopping because of " + right);
+        return true;
+      }
+      return false;
+    }
+    @Override
+    public int estimatedNumberOfIterations() {
+      int l = left.estimatedNumberOfIterations();
+      int r = right.estimatedNumberOfIterations();
+      double har = 2d / (1d / l + 1d / r);
+      double alpha = 0.8;
+      return (int) (alpha * Math.min(l, r) + (1d - alpha) * har + 0.5d);
+    }
+  }
+
+  public static class Time implements StoppingCondition {
+    public static int INTERVAL = 200;
+    private long start = -1;
+    private int iterEstimate = -1;
+    private int iter;
+    private double maxMinutes;
+    public Time(double maxMinutes) {
+      this.maxMinutes = maxMinutes;
+    }
+    @Override
+    public String toString() {
+      return String.format("Time(%.1f mintes)", maxMinutes);
+    }
+    @Override
+    public boolean stop(int iter, double violation) {
+      if (start < 0)
+        start = System.currentTimeMillis();
+      this.iter = iter;
+      if (iter % INTERVAL != 0)
+        return false;
+      boolean stop = elapsedMins() > maxMinutes;
+      if (stop)
+        LOG.info(toString() + " stopping due to time");
+      return stop;
+    }
+    public double elapsedMins() {
+      long end = System.currentTimeMillis();
+      return (end - start) / (1000d * 60d);
+    }
+    @Override
+    public int estimatedNumberOfIterations() {
+      if (iterEstimate < 0 || iter % INTERVAL == 0) {
+        double alpha = 0.75;  // how much to trust most recent estimate
+        double newEst = iter * (maxMinutes / elapsedMins());
+        iterEstimate = (int) (alpha * newEst + (1d - alpha) * iterEstimate + 0.5d);
+      }
+      return iterEstimate;
+    }
+  }
 
   /** A fixed number of iterations */
   public static class Fixed implements StoppingCondition {
@@ -35,6 +110,7 @@ public interface StoppingCondition {
    * of iterations), stops the learning.
    */
   public static class HammingConvergence implements StoppingCondition {
+    public static boolean VERBOSE = false;
     private final EMA slow, fast;
     private final double tol;
     private final int inARow;
@@ -61,14 +137,28 @@ public interface StoppingCondition {
       slow.update(violation);
       fast.update(violation);
       double red = slow.getAverage() - fast.getAverage();
-      RerankerTrainer.LOG.info("[HammingConvergence] iter=" + iter + " tol=" + tol
-          + " slow=" + slow.getAverage() + " fast=" + fast.getAverage()
-          + " violation=" + violation + " red=" + red);
-      if (Math.abs(red) < tol && red > 0d && fast.getNumUpdates() > 1) {
+      assert !Double.isNaN(red);
+      assert Double.isFinite(red);
+      if (VERBOSE) {
+        LOG.info("[HammingConvergence] iter=" + iter + " tol=" + tol
+            + " slow=" + slow.getAverage() + " fast=" + fast.getAverage()
+            + " violation=" + violation + " red=" + red);
+      }
+      if (Math.abs(red) < tol && fast.getNumUpdates() > 1) {
         curRun++;
         if (curRun == inARow)
           return true;
+        int k = Math.max(1, inARow / 10);
+        if (curRun % k == 0) {
+          LOG.info("[HammingConvergence] curRun=" + curRun
+              + " inARow=" + inARow + " iter=" + iter);
+        }
       } else {
+        double t = Math.min(0.25d, inARow / (iter + 1));
+        if (((double) curRun) / inARow > t) {
+          LOG.info("[HammingConvergence] resetting after curRun=" + curRun
+              + " inARow=" + inARow + " iter=" + iter);
+        }
         curRun = 0;
       }
       return false;

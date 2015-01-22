@@ -104,8 +104,10 @@ public class EmbeddingParams implements Params.Stateless {
 
     @Override
     public void getUpdate(double[] addTo, double scale) {
-      throw new RuntimeException("i don't quite know how to do this, "
-          + "code changes have confused me");
+      // I can't dump the update into addTo
+      // This class does have the forward pass information though.
+      // The proper update is in EmbeddingParams.update
+      LOG.warn("[QuadAdjoints getUpdate] no-op, bad design");
     }
   }
 
@@ -115,11 +117,11 @@ public class EmbeddingParams implements Params.Stateless {
 
   /**
    * @param k is a multiplier for how many params to use, 1 is very parsimonious
-   * and 5 is a lot, 2 is a good default.
+   * and 6 is a lot, 3 is a good default. The number of params is linear in k.
    */
   public EmbeddingParams(int k) {
-    frE = new FrameRoleFeatures(16 * k, 32 * k, 16 * k);
-    ctxE = new ContextEmbedding(32 * k);
+    frE = new FrameRoleFeatures(8 * k, 16 * k, 8 * k);
+    ctxE = new ContextEmbedding(16 * k);
     theta = new double[frE.dimension()][ctxE.getDimension()];
     int d = theta.length * theta[0].length;
     LOG.info("theta is (" + theta.length + ", " + theta[0].length + ") numParams=" + d);

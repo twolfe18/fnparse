@@ -2,8 +2,6 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
@@ -27,12 +25,12 @@ import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.hlt.fnparse.rl.params.HasUpdate;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.HingeUpdate;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
-import edu.jhu.hlt.fnparse.util.RandomSpan;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -62,8 +60,7 @@ import edu.jhu.hlt.fnparse.util.RandomSpan;
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
   public static boolean LOG_UPDATE = false;
-  public static boolean LOG_ORACLE = false;
-  public static boolean LOG_MOST_VIOLATED = false;
+  public static boolean LOG_FORWARD_SEARCH = false;
 
   public static final double COST_FN = 1d;
 
@@ -88,7 +85,6 @@ public class Reranker {
   // via Params, in e.g. PriorScoreParams
 
   private MultiTimer timer = new MultiTimer();
-  private Random rand;
 
   public Reranker(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth, Random rand) {
     this.thetaStateful = thetaStateful;
@@ -98,7 +94,6 @@ public class Reranker {
         ActionType.COMMIT,
         //ActionType.COMMIT_AND_PRUNE,
     };
-    this.rand = rand;
   }
 
   public String toString() {
@@ -162,76 +157,45 @@ public class Reranker {
     return items;
   }
 
-  /**
-   * Solves problem 1: \max_z s(y,z) = \max_z \sum_i s(y,z_i)
-   * 
-   * This is accomplished through beam search, starting at y and performing
-   * "undo"s on potential actions that would lead to a starting point (empty
-   * parse or initial decoder state).
-   * 
-   * NOTE: The reason this beam search works "backwards" (from the label with
-   * undo operations) is to enforce the constraint that we're only considering
-   * z that lead to y. However, this is not impossible to do in a forwards pass.
-   * 
-   * @param y
-   */
-  public StateSequence oracle(FNParse y) {
-    boolean verbose = false;
-    String desc = "[oracle]";
-    LOG.info(desc + " starting with beamWidth=" + beamWidth);
-    Beam<StateSequence> beam = new Beam<>(beamWidth);
+  public State randomDecodingState(FNTagging frames, Random rand) {
     Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(theta, actionTypes);
-    State finalState = State.finalState(y);
-    StateSequence init = new StateSequence(null, null, finalState, null);
-    beam.push(init, 0d);
-    for (int iter = 0; true; iter++) {
-      // Choose an item to extend
-      StateSequence frontier = beam.pop();
-      boolean verboseThisIter = verbose || iter % 500000 == 0;
-      if (LOG_ORACLE && verboseThisIter)
-        logStateInfo("[oracle]", frontier.getCur());
-      // For each of its extensions, check if they should be put on the beam.
-      int added = 0;
-      for (StateSequence ss : transF.previousStates(frontier)) {
-        added++;
-        double score = ss.getScore();
-        boolean onBeam = beam.push(ss, score);
-        if (LOG_ORACLE && verboseThisIter && onBeam )
-          logAction(desc, iter, score, ss, y, false);
-      }
-      //LOG.debug(desc + " added=" + added);
-      if (added == 0) {
-        // There were no previous states, so frontier must be the empty parse,
-        // or initial state.
-        if (LOG_ORACLE)
-          LOG.debug(desc + " done after " + iter + " iterations");
-        logSolution(desc, frontier);
-        return frontier;
-      }
-    }
+    State init = State.initialState(frames);
+    StateSequence frontier = new StateSequence(null, null, init, null);
+    int TK = init.numFrameRoleInstances();
+    if (TK == 0)
+      throw new IllegalArgumentException("only works when there are frameInstances");
+    int tkStop = rand.nextInt(TK);
+    for (int i = 0; i < tkStop; i++)
+      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+    return frontier.getCur();
   }
 
+  // Single predict
+  public FNParse predict(State initialState) {
+    Params.Stateful model = getCachingParams();
+    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, model);
+    fs.run();
+    StateSequence ss = fs.getPath();
+    FNParse yhat = ss.getCur().decode();
+    assert yhat != null;
+    return yhat;
+  }
   public FNParse predict(FNTagging frames) {
     assert !useItemsForPruning : "need the items then!";
     if (frames.numFrameInstances() == 0)
       return new FNParse(frames.getSentence(), Collections.emptyList());
-    StateSequence ss = mostViolated(frames, null, Double.POSITIVE_INFINITY);
-    State st = ss.getCur();
-    assert ss == ss.getLast();
-    return st.decode();
+    return predict(State.initialState(frames));
   }
   public FNParse predict(FNTagging frames, List<Item> items) {
     assert useItemsForPruning : "probably should use the other one";
     if (frames.numFrameInstances() == 0)
       return new FNParse(frames.getSentence(), Collections.emptyList());
-    StateSequence ss = mostViolated(items, frames, null, Double.POSITIVE_INFINITY);
-    State st = ss.getCur();
-    assert ss == ss.getLast();
-    return st.decode();
+    return predict(State.initialState(frames, items));
   }
 
+  // Batch predict
   public <T extends FNTagging> List<FNParse> predict(List<T> frames) {
     assert !useItemsForPruning : "need the items then!";
     List<FNParse> r = new ArrayList<>();
@@ -298,12 +262,12 @@ public class Reranker {
   }
 
   /**
-   * Returns parameters which cache the stateless features, but not the stateful
+   * Returns parameters which cache the Stateless features, but not the Stateful
    * ones (obviously...).
    *
    * Right now this only caches for a single FNTagging, and it will likely have
    * to stay this way, because otherwise it would need to cache for an entire
-   * dataset, which is likley too much.
+   * data set, which is likely too much.
    */
   private Params.Stateful getCachingParams() {
     Params.Stateless thetaBaseCache = new Params.Stateless.Caching(thetaStateless);
@@ -312,103 +276,268 @@ public class Reranker {
   }
 
   /**
-   * if y is null, then do decoding.
+   * BFunc = "bias function" for use with
+   * {@link edu.jhu.hlt.fnparse.rl.rerank.Reranker.ForwardSearch}
    */
-  public StateSequence mostViolated(FNTagging frames, FNParse y, double keepFactor) {
-    if (LOG_MOST_VIOLATED)
-      LOG.warn("[mostViolated] using exhaustive version (not reranking)");
-    State init = State.initialState(y != null ? y : frames);
-    return mostViolatedHelper(init, y, keepFactor);
-  }
-  public StateSequence mostViolated(List<Item> rerank, FNTagging frames, FNParse y, double keepFactor) {
-    if (useItemsForPruning) {
-      if (LOG_MOST_VIOLATED)
-        LOG.warn("[mostViolated] using reranking version");
-      State init = State.initialState(y != null ? y : frames, rerank);
-      return mostViolatedHelper(init, y, keepFactor);
-    } else {
-      return mostViolated(y, y, keepFactor);
+  public static interface BFunc {
+    public double score(State s, Action a);
+
+    /** Returns a score of 0 always */
+    public static class None implements BFunc {
+      @Override
+      public double score(State s, Action a) {
+        return 0d;
+      }
+    }
+    public static BFunc NONE = new None();
+
+    /** Lifts a Params.Stateful to a BFunc */
+    public static class StatefulAdapter implements BFunc {
+      public Stateful params;
+      public StatefulAdapter(Stateful params) {
+        this.params = params;
+      }
+      @Override
+      public double score(State s, Action a) {
+        Adjoints adj = params.score(s, a);
+        return adj.getScore();
+      }
+    }
+
+    /**
+     * A BFunc which represents a constraint (i.e. only returns values of 0 or
+     * -infinity) that given actions must lead to the given gold parse.
+     */
+    public static class Oracle implements BFunc {
+      private FNParse gold;
+      public Oracle(FNParse gold) {
+        this.gold = gold;
+      }
+      @Override
+      public double score(State s, Action a) {
+        FrameInstance fi = gold.getFrameInstance(a.t);
+        Span arg = fi.getArgument(a.k);
+        if (arg != a.getSpanSafe())
+          return Double.NEGATIVE_INFINITY;
+        return 0d;
+      }
+    }
+
+    /**
+     * A BFunc which rewards increasing the hamming loss (aka deltaLoss).
+     */
+    public static class MostViolated implements BFunc {
+      private FNParse gold;
+      public MostViolated(FNParse gold) {
+        this.gold = gold;
+      }
+      @Override
+      public double score(State s, Action a) {
+        ActionType at = a.getActionType();
+        return at.deltaLoss(s, a, gold);
+      }
     }
   }
-  private StateSequence mostViolatedHelper(State init, FNParse y, double keepFactor) {
-    if (keepFactor < 0d)
-      throw new IllegalArgumentException("skipProb=" + keepFactor);
-    String desc = (y == null) ? "[decode]" : "[mostViolated]";
-    boolean verbose = true;
-    Params.Stateful theta = getCachingParams();
-    TransitionFunction transF =
-        new ActionDrivenTransitionFunction(theta, actionTypes);
-    StateSequence frontier = new StateSequence(null, null, init, null);
-    Beam<StateSequence> beam = new Beam<>(beamWidth);
-    beam.push(frontier, 0d);
-    for (int iter = 0; true; iter++) {  // while (true)
-      frontier = beam.pop();
-      if (verbose && LOG_MOST_VIOLATED)
-        logStateInfo(desc, frontier.getCur());
-      int added = 0;
 
-      // As skipProb -> 1, the behavior of this method starts to look like
-      // "choose a random span for every (t,k)" as the negative evidence.
-      int reservoirSize = (int) (keepFactor * init.getSentence().size()) + 1;
-      LOG.info(desc + " keepFactor=" + keepFactor + " reservoirSize=" + reservoirSize);
-      List<StateSequence> consider = DataUtil.reservoirSample(
-          transF.nextStates(frontier), reservoirSize, rand);
+  private ForwardSearch fullSearch(State initialState, BFunc biasFunction, Params.Stateful model) {
+    // TODO expose option to record initialActions as well?
+    return this.new ForwardSearch(initialState, biasFunction, model, null, true);
+  }
 
-      //for (StateSequence ss : transF.nextStates(frontier)) {
-      for (StateSequence ss : consider) {
+  private ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, Params.Stateful model) {
+    return this.new ForwardSearch(initialState, biasFunction, model, new ArrayList<>(), false);
+  }
 
-        // Model score
-        double score = ss.getScore();
+  /**
+   * Represents an Action and some feedback (from deltaLoss) that came out
+   * of the initial state. Implements HasUpdate by backpropping a score of
+   * 1 if the given action doesn't incur any loss and -1 if it does.
+   */
+  public static class ScoredAction implements HingeUpdate {
+    public final Adjoints adjoints;
+    public final double y;
+    public final double hinge;
+    public ScoredAction(Adjoints a, double deltaLoss) {
+      if (deltaLoss != 0d && deltaLoss != 1d)
+        throw new IllegalArgumentException("deltaLoss should be 0 or 1");
+      this.adjoints = a;
+      this.y = (deltaLoss - 0.5) * -2;  // {0,1} => {1,-1}
+      double wx = adjoints.getScore();
+      hinge = Math.max(0d, 1d - y * wx);
+    }
+    @Override
+    public void getUpdate(double[] addTo, double scale) {
+      if (hinge > 0d)
+        adjoints.getUpdate(addTo, scale * y * hinge);
+    }
+    @Override
+    public double violation() {
+      return hinge;
+    }
+  }
 
-        // Add in a reward for increasing the loss
-        if (y != null) {
-          Action a = ss.getAction();
-          ActionType at = a.getActionType();
-          //State s = ss.getCur();        // State after applying a (slow)
-          State s = frontier.getCur();    // State before applying a (fast)
-          score += at.deltaLoss(s, a, y);
-        }
+  public class ForwardSearch implements Runnable {
+    private final State initialState;
+    private final BFunc biasFunction;
+    private final Params.Stateful model;
+    private boolean fullSearch;
+    private boolean hasRun;
 
-        // Add to the beam
-        added++;
-        boolean onBeam = beam.push(ss, score);
-        if (verbose && onBeam && LOG_MOST_VIOLATED)
-          logAction(desc, iter, score, ss, y, y != null);
-      }
-      //LOG.debug("[mostViolated] added=" + added);
-      if (added == 0) {
-        if (LOG_MOST_VIOLATED) {
-          LOG.info("[mostViolated] done on iteration " + iter);
-          if (verbose) {
-            StateSequence cur = frontier;
-            while (cur != null) {
-              Adjoints a = cur.getAdjoints();
-              if (a != null)
-                LOG.info("[mostViolated] " + a.getAction() + " with score " + a.getScore());
-              cur = cur.getPrev();
-            }
+    private StateSequence path;                 // to be used if fullSearch (oracle, mostViolated)
+    private List<ScoredAction> initialActions;  // to be used if !fullSearch (statelessTrain)
+
+    public FNParse gold = null;  // purely for debugging
+
+    /**
+     * @param biasFunction is evaluated before the model score and can short-circuit
+     * the model score if -infinity is returned.
+     */
+    ForwardSearch(State initialState, BFunc biasFunction, Params.Stateful model, List<ScoredAction> initialActions, boolean fullSearch) {
+      this.initialState = initialState;
+      this.biasFunction = biasFunction;
+      this.model = model;
+      this.initialActions = initialActions;
+      this.path = null;
+      this.fullSearch = fullSearch;
+      this.hasRun = false;
+    }
+
+    @Override
+    public void run() {
+      assert !hasRun;
+
+      String desc = "[forwardSearch " + (fullSearch ? "full" : "init") + "]";
+      boolean verbose = false;
+
+      TransitionFunction transF =
+          new ActionDrivenTransitionFunction(model, actionTypes);
+      StateSequence frontier = new StateSequence(null, null, initialState, null);
+      Beam<StateSequence> beam = new Beam<>(beamWidth);
+      beam.push(frontier, 0d);
+
+      for (int iter = 0; beam.getSize() > 0; iter++) {
+
+        frontier = beam.pop();
+        if (verbose && LOG_FORWARD_SEARCH)
+          logStateInfo(desc, frontier.getCur());
+        int added = 0;
+
+        // As skipProb -> 1, the behavior of this method starts to look like
+        // "choose a random span for every (t,k)" as the negative evidence.
+        //      int reservoirSize = (int) (keepFactor * init.getSentence().size()) + 1;
+        //      LOG.info(desc + " keepFactor=" + keepFactor + " reservoirSize=" + reservoirSize);
+        //      List<StateSequence> consider = DataUtil.reservoirSample(
+        //          transF.nextStates(frontier), reservoirSize, rand);
+
+        for (StateSequence ss : transF.nextStates(frontier)) {
+          State s = frontier.getCur();
+          Adjoints adj = ss.getAdjoints();
+          Action a = adj.getAction();
+
+          double bias = biasFunction.score(s, a);
+          if (Double.isInfinite(bias)) {
+            assert bias < 0;
+            continue;
+          }
+
+          // model score
+          double modelScore = model.score(s, a).getScore();
+          double score = bias + modelScore;
+
+          // Save the initial actions and their scores
+          if (initialActions != null && iter == 0)
+            initialActions.add(new ScoredAction(adj, bias));
+
+          // Add to the beam
+          if (fullSearch) {
+            added++;
+            boolean onBeam = beam.push(ss, score);
+            if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
+              logAction(desc, iter, score, ss, gold, false);
           }
         }
-        assert 0 == frontier.getCur().numUncommitted();
-        logSolution(desc, frontier);
-        return frontier;
+
+        if (LOG_FORWARD_SEARCH)
+          LOG.info(desc + " added=" + added);
+
+        if (!fullSearch || added == 0) {
+          if (LOG_FORWARD_SEARCH)
+            LOG.info(desc + " done on iteration " + iter);
+          if (fullSearch) {
+            logSolution(desc, frontier);
+            this.path = frontier;
+          }
+          this.hasRun = true;
+          return;
+        }
+
       }
+      throw new RuntimeException("how did you run out of items on the beam?");
+    }
+
+    /**
+     * @return the path found using model+bfunc scores. The Adjoints in the
+     * returned StateSequence come from model, not including bfunc.
+     */
+    public StateSequence getPath() {
+      assert hasRun;
+      return path;
+    }
+
+    /**
+     * @return all actions out of initialState with their score from bfunc
+     */
+    public List<ScoredAction> getStatelessTrainUpdates() {
+      assert hasRun;
+      assert initialActions.size() > 0;
+      return initialActions;
     }
   }
 
-  public State randomDecodingState(FNTagging frames, Random rand) {
-    Params.Stateful theta = getCachingParams();
-    TransitionFunction transF =
-        new ActionDrivenTransitionFunction(theta, actionTypes);
-    State init = State.initialState(frames);
-    StateSequence frontier = new StateSequence(null, null, init, null);
-    int TK = init.numFrameRoleInstances();
-    if (TK == 0)
-      throw new IllegalArgumentException("only works when there are frameInstances");
-    int tkStop = rand.nextInt(TK);
-    for (int i = 0; i < tkStop; i++)
-      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
-    return frontier.getCur();
+  /**
+   * Runs a forward search to find both the oracle and mostViolated parses
+   * and returns an Update.
+   */
+  public HingeUpdate getFullUpdate(State init, FNParse y) {
+    if (y.numFrameInstances() == 0) {
+      assert init.numFrameInstance() == 0;
+      return HingeUpdate.NONE;
+    }
+
+    // Will cache adjoints across oracle and mostViolated
+    Params.Stateful cachingModelParams = getCachingParams();
+
+    // Find the oracle parse
+    ForwardSearch oracleSearch =
+        fullSearch(init, new BFunc.Oracle(y), cachingModelParams);
+    oracleSearch.run();
+
+    // Find the most violated parse
+    ForwardSearch mvSearch =
+        fullSearch(init, new BFunc.MostViolated(y), cachingModelParams);
+    mvSearch.run();
+
+    return new Update(y, oracleSearch.getPath(), mvSearch.getPath());
+  }
+
+  /**
+   * Does no search and returns a batch of ScoredActions.
+   */
+  public HingeUpdate getStatelessUpdate(State init, FNParse y) {
+    if (y.numFrameInstances() == 0) {
+      assert init.numFrameInstance() == 0;
+      return HingeUpdate.NONE;
+    }
+    Params.Stateful model = getCachingParams();
+    BFunc deltaLoss = new BFunc.MostViolated(y);
+    ForwardSearch initialActions =
+        initialActionsSearch(init, deltaLoss, model);
+    initialActions.run();
+    HingeUpdate.Batch batch = new HingeUpdate.Batch();
+    for (ScoredAction action : initialActions.getStatelessTrainUpdates()) {
+      batch.add(action);
+    }
+    return new HingeUpdate.Batch(initialActions.getStatelessTrainUpdates());
   }
 
   /**
@@ -421,73 +550,24 @@ public class Reranker {
    *
    * @return the hinge loss
    */
-  public class Update implements HasUpdate {
-    private final Logger LOG = Logger.getLogger(Update.class);
-
+  public class Update implements HingeUpdate {
+    public final FNParse gold;
     public final StateSequence oracle;
     public final StateSequence mostViolated;
     public final double hinge;
-    public final double keepFactor;
 
-    private StateSequence oracle(FNParse y, List<Item> rerank) {
-      StateSequence oracle;
-      timer.start("udpate.oracle");
-      oracle = Reranker.this.oracle(y);
-      timer.stop("udpate.oracle");
-      return oracle;
-    }
+    public Update(FNParse gold, StateSequence oracle, StateSequence mostViolated) {
+      this.gold = gold;
+      this.oracle = oracle;
+      this.mostViolated = mostViolated;
 
-    private StateSequence mostViolated(FNParse y, List<Item> rerank) {
-      StateSequence mv;
-      timer.start("udpate.mostViolated");
-      mv = Reranker.this.mostViolated(rerank, y, y, keepFactor);
-      timer.stop("udpate.mostViolated");
-      return mv;
-    }
-
-    public Update(FNParse y, List<Item> rerank, double skipProb) {//, boolean onlyStateless) {
-      this.keepFactor = skipProb;
-      if (y.numFrameInstances() == 0) {
-        oracle = null;
-        mostViolated = null;
-        hinge = 0d;
-        if (LOG_UPDATE)
-          LOG.info("[init] no frameInstances, 0 update");
-      } else {
-        if (rerank == null || rerank.size() == 0)
-          throw new IllegalArgumentException();
-
-        if (LOG_UPDATE) LOG.info("[init] solving oracle for " + y.getId());
-        oracle = oracle(y, rerank);
-
-        if (LOG_UPDATE) LOG.info("[init] solving mostViolated for " + y.getId());
-        mostViolated = mostViolated(y, rerank);
-
-        if (LOG_UPDATE) LOG.info("[init] decoding for " + y.getId());
-        timer.start("udpate.decode");
-        FNParse yHat = mostViolated.getCur().decode();
-        timer.stop("udpate.decode");
-
-        assert yHat != null : "mostViolated returned non-terminal state?";
-        SentenceEval se = new SentenceEval(y, yHat);
-        double l = se.argOnlyFP() + se.argOnlyFN() * COST_FN;
-        assert l >= 0d;
-        hinge = oracle.getScore() - (mostViolated.getScore() + l);
-        if (LOG_UPDATE) {
-          LOG.info(String.format(
-              "[init] y=%s hinge=%.2f = s(oracle)=%.2f - [s(mv)=%.2f + loss=%.2f]",
-              y.getId(), hinge, oracle.getScore(), mostViolated.getScore(), l));
-          LOG.info("[init] in MV solution:     fp=" + se.argOnlyFP() + " fn=" + se.argOnlyFN() + " tp=" + se.argOnlyTP());
-
-          // See if the oracle is finding the perfect answer
-          FNParse oracleDecode = oracle.getLast().getCur().decode();
-          assert oracleDecode != null : "oracle didn't even find a parse?";
-          SentenceEval se2 = new SentenceEval(y, oracleDecode);
-          LOG.info("[init] in oracle solution: fp=" + se2.argOnlyFP() + " fn=" + se2.argOnlyFN() + " tp=" + se2.argOnlyTP());
-
-          LOG.info("[init] timer: " + timer);
-        }
-      }
+      FNParse yHat = mostViolated.getCur().decode();
+      assert yHat != null : "mostViolated returned non-terminal state?";
+      SentenceEval se = new SentenceEval(gold, yHat);
+      double loss = se.argOnlyFP() + se.argOnlyFN();
+      this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
+      assert !Double.isNaN(hinge);
+      assert Double.isFinite(hinge);
     }
 
     public boolean isViolated() {
@@ -535,31 +615,6 @@ public class Reranker {
       assert skipped <= 1;
 
       timer.stop("Update.getUpdate");
-    }
-  }
-
-  /**
-   * Averages the updates in the given batch.
-   */
-  public static class UpdateBatch implements HasUpdate {
-    private Collection<Update> elements;
-    public UpdateBatch(Update... elements) {
-      this.elements = Arrays.asList(elements);
-    }
-    public UpdateBatch(Collection<Update> elements) {
-      this.elements = elements;
-    }
-    @Override
-    public void getUpdate(double[] addTo, double scale) {
-      double s = scale / elements.size();
-      for (Update u : elements)
-        u.getUpdate(addTo, s);
-    }
-    public double violation() {
-      double v = 0d;
-      for (Update u : elements)
-        v += u.violation();
-      return v;
     }
   }
 }

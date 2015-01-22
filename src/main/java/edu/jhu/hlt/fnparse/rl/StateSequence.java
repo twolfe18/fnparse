@@ -9,10 +9,9 @@ public class StateSequence {
   private State cur;
   private int movesApplied = -1;
 
-  // The action + features + computation
-  // either (cur -> action -> next) if next != null
-  // or     (prev -> action -> cur) if prev != null
-  // TODO this definition is not compatible with neighbor(), choose one version
+  // Contains an Action which is
+  // either (prev -> action -> cur)
+  // or     (cur -> action -> next)
   private Adjoints action;
 
   public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
@@ -27,8 +26,7 @@ public class StateSequence {
   public String showActions() {
     FNTagging frames = getCur().getFrames();
     StringBuilder sb = null;
-    StateSequence cur = this;
-    while (cur != null) {
+    for (StateSequence cur = this; cur != null; cur = cur.neighbor()) {
       String a = (cur.action == null) ? "???" : cur.getAction().show(frames);
       if (sb == null) {
         sb = new StringBuilder(a);
@@ -36,7 +34,6 @@ public class StateSequence {
         sb.append(", ");
         sb.append(a);
       }
-      cur = cur.neighbor();
     }
     return sb.toString();
   }

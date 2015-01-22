@@ -151,7 +151,7 @@ public class LearningTest {
 
     int beamWidth = 10;
     Reranker model = new Reranker(Stateful.NONE, theta, beamWidth, rand);
-    Reranker.LOG_MOST_VIOLATED = false;
+    Reranker.LOG_FORWARD_SEARCH = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
   }
@@ -206,8 +206,7 @@ public class LearningTest {
   public void fromPriorScores() {
     // Train a model using PriorScoreParams
     Reranker.LOG_UPDATE = true;
-    Reranker.LOG_ORACLE = true;
-    Reranker.LOG_MOST_VIOLATED = false;
+    Reranker.LOG_FORWARD_SEARCH = true;
     ItemProvider ip = Reranker.getItemProvider(100, false);
     int beamWidth = 1;
     boolean train = true;

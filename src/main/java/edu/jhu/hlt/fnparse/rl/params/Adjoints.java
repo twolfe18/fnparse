@@ -16,6 +16,14 @@ public interface Adjoints extends HasUpdate {
 
   public double getScore();
   public Action getAction();
+  
+  // TODO
+  // the fact that getUpdate(double[] addTo, double scale), from HasUpdate
+  // is here reflects the assumption that Adjoints produce rather than apply
+  // updates. This seems wrong, Adjoints should be able to apply a backwards
+  // update.
+  // Like Params.update!
+  
 
   /**
    * Must provide a Supplier<Adjoints> that returns a non-null Adjoints.

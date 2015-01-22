@@ -110,10 +110,6 @@ public class OldFeatureParams implements Params.Stateless {
     int k = 12; // how many of the most extreme features to show
     List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
     ModelViewer.showBiggestWeights(w, k, msg, LOG);
-    if (theta.hasAverage()) {
-      w = ModelViewer.getSortedWeights(theta.getAveragedWeights(), featureIndices);
-      ModelViewer.showBiggestWeights(w, k, msg + " avg", LOG);
-    }
   }
 
   @Override
@@ -173,12 +169,12 @@ public class OldFeatureParams implements Params.Stateless {
   public void doneTraining() {
     if (featureIndices != null)
       featureIndices.stopGrowth();
+    showFeatures("[doneTraining]");
     if (theta.hasAverage()) {
       LOG.info("[doneTraining] setting theta to averaged value");
-      if (SHOW_ON_UPDATE)
-        showFeatures("[doneTraining] averaged:");
       theta.setAveragedWeights();
-      printedSinceUpdate = false;
+      showFeatures("[doneTraining] after averaging:");
     }
+    printedSinceUpdate = false;
   }
 }
