@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Collection;
 import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
@@ -13,6 +12,8 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -29,7 +30,6 @@ public class OldFeatureParams implements Params.Stateless {
   private TemplatedFeatures features;
   private HeadFinder headFinder;
   private AveragedWeights theta;
-  private double learningRate;
 
   private Alphabet<String> featureIndices;
   private int numBuckets;
@@ -56,7 +56,6 @@ public class OldFeatureParams implements Params.Stateless {
   }
 
   private OldFeatureParams() {
-    learningRate = 1d;
     headFinder = new SemaforicHeadFinder();
   }
 
@@ -89,17 +88,6 @@ public class OldFeatureParams implements Params.Stateless {
 
   public int getNumParams() {
     return featureIndices.size();
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    double[] update = new double[theta.dimension()];
-    double scale = learningRate / batch.size();
-    for (T up : batch)
-      up.getUpdate(update, scale);
-    theta.add(update);
-    theta.incrementCount();
-    printedSinceUpdate = false;
   }
 
   public void showFeatures(String msg) {
@@ -149,8 +137,22 @@ public class OldFeatureParams implements Params.Stateless {
 
     // TODO consider if we should ever use the average here
     //return new Adjoints.SparseFeatures(fv, theta, a);
-    return new Adjoints.SparseFeatures(fv, theta.getWeights(), a);
+    //return new Adjoints.SparseFeatures(fv, theta.getWeights(), a);
+    
+    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
+    return new Adjoints.Vector(a, weights, fv);
   }
+
+//  @Override
+//  public <T extends HasUpdate> void update(Collection<T> batch) {
+//    double[] update = new double[theta.dimension()];
+//    double scale = learningRate / batch.size();
+//    for (T up : batch)
+//      up.getUpdate(update, scale);
+//    theta.add(update);
+//    theta.incrementCount();
+//    printedSinceUpdate = false;
+//  }
 
   private void checkSize() {
     if (isAlphabetBased()) {

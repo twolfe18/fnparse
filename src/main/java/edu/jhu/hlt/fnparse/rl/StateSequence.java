@@ -103,7 +103,7 @@ public class StateSequence {
       if (action == null)
         return 0d;
       StateSequence n = neighbor();
-      score = action.getScore() +  (n == null ? 0d : n.getScore());
+      score = action.forwards() +  (n == null ? 0d : n.getScore());
     }
     return score;
   }

@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -11,6 +10,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 public class CheatingParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(CheatingParams.class);
@@ -19,10 +19,8 @@ public class CheatingParams implements Params.Stateless {
   private Set<String> goldItems;
   private Set<String> goldParseIds;
   private double[] theta;
-  private double learningRate;  // TODO remove, doesn't matter for perceptron
 
   public CheatingParams(Iterable<FNParse> parses) {
-    learningRate = 0.01d;
     theta = new double[2];
     goldItems = new HashSet<>();
     goldParseIds = new HashSet<>();
@@ -65,16 +63,7 @@ public class CheatingParams implements Params.Stateless {
     double[] f = new double[theta.length];
     f[0] = 1d;
     f[1] = isGold ? 1d : 0d;
-    return new Adjoints.DenseFeatures(f, theta, a);
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    double s = learningRate / batch.size();
-    for (T up : batch)
-      up.getUpdate(theta, s);
-    if (SHOW_ON_UPDATE)
-      LOG.info("[update] afterwards: " + showWeights());
+    return new Adjoints.Vector(a, new IntDoubleDenseVector(theta), new IntDoubleDenseVector(f));
   }
 
   @Override

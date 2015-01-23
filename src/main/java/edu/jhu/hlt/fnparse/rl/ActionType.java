@@ -41,6 +41,8 @@ public interface ActionType {
    * b, return the BitSet that would have lead to s under a.
    *
    * You can assume this action came from next().
+   *
+   * @deprecated only need forwards now
    */
   public State unapply(Action a, State s);
 
@@ -58,6 +60,8 @@ public interface ActionType {
 
   /**
    * Return a list of actions of this type that would lead to the given State.
+   *
+   * @deprecated only need forwards now
    */
   public Iterable<Action> prev(State s);
 
@@ -153,6 +157,9 @@ public interface ActionType {
       return actions;
     }
 
+    /**
+     * @deprecated
+     */
     @Override
     public Iterable<Action> prev(State st) {
       List<Action> actions = new ArrayList<>();
@@ -240,6 +247,9 @@ public interface ActionType {
       return next;
     }
 
+    /**
+     * @deprecated
+     */
     @Override
     public State unapply(Action a, State s) {
       throw new RuntimeException("This is an impossible task, and a design flaw."
@@ -251,6 +261,9 @@ public interface ActionType {
       return prune(COMMIT.next(st, y), st);
     }
 
+    /**
+     * @deprecated
+     */
     @Override
     public Iterable<Action> prev(State st) {
       // TODO figure this out.

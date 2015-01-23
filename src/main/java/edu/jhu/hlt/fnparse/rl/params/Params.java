@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,7 +15,8 @@ import edu.jhu.hlt.fnparse.rl.State;
 public interface Params {
   public static final Logger LOG = Logger.getLogger(Params.class);
 
-  public <T extends HasUpdate> void update(Collection<T> batch);
+  // This is no longer needed because the Adjoints have an apply method
+  //public void update(Update update);
 
   /**
    * This is called after training is complete. This is a useful hook for
@@ -38,19 +38,15 @@ public interface Params {
     public static final Stateful NONE = new Stateful() {
       @Override public Adjoints score(State s, final Action a) {
         return new Adjoints() {
-          @Override public double getScore() { return 0d; }
+          @Override public double forwards() { return 0d; }
           @Override public Action getAction() {
             return a;
           }
           @Override
-          public void getUpdate(double[] addTo, double scale) {
+          public void backwards(double dErr_dForwards) {
             // no-op
           }
         };
-      }
-      @Override
-      public <T extends HasUpdate> void update(Collection<T> batch) {
-        // no-op
       }
       @Override
       public void doneTraining() {
@@ -63,10 +59,6 @@ public interface Params {
         @Override
         public Adjoints score(State s, Action a) {
           return theta.score(s.getFrames(), a);
-        }
-        @Override
-        public <T extends HasUpdate> void update(Collection<T> batch) {
-          theta.update(batch);
         }
         @Override
         public void doneTraining() {
@@ -86,7 +78,7 @@ public interface Params {
       @Override public Adjoints score(FNTagging frames, final Action a) {
         return new Adjoints() {
           @Override
-          public double getScore() {
+          public double forwards() {
             return 0d;
           }
           @Override
@@ -94,14 +86,10 @@ public interface Params {
             return a;
           }
           @Override
-          public void getUpdate(double[] addTo, double scale) {
+          public void backwards(double dErr_dForwards) {
             // no-op
           }
         };
-      }
-      @Override
-      public <T extends HasUpdate> void update(Collection<T> batch) {
-        // no-op
       }
       @Override
       public void doneTraining() {
@@ -199,10 +187,6 @@ public interface Params {
       }
       */
       @Override
-      public <T extends HasUpdate> void update(Collection<T> batch) {
-        wrapping.update(batch);
-      }
-      @Override
       public void doneTraining() {
         wrapping.doneTraining();
       }
@@ -218,8 +202,8 @@ public interface Params {
       this.right = stateless;
     }
     @Override
-    public double getScore() {
-      return left.getScore() + right.getScore();
+    public double forwards() {
+      return left.forwards() + right.forwards();
     }
     @Override
     public Action getAction() {
@@ -228,9 +212,9 @@ public interface Params {
       return left.getAction();
     }
     @Override
-    public void getUpdate(double[] addTo, double scale) {
-      left.getUpdate(addTo, scale);
-      right.getUpdate(addTo, scale);
+    public void backwards(double dErr_dForwards) {
+      left.backwards(dErr_dForwards);
+      right.backwards(dErr_dForwards);
     }
   }
 
@@ -247,12 +231,7 @@ public interface Params {
       FNTagging f = s.getFrames();
       return new SumAdj(stateful.score(s, a), stateless.score(f, a));
     }
-    @Override
-    public <T extends HasUpdate> void update(Collection<T> batch) {
-      stateful.update(batch);
-      stateless.update(batch);
-    }
-    @Override
+   @Override
     public void doneTraining() {
       stateful.doneTraining();
       stateless.doneTraining();
@@ -269,11 +248,6 @@ public interface Params {
     @Override
     public Adjoints score(FNTagging f, Action a) {
       return new SumAdj(left.score(f, a), right.score(f, a));
-    }
-    @Override
-    public <T extends HasUpdate> void update(Collection<T> batch) {
-      left.update(batch);
-      right.update(batch);
     }
     @Override
     public void doneTraining() {

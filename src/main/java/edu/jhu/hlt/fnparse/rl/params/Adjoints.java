@@ -2,9 +2,10 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.function.Supplier;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
  * Wraps the result of a forward pass, which is often needed for computing a
@@ -12,18 +13,63 @@ import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
  *
  * @author travis
  */
-public interface Adjoints extends HasUpdate {
+public interface Adjoints {
 
-  public double getScore();
-  public Action getAction();
-  
+  public Action getAction();  // TODO put in sub-class
+
+  public double forwards();
+
+  public void backwards(double dErr_dForwards);
+
   // TODO
   // the fact that getUpdate(double[] addTo, double scale), from HasUpdate
   // is here reflects the assumption that Adjoints produce rather than apply
   // updates. This seems wrong, Adjoints should be able to apply a backwards
   // update.
   // Like Params.update!
-  
+
+  /**
+   * Replaces Dense and Sparse
+   */
+  public static class Vector implements Adjoints {
+    private final Action action;
+    private final IntDoubleVector features;
+    private final IntDoubleVector weights;  // not owned by this class
+    private double score;
+    private boolean computed;
+    public Vector(Action a, double[] weights, double[] features) {
+      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features));
+    }
+    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features) {
+      this.action = a;
+      this.weights = weights;
+      this.features = features;
+      this.computed = false;
+    }
+    @Override
+    public Action getAction() {
+      return action;
+    }
+    @Override
+    public double forwards() {
+      if (!computed) {
+        score = features.dot(weights);
+        computed = true;
+      }
+      return score;
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      assert computed;
+      features.apply(new FnIntDoubleToDouble() {
+        @Override
+        public double call(int i, double w_i) {
+          weights.add(i, dErr_dForwards * w_i);
+          return w_i;
+        }
+      });
+    }
+  }
 
   /**
    * Must provide a Supplier<Adjoints> that returns a non-null Adjoints.
@@ -36,20 +82,12 @@ public interface Adjoints extends HasUpdate {
       this.value = null;
     }
     @Override
-    public void getUpdate(double[] addTo, double scale) {
+    public double forwards() {
       if (value == null) {
         value = thunk.get();
         assert value != null;
       }
-      value.getUpdate(addTo, scale);
-    }
-    @Override
-    public double getScore() {
-      if (value == null) {
-        value = thunk.get();
-        assert value != null;
-      }
-      return value.getScore();
+      return value.forwards();
     }
     @Override
     public Action getAction() {
@@ -58,6 +96,14 @@ public interface Adjoints extends HasUpdate {
         assert value != null;
       }
       return value.getAction();
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      if (value == null) {
+        value = thunk.get();
+        assert value != null;
+      }
+      value.backwards(dErr_dForwards);
     }
   }
 
@@ -80,7 +126,7 @@ public interface Adjoints extends HasUpdate {
       return tag;
     }
     @Override
-    public double getScore() {
+    public double forwards() {
       return score;
     }
     @Override
@@ -88,15 +134,14 @@ public interface Adjoints extends HasUpdate {
       return action;
     }
     @Override
-    public void getUpdate(double[] addTo, double scale) {
+    public void backwards(double dErr_dForwards) {
       // no-op
     }
   }
 
-  /**
+  /*
    * Represents a score parameterized by a dot product between parameters and
    * a dense vector.
-   */
   public static class DenseFeatures implements Adjoints {
     protected double[] features;
     private double[] theta;
@@ -125,11 +170,11 @@ public interface Adjoints extends HasUpdate {
         addTo[i] += scale * features[i];
     }
   }
+   */
 
-  /**
+  /*
    * Represents a score parameterized by a dot product between parameters and
    * a sparse vector.
-   */
   public static class SparseFeatures implements Adjoints {
     private FeatureVector features;
     private double[] theta;
@@ -161,4 +206,5 @@ public interface Adjoints extends HasUpdate {
       });
     }
   }
+   */
 }

@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.Arrays;
-import java.util.Collection;
 
 import org.apache.log4j.Logger;
 
@@ -11,25 +10,25 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.util.Alphabet;
 
 public class FeatureParams implements Params.Stateful {
   public static final Logger LOG = Logger.getLogger(FeatureParams.class);
 
-  private Alphabet<String> features;
+  private Alphabet<String> featureNames;
   private double[] theta;
-  private double learningRate = 0.1d;     // TODO remove, not needed for perceptron
-  private Adjoints.SparseFeatures cache;
+  private FeatureVector features;
 
   public FeatureParams() {
-    features = new Alphabet<>();
+    featureNames = new Alphabet<>();
     theta = new double[1024];
   }
 
   private void b(String featureName) {
     //LOG.info("[b] adding: " + featureName);
-    int i = features.lookupIndex(featureName, true);
-    cache.add(i, 1d);
+    int i = featureNames.lookupIndex(featureName, true);
+    features.add(i, 1d);
   }
 
   private void bb(String featureName, String... backoffs) {
@@ -50,7 +49,8 @@ public class FeatureParams implements Params.Stateful {
     // Number of items committed to on this side of the target.
 
     //LOG.info("[score] starting ");// + a.toString(s));
-    cache = new Adjoints.SparseFeatures(new FeatureVector(), theta, a);
+    //cache = new Adjoints.SparseFeatures(new FeatureVector(), theta, a);
+    features = new FeatureVector();
     FrameInstance fi = s.getFrameInstance(a.t);
     Span t = fi.getTarget();
     String f = fi.getFrame().getName();
@@ -82,19 +82,12 @@ public class FeatureParams implements Params.Stateful {
       b("abnormalSpan");
     }
     // Check that theta is big enough
-    if (features.size() > theta.length) {
-      int n = (int) (features.size() * 1.6d + 0.5d);
+    if (featureNames.size() > theta.length) {
+      int n = (int) (featureNames.size() * 1.6d + 0.5d);
       LOG.info("[score] resizing theta: " + theta.length + " => " + n);
       theta = Arrays.copyOf(theta, n);
     }
-    return cache;
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    final double s = learningRate / batch.size();
-    for (T up : batch)
-      up.getUpdate(theta, s);
+    return new Adjoints.Vector(a, new IntDoubleDenseVector(theta), features);
   }
 
 //  @Override

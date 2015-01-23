@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Collection;
+import java.util.Random;
 
 import org.apache.log4j.Logger;
 
@@ -8,8 +8,15 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.FrameRoleFeatures;
+import edu.jhu.hlt.fnparse.rl.FrameRoleEmbeddings;
 import edu.jhu.hlt.fnparse.rl.params.ContextEmbedding.CtxEmb;
+import edu.jhu.hlt.fnparse.util.RandomInitialization;
+import edu.jhu.prim.util.math.FastMath;
+
+/**
+ * TODO write a test where I replace either v_x and/or v_y with 1 or f(y,x), interchangably
+ * I should be able to learn the same weights as OldFeatureParams.
+ */
 
 /**
  * implements e(f,r)' \theta \phi(t,a,s,x)
@@ -30,70 +37,76 @@ import edu.jhu.hlt.fnparse.rl.params.ContextEmbedding.CtxEmb;
 public class EmbeddingParams implements Params.Stateless {
   public static final Logger LOG = Logger.getLogger(EmbeddingParams.class);
 
-  static class QuadAdjoints implements Adjoints {
+  public static boolean regular(double[] fr) {
+    for (int i = 0; i < fr.length; i++) {
+      if (Double.isNaN(fr[i])) return false;
+      if (!Double.isFinite(fr[i])) return false;
+    }
+    return true;
+  }
+
+  class QuadAdjoints implements Adjoints {
     public final FNTagging frames;
     public final Action action;
     public final double[] fr;
     public final CtxEmb ctx;
 
-    private double[][] prod;  // pointwise product of ((fr' ctx) theta)
-    private double[] prodRowSums;
-    private double[] prodColSums;
-    private double prodSum;
+    private double prodSum; // wx
+    private double[] frTimesTheta;  // indexed with j < ctx.length
+    private double[] ctxTimesTheta; // indexed with i < fr.length
+    private double[][] frTimesCtx;  // indexed with i,j
 
     public QuadAdjoints(FNTagging frames, Action a, double[] fr, CtxEmb ctx) {
       this.frames = frames;
       this.action = a;
       this.fr = fr;
       this.ctx = ctx;
+      assert fr.length == theta.length;
+      assert ctx.getEmbedding().length == theta[0].length;
+      assert regular(fr);
+      assert regular(ctx.getEmbedding());
     }
 
     public void compute(double[][] theta) {
       int nR = theta.length;
       int nC = theta[0].length;
-      prod = new double[nR][nC];
-      prodRowSums = new double[nR];
-      prodColSums = new double[nC];
+      frTimesTheta = new double[nC];
+      ctxTimesTheta = new double[nR];
+      frTimesCtx = new double[nR][nC];
       prodSum = 0d;
       double[] ctx = this.ctx.getEmbedding();
       for (int i = 0; i < nR; i++) {
         for (int j = 0; j < nC; j++) {
-          double p = theta[i][j] * fr[i] * ctx[j];
-          prod[i][j] = p;
-          prodRowSums[i] += p;
-          prodColSums[j] += p;
-          prodSum += p;
+          prodSum += theta[i][j] * fr[i] * ctx[j];
+          assert !Double.isNaN(prodSum);
+          assert Double.isFinite(prodSum);
+          frTimesTheta[j] += theta[i][j] * fr[i];
+          ctxTimesTheta[i] += theta[i][j] * ctx[j];
+          frTimesCtx[i][j] += fr[i] * ctx[j];
         }
       }
+      assert !Double.isNaN(prodSum);
+      assert Double.isFinite(prodSum);
     }
 
     public double[] getFrTimesTheta() {
-      assert prod != null;
-      double[] ctx = this.ctx.getEmbedding();
-      int n = ctx.length;
-      double[] p = new double[n];
-      for (int i = 0; i < n; i++)
-        p[i] = prodColSums[i] / ctx[i];
-      return p;
+      assert regular(frTimesTheta);
+      return frTimesTheta;
     }
 
     public double[] getCtxTimesTheta() {
-      assert prod != null;
-      int n = fr.length;
-      double[] p = new double[n];
-      for (int i = 0; i < n; i++)
-        p[i] = prodRowSums[i] / fr[i];
-      return p;
+      assert regular(ctxTimesTheta);
+      return ctxTimesTheta;
     }
 
     public double[][] getProd() {
-      assert prod != null;
-      return prod;
+      for (double[] fc : frTimesCtx)
+        assert regular(fc);
+      return frTimesCtx;
     }
 
     @Override
-    public double getScore() {
-      assert prod != null;
+    public double forwards() {
       return prodSum;
     }
 
@@ -103,28 +116,69 @@ public class EmbeddingParams implements Params.Stateless {
     }
 
     @Override
-    public void getUpdate(double[] addTo, double scale) {
-      // I can't dump the update into addTo
-      // This class does have the forward pass information though.
-      // The proper update is in EmbeddingParams.update
-      LOG.warn("[QuadAdjoints getUpdate] no-op, bad design");
+    public void backwards(double dErr_dForwards) {
+      double learningRate = 1d;
+      Frame f = frames.getFrameInstance(action.t).getFrame();
+
+      double[] ctt = getCtxTimesTheta();
+      LOG.info("2norm of ctx * theta = " + l2norm(ctt));
+      frE.update(f, action.k, ctt, learningRate * dErr_dForwards);
+
+      double[] ftt = getFrTimesTheta();
+      LOG.info("2norm of fr * theta = " + l2norm(ftt));
+      ctxE.update(ctx, ftt, learningRate * dErr_dForwards);
+
+      LOG.info("2norm of fr * ctx = " + l2norm(frTimesCtx));
+      LOG.info("2norm of theta = " + l2norm(theta));
+      double l2Penalty = 1e-2;
+      for (int i = 0; i < frTimesCtx.length; i++) {
+        for (int j = 0; j < frTimesCtx[i].length; j++) {
+          double dTheta = learningRate * dErr_dForwards * frTimesCtx[i][j];
+//          assert !Double.isNaN(dTheta);
+//          assert Double.isFinite(dTheta);
+          theta[i][j] += dTheta - l2Penalty * theta[i][j];
+        }
+      }
+
     }
   }
 
-  private FrameRoleFeatures frE;
+  public static double l2norm(double[] v) {
+    double d = 0d;
+    for (double vv : v) d += vv * vv;
+    return FastMath.sqrt(d);
+  }
+
+  public static double l2norm(double[][] v) {
+    double d = 0d;
+    for (double[] vv : v) {
+      double s = l2norm(vv);
+      d += s * s;
+    }
+    return FastMath.sqrt(d);
+  }
+
+  private FrameRoleEmbeddings frE;
   private ContextEmbedding ctxE;
   private double[][] theta;
 
   /**
    * @param k is a multiplier for how many params to use, 1 is very parsimonious
-   * and 6 is a lot, 3 is a good default. The number of params is linear in k.
+   * and 6 is a lot, 2 is a good default. The number of params is linear in k.
+   * Powers of 2 are preferable for k.
    */
-  public EmbeddingParams(int k) {
-    frE = new FrameRoleFeatures(8 * k, 16 * k, 8 * k);
+  public EmbeddingParams(int k, Random rand) {
+    frE = new FrameRoleEmbeddings(8 * k, 16 * k, 8 * k);
     ctxE = new ContextEmbedding(16 * k);
     theta = new double[frE.dimension()][ctxE.getDimension()];
     int d = theta.length * theta[0].length;
     LOG.info("theta is (" + theta.length + ", " + theta[0].length + ") numParams=" + d);
+
+    double variance = 10;
+    LOG.info("randomly initializing with variance=" + variance);
+    frE.initialize(variance, rand);
+    ctxE.initialize(variance, rand);
+    new RandomInitialization(rand).unif(theta, variance);
   }
 
   @Override
@@ -140,33 +194,6 @@ public class EmbeddingParams implements Params.Stateless {
     //long t3 = System.currentTimeMillis();
     //LOG.info("[score] frE=" + (t1-t0) + " ctxE=" + (t2-t1) + " quad=" + (t3-t2));
     return adj;
-  }
-
-  private void update(Adjoints adjoints, double reward) {
-    QuadAdjoints adj = (QuadAdjoints) adjoints;
-    Action a = adj.getAction();
-    double learningRate = 0.1d;
-    Frame f = adj.frames.getFrameInstance(a.t).getFrame();
-    frE.update(f, a.k, adj.getCtxTimesTheta(), learningRate);
-    ctxE.update(adj.ctx, adj.getFrTimesTheta(), learningRate);
-    double[][] prod = adj.getProd();
-    int nR = prod.length;
-    int nC = prod[0].length;
-    for (int i = 0; i < nR; i++) {
-      for (int j = 0; j < nC; j++) {
-        double dtheta = prod[i][j] / theta[i][j];
-        theta[i][j] += learningRate * dtheta;
-      }
-    }
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    final double s = 1d / batch.size();
-    for (T up : batch) {
-      QuadAdjoints qa = (QuadAdjoints) up;
-      update(qa, s);  // TODO is this right?
-    }
   }
 
   @Override

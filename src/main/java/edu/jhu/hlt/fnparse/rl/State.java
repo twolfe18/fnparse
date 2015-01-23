@@ -315,8 +315,10 @@ public class State {
     ActionType at = ActionType.ACTION_TYPES[a.mode];
     if (forwards)
       return at.apply(a, this);
-    else
+    else {
+      assert false : "we shouldn't be using this anymore";
       return at.unapply(a, this);
+    }
   }
 
   public String show() {

@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -20,15 +19,16 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
-import edu.jhu.hlt.fnparse.rl.params.HasUpdate;
 import edu.jhu.hlt.fnparse.rl.params.OldFeatureParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
-import edu.jhu.hlt.fnparse.util.HingeUpdate;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.Conjunction;
+import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.HammingConvergence;
+import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.Time;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
-import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.*;
 
 /**
  * Training logic can get out of hand (e.g. checking against dev data, etc).
@@ -183,7 +183,7 @@ public class RerankerTrainer {
     ExecutorService es = null;
     if (threads > 1)
       es = Executors.newWorkStealingPool(threads);
-    int interval = 1000;
+    int interval = 10;
     boolean showTime = false;
     boolean showViolation = true;
     for (int iter = 0; true; iter++) {
@@ -226,11 +226,11 @@ public class RerankerTrainer {
       boolean onlyStateless,
       String timerStrPartial) throws InterruptedException, ExecutionException {
     String timerStr = timerStrPartial + ".batch";
-    Timer t = timer.get(timerStr, true).setPrintInterval(30);
+    Timer t = timer.get(timerStr, true).setPrintInterval(10).ignoreFirstTime();
     t.start();
     boolean verbose = false;
     int n = ip.size();
-    List<HingeUpdate> finishedUpdates = new ArrayList<>();
+    List<Update> finishedUpdates = new ArrayList<>();
     if (es == null) {
       if (verbose)
         LOG.info("[hammingTrainBatch] running serial");
@@ -241,7 +241,7 @@ public class RerankerTrainer {
         State init = State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        HingeUpdate u = onlyStateless
+        Update u = onlyStateless
           ? r.getStatelessUpdate(init, y)
           : r.getFullUpdate(init, y);
         finishedUpdates.add(u);
@@ -249,7 +249,7 @@ public class RerankerTrainer {
     } else {
       if (verbose)
         LOG.info("[hammingTrainBatch] running with ExecutorService");
-      List<Future<HingeUpdate>> updates = new ArrayList<>();
+      List<Future<Update>> updates = new ArrayList<>();
       for (int i = 0; i < batchSize; i++) {
         int idx = rand.nextInt(n);
         FNParse y = ip.label(idx);
@@ -258,19 +258,15 @@ public class RerankerTrainer {
           LOG.info("[hammingTrainBatch] submitting " + idx);
         updates.add(es.submit(() -> r.getFullUpdate(State.initialState(y, rerank), y)));
       }
-      for (Future<HingeUpdate> u : updates)
+      for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
     }
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batchSize;
 
-    HingeUpdate.Batch ub = new HingeUpdate.Batch(finishedUpdates);
-    List<HasUpdate> batch = Arrays.asList(ub);
-    r.getStatefulParams().update(batch);
-    r.getStatelessParams().update(batch);
-
-    double violation = ub.violation();
+    // Apply the update
+    double violation = new Update.Batch<>(finishedUpdates).apply(1d);
     t.stop();
     return violation;
   }
@@ -301,16 +297,16 @@ public class RerankerTrainer {
     Reranker.LOG_FORWARD_SEARCH = false;
     OldFeatureParams.AVERAGE_FEATURES = false;
     OldFeatureParams.SHOW_ON_UPDATE = false;
-    trainer.batchSize = 4;
+    trainer.batchSize = 1;
     trainer.beamSize = 1;
     trainer.stoppingPretrain = new Conjunction(
-        new HammingConvergence(0.05, 5000), new Time(60));
+        new HammingConvergence(0.05, 5000), new Time(15));
 
-    if (useFeatureHashing)
-      trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
-    else
-      trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(250 * 1000);
-//    trainer.statelessParams = new EmbeddingParams(2);
+//    if (useFeatureHashing)
+//      trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
+//    else
+//      trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(250 * 1000);
+    trainer.statelessParams = new EmbeddingParams(1, trainer.rand);
 
     Reranker model = trainer.train(train);
     LOG.info("[main] done training, evaluating");

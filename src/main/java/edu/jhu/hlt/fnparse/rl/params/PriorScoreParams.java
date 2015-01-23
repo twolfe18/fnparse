@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -94,7 +93,6 @@ public class PriorScoreParams implements Params.Stateless {
 
   private Map<String, Item> index;
   private double[] theta;
-  private double learningRate = 0.01d;  // TODO remove, not needed in perceptron
 
   /**
    * If featureMode = true, then this will learn weights for two features:
@@ -153,7 +151,7 @@ public class PriorScoreParams implements Params.Stateless {
         if (score.rank == 5) feats[offset + 7] = 1d;
         if (score.rank > 5)  feats[offset + 8] = 1d;
       }
-      return new Adjoints.DenseFeatures(feats, theta, a);
+      return new Adjoints.Vector(a, theta, feats);
     } else {
       double s = score == null ? Double.NEGATIVE_INFINITY : score.getScore();
       return new Adjoints.Explicit(s, a, "priorScore");
@@ -195,19 +193,6 @@ public class PriorScoreParams implements Params.Stateless {
     LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
 
     LOG.debug("");
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    if (theta != null) {
-      final double s = learningRate / batch.size();
-      for (T up : batch)
-        up.getUpdate(theta, s);
-      if (SHOW_PARAMS_AFTER_UPDATE)
-        logParams();
-    } else {
-      LOG.debug("[update] not doing anything");
-    }
   }
 
   @Override

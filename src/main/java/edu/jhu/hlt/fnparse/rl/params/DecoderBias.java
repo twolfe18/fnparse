@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Collection;
-
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
 
@@ -30,11 +28,6 @@ public class DecoderBias implements Params.Stateless {
   public Adjoints score(FNTagging f, Action a) {
     double score = a.hasSpan() ? recallBias : 0d;
     return new Adjoints.Explicit(score, a, getClass().getName());
-  }
-
-  @Override
-  public <T extends HasUpdate> void update(Collection<T> batch) {
-    // No-op. You don't learn these Params like other params.
   }
 
   @Override

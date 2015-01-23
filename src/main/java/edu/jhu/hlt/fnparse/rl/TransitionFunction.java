@@ -3,18 +3,19 @@ package edu.jhu.hlt.fnparse.rl;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.hlt.fnparse.rl.params.Params;
 
 public interface TransitionFunction {
 
-  public Iterable<StateSequence> previousStates(StateSequence s);
-  public Iterable<StateSequence> nextStates(StateSequence s);
+  public Iterable<Action> nextStates(StateSequence s);
+
+  /**
+   * @deprecated we've switched to a forwards-only beam search.
+   */
+  public Iterable<Action> previousStates(StateSequence s);
 
   /*
    * AH, BE CAREFUL NOT TO PUT TOO MUCH IN THIS CLASS.
@@ -63,67 +64,42 @@ public interface TransitionFunction {
     // or generate transition code.
 
     private ActionType[] actionTypes;
-    private Params.Stateful theta;
     private FNParse y;
 
     /**
      * @deprecated Should not really need y, use the constructor without it.
      */
-    public ActionDrivenTransitionFunction(Params.Stateful theta, FNParse y, ActionType... actionTypes) {
+    public ActionDrivenTransitionFunction(FNParse y, ActionType... actionTypes) {
       this.actionTypes = actionTypes;
-      this.theta = theta;
       this.y = y;
     }
 
-    public ActionDrivenTransitionFunction(Params.Stateful theta, ActionType... actionTypes) {
+    public ActionDrivenTransitionFunction(ActionType... actionTypes) {
       this.actionTypes = actionTypes;
-      this.theta = theta;
       this.y = null;
     }
 
     @Override
-    public Iterable<StateSequence> previousStates(StateSequence s) {
-      State st = s.getCur();
-      int n = actionTypes.length;
-      List<Iterable<StateSequence>> inputs = new ArrayList<>();
-      for (int i = 0; i < n; i++) {
-        Iterable<Action> ita = actionTypes[i].prev(st);
-        Iterable<StateSequence> itss = Iterables.transform(ita, new Function<Action, StateSequence>() {
-          @Override
-          public StateSequence apply(Action input) {
-            Adjoints adj = theta.score(st, input);
-            //Adjoints adj = new Adjoints.Lazy(() -> theta.score(st, input));
-            
-            // lskdjflkds
-            // how was this working before?
-            
-            
-            return new StateSequence(null, s, null, adj);
-          }
-        });
-        inputs.add(itss);
-      }
-      return Iterables.concat(inputs);
+    public Iterable<Action> previousStates(StateSequence s) {
+//      State st = s.getCur();
+//      int n = actionTypes.length;
+//      List<Iterable<Action>> inputs = new ArrayList<>();
+//      for (int i = 0; i < n; i++) {
+//        Iterable<Action> ita = actionTypes[i].prev(st);
+//        inputs.add(ita);
+//      }
+//      return Iterables.concat(inputs);
+      throw new RuntimeException("should not be calling this");
     }
 
     @Override
-    public Iterable<StateSequence> nextStates(StateSequence s) {
-      // Lift Actions to StateSequences,
-      // then concatenate each actionType's Iterable into one.
+    public Iterable<Action> nextStates(StateSequence s) {
       State st = s.getCur();
       int n = actionTypes.length;
-      List<Iterable<StateSequence>> inputs = new ArrayList<>();
+      List<Iterable<Action>> inputs = new ArrayList<>();
       for (int i = 0; i < n; i++) {
         Iterable<Action> ita = actionTypes[i].next(st, y);
-        Iterable<StateSequence> itss = Iterables.transform(ita, new Function<Action, StateSequence>() {
-          @Override
-          public StateSequence apply(Action input) {
-            //Adjoints adj = theta.score(st, input);
-            Adjoints adj = new Adjoints.Lazy(() -> theta.score(st, input));
-            return new StateSequence(s, null, null, adj);
-          }
-        });
-        inputs.add(itss);
+        inputs.add(ita);
       }
       return Iterables.concat(inputs);
     }
@@ -139,17 +115,15 @@ public interface TransitionFunction {
      * If not null, then all next state transitions must be consistent with y.
      */
     private FNParse y;
-    private Params.Stateful params;
 
-    public Simple(FNParse goal, Params.Stateful params) {
+    public Simple(FNParse goal) {
       this.y = goal;
-      this.params = params;
       assert false : "don't use this anymore";
     }
 
     @Override
-    public Iterable<StateSequence> previousStates(StateSequence s) {
-      List<StateSequence> ss = new ArrayList<>();
+    public Iterable<Action> previousStates(StateSequence s) {
+      List<Action> ss = new ArrayList<>();
       State st = s.getCur();
       if (st == null) {
         throw new IllegalArgumentException(
@@ -162,17 +136,15 @@ public interface TransitionFunction {
           Span a = st.committed(t, k);
           if (a == null) continue;
           // Make an action that would have lead to this (t,k) being committed
-          Action act = new Action(t, k, ActionType.COMMIT.getIndex(), a);
-          Adjoints adj = params.score(st, act);
-          ss.add(new StateSequence(null, s, null, adj));
+          ss.add(new Action(t, k, ActionType.COMMIT.getIndex(), a));
         }
       }
       return ss;
     }
 
     @Override
-    public Iterable<StateSequence> nextStates(StateSequence s) {
-      List<StateSequence> ss = new ArrayList<>();
+    public Iterable<Action> nextStates(StateSequence s) {
+      List<Action> ss = new ArrayList<>();
       State st = s.getCur();
       if (st == null) {
         throw new IllegalArgumentException(
@@ -186,18 +158,12 @@ public interface TransitionFunction {
           if (a != null) continue;
           if (y == null) {
             // Consider all possible actions
-            for (Span arg : st.naiveAllowableSpans(t, k)) {
-              Action act = new Action(t, k, ActionType.COMMIT.getIndex(), arg);
-              Adjoints adj = params.score(st, act);
-              // TODO decide on if score should take the leaving state or arriving state
-              ss.add(new StateSequence(s, null, null, adj));
-            }
+            for (Span arg : st.naiveAllowableSpans(t, k))
+              ss.add(new Action(t, k, ActionType.COMMIT.getIndex(), arg));
           } else {
             // Only consider actions that will lead to y (there is only one)
             Span yArg = y.getFrameInstance(t).getArgument(k);
-            Action act = new Action(t, k, ActionType.COMMIT.getIndex(), yArg);
-            Adjoints adj = params.score(st, act);
-            ss.add(new StateSequence(s, null, null, adj));
+            ss.add(new Action(t, k, ActionType.COMMIT.getIndex(), yArg));
           }
         }
       }

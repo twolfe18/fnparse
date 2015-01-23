@@ -28,6 +28,16 @@ public class Timer {
     return t;
   }
 
+  public Timer ignoreFirstTime() {
+    this.ignoreFirstTime = true;
+    return this;
+  }
+
+  public Timer ignoreFirstTime(boolean ignore) {
+    this.ignoreFirstTime = ignore;
+    return this;
+  }
+
   public Timer setPrintInterval(int interval) {
     if(interval <= 0) throw new IllegalArgumentException();
     this.printIterval = interval;

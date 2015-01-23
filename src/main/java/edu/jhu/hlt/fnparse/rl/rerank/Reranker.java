@@ -29,8 +29,8 @@ import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.HingeUpdate;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.prim.util.math.FastMath;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -158,23 +158,26 @@ public class Reranker {
   }
 
   public State randomDecodingState(FNTagging frames, Random rand) {
-    Params.Stateful theta = getCachingParams();
     TransitionFunction transF =
-        new ActionDrivenTransitionFunction(theta, actionTypes);
+        new ActionDrivenTransitionFunction(actionTypes);
     State init = State.initialState(frames);
     StateSequence frontier = new StateSequence(null, null, init, null);
     int TK = init.numFrameRoleInstances();
     if (TK == 0)
       throw new IllegalArgumentException("only works when there are frameInstances");
     int tkStop = rand.nextInt(TK);
-    for (int i = 0; i < tkStop; i++)
-      frontier = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+    for (int i = 0; i < tkStop; i++) {
+      Action a = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+      Adjoints adj = new Adjoints.Explicit(0d, a, "randomDecodingState");
+      State n = frontier.getCur().apply(a, true);
+      frontier = new StateSequence(frontier, null, n, adj);
+    }
     return frontier.getCur();
   }
 
   // Single predict
   public FNParse predict(State initialState) {
-    Params.Stateful model = getCachingParams();
+    Params.Stateful model = getFullParams(true);
     ForwardSearch fs = fullSearch(initialState, BFunc.NONE, model);
     fs.run();
     StateSequence ss = fs.getPath();
@@ -238,7 +241,7 @@ public class Reranker {
     sb.append(" id=" + ss.getCur().getFrames().getId());
     sb.append(" " + ss.getAction());
     sb.append(" score=" + score);
-    sb.append(" actionScore=" + ss.getAdjoints().getScore());
+    sb.append(" actionScore=" + ss.getAdjoints().forwards());
     if (showDeltaLoss) {
       Action a = ss.getAction();
       ActionType at = a.getActionType();
@@ -269,10 +272,11 @@ public class Reranker {
    * to stay this way, because otherwise it would need to cache for an entire
    * data set, which is likely too much.
    */
-  private Params.Stateful getCachingParams() {
-    Params.Stateless thetaBaseCache = new Params.Stateless.Caching(thetaStateless);
-    Params.Stateful theta = new Params.SumMixed(thetaStateful, thetaBaseCache);
-    return theta;
+  private Params.Stateful getFullParams(boolean caching) {
+    Params.Stateless stateless = caching
+        ? new Params.Stateless.Caching(thetaStateless)
+      : thetaStateless;
+    return new Params.SumMixed(thetaStateful, stateless);
   }
 
   /**
@@ -300,7 +304,7 @@ public class Reranker {
       @Override
       public double score(State s, Action a) {
         Adjoints adj = params.score(s, a);
-        return adj.getScore();
+        return adj.forwards();
       }
     }
 
@@ -348,11 +352,10 @@ public class Reranker {
     return this.new ForwardSearch(initialState, biasFunction, model, new ArrayList<>(), false);
   }
 
-  /**
+  /*
    * Represents an Action and some feedback (from deltaLoss) that came out
    * of the initial state. Implements HasUpdate by backpropping a score of
    * 1 if the given action doesn't incur any loss and -1 if it does.
-   */
   public static class ScoredAction implements HingeUpdate {
     public final Adjoints adjoints;
     public final double y;
@@ -375,6 +378,39 @@ public class Reranker {
       return hinge;
     }
   }
+   */
+
+
+  /**
+   * This is now an update.
+   */
+  public static class ScoredAction2 implements Update {
+    public final Adjoints adjoints;
+    public final double y;
+    public final double wx;
+    public final double hinge;
+    public ScoredAction2(Adjoints a, double deltaLoss) {
+      if (deltaLoss != 0d && deltaLoss != 1d)
+        throw new IllegalArgumentException("deltaLoss should be 0 or 1");
+      this.adjoints = a;
+      this.y = (deltaLoss - 0.5) * -2;  // {0,1} => {1,-1}
+      this.wx = adjoints.forwards();
+      hinge = Math.max(0d, 1d - y * wx);
+
+      if (hinge > 10)
+        LOG.warn("wat? badHinge=" + hinge);
+    }
+    @Override
+    public double apply(double learningRate) {
+      LOG.info("hinge=" + hinge + " wx=" + wx + " y=" + y);
+      if (hinge > 0)
+        adjoints.backwards(learningRate * y * hinge);
+//      adjoints.backwards(learningRate * y * hinge);
+      //adjoints.backwards(100 * wx);
+      //adjoints.backwards(1d);
+      return hinge;
+    }
+  }
 
   public class ForwardSearch implements Runnable {
     private final State initialState;
@@ -384,7 +420,7 @@ public class Reranker {
     private boolean hasRun;
 
     private StateSequence path;                 // to be used if fullSearch (oracle, mostViolated)
-    private List<ScoredAction> initialActions;  // to be used if !fullSearch (statelessTrain)
+    private List<ScoredAction2> initialActions;  // to be used if !fullSearch (statelessTrain)
 
     public FNParse gold = null;  // purely for debugging
 
@@ -392,7 +428,7 @@ public class Reranker {
      * @param biasFunction is evaluated before the model score and can short-circuit
      * the model score if -infinity is returned.
      */
-    ForwardSearch(State initialState, BFunc biasFunction, Params.Stateful model, List<ScoredAction> initialActions, boolean fullSearch) {
+    ForwardSearch(State initialState, BFunc biasFunction, Params.Stateful model, List<ScoredAction2> initialActions, boolean fullSearch) {
       this.initialState = initialState;
       this.biasFunction = biasFunction;
       this.model = model;
@@ -410,7 +446,7 @@ public class Reranker {
       boolean verbose = false;
 
       TransitionFunction transF =
-          new ActionDrivenTransitionFunction(model, actionTypes);
+          new ActionDrivenTransitionFunction(actionTypes);
       StateSequence frontier = new StateSequence(null, null, initialState, null);
       Beam<StateSequence> beam = new Beam<>(beamWidth);
       beam.push(frontier, 0d);
@@ -429,10 +465,9 @@ public class Reranker {
         //      List<StateSequence> consider = DataUtil.reservoirSample(
         //          transF.nextStates(frontier), reservoirSize, rand);
 
-        for (StateSequence ss : transF.nextStates(frontier)) {
-          State s = frontier.getCur();
-          Adjoints adj = ss.getAdjoints();
-          Action a = adj.getAction();
+        State s = frontier.getCur();
+        //for (StateSequence ss : transF.nextStates(frontier)) {
+        for (Action a : transF.nextStates(frontier)) {
 
           double bias = biasFunction.score(s, a);
           if (Double.isInfinite(bias)) {
@@ -441,16 +476,18 @@ public class Reranker {
           }
 
           // model score
-          double modelScore = model.score(s, a).getScore();
+          Adjoints adj = model.score(s, a);
+          double modelScore = adj.forwards();
           double score = bias + modelScore;
 
           // Save the initial actions and their scores
           if (initialActions != null && iter == 0)
-            initialActions.add(new ScoredAction(adj, bias));
+            initialActions.add(new ScoredAction2(adj, bias));
 
           // Add to the beam
           if (fullSearch) {
             added++;
+            StateSequence ss = new StateSequence(frontier, null, null, adj);
             boolean onBeam = beam.push(ss, score);
             if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
               logAction(desc, iter, score, ss, gold, false);
@@ -487,7 +524,7 @@ public class Reranker {
     /**
      * @return all actions out of initialState with their score from bfunc
      */
-    public List<ScoredAction> getStatelessTrainUpdates() {
+    public List<ScoredAction2> getStatelessTrainUpdates() {
       assert hasRun;
       assert initialActions.size() > 0;
       return initialActions;
@@ -498,14 +535,14 @@ public class Reranker {
    * Runs a forward search to find both the oracle and mostViolated parses
    * and returns an Update.
    */
-  public HingeUpdate getFullUpdate(State init, FNParse y) {
+  public Update getFullUpdate(State init, FNParse y) {
     if (y.numFrameInstances() == 0) {
       assert init.numFrameInstance() == 0;
-      return HingeUpdate.NONE;
+      return Update.NONE;
     }
 
     // Will cache adjoints across oracle and mostViolated
-    Params.Stateful cachingModelParams = getCachingParams();
+    Params.Stateful cachingModelParams = getFullParams(true);
 
     // Find the oracle parse
     ForwardSearch oracleSearch =
@@ -517,27 +554,62 @@ public class Reranker {
         fullSearch(init, new BFunc.MostViolated(y), cachingModelParams);
     mvSearch.run();
 
-    return new Update(y, oracleSearch.getPath(), mvSearch.getPath());
+    return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
   }
 
   /**
    * Does no search and returns a batch of ScoredActions.
    */
-  public HingeUpdate getStatelessUpdate(State init, FNParse y) {
+  public Update getStatelessUpdate(State init, FNParse y) {
     if (y.numFrameInstances() == 0) {
       assert init.numFrameInstance() == 0;
-      return HingeUpdate.NONE;
+      return Update.NONE;
     }
-    Params.Stateful model = getCachingParams();
+    Params.Stateful model = getFullParams(false);
     BFunc deltaLoss = new BFunc.MostViolated(y);
     ForwardSearch initialActions =
         initialActionsSearch(init, deltaLoss, model);
     initialActions.run();
-    HingeUpdate.Batch batch = new HingeUpdate.Batch();
-    for (ScoredAction action : initialActions.getStatelessTrainUpdates()) {
-      batch.add(action);
+    return new Update.Batch<>(initialActions.getStatelessTrainUpdates());
+  }
+
+  public static interface Update {
+    /**
+     * @return the error before applying this update
+     * (should not depend on learningRate)
+     */
+    public double apply(double learningRate);
+
+    public static Update NONE = new Update() {
+      @Override public double apply(double learningRate) {
+        return 0d;
+      }
+    };
+
+    public static class Batch<T extends Update> implements Update {
+      private List<T> updates;
+      public Batch() {
+        updates = new ArrayList<>();
+      }
+      public Batch(List<T> updates) {
+        this.updates = updates;
+      }
+      public void add(T update) {
+        updates.add(update);
+      }
+      public int size() {
+        return updates.size();
+      }
+      @Override
+      public double apply(double learningRate) {
+        assert updates.size() > 0;
+        double s = learningRate / updates.size();
+        double u = 0d;
+        for (T up : updates)
+          u += up.apply(s);
+        return u / updates.size();
+      }
     }
-    return new HingeUpdate.Batch(initialActions.getStatelessTrainUpdates());
   }
 
   /**
@@ -550,13 +622,13 @@ public class Reranker {
    *
    * @return the hinge loss
    */
-  public class Update implements HingeUpdate {
+  public class FullUpdate implements Update {
     public final FNParse gold;
     public final StateSequence oracle;
     public final StateSequence mostViolated;
     public final double hinge;
 
-    public Update(FNParse gold, StateSequence oracle, StateSequence mostViolated) {
+    public FullUpdate(FNParse gold, StateSequence oracle, StateSequence mostViolated) {
       this.gold = gold;
       this.oracle = oracle;
       this.mostViolated = mostViolated;
@@ -581,40 +653,44 @@ public class Reranker {
         return 0d;
     }
 
+//    public void getUpdate(double[] addTo, double scale) {
     @Override
-    public void getUpdate(double[] addTo, double scale) {
+    public double apply(double learningRate) {
       timer.start("Update.getUpdate");
 
       if (!isViolated()) {
         timer.stop("Update.getUpdate");
-        return;
+        return 0d;
       }
 
       int skipped;
 
       skipped = 0;
-      final double upOracle = scale * -hinge / oracle.length();
+      final double upOracle = learningRate * -hinge / oracle.length();
       for (StateSequence cur = oracle; cur != null; cur = cur.neighbor()) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          a.getUpdate(addTo, upOracle);
+          a.backwards(upOracle);
+//          a.getUpdate(addTo, upOracle);
         else
           skipped++;
       }
       assert skipped <= 1;
 
       skipped = 0;
-      final double upMV = scale * hinge / mostViolated.length();
+      final double upMV = learningRate * hinge / mostViolated.length();
       for (StateSequence cur = mostViolated; cur != null; cur = cur.neighbor()) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
-          a.getUpdate(addTo, upMV);
+          a.backwards(upMV);
+//          a.getUpdate(addTo, upMV);
         else
           skipped++;
       }
       assert skipped <= 1;
 
       timer.stop("Update.getUpdate");
+      return violation();
     }
   }
 }

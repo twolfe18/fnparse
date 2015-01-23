@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
@@ -48,7 +49,7 @@ public class LearningTest {
    * Asserts that there is at least one Action that has a positive score out of
    * the given state.
    */
-  public void assertStateHasAtLeastOneGoldAction(StateSequence ss, TransitionFunction oracleScoreTf, double probRecurse) {
+  public void assertStateHasAtLeastOneGoldAction(StateSequence ss, Params.Stateful theta, TransitionFunction oracleScoreTf, double probRecurse) {
     boolean showState = false;
     boolean showAction = false;
     boolean showDiff = false;
@@ -57,7 +58,10 @@ public class LearningTest {
     int n = 0;
     if (showState)
       LOG.info("[assertStateHasAtLeastOneGoldAction] out of: " + ss.getCur().show());
-    for (StateSequence next : oracleScoreTf.nextStates(ss)) {
+    for (Action a : oracleScoreTf.nextStates(ss)) {
+    //for (StateSequence next : oracleScoreTf.nextStates(ss)) {
+      Adjoints adj = theta.score(ss.getCur(), a);
+      StateSequence next = new StateSequence(ss, null, null, adj);
       n++;
       Assert.assertTrue(next.getPrev() != null);
       Assert.assertTrue(next.getNext() == null);
@@ -66,7 +70,7 @@ public class LearningTest {
       // that action, as opposed to the StateSequence's score, which is the sum
       // of all of the action scores.
       //double s = next.getScore();
-      double s = next.getAdjoints().getScore();
+      double s = next.getAdjoints().forwards();
       Assert.assertTrue(Math.abs(s) > 1e-5);
 
       if (showAction) {
@@ -90,7 +94,7 @@ public class LearningTest {
       for (StateSequence ns : posScoreActions) {
         if (rand.nextDouble() >= probRecurse)
           continue;
-        assertStateHasAtLeastOneGoldAction(ns, oracleScoreTf, probRecurse * 0.5d);
+        assertStateHasAtLeastOneGoldAction(ns, theta, oracleScoreTf, probRecurse * 0.5d);
       }
     }
   }
@@ -114,14 +118,14 @@ public class LearningTest {
         State init = State.initialState(y);
         StateSequence ss = new StateSequence(null, null, init, null);
         ActionDrivenTransitionFunction oracleScoreTf =
-            new ActionDrivenTransitionFunction(theta, ActionType.COMMIT);
+            new ActionDrivenTransitionFunction(ActionType.COMMIT);
 
         // Initial state should have an Action that is consistent with the label
         // Recursively?
         // I believe this is true for COMMIT, as in no single COMMIT should step
         // on another COMMIT's toes. For COMMIT_AND_PRUNE, this wont be true if
         // there are spans in y that overlap.
-        assertStateHasAtLeastOneGoldAction(ss, oracleScoreTf, probRecurse);
+        assertStateHasAtLeastOneGoldAction(ss, theta, oracleScoreTf, probRecurse);
       }
     }
   }
@@ -206,7 +210,7 @@ public class LearningTest {
   public void fromPriorScores() {
     // Train a model using PriorScoreParams
     Reranker.LOG_UPDATE = true;
-    Reranker.LOG_FORWARD_SEARCH = true;
+    Reranker.LOG_FORWARD_SEARCH = false;
     ItemProvider ip = Reranker.getItemProvider(100, false);
     int beamWidth = 1;
     boolean train = true;

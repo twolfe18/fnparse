@@ -54,7 +54,7 @@ public interface StoppingCondition {
     }
     @Override
     public String toString() {
-      return String.format("Time(%.1f mintes)", maxMinutes);
+      return String.format("Time(%.1f minutes)", maxMinutes);
     }
     @Override
     public boolean stop(int iter, double violation) {

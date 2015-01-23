@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.util.RandomInitialization;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -48,11 +49,8 @@ public class ContextEmbedding {
 
     public void initializeEmbeddings(int dimension, Random r, double variance) {
       this.dimension = dimension;
-      int n = words.size();
-      embeddings = new double[n][dimension];
-      for (int i = 0; i < n; i++)
-        for (int j = 0; j < dimension; j++)
-          embeddings[i][j] = r.nextGaussian() * variance;
+      embeddings = new double[words.size()][dimension];
+      new RandomInitialization(r).unif(embeddings, variance);
     }
 
     public void getEmbedding(int word, double[] addTo) {
@@ -79,9 +77,13 @@ public class ContextEmbedding {
 
     public void update(int i, double[] deriv, double learningRate) {
       if (i >= 0) {
+        double l2Penalty = 1e-2;
         double[] emb = embeddings[i];
-        for (int j = 0; j < dimension; j++)
-          emb[j] += learningRate * deriv[j];
+        for (int j = 0; j < dimension; j++) {
+          emb[j] += learningRate * deriv[j] - l2Penalty * 2 * emb[j];
+//          if (Math.abs(emb[j]) > 1e6)
+//            assert false;
+        }
       }
     }
   }
@@ -96,25 +98,28 @@ public class ContextEmbedding {
     public EmbAvg(int[] words, double[] weights) {
       this.words = words;
       this.weights = weights;
+
+      // given weights should sum to 1
+      double z = 0;
+      for (double w : weights) z += w;
+      assert Math.abs(z - 1d) < 1e-5;
     }
     public void constructEmbedding(WordEmbeddings from) {
       int D = from.getDimension();
       emb = new double[D];
       double[] temp = new double[D];
       for (int i = 0; i < words.length; i++) {
+        double w = weights[i];
         from.getEmbedding(words[i], temp);
         for (int j = 0; j < D; j++) {
-          emb[j] += weights[i] * temp[j];
+          emb[j] += w * temp[j];
           temp[j] = 0d;
         }
       }
-      double z = 0d;
-      for (double w : weights) z += w;
-      for (int j = 0; j < D; j++) emb[j] /= z;
     }
-    public void update(double[] dErr, WordEmbeddings from) {
+    public void update(double[] dErr, double learningRate, WordEmbeddings from) {
       for (int i = 0; i < words.length; i++)
-        from.update(words[i], dErr, weights[i]);
+        from.update(words[i], dErr, learningRate * weights[i]);
     }
     public double[] getEmbedding() {
       assert emb != null;
@@ -134,7 +139,7 @@ public class ContextEmbedding {
         else
           w = s.getWord(start + i);
         words[i] = we.lookupIndex(w, false);
-        weights[i] = 1d;
+        weights[i] = 1d / n;
       }
       EmbAvg ea = new EmbAvg(words, weights);
       ea.constructEmbedding(we);
@@ -156,10 +161,10 @@ public class ContextEmbedding {
         eLeft = EmbAvg.unif(arg.start - contextWordsLeft, arg.start, sent, wordEmb);
         eRight = EmbAvg.unif(arg.end, arg.end + contextWordsRight, sent, wordEmb);
         eSent = EmbAvg.unif(0, sent.size(), sent, wordEmb);
-        System.arraycopy(eSpan.getEmbedding(), 0, stacked, 0, D);
-        System.arraycopy(eLeft.getEmbedding(), 0, stacked, D, D);
+        System.arraycopy(eSpan.getEmbedding(),  0, stacked, 0*D, D);
+        System.arraycopy(eLeft.getEmbedding(),  0, stacked, 1*D, D);
         System.arraycopy(eRight.getEmbedding(), 0, stacked, 2*D, D);
-        System.arraycopy(eSent.getEmbedding(), 0, stacked, 3*D, D);
+        System.arraycopy(eSent.getEmbedding(),  0, stacked, 3*D, D);
       }
     }
     public double[] getEmbedding() {
@@ -172,7 +177,7 @@ public class ContextEmbedding {
       for (EmbAvg ea : Arrays.asList(eSpan, eLeft, eRight, eSent)) {
         if (ea == null) continue;
         System.arraycopy(ea.getEmbedding(), 0, temp, 0, D);
-        ea.update(temp, wordEmb);
+        ea.update(temp, learningRate, wordEmb);
       }
     }
   }
@@ -180,6 +185,7 @@ public class ContextEmbedding {
   private WordEmbeddings wordEmb;
   private int contextWordsLeft = 3;
   private int contextWordsRight = 3;
+  private int dimensionPerWord;
 
   public ContextEmbedding(int dimension) {
     wordEmb = new WordEmbeddings();
@@ -191,11 +197,15 @@ public class ContextEmbedding {
       for (int i = 0; i < s.size(); i++)
         wordEmb.lookupIndex(s.getWord(i), true);
     }
-    wordEmb.initializeEmbeddings(dimension, new Random(9001), 0.05d);
+    this.dimensionPerWord = dimension;
+  }
+
+  public void initialize(double variance, Random rand) {
+    wordEmb.initializeEmbeddings(dimensionPerWord, rand, variance);
   }
 
   public int getDimension() {
-    return 4 * wordEmb.getDimension();
+    return 4 * dimensionPerWord;
   }
 
   public CtxEmb embed(Sentence sent, Span target, Action action) {
