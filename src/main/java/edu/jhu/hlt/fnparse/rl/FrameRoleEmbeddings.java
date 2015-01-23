@@ -8,6 +8,8 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
+import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.EmbeddingAdjoints;
+import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.FrameRoleEmbeddingParams;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
 import edu.jhu.util.Alphabet;
 
@@ -17,12 +19,13 @@ import edu.jhu.util.Alphabet;
  * 
  * @author travis
  */
-public class FrameRoleEmbeddings {
+public class FrameRoleEmbeddings implements FrameRoleEmbeddingParams {
   public static final Logger LOG = Logger.getLogger(FrameRoleEmbeddings.class);
 
   public final int dFrame;
   public final int dFrameRole;
   public final int dRole;
+  public final double l2Penalty;
 
   private Alphabet<String> roleNames;   // for role embeddings
   private double[][] frameEmb;
@@ -30,12 +33,13 @@ public class FrameRoleEmbeddings {
   private double[][] roleEmb;
   private int numParams;
 
-  public FrameRoleEmbeddings(int dFrame, int dFrameRole, int dRole) {
-    LOG.info("initializing dFrame=" + dFrame + " dFrameRole=" + dFrameRole + " dRole=" + dRole);
+  public FrameRoleEmbeddings(int dFrame, int dFrameRole, int dRole, double l2Penalty) {
+    LOG.info("initializing dFrame=" + dFrame + " dFrameRole=" + dFrameRole + " dRole=" + dRole + " l2Penalty=" + l2Penalty);
     assert dFrame > 0 && dFrameRole > 0 && dRole > 0;
     this.dFrame = dFrame;
     this.dFrameRole = dFrameRole;
     this.dRole = dRole;
+    this.l2Penalty = l2Penalty;
     List<Frame> frames = FrameIndex.getInstance().allFrames();
     int nF = frames.size();
     assert nF > 0;
@@ -55,6 +59,56 @@ public class FrameRoleEmbeddings {
     roleEmb = new double[roleNames.size()][dRole];
     numParams += roleNames.size() * dRole;
     show();
+  }
+
+  class FrameRoleEmbeddingAdjoints implements EmbeddingAdjoints {
+    private Frame frame;
+    private int role;
+    private double[] embedding;
+    public FrameRoleEmbeddingAdjoints(Frame frame, int role) {
+      this.frame = frame;
+      this.role = role;
+      this.embedding = null;
+    }
+    @Override
+    public double[] forwards() {
+      if (embedding == null)
+        computeEmbedding();
+      return embedding;
+    }
+    public void computeEmbedding() {
+      assert embedding == null;
+      double[] fE = frameEmb[frame.getId()];
+      double[] frE = frameRoleEmb[frame.getId()][role];
+      double[] rE = roleEmb[roleNames.lookupIndex(frame.getRole(role), false)];
+      embedding = new double[fE.length + frE.length + rE.length];
+      System.arraycopy(fE, 0, embedding, 0, fE.length);
+      assert EmbeddingParams.regular(embedding);
+      System.arraycopy(frE, 0, embedding, fE.length, frE.length);
+      assert EmbeddingParams.regular(embedding);
+      System.arraycopy(rE, 0, embedding, fE.length + frE.length, rE.length);
+      assert EmbeddingParams.regular(embedding);
+    }
+    @Override
+    public void backwards(double[] dErr_dForwards) {
+      if (embedding == null)
+        computeEmbedding();
+      if (embedding.length != dErr_dForwards.length)
+        throw new IllegalArgumentException();
+      double[] fE = frameEmb[frame.getId()];
+      double[] frE = frameRoleEmb[frame.getId()][role];
+      double[] rE = roleEmb[roleNames.lookupIndex(frame.getRole(role), false)];
+      int ofs1 = fE.length;
+      int ofs2 = fE.length + frE.length;
+      for (int i = 0; i < dErr_dForwards.length; i++) {
+        if (i < ofs1)
+          fE[i] += dErr_dForwards[i] - l2Penalty * fE[i];
+        else if (i < ofs2)
+          frE[i - ofs1] += dErr_dForwards[i] - l2Penalty * frE[i - ofs1];
+        else
+          rE[i - ofs2] += dErr_dForwards[i] - l2Penalty * rE[i - ofs2];
+      }
+    }
   }
 
   public void initialize(double variance, Random rand) {
@@ -77,39 +131,8 @@ public class FrameRoleEmbeddings {
     return numParams;
   }
 
-  public double[] embed(Frame f, int role) {
-    double[] fE = frameEmb[f.getId()];
-    double[] frE = frameRoleEmb[f.getId()][role];
-    double[] rE = roleEmb[roleNames.lookupIndex(f.getRole(role), false)];
-    double[] emb = new double[dimension()];
-    System.arraycopy(fE, 0, emb, 0, fE.length);
-    assert EmbeddingParams.regular(emb);
-    System.arraycopy(frE, 0, emb, fE.length, frE.length);
-    assert EmbeddingParams.regular(emb);
-    System.arraycopy(rE, 0, emb, fE.length + frE.length, rE.length);
-    assert EmbeddingParams.regular(emb);
-    return emb;
+  @Override
+  public EmbeddingAdjoints embed(Frame frame, int role) {
+    return this.new FrameRoleEmbeddingAdjoints(frame, role);
   }
-
-  public void update(Frame f, int role, double[] dErr_dEmbedding, double learningRate) {
-    if (dErr_dEmbedding.length != dimension())
-      throw new IllegalArgumentException();
-    double[] fE = frameEmb[f.getId()];
-    double[] frE = frameRoleEmb[f.getId()][role];
-    double[] rE = roleEmb[roleNames.lookupIndex(f.getRole(role), false)];
-    int ofs1 = fE.length;
-    int ofs2 = fE.length + frE.length;
-    
-    double l2Penalty = 1e-2;
-    
-    for (int i = 0; i < dErr_dEmbedding.length; i++) {
-      if (i < ofs1)
-        fE[i] += learningRate * dErr_dEmbedding[i] - l2Penalty * fE[i];
-      else if (i < ofs2)
-        frE[i - ofs1] += learningRate * dErr_dEmbedding[i] - l2Penalty * frE[i - ofs1];
-      else
-        rE[i - ofs2] += learningRate * dErr_dEmbedding[i] - l2Penalty * rE[i - ofs2];
-    }
-  }
-
 }

@@ -9,6 +9,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.ContextEmbeddingParams;
+import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.EmbeddingAdjoints;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
 import edu.jhu.util.Alphabet;
 
@@ -23,7 +25,7 @@ import edu.jhu.util.Alphabet;
  * 
  * @author travis
  */
-public class ContextEmbedding {
+public class ContextEmbedding implements ContextEmbeddingParams {
 
   static class WordEmbeddings {
     private double[][] embeddings;
@@ -70,21 +72,24 @@ public class ContextEmbedding {
         Arrays.fill(addTo, 0d);
     }
 
-    public void update(String w, double[] deriv, double learningRate) {
+    public void update(
+        String w,
+        double[] deriv,
+        double learningRate,
+        double l2Penalty) {
       int i = words.lookupIndex(normalize(w), false);
-      update(i, deriv, learningRate);
+      if (i >= 0)
+        update(i, deriv, learningRate, l2Penalty);
     }
 
-    public void update(int i, double[] deriv, double learningRate) {
-      if (i >= 0) {
-        double l2Penalty = 1e-2;
-        double[] emb = embeddings[i];
-        for (int j = 0; j < dimension; j++) {
-          emb[j] += learningRate * deriv[j] - l2Penalty * 2 * emb[j];
-//          if (Math.abs(emb[j]) > 1e6)
-//            assert false;
-        }
-      }
+    public void update(
+        int i,
+        double[] deriv,
+        double learningRate,
+        double l2Penalty) {
+      double[] emb = embeddings[i];
+      for (int j = 0; j < dimension; j++)
+        emb[j] += learningRate * (deriv[j] - l2Penalty * 2 * emb[j]);
     }
   }
 
@@ -117,9 +122,13 @@ public class ContextEmbedding {
         }
       }
     }
-    public void update(double[] dErr, double learningRate, WordEmbeddings from) {
+    public void update(
+        double[] dErr,
+        double learningRate,
+        double l2Penalty,
+        WordEmbeddings from) {
       for (int i = 0; i < words.length; i++)
-        from.update(words[i], dErr, learningRate * weights[i]);
+        from.update(words[i], dErr, learningRate * weights[i], l2Penalty);
     }
     public double[] getEmbedding() {
       assert emb != null;
@@ -146,7 +155,7 @@ public class ContextEmbedding {
       return ea;
     }
   }
-  class CtxEmb {
+  class CtxEmb implements EmbeddingAdjoints {
     EmbAvg eSpan;
     EmbAvg eLeft;
     EmbAvg eRight;
@@ -167,17 +176,19 @@ public class ContextEmbedding {
         System.arraycopy(eSent.getEmbedding(),  0, stacked, 3*D, D);
       }
     }
-    public double[] getEmbedding() {
+    @Override
+    public double[] forwards() {
       return stacked;
     }
-    public void update(double[] deriv, double learningRate) {
+    @Override
+    public void backwards(double[] dErr_dForwards) {
       int D = wordEmb.getDimension();
       double[] temp = new double[D];
-      assert deriv.length == 4*D;
+      assert dErr_dForwards.length == 4*D;
       for (EmbAvg ea : Arrays.asList(eSpan, eLeft, eRight, eSent)) {
         if (ea == null) continue;
         System.arraycopy(ea.getEmbedding(), 0, temp, 0, D);
-        ea.update(temp, learningRate, wordEmb);
+        ea.update(temp, learningRate, l2Penalty, wordEmb);
       }
     }
   }
@@ -186,8 +197,10 @@ public class ContextEmbedding {
   private int contextWordsLeft = 3;
   private int contextWordsRight = 3;
   private int dimensionPerWord;
+  private double learningRate;
+  private double l2Penalty;
 
-  public ContextEmbedding(int dimension) {
+  public ContextEmbedding(int dimension, double l2Penalty) {
     wordEmb = new WordEmbeddings();
     wordEmb.lookupIndex(SENT_START, true);
     wordEmb.lookupIndex(SENT_END, true);
@@ -198,21 +211,26 @@ public class ContextEmbedding {
         wordEmb.lookupIndex(s.getWord(i), true);
     }
     this.dimensionPerWord = dimension;
+    this.learningRate = 1d;
+    this.l2Penalty = l2Penalty;
   }
 
+  @Override
   public void initialize(double variance, Random rand) {
     wordEmb.initializeEmbeddings(dimensionPerWord, rand, variance);
-  }
-
-  public int getDimension() {
-    return 4 * dimensionPerWord;
   }
 
   public CtxEmb embed(Sentence sent, Span target, Action action) {
     return new CtxEmb(sent, target, action);
   }
 
-  public void update(CtxEmb adjoints, double[] dErr_dEmbedding, double learningRate) {
-    adjoints.update(dErr_dEmbedding, learningRate);
+  @Override
+  public int dimension() {
+    return 4 * dimensionPerWord;
+  }
+
+  @Override
+  public EmbeddingAdjoints embed(FNTagging frames, Span target, Action action) {
+    return new CtxEmb(frames.getSentence(), target, action);
   }
 }
