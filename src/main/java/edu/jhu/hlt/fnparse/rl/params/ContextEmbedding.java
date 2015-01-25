@@ -87,7 +87,10 @@ public class ContextEmbedding implements ContextEmbeddingParams {
         double[] deriv,
         double learningRate,
         double l2Penalty) {
+      if (i < 0)
+        return; // OOV
       double[] emb = embeddings[i];
+      assert dimension == emb.length && dimension == deriv.length;
       for (int j = 0; j < dimension; j++)
         emb[j] += learningRate * (deriv[j] - l2Penalty * 2 * emb[j]);
     }

@@ -86,8 +86,15 @@ public class OldFeatureParams implements Params.Stateless {
     return featureTemplateString;
   }
 
+  /** Only works if you're using Alphabet mode */
   public int getNumParams() {
     return featureIndices.size();
+  }
+
+  /** Only works if you're using feature hashing mode */
+  public int getNumHashingBuckets() {
+    assert numBuckets > 0;
+    return numBuckets;
   }
 
   public void showFeatures(String msg) {
@@ -100,13 +107,7 @@ public class OldFeatureParams implements Params.Stateless {
     ModelViewer.showBiggestWeights(w, k, msg, LOG);
   }
 
-  @Override
-  public Adjoints score(FNTagging f, Action a) {
-    if (SHOW_ON_UPDATE && !printedSinceUpdate && isAlphabetBased()) {
-      showFeatures("[update]");
-      printedSinceUpdate = true;
-    }
-
+  public FeatureVector getFeatures(FNTagging f, Action a) {
     // Capture the context for the TemplatedFeatures
     FrameInstance fi = f.getFrameInstance(a.t);
     TemplateContext context = new TemplateContext();
@@ -135,10 +136,16 @@ public class OldFeatureParams implements Params.Stateless {
     // Make sure that theta is big enough
     checkSize();
 
-    // TODO consider if we should ever use the average here
-    //return new Adjoints.SparseFeatures(fv, theta, a);
-    //return new Adjoints.SparseFeatures(fv, theta.getWeights(), a);
-    
+    return fv;
+  }
+
+  @Override
+  public Adjoints score(FNTagging f, Action a) {
+    if (SHOW_ON_UPDATE && !printedSinceUpdate && isAlphabetBased()) {
+      showFeatures("[update]");
+      printedSinceUpdate = true;
+    }
+    FeatureVector fv = getFeatures(f, a);
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
     return new Adjoints.Vector(a, weights, fv);
   }

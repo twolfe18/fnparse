@@ -30,7 +30,6 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
-import edu.jhu.prim.util.math.FastMath;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -352,35 +351,6 @@ public class Reranker {
     return this.new ForwardSearch(initialState, biasFunction, model, new ArrayList<>(), false);
   }
 
-  /*
-   * Represents an Action and some feedback (from deltaLoss) that came out
-   * of the initial state. Implements HasUpdate by backpropping a score of
-   * 1 if the given action doesn't incur any loss and -1 if it does.
-  public static class ScoredAction implements HingeUpdate {
-    public final Adjoints adjoints;
-    public final double y;
-    public final double hinge;
-    public ScoredAction(Adjoints a, double deltaLoss) {
-      if (deltaLoss != 0d && deltaLoss != 1d)
-        throw new IllegalArgumentException("deltaLoss should be 0 or 1");
-      this.adjoints = a;
-      this.y = (deltaLoss - 0.5) * -2;  // {0,1} => {1,-1}
-      double wx = adjoints.getScore();
-      hinge = Math.max(0d, 1d - y * wx);
-    }
-    @Override
-    public void getUpdate(double[] addTo, double scale) {
-      if (hinge > 0d)
-        adjoints.getUpdate(addTo, scale * y * hinge);
-    }
-    @Override
-    public double violation() {
-      return hinge;
-    }
-  }
-   */
-
-
   /**
    * This is now an update.
    */
@@ -402,12 +372,9 @@ public class Reranker {
     }
     @Override
     public double apply(double learningRate) {
-      LOG.info("hinge=" + hinge + " wx=" + wx + " y=" + y);
+      //LOG.info("hinge=" + hinge + " wx=" + wx + " y=" + y);
       if (hinge > 0)
         adjoints.backwards(learningRate * y * hinge);
-//      adjoints.backwards(learningRate * y * hinge);
-      //adjoints.backwards(100 * wx);
-      //adjoints.backwards(1d);
       return hinge;
     }
   }

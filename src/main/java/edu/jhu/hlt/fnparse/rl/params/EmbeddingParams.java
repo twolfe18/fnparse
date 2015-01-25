@@ -1,9 +1,11 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Arrays;
 import java.util.Random;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -11,6 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.FrameRoleEmbeddings;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.util.math.FastMath;
 
 /**
@@ -52,6 +55,59 @@ public class EmbeddingParams implements Params.Stateless {
   public static interface EmbeddingAdjoints {
     public double[] forwards();
     public void backwards(double[] dErr_dForwards);
+  }
+
+  // Returns an embedding which is really just features, doesn't update anything.
+  // Used for debugging.
+  public static class FeatureEmbeddingAdjoints implements EmbeddingAdjoints {
+    private double[] features;
+    /**
+     * @param features are sparse features with unbounded indices
+     * @param hashBuckets is the dimension of the dense features used. If an
+     * index in features is larger than this, it is treated as a hash and
+     * idx % hashBuckets is used instead.
+     */
+    public FeatureEmbeddingAdjoints(FeatureVector features, int hashBuckets) {
+      final double[] dfeatures = new double[hashBuckets];
+      features.apply(new FnIntDoubleToDouble() {
+        @Override
+        public double call(int arg0, double arg1) {
+          dfeatures[arg0 % hashBuckets] += arg1;
+          return arg1;
+        }
+      });
+      this.features = dfeatures;
+    }
+    @Override
+    public double[] forwards() {
+      return features;
+    }
+    @Override
+    public void backwards(double[] dErr_dForwards) {
+      // no-op (we're not learning an embedding, features have no params)
+      // TODO interesting side note, this would make for an interesting paper
+      // where you take all of the features that we typically use for an NLP
+      // task and then put "dampening" or "meta" features on them, which
+      // control the features activation. For example, you might want your
+      // capitalization feature to not fire if its the first word in a sentence.
+    }
+  }
+
+  // Returns an embedding which is just a vector of ones and does no updating.
+  public static class OnesEmbeddingAdjoints implements EmbeddingAdjoints {
+    private final double[] ones;
+    public OnesEmbeddingAdjoints(int dimension) {
+      ones = new double[dimension];
+      Arrays.fill(ones, 1d);
+    }
+    @Override
+    public double[] forwards() {
+      return ones;
+    }
+    @Override
+    public void backwards(double[] dErr_dForwards) {
+      // no-op
+    }
   }
 
   class QuadAdjoints2 implements Adjoints {
@@ -100,14 +156,18 @@ public class EmbeddingParams implements Params.Stateless {
 
     @Override
     public double forwards() {
+      if (computed == 0)
+        compute();
       assert computed == 1;
       return prod;
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
+      if (computed == 0)
+        compute();
       assert computed == 1;
-      for (int i = 0; i < leftTimesRight.length; i++)
+      for (int i = 0; i < leftTimesTheta.length; i++)
         leftTimesTheta[i] *= dErr_dForwards;
       for (int j = 0; j < rightTimesTheta.length; j++)
         rightTimesTheta[j] *= dErr_dForwards;
@@ -115,7 +175,7 @@ public class EmbeddingParams implements Params.Stateless {
       right.backwards(leftTimesTheta);
       for (int i = 0; i < theta.length; i++)
         for (int j = 0; j < theta[i].length; j++)
-          theta[i][j] += dErr_dForwards * leftTimesRight[i][j];
+          theta[i][j] += dErr_dForwards * leftTimesRight[i][j] - l2Penalty * theta[i][j];
     }
   }
 
@@ -145,6 +205,16 @@ public class EmbeddingParams implements Params.Stateless {
   private FrameRoleEmbeddingParams frParams;
   private ContextEmbeddingParams ctxParams;
   private double[][] theta;
+  private double l2Penalty = 1e-5;
+
+  // If true, use the params below
+  private OldFeatureParams debugParams;
+  public void debug(OldFeatureParams debugParams) {
+    this.debugParams = debugParams;
+    this.theta = new double[1][debugParams.getNumHashingBuckets()];
+    this.frParams = null;
+    this.ctxParams = null;
+  }
 
   /**
    * @param k is a multiplier for how many params to use, 1 is very parsimonious
@@ -152,7 +222,6 @@ public class EmbeddingParams implements Params.Stateless {
    * Powers of 2 are preferable for k.
    */
   public EmbeddingParams(int k, Random rand) {
-    double l2Penalty = 1e-5;
     frParams = new FrameRoleEmbeddings(8 * k, 16 * k, 8 * k, l2Penalty);
     ctxParams = new ContextEmbedding(16 * k, l2Penalty);
     theta = new double[frParams.dimension()][ctxParams.dimension()];
@@ -168,11 +237,22 @@ public class EmbeddingParams implements Params.Stateless {
 
   @Override
   public QuadAdjoints2 score(FNTagging frames, Action a) {
-    FrameInstance fi = frames.getFrameInstance(a.t);
-    EmbeddingAdjoints fr = frParams.embed(fi.getFrame(), a.k);
-    EmbeddingAdjoints ctx = ctxParams.embed(frames, fi.getTarget(), a);
-    QuadAdjoints2 adj = new QuadAdjoints2(a, theta, fr, ctx);
-    return adj;
+    if (debugParams != null) {
+      // Use features instead of embeddings
+      FeatureVector fv = debugParams.getFeatures(frames, a);
+      int dim = debugParams.getNumHashingBuckets();
+      EmbeddingAdjoints right = new FeatureEmbeddingAdjoints(fv, dim);
+      EmbeddingAdjoints left = new OnesEmbeddingAdjoints(1);
+      QuadAdjoints2 adj = new QuadAdjoints2(a, theta, left, right);
+      return adj;
+    } else {
+      // Normally, do this, compute embeddings
+      FrameInstance fi = frames.getFrameInstance(a.t);
+      EmbeddingAdjoints fr = frParams.embed(fi.getFrame(), a.k);
+      EmbeddingAdjoints ctx = ctxParams.embed(frames, fi.getTarget(), a);
+      QuadAdjoints2 adj = new QuadAdjoints2(a, theta, fr, ctx);
+      return adj;
+    }
   }
 
   @Override

@@ -279,6 +279,11 @@ public class RerankerTrainer {
     RerankerTrainer trainer = new RerankerTrainer(rand);
     ItemProvider ip = Reranker.getItemProvider(10, false);
 
+    for (int i = 0; i < ip.size(); i++) {
+      State s = State.initialState(ip.label(i));
+      LOG.info("TK=" + s.numFrameRoleInstances());
+    }
+
     ItemProvider train, test;
     if (testOnTrain) {
       train = ip;
@@ -300,13 +305,16 @@ public class RerankerTrainer {
     trainer.batchSize = 1;
     trainer.beamSize = 1;
     trainer.stoppingPretrain = new Conjunction(
-        new HammingConvergence(0.05, 5000), new Time(15));
+        new HammingConvergence(0.05, 5000), new Time(2));
 
 //    if (useFeatureHashing)
 //      trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
 //    else
 //      trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(250 * 1000);
-    trainer.statelessParams = new EmbeddingParams(1, trainer.rand);
+    EmbeddingParams ep = new EmbeddingParams(1, trainer.rand);
+    int dim = 10 * 1000;
+    ep.debug(new OldFeatureParams(featureTemplates, dim));
+    trainer.statelessParams = ep;
 
     Reranker model = trainer.train(train);
     LOG.info("[main] done training, evaluating");
