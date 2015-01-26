@@ -12,6 +12,8 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.ContextEmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.EmbeddingAdjoints;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -184,14 +186,14 @@ public class ContextEmbedding implements ContextEmbeddingParams {
       return stacked;
     }
     @Override
-    public void backwards(double[] dErr_dForwards) {
+    public void backwards(IntDoubleVector dScore_dForwards_v) {
+      double[] dScore_dForwards =
+          ((IntDoubleDenseVector) dScore_dForwards_v).getInternalElements();
       int D = wordEmb.getDimension();
-      double[] temp = new double[D];
-      assert dErr_dForwards.length == 4*D;
+      assert dScore_dForwards.length == 4*D;
       for (EmbAvg ea : Arrays.asList(eSpan, eLeft, eRight, eSent)) {
         if (ea == null) continue;
-        System.arraycopy(ea.getEmbedding(), 0, temp, 0, D);
-        ea.update(temp, learningRate, l2Penalty, wordEmb);
+        ea.update(dScore_dForwards, learningRate, l2Penalty, wordEmb);
       }
     }
   }
