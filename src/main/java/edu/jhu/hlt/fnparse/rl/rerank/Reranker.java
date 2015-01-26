@@ -176,12 +176,37 @@ public class Reranker {
 
   // Single predict
   public FNParse predict(State initialState) {
-    Params.Stateful model = getFullParams(true);
+    LOG.info("[predict] starting TK=" + initialState.numFrameRoleInstances());
+
+    // Caching Adjoints isn't as clear as I thought it would be
+    // Assume: TK=300, #spans=1000, and Adjoints.size=10000*8b
+    //   (10000 is for leftTimesRight, which can be skipped if score is given the
+    //   info that the returned Adjoints will never have backwards called on them)
+    // This is 24 GB per decode, which is not reasonable.
+
+    // 10000 longs per Adjoints in the current case is for my debugging experiment
+    // where left=[1] and right=[sparse features < 10k]
+    // but in general, you will need this if you are learning theta and neither
+    // left nor right are sparse.
+    // 10k = 200 * 50, which is kind of tiny for embeddings
+
+    // pretrain => no Adjoint caching => no problem
+    // train => Adjoint caching + you actually need adjoints => PROBLEM
+    // predict => Adjoint caching + only need score rather than adjoints => no problem
+    //            (this assumes I fixe score to include a onlyForwards flag)
+
+    // Right now I can cache because I just realilzed that leftTimesRight can
+    // be sparse if right is sparse.
+    // When I switch to full dense embeddings, I will have to revisit this.
+
+    boolean cacheAdjoints = true;
+    Params.Stateful model = getFullParams(cacheAdjoints);
     ForwardSearch fs = fullSearch(initialState, BFunc.NONE, model);
     fs.run();
     StateSequence ss = fs.getPath();
     FNParse yhat = ss.getCur().decode();
     assert yhat != null;
+    LOG.info("[predict] done");
     return yhat;
   }
   public FNParse predict(FNTagging frames) {
@@ -274,7 +299,7 @@ public class Reranker {
   private Params.Stateful getFullParams(boolean caching) {
     Params.Stateless stateless = caching
         ? new Params.Stateless.Caching(thetaStateless)
-      : thetaStateless;
+        : thetaStateless;
     return new Params.SumMixed(thetaStateful, stateless);
   }
 
@@ -410,7 +435,7 @@ public class Reranker {
       assert !hasRun;
 
       String desc = "[forwardSearch " + (fullSearch ? "full" : "init") + "]";
-      boolean verbose = false;
+      boolean verbose = true;
 
       TransitionFunction transF =
           new ActionDrivenTransitionFunction(actionTypes);

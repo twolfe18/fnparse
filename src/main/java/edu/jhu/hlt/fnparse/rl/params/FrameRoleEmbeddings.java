@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.List;
 import java.util.Random;
@@ -7,10 +7,11 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.EmbeddingAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.FrameRoleEmbeddingParams;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -71,10 +72,10 @@ public class FrameRoleEmbeddings implements FrameRoleEmbeddingParams {
       this.embedding = null;
     }
     @Override
-    public double[] forwards() {
+    public IntDoubleVector forwards() {
       if (embedding == null)
         computeEmbedding();
-      return embedding;
+      return new IntDoubleDenseVector(embedding);
     }
     public void computeEmbedding() {
       assert embedding == null;
@@ -90,24 +91,30 @@ public class FrameRoleEmbeddings implements FrameRoleEmbeddingParams {
       assert EmbeddingParams.regular(embedding);
     }
     @Override
-    public void backwards(double[] dErr_dForwards) {
+    public void backwards(IntDoubleVector dScore_dForwards_v) {
       if (embedding == null)
         computeEmbedding();
-      if (embedding.length != dErr_dForwards.length)
+      double[] dScore_dForwards =
+          ((IntDoubleDenseVector) dScore_dForwards_v).getInternalElements();
+      if (embedding.length != dScore_dForwards.length)
         throw new IllegalArgumentException();
       double[] fE = frameEmb[frame.getId()];
       double[] frE = frameRoleEmb[frame.getId()][role];
       double[] rE = roleEmb[roleNames.lookupIndex(frame.getRole(role), false)];
       int ofs1 = fE.length;
       int ofs2 = fE.length + frE.length;
-      for (int i = 0; i < dErr_dForwards.length; i++) {
+      for (int i = 0; i < dScore_dForwards.length; i++) {
         if (i < ofs1)
-          fE[i] += dErr_dForwards[i] - l2Penalty * fE[i];
+          fE[i] += dScore_dForwards[i] - l2Penalty * fE[i];
         else if (i < ofs2)
-          frE[i - ofs1] += dErr_dForwards[i] - l2Penalty * frE[i - ofs1];
+          frE[i - ofs1] += dScore_dForwards[i] - l2Penalty * frE[i - ofs1];
         else
-          rE[i - ofs2] += dErr_dForwards[i] - l2Penalty * rE[i - ofs2];
+          rE[i - ofs2] += dScore_dForwards[i] - l2Penalty * rE[i - ofs2];
       }
+    }
+    @Override
+    public boolean takesUpdates() {
+      return true;
     }
   }
 

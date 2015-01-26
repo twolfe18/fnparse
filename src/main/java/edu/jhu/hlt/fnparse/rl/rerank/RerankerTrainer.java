@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -40,11 +41,63 @@ public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
 
+  public static interface LearningRateSchedule {
+    public void observe(int iteration, double violation, int batchSize);
+    public double learningRate();
+
+    public static class Constant implements LearningRateSchedule {
+      private final double learningRate;
+      public Constant(double learningRate) {
+        this.learningRate = learningRate;
+      }
+      @Override
+      public void observe(int iteration, double violation, int batchSize) {
+        // no-op
+      }
+      @Override
+      public double learningRate() {
+        return learningRate;
+      }
+    }
+
+    public static class Normal implements LearningRateSchedule {
+      private double initial;
+      private double smooth;
+      private double squish;
+      private int iter;
+      public Normal(double initial) {
+        this(initial, 100d, 0.75d);
+      }
+      public Normal(double initial, double smooth, double squish) {
+        if (squish > 1 || squish <= 0)
+          throw new IllegalArgumentException();
+        this.initial = initial;
+        this.smooth = smooth;
+        this.squish = squish;
+        this.iter = 0;
+      }
+      @Override
+      public void observe(int iteration, double violation, int batchSize) {
+        this.iter = iteration;
+      }
+      @Override
+      public double learningRate() {
+        double it = FastMath.pow(iter + 1, squish);
+        double lr = initial * smooth / (smooth + it);
+        if (iter % 100 == 0)
+          LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
+        return lr;
+      }
+    }
+  }
+
   // General parameters
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
   public StoppingCondition stoppingTrain = new StoppingCondition.HammingConvergence(5.0, 5);
   public StoppingCondition stoppingPretrain = new StoppingCondition.HammingConvergence(0.1, 3000);
+  public LearningRateSchedule learningRateTrain = new LearningRateSchedule.Constant(0.5d);
+  public LearningRateSchedule learningRatePretrain = new LearningRateSchedule.Constant(1d);
   public int threads = 1;
   public int batchSize = 4;
 
@@ -172,7 +225,15 @@ public class RerankerTrainer {
    */
   public void hammingTrain(Reranker r, ItemProvider ip, boolean onlyStateless)
       throws InterruptedException, ExecutionException {
-    StoppingCondition stoppingCond = onlyStateless ? stoppingPretrain : stoppingTrain;
+    StoppingCondition stoppingCond;
+    LearningRateSchedule lrSched;
+    if (onlyStateless) {
+      stoppingCond = stoppingPretrain;
+      lrSched = learningRatePretrain;
+    } else {
+      stoppingCond = stoppingTrain;
+      lrSched = learningRateTrain;
+    }
     LOG.info("[hammingTrain] batchSize=" + batchSize
         + " threads=" + threads
         + " onlyStateless=" + onlyStateless
@@ -187,7 +248,7 @@ public class RerankerTrainer {
     boolean showTime = false;
     boolean showViolation = true;
     for (int iter = 0; true; iter++) {
-      double violation = hammingTrainBatch(r, es, ip, onlyStateless, timerStr);
+      double violation = hammingTrainBatch(r, es, ip, onlyStateless, iter, lrSched, timerStr);
       if (stoppingCond.stop(iter, violation)) {
         LOG.info("[hammingTrain] stopping due to " + stoppingCond);
         break;
@@ -224,6 +285,8 @@ public class RerankerTrainer {
       ExecutorService es,
       ItemProvider ip,
       boolean onlyStateless,
+      int iter,
+      LearningRateSchedule lrSched,
       String timerStrPartial) throws InterruptedException, ExecutionException {
     String timerStr = timerStrPartial + ".batch";
     Timer t = timer.get(timerStr, true).setPrintInterval(10).ignoreFirstTime();
@@ -266,14 +329,17 @@ public class RerankerTrainer {
     assert finishedUpdates.size() == batchSize;
 
     // Apply the update
-    double violation = new Update.Batch<>(finishedUpdates).apply(1d);
+    double learningRate = lrSched.learningRate();
+    double violation = new Update.Batch<>(finishedUpdates).apply(learningRate);
+    lrSched.observe(iter, violation, batchSize);
     t.stop();
     return violation;
   }
 
   public static void main(String[] args) {
+    boolean useEmbeddingParams = true; // else use OldFeatureParams
     boolean useFeatureHashing = false;
-    boolean testOnTrain = false;
+    boolean testOnTrain = true;
 
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand);
@@ -305,16 +371,22 @@ public class RerankerTrainer {
     trainer.batchSize = 1;
     trainer.beamSize = 1;
     trainer.stoppingPretrain = new Conjunction(
-        new HammingConvergence(0.05, 5000), new Time(2));
+        new HammingConvergence(0.01, 5000), new Time(2));
+    trainer.learningRatePretrain = new LearningRateSchedule.Normal(1d, 100, 0.75d);
 
-//    if (useFeatureHashing)
-//      trainer.statelessParams = new OldFeatureParams(featureTemplates, 250 * 1000);
-//    else
-//      trainer.statelessParams = new OldFeatureParams(featureTemplates).sizeHint(250 * 1000);
-    EmbeddingParams ep = new EmbeddingParams(1, trainer.rand);
-    int dim = 10 * 1000;
-    ep.debug(new OldFeatureParams(featureTemplates, dim));
-    trainer.statelessParams = ep;
+    final int hashBuckets = 8 * 1000 * 1000;
+    if (useEmbeddingParams) {
+      EmbeddingParams ep = new EmbeddingParams(1, trainer.rand);
+      double l2Penalty = testOnTrain ? 1e-14 : 1e-8;
+      ep.debug(new OldFeatureParams(featureTemplates, hashBuckets), l2Penalty);
+      trainer.statelessParams = ep;
+    } else {
+      if (useFeatureHashing) {
+        trainer.statelessParams = new OldFeatureParams(featureTemplates, hashBuckets);
+      } else {
+        trainer.statelessParams = new OldFeatureParams(featureTemplates);
+      }
+    }
 
     Reranker model = trainer.train(train);
     LOG.info("[main] done training, evaluating");

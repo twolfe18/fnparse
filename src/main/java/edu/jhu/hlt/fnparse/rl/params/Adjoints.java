@@ -19,7 +19,7 @@ public interface Adjoints {
 
   public double forwards();
 
-  public void backwards(double dErr_dForwards);
+  public void backwards(double dScore_dForwards);
 
   // TODO
   // the fact that getUpdate(double[] addTo, double scale), from HasUpdate
@@ -59,13 +59,13 @@ public interface Adjoints {
       return score;
     }
     @Override
-    public void backwards(double dErr_dForwards) {
+    public void backwards(double dScore_dForwards) {
       assert computed;
       features.apply(new FnIntDoubleToDouble() {
         @Override
-        public double call(int i, double w_i) {
-          weights.add(i, dErr_dForwards * w_i);
-          return w_i;
+        public double call(int i, double f_i) {
+          weights.add(i, dScore_dForwards * f_i);
+          return f_i;
         }
       });
     }
@@ -98,12 +98,12 @@ public interface Adjoints {
       return value.getAction();
     }
     @Override
-    public void backwards(double dErr_dForwards) {
+    public void backwards(double dScore_dForwards) {
       if (value == null) {
         value = thunk.get();
         assert value != null;
       }
-      value.backwards(dErr_dForwards);
+      value.backwards(dScore_dForwards);
     }
   }
 
@@ -134,7 +134,7 @@ public interface Adjoints {
       return action;
     }
     @Override
-    public void backwards(double dErr_dForwards) {
+    public void backwards(double dScore_dForwards) {
       // no-op
     }
   }

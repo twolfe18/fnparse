@@ -44,7 +44,7 @@ public interface StoppingCondition {
   }
 
   public static class Time implements StoppingCondition {
-    public static int INTERVAL = 200;
+    public static int INTERVAL = 100;
     private long start = -1;
     private int iterEstimate = -1;
     private int iter;

@@ -86,15 +86,15 @@ public class ContextEmbedding implements ContextEmbeddingParams {
 
     public void update(
         int i,
-        double[] deriv,
+        double[] dScore_dForwards,
         double learningRate,
         double l2Penalty) {
       if (i < 0)
         return; // OOV
       double[] emb = embeddings[i];
-      assert dimension == emb.length && dimension == deriv.length;
+      assert dimension == emb.length && dimension == dScore_dForwards.length;
       for (int j = 0; j < dimension; j++)
-        emb[j] += learningRate * (deriv[j] - l2Penalty * 2 * emb[j]);
+        emb[j] += learningRate * (dScore_dForwards[j] - l2Penalty * 2 * emb[j]);
     }
   }
 
@@ -128,12 +128,12 @@ public class ContextEmbedding implements ContextEmbeddingParams {
       }
     }
     public void update(
-        double[] dErr,
+        double[] dScore,
         double learningRate,
         double l2Penalty,
         WordEmbeddings from) {
       for (int i = 0; i < words.length; i++)
-        from.update(words[i], dErr, learningRate * weights[i], l2Penalty);
+        from.update(words[i], dScore, learningRate * weights[i], l2Penalty);
     }
     public double[] getEmbedding() {
       assert emb != null;
@@ -182,8 +182,12 @@ public class ContextEmbedding implements ContextEmbeddingParams {
       }
     }
     @Override
-    public double[] forwards() {
-      return stacked;
+    public boolean takesUpdates() {
+      return true;
+    }
+    @Override
+    public IntDoubleVector forwards() {
+      return new IntDoubleDenseVector(stacked);
     }
     @Override
     public void backwards(IntDoubleVector dScore_dForwards_v) {

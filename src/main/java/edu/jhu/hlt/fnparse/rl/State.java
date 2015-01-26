@@ -317,7 +317,8 @@ public class State {
       return at.apply(a, this);
     else {
       assert false : "we shouldn't be using this anymore";
-      return at.unapply(a, this);
+      //return at.unapply(a, this);
+      return null;
     }
   }
 

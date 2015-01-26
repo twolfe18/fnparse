@@ -43,7 +43,7 @@ public interface Params {
             return a;
           }
           @Override
-          public void backwards(double dErr_dForwards) {
+          public void backwards(double dScore_dForwards) {
             // no-op
           }
         };
@@ -86,7 +86,7 @@ public interface Params {
             return a;
           }
           @Override
-          public void backwards(double dErr_dForwards) {
+          public void backwards(double dScore_dForwards) {
             // no-op
           }
         };
@@ -212,9 +212,9 @@ public interface Params {
       return left.getAction();
     }
     @Override
-    public void backwards(double dErr_dForwards) {
-      left.backwards(dErr_dForwards);
-      right.backwards(dErr_dForwards);
+    public void backwards(double dScore_dForwards) {
+      left.backwards(dScore_dForwards);
+      right.backwards(dScore_dForwards);
     }
   }
 

@@ -16,6 +16,11 @@ public class DecoderBias implements Params.Stateless {
 
   private double recallBias = 0d;
 
+  @Override
+  public String toString() {
+    return String.format("<DecoderBias recallBias=%.2f>", recallBias);
+  }
+
   public void setRecallBias(double b) {
     this.recallBias = b;
   }
