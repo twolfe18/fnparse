@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams.EmbeddingAdjoints;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
+import edu.jhu.prim.vector.IntDoubleVectorSlice;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -76,25 +77,25 @@ public class ContextEmbedding implements ContextEmbeddingParams {
 
     public void update(
         String w,
-        double[] deriv,
+        IntDoubleVectorSlice dScore_dForwards,
         double learningRate,
         double l2Penalty) {
       int i = words.lookupIndex(normalize(w), false);
       if (i >= 0)
-        update(i, deriv, learningRate, l2Penalty);
+        update(i, dScore_dForwards, learningRate, l2Penalty);
     }
 
     public void update(
-        int i,
-        double[] dScore_dForwards,
+        int embeddingIndex,
+        IntDoubleVector dScore_dForwards,
         double learningRate,
         double l2Penalty) {
-      if (i < 0)
+      if (embeddingIndex < 0)
         return; // OOV
-      double[] emb = embeddings[i];
-      assert dimension == emb.length && dimension == dScore_dForwards.length;
+      double[] emb = embeddings[embeddingIndex];
+      assert dimension == emb.length && dimension == dScore_dForwards.getNumImplicitEntries();
       for (int j = 0; j < dimension; j++)
-        emb[j] += learningRate * (dScore_dForwards[j] - l2Penalty * 2 * emb[j]);
+        emb[j] += learningRate * (dScore_dForwards.get(j) - l2Penalty * 2 * emb[j]);
     }
   }
 
@@ -128,12 +129,14 @@ public class ContextEmbedding implements ContextEmbeddingParams {
       }
     }
     public void update(
-        double[] dScore,
+        IntDoubleVector dScore_dForwards,
         double learningRate,
         double l2Penalty,
         WordEmbeddings from) {
+      int D = from.getDimension();
+      assert dScore_dForwards.getNumImplicitEntries() == D; // not weight.length*D
       for (int i = 0; i < words.length; i++)
-        from.update(words[i], dScore, learningRate * weights[i], l2Penalty);
+        from.update(words[i], dScore_dForwards, learningRate * weights[i], l2Penalty);
     }
     public double[] getEmbedding() {
       assert emb != null;
@@ -195,9 +198,28 @@ public class ContextEmbedding implements ContextEmbeddingParams {
           ((IntDoubleDenseVector) dScore_dForwards_v).getInternalElements();
       int D = wordEmb.getDimension();
       assert dScore_dForwards.length == 4*D;
-      for (EmbAvg ea : Arrays.asList(eSpan, eLeft, eRight, eSent)) {
-        if (ea == null) continue;
-        ea.update(dScore_dForwards, learningRate, l2Penalty, wordEmb);
+      // each embedding is 16 dimensional
+      // D == 16
+      // dScore_dForwards is 64 dimensional
+
+      if (eSpan != null) {
+        IntDoubleVectorSlice dScore_deSpan = new IntDoubleVectorSlice(dScore_dForwards, 0*D, D);
+        eSpan.update(dScore_deSpan, learningRate, l2Penalty, wordEmb);
+      }
+
+      if (eLeft != null) {
+        IntDoubleVectorSlice dScore_deLeft = new IntDoubleVectorSlice(dScore_dForwards, 0*D, D);
+        eLeft.update(dScore_deLeft, learningRate, l2Penalty, wordEmb);
+      }
+
+      if (eRight != null) {
+        IntDoubleVectorSlice dScore_deRight = new IntDoubleVectorSlice(dScore_dForwards, 0*D, D);
+        eRight.update(dScore_deRight, learningRate, l2Penalty, wordEmb);
+      }
+
+      if (eSent != null) {
+        IntDoubleVectorSlice dScore_deSent = new IntDoubleVectorSlice(dScore_dForwards, 0*D, D);
+        eSent.update(dScore_deSent, learningRate, l2Penalty, wordEmb);
       }
     }
   }
