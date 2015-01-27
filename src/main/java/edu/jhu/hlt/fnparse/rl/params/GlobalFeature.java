@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -7,8 +7,9 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.rl.params.FeatureParams;
-import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 
 /**

@@ -6,6 +6,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.util.AveragedWeights;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.vector.IntDoubleDenseVector;

@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl.params;
+package edu.jhu.hlt.fnparse.util;
 
 import java.util.Arrays;
 

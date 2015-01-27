@@ -18,11 +18,11 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
-import edu.jhu.hlt.fnparse.rl.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.FeatureParams;
+import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
@@ -267,7 +267,7 @@ public class RerankerTrainer {
     ExecutorService es = null;
     if (threads > 1)
       es = Executors.newWorkStealingPool(threads);
-    int interval = 10;
+    int interval = 1;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -376,11 +376,13 @@ public class RerankerTrainer {
     RerankerTrainer trainer = new RerankerTrainer(rand);
     ItemProvider ip = Reranker.getItemProvider(10, false);
 
+    // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
       State s = State.initialState(ip.label(i));
       LOG.info("TK=" + s.numFrameRoleInstances());
     }
 
+    // Split into train and test sets
     ItemProvider train, test;
     if (testOnTrain) {
       train = ip;
@@ -407,9 +409,10 @@ public class RerankerTrainer {
 //    trainer.learningRatePretrain = new LearningRateSchedule.Constant(1);
 //    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
 
-    trainer.stoppingTrain = new Conjunction(
-        new StoppingCondition.NoViolations(2 * train.size()),
-        new StoppingCondition.Time(10));
+    trainer.stoppingTrain = new StoppingCondition.Time(4);
+//    trainer.stoppingTrain = new Conjunction(
+//        new StoppingCondition.NoViolations(2 * train.size()),
+//        new StoppingCondition.Time(10));
     trainer.learningRateTrain = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     final int hashBuckets = 8 * 1000 * 1000;
