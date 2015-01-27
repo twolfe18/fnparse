@@ -177,7 +177,7 @@ public class EmbeddingParams implements Params.Stateless {
       // rightTimesTheta :: RxC * Cx1 = Rx1
       // rtt[i] = dot(theta[i,], right)
       if (left.takesUpdates()) {
-        rightTimesTheta = new IntDoubleSortedVector(nR);
+        rightTimesTheta = new IntDoubleDenseVector(nR);
         for (int i = 0; i < nR; i++)
           rightTimesTheta.add(i, rightE.dot(theta[i]));
       }
@@ -223,12 +223,12 @@ public class EmbeddingParams implements Params.Stateless {
         compute();
       assert computed == 1;
 
-      if (left.takesUpdates()) {
+      if (left.takesUpdates() && (!onlyUpdateTheta || !updateTheta)) {
         rightTimesTheta.scale(dScore_dForwards);
         left.backwards(rightTimesTheta);
       }
 
-      if (right.takesUpdates()) {
+      if (right.takesUpdates() && (!onlyUpdateTheta || !updateTheta)) {
         leftTimesTheta.scale(dScore_dForwards);
         right.backwards(leftTimesTheta);
       }
@@ -284,6 +284,7 @@ public class EmbeddingParams implements Params.Stateless {
   private int nR;   // nR = #rows in theta = length of frEmbedding
   private int nC;   // nC = #cols in theta = length of ctxEmbedding
   private boolean updateTheta;  // if false, don't apply gradient updates to theta
+  private boolean onlyUpdateTheta = false;    // when true updates are made to either theta OR the embeddings, otherwise updateTheta only says whether theta receives a gradient update (embeddings always do).
   private double l2Penalty = 1e-5;
 
   // If true, use the params below
@@ -305,13 +306,14 @@ public class EmbeddingParams implements Params.Stateless {
    * and 6 is a lot, 2 is a good default. The number of params is linear in k.
    * Powers of 2 are preferable for k.
    */
-  public EmbeddingParams(int k, Random rand) {
-    updateTheta = true;
-    frParams = new FrameRoleEmbeddings(8 * k, 16 * k, 8 * k, l2Penalty);
-    ctxParams = new ContextEmbedding(16 * k, l2Penalty);
-    nR = frParams.dimension();
-    nC = ctxParams.dimension();
-    theta = new double[nR][nC];
+  public EmbeddingParams(int k, double l2Penalty, Random rand) {
+    this.l2Penalty = l2Penalty;
+    this.updateTheta = true;
+    this.frParams = new FrameRoleEmbeddings(8 * k, 16 * k, 8 * k, l2Penalty);
+    this.ctxParams = new ContextEmbedding(16 * k, l2Penalty);
+    this.nR = frParams.dimension();
+    this.nC = ctxParams.dimension();
+    this.theta = new double[nR][nC];
     LOG.info("[init] theta is (" + nR + ", " + nC + ") numParams=" + (nR*nC));
 
     double variance = 10;
@@ -319,6 +321,14 @@ public class EmbeddingParams implements Params.Stateless {
     frParams.initialize(variance, rand);
     ctxParams.initialize(variance, rand);
     new RandomInitialization(rand).unif(theta, variance);
+  }
+
+  public boolean isLearningTheta() {
+    return updateTheta;
+  }
+
+  public void learnTheta(boolean learnTheta) {
+    this.updateTheta = learnTheta;
   }
 
   @Override

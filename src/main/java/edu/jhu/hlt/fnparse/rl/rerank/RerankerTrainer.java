@@ -8,6 +8,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
 import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
@@ -89,6 +90,25 @@ public class RerankerTrainer {
         return lr;
       }
     }
+
+    public static class Exp implements LearningRateSchedule {
+      private final double decayRate;
+      private int iter;
+      public Exp(double decayRate) {
+        this.decayRate = decayRate;
+      }
+      @Override
+      public void observe(int iteration, double violation, int batchSize) {
+        this.iter = iteration;
+      }
+      @Override
+      public double learningRate() {
+        double lr = FastMath.exp(-iter / decayRate);
+        if (iter % 100 == 0)
+          LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
+        return lr;
+      }
+    }
   }
 
   // General parameters
@@ -98,6 +118,7 @@ public class RerankerTrainer {
   public StoppingCondition stoppingPretrain = new StoppingCondition.HammingConvergence(0.1, 3000);
   public LearningRateSchedule learningRateTrain = new LearningRateSchedule.Constant(0.5d);
   public LearningRateSchedule learningRatePretrain = new LearningRateSchedule.Constant(1d);
+  public Consumer<Integer> calledEveryEpoch = i -> {};
   public int threads = 1;
   public int batchSize = 4;
 
@@ -247,24 +268,29 @@ public class RerankerTrainer {
     int interval = 10;
     boolean showTime = false;
     boolean showViolation = true;
-    for (int iter = 0; true; iter++) {
-      double violation = hammingTrainBatch(r, es, ip, onlyStateless, iter, lrSched, timerStr);
-      if (stoppingCond.stop(iter, violation)) {
-        LOG.info("[hammingTrain] stopping due to " + stoppingCond);
-        break;
-      }
+    outer:
+    for (int iter = 0; true; ) {
+      for (int i = 0; i < ip.size(); i += batchSize) {
+        iter++;
+        double violation = hammingTrainBatch(r, es, ip, onlyStateless, iter, lrSched, timerStr);
+        if (stoppingCond.stop(iter, violation)) {
+          LOG.info("[hammingTrain] stopping due to " + stoppingCond);
+          break outer;
+        }
 
-      if (iter % interval == 0) {
-        if (showViolation)
-          LOG.info("[hammingTrain] iter=" + iter + " violation=" + violation);
-        if (showTime) {
-          Timer t = timer.get(timerStr + ".batch", false);
-          int totalUpdates = stoppingCond.estimatedNumberOfIterations();
-          LOG.info(String.format(
-              "[hammingTrain] estimate: completed %d of %d updates, %.1f minutes remaining",
-              t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
+        if (iter % interval == 0) {
+          if (showViolation)
+            LOG.info("[hammingTrain] iter=" + iter + " violation=" + violation);
+          if (showTime) {
+            Timer t = timer.get(timerStr + ".batch", false);
+            int totalUpdates = stoppingCond.estimatedNumberOfIterations();
+            LOG.info(String.format(
+                "[hammingTrain] estimate: completed %d of %d updates, %.1f minutes remaining",
+                t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
+          }
         }
       }
+      calledEveryEpoch.accept(iter);
     }
     if (es != null)
       es.shutdown();
@@ -338,6 +364,7 @@ public class RerankerTrainer {
 
   public static void main(String[] args) {
     boolean useEmbeddingParams = true; // else use OldFeatureParams
+    boolean useEmbeddingParamsDebug = false;
     boolean useFeatureHashing = false;
     boolean testOnTrain = true;
 
@@ -371,14 +398,26 @@ public class RerankerTrainer {
     trainer.batchSize = 1;
     trainer.beamSize = 1;
     trainer.stoppingPretrain = new Conjunction(
-        new HammingConvergence(0.01, 5000), new Time(2));
-    trainer.learningRatePretrain = new LearningRateSchedule.Normal(1d, 100, 0.75d);
+        new HammingConvergence(0.01, 5000), new Time(5));
+    //trainer.learningRatePretrain = new LearningRateSchedule.Normal(0.5, 10, 1);
+    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
 
     final int hashBuckets = 8 * 1000 * 1000;
+    final double l2Penalty = testOnTrain ? 1e-14 : 1e-8;
     if (useEmbeddingParams) {
-      EmbeddingParams ep = new EmbeddingParams(1, trainer.rand);
-      double l2Penalty = testOnTrain ? 1e-14 : 1e-8;
-      ep.debug(new OldFeatureParams(featureTemplates, hashBuckets), l2Penalty);
+      int embeddingSize = 2;
+      EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
+      ep.learnTheta(true);
+//      trainer.calledEveryEpoch = epoch -> {
+//        if (epoch % 100 == 0) {
+//          boolean lt = ep.isLearningTheta();
+//          LOG.info("[epoch " + epoch + "] chaning learnTheta from " + lt + " to " + (!lt));
+//          ep.learnTheta(!lt);
+//        }
+//      };
+      if (useEmbeddingParamsDebug) {
+        ep.debug(new OldFeatureParams(featureTemplates, hashBuckets), l2Penalty);
+      }
       trainer.statelessParams = ep;
     } else {
       if (useFeatureHashing) {
