@@ -54,8 +54,8 @@ public class ModelViewer {
 
   public static List<FeatureWeight> getSortedWeights(FgModel weights, Alphabet<String> names) {
     List<FeatureWeight> w = new ArrayList<>();
-    assert names.size() <= weights.getNumParams()
-        : "weights should be able to accomodate all the features in the alphabet!";
+//    assert names.size() <= weights.getNumParams()
+//        : "weights should be able to accomodate all the features in the alphabet!";
     final int n = Math.min(weights.getNumParams(), names.size());
     weights.apply(new FnIntDoubleToDouble() {
       @Override

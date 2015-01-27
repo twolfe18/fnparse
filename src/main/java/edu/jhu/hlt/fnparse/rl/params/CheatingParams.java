@@ -63,7 +63,11 @@ public class CheatingParams implements Params.Stateless {
     double[] f = new double[theta.length];
     f[0] = 1d;
     f[1] = isGold ? 1d : 0d;
-    return new Adjoints.Vector(a, new IntDoubleDenseVector(theta), new IntDoubleDenseVector(f));
+    double l2Penalty = 0;
+    return new Adjoints.Vector(a,
+        new IntDoubleDenseVector(theta),
+        new IntDoubleDenseVector(f),
+        l2Penalty);
   }
 
   @Override

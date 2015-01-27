@@ -1,103 +1,153 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.Arrays;
+import java.util.List;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.util.ModelViewer;
+import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
-public class FeatureParams implements Params.Stateful {
-  public static final Logger LOG = Logger.getLogger(FeatureParams.class);
+/**
+ * Wraps my feature template language and implements Params.Stateless.
+ *
+ * @author travis
+ */
+public abstract class FeatureParams<Context> {
+  public final Logger log = Logger.getLogger(getClass());
 
-  private Alphabet<String> featureNames;
-  private double[] theta;
-  private FeatureVector features;
+  public boolean showOnUpdate = false;
+  public boolean showFeatures = false;
+  public boolean averageFeatures = false;  // only applies upon construction
 
-  public FeatureParams() {
-    featureNames = new Alphabet<>();
-    theta = new double[1024];
+  protected AveragedWeights theta;
+  protected double l2Penalty;
+
+  protected Alphabet<String> featureIndices;
+  protected int numBuckets;
+
+  /** For AlphabetBased implementation */
+  public FeatureParams(double l2Penalty) {
+    this.featureIndices = new Alphabet<>();
+    this.featureIndices.startGrowth(); // stops growing when doneTraining is called
+    this.numBuckets = -1;
+    this.theta = new AveragedWeights(1024, averageFeatures);
+    this.l2Penalty = l2Penalty;
   }
 
-  private void b(String featureName) {
-    //LOG.info("[b] adding: " + featureName);
-    int i = featureNames.lookupIndex(featureName, true);
-    features.add(i, 1d);
+  /** For HashBased implementation */
+  public FeatureParams(double l2Penalty, int numBuckets) {
+    this.featureIndices = null;
+    this.numBuckets = numBuckets;
+    this.theta = new AveragedWeights(1024, averageFeatures);
+    this.l2Penalty = l2Penalty;
   }
 
-  private void bb(String featureName, String... backoffs) {
-    b(featureName);
-    for (String b : backoffs)
-      b(featureName + "-" + b);
+  public abstract FeatureVector getFeatures(Context c, Action a);
+
+  public boolean isAlphabetBased() {
+    assert (numBuckets <= 0) != (featureIndices == null);
+    return numBuckets <= 0;
   }
 
-  @Override
-  public Adjoints score(State s, Action a) {
+  public void b(FeatureVector fv, String... pieces) {
+    b(fv, 1d, pieces);
+  }
 
-    // TODO:
-    // Does this item overlap with a previously-committed-to item? Its score?
-    // How many items have been committed to for this frame instance?
-    // How many items have been committed to for this (frame,role)?
-    // Set of roles committed to for this frame (unigrams, pairs, and count)
-    // Does this item overlap with a target?
-    // Number of items committed to on this side of the target.
+  public void b(FeatureVector fv, double w, String... pieces) {
+    StringBuilder sb = new StringBuilder(pieces[0]);
+    for (int i = 1; i < pieces.length; i++)
+      sb.append("-" + pieces[i]);
+    int idx = featureIndex(sb.toString());
+    if (idx >= 0)
+      fv.add(idx, w);
+  }
 
-    //LOG.info("[score] starting ");// + a.toString(s));
-    //cache = new Adjoints.SparseFeatures(new FeatureVector(), theta, a);
-    features = new FeatureVector();
-    FrameInstance fi = s.getFrameInstance(a.t);
-    Span t = fi.getTarget();
-    String f = fi.getFrame().getName();
-    String r = fi.getFrame().getRole(a.k);
-    String fr = f + "." + r;
-    String m = a.getActionType().getName();
-    bb(m, f, fr, r);
-    if (a.hasSpan()) {
-      Span arg = a.getSpan();
-
-      String w = "width=" + BasicFeatureTemplates.sentenceLengthBuckets(a.width());
-      bb(w, f, fr, r);
-
-      String rel = "rel=" + BasicFeatureTemplates.spanPosRel(t, arg);
-      bb(rel, f, fr, r);
-
-      String dist = null;
-      if (arg.after(t))
-        dist = BasicFeatureTemplates.sentenceLengthBuckets(arg.start - t.end);
-      else if (arg.before(t))
-        dist = BasicFeatureTemplates.sentenceLengthBuckets(t.start - arg.end);
-      else
-        dist = "overlap";
-      dist = "dist=" + dist;
-
-      bb(dist, f, fr, r);
-      bb(rel + "-" + dist, f, fr, r);
+  public int featureIndex(String featureName) {
+    if (isAlphabetBased()) {
+      return featureIndices.lookupIndex(featureName);
     } else {
-      b("abnormalSpan");
+      int h = featureName.hashCode();
+      if (h < 0) h = ~h;
+      return h % numBuckets;
     }
-    // Check that theta is big enough
-    if (featureNames.size() > theta.length) {
-      int n = (int) (featureNames.size() * 1.6d + 0.5d);
-      LOG.info("[score] resizing theta: " + theta.length + " => " + n);
-      theta = Arrays.copyOf(theta, n);
-    }
-    return new Adjoints.Vector(a, new IntDoubleDenseVector(theta), features);
   }
 
-//  @Override
-//  public void update(Adjoints adj, double reward) {
-//    //LOG.info("[update] starting ");// + a.toString(s) + " has reward " + reward);
-//    ((Adjoints.SparseFeatures) adj).update(reward, learningRate);;
-//  }
+  /** Only works if you're using Alphabet mode */
+  public int getNumParams() {
+    return featureIndices.size();
+  }
 
-  @Override
+  /** Only works if you're using feature hashing mode */
+  public int getNumHashingBuckets() {
+    assert numBuckets > 0;
+    return numBuckets;
+  }
+
+  public FeatureParams<Context> sizeHint(int size) {
+    assert isAlphabetBased() : "size must match numBuckets, don't use this method";
+    if (size > theta.dimension())
+      theta.grow(size);
+    return this;
+  }
+
+  public void setShowOnUpdate() {
+    assert this.featureIndices != null;
+    this.showOnUpdate = true;
+  }
+
+  public void showFeatures(String msg) {
+    if (featureIndices == null) {
+      log.info("[showFeatures] can't show features because we're using feature hashing");
+      return;
+    }
+    int k = 12; // how many of the most extreme features to show
+    List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
+    ModelViewer.showBiggestWeights(w, k, msg, log);
+  }
+
+  public Adjoints score(Context f, Action a) {
+//    if (showOnUpdate && !printedSinceUpdate && isAlphabetBased()) {
+//      showFeatures("[update]");
+//      printedSinceUpdate = true;
+//    }
+    FeatureVector fv = getFeatures(f, a);
+
+    // Make sure that theta is big enough
+    checkSize();
+
+    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
+    if (showOnUpdate && featureIndices != null)
+      adj.showFeatures(getClass().getName(), featureIndices);
+    return adj;
+  }
+
+  private void checkSize() {
+    if (isAlphabetBased()) {
+      int n = featureIndices.size();
+      if (n > theta.dimension()) {
+        int ns = (int) (1.6d * n + 0.5d);
+        theta.grow(ns);
+      }
+    } else {
+      if (theta.dimension() < numBuckets)
+        theta.grow(numBuckets);
+    }
+  }
+
   public void doneTraining() {
-    LOG.info("[doneTraining] currently doesn't support weight averaging");
+    if (featureIndices != null)
+      featureIndices.stopGrowth();
+    showFeatures("[doneTraining]");
+    if (theta.hasAverage()) {
+      log.info("[doneTraining] setting theta to averaged value");
+      theta.setAveragedWeights();
+      showFeatures("[doneTraining] after averaging:");
+    }
   }
 }

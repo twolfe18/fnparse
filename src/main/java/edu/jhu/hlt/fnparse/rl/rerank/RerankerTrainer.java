@@ -18,13 +18,15 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.rl.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
-import edu.jhu.hlt.fnparse.rl.params.OldFeatureParams;
+import edu.jhu.hlt.fnparse.rl.params.FeatureParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
+import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.Conjunction;
 import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.HammingConvergence;
@@ -114,8 +116,8 @@ public class RerankerTrainer {
   // General parameters
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
-  public StoppingCondition stoppingTrain = new StoppingCondition.HammingConvergence(5.0, 5);
-  public StoppingCondition stoppingPretrain = new StoppingCondition.HammingConvergence(0.1, 3000);
+  public StoppingCondition stoppingTrain = new StoppingCondition.Time(60);
+  public StoppingCondition stoppingPretrain = new StoppingCondition.Time(60);
   public LearningRateSchedule learningRateTrain = new LearningRateSchedule.Constant(0.5d);
   public LearningRateSchedule learningRatePretrain = new LearningRateSchedule.Constant(1d);
   public Consumer<Integer> calledEveryEpoch = i -> {};
@@ -296,8 +298,9 @@ public class RerankerTrainer {
       es.shutdown();
 
     LOG.info("[hammingTrain] telling Params that training is over");
-    r.getStatefulParams().doneTraining();
     r.getStatelessParams().doneTraining();
+    if (!onlyStateless)
+      r.getStatefulParams().doneTraining();
 
     LOG.info("[hammingTrain] times:\n" + timer);
     timer.stop(timerStr);
@@ -363,7 +366,8 @@ public class RerankerTrainer {
   }
 
   public static void main(String[] args) {
-    boolean useEmbeddingParams = true; // else use OldFeatureParams
+    boolean useGlobalFeatures = true;
+    boolean useEmbeddingParams = false; // else use TemplatedFeatureParams
     boolean useEmbeddingParamsDebug = false;
     boolean useFeatureHashing = false;
     boolean testOnTrain = true;
@@ -393,14 +397,20 @@ public class RerankerTrainer {
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
     Reranker.LOG_FORWARD_SEARCH = false;
-    OldFeatureParams.AVERAGE_FEATURES = false;
-    OldFeatureParams.SHOW_ON_UPDATE = false;
     trainer.batchSize = 1;
     trainer.beamSize = 1;
+
     trainer.stoppingPretrain = new Conjunction(
-        new HammingConvergence(0.01, 5000), new Time(5));
-    //trainer.learningRatePretrain = new LearningRateSchedule.Normal(0.5, 10, 1);
-    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
+        new StoppingCondition.HammingConvergence(0.01, 5000),
+        new StoppingCondition.Time(5));
+    trainer.learningRatePretrain = new LearningRateSchedule.Normal(1, 50, 0.5);
+//    trainer.learningRatePretrain = new LearningRateSchedule.Constant(1);
+//    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
+
+    trainer.stoppingTrain = new Conjunction(
+        new StoppingCondition.NoViolations(2 * train.size()),
+        new StoppingCondition.Time(10));
+    trainer.learningRateTrain = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = testOnTrain ? 1e-14 : 1e-8;
@@ -415,16 +425,36 @@ public class RerankerTrainer {
 //          ep.learnTheta(!lt);
 //        }
 //      };
-      if (useEmbeddingParamsDebug) {
-        ep.debug(new OldFeatureParams(featureTemplates, hashBuckets), l2Penalty);
-      }
+      if (useEmbeddingParamsDebug)
+        ep.debug(new TemplatedFeatureParams(featureTemplates, hashBuckets), l2Penalty);
       trainer.statelessParams = ep;
     } else {
       if (useFeatureHashing) {
-        trainer.statelessParams = new OldFeatureParams(featureTemplates, hashBuckets);
+        trainer.statelessParams = new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets);
       } else {
-        trainer.statelessParams = new OldFeatureParams(featureTemplates);
+        trainer.statelessParams = new TemplatedFeatureParams(featureTemplates, l2Penalty);
       }
+    }
+
+    if (useGlobalFeatures) {
+      //    GlobalFeature.ArgOverlapFeature g1 = new GlobalFeature.ArgOverlapFeature();
+      //    GlobalFeature.RoleCooccurenceFeature g2 = new GlobalFeature.RoleCooccurenceFeature();
+      //    GlobalFeature.SpanBoundaryFeature g3 = new GlobalFeature.SpanBoundaryFeature();
+      //    g1.showOnUpdate = g2.showOnUpdate = g2.showOnUpdate = true;
+      //    g1.showFeatures = g2.showFeatures = g2.showFeatures = true;
+      //    trainer.statefulParams =
+      //        new Params.SumStateful(g1, new Params.SumStateful(g2, g3));
+      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
+          new GlobalFeature.RoleCooccurenceFeatureStateful(l2Penalty);
+      g1.setShowOnUpdate();
+      GlobalFeature.ArgOverlapFeature g2 =
+          new GlobalFeature.ArgOverlapFeature(l2Penalty);
+      g2.setShowOnUpdate();
+      GlobalFeature.SpanBoundaryFeature g3 =
+          new GlobalFeature.SpanBoundaryFeature(l2Penalty);
+      g3.setShowOnUpdate();
+      trainer.statefulParams = new Params.SumStateful(
+          g1, new Params.SumStateful(g2, g3));
     }
 
     Reranker model = trainer.train(train);

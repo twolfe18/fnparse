@@ -173,4 +173,35 @@ public interface StoppingCondition {
       return (int) (r * iterations + 0.5d);
     }
   }
+
+  public static class NoViolations implements StoppingCondition {
+    private int needed;
+    private int curStreak;
+    private int iterations;
+    public NoViolations(int needed) {
+      this.needed = needed;
+      this.curStreak = 0;
+      this.iterations = 0;
+    }
+    @Override
+    public String toString() {
+      return "NoViolations(" + needed + ")";
+    }
+    @Override
+    public boolean stop(int iter, double violation) {
+      iterations++;
+      if (violation == 0) {
+        curStreak++;
+        if (curStreak >= needed)
+          return true;
+      } else {
+        curStreak = 0;
+      }
+      return false;
+    }
+    @Override
+    public int estimatedNumberOfIterations() {
+      return (iterations + 1) * 2;
+    }
+  }
 }

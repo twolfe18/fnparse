@@ -256,5 +256,21 @@ public interface Params {
     }
   }
 
-  // TODO SumStateful?
+  /** Params is closed under addition */
+  public static class SumStateful implements Stateful {
+    private final Stateful left, right;
+    public SumStateful(Stateful left, Stateful right) {
+      this.left = left;
+      this.right = right;
+    }
+    @Override
+    public Adjoints score(State s, Action a) {
+      return new SumAdj(left.score(s, a), right.score(s, a));
+    }
+    @Override
+    public void doneTraining() {
+      left.doneTraining();
+      right.doneTraining();
+    }
+  }
 }

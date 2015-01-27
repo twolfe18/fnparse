@@ -1,11 +1,17 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.List;
 import java.util.function.Supplier;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.util.ModelViewer;
+import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
+import edu.jhu.util.Alphabet;
 
 /**
  * Wraps the result of a forward pass, which is often needed for computing a
@@ -35,16 +41,18 @@ public interface Adjoints {
     private final Action action;
     private final IntDoubleVector features;
     private final IntDoubleVector weights;  // not owned by this class
+    private final double l2Penalty;
     private double score;
     private boolean computed;
-    public Vector(Action a, double[] weights, double[] features) {
-      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features));
+    public Vector(Action a, double[] weights, double[] features, double l2Penalty) {
+      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
     }
-    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features) {
+    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
       this.action = a;
       this.weights = weights;
       this.features = features;
       this.computed = false;
+      this.l2Penalty = l2Penalty;
     }
     @Override
     public Action getAction() {
@@ -64,10 +72,30 @@ public interface Adjoints {
       features.apply(new FnIntDoubleToDouble() {
         @Override
         public double call(int i, double f_i) {
-          weights.add(i, dScore_dForwards * f_i);
+          double g = dScore_dForwards * f_i;
+          double l2p = 0d;
+          if (l2Penalty > 0)
+            l2p = weights.get(i) * l2Penalty;
+          weights.add(i, g - l2p);
           return f_i;
         }
       });
+
+      if (featureNames != null)
+        showFeature();
+    }
+
+    // Set this to print on updates
+    private String tag;
+    private Alphabet<String> featureNames;
+    public void showFeatures(String tag, Alphabet<String> featureNames) {
+      this.tag = tag;
+      this.featureNames = featureNames;
+    }
+    public void showFeature() {
+      int k = 12; // how many of the most extreme features to show
+      List<FeatureWeight> w = ModelViewer.getSortedWeights(weights.toNativeArray(), featureNames);
+      ModelViewer.showBiggestWeights(w, k, tag, Logger.getLogger(getClass()));
     }
   }
 

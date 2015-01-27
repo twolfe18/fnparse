@@ -316,6 +316,10 @@ public class Reranker {
       public double score(State s, Action a) {
         return 0d;
       }
+      @Override
+      public String toString() {
+        return "NONE";
+      }
     }
     public static BFunc NONE = new None();
 
@@ -349,6 +353,10 @@ public class Reranker {
           return Double.NEGATIVE_INFINITY;
         return 0d;
       }
+      @Override
+      public String toString() {
+        return "ORACLE";
+      }
     }
 
     /**
@@ -363,6 +371,10 @@ public class Reranker {
       public double score(State s, Action a) {
         ActionType at = a.getActionType();
         return at.deltaLoss(s, a, gold);
+      }
+      @Override
+      public String toString() {
+        return "MOST_VIOLATED";
       }
     }
   }
@@ -434,7 +446,8 @@ public class Reranker {
     public void run() {
       assert !hasRun;
 
-      String desc = "[forwardSearch " + (fullSearch ? "full" : "init") + "]";
+      String desc = "[forwardSearch " + (fullSearch ? "full" : "init")
+          + " bFunc=" + biasFunction.toString() + "]";
       boolean verbose = true;
 
       TransitionFunction transF =
@@ -557,7 +570,8 @@ public class Reranker {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
     }
-    Params.Stateful model = getFullParams(false);
+    //Params.Stateful model = getFullParams(false);
+    Params.Stateful model = Params.Stateful.lift(thetaStateless);
     BFunc deltaLoss = new BFunc.MostViolated(y);
     ForwardSearch initialActions =
         initialActionsSearch(init, deltaLoss, model);
@@ -645,7 +659,6 @@ public class Reranker {
         return 0d;
     }
 
-//    public void getUpdate(double[] addTo, double scale) {
     @Override
     public double apply(double learningRate) {
       timer.start("Update.getUpdate");
@@ -663,7 +676,6 @@ public class Reranker {
         Adjoints a = cur.getAdjoints();
         if (a != null)
           a.backwards(upOracle);
-//          a.getUpdate(addTo, upOracle);
         else
           skipped++;
       }
