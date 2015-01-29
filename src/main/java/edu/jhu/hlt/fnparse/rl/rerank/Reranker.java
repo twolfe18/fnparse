@@ -33,6 +33,7 @@ import edu.jhu.hlt.fnparse.util.Beam.BeamN;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
  * Lets think about how this model compares to the previous one I have, which
@@ -653,78 +654,32 @@ public class Reranker {
   /**
    * Runs a forward search to find both the oracle and mostViolated parses
    * and returns an Update.
+   * @param oracleTimer may be null
+   * @param mvTimer may be null
    */
-  public Update getFullUpdate(State init, FNParse y, Random rand) {
+  public Update getFullUpdate(State init, FNParse y, Random rand, Timer oracleTimer, Timer mvTimer) {
     if (y.numFrameInstances() == 0) {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
     }
 
-    // Will cache adjoints across oracle and mostViolated
-    Params.Stateful cachingModelParams = getFullParams(true);
-
-
     // Find the oracle parse
+    if (oracleTimer != null) oracleTimer.start();
+    Params.Stateful cachingModelParams = getFullParams(true);
     boolean oracleSolveMax = false;
     ForwardSearch oracleSearch = fullSearch(
         init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, cachingModelParams);
     oracleSearch.run();
-
-//    // NEW WAY:
-//    // Instead of using s(y,z) to guide the oracle, add a random perturbation.
-//    // This will mean that the oracle will explore the space of z that lead to y
-//    // and mean that we won't be updating towards ONE way of getting to y,
-//    // we will be updating towards many, in proportion to their score.
-//    Params.Stateful modelPlusNoise = new Params.SumStateful(
-//        new Params.RandScore(rand, 10d),
-//        cachingModelParams);
-//    ForwardSearch oracleSearch =
-//        fullSearch(init, new BFunc.Oracle(y), modelPlusNoise);
-//    oracleSearch.run();
-    
-    
-    
-    
-    // NEW NEW WAY:
-    // I'm trying to map this code to traditional perceptron/SVM math, and the
-    // problem is that s(y,x) is not well defined for me [I'll refer to it as s(y)]
-    // because there can be many z that lead to y and yield different s(y,z).
-
-    // Solution:
-    // def s(y) =
-    //   if oracle:
-    //     min_z s(y,z)
-    //   if mostViolated:
-    //     max_z s(y,z)   # the current implementation
-
-    // This is related to a problem I was thinking about yesterday where I think
-    // that we're getting non-violated constraints quickly in full learning because
-    // the oracle+params can choose a single z that it likes (the global features
-    // have a very easy time pushing up the score of a single path pretty considerably
-    // compared to the scale of the loss function).
-    // By taking this min in the oracle s(y), the model must force up ALL derivations
-    // of the gold parse to meet the margin constraint.
-    
-    // Implementation:
-    // Oracle.bFunc = Indicator(y,a) \in {-inf, 0}
-    //              + -2 * s(y,z)
-    // leads to bFunc + s(y,z) = Indicator(y,a) - s(y,z), which finds the argmin_z s(y,z)
-    // NOTE: this is not very efficient because we have to score the (s,a) twice
-    // and lose the benefit of short-circuit evaluation on Indicator(y,a)...
-    // Really need to incorporate this into ForwardSearch...
-    
-    // WAIT A SECOND: I only need to control the score as far as keeping track
-    // of what goes on the beam, which is luckily decoupled from the Adjoints
-    // that I compute and then put in the returned StateSequence.
-    // MEANING I can just compute the score once and flip it.
-    // ForwardSearch now needs a flag on whether its computing an max or min.
-
+    if (oracleTimer != null) oracleTimer.stop();
 
     // Find the most violated parse
+    if (mvTimer != null) mvTimer.start();
+    cachingModelParams = getFullParams(true); // release old cache, not worth it
     boolean mvSolveMax = true;
     ForwardSearch mvSearch =
         fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, cachingModelParams);
     mvSearch.run();
+    if (mvTimer != null) mvTimer.stop();
 
     return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
   }
@@ -839,8 +794,6 @@ public class Reranker {
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       assert !Double.isNaN(hinge);
       assert Double.isFinite(hinge);
-      if (!isViolated())
-        LOG.debug("wat");
     }
 
     public boolean isViolated() {
@@ -848,10 +801,12 @@ public class Reranker {
     }
 
     public double violation() {
-      if (hinge < 0d)
-        return -hinge;
-      else
+      if (hinge < 0d) {
+        double z = oracle.length() + mostViolated.length();
+        return -hinge / z;
+      } else {
         return 0d;
+      }
     }
 
     @Override

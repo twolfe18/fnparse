@@ -41,9 +41,6 @@ public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
 
-  // to get an idea of how well you're doing before adding the stateful parameters to the model
-  public static boolean TUNE_BEFORE_STATEFUL_TRAIN = true;
-
   // may differ across pretrain/train
   public class Config {
     // Meta
@@ -279,8 +276,9 @@ public class RerankerTrainer {
       Config conf,
       int iter,
       String timerStrPartial) throws InterruptedException, ExecutionException {
-    String timerStr = timerStrPartial + ".batch";
-    Timer t = timer.get(timerStr, true).setPrintInterval(10).ignoreFirstTime();
+    Timer tmv = timer.get(timerStrPartial + ".mostViolated", true).setPrintInterval(10).ignoreFirstTime();
+    Timer to = timer.get(timerStrPartial + ".oracle", true).setPrintInterval(10).ignoreFirstTime();
+    Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
     t.start();
     boolean verbose = false;
     int n = ip.size();
@@ -297,7 +295,7 @@ public class RerankerTrainer {
           LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = r.getStatefulParams() == Params.Stateful.NONE
           ? r.getStatelessUpdate(init, y)
-          : r.getFullUpdate(init, y, rand);
+          : r.getFullUpdate(init, y, rand, to, tmv);
         finishedUpdates.add(u);
       }
     } else {
@@ -311,7 +309,7 @@ public class RerankerTrainer {
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
         updates.add(es.submit(() ->
-          r.getFullUpdate(State.initialState(y, rerank), y, rand)));
+          r.getFullUpdate(State.initialState(y, rerank), y, rand, null, null)));
       }
       for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
@@ -365,23 +363,21 @@ public class RerankerTrainer {
 
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
-    Reranker.LOG_FORWARD_SEARCH = false;
-
     // On the last run, the average error for the first and second 100
     // violations respectively were 0.0445782 and 0.0263481.
     // This comes out to
     // avgRedPerIter = (0.0445782 - 0.0263481) / 100 = 0.000182301
     // relRedPerIter = ((0.0445782 - 0.0263481) / 0.0445782) / 100 = 0.004089465254317132
-    trainer.pretrainConf.stopping =
-        new StoppingCondition.AvgErrReduction(100, 1e-4, 1e-3);
+//    trainer.pretrainConf.stopping =
+//        new StoppingCondition.AvgErrReduction(10, 1e-4, 1e-3);
     trainer.pretrainConf.learningRate = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     // For full training avg err for the first and second 50 violations
     // respectively were 33.2382 and 10.3588
     // avgRedPerIter = (33.2382 - 10.3588) / 50 = 0.45758799999999994
     // relRedPerIter = ((33.2382 - 10.3588) / 33.2382) / 50 = 0.013766930820561882
-    trainer.trainConf.stopping =
-        new StoppingCondition.AvgErrReduction(50, 1e-1, 1e-2);
+//    trainer.trainConf.stopping =
+//        new StoppingCondition.AvgErrReduction(50, 1e-1, 1e-2);
     trainer.trainConf.learningRate = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     final int hashBuckets = 8 * 1000 * 1000;
