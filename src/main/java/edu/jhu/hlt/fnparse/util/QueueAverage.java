@@ -30,6 +30,7 @@ public class QueueAverage<T extends Number> {
       evicted = elems.poll();
       sumOfElems -= evicted.doubleValue();
     }
+    elems.add(value);
     sumOfElems += value.doubleValue();
     return evicted;
   }

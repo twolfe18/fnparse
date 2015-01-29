@@ -164,10 +164,10 @@ public interface StoppingCondition {
       double relRedPerIter = ((hi - lo) / hi) / bucketSize;
 
       LOG.info(String.format(
-          "[AvgErrReduction] %s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%decorrelate=%d",
+          "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%decorrelate=%d",
           toString(), iter, hi - lo, absRedPerIter, relRedPerIter, iter % decorrelate));
 
-      if (iter % decorrelate == 0) {
+      if (this.iter % decorrelate == 0) {
         return absRedPerIter < this.minAbsRedPerIter
             || relRedPerIter < this.minRelRedPerIter;
       } else {
