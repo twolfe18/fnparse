@@ -28,7 +28,10 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.util.Beam;
+import edu.jhu.hlt.fnparse.util.Beam.Beam1;
+import edu.jhu.hlt.fnparse.util.Beam.BeamN;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 
 /**
@@ -60,6 +63,8 @@ public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
   public static boolean LOG_UPDATE = false;
   public static boolean LOG_FORWARD_SEARCH = false;
+
+  public static boolean ORACLE_DEBUG = false;
 
   public static final double COST_FN = 1d;
 
@@ -201,7 +206,8 @@ public class Reranker {
 
     boolean cacheAdjoints = true;
     Params.Stateful model = getFullParams(cacheAdjoints);
-    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, model);
+    boolean solveMax = true;
+    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, solveMax, model);
     fs.run();
     StateSequence ss = fs.getPath();
     FNParse yhat = ss.getCur().decode();
@@ -341,21 +347,26 @@ public class Reranker {
      * -infinity) that given actions must lead to the given gold parse.
      */
     public static class Oracle implements BFunc {
-      private FNParse gold;
-      public Oracle(FNParse gold) {
+      private final FNParse gold;
+      private final boolean solveMax;
+      public Oracle(FNParse gold, boolean solveMax) {
         this.gold = gold;
+        this.solveMax = solveMax;
       }
       @Override
       public double score(State s, Action a) {
         FrameInstance fi = gold.getFrameInstance(a.t);
         Span arg = fi.getArgument(a.k);
         if (arg != a.getSpanSafe())
-          return Double.NEGATIVE_INFINITY;
+          return solveMax ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
         return 0d;
       }
       @Override
       public String toString() {
         return "ORACLE";
+      }
+      public FNParse getLabel() {
+        return gold;
       }
     }
 
@@ -370,7 +381,9 @@ public class Reranker {
       @Override
       public double score(State s, Action a) {
         ActionType at = a.getActionType();
-        return at.deltaLoss(s, a, gold);
+        double dl = at.deltaLoss(s, a, gold);
+        assert dl >= 0;
+        return dl;
       }
       @Override
       public String toString() {
@@ -379,13 +392,13 @@ public class Reranker {
     }
   }
 
-  private ForwardSearch fullSearch(State initialState, BFunc biasFunction, Params.Stateful model) {
+  public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
     // TODO expose option to record initialActions as well?
-    return this.new ForwardSearch(initialState, biasFunction, model, null, true);
+    return this.new ForwardSearch(initialState, biasFunction, solveMax, model, null, true);
   }
 
-  private ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, Params.Stateful model) {
-    return this.new ForwardSearch(initialState, biasFunction, model, new ArrayList<>(), false);
+  public ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
+    return this.new ForwardSearch(initialState, biasFunction, solveMax, model, new ArrayList<>(), false);
   }
 
   /**
@@ -416,10 +429,16 @@ public class Reranker {
     }
   }
 
+  /**
+   * TODO what this class lacks is the ability to tell when Stateless params are
+   * being used, and the search decomposes to parallel process over (t,k) rather
+   * than sequential (using the beam).
+   */
   public class ForwardSearch implements Runnable {
     private final State initialState;
     private final BFunc biasFunction;
     private final Params.Stateful model;
+    private final boolean solvingMax;
     private boolean fullSearch;
     private boolean hasRun;
 
@@ -431,10 +450,18 @@ public class Reranker {
     /**
      * @param biasFunction is evaluated before the model score and can short-circuit
      * the model score if -infinity is returned.
+     * @param solvingMax says whether we should be solving an argmax or argmin
+     * in this search.
+     * 
+     * Note: if solvingMax=true, biasFunction is allowed to return -infinity
+     * to short-circuiting the model score function, but not +infinity. For
+     * solvingMax=false, the reverse is true, +infinity is allowed, not -infinity.
      */
-    ForwardSearch(State initialState, BFunc biasFunction, Params.Stateful model, List<ScoredAction2> initialActions, boolean fullSearch) {
+    ForwardSearch(State initialState, BFunc biasFunction, boolean solvingMax, Params.Stateful model, List<ScoredAction2> initialActions, boolean fullSearch) {
+      assert initialState.numCommitted() == 0;
       this.initialState = initialState;
       this.biasFunction = biasFunction;
+      this.solvingMax = solvingMax;
       this.model = model;
       this.initialActions = initialActions;
       this.path = null;
@@ -449,34 +476,52 @@ public class Reranker {
       String desc = "[forwardSearch " + (fullSearch ? "full" : "init")
           + " bFunc=" + biasFunction.toString() + "]";
       boolean verbose = true;
+      if (verbose && LOG_FORWARD_SEARCH)
+        LOG.info(desc + " starting...");
 
       TransitionFunction transF =
           new ActionDrivenTransitionFunction(actionTypes);
       StateSequence frontier = new StateSequence(null, null, initialState, null);
-      Beam<StateSequence> beam = new Beam<>(beamWidth);
+      Beam<StateSequence> beam = beamWidth == 1
+          ? new Beam1<>() : new BeamN<>(beamWidth);
       beam.push(frontier, 0d);
 
-      for (int iter = 0; beam.getSize() > 0; iter++) {
+      for (int iter = 0; beam.size() > 0; iter++) {
 
+        int added = 0, actionsTried = 0;
         frontier = beam.pop();
-        if (verbose && LOG_FORWARD_SEARCH)
-          logStateInfo(desc, frontier.getCur());
-        int added = 0;
-
-        // As skipProb -> 1, the behavior of this method starts to look like
-        // "choose a random span for every (t,k)" as the negative evidence.
-        //      int reservoirSize = (int) (keepFactor * init.getSentence().size()) + 1;
-        //      LOG.info(desc + " keepFactor=" + keepFactor + " reservoirSize=" + reservoirSize);
-        //      List<StateSequence> consider = DataUtil.reservoirSample(
-        //          transF.nextStates(frontier), reservoirSize, rand);
-
         State s = frontier.getCur();
-        //for (StateSequence ss : transF.nextStates(frontier)) {
+        if (verbose && LOG_FORWARD_SEARCH)
+          logStateInfo(desc + " @ iter=" + iter, s);
         for (Action a : transF.nextStates(frontier)) {
+          if (verbose && LOG_FORWARD_SEARCH)
+            LOG.info("trying out " + a);
+          
+          if (verbose && fullSearch && ORACLE_DEBUG && biasFunction instanceof BFunc.Oracle) {
+            FNParse y = ((BFunc.Oracle) biasFunction).getLabel();
+            int T = y.numFrameInstances();
+            for (int t = 0; t < T; t++) {
+              FrameInstance fi = y.getFrameInstance(t);
+              int K = fi.numArguments();
+              for (int k = 0; k < K; k++) {
+                Span goldArg = fi.getArgument(k);
+                boolean p = s.possible(t, k, goldArg);
+                Span c = s.committed(t, k);
+                LOG.info("checking t=" + t + " k=" + k + " p=" + p + " c=" + c);
+                // Either this must be possible or committed to
+                assert p || c == goldArg;
+              }
+            }
+            LOG.info("yup");
+          }
 
+          actionsTried++;
           double bias = biasFunction.score(s, a);
           if (Double.isInfinite(bias)) {
-            assert bias < 0;
+            if (verbose && LOG_FORWARD_SEARCH)
+              LOG.info("skipping due to bFunc");
+            if (solvingMax) assert bias < 0;
+            else assert bias > 0;
             continue;
           }
 
@@ -484,6 +529,21 @@ public class Reranker {
           Adjoints adj = model.score(s, a);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
+          if (!solvingMax)
+            score = -score;
+
+          if (verbose && LOG_FORWARD_SEARCH) {
+            LOG.info("score=" + score + " bias=" + bias
+                + " modelScore=" + modelScore + " adjoints=" + adj);
+          }
+          
+          // TODO speed up stateless decoding
+          // (certainly works for only COMMIT, other action types... ???)
+          // if (!fullSearch && only stateless params) {
+          //   if (score > 0) applyThis action;
+          //   break;
+          // }
+          
 
           // Save the initial actions and their scores
           if (initialActions != null && iter == 0)
@@ -498,9 +558,11 @@ public class Reranker {
               logAction(desc, iter, score, ss, gold, false);
           }
         }
+        if (actionsTried == 0 && ORACLE_DEBUG)
+          LOG.info("wat2");
 
         if (LOG_FORWARD_SEARCH)
-          LOG.info(desc + " added=" + added);
+          LOG.info(desc + " added=" + added + " of=" + actionsTried);
 
         if (!fullSearch || added == 0) {
           if (LOG_FORWARD_SEARCH)
@@ -508,6 +570,14 @@ public class Reranker {
           if (fullSearch) {
             logSolution(desc, frontier);
             this.path = frontier;
+            if (ORACLE_DEBUG) {
+              State finalState = frontier.getCur();
+              int nu = finalState.numUncommitted();
+              int nc = finalState.numCommitted();
+              int TK = finalState.numFrameRoleInstances();
+              assert nu == 0;
+              assert nc == TK;
+            }
           }
           this.hasRun = true;
           return;
@@ -540,7 +610,7 @@ public class Reranker {
    * Runs a forward search to find both the oracle and mostViolated parses
    * and returns an Update.
    */
-  public Update getFullUpdate(State init, FNParse y) {
+  public Update getFullUpdate(State init, FNParse y, Random rand) {
     if (y.numFrameInstances() == 0) {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
@@ -549,14 +619,67 @@ public class Reranker {
     // Will cache adjoints across oracle and mostViolated
     Params.Stateful cachingModelParams = getFullParams(true);
 
+
     // Find the oracle parse
-    ForwardSearch oracleSearch =
-        fullSearch(init, new BFunc.Oracle(y), cachingModelParams);
+    boolean oracleSolveMax = false;
+    ForwardSearch oracleSearch = fullSearch(
+        init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, cachingModelParams);
     oracleSearch.run();
 
+//    // NEW WAY:
+//    // Instead of using s(y,z) to guide the oracle, add a random perturbation.
+//    // This will mean that the oracle will explore the space of z that lead to y
+//    // and mean that we won't be updating towards ONE way of getting to y,
+//    // we will be updating towards many, in proportion to their score.
+//    Params.Stateful modelPlusNoise = new Params.SumStateful(
+//        new Params.RandScore(rand, 10d),
+//        cachingModelParams);
+//    ForwardSearch oracleSearch =
+//        fullSearch(init, new BFunc.Oracle(y), modelPlusNoise);
+//    oracleSearch.run();
+    
+    
+    
+    
+    // NEW NEW WAY:
+    // I'm trying to map this code to traditional perceptron/SVM math, and the
+    // problem is that s(y,x) is not well defined for me [I'll refer to it as s(y)]
+    // because there can be many z that lead to y and yield different s(y,z).
+
+    // Solution:
+    // def s(y) =
+    //   if oracle:
+    //     min_z s(y,z)
+    //   if mostViolated:
+    //     max_z s(y,z)   # the current implementation
+
+    // This is related to a problem I was thinking about yesterday where I think
+    // that we're getting non-violated constraints quickly in full learning because
+    // the oracle+params can choose a single z that it likes (the global features
+    // have a very easy time pushing up the score of a single path pretty considerably
+    // compared to the scale of the loss function).
+    // By taking this min in the oracle s(y), the model must force up ALL derivations
+    // of the gold parse to meet the margin constraint.
+    
+    // Implementation:
+    // Oracle.bFunc = Indicator(y,a) \in {-inf, 0}
+    //              + -2 * s(y,z)
+    // leads to bFunc + s(y,z) = Indicator(y,a) - s(y,z), which finds the argmin_z s(y,z)
+    // NOTE: this is not very efficient because we have to score the (s,a) twice
+    // and lose the benefit of short-circuit evaluation on Indicator(y,a)...
+    // Really need to incorporate this into ForwardSearch...
+    
+    // WAIT A SECOND: I only need to control the score as far as keeping track
+    // of what goes on the beam, which is luckily decoupled from the Adjoints
+    // that I compute and then put in the returned StateSequence.
+    // MEANING I can just compute the score once and flip it.
+    // ForwardSearch now needs a flag on whether its computing an max or min.
+
+
     // Find the most violated parse
+    boolean mvSolveMax = true;
     ForwardSearch mvSearch =
-        fullSearch(init, new BFunc.MostViolated(y), cachingModelParams);
+        fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, cachingModelParams);
     mvSearch.run();
 
     return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
@@ -570,11 +693,11 @@ public class Reranker {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
     }
-    //Params.Stateful model = getFullParams(false);
     Params.Stateful model = Params.Stateful.lift(thetaStateless);
     BFunc deltaLoss = new BFunc.MostViolated(y);
+    boolean solveMax = true;
     ForwardSearch initialActions =
-        initialActionsSearch(init, deltaLoss, model);
+        initialActionsSearch(init, deltaLoss, solveMax, model);
     initialActions.run();
     return new Update.Batch<>(initialActions.getStatelessTrainUpdates());
   }
@@ -639,6 +762,30 @@ public class Reranker {
       this.oracle = oracle;
       this.mostViolated = mostViolated;
 
+      // The oracle is supposed to find the highest/lowest scoring derivation
+      // of the gold parse.
+      State os = oracle.getCur();
+      if (os == null) {
+        logSolution("[oracle]", oracle);
+        LOG.debug("null1");
+      } else {
+        FNParse osd = os.decode();
+        if (osd == null) {
+          logSolution("[oracle]", oracle);
+          logStateInfo("[oracle]", os);
+          LOG.debug("null2");
+        } else {
+          if (!osd.equals(gold)) {
+            LOG.info(FNDiff.diffArgs(osd, gold, true));
+            logSolution("[oracle]", oracle);
+            logStateInfo("[oracle]", os);
+            LOG.info("oracle isn't gold?");
+          } else {
+            // good!
+          }
+        }
+      }
+
       FNParse yHat = mostViolated.getCur().decode();
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
@@ -646,6 +793,8 @@ public class Reranker {
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       assert !Double.isNaN(hinge);
       assert Double.isFinite(hinge);
+      if (!isViolated())
+        LOG.debug("wat");
     }
 
     public boolean isViolated() {
@@ -687,7 +836,6 @@ public class Reranker {
         Adjoints a = cur.getAdjoints();
         if (a != null)
           a.backwards(upMV);
-//          a.getUpdate(addTo, upMV);
         else
           skipped++;
       }

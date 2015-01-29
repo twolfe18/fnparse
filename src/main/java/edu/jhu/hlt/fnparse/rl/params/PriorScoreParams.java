@@ -152,7 +152,8 @@ public class PriorScoreParams implements Params.Stateless {
         if (score.rank > 5)  feats[offset + 8] = 1d;
       }
       double l2Penalty = 0d;
-      return new Adjoints.Vector(a, theta, feats, l2Penalty);
+      double learningRate = 1d;
+      return new Adjoints.Vector(a, theta, feats, l2Penalty, learningRate);
     } else {
       double s = score == null ? Double.NEGATIVE_INFINITY : score.getScore();
       return new Adjoints.Explicit(s, a, "priorScore");

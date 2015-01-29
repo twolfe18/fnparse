@@ -14,6 +14,7 @@ import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
@@ -21,7 +22,6 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
-import edu.jhu.hlt.fnparse.rl.params.FeatureParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
@@ -29,8 +29,6 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.Conjunction;
-import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.HammingConvergence;
-import edu.jhu.hlt.fnparse.rl.rerank.StoppingCondition.Time;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 
@@ -43,6 +41,9 @@ import edu.jhu.hlt.fnparse.util.Timer;
 public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
+
+  // to get an idea of how well you're doing before adding the stateful parameters to the model
+  public static boolean TUNE_BEFORE_STATEFUL_TRAIN = true;
 
   public static interface LearningRateSchedule {
     public void observe(int iteration, double violation, int batchSize);
@@ -224,10 +225,15 @@ public class RerankerTrainer {
       hammingTrain(m, train, true);
 
       // Stateful training
-      if (m.getStatefulParams() != Stateful.NONE)
+      if (m.getStatefulParams() != Stateful.NONE) {
+        if (TUNE_BEFORE_STATEFUL_TRAIN) {
+          LOG.info("[train] tuning model for F1 loss BEFORE running Stateful train");
+          tuneModelForF1(m, dev);
+        }
         hammingTrain(m, train, false);
-      else
+      } else {
         LOG.info("[train] skipping Stateful train because no Stateful params were given");
+      }
 
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -335,7 +341,7 @@ public class RerankerTrainer {
           LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = onlyStateless
           ? r.getStatelessUpdate(init, y)
-          : r.getFullUpdate(init, y);
+          : r.getFullUpdate(init, y, rand);
         finishedUpdates.add(u);
       }
     } else {
@@ -348,7 +354,8 @@ public class RerankerTrainer {
         List<Item> rerank = ip.items(idx);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        updates.add(es.submit(() -> r.getFullUpdate(State.initialState(y, rerank), y)));
+        updates.add(es.submit(() ->
+          r.getFullUpdate(State.initialState(y, rerank), y, rand)));
       }
       for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
@@ -374,7 +381,9 @@ public class RerankerTrainer {
 
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand);
-    ItemProvider ip = Reranker.getItemProvider(10, false);
+    ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
+        .subList(0, 100));
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
@@ -388,10 +397,10 @@ public class RerankerTrainer {
       train = ip;
       test = ip;
       trainer.tuneOnTrainingData = true;
-      trainer.maxDev = 10;
+      trainer.maxDev = 15;
     } else {
       ItemProvider.TrainTestSplit trainTest =
-          new ItemProvider.TrainTestSplit(ip, 0.25, 100, rand);
+          new ItemProvider.TrainTestSplit(ip, 0.25, 10, rand);
       train = trainTest.getTrain();
       test = trainTest.getTest();
     }
@@ -399,24 +408,24 @@ public class RerankerTrainer {
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
     Reranker.LOG_FORWARD_SEARCH = false;
-    trainer.batchSize = 1;
+    trainer.batchSize = 4;
     trainer.beamSize = 1;
 
-    trainer.stoppingPretrain = new Conjunction(
-        new StoppingCondition.HammingConvergence(0.01, 5000),
-        new StoppingCondition.Time(5));
+//    trainer.stoppingPretrain = new Conjunction(
+//        new StoppingCondition.HammingConvergence(0.01, 5000),
+//        new StoppingCondition.Time(0.5));
+    trainer.stoppingPretrain = new StoppingCondition.Fixed(1000);
     trainer.learningRatePretrain = new LearningRateSchedule.Normal(1, 50, 0.5);
 //    trainer.learningRatePretrain = new LearningRateSchedule.Constant(1);
 //    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
 
-    trainer.stoppingTrain = new StoppingCondition.Time(4);
-//    trainer.stoppingTrain = new Conjunction(
-//        new StoppingCondition.NoViolations(2 * train.size()),
-//        new StoppingCondition.Time(10));
+    trainer.stoppingTrain = new Conjunction(
+        new StoppingCondition.NoViolations(train.size()),
+        new StoppingCondition.Time(120));
     trainer.learningRateTrain = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     final int hashBuckets = 8 * 1000 * 1000;
-    final double l2Penalty = testOnTrain ? 1e-14 : 1e-8;
+    final double l2Penalty = 1e-8;
     if (useEmbeddingParams) {
       int embeddingSize = 2;
       EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
@@ -440,24 +449,20 @@ public class RerankerTrainer {
     }
 
     if (useGlobalFeatures) {
-      //    GlobalFeature.ArgOverlapFeature g1 = new GlobalFeature.ArgOverlapFeature();
-      //    GlobalFeature.RoleCooccurenceFeature g2 = new GlobalFeature.RoleCooccurenceFeature();
-      //    GlobalFeature.SpanBoundaryFeature g3 = new GlobalFeature.SpanBoundaryFeature();
-      //    g1.showOnUpdate = g2.showOnUpdate = g2.showOnUpdate = true;
-      //    g1.showFeatures = g2.showFeatures = g2.showFeatures = true;
-      //    trainer.statefulParams =
-      //        new Params.SumStateful(g1, new Params.SumStateful(g2, g3));
-      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
-          new GlobalFeature.RoleCooccurenceFeatureStateful(l2Penalty);
-      g1.setShowOnUpdate();
+      double globalL2Penalty = 1;
+      double globalLearningRate = 0.1;
+//      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
+//          new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
+//      g1.setShowOnUpdate();
       GlobalFeature.ArgOverlapFeature g2 =
-          new GlobalFeature.ArgOverlapFeature(l2Penalty);
+          new GlobalFeature.ArgOverlapFeature(globalL2Penalty, globalLearningRate);
       g2.setShowOnUpdate();
       GlobalFeature.SpanBoundaryFeature g3 =
-          new GlobalFeature.SpanBoundaryFeature(l2Penalty);
+          new GlobalFeature.SpanBoundaryFeature(globalL2Penalty, globalLearningRate);
       g3.setShowOnUpdate();
-      trainer.statefulParams = new Params.SumStateful(
-          g1, new Params.SumStateful(g2, g3));
+//      trainer.statefulParams = new Params.SumStateful(
+//          g1, new Params.SumStateful(g2, g3));
+      trainer.statefulParams = new Params.SumStateful(g2, g3);
     }
 
     Reranker model = trainer.train(train);

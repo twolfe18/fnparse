@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.log4j.Logger;
 
@@ -29,6 +30,33 @@ public interface Params {
   // its not listed here.
 
 
+  public static class RandScore implements Stateless, Stateful {
+    private java.util.Random rand;
+    private double variance;
+    public RandScore(Random rand, double variance) {
+      this.rand = rand;
+      this.variance = variance;
+    }
+    @Override
+    public String toString() {
+      return String.format("(Rand %.1f)", variance);
+    }
+    @Override
+    public void doneTraining() {
+      // no-op
+    }
+    @Override
+    public Adjoints score(State s, Action a) {
+      double r = (rand.nextDouble() - 0.5) * 2 * variance;
+      return new Adjoints.Explicit(r, a, "rand");
+    }
+    @Override
+    public Adjoints score(FNTagging f, Action a) {
+      double r = (rand.nextDouble() - 0.5) * 2 * variance;
+      return new Adjoints.Explicit(r, a, "rand");
+    }
+  }
+
   /**
    * Features that need to look at the state of the parser (uncacheable)
    */
@@ -38,6 +66,7 @@ public interface Params {
     public static final Stateful NONE = new Stateful() {
       @Override public Adjoints score(State s, final Action a) {
         return new Adjoints() {
+          @Override public String toString() { return "0"; }
           @Override public double forwards() { return 0d; }
           @Override public Action getAction() {
             return a;
@@ -48,6 +77,7 @@ public interface Params {
           }
         };
       }
+      @Override public String toString() { return "0"; }
       @Override
       public void doneTraining() {
         // no-op
@@ -56,6 +86,10 @@ public interface Params {
 
     public static Stateful lift(final Stateless theta) {
       return new Stateful() {
+        @Override
+        public String toString() {
+          return "(Lifted " + theta + ")";
+        }
         @Override
         public Adjoints score(State s, Action a) {
           return theta.score(s.getFrames(), a);
@@ -77,6 +111,7 @@ public interface Params {
     public static final Stateless NONE = new Stateless() {
       @Override public Adjoints score(FNTagging frames, final Action a) {
         return new Adjoints() {
+          @Override public String toString() { return "0"; }
           @Override
           public double forwards() {
             return 0d;
@@ -91,6 +126,7 @@ public interface Params {
           }
         };
       }
+      @Override public String toString() { return "0"; }
       @Override
       public void doneTraining() {
         // no-op
@@ -113,6 +149,10 @@ public interface Params {
       public Caching(Stateless wrapping) {
         this.wrapping = wrapping;
         this.cache1 = new HashMap<>();
+      }
+      @Override
+      public String toString() {
+        return "(Cache " + wrapping + ")";
       }
       public Stateless getWrapped() {
         return wrapping;
@@ -202,6 +242,10 @@ public interface Params {
       this.right = stateless;
     }
     @Override
+    public String toString() {
+      return left + " + " + right;
+    }
+    @Override
     public double forwards() {
       return left.forwards() + right.forwards();
     }
@@ -227,6 +271,10 @@ public interface Params {
       this.stateless = stateless;
     }
     @Override
+    public String toString() {
+      return stateful + " + " + stateless;
+    }
+    @Override
     public Adjoints score(State s, Action a) {
       FNTagging f = s.getFrames();
       return new SumAdj(stateful.score(s, a), stateless.score(f, a));
@@ -246,6 +294,10 @@ public interface Params {
       this.right = right;
     }
     @Override
+    public String toString() {
+      return left + " + " + right;
+    }
+    @Override
     public Adjoints score(FNTagging f, Action a) {
       return new SumAdj(left.score(f, a), right.score(f, a));
     }
@@ -262,6 +314,10 @@ public interface Params {
     public SumStateful(Stateful left, Stateful right) {
       this.left = left;
       this.right = right;
+    }
+    @Override
+    public String toString() {
+      return left + " + " + right;
     }
     @Override
     public Adjoints score(State s, Action a) {

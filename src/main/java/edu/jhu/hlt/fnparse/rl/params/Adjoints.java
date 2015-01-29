@@ -27,12 +27,6 @@ public interface Adjoints {
 
   public void backwards(double dScore_dForwards);
 
-  // TODO
-  // the fact that getUpdate(double[] addTo, double scale), from HasUpdate
-  // is here reflects the assumption that Adjoints produce rather than apply
-  // updates. This seems wrong, Adjoints should be able to apply a backwards
-  // update.
-  // Like Params.update!
 
   /**
    * Replaces Dense and Sparse
@@ -42,17 +36,23 @@ public interface Adjoints {
     private final IntDoubleVector features;
     private final IntDoubleVector weights;  // not owned by this class
     private final double l2Penalty;
+    private final double learningRate;
     private double score;
     private boolean computed;
-    public Vector(Action a, double[] weights, double[] features, double l2Penalty) {
-      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
+    public Vector(Action a, double[] weights, double[] features, double l2Penalty, double learningRate) {
+      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty, learningRate);
     }
-    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
+    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty, double learningRate) {
       this.action = a;
       this.weights = weights;
       this.features = features;
       this.computed = false;
       this.l2Penalty = l2Penalty;
+      this.learningRate = learningRate;
+    }
+    @Override
+    public String toString() {
+      return "(Adjoints.Vector " + action + ")";
     }
     @Override
     public Action getAction() {
@@ -76,7 +76,8 @@ public interface Adjoints {
           double l2p = 0d;
           if (l2Penalty > 0)
             l2p = weights.get(i) * l2Penalty;
-          weights.add(i, g - l2p);
+          double u = learningRate * (g - l2p);
+          weights.add(i, u);
           return f_i;
         }
       });
@@ -108,6 +109,10 @@ public interface Adjoints {
     public Lazy(Supplier<Adjoints> thunk) {
       this.thunk = thunk;
       this.value = null;
+    }
+    @Override
+    public String toString() {
+      return "(Lazy " + value + ")";
     }
     @Override
     public double forwards() {
@@ -153,6 +158,10 @@ public interface Adjoints {
     public String getTag() {
       return tag;
     }
+    public String toString() {
+      return String.format("(Explicit %s%.1f %s)",
+          tag == null ? "" : tag + " ", score, action);
+    }
     @Override
     public double forwards() {
       return score;
@@ -166,73 +175,4 @@ public interface Adjoints {
       // no-op
     }
   }
-
-  /*
-   * Represents a score parameterized by a dot product between parameters and
-   * a dense vector.
-  public static class DenseFeatures implements Adjoints {
-    protected double[] features;
-    private double[] theta;
-    private Action action;
-    public DenseFeatures(double[] features, double[] theta, Action a) {
-      if (theta.length != features.length)
-        throw new IllegalArgumentException();
-      this.action = a;
-      this.features = features;
-      this.theta = theta;
-    }
-    @Override
-    public double getScore() {
-      double s = 0d;
-      for (int i = 0; i < features.length; i++)
-        s += features[i] * theta[i];
-      return s;
-    }
-    @Override
-    public Action getAction() {
-      return action;
-    }
-    @Override
-    public void getUpdate(double[] addTo, double scale) {
-      for (int i = 0; i < theta.length; i++)
-        addTo[i] += scale * features[i];
-    }
-  }
-   */
-
-  /*
-   * Represents a score parameterized by a dot product between parameters and
-   * a sparse vector.
-  public static class SparseFeatures implements Adjoints {
-    private FeatureVector features;
-    private double[] theta;
-    private Action action;
-    public SparseFeatures(FeatureVector features, double[] theta, Action a) {
-      action = a;
-      this.features = features;
-      this.theta = theta;
-    }
-    public void add(int index, double value) {
-      features.add(index, value);
-    }
-    @Override
-    public double getScore() {
-      return features.dot(theta);
-    }
-    @Override
-    public Action getAction() {
-      return action;
-    }
-    @Override
-    public void getUpdate(double[] addTo, double scale) {
-      features.apply(new FnIntDoubleToDouble() {
-        @Override
-        public double call(int arg0, double arg1) {
-          addTo[arg0] += scale * arg1;
-          return arg1;
-        }
-      });
-    }
-  }
-   */
 }

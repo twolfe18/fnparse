@@ -37,8 +37,6 @@ public class DecoderBias implements Params.Stateless {
 
   @Override
   public void doneTraining() {
-    LOG.warn("this should probably never be called because this should be "
-        + "added after hamminTrain");
-    assert false;
+    // no-op
   }
 }

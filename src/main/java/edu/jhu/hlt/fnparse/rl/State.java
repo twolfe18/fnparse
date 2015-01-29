@@ -328,9 +328,11 @@ public class State {
     for (int t = 0; t < T; t++) {
       for (int k = 0; k < committed[t].length; k++) {
         Span a = committed[t][k];
+        Span ga = frames.getFrameInstance(t).getArgument(k);
         String as = a == null ? "NULL" : a.shortString();
-        String gs = frames.getFrameInstance(t).getArgument(k).shortString();
-        sb.append("(" + t + "," + k + ") = " + as + "\t" + gs + "\n");
+        String gs = ga.shortString();
+        String p = ""+possible(t, k, ga);
+        sb.append("t=" + t + " k=" + k + " committed=" + as + "\tgold=" + gs + "\tgoldPossible=" + p + "\n");
       }
     }
     return sb.toString();

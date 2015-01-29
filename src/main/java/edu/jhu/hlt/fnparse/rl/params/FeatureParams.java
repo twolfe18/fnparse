@@ -27,6 +27,7 @@ public abstract class FeatureParams<Context> {
 
   protected AveragedWeights theta;
   protected double l2Penalty;
+  protected double learningRate;
 
   protected Alphabet<String> featureIndices;
   protected int numBuckets;
@@ -38,6 +39,7 @@ public abstract class FeatureParams<Context> {
     this.numBuckets = -1;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
+    this.learningRate = 1;
   }
 
   /** For HashBased implementation */
@@ -46,6 +48,7 @@ public abstract class FeatureParams<Context> {
     this.numBuckets = numBuckets;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
+    this.learningRate = 1;
   }
 
   public abstract FeatureVector getFeatures(Context c, Action a);
@@ -122,7 +125,7 @@ public abstract class FeatureParams<Context> {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
     if (showOnUpdate && featureIndices != null)
       adj.showFeatures(getClass().getName(), featureIndices);
     return adj;

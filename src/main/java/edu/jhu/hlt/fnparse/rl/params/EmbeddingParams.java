@@ -43,13 +43,13 @@ public class EmbeddingParams implements Params.Stateless {
 
   public interface FrameRoleEmbeddingParams {
     public int dimension(); // returned EmbeddingAdjoints should have forward scores of this dimension
-    public void initialize(double variance, Random rand);
+    public void initialize(double variance, java.util.Random rand);
     public EmbeddingAdjoints embed(Frame frame, int role);
   }
 
   public interface ContextEmbeddingParams {
     public int dimension(); // returned EmbeddingAdjoints should have forward scores of this dimension
-    public void initialize(double variance, Random rand);
+    public void initialize(double variance, java.util.Random rand);
     public EmbeddingAdjoints embed(FNTagging frames, Span target, Action action);
   }
 

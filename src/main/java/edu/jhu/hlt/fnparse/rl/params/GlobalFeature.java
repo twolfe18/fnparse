@@ -47,8 +47,9 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams<State> implements Params.Stateful {
-    public RoleCooccurenceFeatureStateful(double l2Penalty) {
+    public RoleCooccurenceFeatureStateful(double l2Penalty, double learningRate) {
       super(l2Penalty); // use Alphabet
+      this.learningRate = learningRate;
     }
     @Override
     public FeatureVector getFeatures(State state, Action a2) {
@@ -57,8 +58,8 @@ public interface GlobalFeature extends Params.Stateful {
       if (!a2.hasSpan())
         da2 += ".nullSpan";
       FeatureVector fv = new FeatureVector();
-      double smooth = 3d;
-      double w = smooth / (state.numCommitted() + smooth);
+      //double smooth = 3d;
+      double w = 1d;  //smooth / (state.numCommitted() + smooth);
       final int T = state.numFrameInstance();
       for (int t = 0; t < T; t++) {
         FrameInstance fi = state.getFrameInstance(t);
@@ -100,8 +101,9 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class ArgOverlapFeature
       extends FeatureParams<State> implements Params.Stateful {
-    public ArgOverlapFeature(double l2Penalty) {
+    public ArgOverlapFeature(double l2Penalty, double learningRate) {
       super(l2Penalty);   // use Alphabet
+      this.learningRate = learningRate;
     }
     // start with a balanced tree, leaves are token indices
     // internal nodes represent a contiguous span of all the leaves/tokens it dominates
@@ -124,7 +126,11 @@ public interface GlobalFeature extends Params.Stateful {
       if (ovlp == 0)
         return FeatureUtils.emptyFeatures;
       FeatureVector fv = new FeatureVector();
-      b(fv, "overlap=" + ovlp);
+      int k = 5;
+      if (ovlp < k)
+        b(fv, "overlap=" + ovlp);
+      else
+        b(fv, "overlap=" + k + "+");
       return fv;
     }
   }
@@ -135,8 +141,9 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class SpanBoundaryFeature
       extends FeatureParams<State> implements Params.Stateful {
-    public SpanBoundaryFeature(double l2Penalty) {
+    public SpanBoundaryFeature(double l2Penalty, double learningRate) {
       super(l2Penalty);
+      this.learningRate = learningRate;
     }
     private static void indexSpans(State state, Span s,
         List<Action> mStart, List<Action> mEnd,
