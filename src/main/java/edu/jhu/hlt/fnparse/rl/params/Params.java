@@ -16,9 +16,6 @@ import edu.jhu.hlt.fnparse.rl.State;
 public interface Params {
   public static final Logger LOG = Logger.getLogger(Params.class);
 
-  // This is no longer needed because the Adjoints have an apply method
-  //public void update(Update update);
-
   /**
    * This is called after training is complete. This is a useful hook for
    * switching from regular perceptron weights to averaged ones.

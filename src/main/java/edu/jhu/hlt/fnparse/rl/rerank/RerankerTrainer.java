@@ -263,7 +263,7 @@ public class RerankerTrainer {
       stoppingCond = stoppingTrain;
       lrSched = learningRateTrain;
     }
-    LOG.info("[hammingTrain] batchSize=" + batchSize
+    LOG.info("[hammingTrain] starting, batchSize=" + batchSize
         + " threads=" + threads
         + " onlyStateless=" + onlyStateless
         + " stopping=" + stoppingCond);
@@ -411,17 +411,21 @@ public class RerankerTrainer {
     trainer.batchSize = 4;
     trainer.beamSize = 1;
 
-//    trainer.stoppingPretrain = new Conjunction(
-//        new StoppingCondition.HammingConvergence(0.01, 5000),
-//        new StoppingCondition.Time(0.5));
-    trainer.stoppingPretrain = new StoppingCondition.Fixed(1000);
+    // On the last run, the average error for the first and second 100
+    // violations respectively were 0.0445782 and 0.0263481.
+    // This comes out to
+    // avgRedPerIter = (0.0445782 - 0.0263481) / 100 = 0.000182301
+    // relRedPerIter = ((0.0445782 - 0.0263481) / 0.0445782) / 100 = 0.004089465254317132
+    trainer.stoppingPretrain =
+        new StoppingCondition.AvgErrReduction(100, 1e-4, 1e-3);
     trainer.learningRatePretrain = new LearningRateSchedule.Normal(1, 50, 0.5);
-//    trainer.learningRatePretrain = new LearningRateSchedule.Constant(1);
-//    trainer.learningRatePretrain = new LearningRateSchedule.Exp(100d);
 
-    trainer.stoppingTrain = new Conjunction(
-        new StoppingCondition.NoViolations(train.size()),
-        new StoppingCondition.Time(120));
+    // For full training avg err for the first and second 50 violations
+    // respectively were 33.2382 and 10.3588
+    // avgRedPerIter = (33.2382 - 10.3588) / 50 = 0.45758799999999994
+    // relRedPerIter = ((33.2382 - 10.3588) / 33.2382) / 50 = 0.013766930820561882
+    trainer.stoppingTrain =
+        new StoppingCondition.AvgErrReduction(50, 1e-1, 1e-2);
     trainer.learningRateTrain = new LearningRateSchedule.Normal(1, 50, 0.5);
 
     final int hashBuckets = 8 * 1000 * 1000;

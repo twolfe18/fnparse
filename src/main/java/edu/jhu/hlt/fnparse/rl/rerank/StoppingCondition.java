@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.EMA;
+import edu.jhu.hlt.fnparse.util.QueueAverage;
 
 
 public interface StoppingCondition {
@@ -105,21 +106,97 @@ public interface StoppingCondition {
   }
 
   /**
-   * Keeps two exponentially weighted moving averages, one fast and one slow,
-   * and when they converge (stay within a given tolerance for a certain number
-   * of iterations), stops the learning.
+   * Keeps two buckets of violations of size K and stops when the absolute or
+   * relative reduction in the averages of the two buckets drops below a
+   * threshold. Will require at least 2*K iterations.
    */
-  public static class HammingConvergence implements StoppingCondition {
+  public static class AvgErrReduction implements StoppingCondition {
+    private QueueAverage<Double> olderBucket, newBucket;
+    private int bucketSize;
+    private double minAbsRedPerIter;
+    private double minRelRedPerIter;
+    private int iter;
+    private int decorrelate;  // only check every decorrelate iters
+
+    public AvgErrReduction(int bucketSize, double minAbsReductionPerIter, double minRelReductionPerIter) {
+      this.bucketSize = bucketSize;
+      this.olderBucket = new QueueAverage<>(bucketSize);
+      this.newBucket = new QueueAverage<>(bucketSize);
+      this.minAbsRedPerIter = minAbsReductionPerIter;
+      this.minRelRedPerIter = minRelReductionPerIter;
+      this.iter = 0;
+      // bucketSize >= 100, check every iteration
+      // bucketSize =   50, check every 2 iterations
+      // bucketSize =   10, check every 4 iterations
+      this.decorrelate = Math.max(1, (int) Math.ceil(10d / Math.sqrt(bucketSize)));
+    }
+
+    public void reset() {
+      olderBucket.clear();
+      newBucket.clear();
+    }
+
+    @Override
+    public String toString() {
+      return String.format("AvgErrReduction(k=%d,abs=%.2g,rel=%.2g)",
+          bucketSize, minAbsRedPerIter, minRelRedPerIter);
+    }
+
+    @Override
+    public boolean stop(int iter, double violation) {
+      // Add this violation to our estimate
+      this.iter++;
+      if (!olderBucket.isFull()) {
+        olderBucket.push(violation);
+        return false;
+      } else if (!newBucket.isFull()) {
+        newBucket.push(violation);
+        return false;
+      }
+      // Cascade from new to old
+      double old = newBucket.push(violation);
+      olderBucket.push(old);
+
+      // Estimate the error reduction per iteration
+      double hi = olderBucket.getAverage();
+      double lo = newBucket.getAverage();
+      double absRedPerIter = (hi - lo) / bucketSize;
+      double relRedPerIter = ((hi - lo) / hi) / bucketSize;
+
+      LOG.info(String.format(
+          "[AvgErrReduction] %s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%decorrelate=%d",
+          toString(), iter, hi - lo, absRedPerIter, relRedPerIter, iter % decorrelate));
+
+      if (iter % decorrelate == 0) {
+        return absRedPerIter < this.minAbsRedPerIter
+            || relRedPerIter < this.minRelRedPerIter;
+      } else {
+        return false;
+      }
+    }
+
+    @Override
+    public int estimatedNumberOfIterations() {
+      return (int) (this.iter * 1.5 + 10);
+    }
+  }
+
+  /**
+   * Keeps two exponentially weighted moving averages (EMA), one fast, one slow.
+   * When they converge (stay within a given tolerance for a certain number of
+   * iterations), stops the learning.
+   */
+  public static class EMAConvergence implements StoppingCondition {
     public static boolean VERBOSE = false;
     private final EMA slow, fast;
     private final double tol;
     private final int inARow;
     private int curRun;
     private int iterations;
-    public HammingConvergence() {
+    public EMAConvergence() {
       this(5.0, 5);
     }
-    public HammingConvergence(double tolerance, int inARow) {
+    public EMAConvergence(double tolerance, int inARow) {
       slow = new EMA(0.9);
       fast = new EMA(0.1);
       tol = tolerance;

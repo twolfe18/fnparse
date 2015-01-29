@@ -44,6 +44,8 @@ public interface GlobalFeature extends Params.Stateful {
    * Fires when roles co-occur.
    * Captures "stopping features", e.g. "commit to (t,k) = nullSpan even though
    * (t',k') = nonNullSpan".
+   * 
+   * TODO make this faster.
    */
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams<State> implements Params.Stateful {

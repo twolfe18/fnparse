@@ -95,16 +95,9 @@ public interface ActionType {
       // Update possible
       StateIndex si = s.getStateIndex();
       int n = si.sentenceSize();
-      for (int i = 0; i < n; i++) {
-        for (int j = i + 1; j <= n; j++) {
-//          if (Reranker.ORACLE_DEBUG && s.getFrames().getId().equals("FNFUTXT1274783")) {
-//            if (a.t == 9 && a.k == 2)
-//              Reranker.LOG.info("[apply] checkme");
-//            Reranker.LOG.info("[apply] setting " + a + " i=" + i + " j=" + j + " to false");
-//          }
+      for (int i = 0; i < n; i++)
+        for (int j = i + 1; j <= n; j++)
           next.set(si.index(a.t, a.k, i, j), false);
-        }
-      }
 
       // Update committed
       Span[][] c = s.copyOfCommitted();
@@ -150,13 +143,8 @@ public interface ActionType {
           if (y == null) {
             // Consider all possible actions
             for (Span arg : st.naiveAllowableSpans(t, k)) {
-//              boolean added = false;
-              if (st.possible(t, k, arg)) {
+              if (st.possible(t, k, arg))
                 actions.add(new Action(t, k, getIndex(), arg));
-//                added = true;
-              }
-//              if (Reranker.ORACLE_DEBUG && t == 9)
-//                Reranker.LOG.info("[COMMIT next] t=" + t + " k=" + k + " added " + arg + " " + added);
             }
           } else {
             // Only consider actions that will lead to y (there is only one)
