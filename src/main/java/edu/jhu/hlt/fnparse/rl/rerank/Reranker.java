@@ -64,8 +64,6 @@ public class Reranker {
   public static boolean LOG_UPDATE = false;
   public static boolean LOG_FORWARD_SEARCH = false;
 
-  public static boolean ORACLE_DEBUG = false;
-
   public static final double COST_FN = 1d;
 
   // Higher score is better, this puts highest scores at the end of the list
@@ -83,6 +81,7 @@ public class Reranker {
   private Params.Stateful thetaStateful;
   private Params.Stateless thetaStateless;
 
+  private Random rand;
   private ActionType[] actionTypes;
   private int beamWidth;
   public boolean useItemsForPruning = false; // Otherwise use them as features
@@ -98,6 +97,7 @@ public class Reranker {
         ActionType.COMMIT,
         //ActionType.COMMIT_AND_PRUNE,
     };
+    this.rand = rand;
   }
 
   public String toString() {
@@ -383,7 +383,7 @@ public class Reranker {
      * A BFunc which rewards increasing the hamming loss (aka deltaLoss).
      */
     public static class MostViolated implements BFunc {
-      private FNParse gold;
+      private final FNParse gold;
       public MostViolated(FNParse gold) {
         this.gold = gold;
       }
@@ -399,10 +399,43 @@ public class Reranker {
         return "MOST_VIOLATED";
       }
     }
+
+    /**
+     * Same as MostViolated, but you can use this when building stateless
+     * updates to skip computing model scores on most negative actions
+     * (most actions are negative and you don't need to see all of them to learn
+     * that they're bad -- a class imbalance problem).
+     */
+    public static class MostViolatedWithSubsampling extends MostViolated {
+      private final double negSubsampleRate;
+      private final Random rand;
+      public MostViolatedWithSubsampling(FNParse gold, double negSubsampleRate, Random rand) {
+        super(gold);
+        this.negSubsampleRate = negSubsampleRate;
+        this.rand = rand;
+      }
+      @Override
+      public double score(State s, Action a) {
+        double deltaLoss = super.score(s, a);
+        if (deltaLoss > 0) {
+          // Negative action, skip it with some probability
+          if (rand.nextDouble() < negSubsampleRate)
+            return Double.NEGATIVE_INFINITY;
+          else
+            return deltaLoss;
+        } else {
+          // Gold (or consistent-with-gold) action, keep no matter what
+          return deltaLoss;
+        }
+      }
+      @Override
+      public String toString() {
+        return String.format("MOST_VIOLATED_SUBSAMPLE_%.2g", negSubsampleRate);
+      }
+    }
   }
 
   public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
-    // TODO expose option to record initialActions as well?
     return this.new ForwardSearch(initialState, biasFunction, solveMax, model, null, true);
   }
 
@@ -442,6 +475,10 @@ public class Reranker {
    * TODO what this class lacks is the ability to tell when Stateless params are
    * being used, and the search decomposes to parallel process over (t,k) rather
    * than sequential (using the beam).
+   *
+   * For !fullSearch, this class needs the ability to sub-sample negatives,
+   * which means skipping actions when deltaLoss > 0.
+   * => do this in bFunc
    */
   public class ForwardSearch implements Runnable {
     private final State initialState;
@@ -502,27 +539,27 @@ public class Reranker {
         State s = frontier.getCur();
         if (verbose && LOG_FORWARD_SEARCH)
           logStateInfo(desc + " @ iter=" + iter, s);
+
         for (Action a : transF.nextStates(frontier)) {
           if (verbose && LOG_FORWARD_SEARCH)
             LOG.info("trying out " + a);
-          
-          if (verbose && fullSearch && ORACLE_DEBUG && biasFunction instanceof BFunc.Oracle) {
-            FNParse y = ((BFunc.Oracle) biasFunction).getLabel();
-            int T = y.numFrameInstances();
-            for (int t = 0; t < T; t++) {
-              FrameInstance fi = y.getFrameInstance(t);
-              int K = fi.numArguments();
-              for (int k = 0; k < K; k++) {
-                Span goldArg = fi.getArgument(k);
-                boolean p = s.possible(t, k, goldArg);
-                Span c = s.committed(t, k);
-                LOG.info("checking t=" + t + " k=" + k + " p=" + p + " c=" + c);
-                // Either this must be possible or committed to
-                assert p || c == goldArg;
-              }
-            }
-            LOG.info("yup");
-          }
+//          if (verbose && fullSearch && ORACLE_DEBUG && biasFunction instanceof BFunc.Oracle) {
+//            FNParse y = ((BFunc.Oracle) biasFunction).getLabel();
+//            int T = y.numFrameInstances();
+//            for (int t = 0; t < T; t++) {
+//              FrameInstance fi = y.getFrameInstance(t);
+//              int K = fi.numArguments();
+//              for (int k = 0; k < K; k++) {
+//                Span goldArg = fi.getArgument(k);
+//                boolean p = s.possible(t, k, goldArg);
+//                Span c = s.committed(t, k);
+//                LOG.info("checking t=" + t + " k=" + k + " p=" + p + " c=" + c);
+//                // Either this must be possible or committed to
+//                assert p || c == goldArg;
+//              }
+//            }
+//            LOG.info("yup");
+//          }
 
           actionsTried++;
           double bias = biasFunction.score(s, a);
@@ -567,8 +604,6 @@ public class Reranker {
               logAction(desc, iter, score, ss, gold, false);
           }
         }
-        if (actionsTried == 0 && ORACLE_DEBUG)
-          LOG.info("wat2");
 
         if (LOG_FORWARD_SEARCH)
           LOG.info(desc + " added=" + added + " of=" + actionsTried);
@@ -579,14 +614,14 @@ public class Reranker {
           if (fullSearch) {
             logSolution(desc, frontier);
             this.path = frontier;
-            if (ORACLE_DEBUG) {
-              State finalState = frontier.getCur();
-              int nu = finalState.numUncommitted();
-              int nc = finalState.numCommitted();
-              int TK = finalState.numFrameRoleInstances();
-              assert nu == 0;
-              assert nc == TK;
-            }
+//            if (ORACLE_DEBUG) {
+//              State finalState = frontier.getCur();
+//              int nu = finalState.numUncommitted();
+//              int nc = finalState.numCommitted();
+//              int TK = finalState.numFrameRoleInstances();
+//              assert nu == 0;
+//              assert nc == TK;
+//            }
           }
           this.hasRun = true;
           return;
@@ -703,7 +738,9 @@ public class Reranker {
       return Update.NONE;
     }
     Params.Stateful model = Params.Stateful.lift(thetaStateless);
-    BFunc deltaLoss = new BFunc.MostViolated(y);
+    //BFunc deltaLoss = new BFunc.MostViolated(y);
+    double negSubsampleRate = 0.75d;
+    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);
     boolean solveMax = true;
     ForwardSearch initialActions =
         initialActionsSearch(init, deltaLoss, solveMax, model);
