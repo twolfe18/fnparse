@@ -120,6 +120,15 @@ public class Reranker {
     this.thetaStateful = theta;
   }
 
+  public int getBeamWidth() {
+    return beamWidth;
+  }
+
+  public void setBeamWidth(int w) {
+    if (w < 1) throw new IllegalArgumentException();
+    beamWidth = w;
+  }
+
   public static ItemProvider getItemProvider() {
     return getItemProvider(100, true);
   }

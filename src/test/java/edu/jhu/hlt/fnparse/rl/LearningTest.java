@@ -169,13 +169,13 @@ public class LearningTest {
     Reranker.LOG_UPDATE = true;
     CheatingParams.SHOW_ON_UPDATE = true;
     RerankerTrainer trainer = new RerankerTrainer(rand);
-    trainer.beamSize = 10;
+    trainer.pretrainConf.beamSize = 10;
     ItemProvider ip = Reranker.getItemProvider(100, false);
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
     trainer.statelessParams = theta;
     LOG.info("[getsItRight] before: " + theta.showWeights());
-    Reranker model = trainer.train(ip);
+    Reranker model = trainer.train1(ip);
     LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
     evaluate(model, ip, 0.99d, 0.99d);
   }
@@ -226,8 +226,8 @@ public class LearningTest {
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand);
         trainer.statelessParams = theta;
-        trainer.batchSize = 20;
-        model = trainer.train(ip);
+        trainer.pretrainConf.batchSize = 20;
+        model = trainer.train1(ip);
       }
     } else {
       // Intersect the items dumped to disk with oracle parameters,

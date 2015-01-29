@@ -109,6 +109,8 @@ public interface StoppingCondition {
    * Keeps two buckets of violations of size K and stops when the absolute or
    * relative reduction in the averages of the two buckets drops below a
    * threshold. Will require at least 2*K iterations.
+   * 
+   * NOTE: I think this is a little more predictable and easy to use than EMAConvergence.
    */
   public static class AvgErrReduction implements StoppingCondition {
     private QueueAverage<Double> olderBucket, newBucket;
@@ -147,9 +149,11 @@ public interface StoppingCondition {
       // Add this violation to our estimate
       this.iter++;
       if (!olderBucket.isFull()) {
+        LOG.info(toString() + " pushing to old");
         olderBucket.push(violation);
         return false;
       } else if (!newBucket.isFull()) {
+        LOG.info(toString() + " pushing to new");
         newBucket.push(violation);
         return false;
       }
@@ -164,12 +168,19 @@ public interface StoppingCondition {
       double relRedPerIter = ((hi - lo) / hi) / bucketSize;
 
       LOG.info(String.format(
-          "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%decorrelate=%d",
-          toString(), iter, hi - lo, absRedPerIter, relRedPerIter, iter % decorrelate));
+          "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%%decorrelate=%d",
+          toString(), this.iter, hi - lo, absRedPerIter, relRedPerIter, iter % decorrelate));
 
       if (this.iter % decorrelate == 0) {
-        return absRedPerIter < this.minAbsRedPerIter
-            || relRedPerIter < this.minRelRedPerIter;
+        boolean a = absRedPerIter < this.minAbsRedPerIter;
+        boolean b = relRedPerIter < this.minRelRedPerIter;
+        if (a && b)
+          LOG.info(toString() + " stopping because of absolute and relative error");
+        else if (a)
+          LOG.info(toString() + " stopping because of absolute error");
+        else if (b)
+          LOG.info(toString() + " stopping because of relative error");
+        return a || b;
       } else {
         return false;
       }
