@@ -6,6 +6,7 @@ import java.io.OutputStreamWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -22,6 +23,22 @@ public interface ResultReporter {
       String jobName,
       Map<String, String> ancillaryInfo);
 
+  // Use this with reportResult
+  public static Map<String, String> mapToString(Map<?, ?> m) {
+    Map<String, String> r = new HashMap<>();
+    for (Entry<?, ?> x : m.entrySet())
+      r.put(x.getKey().toString(), x.getValue().toString());
+    return r;
+  }
+
+  // Use with getReporters
+  public static Map<Object, Object> mapToObj(Map<?, ?> m) {
+    Map<Object, Object> r = new HashMap<>();
+    for (Entry<?, ?> x : m.entrySet())
+      r.put(x.getKey(), x.getValue());
+    return r;
+  }
+
   /**
    * You can use the key "resultReporter" -> "redis:host,channel,port"
    * or "resultReporter" -> "none", but something should be there.
@@ -29,9 +46,9 @@ public interface ResultReporter {
    * Multiple ResultReporters can be used by putting tabs between the entries
    * in the value.
    */
-  public static List<ResultReporter> getReporter(Map<String, String> config) {
+  public static List<ResultReporter> getReporters(Map<Object, Object> config) {
     String key = "resultReporter";
-    String name = config.get(key);
+    String name = (String) config.get(key);
     if (name == null || "none".equalsIgnoreCase(name)) {
       if (name == null)
         LOG.warn(key + " was not specified");

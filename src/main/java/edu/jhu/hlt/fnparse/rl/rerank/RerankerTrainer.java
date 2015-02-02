@@ -1,6 +1,12 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -18,8 +24,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.rl.State;
-import edu.jhu.hlt.fnparse.rl.params.ActionTypeParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -28,6 +34,7 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
@@ -53,7 +60,8 @@ public class RerankerTrainer {
     public int batchSize = 4;
     public StoppingCondition stopping = new StoppingCondition.Conjunction(
         new StoppingCondition.Time(60),
-        new StoppingCondition.AvgErrReduction(50, 1e-4, 1e-3));
+        //new StoppingCondition.AvgErrReduction(50, 1e-5, 1e-4));
+        new StoppingCondition.AvgErrReduction(50, 0.75));
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
     public Consumer<Integer> calledEveryEpoch = i -> {};
 
@@ -91,6 +99,7 @@ public class RerankerTrainer {
   // Configuration
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
+  public List<ResultReporter> reporters;
   public Config pretrainConf; // for training statelessParams
   public Config trainConf;    // for training statelessParams + statefulParams
 
@@ -102,7 +111,6 @@ public class RerankerTrainer {
     this.rand = rand;
     this.pretrainConf = new Config("pretrain");
     this.pretrainConf.beamSize = 1;
-    this.pretrainConf.tuneOnTrainingData = true;
     this.trainConf = new Config("train");
   }
 
@@ -341,18 +349,30 @@ public class RerankerTrainer {
     return violation;
   }
 
+  /**
+   * First arg must be the job name (for tie-ins with tge) and the remaining are
+   * key-value pairs.
+   */
   public static void main(String[] args) {
-    boolean useGlobalFeatures = true;
-    boolean useEmbeddingParams = false; // else use TemplatedFeatureParams
-    boolean useEmbeddingParamsDebug = false;
-    boolean useFeatureHashing = false;
-    boolean testOnTrain = false;
+    assert args.length % 2 == 1;
+    String jobName = args[0];
+    ExperimentProperties config = new ExperimentProperties();
+    config.putAll(System.getProperties());
+    config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
+    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/reranker-train"));
+    boolean useGlobalFeatures = config.getBoolean("useGolbalFeatures", true);
+    boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
+    boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
+    boolean useFeatureHashing = config.getBoolean("useFeatureHashing", false);
+    boolean testOnTrain = config.getBoolean("testOnTrain", false);
 
+    int nTrain = config.getInt("nTrain", 100);
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand);
+    trainer.reporters = ResultReporter.getReporters(config);
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-        .subList(0, 100));
+        .subList(0, nTrain));
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
@@ -378,23 +398,6 @@ public class RerankerTrainer {
 
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
-    // On the last run, the average error for the first and second 100
-    // violations respectively were 0.0445782 and 0.0263481.
-    // This comes out to
-    // avgRedPerIter = (0.0445782 - 0.0263481) / 100 = 0.000182301
-    // relRedPerIter = ((0.0445782 - 0.0263481) / 0.0445782) / 100 = 0.004089465254317132
-//    trainer.pretrainConf.stopping =
-//        new StoppingCondition.AvgErrReduction(10, 1e-4, 1e-3);
-    trainer.pretrainConf.learningRate = new LearningRateSchedule.Normal(1, 50, 0.5);
-
-    // For full training avg err for the first and second 50 violations
-    // respectively were 33.2382 and 10.3588
-    // avgRedPerIter = (33.2382 - 10.3588) / 50 = 0.45758799999999994
-    // relRedPerIter = ((33.2382 - 10.3588) / 33.2382) / 50 = 0.013766930820561882
-//    trainer.trainConf.stopping =
-//        new StoppingCondition.AvgErrReduction(50, 1e-1, 1e-2);
-    trainer.trainConf.learningRate = new LearningRateSchedule.Normal(1, 50, 0.5);
-
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = 1e-8;
     if (useEmbeddingParams) {
@@ -411,29 +414,48 @@ public class RerankerTrainer {
         trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
       }
 
-      trainer.addParams(new ActionTypeParams(l2Penalty));
+      //trainer.addParams(new ActionTypeParams(l2Penalty));
     }
 
     if (useGlobalFeatures) {
-      double globalL2Penalty = 1;
+      double globalL2Penalty = 1e-3;
       double globalLearningRate = 0.1;
-//      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
-//          new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
-//      g1.setShowOnUpdate();
+      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
+          new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
+      g1.setShowOnUpdate();
+      //trainer.addParams(g1);
+
       GlobalFeature.ArgOverlapFeature g2 =
           new GlobalFeature.ArgOverlapFeature(globalL2Penalty, globalLearningRate);
       g2.setShowOnUpdate();
+      trainer.addParams(g2);
+
       GlobalFeature.SpanBoundaryFeature g3 =
           new GlobalFeature.SpanBoundaryFeature(globalL2Penalty, globalLearningRate);
       g3.setShowOnUpdate();
-//      trainer.statefulParams = new Params.SumStateful(
-//          g1, new Params.SumStateful(g2, g3));
-      trainer.statefulParams = new Params.SumStateful(g2, g3);
+      trainer.addParams(g3);
     }
 
     Reranker model = trainer.train1(train);
     LOG.info("[main] done training, evaluating");
-    eval(model, test, "[main]");
+    Map<String, Double> perfResults = eval(model, test, "[main]");
+    Map<String, String> results = new HashMap<>();
+    results.putAll(ResultReporter.mapToString(perfResults));
+    results.putAll(ResultReporter.mapToString(config));
+
+    // Save the configuration
+    try {
+      OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
+      config.storeToXML(os, "ran on " + new Date());
+      os.close();
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+
+    // Report results back to tge
+    double mainResult = perfResults.get(BasicEvaluation.argOnlyMicroF1.getName());
+    for (ResultReporter rr : trainer.reporters)
+      rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
   }
 
   private static final String featureTemplates = "1"
