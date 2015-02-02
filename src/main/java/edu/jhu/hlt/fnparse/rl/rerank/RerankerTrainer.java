@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.params.ActionTypeParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -103,6 +104,20 @@ public class RerankerTrainer {
     this.pretrainConf.beamSize = 1;
     this.pretrainConf.tuneOnTrainingData = true;
     this.trainConf = new Config("train");
+  }
+
+  public void addParams(Params.Stateful p) {
+    if (this.statefulParams == Params.Stateful.NONE)
+      this.statefulParams = p;
+    else
+      this.statefulParams = new Params.SumStateful(this.statefulParams, p);
+  }
+
+  public void addParams(Params.Stateless p) {
+    if (this.statelessParams == Params.Stateless.NONE)
+      this.statelessParams = p;
+    else
+      this.statelessParams = new Params.SumStateless(this.statelessParams, p);
   }
 
   /** If you don't want anything to print, just provide showStr=null */
@@ -388,13 +403,15 @@ public class RerankerTrainer {
       ep.learnTheta(true);
       if (useEmbeddingParamsDebug)
         ep.debug(new TemplatedFeatureParams(featureTemplates, hashBuckets), l2Penalty);
-      trainer.statelessParams = ep;
+      trainer.addParams(ep);
     } else {
       if (useFeatureHashing) {
-        trainer.statelessParams = new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets);
+        trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
       } else {
-        trainer.statelessParams = new TemplatedFeatureParams(featureTemplates, l2Penalty);
+        trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
       }
+
+      trainer.addParams(new ActionTypeParams(l2Penalty));
     }
 
     if (useGlobalFeatures) {

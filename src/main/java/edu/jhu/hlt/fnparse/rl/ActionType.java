@@ -10,10 +10,14 @@ import com.google.common.base.Function;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
 
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
+import edu.jhu.hlt.fnparse.util.AveragedWeights;
+import edu.jhu.util.Alphabet;
 
 public interface ActionType {
 
@@ -259,7 +263,9 @@ public interface ActionType {
 
     @Override
     public Iterable<Action> next(State st, FNParse y) {
-      return prune(COMMIT.next(st, y), st);
+      Iterable<Action> actions = COMMIT.next(st, y);
+      actions = prune(actions, st);
+      return actions;
     }
 
     /**
@@ -302,6 +308,159 @@ public interface ActionType {
       return cost;
     }
   };
+
+  /**
+   * The idea of this ActionType is that a bunch of instances will be created
+   * given each t. Each instance will have 1 (or a small number of) features
+   * which basically say "how was this instance created". For example, given
+   * t = {frame:foo, target:3-4}
+   * one of the actions instantiated by this type would have the feature
+   * "prune-spans-right-of-next-target"
+   * or "prune-spans-right-of-next-DT"
+   * or "prune-spans-more-than-10-tokens-right"
+   *    (last one might have additional BoW features for words in those 10 tokens)
+   *
+   * These "explanations"/features can/should be conjoined with frame/frameRole/role.
+   *
+   * We may instantiate many of these Actions, but they should be cheap to evaluate
+   * and should save a lot of time any time one of them is chosen, by ruling out
+   * a lot of potential spans.
+   *
+   * TODO where do these features live (seems like the code that generates these
+   * should be the same code as the ones who featurize it).
+   *
+   * How do we capture the semantics of the prune?
+   * I think I had proposed giving an "envelope", defined by these descriptions
+   * above, where the code that applies the prune only has to know to prune spans
+   * that don't fall within that envelope (and the secret sauce is in the generation
+   * and featurization of these envelopes).
+   *
+   * To play devil's advocate, why am I doing this now and not a long time ago?
+   * Many of these pruning actions probably work in a static context (i.e. they
+   * don't need to know about arguments committed to -- for that matter they
+   * could be implemented as features right now). There is some difference
+   * between their implementation as *features* vs *pruning rules*, but I'm not
+   * sold that this is a huge thing... maybe it is.
+   * Actually, I think I do have features like this, but they apply for every
+   * (t,k), as opposed to every t, and they cannot "make a unilateral decision"
+   * to prune, they have to win out over other features that might disagree.
+   * 
+   * Under the "envelope" implementation, I can use start and end in Action to
+   * store this. Still need to figure out how to featurize these. Normally, I
+   * need to wait until Params.score comes around to extract the features.
+   * - I could have a subclass of Action that stores the features...
+   * Who is going to hold the alphabet and the weights?
+   * I could have a class that implements both ActionType and Params...
+   *
+   * TODO I shouldn't even make this a COMMIT type action!
+   * 
+   * TODO I think I'm missing something pretty fundamental: I have no way for
+   * scoring actions to know about the score of other actions that have already
+   * been computed. For example, to fully support the actions of the previous
+   * model, I would need an action that takes the max of spans over a given (t,k)
+   * and commits to it. COMMIT_AND_PRUNE is close to this, but for example, there
+   * is no way to say "only do a COMMIT_AND_PRUNE if you've scored all of the
+   * actions that will be pruned". Lets come up with a simpler example that is
+   * still not possible: ...
+   * Wait, Action is pretty general. There is no reason I couldn't have an Action
+   * that gets to look at more than one commit.
+   *
+   * I have tried to think out how you would design an Action that is an "argmax for a (t,k)",
+   * and the problem comes with propagating the error of a bad choice back to the
+   * params inside the argmax. If you got a argmax span wrong, you could push down
+   * the features that lead to the span that won the argmax, but you have no
+   * signal on what to push up (i.e. what arg should have won the argmax?)
+   * 
+   * Remember that the score returned by forwards() is just whether this action
+   * should be take or not, but not (necessarily) related to the scores of the
+   * spans being selected.
+   *
+   * This is one way to look at compositional actions (put everything into an
+   * action). Another way of doing this is to put the capability to do this
+   * inside the machine applying the actions.
+   * Perhaps we could support two-stage actions. The first stage would be to choose
+   * the (t,k) to do the argmax on, and the second stage would be to do the argmax.
+   * The net result of this is a "rank 1 action" -- same as being scored currently,
+   * but where the Learner needs to support separate updates for the first and
+   * second stage. For the first stage, how do you know whether to update up or
+   * down? I guess you could use deltaLoss on the final rank1 action it produced...
+   *
+   * Aside from two-stage stuff, is there a way for Actions to be self-aware?
+   * I could just add ???
+   */
+  public static final ActionType COMMIT_AND_PRUNE_X = new ActionType() {
+
+    @Override
+    public int getIndex() {
+      return 2;
+    }
+
+    @Override
+    public String getName() {
+      return "COMMIT_AND_PRUNE_X";
+    }
+
+    @Override
+    public State apply(Action action, State state) {
+      PruneXAction a = (PruneXAction) action;
+      Span s = a.getSpan();
+
+      // Prune any item that does not fall in s
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public State unapply(Action a, State s) {
+      throw new RuntimeException("no longer supported");
+    }
+
+    @Override
+    public Iterable<Action> next(State s, FNParse y) {
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public Iterable<Action> prev(State s) {
+      throw new RuntimeException("no longer supported");
+    }
+
+    @Override
+    public double deltaLoss(State s, Action a, FNParse y) {
+      assert a.getActionType() == this;
+      assert a.hasSpan();
+      // consider gold args that are outside of a.getSpan()
+      throw new RuntimeException("implement me");
+    }
+  };
+  // TODO make this an inner class of the class that implements ActoinType and Params.State???
+  // this will then inherit the Alphabet<String> and weights from there.
+  public static class PruneXAction extends Action implements Adjoints {
+    private FeatureVector features;
+    private Alphabet<String> featureNames;  // see above
+    private AveragedWeights weights;        // see above
+    public PruneXAction(int t, int k, int mode, Span s) {
+      super(t, k, mode, s);
+      features = new FeatureVector();
+    }
+    public void b(String... featurePieces) {
+      // add to features
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public Action getAction() {
+      return this;
+    }
+    @Override
+    public double forwards() {
+      // TODO compute this once so that weights don't change?
+      return features.dot(weights.getWeights());
+    }
+    @Override
+    public void backwards(double dScore_dForwards) {
+      // update weights
+      throw new RuntimeException("implement me");
+    }
+  }
 
   public static Iterable<Action> changeModeTo(int mode, Iterable<Action> change) {
     return Iterables.transform(change, new Function<Action, Action>() {

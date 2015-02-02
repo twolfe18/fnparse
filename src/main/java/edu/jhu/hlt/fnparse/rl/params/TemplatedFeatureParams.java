@@ -9,6 +9,16 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
 
+/**
+ * Lifts TemplatedFeatures into Stateless.Params. Does so by only looking at the
+ * span provided by an action.
+ * 
+ * Doesn't care what type of Action you give it, so make sure to add something
+ * like ActionTypeParams if you want the model to be able tell apart two actions
+ * that have the same span.
+ *
+ * @author travis
+ */
 public class TemplatedFeatureParams
     extends FeatureParams<FNTagging> implements Params.Stateless {
   private TemplatedFeatures features;
