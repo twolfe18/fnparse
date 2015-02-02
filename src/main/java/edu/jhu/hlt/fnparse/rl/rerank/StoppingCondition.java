@@ -4,6 +4,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
+import edu.jhu.prim.util.math.FastMath;
 
 
 public interface StoppingCondition {
@@ -117,15 +118,38 @@ public interface StoppingCondition {
     private int bucketSize;
     private double minAbsRedPerIter;
     private double minRelRedPerIter;
+    private double maxPvalue;
     private int iter;
     private int decorrelate;  // only check every decorrelate iters
 
+    /**
+     * Will stop when a two sample t-test of two buckets yields a p-value
+     * greater than maxPvalue.
+     */
+    public AvgErrReduction(int bucketSize, double maxPvalue) {
+      this.bucketSize = bucketSize;
+      this.olderBucket = new QueueAverage<>(bucketSize);
+      this.newBucket = new QueueAverage<>(bucketSize);
+      this.iter = 0;
+      this.maxPvalue = maxPvalue;
+      this.minAbsRedPerIter = Double.NEGATIVE_INFINITY;
+      this.minRelRedPerIter = Double.NEGATIVE_INFINITY;
+      // bucketSize >= 100, check every iteration
+      // bucketSize =   50, check every 2 iterations
+      // bucketSize =   10, check every 4 iterations
+      this.decorrelate = Math.max(1, (int) Math.ceil(10d / Math.sqrt(bucketSize)));
+    }
+
+    /**
+     * @deprecated use the p-value version instead
+     */
     public AvgErrReduction(int bucketSize, double minAbsReductionPerIter, double minRelReductionPerIter) {
       this.bucketSize = bucketSize;
       this.olderBucket = new QueueAverage<>(bucketSize);
       this.newBucket = new QueueAverage<>(bucketSize);
       this.minAbsRedPerIter = minAbsReductionPerIter;
       this.minRelRedPerIter = minRelReductionPerIter;
+      this.maxPvalue = Double.POSITIVE_INFINITY;
       this.iter = 0;
       // bucketSize >= 100, check every iteration
       // bucketSize =   50, check every 2 iterations
@@ -140,8 +164,18 @@ public interface StoppingCondition {
 
     @Override
     public String toString() {
-      return String.format("AvgErrReduction(k=%d,abs=%.2g,rel=%.2g)",
-          bucketSize, minAbsRedPerIter, minRelRedPerIter);
+      boolean af = Double.isFinite(minAbsRedPerIter);
+      boolean rf = Double.isFinite(minRelRedPerIter);
+      boolean pf = Double.isFinite(maxPvalue);
+      assert af == rf;
+      assert pf != (af && rf);
+      if (pf) {
+        return String.format("AvgErrReduction(k=%d,p=%.2f)",
+            bucketSize, maxPvalue);
+      } else {
+        return String.format("AvgErrReduction(k=%d,abs=%.2g,rel=%.2g)",
+            bucketSize, minAbsRedPerIter, minRelRedPerIter);
+      }
     }
 
     @Override
@@ -167,20 +201,30 @@ public interface StoppingCondition {
       double absRedPerIter = (hi - lo) / bucketSize;
       double relRedPerIter = ((hi - lo) / hi) / bucketSize;
 
+      // Do t-test on bucket means
+      double oldMeanVar = olderBucket.getVariance() / bucketSize;
+      double newMeanVar = newBucket.getVariance() / bucketSize;
+      double t = absRedPerIter / FastMath.sqrt(oldMeanVar + newMeanVar);
+
       LOG.info(String.format(
-          "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g iter%%decorrelate=%d",
-          toString(), this.iter, hi - lo, absRedPerIter, relRedPerIter, iter % decorrelate));
+          "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g "
+          + "iter%%decorrelate=%d t=%.3f oldMeanVar=%.3f newMeanVar=%.3f",
+          toString(), this.iter, hi - lo, absRedPerIter, relRedPerIter,
+          iter % decorrelate, t, oldMeanVar, newMeanVar));
 
       if (this.iter % decorrelate == 0) {
         boolean a = absRedPerIter < this.minAbsRedPerIter;
         boolean b = relRedPerIter < this.minRelRedPerIter;
+        boolean p = t > this.maxPvalue;
+        if (p)
+          LOG.info(toString() + " stopping because of t-test");
         if (a && b)
           LOG.info(toString() + " stopping because of absolute and relative error");
         else if (a)
           LOG.info(toString() + " stopping because of absolute error");
         else if (b)
           LOG.info(toString() + " stopping because of relative error");
-        return a || b;
+        return p || a || b;
       } else {
         return false;
       }
