@@ -470,6 +470,10 @@ public class Reranker {
         adjoints.backwards(learningRate * y * hinge);
       return hinge;
     }
+    @Override
+    public double violation() {
+      return hinge;
+    }
   }
 
   /**
@@ -710,8 +714,17 @@ public class Reranker {
      */
     public double apply(double learningRate);
 
+    /**
+     * @return the error before applying this update
+     * (should not depend on learningRate)
+     */
+    public double violation();
+
     public static Update NONE = new Update() {
       @Override public double apply(double learningRate) {
+        return 0d;
+      }
+      @Override public double violation() {
         return 0d;
       }
     };
@@ -737,6 +750,14 @@ public class Reranker {
         double u = 0d;
         for (T up : updates)
           u += up.apply(s);
+        return u / updates.size();
+      }
+      @Override
+      public double violation() {
+        assert updates.size() > 0;
+        double u = 0d;
+        for (T up : updates)
+          u += up.violation();
         return u / updates.size();
       }
     }

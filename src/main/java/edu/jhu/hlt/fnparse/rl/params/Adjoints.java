@@ -84,19 +84,24 @@ public interface Adjoints {
 
       if (featureNames != null)
         showFeature();
+      printedSinceLastUpdate = false;
     }
 
     // Set this to print on updates
     private String tag;
     private Alphabet<String> featureNames;
+    private boolean printedSinceLastUpdate = false;
     public void showFeatures(String tag, Alphabet<String> featureNames) {
       this.tag = tag;
       this.featureNames = featureNames;
     }
     public void showFeature() {
+      if (printedSinceLastUpdate)
+        return;
       int k = 12; // how many of the most extreme features to show
       List<FeatureWeight> w = ModelViewer.getSortedWeights(weights.toNativeArray(), featureNames);
       ModelViewer.showBiggestWeights(w, k, tag, Logger.getLogger(getClass()));
+      printedSinceLastUpdate = true;
     }
   }
 

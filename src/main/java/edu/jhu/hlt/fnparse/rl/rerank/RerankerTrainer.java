@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
+import java.util.function.DoubleSupplier;
 
 import org.apache.log4j.Logger;
 
@@ -58,10 +59,7 @@ public class RerankerTrainer {
     public int threads = 1;
     public int beamSize = 1;
     public int batchSize = 4;
-    public StoppingCondition stopping = new StoppingCondition.Conjunction(
-        new StoppingCondition.Time(60),
-        //new StoppingCondition.AvgErrReduction(50, 1e-5, 1e-4));
-        new StoppingCondition.AvgErrReduction(50, 0.75));
+    public StoppingCondition stopping = new StoppingCondition.Time(60);
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
     public Consumer<Integer> calledEveryEpoch = i -> {};
 
@@ -77,6 +75,16 @@ public class RerankerTrainer {
 
     public Config(String name) {
       this.name = name;
+    }
+
+    /**
+     * After this method, will stop if the previous stopping condition says so
+     * OR if the given stopping condition does.
+     * @return what is passed in.
+     */
+    public <T extends StoppingCondition> T addStoppingCondition(T s) {
+      stopping = new StoppingCondition.Conjunction(stopping, s);
+      return s;
     }
 
     public String toString() {
@@ -206,9 +214,12 @@ public class RerankerTrainer {
     return m;
   }
 
+  /**
+   * Adds a stopping condition based on the dev set performance.
+   */
   public void train2(Reranker m, ItemProvider ip, Config conf) {
     // Split the data
-    ItemProvider train, dev;
+    final ItemProvider train, dev;
     if (conf.tuneOnTrainingData) {
       LOG.info("[train] tuneOnTrainingData=true");
       train = ip;
@@ -222,6 +233,34 @@ public class RerankerTrainer {
     }
     LOG.info("[train] nTrain=" + train.size() + " nDev=" + dev.size());
 
+    // Use dev data for stopping condition
+    File rScript = new File("scripts/stop.sh");
+    double alpha = 0.25d;
+    int skip = 2;
+    if (m.getStatefulParams() != Params.Stateful.NONE)
+      skip *= 5;
+    DoubleSupplier devLossFunc = new DoubleSupplier() {
+      @Override
+      public double getAsDouble() {
+        LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
+        double loss = 0d;
+        for (int i = 0; i < dev.size(); i++) {
+          FNParse y = ip.label(i);
+          List<Item> rerank = ip.items(i);
+          State init = State.initialState(y, rerank);
+          Update u = m.getStatefulParams() == Params.Stateful.NONE
+              ? m.getStatelessUpdate(init, y)
+              : m.getFullUpdate(init, y, rand, null, null);
+          loss += u.violation();
+        }
+        loss /= dev.size();
+        LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size());
+        return loss;
+      }
+    };
+    StoppingCondition.DevSet dynamicStopping = conf.addStoppingCondition(
+        new StoppingCondition.DevSet(rScript, devLossFunc, alpha, skip));
+
     try {
       // Train the model
       hammingTrain(m, train, conf);
@@ -234,6 +273,8 @@ public class RerankerTrainer {
       throw new RuntimeException(e);
     }
 
+    // StoppingCondition.DevSet writes to a file, this closes that.
+    dynamicStopping.close();
     LOG.info("[train2] done, times:\n" + timer);
   }
 
@@ -373,6 +414,9 @@ public class RerankerTrainer {
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
         .subList(0, nTrain));
+
+    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 16);
+    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 16);
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {

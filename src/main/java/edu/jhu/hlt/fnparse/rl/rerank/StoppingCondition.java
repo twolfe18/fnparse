@@ -4,7 +4,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.util.Random;
-import java.util.function.Supplier;
+import java.util.function.DoubleSupplier;
 
 import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
@@ -115,32 +115,21 @@ public interface StoppingCondition {
 
   /**
    * Computes a t-statistic on the differences in two values:
-   * 1) the mean of the previous k evaluations of the dev set loss
-   * 2) the predicted 
-   * 
-   * TODO: What I really want is:
-   * - fit a quadratic function to the dev set evals, discount weights of very old evals
-   * - project this one step out to get x
-   * - compute the std err of the residuals, s
-   * - if p(next iterate is less that current based on x and s) < tolerance, stop
-   * - "locally weighted" will be approximated by only keeping the last few iterates
-   * 
-   * I guess I could do a first order version of this!
-   * I should do this in R!
-   * JRI is shit!
-   * I should do this with files and Rscript.
-   * Do I really want to depend on R...
+   * 1) the (mean,var) of the previous k evaluations of the dev set loss
+   * 2) the (mean,var) of the next predicted value under a locally-weighted
+   *    linear regression.
+   * If the t-statistic is greater than the given value (alpha), then stop.
    */
   public static class DevSet implements StoppingCondition {
 
     private File rScript;
     private File historyFile;
     private FileWriter historyFileWriter;
-    private Supplier<Double> devLossFunc;
-    private int skip; // only call devPerf every skip iterations
+    private DoubleSupplier devLossFunc;
+    private final int skip; // only call devPerf every skip iterations
+    private final double alpha;
+    private final int k = 50;
     private int iter;
-    private double alpha = 0.5;
-    private int k = 50;
 
     /**
      * @param rScript is a path to a 3-arg shell script which prints either
@@ -150,7 +139,7 @@ public interface StoppingCondition {
      * quickly and large values will stop late.
      * @param skip is how many iterations between calls to the dev set evaluator
      */
-    public DevSet(File rScript, Supplier<Double> devLossFunc, double alpha, int skip) {
+    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, int skip) {
       if (!rScript.isFile())
         throw new IllegalArgumentException(rScript.getPath() + " is not a file");
       this.rScript = rScript;
@@ -160,32 +149,51 @@ public interface StoppingCondition {
       } catch (IOException e) {
         throw new RuntimeException(e);
       }
+      this.alpha = alpha;
       this.devLossFunc = devLossFunc;
       this.skip = skip;
       this.iter = 0;
     }
 
+    @Override
+    public String toString() {
+      return String.format("DevSet(%s,alpha=%.2f,k=%d,skip=%d)",
+          historyFile.getPath(), alpha, k, skip);
+    }
+
+    public void close() {
+      try {
+        historyFileWriter.close();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
     /** You must override this method with one that might return true */
     @Override
     public boolean stop(int iter, double violation) {
-      this.iter++;
-
-      if (this.iter % skip != 0)
+      if (this.iter++ % skip != 0)
         return false;
 
       // Compute held-out loss
-      double devLoss = devLossFunc.get();
+      double devLoss = devLossFunc.getAsDouble();
+      assert Double.isFinite(devLoss);
+      assert !Double.isNaN(devLoss);
+      assert devLoss >= 0 : "technically this isn't needed...";
       try {
+        LOG.info("[DevSet stop] writing loss to " + historyFile.getPath());
         this.historyFileWriter.write(devLoss + "\n");
         this.historyFileWriter.flush();
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
 
-      if (this.iter < this.k / 2 || this.iter < 10)
+      int updates = this.iter / this.skip;
+      if (updates < 5)
         return false;
 
       // Call rScript
+      LOG.info("[DevSet stop] iter=" + iter + " calling " + toString());
       ProcessBuilder pb = new ProcessBuilder(
           rScript.getPath(), historyFile.getPath(), "" + alpha, "" + k);
       try {
@@ -195,8 +203,11 @@ public interface StoppingCondition {
         stdout.start();
         stderr.start();
         int r = p.waitFor();
-        if (r != 0)
-          throw new RuntimeException("exit value: " + r);
+        if (r != 0) {
+          //throw new RuntimeException("exit value: " + r);
+          LOG.warn("[DevSet stop] error during call: " + r);
+          return false;
+        }
         String guidance = stdout.getLines().get(0).trim();
         if ("stop".equalsIgnoreCase(guidance)) {
           return true;
@@ -449,11 +460,11 @@ public interface StoppingCondition {
     File rScript = new File("scripts/stop.sh");
     double alpha = 0.25;
     int skip = 1;
-    Supplier<Double> devLossFunc = new Supplier<Double>() {
+    DoubleSupplier devLossFunc = new DoubleSupplier() {
       private Random rand = new Random(9001);
       private int iter = 0;
       @Override
-      public Double get() {
+      public double getAsDouble() {
         double y = 1000d - 0.5d * iter + 1.5d * Math.pow(75d - iter, 2d);
         double n = rand.nextGaussian() * 1000d;
         System.out.println("eval y=" + y + " n=" + n + " sum=" + (y+n));
