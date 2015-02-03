@@ -30,8 +30,8 @@ class Config(tge.Item):
     cmd.append('java')
     cmd.append('-ea')
     cmd.append('-Xmx6G')
+    cmd.append('-XX:+UseSerialGC')
     cmd.append('-cp')
-    #cmd.append('target/fnparse-1.0.3.jar:target/fnparse-1.0.3-jar-with-dependencies.jar')
     cmd.append(':'.join(self.jars()))
     cmd.append('edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer')
     cmd.append(name)
@@ -49,7 +49,7 @@ def learning_curves():
   q_local = q.add_queue('local', tge.ExplicitQueue())
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
-  for n in [100, 300, 1000, 3000]:
+  for n in [100, 500, 1500, 3000]:
     cl = Config()
     cl.nTrain = n
     cl.useGlobalFeatures = False
@@ -72,7 +72,8 @@ def run(q, working_dir, local=True):
     job_tracker.remove_all_jobs()
   else:
     d = os.path.join(working_dir, 'sge-logs')
-    job_tracker = tge.SgeJobTracker(logging_dir=d)
+    max_concur = 50
+    job_tracker = tge.SgeJobTracker('twolfe', max_concur, logging_dir=d)
 
 
   print 'starting...'
@@ -83,9 +84,10 @@ def run(q, working_dir, local=True):
 if __name__ == '__main__':
   if len(sys.argv) != 2:
     print 'please provide a working dir'
+    #print 'make sure its a full path! sge is not the sharpest...'
     sys.exit(-1)
   wd = sys.argv[1]
-  run(learning_curves(), wd, local=True)
+  run(learning_curves(), wd, local=False)
 
 
 

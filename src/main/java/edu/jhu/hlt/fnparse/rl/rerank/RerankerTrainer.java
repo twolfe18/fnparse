@@ -59,7 +59,7 @@ public class RerankerTrainer {
     public int threads = 1;
     public int beamSize = 1;
     public int batchSize = 4;
-    public StoppingCondition stopping = new StoppingCondition.Time(60);
+    public StoppingCondition stopping = new StoppingCondition.Time(4 * 60);
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
     public Consumer<Integer> calledEveryEpoch = i -> {};
 
@@ -401,7 +401,7 @@ public class RerankerTrainer {
     config.putAll(System.getProperties());
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/reranker-train"));
-    boolean useGlobalFeatures = config.getBoolean("useGolbalFeatures", true);
+    boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
     boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
     boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
     boolean useFeatureHashing = config.getBoolean("useFeatureHashing", false);
@@ -445,6 +445,7 @@ public class RerankerTrainer {
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = 1e-8;
     if (useEmbeddingParams) {
+      LOG.info("[main] using embedding params");
       int embeddingSize = 2;
       EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
       ep.learnTheta(true);
@@ -453,8 +454,10 @@ public class RerankerTrainer {
       trainer.addParams(ep);
     } else {
       if (useFeatureHashing) {
+        LOG.info("[main] using TemplatedFeatureParams with feature hashing");
         trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
       } else {
+        LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
         trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
       }
 
@@ -462,8 +465,9 @@ public class RerankerTrainer {
     }
 
     if (useGlobalFeatures) {
-      double globalL2Penalty = 1e-3;
+      double globalL2Penalty = 1e-2;
       double globalLearningRate = 0.1;
+      LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
       GlobalFeature.RoleCooccurenceFeatureStateful g1 =
           new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
       g1.setShowOnUpdate();
