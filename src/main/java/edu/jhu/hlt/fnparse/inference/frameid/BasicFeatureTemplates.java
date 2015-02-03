@@ -65,6 +65,16 @@ import edu.mit.jwi.item.IWordID;
 public class BasicFeatureTemplates {
   public static final Logger LOG = Logger.getLogger(BasicFeatureTemplates.class);
 
+  public static String spanPosRel(Span s1, Span s2) {
+    return posRel(s1.start, s2.start) + "-" + posRel(s1.end, s2.end);
+  }
+
+  public static String posRel(int i, int j) {
+    if (i < j) return "L";
+    if (j > i) return "R";
+    return "E";
+  }
+
   private static String discretizeWidth(String name, int divisor, int maxCardinality, int width) {
     int w = width / divisor;
     if (w >= maxCardinality-1)
@@ -235,6 +245,8 @@ public class BasicFeatureTemplates {
         shape = PosPatternGenerator.shapeNormalize(x.sentence.getWord(x.index));
         x.sentence.setShape(x.index, shape);
       }
+      if (shape == null)
+        return null;
       return "Shape=" + shape;
     });
     tokenExtractors.put("Pos", x -> {

@@ -8,3 +8,4 @@ target/
 /from-CMU/
 *~
 /experiments
+*.pyc

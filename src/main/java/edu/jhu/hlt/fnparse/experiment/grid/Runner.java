@@ -231,7 +231,8 @@ public class Runner {
   public void run() {
     LOG.info("[run] starting");
     Random rand = getRandom(config);
-    List<ResultReporter> reporters = ResultReporter.getReporter(config);
+    List<ResultReporter> reporters = ResultReporter.getReporters(
+        ResultReporter.mapToObj(config));
     File workingDir = getWorkingDir(config);
 
     Parser parser = ParserLoader.instantiateParser(config);

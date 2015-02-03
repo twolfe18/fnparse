@@ -486,6 +486,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
   @Override
   public List<FNParse> parse(List<Sentence> sentences, List<FNParse> gold) {
 
+    LOG.info("[parse] parsing " + sentences.size() + " with "
+        + (gold == null ? "no gold labels" : "gold labels"));
     long start = System.currentTimeMillis();
     List<FNTagging> frames = frameId.setupInference(sentences, gold).decodeAll();
 
@@ -498,9 +500,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
       if (gold != null)
         goldPrune = FNParseSpanPruning.optimalPrune(gold);
 
+      LOG.info("[parse] pruning possible arguments");
       List<FNParseSpanPruning> prunes =
           rolePruning.setupInference(frames, goldPrune).decodeAll();
 
+      LOG.info("[parse] predicting final arguments");
       parses = roleLabeling.setupInference(prunes, gold).decodeAll();
 
       if (SHOW_PRUNING_PROPERTIES)

@@ -28,7 +28,7 @@ import edu.jhu.util.Alphabet;
  * 
  * @author travis
  */
-public class TemplatedFeatures implements Serializable {
+public abstract class TemplatedFeatures implements Serializable {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(TemplatedFeatures.class);
 
@@ -94,6 +94,7 @@ public class TemplatedFeatures implements Serializable {
       };
     }
   }
+
   public static class IterableProduct implements Iterator<String> {
     private Iterable<String> b;
     private Iterator<String> aIter, bIter;
@@ -213,24 +214,70 @@ public class TemplatedFeatures implements Serializable {
   private String globalPrefix;
   private String templateString;
   private transient List<Template> templates;
-  private transient Alphabet<String> featureAlphabet;
+
+  public abstract int indexOf(String featureName);
+  public abstract int dimension();
 
   public TemplatedFeatures(
       String globalPrefix,
-      String description,
-      Alphabet<String> featureAlphabet) {
+      String description) {
     this.globalPrefix = globalPrefix;
     this.templateString = description;
-    this.featureAlphabet = featureAlphabet;
-    /*
-    // NOTE this has been pushed back into featurize because of some
-    // initialization terribleness related to BasicFeatureTemplates
-    try {
-      this.templates = parseTemplates(description);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
+  }
+
+  public static class AlphabetBased extends TemplatedFeatures {
+    private static final long serialVersionUID = 1L;
+    private Alphabet<String> featureAlphabet;
+    public AlphabetBased(
+        String globalPrefix,
+        String description,
+        Alphabet<String> featureAlphabet) {
+      super(globalPrefix, description);
+      this.featureAlphabet = featureAlphabet;
     }
-    */
+    public Alphabet<String> getAlphabet() {
+      return featureAlphabet;
+    }
+    @Override
+    public int indexOf(String featureName) {
+      boolean grow = featureAlphabet.isGrowing();
+      int idx;
+      if (grow) {
+        int initAlphSize = featureAlphabet.size();
+        idx = featureAlphabet.lookupIndex(featureName, true);
+        if (idx > initAlphSize && idx % 1000000 == 0)
+          LOG.info("[featurize] alphabet just grew to " + idx);
+      } else {
+        idx = featureAlphabet.lookupIndex(featureName, false);
+      }
+      return idx;
+    }
+    @Override
+    public int dimension() {
+      return featureAlphabet.size();
+    }
+  }
+
+  public static class HashBased extends TemplatedFeatures {
+    private static final long serialVersionUID = 1L;
+    private int numBuckets;
+    public HashBased(
+        String globalPrefix,
+        String description,
+        int numBuckets) {
+      super(globalPrefix, description);
+      this.numBuckets = numBuckets;
+    }
+    @Override
+    public int indexOf(String featureName) {
+      int h = featureName.hashCode();
+      if (h < 0) h = ~h;
+      return h % numBuckets;
+    }
+    @Override
+    public int dimension() {
+      return numBuckets;
+    }
   }
 
   public String getTemplateString() {
@@ -240,8 +287,7 @@ public class TemplatedFeatures implements Serializable {
   public static void showContext(TemplateContext ctx) {
     Sentence s = ctx.getSentence();
     Frame f = ctx.getFrame();
-    assert ctx.getStage() != null;
-    LOG.debug("[context] stage=" + ctx.getStage());
+    LOG.debug("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
     LOG.debug("[context] sentence=" + s);
     LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
     LOG.debug("[context] role=" + ctx.getRoleStrDebug());
@@ -290,7 +336,11 @@ public class TemplatedFeatures implements Serializable {
     LOG.debug("");
     LOG.info(message);
     showContext(context);
-    showFeatures(v, featureAlphabet);
+    if (this instanceof AlphabetBased) {
+      showFeatures(v, ((AlphabetBased) this).featureAlphabet);
+    } else {
+      LOG.warn("[featurizeDebug] can't show you features because you're not using AlphabetBased features: " + getClass().getName());
+    }
     LOG.debug("");
   }
 
@@ -303,21 +353,18 @@ public class TemplatedFeatures implements Serializable {
         throw new RuntimeException(e);
       }
     }
-    boolean grow = featureAlphabet.isGrowing();
-    int initAlphSize = featureAlphabet.size();
+    //boolean grow = featureAlphabet.isGrowing();
     for (Template t : templates) {
       Iterable<String> te = t.extract(context);
       if (te == null)
         continue;
       for (String e : te) {
         String featName = e + "::" + globalPrefix;
-        int featIdx = featureAlphabet.lookupIndex(featName, grow);
-        if (featIdx >= 0) {
+        int featIdx = indexOf(featName);
+        if (featIdx >= 0)
           v.add(featIdx, 1d);
-          if (grow && featIdx > initAlphSize && featIdx % 1000000 == 0)
-            LOG.info("[featurize] alphabet just grew to " + featIdx);
-        }
       }
     }
   }
+
 }

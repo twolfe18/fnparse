@@ -235,11 +235,28 @@ public class DataUtil {
     return l;
   }
 
+  public static <T> T reservoirSampleOne(Iterable<T> all, Random rand) {
+    T res = null;
+    int seen = 0;
+    for (T t : all) {
+      seen++;
+      if (rand.nextInt(seen) == 0)
+        res = t;
+    }
+    if (seen == 0)
+      throw new RuntimeException("empty sequence given!");
+    return res;
+  }
+
+  /**
+   * If howMany turns out to be larger than the number of elements in all, then
+   * every element in all is returned.
+   */
   public static <T> List<T> reservoirSample(
-      List<T> all,
+      Iterable<T> all,
       int howMany,
       Random rand) {
-    List<T> reservoir = new ArrayList<T>();
+    List<T> reservoir = new ArrayList<T>(howMany);
     int i = 0;
     for (T t : all) {
       if (i < howMany) {

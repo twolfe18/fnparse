@@ -70,6 +70,10 @@ public class FinalResults implements Runnable {
   private Random rand = new Random(9001);
 
   public FinalResults(File workingDir, Random rand, String mode, int trainSize) {
+    this(workingDir, rand, mode, trainSize, true);
+  }
+
+  public FinalResults(File workingDir, Random rand, String mode, int trainSize, boolean loadData) {
     if (!mode.equals("span") && !mode.equals("head"))
       throw new IllegalArgumentException();
     if (!workingDir.isDirectory())
@@ -77,29 +81,30 @@ public class FinalResults implements Runnable {
     this.workingDir = workingDir;
     this.mode = mode;
     this.numTrain = trainSize;
+    if (loadData) {
+      Iterator<FNParse> iter;
+      iter = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+      testData = new ArrayList<>();
+      while (iter.hasNext())
+        testData.add(iter.next());
+      LOG.info("[init] testData.size=" + testData.size());
 
-    Iterator<FNParse> iter;
-    iter = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
-    testData = new ArrayList<>();
-    while (iter.hasNext())
-      testData.add(iter.next());
-    LOG.info("[init] testData.size=" + testData.size());
-
-    // NOTE: fulltext (train) data should come first here
-    // Later I'll take from this first, before LEX instances, as I don't think
-    // they work as well.
-    trainData = new ArrayList<>();
-    iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
-    while (iter.hasNext())
-      trainData.add(iter.next());
-    LOG.info("[init] after train, trainData.size=" + trainData.size());
-    iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
-    while (iter.hasNext()) {
-      FNParse p = iter.next();
-      if (!valid(p)) continue;
-      trainData.add(p);
+      // NOTE: fulltext (train) data should come first here
+      // Later I'll take from this first, before LEX instances, as I don't think
+      // they work as well.
+      trainData = new ArrayList<>();
+      iter = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+      while (iter.hasNext())
+        trainData.add(iter.next());
+      LOG.info("[init] after train, trainData.size=" + trainData.size());
+      iter = FileFrameInstanceProvider.fn15lexFIP.getParsedSentences();
+      while (iter.hasNext()) {
+        FNParse p = iter.next();
+        if (!valid(p)) continue;
+        trainData.add(p);
+      }
+      LOG.info("[init] after LEX, trainData.size=" + trainData.size());
     }
-    LOG.info("[init] after LEX, trainData.size=" + trainData.size());
   }
 
   private static boolean valid(FNParse p) {
@@ -312,7 +317,11 @@ public class FinalResults implements Runnable {
     }
   }
 
-  private void loadModel() {
+  public Parser getParser() {
+    return parser;
+  }
+
+  public void loadModel() {
     LOG.info("[loadModel] from " + workingDir.getPath());
     if (mode.equals("span")) {
       parser = new LatentConstituencyPipelinedParser();

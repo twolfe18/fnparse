@@ -118,9 +118,12 @@ public class FrameInstance {
   public boolean equals(Object other) {
     if(other instanceof FrameInstance) {
       FrameInstance fi = (FrameInstance) other;
-      return target == fi.target && frame.equals(fi.frame)
-          && sentence.equals(fi.sentence) && Arrays.equals(arguments, fi.arguments);
+      return target == fi.target
+          && frame.equals(fi.frame)
+          && sentence.equals(fi.sentence)
+          && Arrays.equals(arguments, fi.arguments);
+    } else {
+      return false;
     }
-    else return false;
   }
 }

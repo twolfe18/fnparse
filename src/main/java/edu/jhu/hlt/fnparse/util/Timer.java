@@ -28,9 +28,20 @@ public class Timer {
     return t;
   }
 
-  public void setPrintInterval(int interval) {
+  public Timer ignoreFirstTime() {
+    this.ignoreFirstTime = true;
+    return this;
+  }
+
+  public Timer ignoreFirstTime(boolean ignore) {
+    this.ignoreFirstTime = ignore;
+    return this;
+  }
+
+  public Timer setPrintInterval(int interval) {
     if(interval <= 0) throw new IllegalArgumentException();
     this.printIterval = interval;
+    return this;
   }
 
   public void disablePrinting() {
@@ -75,6 +86,17 @@ public class Timer {
     if(count > 1)
       return ((time - firstTime)/1000d) / (count-1);
     return (time/1000d) / count;
+  }
+
+  public double minutesUntil(int iterations) {
+    int remaining = iterations - count;
+    double rate = secPerCall() / 60d;
+    return rate * remaining;
+  }
+
+  /** How many times start/stop has been called */
+  public int getCount() {
+    return count;
   }
 
   public double totalTimeInSeconds() { return time / 1000d; }
