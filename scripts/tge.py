@@ -369,11 +369,13 @@ class SgeJobTracker(object):
     '''
     assert isinstance(args, list)
     assert isinstance(name, str)
-    cmd = ['qsub', '-N', name]
+    cmd = ['qsub', '-N', name, '-j', 'y', '-V', '-b', 'y', '-cwd']
+    # TODO take these as args!
+    cmd += ['-q', 'all.q', '-l', 'num_proc=1,mem_free=8G,h_rt=72:00:00']
     if self.logging_dir:
       cmd += ['-o', self.logging_dir]
     cmd += args
-    print '[sge spawn] cmd =', cmd
+    print '[sge spawn] cmd =', ' '.join(cmd)
     subprocess.Popen(cmd)
     time.sleep(0.2)
 
