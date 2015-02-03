@@ -4,8 +4,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -22,6 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
 
 /**
  * A wrapper around SEMAFOR's wrapper around SemEval'07 evaluation script.
@@ -213,8 +212,8 @@ public class SemaforEval {
       ProcessBuilder pb = new ProcessBuilder(command);
       Process p = pb.start();
 
-      Gobbler stdout = new Gobbler(p.getInputStream());
-      Gobbler stderr = new Gobbler(p.getErrorStream());
+      InputStreamGobbler stdout = new InputStreamGobbler(p.getInputStream());
+      InputStreamGobbler stderr = new InputStreamGobbler(p.getErrorStream());
 
       stdout.start();
       stderr.start();
@@ -226,28 +225,6 @@ public class SemaforEval {
       return stdout.getLines();
     } catch (Exception e) {
       throw new RuntimeException(e);
-    }
-  }
-
-  static class Gobbler extends Thread {
-    private InputStream is;
-    private List<String> lines;
-    public Gobbler(InputStream is) {
-      this.is = is;
-      this.lines = new ArrayList<>();
-    }
-    @Override
-    public void run() {
-      try (BufferedReader r = new BufferedReader(new InputStreamReader(is))) {
-        String line;
-        while ((line = r.readLine()) != null)
-          lines.add(line);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-    public List<String> getLines() {
-      return lines;
     }
   }
 
