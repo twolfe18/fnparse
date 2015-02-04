@@ -236,7 +236,7 @@ public class RerankerTrainer {
     // Use dev data for stopping condition
     File rScript = new File("scripts/stop.sh");
     double alpha = 0.25d;
-    int skip = 2;
+    int skip = 5;
     if (m.getStatefulParams() != Params.Stateful.NONE)
       skip *= 5;
     DoubleSupplier devLossFunc = new DoubleSupplier() {
@@ -398,7 +398,7 @@ public class RerankerTrainer {
     assert args.length % 2 == 1;
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
-    config.putAll(System.getProperties());
+    //config.putAll(System.getProperties());
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/reranker-train"));
     boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
@@ -443,7 +443,7 @@ public class RerankerTrainer {
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
     final int hashBuckets = 8 * 1000 * 1000;
-    final double l2Penalty = 1e-8;
+    final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
     if (useEmbeddingParams) {
       LOG.info("[main] using embedding params");
       int embeddingSize = 2;
@@ -465,13 +465,16 @@ public class RerankerTrainer {
     }
 
     if (useGlobalFeatures) {
-      double globalL2Penalty = 1e-2;
+      double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
       double globalLearningRate = 0.1;
       LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
-      GlobalFeature.RoleCooccurenceFeatureStateful g1 =
-          new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
-      g1.setShowOnUpdate();
-      //trainer.addParams(g1);
+
+      if (config.getBoolean("useRoleCooc", false)) {
+        GlobalFeature.RoleCooccurenceFeatureStateful g1 =
+            new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
+        g1.setShowOnUpdate();
+        trainer.addParams(g1);
+      }
 
       GlobalFeature.ArgOverlapFeature g2 =
           new GlobalFeature.ArgOverlapFeature(globalL2Penalty, globalLearningRate);

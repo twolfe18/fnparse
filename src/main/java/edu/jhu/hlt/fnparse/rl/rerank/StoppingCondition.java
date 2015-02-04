@@ -177,11 +177,11 @@ public interface StoppingCondition {
 
       // Compute held-out loss
       double devLoss = devLossFunc.getAsDouble();
+      LOG.info("[DevSet stop] writing loss=" + devLoss + " to file=" + historyFile.getPath());
       assert Double.isFinite(devLoss);
       assert !Double.isNaN(devLoss);
       assert devLoss >= 0 : "technically this isn't needed...";
       try {
-        LOG.info("[DevSet stop] writing loss to " + historyFile.getPath());
         this.historyFileWriter.write(devLoss + "\n");
         this.historyFileWriter.flush();
       } catch (Exception e) {

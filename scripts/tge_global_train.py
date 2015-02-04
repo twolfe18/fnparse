@@ -29,7 +29,7 @@ class Config(tge.Item):
     cmd = []
     cmd.append('java')
     cmd.append('-ea')
-    cmd.append('-Xmx6G')
+    cmd.append('-Xmx7G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-cp')
     cmd.append(':'.join(self.jars()))
@@ -50,20 +50,31 @@ def learning_curves():
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
   for n in [100, 500, 1500, 3000]:
-    cl = Config()
-    cl.nTrain = n
-    cl.useGlobalFeatures = False
-    q_local.add(cl)
-
-    cg = Config()
-    cg.nTrain = n
-    cg.useGlobalFeatures = True
-    q_global.add(cg)
+    for batch_size in [1, 4, 16, 64]:
+      for l2p in [1e-6, 1e-8, 1e-10]:
+        cl = Config()
+        cl.l2Penalty = l2p
+        cl.globalL2Penalty = l2pg
+        cl.pretrainBatchSize = batch_size
+        cl.trainBatchSize = batch_size
+        cl.nTrain = n
+        cl.useGlobalFeatures = False
+        q_local.add(cl)
+        for l2pg in [1e-1, 1e-2, 1e-3]:
+          for useRoleCooc in [True, False]:
+            cg = Config()
+            cg.useRoleCooc = useRoleCooc
+            cg.l2Penalty = l2p
+            cg.globalL2Penalty = l2pg
+            cg.pretrainBatchSize = batch_size
+            cg.trainBatchSize = batch_size
+            cg.nTrain = n
+            cg.useGlobalFeatures = True
+            q_global.add(cg)
 
   return q
 
 def run(q, working_dir, local=True):
-  #working_dir = '/tmp/tge-global-train'
   print 'running', q, 'and putting the results in', working_dir
 
   # Create the job tracker
@@ -84,7 +95,6 @@ def run(q, working_dir, local=True):
 if __name__ == '__main__':
   if len(sys.argv) != 2:
     print 'please provide a working dir'
-    #print 'make sure its a full path! sge is not the sharpest...'
     sys.exit(-1)
   wd = sys.argv[1]
   run(learning_curves(), wd, local=False)
