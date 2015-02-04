@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
+import edu.jhu.hlt.fnparse.util.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 
@@ -120,18 +121,26 @@ public interface StoppingCondition {
    * 2) the (mean,var) of the next predicted value under a locally-weighted
    *    linear regression.
    * If the t-statistic is greater than the given value (alpha), then stop.
+   *
+   * Will actually perform this test (which requires decoding on dev data and
+   * can be slow), every d*T seconds, where T is the average time to evaluate
+   * on dev and d is a parameter (e.g. 10).
    */
   public static class DevSet implements StoppingCondition {
 
     private File rScript;
     private File historyFile;
     private FileWriter historyFileWriter;
+    private int historySize;
+
     private DoubleSupplier devLossFunc;
-    private final int skip; // only call devPerf every skip iterations
     private final double alpha;
     private final int k = 50;
-    private int iter;
+
+    private final double d;
     private Timer rScriptTimer;
+    private Timer devLossFuncTimer;
+    private TimeMarker timeMarker;
 
     /**
      * @param rScript is a path to a 3-arg shell script which prints either
@@ -139,13 +148,13 @@ public interface StoppingCondition {
      * @param devLossFunc computes the loss on the dev set
      * @param alpha should be between 0 and 1, where small values will stop
      * quickly and large values will stop late.
-     * @param skip is how many iterations between calls to the dev set evaluator
      */
-    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, int skip) {
+    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double d) {
       if (!rScript.isFile())
         throw new IllegalArgumentException(rScript.getPath() + " is not a file");
       this.rScript = rScript;
       try {
+        this.historySize = 0;
         this.historyFile = File.createTempFile("devSetLoss", ".txt");
         this.historyFileWriter = new FileWriter(historyFile);
       } catch (IOException e) {
@@ -153,20 +162,26 @@ public interface StoppingCondition {
       }
       this.alpha = alpha;
       this.devLossFunc = devLossFunc;
-      this.skip = skip;
-      this.iter = 0;
-
+      this.d = d;
       this.rScriptTimer = new Timer()
         .setPrintInterval(1)
         .ignoreFirstTime(false);
+      this.devLossFuncTimer = new Timer()
+        .setPrintInterval(1)
+        .ignoreFirstTime(false);
+      this.timeMarker = new TimeMarker();
     }
 
     @Override
     public String toString() {
-      return String.format("DevSet(%s,alpha=%.2f,k=%d,skip=%d)",
-          historyFile.getPath(), alpha, k, skip);
+      return String.format("DevSet(%s,alpha=%.2f,k=%d,d=%.1f)",
+          historyFile.getPath(), alpha, k, d);
     }
 
+    /**
+     * This class keeps an open FileWriter for writing out this history, and
+     * this method closes that writer.
+     */
     public void close() {
       try {
         historyFileWriter.close();
@@ -178,41 +193,47 @@ public interface StoppingCondition {
     /** You must override this method with one that might return true */
     @Override
     public boolean stop(int iter, double violation) {
-      if (this.iter++ % skip != 0)
-        return false;
+      if (this.historySize > 0) {
+        double enoughSeconds = this.d * devLossFuncTimer.secPerCall();
+        if (!timeMarker.enoughTimePassed(enoughSeconds)) {
+          LOG.info("[DevSet stop] continuing because less than "
+              + enoughSeconds + " seconds have passed");
+          return false;
+        }
+      }
 
       // Compute held-out loss
+      LOG.info("[DevSet stop] calling dev set loss function");
+      devLossFuncTimer.start();
       double devLoss = devLossFunc.getAsDouble();
+      devLossFuncTimer.stop();
       LOG.info("[DevSet stop] writing loss=" + devLoss + " to file=" + historyFile.getPath());
       assert Double.isFinite(devLoss);
       assert !Double.isNaN(devLoss);
       assert devLoss >= 0 : "technically this isn't needed...";
       try {
+        this.historySize++;
         this.historyFileWriter.write(devLoss + "\n");
         this.historyFileWriter.flush();
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
 
-      int updates = this.iter / this.skip;
-      if (updates < 5)
+      if (this.historySize < 5)
         return false;
 
       // Call rScript
       LOG.info("[DevSet stop] iter=" + iter + " calling " + toString());
-      ProcessBuilder pb = new ProcessBuilder(
-          rScript.getPath(), historyFile.getPath(), "" + alpha, "" + k);
+      rScriptTimer.start();
       try {
-        rScriptTimer.start();
+        ProcessBuilder pb = new ProcessBuilder(
+            rScript.getPath(), historyFile.getPath(), "" + alpha, "" + k);
         Process p = pb.start();
         InputStreamGobbler stdout = new InputStreamGobbler(p.getInputStream());
         InputStreamGobbler stderr = new InputStreamGobbler(p.getErrorStream());
         stdout.start();
         stderr.start();
         int r = p.waitFor();
-        double secs = rScriptTimer.stop() / 1000d;
-        if (secs > 1d)
-          LOG.warn("[DevSet stop] slow rScript, secs=" + secs);
         if (r != 0) {
           //throw new RuntimeException("exit value: " + r);
           LOG.warn("[DevSet stop] error during call: " + r);
@@ -225,13 +246,17 @@ public interface StoppingCondition {
         assert "continue".equalsIgnoreCase(guidance) : "guidance: " + guidance;
       } catch (Exception e) {
         throw new RuntimeException(e);
+      } finally {
+        double secs = rScriptTimer.stop() / 1000d;
+        if (secs > 1d)
+          LOG.warn("[DevSet stop] slow rScript, secs=" + secs);
       }
       return false;
     }
 
     @Override
     public int estimatedNumberOfIterations() {
-      return this.iter * 2;
+      return this.historySize * 2;
     }
   }
 
@@ -469,7 +494,7 @@ public interface StoppingCondition {
   public static void main(String[] args) {
     File rScript = new File("scripts/stop.sh");
     double alpha = 0.25;
-    int skip = 1;
+    int d = 5;
     DoubleSupplier devLossFunc = new DoubleSupplier() {
       private Random rand = new Random(9001);
       private int iter = 0;
@@ -482,7 +507,7 @@ public interface StoppingCondition {
         return y + n;
       }
     };
-    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, skip);
+    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d);
     for (int i = 0; i < 200; i++) {
       boolean s = stop.stop(i, 0);
       System.out.println("stop=" + s);

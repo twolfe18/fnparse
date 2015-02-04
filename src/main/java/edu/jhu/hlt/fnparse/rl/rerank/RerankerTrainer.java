@@ -39,6 +39,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
@@ -247,9 +248,7 @@ public class RerankerTrainer {
     // Use dev data for stopping condition
     File rScript = new File("scripts/stop.sh");
     double alpha = 0.3d;
-    int skip = 5;
-    if (m.hasStatefulFeatures())
-      skip *= 5;  // decoding (dev tuning) takes a very long time here
+    double d = 10;
     DoubleSupplier devLossFunc = new DoubleSupplier() {
       @Override
       public double getAsDouble() {
@@ -270,7 +269,7 @@ public class RerankerTrainer {
       }
     };
     StoppingCondition.DevSet dynamicStopping = conf.addStoppingCondition(
-        new StoppingCondition.DevSet(rScript, devLossFunc, alpha, skip));
+        new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d));
 
     try {
       // Train the model
@@ -301,10 +300,13 @@ public class RerankerTrainer {
     timer.start(timerStr);
 
     ExecutorService es = null;
-    if (conf.threads > 1)
+    if (conf.threads > 1) {
+      String msg = "i'm pretty sure multi-threaded features do not work";
+      LOG.warn(msg);
+      assert false : msg;
       es = Executors.newWorkStealingPool(conf.threads);
-    Timer t = new Timer().setPrintInterval(0);
-    t.start();
+    }
+    TimeMarker t = new TimeMarker();
     double secsBetweenUpdates = 3 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
@@ -320,8 +322,7 @@ public class RerankerTrainer {
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
-        if (t.sinceStart() / 1000d > secsBetweenUpdates) {
-          t.stop();
+        if (t.enoughTimePassed(secsBetweenUpdates)) {
           r.getStatelessParams().showWeights();
           r.getStatefulParams().showWeights();
           if (showViolation)

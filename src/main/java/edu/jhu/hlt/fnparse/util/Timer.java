@@ -44,8 +44,9 @@ public class Timer {
     return this;
   }
 
-  public void disablePrinting() {
+  public Timer disablePrinting() {
     this.printIterval = -1;
+    return this;
   }
 
   public void start() {
