@@ -121,6 +121,10 @@ public class Reranker {
     this.thetaStateful = theta;
   }
 
+  public boolean hasStatefulFeatures() {
+    return thetaStateful != Params.Stateful.NONE;
+  }
+
   public int getBeamWidth() {
     return beamWidth;
   }

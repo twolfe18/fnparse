@@ -64,6 +64,14 @@ public class Timer {
     return t;
   }
 
+  /**
+   * like stop, returns the time taken between the last start/stop pair in
+   * milliseconds, but does not stop the timer.
+   */
+  public long sinceStart() {
+    return System.currentTimeMillis() - lastStart;
+  }
+
   public String toString() {
     double rate = 1000d * countsPerMSec();
     if(rate >= 0.5d) {

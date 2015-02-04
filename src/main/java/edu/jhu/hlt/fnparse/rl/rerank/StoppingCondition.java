@@ -12,6 +12,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
+import edu.jhu.hlt.fnparse.util.Timer;
 
 
 public interface StoppingCondition {
@@ -130,6 +131,7 @@ public interface StoppingCondition {
     private final double alpha;
     private final int k = 50;
     private int iter;
+    private Timer rScriptTimer;
 
     /**
      * @param rScript is a path to a 3-arg shell script which prints either
@@ -153,6 +155,10 @@ public interface StoppingCondition {
       this.devLossFunc = devLossFunc;
       this.skip = skip;
       this.iter = 0;
+
+      this.rScriptTimer = new Timer()
+        .setPrintInterval(1)
+        .ignoreFirstTime(false);
     }
 
     @Override
@@ -197,12 +203,16 @@ public interface StoppingCondition {
       ProcessBuilder pb = new ProcessBuilder(
           rScript.getPath(), historyFile.getPath(), "" + alpha, "" + k);
       try {
+        rScriptTimer.start();
         Process p = pb.start();
         InputStreamGobbler stdout = new InputStreamGobbler(p.getInputStream());
         InputStreamGobbler stderr = new InputStreamGobbler(p.getErrorStream());
         stdout.start();
         stderr.start();
         int r = p.waitFor();
+        double secs = rScriptTimer.stop() / 1000d;
+        if (secs > 1d)
+          LOG.warn("[DevSet stop] slow rScript, secs=" + secs);
         if (r != 0) {
           //throw new RuntimeException("exit value: " + r);
           LOG.warn("[DevSet stop] error during call: " + r);

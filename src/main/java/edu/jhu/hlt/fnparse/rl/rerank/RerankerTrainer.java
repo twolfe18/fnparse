@@ -62,17 +62,26 @@ public class RerankerTrainer {
     public int batchSize = 4;
     public StoppingCondition stopping = new StoppingCondition.Time(4 * 60);
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public Consumer<Integer> calledEveryEpoch = i -> {};
 
     // Tuning parameters
-    public boolean performTuning() { return propDev > 0 && maxDev > 0; }
-    public void dontPerformTuning() { propDev = 0; maxDev = 0; }
     public double propDev = 0.2d;
     public int maxDev = 150;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
     public boolean tuneOnTrainingData = false;
+
+    // Convenient extras
+    public Consumer<Integer> calledEveryEpoch = i -> {};
+    public boolean performTuning() { return propDev > 0 && maxDev > 0; }
+    public void dontPerformTuning() { propDev = 0; maxDev = 0; }
+    public void spreadTuneRange(double factor) {
+      assert factor > 0;
+      assert recallBiasLo < 0;
+      assert recallBiasHi > 0;
+      recallBiasLo *= factor;
+      recallBiasHi *= factor;
+    }
 
     public Config(String name) {
       this.name = name;
@@ -121,6 +130,7 @@ public class RerankerTrainer {
     this.pretrainConf = new Config("pretrain");
     this.pretrainConf.beamSize = 1;
     this.trainConf = new Config("train");
+    this.trainConf.spreadTuneRange(2);
   }
 
   public void addParams(Params.Stateful p) {
@@ -236,10 +246,10 @@ public class RerankerTrainer {
 
     // Use dev data for stopping condition
     File rScript = new File("scripts/stop.sh");
-    double alpha = 0.5d;
+    double alpha = 0.3d;
     int skip = 5;
-    if (m.getStatefulParams() != Params.Stateful.NONE)
-      skip *= 5;
+    if (m.hasStatefulFeatures())
+      skip *= 5;  // decoding (dev tuning) takes a very long time here
     DoubleSupplier devLossFunc = new DoubleSupplier() {
       @Override
       public double getAsDouble() {
@@ -249,9 +259,9 @@ public class RerankerTrainer {
           FNParse y = ip.label(i);
           List<Item> rerank = ip.items(i);
           State init = State.initialState(y, rerank);
-          Update u = m.getStatefulParams() == Params.Stateful.NONE
-              ? m.getStatelessUpdate(init, y)
-              : m.getFullUpdate(init, y, rand, null, null);
+          Update u = m.hasStatefulFeatures()
+              ? m.getFullUpdate(init, y, rand, null, null)
+              : m.getStatelessUpdate(init, y);
           loss += u.violation();
         }
         loss /= dev.size();
@@ -293,7 +303,9 @@ public class RerankerTrainer {
     ExecutorService es = null;
     if (conf.threads > 1)
       es = Executors.newWorkStealingPool(conf.threads);
-    int interval = 1;
+    Timer t = new Timer().setPrintInterval(0);
+    t.start();
+    double secsBetweenUpdates = 3 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -306,17 +318,20 @@ public class RerankerTrainer {
           break outer;
         }
 
-        if (iter % interval == 0) {
+        // Print some data every once in a while.
+        // Nothing in this conditional should have side-effects on the learning.
+        if (t.sinceStart() / 1000d > secsBetweenUpdates) {
+          t.stop();
           r.getStatelessParams().showWeights();
           r.getStatefulParams().showWeights();
           if (showViolation)
-            LOG.info("[hammingTrain] iter=" + iter + " violation=" + violation);
+            LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
           if (showTime) {
-            Timer t = timer.get(timerStr + ".batch", false);
+            Timer bt = timer.get(timerStr + ".batch", false);
             int totalUpdates = conf.stopping.estimatedNumberOfIterations();
             LOG.info(String.format(
                 "[hammingTrain] estimate: completed %d of %d updates, %.1f minutes remaining",
-                t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
+                bt.getCount(), totalUpdates, bt.minutesUntil(totalUpdates)));
           }
         }
         iter++;
@@ -361,9 +376,9 @@ public class RerankerTrainer {
         State init = State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        Update u = r.getStatefulParams() == Params.Stateful.NONE
-          ? r.getStatelessUpdate(init, y)
-          : r.getFullUpdate(init, y, rand, to, tmv);
+        Update u = r.hasStatefulFeatures()
+          ? r.getFullUpdate(init, y, rand, to, tmv)
+          : r.getStatelessUpdate(init, y);
         finishedUpdates.add(u);
       }
     } else {
@@ -419,7 +434,7 @@ public class RerankerTrainer {
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
         .subList(0, nTrain));
 
-    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 16);
+    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
 
     // Show how many roles we need to make predictions for (in train and test)

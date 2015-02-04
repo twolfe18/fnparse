@@ -2,8 +2,6 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.function.Supplier;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
