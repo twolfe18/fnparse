@@ -54,7 +54,6 @@ def learning_curves():
       for l2p in [1e-6, 1e-8, 1e-10]:
         cl = Config()
         cl.l2Penalty = l2p
-        cl.globalL2Penalty = l2pg
         cl.pretrainBatchSize = batch_size
         cl.trainBatchSize = batch_size
         cl.nTrain = n

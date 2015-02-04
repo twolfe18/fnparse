@@ -67,7 +67,7 @@ public class RerankerTrainer {
     public boolean performTuning() { return propDev > 0 && maxDev > 0; }
     public void dontPerformTuning() { propDev = 0; maxDev = 0; }
     public double propDev = 0.2d;
-    public int maxDev = 40;
+    public int maxDev = 150;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -235,7 +235,7 @@ public class RerankerTrainer {
 
     // Use dev data for stopping condition
     File rScript = new File("scripts/stop.sh");
-    double alpha = 0.25d;
+    double alpha = 0.5d;
     int skip = 5;
     if (m.getStatefulParams() != Params.Stateful.NONE)
       skip *= 5;

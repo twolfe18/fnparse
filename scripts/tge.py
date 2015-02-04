@@ -60,6 +60,7 @@ class ExplicitQueue(Queue):
     if self.items:
       r = self.items[0]
       self.items = self.items[1:]
+      print '[ExplicitQueue] pop', len(self.items), 'left'
       return r
     else:
       return None
