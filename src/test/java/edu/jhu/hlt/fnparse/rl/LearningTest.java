@@ -174,9 +174,11 @@ public class LearningTest {
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
     trainer.statelessParams = theta;
-    LOG.info("[getsItRight] before: " + theta.showWeights());
+    LOG.info("[getsItRight] before: ");
+    theta.showWeights();
     Reranker model = trainer.train1(ip);
-    LOG.info("[getsItRight] after " + iters + ": " + theta.showWeights());
+    LOG.info("[getsItRight] after " + iters + ": ");
+    theta.showWeights();
     evaluate(model, ip, 0.99d, 0.99d);
   }
 

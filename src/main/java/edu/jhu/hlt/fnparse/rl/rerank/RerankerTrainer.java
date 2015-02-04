@@ -299,14 +299,16 @@ public class RerankerTrainer {
     outer:
     for (int iter = 0; true; ) {
       for (int i = 0; i < ip.size(); i += conf.batchSize) {
-        iter++;
         double violation = hammingTrainBatch(r, es, ip, conf, iter, timerStr);
-        if (conf.stopping.stop(iter, violation)) {
+        boolean stop = conf.stopping.stop(iter, violation);
+        if (stop) {
           LOG.info("[hammingTrain] stopping due to " + conf.stopping);
           break outer;
         }
 
         if (iter % interval == 0) {
+          r.getStatelessParams().showWeights();
+          r.getStatefulParams().showWeights();
           if (showViolation)
             LOG.info("[hammingTrain] iter=" + iter + " violation=" + violation);
           if (showTime) {
@@ -317,6 +319,7 @@ public class RerankerTrainer {
                 t.getCount(), totalUpdates, t.minutesUntil(totalUpdates)));
           }
         }
+        iter++;
       }
       conf.calledEveryEpoch.accept(iter);
     }
@@ -417,7 +420,7 @@ public class RerankerTrainer {
         .subList(0, nTrain));
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 16);
-    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 16);
+    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
@@ -472,21 +475,15 @@ public class RerankerTrainer {
       LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
 
       if (config.getBoolean("useRoleCooc", false)) {
-        GlobalFeature.RoleCooccurenceFeatureStateful g1 =
-            new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty, globalLearningRate);
-        g1.setShowOnUpdate();
-        trainer.addParams(g1);
+        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
+            globalL2Penalty, globalLearningRate));
       }
 
-      GlobalFeature.ArgOverlapFeature g2 =
-          new GlobalFeature.ArgOverlapFeature(globalL2Penalty, globalLearningRate);
-      g2.setShowOnUpdate();
-      trainer.addParams(g2);
+      trainer.addParams(new GlobalFeature.ArgOverlapFeature(
+          globalL2Penalty, globalLearningRate));
 
-      GlobalFeature.SpanBoundaryFeature g3 =
-          new GlobalFeature.SpanBoundaryFeature(globalL2Penalty, globalLearningRate);
-      g3.setShowOnUpdate();
-      trainer.addParams(g3);
+      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
+          globalL2Penalty, globalLearningRate));
     }
 
     LOG.info("[main] starting training, config:");

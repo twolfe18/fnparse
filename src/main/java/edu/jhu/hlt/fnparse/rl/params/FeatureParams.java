@@ -21,8 +21,6 @@ import edu.jhu.util.Alphabet;
 public abstract class FeatureParams<Context> {
   public final Logger log = Logger.getLogger(getClass());
 
-  public boolean showOnUpdate = false;
-  public boolean showFeatures = false;
   public boolean averageFeatures = false;  // only applies upon construction
 
   protected AveragedWeights theta;
@@ -99,26 +97,7 @@ public abstract class FeatureParams<Context> {
     return this;
   }
 
-  public void setShowOnUpdate() {
-    assert this.featureIndices != null;
-    this.showOnUpdate = true;
-  }
-
-  public void showFeatures(String msg) {
-    if (featureIndices == null) {
-      log.info("[showFeatures] can't show features because we're using feature hashing");
-      return;
-    }
-    int k = 12; // how many of the most extreme features to show
-    List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
-    ModelViewer.showBiggestWeights(w, k, msg, log);
-  }
-
   public Adjoints score(Context f, Action a) {
-//    if (showOnUpdate && !printedSinceUpdate && isAlphabetBased()) {
-//      showFeatures("[update]");
-//      printedSinceUpdate = true;
-//    }
     FeatureVector fv = getFeatures(f, a);
 
     // Make sure that theta is big enough
@@ -126,8 +105,6 @@ public abstract class FeatureParams<Context> {
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
     Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
-    if (showOnUpdate && featureIndices != null)
-      adj.showFeatures(getClass().getName(), featureIndices);
     return adj;
   }
 
@@ -144,14 +121,27 @@ public abstract class FeatureParams<Context> {
     }
   }
 
-  public void doneTraining() {
-    if (featureIndices != null)
-      featureIndices.stopGrowth();
-    showFeatures("[doneTraining]");
-    if (theta.hasAverage()) {
-      log.info("[doneTraining] setting theta to averaged value");
-      theta.setAveragedWeights();
-      showFeatures("[doneTraining] after averaging:");
+  /** This will override Params.showWeights for extending classes */
+  public void showWeights() {
+    if (featureIndices == null) {
+      log.info("[showFeatures] can't show features because we're using feature hashing");
+      return;
     }
+    String msg = getClass().getName();
+    int k = 15; // how many of the most extreme features to show
+    List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
+    ModelViewer.showBiggestWeights(w, k, msg, log);
+  }
+
+  /**
+   * This will override Params.doneTraining for extending classes.
+   * Stop the alphabet from growing.
+   */
+  public void doneTraining() {
+    if (featureIndices != null) {
+      log.info("[doneTraining] stopping alphabet growth");
+      featureIndices.stopGrowth();
+    }
+    showWeights();
   }
 }

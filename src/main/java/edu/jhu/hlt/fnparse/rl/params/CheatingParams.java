@@ -47,12 +47,13 @@ public class CheatingParams implements Params.Stateless {
     theta[1] =  2d;
   }
 
-  public String showWeights() {
+  @Override
+  public void showWeights() {
     StringBuilder sb = new StringBuilder("[CheatingParams weights:\n");
     sb.append("intercept = " + theta[0] + "\n");
     sb.append("isGold    = " + theta[1] + "\n");
     sb.append("]");
-    return sb.toString();
+    LOG.info(sb.toString());
   }
 
   @Override

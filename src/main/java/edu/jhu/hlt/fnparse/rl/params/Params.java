@@ -20,7 +20,13 @@ public interface Params {
    * This is called after training is complete. This is a useful hook for
    * switching from regular perceptron weights to averaged ones.
    */
-  public void doneTraining();
+  default public void doneTraining() {
+    // no-op
+  }
+
+  default public void showWeights() {
+    // no-op
+  }
 
   // score is in an extending class
   // because its signature differs between Stateful and Stateless,
@@ -37,10 +43,6 @@ public interface Params {
     @Override
     public String toString() {
       return String.format("(Rand %.1f)", variance);
-    }
-    @Override
-    public void doneTraining() {
-      // no-op
     }
     @Override
     public Adjoints score(State s, Action a) {
@@ -75,10 +77,6 @@ public interface Params {
         };
       }
       @Override public String toString() { return "0"; }
-      @Override
-      public void doneTraining() {
-        // no-op
-      }
     };
 
     public static Stateful lift(final Stateless theta) {
@@ -94,6 +92,10 @@ public interface Params {
         @Override
         public void doneTraining() {
           theta.doneTraining();
+        }
+        @Override
+        public void showWeights() {
+          theta.showWeights();
         }
       };
     }
@@ -124,10 +126,6 @@ public interface Params {
         };
       }
       @Override public String toString() { return "0"; }
-      @Override
-      public void doneTraining() {
-        // no-op
-      }
     };
 
     /**
@@ -227,6 +225,10 @@ public interface Params {
       public void doneTraining() {
         wrapping.doneTraining();
       }
+      @Override
+      public void showWeights() {
+        wrapping.showWeights();
+      }
     }
   }
 
@@ -276,10 +278,15 @@ public interface Params {
       FNTagging f = s.getFrames();
       return new SumAdj(stateful.score(s, a), stateless.score(f, a));
     }
-   @Override
+    @Override
     public void doneTraining() {
       stateful.doneTraining();
       stateless.doneTraining();
+    }
+    @Override
+    public void showWeights() {
+      stateful.showWeights();
+      stateless.showWeights();
     }
   }
 
@@ -303,6 +310,11 @@ public interface Params {
       left.doneTraining();
       right.doneTraining();
     }
+    @Override
+    public void showWeights() {
+      left.showWeights();
+      right.showWeights();
+    }
   }
 
   /** Params is closed under addition */
@@ -324,6 +336,11 @@ public interface Params {
     public void doneTraining() {
       left.doneTraining();
       right.doneTraining();
+    }
+    @Override
+    public void showWeights() {
+      left.showWeights();
+      right.showWeights();
     }
   }
 }

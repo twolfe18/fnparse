@@ -1,17 +1,13 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import java.util.List;
 import java.util.function.Supplier;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.util.ModelViewer;
-import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
-import edu.jhu.util.Alphabet;
 
 /**
  * Wraps the result of a forward pass, which is often needed for computing a
@@ -81,27 +77,6 @@ public interface Adjoints {
           return f_i;
         }
       });
-
-      if (featureNames != null)
-        showFeature();
-      printedSinceLastUpdate = false;
-    }
-
-    // Set this to print on updates
-    private String tag;
-    private Alphabet<String> featureNames;
-    private boolean printedSinceLastUpdate = false;
-    public void showFeatures(String tag, Alphabet<String> featureNames) {
-      this.tag = tag;
-      this.featureNames = featureNames;
-    }
-    public void showFeature() {
-      if (printedSinceLastUpdate)
-        return;
-      int k = 12; // how many of the most extreme features to show
-      List<FeatureWeight> w = ModelViewer.getSortedWeights(weights.toNativeArray(), featureNames);
-      ModelViewer.showBiggestWeights(w, k, tag, Logger.getLogger(getClass()));
-      printedSinceLastUpdate = true;
     }
   }
 
