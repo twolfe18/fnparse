@@ -65,7 +65,7 @@ public class RerankerTrainer {
 
     // Tuning parameters
     public double propDev = 0.2d;
-    public int maxDev = 150;
+    public int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -453,8 +453,10 @@ public class RerankerTrainer {
       trainer.trainConf.tuneOnTrainingData = true;
       trainer.trainConf.maxDev = 15;
     } else {
+      double propTest = 0.25;
+      int maxTest = 9999;
       ItemProvider.TrainTestSplit trainTest =
-          new ItemProvider.TrainTestSplit(ip, 0.25, 10, rand);
+          new ItemProvider.TrainTestSplit(ip, propTest, maxTest, rand);
       train = trainTest.getTrain();
       test = trainTest.getTest();
     }
