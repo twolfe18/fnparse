@@ -30,7 +30,7 @@ public class ExperimentProperties extends java.util.Properties {
   public int getInt(String key, int defaultValue) {
     String value = getProperty(key);
     if (value == null) {
-      put(key, defaultValue);
+      put(key, String.valueOf(defaultValue));
       return defaultValue;
     }
     return Integer.parseInt(value);
@@ -44,7 +44,7 @@ public class ExperimentProperties extends java.util.Properties {
   public double getDouble(String key, double defaultValue) {
     String value = getProperty(key);
     if (value == null) {
-      put(key, defaultValue);
+      put(key, String.valueOf(defaultValue));
       return defaultValue;
     }
     return Double.parseDouble(value);
@@ -58,7 +58,7 @@ public class ExperimentProperties extends java.util.Properties {
   public boolean getBoolean(String key, boolean defaultValue) {
     String value = getProperty(key);
     if (value == null) {
-      put(key, defaultValue);
+      put(key, String.valueOf(defaultValue));
       return defaultValue;
     }
     return Boolean.parseBoolean(value);
