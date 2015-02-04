@@ -33,6 +33,9 @@ class Item(object):
     experiment code will use something like
     edu.jhu.hlt.fnparse.experiment.grid.ResultReporter.Redis to communicate
     back to JobEngine.
+    name is also useful for creating a unique name for a working directory
+    (for a job to dump output data, logs, etc), as the JobEngine will never
+    assign two jobs the same name.
     '''
     raise NotImplementedError()
 

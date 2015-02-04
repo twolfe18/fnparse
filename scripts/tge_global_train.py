@@ -20,11 +20,20 @@ redis_config = {
 
 class Config(tge.Item):
   ''' Represents a parser configuration, stored in __dict__ '''
+
+  def __init__(self, working_dir_parent):
+  '''
+  working_dir_parent should be a directory that this
+  Config's working dir will be placed into.
+  '''
+  self.working_dir_parent = working_dir_parent
+
   def jars(self):
     for f in os.listdir('target'):
       p = os.path.join('target', f)
       if os.path.isfile(p) and f.endswith('.jar'):
         yield p
+
   def build_command(self, name):
     cmd = []
     cmd.append('java')
@@ -41,10 +50,14 @@ class Config(tge.Item):
     cmd.append('resultsReporter')
     cmd.append('redis:' + redis_config['host'] + ',' \
       + redis_config['channel'] + ',' + redis_config['port'])
+    cmd.append('workingDir')
+    cmd.append(os.path.join(self.working_dir_parent, 'wd-' + name))
     return cmd
 
-def learning_curves():
+def learning_curves(working_dir):
   ''' Returns a queue '''
+  if not os.path.isdir(working_dir):
+    raise Exception('not a dir: ' + working_dir)
   q = tge.MultiQueue()
   q_local = q.add_queue('local', tge.ExplicitQueue())
   q_global = q.add_queue('global', tge.ExplicitQueue())

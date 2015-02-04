@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -394,13 +395,13 @@ public class RerankerTrainer {
    * First arg must be the job name (for tie-ins with tge) and the remaining are
    * key-value pairs.
    */
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     assert args.length % 2 == 1;
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
     //config.putAll(System.getProperties());
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
-    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/reranker-train"));
+    File workingDir = config.getOrMakeDir("workingDir");
     boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
     boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
     boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
@@ -444,6 +445,7 @@ public class RerankerTrainer {
 
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
+    LOG.info("[main] using l2Penalty=" + l2Penalty);
     if (useEmbeddingParams) {
       LOG.info("[main] using embedding params");
       int embeddingSize = 2;
@@ -487,6 +489,8 @@ public class RerankerTrainer {
       trainer.addParams(g3);
     }
 
+    LOG.info("[main] starting training, config:");
+    config.store(System.out, null);
     Reranker model = trainer.train1(train);
     LOG.info("[main] done training, evaluating");
     Map<String, Double> perfResults = eval(model, test, "[main]");
@@ -495,13 +499,9 @@ public class RerankerTrainer {
     results.putAll(ResultReporter.mapToString(config));
 
     // Save the configuration
-    try {
-      OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
-      config.storeToXML(os, "ran on " + new Date());
-      os.close();
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
+    config.storeToXML(os, "ran on " + new Date());
+    os.close();
 
     // Report results back to tge
     double mainResult = perfResults.get(BasicEvaluation.argOnlyMicroF1.getName());

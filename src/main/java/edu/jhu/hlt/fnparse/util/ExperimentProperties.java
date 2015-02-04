@@ -73,6 +73,8 @@ public class ExperimentProperties extends java.util.Properties {
     File f = getFile(key, defaultValue);
     if (!f.isDirectory())
       f.mkdirs();
+    if (!f.isDirectory())
+      throw new RuntimeException("bad dir: " + f.getPath());
     return f;
   }
 
@@ -80,6 +82,8 @@ public class ExperimentProperties extends java.util.Properties {
     File f = getFile(key);
     if (!f.isDirectory())
       f.mkdirs();
+    if (!f.isDirectory())
+      throw new RuntimeException("bad dir: " + f.getPath());
     return f;
   }
 
