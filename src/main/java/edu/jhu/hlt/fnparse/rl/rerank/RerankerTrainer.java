@@ -121,6 +121,7 @@ public class RerankerTrainer {
   public List<ResultReporter> reporters;
   public Config pretrainConf; // for training statelessParams
   public Config trainConf;    // for training statelessParams + statefulParams
+  public boolean performPretrain;
 
   // Model parameters
   public Params.Stateful statefulParams = Stateful.NONE;
@@ -132,6 +133,7 @@ public class RerankerTrainer {
     this.pretrainConf.beamSize = 1;
     this.trainConf = new Config("train");
     this.trainConf.spreadTuneRange(2);
+    this.performPretrain = true;
   }
 
   public void addParams(Params.Stateful p) {
@@ -208,10 +210,14 @@ public class RerankerTrainer {
     if (statefulParams == Stateful.NONE && statelessParams == Stateless.NONE)
       throw new IllegalStateException("you need to set the params");
 
-    LOG.info("[train1] local train");
     Reranker m = new Reranker(
         Params.Stateful.NONE, statelessParams, pretrainConf.beamSize, rand);
-    train2(m, ip, pretrainConf);
+    if (performPretrain) {
+      LOG.info("[train1] local train");
+      train2(m, ip, pretrainConf);
+    } else {
+      LOG.info("[train1] skipping pretrain");
+    }
 
     LOG.info("[train1] global train");
     if (statefulParams != Params.Stateful.NONE) {
@@ -437,6 +443,8 @@ public class RerankerTrainer {
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
+
+    trainer.performPretrain = config.getBoolean("skipPretrain", true);
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
