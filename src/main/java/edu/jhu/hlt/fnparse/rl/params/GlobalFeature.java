@@ -8,6 +8,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionIndex;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
@@ -48,13 +49,13 @@ public interface GlobalFeature extends Params.Stateful {
    * TODO make this faster.
    */
   public static class RoleCooccurenceFeatureStateful
-      extends FeatureParams<State> implements Params.Stateful {
+      extends FeatureParams implements Params.Stateful {
     public RoleCooccurenceFeatureStateful(double l2Penalty, double learningRate) {
       super(l2Penalty); // use Alphabet
       this.learningRate = learningRate;
     }
     @Override
-    public FeatureVector getFeatures(State state, Action a2) {
+    public FeatureVector getFeatures(State state, ActionIndex ai, Action a2) {
       String da2 = state.getFrame(a2.t).getName()
           + "." + state.getFrame(a2.t).getRole(a2.k);
       if (!a2.hasSpan())
@@ -102,11 +103,26 @@ public interface GlobalFeature extends Params.Stateful {
    * committed to span.
    */
   public static class ArgOverlapFeature
-      extends FeatureParams<State> implements Params.Stateful {
+      extends FeatureParams implements Params.Stateful {
     public ArgOverlapFeature(double l2Penalty, double learningRate) {
       super(l2Penalty);   // use Alphabet
       this.learningRate = learningRate;
     }
+    
+    // TODO: a pretty efficient way to do this is to keep two indices for previous
+    // actions, one by the start of their span and one for the end.
+    // For an overlap to occur, an Action must be in exactly one of those lists!
+    // For each list, sort by the non-indexed token (e.g. indexed on start, sort by end).
+    // .... you have to loop over all indices in the current span
+    
+    // TODO index on "crosses this token"
+    // for a cross to occur, it must cross either the start (exclusive) or end of this span!
+    // each index gets a set, loop over the smaller set doing contains on the larger.
+    // this is way easier (at query time, slower at update time).
+    // WAIT: this tradeoff is clearly preferable!
+    // we add a tiny number of spans compared to the number of times we query this feature!
+
+
     // start with a balanced tree, leaves are token indices
     // internal nodes represent a contiguous span of all the leaves/tokens it dominates
     // represent a span as a union of logarithmically-many nodes
@@ -116,24 +132,29 @@ public interface GlobalFeature extends Params.Stateful {
     // X = {x} = set of spans already committed to
     // find x s.t. q.s < x.s < q.e < x.e
     @Override
-    public FeatureVector getFeatures(State s, Action a) {
-      if (!a.hasSpan())
+    public FeatureVector getFeatures(State s, ActionIndex ai, Action a) {
+      if (a.hasSpan()) {
+        int ovlp = 0;
+        Span s1 = a.getSpan();
+
+        //      for (Span s2 : s.getCommittedSpans(new ArrayList<>())) {
+        //        if (s1.overlaps(s2) && s1.start != s2.start && s1.end != s2.end)
+        //          ovlp++;
+        //      }
+        List<Action> overlappingActions = new ArrayList<>();
+        ai.crosses(s1, overlappingActions);
+        ovlp = overlappingActions.size();
+
+        int k = 5;
+        FeatureVector fv = new FeatureVector();
+        if (ovlp < k)
+          b(fv, "overlap=" + ovlp);
+        else
+          b(fv, "overlap=" + k + "+");
+        return fv;
+      } else {
         return FeatureUtils.emptyFeatures;
-      int ovlp = 0;
-      Span s1 = a.getSpan();
-      for (Span s2 : s.getCommittedSpans(new ArrayList<>())) {
-        if (s1.overlaps(s2) && s1.start != s2.start && s1.end != s2.end)
-          ovlp++;
       }
-      if (ovlp == 0)
-        return FeatureUtils.emptyFeatures;
-      FeatureVector fv = new FeatureVector();
-      int k = 5;
-      if (ovlp < k)
-        b(fv, "overlap=" + ovlp);
-      else
-        b(fv, "overlap=" + k + "+");
-      return fv;
     }
   }
 
@@ -142,7 +163,7 @@ public interface GlobalFeature extends Params.Stateful {
    * with a span that has already been committed to.
    */
   public static class SpanBoundaryFeature
-      extends FeatureParams<State> implements Params.Stateful {
+      extends FeatureParams implements Params.Stateful {
     public SpanBoundaryFeature(double l2Penalty, double learningRate) {
       super(l2Penalty);
       this.learningRate = learningRate;
@@ -172,7 +193,7 @@ public interface GlobalFeature extends Params.Stateful {
       }
     }
     @Override
-    public FeatureVector getFeatures(State state, Action a) {
+    public FeatureVector getFeatures(State state, ActionIndex ai, Action a) {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
       List<Action> mStart = new ArrayList<>();

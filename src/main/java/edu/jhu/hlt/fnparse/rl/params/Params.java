@@ -8,6 +8,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionIndex;
 import edu.jhu.hlt.fnparse.rl.State;
 
 /**
@@ -32,38 +33,17 @@ public interface Params {
   // because its signature differs between Stateful and Stateless,
   // its not listed here.
 
-
-  public static class RandScore implements Stateless, Stateful {
-    private java.util.Random rand;
-    private double variance;
-    public RandScore(Random rand, double variance) {
-      this.rand = rand;
-      this.variance = variance;
-    }
-    @Override
-    public String toString() {
-      return String.format("(Rand %.1f)", variance);
-    }
-    @Override
-    public Adjoints score(State s, Action a) {
-      double r = (rand.nextDouble() - 0.5) * 2 * variance;
-      return new Adjoints.Explicit(r, a, "rand");
-    }
-    @Override
-    public Adjoints score(FNTagging f, Action a) {
-      double r = (rand.nextDouble() - 0.5) * 2 * variance;
-      return new Adjoints.Explicit(r, a, "rand");
-    }
-  }
-
   /**
    * Features that need to look at the state of the parser (uncacheable)
    */
   public static interface Stateful extends Params {
-    public Adjoints score(State s, Action a);
+
+    // TODO make this the only method required!
+    // This is just a bandaid so I don't have to fix a bunch of code right away.
+    public Adjoints score(State s, ActionIndex ai, Action a);
 
     public static final Stateful NONE = new Stateful() {
-      @Override public Adjoints score(State s, final Action a) {
+      @Override public Adjoints score(State s, ActionIndex ai, final Action a) {
         return new Adjoints() {
           @Override public String toString() { return "0"; }
           @Override public double forwards() { return 0d; }
@@ -86,7 +66,7 @@ public interface Params {
           return "(Lifted " + theta + ")";
         }
         @Override
-        public Adjoints score(State s, Action a) {
+        public Adjoints score(State s, ActionIndex ai, Action a) {
           return theta.score(s.getFrames(), a);
         }
         @Override
@@ -274,9 +254,9 @@ public interface Params {
       return stateful + " + " + stateless;
     }
     @Override
-    public Adjoints score(State s, Action a) {
+    public Adjoints score(State s, ActionIndex ai, Action a) {
       FNTagging f = s.getFrames();
-      return new SumAdj(stateful.score(s, a), stateless.score(f, a));
+      return new SumAdj(stateful.score(s, ai, a), stateless.score(f, a));
     }
     @Override
     public void doneTraining() {
@@ -329,8 +309,8 @@ public interface Params {
       return left + " + " + right;
     }
     @Override
-    public Adjoints score(State s, Action a) {
-      return new SumAdj(left.score(s, a), right.score(s, a));
+    public Adjoints score(State s, ActionIndex ai, Action a) {
+      return new SumAdj(left.score(s, ai, a), right.score(s, ai, a));
     }
     @Override
     public void doneTraining() {
@@ -343,4 +323,28 @@ public interface Params {
       right.showWeights();
     }
   }
+
+  public static class RandScore implements Stateless, Stateful {
+    private java.util.Random rand;
+    private double variance;
+    public RandScore(Random rand, double variance) {
+      this.rand = rand;
+      this.variance = variance;
+    }
+    @Override
+    public String toString() {
+      return String.format("(Rand %.1f)", variance);
+    }
+    @Override
+    public Adjoints score(State s, ActionIndex ai, Action a) {
+      double r = (rand.nextDouble() - 0.5) * 2 * variance;
+      return new Adjoints.Explicit(r, a, "rand");
+    }
+    @Override
+    public Adjoints score(FNTagging f, Action a) {
+      double r = (rand.nextDouble() - 0.5) * 2 * variance;
+      return new Adjoints.Explicit(r, a, "rand");
+    }
+  }
+
 }

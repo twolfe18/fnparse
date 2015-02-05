@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
  * @author travis
  */
 public class TemplatedFeatureParams
-    extends FeatureParams<FNTagging> implements Params.Stateless {
+    extends FeatureParams implements Params.Stateless {
 
   // if true, call featurizeDebug, which shows all the features that were just
   // computed on every call (very slow -- debug only).

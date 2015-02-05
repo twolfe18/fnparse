@@ -8,6 +8,7 @@ package edu.jhu.hlt.fnparse.util;
  */
 public class TimeMarker {
   private long lastMark = -1;
+
   /**
    * @return true if enoughSeconds have passed since this this method last
    * returned true, or if this method has never been called.
@@ -25,5 +26,9 @@ public class TimeMarker {
     } else {
       return false;
     }
+  }
+
+  public double secondsSinceLastMark() {
+    return (System.currentTimeMillis() - lastMark) / 1000d;
   }
 }

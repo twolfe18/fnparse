@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionIndex;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
@@ -179,7 +180,8 @@ public class Reranker {
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(actionTypes);
     State init = State.initialState(frames);
-    StateSequence frontier = new StateSequence(null, null, init, null);
+    boolean useActionIndex = false;
+    StateSequence frontier = new StateSequence(null, null, init, null, useActionIndex);
     int TK = init.numFrameRoleInstances();
     if (TK == 0)
       throw new IllegalArgumentException("only works when there are frameInstances");
@@ -188,7 +190,7 @@ public class Reranker {
       Action a = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
       Adjoints adj = new Adjoints.Explicit(0d, a, "randomDecodingState");
       State n = frontier.getCur().apply(a, true);
-      frontier = new StateSequence(frontier, null, n, adj);
+      frontier = new StateSequence(frontier, null, n, adj, useActionIndex);
     }
     return frontier.getCur();
   }
@@ -328,12 +330,12 @@ public class Reranker {
    * {@link edu.jhu.hlt.fnparse.rl.rerank.Reranker.ForwardSearch}
    */
   public static interface BFunc {
-    public double score(State s, Action a);
+    public double score(State s, ActionIndex ai, Action a);
 
     /** Returns a score of 0 always */
     public static class None implements BFunc {
       @Override
-      public double score(State s, Action a) {
+      public double score(State s, ActionIndex ai, Action a) {
         return 0d;
       }
       @Override
@@ -350,8 +352,8 @@ public class Reranker {
         this.params = params;
       }
       @Override
-      public double score(State s, Action a) {
-        Adjoints adj = params.score(s, a);
+      public double score(State s, ActionIndex ai, Action a) {
+        Adjoints adj = params.score(s, ai, a);
         return adj.forwards();
       }
     }
@@ -368,7 +370,7 @@ public class Reranker {
         this.solveMax = solveMax;
       }
       @Override
-      public double score(State s, Action a) {
+      public double score(State s, ActionIndex ai, Action a) {
         FrameInstance fi = gold.getFrameInstance(a.t);
         Span arg = fi.getArgument(a.k);
         if (arg != a.getSpanSafe())
@@ -393,7 +395,7 @@ public class Reranker {
         this.gold = gold;
       }
       @Override
-      public double score(State s, Action a) {
+      public double score(State s, ActionIndex ai, Action a) {
         ActionType at = a.getActionType();
         double dl = at.deltaLoss(s, a, gold);
         assert dl >= 0;
@@ -420,8 +422,8 @@ public class Reranker {
         this.rand = rand;
       }
       @Override
-      public double score(State s, Action a) {
-        double deltaLoss = super.score(s, a);
+      public double score(State s, ActionIndex ai, Action a) {
+        double deltaLoss = super.score(s, ai, a);
         if (deltaLoss > 0) {
           // Negative action, skip it with some probability
           if (rand.nextDouble() < negSubsampleRate)
@@ -536,42 +538,29 @@ public class Reranker {
 
       TransitionFunction transF =
           new ActionDrivenTransitionFunction(actionTypes);
-      StateSequence frontier = new StateSequence(null, null, initialState, null);
+      final boolean useActionIndex = hasStatefulFeatures();
+      StateSequence frontier = new StateSequence(null, null, initialState, null, useActionIndex);
       Beam<StateSequence> beam = beamWidth == 1
           ? new Beam1<>() : new BeamN<>(beamWidth);
       beam.push(frontier, 0d);
 
       for (int iter = 0; beam.size() > 0; iter++) {
 
-        int added = 0, actionsTried = 0;
+        // Pop the best StateSequence off the beam.
+        // We are going to score Actions leaving that StateSequence.getCur (s).
         frontier = beam.pop();
         State s = frontier.getCur();
+        ActionIndex ai = frontier.getActionIndex();
         if (verbose && LOG_FORWARD_SEARCH)
           logStateInfo(desc + " @ iter=" + iter, s);
 
+        int added = 0, actionsTried = 0;
         for (Action a : transF.nextStates(frontier)) {
           if (verbose && LOG_FORWARD_SEARCH)
             LOG.info("trying out " + a);
-//          if (verbose && fullSearch && ORACLE_DEBUG && biasFunction instanceof BFunc.Oracle) {
-//            FNParse y = ((BFunc.Oracle) biasFunction).getLabel();
-//            int T = y.numFrameInstances();
-//            for (int t = 0; t < T; t++) {
-//              FrameInstance fi = y.getFrameInstance(t);
-//              int K = fi.numArguments();
-//              for (int k = 0; k < K; k++) {
-//                Span goldArg = fi.getArgument(k);
-//                boolean p = s.possible(t, k, goldArg);
-//                Span c = s.committed(t, k);
-//                LOG.info("checking t=" + t + " k=" + k + " p=" + p + " c=" + c);
-//                // Either this must be possible or committed to
-//                assert p || c == goldArg;
-//              }
-//            }
-//            LOG.info("yup");
-//          }
 
           actionsTried++;
-          double bias = biasFunction.score(s, a);
+          double bias = biasFunction.score(s, ai, a);
           if (Double.isInfinite(bias)) {
             if (verbose && LOG_FORWARD_SEARCH)
               LOG.info("skipping due to bFunc");
@@ -581,7 +570,8 @@ public class Reranker {
           }
 
           // model score
-          Adjoints adj = model.score(s, a);
+          //Adjoints adj = model.score(s, a);
+          Adjoints adj = model.score(s, ai, a);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
           if (!solvingMax)
@@ -607,7 +597,7 @@ public class Reranker {
           // Add to the beam
           if (fullSearch) {
             added++;
-            StateSequence ss = new StateSequence(frontier, null, null, adj);
+            StateSequence ss = new StateSequence(frontier, null, null, adj, useActionIndex);
             boolean onBeam = beam.push(ss, score);
             if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
               logAction(desc, iter, score, ss, gold, false);

@@ -9,7 +9,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
  * Says what the action type is.
  * @author travis
  */
-public class ActionTypeParams extends FeatureParams<FNTagging> implements Params.Stateless {
+public class ActionTypeParams extends FeatureParams implements Params.Stateless {
   private boolean includeFrame;
   private boolean includeFrameRole;
   private boolean includeRole;

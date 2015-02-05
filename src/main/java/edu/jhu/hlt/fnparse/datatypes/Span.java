@@ -75,6 +75,30 @@ public final class Span implements Comparable<Span> {
     return this.start >= other.end;
   }
 
+  public boolean crosses(Span other) {
+    /*
+    boolean sharesEndpoint = start == other.start || end == other.end;
+    if (sharesEndpoint)
+      return false;
+    boolean nested1 = start <= other.start && other.end <= end;
+    if (nested1)
+      return false;
+    boolean nested2 = other.start <= start && end <= other.end;
+    if (nested2)
+      return false;
+    return overlaps(other);
+    */
+    Span a = this;
+    Span b = other;
+    if (a.start < b.start && b.start < a.end && a.end < b.end)
+      return true;
+    a = other;
+    b = this;
+    if (a.start < b.start && b.start < a.end && a.end < b.end)
+      return true;
+    return false;
+  }
+
   public boolean overlaps(Span other) {
     if(end <= other.start) return false;
     if(start >= other.end) return false;

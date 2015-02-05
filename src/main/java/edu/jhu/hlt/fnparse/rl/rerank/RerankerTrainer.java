@@ -211,7 +211,7 @@ public class RerankerTrainer {
     LOG.info("[train1] local train");
     Reranker m = new Reranker(
         Params.Stateful.NONE, statelessParams, pretrainConf.beamSize, rand);
-    train2(m, ip, pretrainConf);
+//    train2(m, ip, pretrainConf);
 
     LOG.info("[train1] global train");
     if (statefulParams != Params.Stateful.NONE) {
@@ -247,8 +247,8 @@ public class RerankerTrainer {
 
     // Use dev data for stopping condition
     File rScript = new File("scripts/stop.sh");
-    double alpha = 0.3d;
-    double d = 10;
+    double alpha = 0.2d;
+    double d = 8;
     DoubleSupplier devLossFunc = new DoubleSupplier() {
       @Override
       public double getAsDouble() {
@@ -492,16 +492,16 @@ public class RerankerTrainer {
       double globalLearningRate = 0.1;
       LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
 
-      if (config.getBoolean("useRoleCooc", false)) {
-        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
-            globalL2Penalty, globalLearningRate));
-      }
+//      if (config.getBoolean("useRoleCooc", false)) {
+//        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
+//            globalL2Penalty, globalLearningRate));
+//      }
 
       trainer.addParams(new GlobalFeature.ArgOverlapFeature(
           globalL2Penalty, globalLearningRate));
 
-      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
-          globalL2Penalty, globalLearningRate));
+//      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
+//          globalL2Penalty, globalLearningRate));
     }
 
     LOG.info("[main] starting training, config:");

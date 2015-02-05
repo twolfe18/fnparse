@@ -287,8 +287,8 @@ public class EmbeddingParams implements Params.Stateless {
   private double l2Penalty = 1e-5;
 
   // If true, use the params below
-  private FeatureParams<FNTagging> debugParams;
-  public void debug(FeatureParams<FNTagging> debugParams, double l2Penalty) {
+  private FeatureParams debugParams;
+  public void debug(FeatureParams debugParams, double l2Penalty) {
     this.updateTheta = true;
     this.l2Penalty = l2Penalty;
     this.debugParams = debugParams;

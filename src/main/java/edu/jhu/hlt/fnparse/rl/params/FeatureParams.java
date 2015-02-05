@@ -5,7 +5,10 @@ import java.util.List;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionIndex;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.AveragedWeights;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
@@ -14,11 +17,12 @@ import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
 /**
- * Wraps my feature template language and implements Params.Stateless.
+ * You implement features, and this does the rest to let you implement Params.
+ * Supports both Alphabets and feature-hashing.
  *
  * @author travis
  */
-public abstract class FeatureParams<Context> {
+public abstract class FeatureParams {
   public final Logger log = Logger.getLogger(getClass());
 
   public boolean averageFeatures = false;  // only applies upon construction
@@ -49,7 +53,17 @@ public abstract class FeatureParams<Context> {
     this.learningRate = 1;
   }
 
-  public abstract FeatureVector getFeatures(Context c, Action a);
+  /** Override one of the getFeatures methods */
+  public FeatureVector getFeatures(FNTagging frames, Action a) {
+    throw new RuntimeException("you should have either overriden this "
+        + "method or called the other one");
+  }
+
+  /** Override one of the getFeatures methods */
+  public FeatureVector getFeatures(State s, ActionIndex ai, Action a) {
+    throw new RuntimeException("you should have either overriden this "
+        + "method or called the other one");
+  }
 
   public boolean isAlphabetBased() {
     assert (numBuckets <= 0) != (featureIndices == null);
@@ -90,15 +104,15 @@ public abstract class FeatureParams<Context> {
     return numBuckets;
   }
 
-  public FeatureParams<Context> sizeHint(int size) {
+  public FeatureParams sizeHint(int size) {
     assert isAlphabetBased() : "size must match numBuckets, don't use this method";
     if (size > theta.dimension())
       theta.grow(size);
     return this;
   }
 
-  public Adjoints score(Context f, Action a) {
-    FeatureVector fv = getFeatures(f, a);
+  public Adjoints score(FNTagging frames, Action a) {
+    FeatureVector fv = getFeatures(frames, a);
 
     // Make sure that theta is big enough
     checkSize();
@@ -108,7 +122,18 @@ public abstract class FeatureParams<Context> {
     return adj;
   }
 
-  private void checkSize() {
+  public Adjoints score(State s, ActionIndex ai, Action a) {
+    FeatureVector fv = getFeatures(s, ai, a);
+
+    // Make sure that theta is big enough
+    checkSize();
+
+    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    return adj;
+  }
+
+  protected void checkSize() {
     if (isAlphabetBased()) {
       int n = featureIndices.size();
       if (n > theta.dimension()) {
