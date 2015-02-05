@@ -75,6 +75,9 @@ public class ActionIndex {
    * @return the collection passed in.
    */
   public <T extends Collection<Action>> T crosses(Span s, T addTo) {
+    return crosses(s.start, s.end, addTo);
+  }
+  public <T extends Collection<Action>> T crosses(int sstart, int send, T addTo) {
     // Take all actions that appear in exactly one of:
     // actions that cross the first token and actions that cross the last token.
     // Below, implemented as all of the actions that cross the first token but
@@ -85,25 +88,25 @@ public class ActionIndex {
     // This does not double count: the first loop will only take a span if it
     // doesn't cover end (and thus must start), and the second loop will only
     // take a span if it doesn't covers start (and thus must end).
-    for (ActionIndex.IndexItem si = coversToken[s.start]; si != null; si = si.prevNonEmptyItem) {
+    for (ActionIndex.IndexItem si = coversToken[sstart]; si != null; si = si.prevNonEmptyItem) {
       Action a = si.action;
-      boolean coversEnd = a.start <= s.end-1 && s.end-1 < a.end;
+      boolean coversEnd = a.start <= send-1 && send-1 < a.end;
       if (coversEnd) continue;
-      boolean shareEndpoint = s.start == a.start || s.end == a.end;
+      boolean shareEndpoint = sstart == a.start || send == a.end;
       if (shareEndpoint) continue;
       addTo.add(a);
     }
-    for (ActionIndex.IndexItem ei = coversToken[s.end - 1]; ei != null; ei = ei.prevNonEmptyItem) {
+    for (ActionIndex.IndexItem ei = coversToken[send - 1]; ei != null; ei = ei.prevNonEmptyItem) {
       Action a = ei.action;
-      boolean coversStart = a.start <= s.start && s.start < a.end;
+      boolean coversStart = a.start <= sstart && sstart < a.end;
       if (coversStart) continue;
-      boolean shareEndpoint = s.start == a.start || s.end == a.end;
+      boolean shareEndpoint = sstart == a.start || send == a.end;
       if (shareEndpoint) continue;
       addTo.add(a);
     }
     return addTo;
   }
-  
+
   public IndexItem allActions() {
     return all;
   }

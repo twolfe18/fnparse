@@ -61,8 +61,7 @@ public class LearningTest {
     for (Action a : oracleScoreTf.nextStates(ss)) {
     //for (StateSequence next : oracleScoreTf.nextStates(ss)) {
       Adjoints adj = theta.score(ss.getCur(), null, a);
-      boolean useActionIndex = false;
-      StateSequence next = new StateSequence(ss, null, null, adj, useActionIndex);
+      StateSequence next = new StateSequence(ss, null, null, adj);
       n++;
       Assert.assertTrue(next.getPrev() != null);
       Assert.assertTrue(next.getNext() == null);
@@ -117,8 +116,7 @@ public class LearningTest {
       for (FNParse y : parses) {
         LOG.info("[noTrainPrereq] testing " + y.getId() + " probRecurse=" + probRecurse);
         State init = State.initialState(y);
-        boolean useActionIndex = false;
-        StateSequence ss = new StateSequence(null, null, init, null, useActionIndex);
+        StateSequence ss = new StateSequence(null, null, init, null);
         ActionDrivenTransitionFunction oracleScoreTf =
             new ActionDrivenTransitionFunction(ActionType.COMMIT);
 

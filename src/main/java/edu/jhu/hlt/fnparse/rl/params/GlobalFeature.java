@@ -9,10 +9,10 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionIndex;
-import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.ActionIndex.IndexItem;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 
 /**
  * GlobalFeatures are expected to keep their own indexes up to date.
@@ -46,75 +46,67 @@ public interface GlobalFeature extends Params.Stateful {
    * Fires when roles co-occur.
    * Captures "stopping features", e.g. "commit to (t,k) = nullSpan even though
    * (t',k') = nonNullSpan".
-   * 
-   * TODO make this faster.
    */
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams implements Params.Stateful {
+    public static FrameRolePacking frPacking = new FrameRolePacking();
+    public static final int BUCKETS = 1<<20;
+    public static final int DA_BITS = 14;
+    public static final int REL_BITS = 3;
     public RoleCooccurenceFeatureStateful(double l2Penalty, double learningRate) {
-      super(l2Penalty); // use Alphabet
+      super(l2Penalty, BUCKETS); // use Hashing
       this.learningRate = learningRate;
     }
     @Override
     public FeatureVector getFeatures(State state, ActionIndex ai, Action a2) {
-      String da2 = state.getFrame(a2.t).getName()
-          + "." + state.getFrame(a2.t).getRole(a2.k);
-      if (!a2.hasSpan())
-        da2 += ".nullSpan";
-      FeatureVector fv = new FeatureVector();
-      //double smooth = 3d;
-      double w = 1d;  //smooth / (state.numCommitted() + smooth);
-//      final int T = state.numFrameInstance();
+      // must be >0 because 0 is the implicit backoff label
+      final int SAME_TARGET = 1;
+      final int BEFORE = 2;
+      final int AFTER = 3;
+      final int WAT = 4;
 
+      int da2;
+      if (a2.hasSpan()) {
+        da2 = frPacking.index(state.getFrame(a2.t), a2.k);
+      } else {
+        da2 = frPacking.index(state.getFrame(a2.t));
+      }
+      da2 = da2 << REL_BITS; // move over to make room for rel type
+
+      FeatureVector fv = new FeatureVector();
       for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
         Action a = i.action;
         FrameInstance fi = state.getFrameInstance(a.t);
         Frame f = fi.getFrame();
-        String da1 = f.getName() + "." + f.getRole(a.k);
+        int da1 = frPacking.index(f, a.k);
+        da1 = da1 << (REL_BITS + DA_BITS);
         if (a.t == a2.t) {
-          b(fv, w, da1, da2, "sameTarget");
+          fv.add(mod(da1 ^ da2 ^ SAME_TARGET, BUCKETS), 1d);
+          fv.add(mod(da1 ^ da2, BUCKETS), 1d);
         } else {
           // This characterizes the linear relationship between the targets
           // of the previously committed item and the current one.
           // TODO characterize the arg position as well.
           Span s1 = state.getFrameInstance(a.t).getTarget();
           Span s2 = state.getFrameInstance(a2.t).getTarget();
-          if (s1.before(s2))
-            b(fv, w, da1, da2, "before");
-          else if (s1.after(s2))
-            b(fv, w, da1, da2, "after");
-          else
-            b(fv, w, da1, da2, "wat");
+          if (s1.before(s2)) {
+            fv.add(mod(da1 ^ da2 ^ BEFORE, BUCKETS), 1d);
+            fv.add(mod(da1 ^ da2, BUCKETS), 1d);
+          } else if (s1.after(s2)) {
+            fv.add(mod(da1 ^ da2 ^ AFTER, BUCKETS), 1d);
+            fv.add(mod(da1 ^ da2, BUCKETS), 1d);
+          } else {
+            fv.add(mod(da1 ^ da2 ^ WAT, BUCKETS), 1d);
+          }
         }
       }
-
-//      for (int t = 0; t < T; t++) {
-//        FrameInstance fi = state.getFrameInstance(t);
-//        Frame f = fi.getFrame();
-//        int K = f.numRoles();
-//        for (int k = 0; k < K; k++) {
-//          Span arg1 = fi.getArgument(k);
-//          if (arg1 == Span.nullSpan) continue;
-//          String da1 = f.getName() + "." + f.getRole(k);
-//          if (t == a2.t) {
-//            b(fv, w, da1, da2, "sameTarget");
-//          } else {
-//            // This characterizes the linear relationship between the targets
-//            // of the previously committed item and the current one.
-//            // TODO characterize the arg position as well.
-//            Span s1 = state.getFrameInstance(t).getTarget();
-//            Span s2 = state.getFrameInstance(a2.t).getTarget();
-//            if (s1.before(s2))
-//              b(fv, w, da1, da2, "before");
-//            else if (s1.after(s2))
-//              b(fv, w, da1, da2, "after");
-//            else
-//              b(fv, w, da1, da2, "wat");
-//          }
-//        }
-//      }
-
       return fv;
+    }
+
+    /** Returns a non-negative version of i % b */
+    public static int mod(int i, int b) {
+      int y = i % b;
+      return y < 0 ? ~y : y;
     }
 
     @Override
@@ -130,53 +122,24 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class ArgOverlapFeature
       extends FeatureParams implements Params.Stateful {
+    public static final int BUCKETS = 6;
     public ArgOverlapFeature(double l2Penalty, double learningRate) {
-      super(l2Penalty);   // use Alphabet
+      super(l2Penalty, BUCKETS);   // use Hashing
       this.learningRate = learningRate;
     }
-    
-    // TODO: a pretty efficient way to do this is to keep two indices for previous
-    // actions, one by the start of their span and one for the end.
-    // For an overlap to occur, an Action must be in exactly one of those lists!
-    // For each list, sort by the non-indexed token (e.g. indexed on start, sort by end).
-    // .... you have to loop over all indices in the current span
-    
-    // TODO index on "crosses this token"
-    // for a cross to occur, it must cross either the start (exclusive) or end of this span!
-    // each index gets a set, loop over the smaller set doing contains on the larger.
-    // this is way easier (at query time, slower at update time).
-    // WAIT: this tradeoff is clearly preferable!
-    // we add a tiny number of spans compared to the number of times we query this feature!
-
-
-    // start with a balanced tree, leaves are token indices
-    // internal nodes represent a contiguous span of all the leaves/tokens it dominates
-    // represent a span as a union of logarithmically-many nodes
-    // if you want to know if a span has any other spans that overlap with it...
-    // this is too hard... start with dumbest implementation possible
     // q = query span
     // X = {x} = set of spans already committed to
     // find x s.t. q.s < x.s < q.e < x.e
     @Override
     public FeatureVector getFeatures(State s, ActionIndex ai, Action a) {
       if (a.hasSpan()) {
-        int ovlp = 0;
-        Span s1 = a.getSpan();
-
-        //      for (Span s2 : s.getCommittedSpans(new ArrayList<>())) {
-        //        if (s1.overlaps(s2) && s1.start != s2.start && s1.end != s2.end)
-        //          ovlp++;
-        //      }
-        List<Action> overlappingActions = new ArrayList<>();
-        ai.crosses(s1, overlappingActions);
-        ovlp = overlappingActions.size();
-
-        int k = 5;
         FeatureVector fv = new FeatureVector();
-        if (ovlp < k)
-          b(fv, "overlap=" + ovlp);
-        else
-          b(fv, "overlap=" + k + "+");
+        List<Action> overlappingActions = new ArrayList<>();
+        ai.crosses(a.start, a.end, overlappingActions);
+        int ovlp = overlappingActions.size();
+        if (ovlp >= BUCKETS)
+          ovlp = BUCKETS - 1;
+        fv.add(ovlp, 1d);
         return fv;
       } else {
         return FeatureUtils.emptyFeatures;
@@ -190,45 +153,31 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class SpanBoundaryFeature
       extends FeatureParams implements Params.Stateful {
+
+    public static final int MSTART1 = 0;
+    public static final int MSTART1_TMATCH = 1;
+    public static final int MSTART2P = 2;
+    public static final int MSTART2P_TMATCH = 3;  // not used
+
+    public static final int MEND1 = 4;
+    public static final int MEND1_TMATCH = 5;
+    public static final int MEND2P = 6;
+    public static final int MEND2P_TMATCH = 7;    // not used
+
+    public static final int MSTART_MEND = 8;
+    public static final int MLEFT = 9;
+    public static final int MRIGHT = 10;
+    public static final int MLEFT_MRIGHT = 11;
+
     public SpanBoundaryFeature(double l2Penalty, double learningRate) {
-      super(l2Penalty);
+      super(l2Penalty, 12);
       this.learningRate = learningRate;
     }
-
-//    private static void indexSpans(State state, Span s,
-//        List<Action> mStart, List<Action> mEnd,
-//        List<Action> mLeft, List<Action> mRight) {
-//      final int T = state.numFrameInstance();
-//      for (int t = 0; t < T; t++) {
-//        FrameInstance fi = state.getFrameInstance(t);
-//        Frame f = fi.getFrame();
-//        int K = f.numRoles();
-//        for (int k = 0; k < K; k++) {
-//          Span arg = fi.getArgument(k);
-//          if (arg == Span.nullSpan) continue;
-//          // TODO get Action type from state somehow?
-//          Action a = new Action(t, k, ActionType.COMMIT.getIndex(), arg);
-//          if (arg.end == s.start)
-//            mLeft.add(a);
-//          if (arg.start == s.start)
-//            mStart.add(a);
-//          if (arg.end == s.end)
-//            mEnd.add(a);
-//          if (arg.start == s.end)
-//            mRight.add(a);
-//        }
-//      }
-//    }
 
     @Override
     public FeatureVector getFeatures(State state, ActionIndex ai, Action a) {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
-//      List<Action> mStart = new ArrayList<>();
-//      List<Action> mEnd = new ArrayList<>();
-//      List<Action> mLeft = new ArrayList<>();
-//      List<Action> mRight = new ArrayList<>();
-//      indexSpans(state, s, mStart, mEnd, mLeft, mRight);
 
       IndexItem mStart = ai.startsAt(s.start);
       IndexItem mEnd = ai.endsAt(s.end - 1);
@@ -241,35 +190,35 @@ public interface GlobalFeature extends Params.Stateful {
 
       if (mStart != null) {
         if (mStart.size == 1) {
-          b(fv, "mStart1");
+          fv.add(MSTART1, 1d);
           if (mStart.action.t == a.t)
-            b(fv, "mStart1", "tMatch");
+            fv.add(MSTART1_TMATCH, 1d);
         } else if (mStart.size > 1) {
-          b(fv, "mStart2+");
+          fv.add(MSTART2P, 1d);
         }
       }
 
       if (mEnd != null) {
         if (mEnd.size == 1) {
-          b(fv, "mEnd1");
+          fv.add(MEND1, 1d);
           if (mEnd.action.t == a.t)
-            b(fv, "mEnd1", "tMatch");
+            fv.add(MEND1_TMATCH, 1d);
         } else if (mEnd.size > 1) {
-          b(fv, "mEnd2+");
+          fv.add(MEND2P, 1d);
         }
       }
 
       if (mStart != null && mStart.size > 0 && mEnd != null && mEnd.size > 0)
-        b(fv, "mStart+mEnd");
+        fv.add(MSTART_MEND, 1d);
 
       if (mLeft != null && mLeft.size > 0)
-        b(fv, "mLeft");
+        fv.add(MLEFT, 1d);
 
       if (mRight != null && mRight.size > 0)
-        b(fv, "mRight");
+        fv.add(MRIGHT, 1d);
 
       if (mLeft != null && mLeft.size > 0 && mRight != null && mRight.size > 0)
-        b(fv, "mLeft+mRight");
+        fv.add(MLEFT_MRIGHT, 1d);
 
       return fv;
     }
