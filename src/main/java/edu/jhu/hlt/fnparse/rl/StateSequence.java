@@ -17,19 +17,22 @@ public class StateSequence {
   // Indexes all the Actions in this sequence for the use by features.
   private ActionIndex actionIndex;
 
-  public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action, boolean useActionIndex) {
+  public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
     assert !(prev != null && next != null);
     this.prev = prev;
     this.next = next;
     this.cur = cur;
     this.action = action;
-    if (useActionIndex) {
-      assert next == null : "did you decide to do bi-directional search again?";
-      if (prev == null)
-        actionIndex = new ActionIndex(cur.getSentence().size());
-      else
-        actionIndex = prev.actionIndex.updateIndex(action.getAction());
-    }
+    this.actionIndex = null;    // call initActionIndex*
+  }
+
+  public void initActionIndexFromPrev() {
+    assert next == null : "did you decide to do bi-directional search again?";
+    actionIndex = prev.actionIndex.updateIndex(action.getAction());
+  }
+
+  public void initActionIndexFromScratch() {
+    actionIndex = new ActionIndex(cur.getSentence().size());
   }
 
   public ActionIndex getActionIndex() {

@@ -180,8 +180,7 @@ public class Reranker {
     TransitionFunction transF =
         new ActionDrivenTransitionFunction(actionTypes);
     State init = State.initialState(frames);
-    boolean useActionIndex = false;
-    StateSequence frontier = new StateSequence(null, null, init, null, useActionIndex);
+    StateSequence frontier = new StateSequence(null, null, init, null);
     int TK = init.numFrameRoleInstances();
     if (TK == 0)
       throw new IllegalArgumentException("only works when there are frameInstances");
@@ -190,7 +189,7 @@ public class Reranker {
       Action a = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
       Adjoints adj = new Adjoints.Explicit(0d, a, "randomDecodingState");
       State n = frontier.getCur().apply(a, true);
-      frontier = new StateSequence(frontier, null, n, adj, useActionIndex);
+      frontier = new StateSequence(frontier, null, n, adj);
     }
     return frontier.getCur();
   }
@@ -482,6 +481,9 @@ public class Reranker {
     }
   }
 
+  public static final Timer FS_TIMER = new Timer("ForwardSearch")
+      .ignoreFirstTime(true).setPrintInterval(1);
+
   /**
    * TODO what this class lacks is the ability to tell when Stateless params are
    * being used, and the search decomposes to parallel process over (t,k) rather
@@ -530,6 +532,7 @@ public class Reranker {
     public void run() {
       assert !hasRun;
 
+      FS_TIMER.start();
       String desc = "[forwardSearch " + (fullSearch ? "full" : "init")
           + " bFunc=" + biasFunction.toString() + "]";
       boolean verbose = true;
@@ -538,8 +541,10 @@ public class Reranker {
 
       TransitionFunction transF =
           new ActionDrivenTransitionFunction(actionTypes);
+      StateSequence frontier = new StateSequence(null, null, initialState, null);
       final boolean useActionIndex = hasStatefulFeatures();
-      StateSequence frontier = new StateSequence(null, null, initialState, null, useActionIndex);
+      if (useActionIndex)
+        frontier.initActionIndexFromScratch();
       Beam<StateSequence> beam = beamWidth == 1
           ? new Beam1<>() : new BeamN<>(beamWidth);
       beam.push(frontier, 0d);
@@ -570,7 +575,6 @@ public class Reranker {
           }
 
           // model score
-          //Adjoints adj = model.score(s, a);
           Adjoints adj = model.score(s, ai, a);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
@@ -597,8 +601,14 @@ public class Reranker {
           // Add to the beam
           if (fullSearch) {
             added++;
-            StateSequence ss = new StateSequence(frontier, null, null, adj, useActionIndex);
+            StateSequence ss = new StateSequence(frontier, null, null, adj);
             boolean onBeam = beam.push(ss, score);
+            if (onBeam) {
+              // Important to delay this until you know this will add to the
+              // beam because this is much slower than the rest of the
+              // StateSequence constructor.
+              ss.initActionIndexFromPrev();
+            }
             if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
               logAction(desc, iter, score, ss, gold, false);
           }
@@ -623,6 +633,7 @@ public class Reranker {
 //            }
           }
           this.hasRun = true;
+          FS_TIMER.stop();
           return;
         }
 
