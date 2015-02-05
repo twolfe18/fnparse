@@ -74,15 +74,9 @@ public class Timer {
   }
 
   public String toString() {
-    double rate = 1000d * countsPerMSec();
-    if(rate >= 0.5d) {
-      String rateStr = rate > 1100d
-          ? String.format("%.1f k", rate/1000d)
-              : String.format("%.1f", rate);
-          return String.format("<Timer %s %.2f sec and %d calls total, %s call/sec>", id, totalTimeInSeconds(), count, rateStr);
-    }
-    else
-      return String.format("<Timer %s %.2f sec and %d calls total, %.1f sec/call>", id, totalTimeInSeconds(), count, secPerCall());
+    double spc = secPerCall();
+    return String.format("<Timer %s %.2f sec and %d calls total, %.3f sec/call>",
+        id, totalTimeInSeconds(), count, spc);
   }
 
   public double countsPerMSec() {
