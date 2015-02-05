@@ -444,7 +444,7 @@ public class RerankerTrainer {
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
 
-    trainer.performPretrain = config.getBoolean("skipPretrain", true);
+    trainer.performPretrain = config.getBoolean("performPretrain", false);
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {

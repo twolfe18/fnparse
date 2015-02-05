@@ -482,7 +482,7 @@ public class Reranker {
   }
 
   public static final Timer FS_TIMER = new Timer("ForwardSearch")
-      .ignoreFirstTime(true).setPrintInterval(1);
+      .ignoreFirstTime(true).setPrintInterval(20);
 
   /**
    * TODO what this class lacks is the ability to tell when Stateless params are
@@ -603,7 +603,7 @@ public class Reranker {
             added++;
             StateSequence ss = new StateSequence(frontier, null, null, adj);
             boolean onBeam = beam.push(ss, score);
-            if (onBeam) {
+            if (useActionIndex && onBeam) {
               // Important to delay this until you know this will add to the
               // beam because this is much slower than the rest of the
               // StateSequence constructor.
