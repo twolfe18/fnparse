@@ -31,20 +31,29 @@ public class ActionIndex {
   }
 
   // These are all indexed by word
-  private ActionIndex.IndexItem[] coversToken;
-  private ActionIndex.IndexItem[] startsAt;
-  private ActionIndex.IndexItem[] endsAt;
+  private IndexItem[] coversToken;
+  private IndexItem[] startsAt;
+  private IndexItem[] endsAt;
+  private IndexItem all;
 
   public ActionIndex(int sentenceLength) {
+    this.all = null;
     this.coversToken = new ActionIndex.IndexItem[sentenceLength];
     this.startsAt = new ActionIndex.IndexItem[sentenceLength];
     this.endsAt = new ActionIndex.IndexItem[sentenceLength];
   }
 
-  private ActionIndex(ActionIndex.IndexItem[] coversToken, ActionIndex.IndexItem[] startsAt, ActionIndex.IndexItem[] endsAt) {
+  private ActionIndex(IndexItem all, ActionIndex.IndexItem[] coversToken, ActionIndex.IndexItem[] startsAt, ActionIndex.IndexItem[] endsAt) {
+    this.all = all;
     this.coversToken = coversToken;
     this.startsAt = startsAt;
     this.endsAt = endsAt;
+  }
+
+  public int size() {
+    assert coversToken.length == startsAt.length;
+    assert startsAt.length == endsAt.length;
+    return coversToken.length;
   }
 
   public String toString() {
@@ -94,13 +103,17 @@ public class ActionIndex {
     }
     return addTo;
   }
+  
+  public IndexItem allActions() {
+    return all;
+  }
 
   /**
    * Returns a linked list of Actions such that their first token was i
    * (i.e. span.start == i).
    * May return null if there are no such Actions.
    */
-  public ActionIndex.IndexItem startsAt(int i) {
+  public IndexItem startsAt(int i) {
     return startsAt[i];
   }
 
@@ -110,7 +123,7 @@ public class ActionIndex {
    *  Spans are exclusive in end).
    * May return null if there are no such Actions.
    */
-  public ActionIndex.IndexItem endsAt(int i) {
+  public IndexItem endsAt(int i) {
     return endsAt[i];
   }
 
@@ -119,9 +132,10 @@ public class ActionIndex {
    * current index.
    */
   public ActionIndex updateIndex(Action a) {
+    IndexItem all = new IndexItem(a, this.all);
     if (!a.hasSpan()) {
       // Nothing changes, can re-use this index
-      return this;
+      return new ActionIndex(all, this.coversToken, this.startsAt, this.endsAt);
     }
     // NOTE: sparse update
     Span s = a.getSpan();
@@ -133,6 +147,6 @@ public class ActionIndex {
       nCrossesToken[i] = new IndexItem(a, nCrossesToken[i]);
     nStartsAt[s.start] = new IndexItem(a, nStartsAt[s.start]);
     nEndsAt[s.end - 1] = new IndexItem(a, nEndsAt[s.end - 1]);
-    return new ActionIndex(nCrossesToken, nStartsAt, nEndsAt);
+    return new ActionIndex(all, nCrossesToken, nStartsAt, nEndsAt);
   }
 }

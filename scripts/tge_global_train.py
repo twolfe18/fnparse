@@ -63,7 +63,7 @@ def learning_curves(working_dir):
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
   for n in [100, 500, 1500, 3000]:
-    for batch_size in [1, 4, 16, 64]:
+    for batch_size in [1, 4, 16]: #, 64]:
       for l2p in [1e-6, 1e-8, 1e-10]:
         cl = Config()
         cl.l2Penalty = l2p

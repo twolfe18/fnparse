@@ -489,19 +489,19 @@ public class RerankerTrainer {
 
     if (useGlobalFeatures) {
       double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
-      double globalLearningRate = 0.1;
+      double globalLearningRate = 0.5;
       LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
 
-//      if (config.getBoolean("useRoleCooc", false)) {
-//        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
-//            globalL2Penalty, globalLearningRate));
-//      }
+      if (config.getBoolean("useRoleCooc", false)) {
+        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
+            globalL2Penalty, globalLearningRate));
+      }
 
       trainer.addParams(new GlobalFeature.ArgOverlapFeature(
           globalL2Penalty, globalLearningRate));
 
-//      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
-//          globalL2Penalty, globalLearningRate));
+      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
+          globalL2Penalty, globalLearningRate));
     }
 
     LOG.info("[main] starting training, config:");
