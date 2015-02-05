@@ -489,7 +489,7 @@ public class RerankerTrainer {
 
     if (useGlobalFeatures) {
       double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
-      double globalLearningRate = 0.5;
+      double globalLearningRate = 0.05;
       LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
 
       if (config.getBoolean("useRoleCooc", false)) {
