@@ -211,7 +211,7 @@ public class RerankerTrainer {
     LOG.info("[train1] local train");
     Reranker m = new Reranker(
         Params.Stateful.NONE, statelessParams, pretrainConf.beamSize, rand);
-//    train2(m, ip, pretrainConf);
+    train2(m, ip, pretrainConf);
 
     LOG.info("[train1] global train");
     if (statefulParams != Params.Stateful.NONE) {

@@ -22,11 +22,11 @@ class Config(tge.Item):
   ''' Represents a parser configuration, stored in __dict__ '''
 
   def __init__(self, working_dir_parent):
-  '''
-  working_dir_parent should be a directory that this
-  Config's working dir will be placed into.
-  '''
-  self.working_dir_parent = working_dir_parent
+    '''
+    working_dir_parent should be a directory that this
+    Config's working dir will be placed into.
+    '''
+    self.working_dir_parent = working_dir_parent
 
   def jars(self):
     for f in os.listdir('target'):
@@ -65,7 +65,7 @@ def learning_curves(working_dir):
   for n in [100, 500, 1500, 3000]:
     for batch_size in [1, 4, 16]: #, 64]:
       for l2p in [1e-6, 1e-8, 1e-10]:
-        cl = Config()
+        cl = Config(working_dir)
         cl.l2Penalty = l2p
         cl.pretrainBatchSize = batch_size
         cl.trainBatchSize = batch_size
@@ -74,7 +74,7 @@ def learning_curves(working_dir):
         q_local.add(cl)
         for l2pg in [1e-1, 1e-2, 1e-3]:
           for useRoleCooc in [True, False]:
-            cg = Config()
+            cg = Config(working_dir)
             cg.useRoleCooc = useRoleCooc
             cg.l2Penalty = l2p
             cg.globalL2Penalty = l2pg
@@ -109,7 +109,7 @@ if __name__ == '__main__':
     print 'please provide a working dir'
     sys.exit(-1)
   wd = sys.argv[1]
-  run(learning_curves(), wd, local=False)
+  run(learning_curves(wd), wd, local=False)
 
 
 
