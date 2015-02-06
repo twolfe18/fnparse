@@ -62,10 +62,14 @@ public interface ActionType {
   public double deltaLoss(State s, Action a, FNParse y);
 
 
-  public static final ActionType COMMIT = new ActionType() {
+  public static class CommitActionType implements ActionType {
+    private final int index;
+    public CommitActionType(int index) {
+      this.index = index;
+    }
     @Override
     public int getIndex() {
-      return 0;
+      return index;
     }
     @Override
     public String getName() {
@@ -185,12 +189,16 @@ public interface ActionType {
    * and they're DUALS of each other! (in the sense that scores of PRUNEs have
    * a term of -max_i{score(COMMIT_i)}.
    */
-  public static final Prune PRUNE = new Prune();
-  public static class Prune implements ActionType {
+  public static class PruneActionType implements ActionType {
+    private final int index;
+
+    public PruneActionType(int index) {
+      this.index = index;
+    }
 
     @Override
     public int getIndex() {
-      return 1;
+      return index;
     }
 
     @Override
@@ -410,6 +418,8 @@ public interface ActionType {
     }
   };
 
+  public static final CommitActionType COMMIT = new CommitActionType(0);
+  public static final PruneActionType PRUNE = new PruneActionType(1);
   public static final ActionType[] ACTION_TYPES = new ActionType[] {
     COMMIT,
     PRUNE,
