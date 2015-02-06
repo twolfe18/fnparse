@@ -104,17 +104,18 @@ public interface ActionType {
     @Override
     public Iterable<Action> next(State st) {
       List<Action> actions = new ArrayList<>();
+      int n = st.getSentence().size();
       int T = st.numFrameInstance();
       for (int t = 0; t < T; t++) {
         int K = st.getFrame(t).numRoles();
         for (int k = 0; k < K; k++) {
           Span a = st.committed(t, k);
           if (a != null) continue;
-          // Consider all possible actions
-          for (Span arg : st.naiveAllowableSpans(t, k)) {
-            if (st.possible(t, k, arg))
-              actions.add(new Action(t, k, getIndex(), arg));
-          }
+          // Consider all possible spans
+          for (int i = 0; i < n; i++)
+            for (int j = i + 1; j <= n; j++)
+              if (st.possible(t, k, i, j))
+                actions.add(new Action(t, k, index, Span.getSpan(i, j)));
         }
       }
       return actions;

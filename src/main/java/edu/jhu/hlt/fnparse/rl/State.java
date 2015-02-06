@@ -211,58 +211,6 @@ public class State {
     return new FNParse(s, fis);
   }
 
-  /**
-   * For now just returns all spans (with a couple simple pruning heuristics).
-   *
-   * TODO this should be fully absorbed into TransitionFunction.
-   */
-  public Iterable<Span> naiveAllowableSpans(int t, int k) {
-    // TODO consider disallowing spans that overlap with a previously committed
-    // to argument (this can be done with features, but is much slower).
-    // NOTE this is not really an issue with targets, because there are almost
-    // always width 1, which means they don't tell you anything about spans.
-    boolean verbose = false;
-    int pruned = 0;
-    List<Span> spans = new ArrayList<>();
-    spans.add(Span.nullSpan);
-    Sentence s = frames.getSentence();
-    int n = s.size();
-    for (int i = 0; i < n; i++) {
-      for (int j = i + 1; j <= n; j++) {
-
-        // TODO both of these pruning heuristics should go away when different
-        // action modes (other than COMMIT) are added,
-        // e.g. PRUNE_WIDER_THAN(k) and PRUNE_ENDING_IN_POS(s)
-        int width = j - i;
-        if (PRUNE_SPANS && width > 10) {
-          pruned++;
-          continue;
-        }
-
-        // there are certain POS that cannot end a span
-        String lastPos = s.getPos(j - 1);
-        if (PRUNE_SPANS &&
-            ("CC".equals(lastPos)
-            || "DT".equals(lastPos)
-            || "IN".equals(lastPos)
-            || "POS".equals(lastPos))) {
-          // TODO test recall of this against actual arguments
-          // TODO consider putting this into a pruning model
-          pruned++;
-          continue;
-        }
-
-        // TODO put a span pruning model here?
-        spans.add(Span.getSpan(i, j));
-      }
-    }
-    if (verbose) {
-    LOG.warn("[naiveAllowableSpans] pruned " + pruned
-        + " spans, REMOVE this and support a richer set of Actions!");
-    }
-    return spans;
-  }
-
   public Frame getFrame(int t) {
     return frames.getFrameInstance(t).getFrame();
   }
