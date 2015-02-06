@@ -66,6 +66,8 @@ public class Reranker {
   public static boolean LOG_UPDATE = false;
   public static boolean LOG_FORWARD_SEARCH = false;
 
+  // NOTE: Do not change this without considerable consideration. This is related
+  // to how margins are computed, and I think a lot will break if this isn't 1.
   public static final double COST_FN = 1d;
 
   // Higher score is better, this puts highest scores at the end of the list
@@ -540,7 +542,8 @@ public class Reranker {
         LOG.info(desc + " starting...");
 
       TransitionFunction transF =
-          new ActionDrivenTransitionFunction(actionTypes);
+          //new ActionDrivenTransitionFunction(actionTypes);
+          new TransitionFunction.Tricky(model);
       StateSequence frontier = new StateSequence(null, null, initialState, null);
       final boolean useActionIndex = hasStatefulFeatures();
       if (useActionIndex)
@@ -560,7 +563,8 @@ public class Reranker {
           logStateInfo(desc + " @ iter=" + iter, s);
 
         int added = 0, actionsTried = 0;
-        for (Action a : transF.nextStates(frontier)) {
+        Iterable<Action> nextStates = transF.nextStates(frontier);
+        for (Action a : nextStates) {
           if (verbose && LOG_FORWARD_SEARCH)
             LOG.info("trying out " + a);
 
@@ -571,11 +575,14 @@ public class Reranker {
               LOG.info("skipping due to bFunc");
             if (solvingMax) assert bias < 0;
             else assert bias > 0;
+            transF.observeAdjoints(null);
             continue;
           }
 
           // model score
-          Adjoints adj = model.score(s, ai, a);
+          Adjoints adj = a instanceof Adjoints
+              ? (Adjoints) a : model.score(s, ai, a);
+          transF.observeAdjoints(adj);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
           if (!solvingMax)

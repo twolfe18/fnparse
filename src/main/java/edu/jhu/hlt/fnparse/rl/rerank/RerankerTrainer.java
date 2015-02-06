@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.params.ActionTypeParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -424,13 +425,12 @@ public class RerankerTrainer {
     assert args.length % 2 == 1;
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
-    //config.putAll(System.getProperties());
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
     File workingDir = config.getOrMakeDir("workingDir");
     boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
     boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
     boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
-    boolean useFeatureHashing = config.getBoolean("useFeatureHashing", false);
+    boolean useFeatureHashing = config.getBoolean("useFeatureHashing", true);
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
 
     int nTrain = config.getInt("nTrain", 100);
@@ -445,6 +445,8 @@ public class RerankerTrainer {
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
+
+    //Reranker.LOG_FORWARD_SEARCH = true;
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
@@ -492,7 +494,7 @@ public class RerankerTrainer {
         trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
       }
 
-      //trainer.addParams(new ActionTypeParams(l2Penalty));
+      trainer.addParams(new ActionTypeParams(l2Penalty));
     }
 
     if (useGlobalFeatures) {

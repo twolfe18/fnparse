@@ -20,18 +20,22 @@ public class Action {
 
   private int hashcode;
 
-  public Action(int t, int k, int mode, Span s) {
+  public Action(int t, int k, int mode, int start, int end) {
     this.t = t;
     this.k = k;
     this.mode = mode;
-    this.start = s.start;
-    this.end = s.end;
-    assert start >= 0;
-    assert start < end || s == Span.nullSpan;
+    this.start = start;
+    this.end = end;
 
     // Must be last
     this.hashcode = hc1();
     //this.hashcode = hc2();
+  }
+
+  public Action(int t, int k, int mode, Span s) {
+    this(t, k, mode, s.start, s.end);
+    assert start >= 0;
+    assert start < end || s == Span.nullSpan;
   }
 
   public boolean hasSpan() {
@@ -74,7 +78,7 @@ public class Action {
       ^ (k << 18)
       ^ (t << 24);
   }
-  /** @deprecated */
+  /** @deprecated this performs terribly */
   public int hc2() {
     // 17 103 211 331 449 587 709 853 991 1117 1270
     return start + (end - start) * 17 + mode * 331 + k * 700 + t * 1279;

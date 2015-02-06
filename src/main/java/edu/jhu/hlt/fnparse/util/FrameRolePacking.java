@@ -12,15 +12,16 @@ public class FrameRolePacking {
 
   private int specialValues;  // TODO can be used to store more special values per frame
   private int[] roleOffsets;
+  private int size;
 
   public FrameRolePacking() {
     this.specialValues = 1;
     int n = FrameIndex.framesInFrameNet + 1;
     roleOffsets = new int[n];
-    int offset = 0;
+    size = 0;
     for (Frame f : FrameIndex.getInstance().allFrames()) {
-      roleOffsets[f.getId()] = offset;
-      offset += f.numRoles() + specialValues;
+      roleOffsets[f.getId()] = size;
+      size += f.numRoles() + specialValues;
     }
   }
 
@@ -31,5 +32,9 @@ public class FrameRolePacking {
   public int index(Frame f, int k) {
     assert k < f.numRoles();
     return roleOffsets[f.getId()] + k;
+  }
+
+  public int size() {
+    return size;
   }
 }
