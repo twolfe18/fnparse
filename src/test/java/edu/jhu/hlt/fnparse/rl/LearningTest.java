@@ -15,10 +15,8 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
-import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
@@ -117,8 +115,8 @@ public class LearningTest {
         LOG.info("[noTrainPrereq] testing " + y.getId() + " probRecurse=" + probRecurse);
         State init = State.initialState(y);
         StateSequence ss = new StateSequence(null, null, init, null);
-        ActionDrivenTransitionFunction oracleScoreTf =
-            new ActionDrivenTransitionFunction(ActionType.COMMIT);
+        TransitionFunction oracleScoreTf =
+            new TransitionFunction.Tricky(theta);
 
         // Initial state should have an Action that is consistent with the label
         // Recursively?
@@ -186,13 +184,7 @@ public class LearningTest {
     // Show the parses one by one
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
-      FNParse yhat;
-      if (model.useItemsForPruning) {
-        FNTagging frames = DataUtil.convertParseToTagging(ip.label(i));
-        yhat = model.predict(frames, ip.items(i));
-      } else {
-        yhat = model.predict(DataUtil.convertParseToTagging(y));
-      }
+      FNParse yhat = model.predict(DataUtil.convertParseToTagging(y));
       SentenceEval se = new SentenceEval(y, yhat);
       double f1 = BasicEvaluation.argOnlyMicroF1.evaluate(se);
       double prec = BasicEvaluation.argOnlyMicroPrecision.evaluate(se);
@@ -237,7 +229,7 @@ public class LearningTest {
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
       model = new Reranker(Stateful.NONE, oracle, beamWidth, rand);
-      model.useItemsForPruning = true;
+      Assert.assertTrue("I dumped support for using items for pruning", false);
     }
 
     evaluate(model, ip, 0d, 0d);

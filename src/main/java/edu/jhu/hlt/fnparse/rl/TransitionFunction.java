@@ -6,8 +6,6 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import com.google.common.collect.Iterables;
-
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 
@@ -138,30 +136,6 @@ public interface TransitionFunction {
       public Iterator<Action> iterator() {
         return this;
       }
-    }
-  }
-
-  /**
-   * Calls next on a specified set of ActionTypes and stitches them together.
-   */
-  public static class ActionDrivenTransitionFunction implements TransitionFunction {
-
-    private ActionType[] actionTypes;
-
-    public ActionDrivenTransitionFunction(ActionType... actionTypes) {
-      this.actionTypes = actionTypes;
-    }
-
-    @Override
-    public Iterable<Action> nextStates(StateSequence s) {
-      State st = s.getCur();
-      int n = actionTypes.length;
-      List<Iterable<Action>> inputs = new ArrayList<>();
-      for (int i = 0; i < n; i++) {
-        Iterable<Action> ita = actionTypes[i].next(st);
-        inputs.add(ita);
-      }
-      return Iterables.concat(inputs);
     }
   }
 }

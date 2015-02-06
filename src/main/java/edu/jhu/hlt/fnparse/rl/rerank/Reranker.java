@@ -24,7 +24,6 @@ import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
-import edu.jhu.hlt.fnparse.rl.TransitionFunction.ActionDrivenTransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
@@ -86,10 +85,7 @@ public class Reranker {
   private Params.Stateless thetaStateless;
 
   private Random rand;
-  private ActionType[] actionTypes;
   private int beamWidth;
-  public boolean useItemsForPruning = false; // Otherwise use them as features
-  // via Params, in e.g. PriorScoreParams
 
   private MultiTimer timer = new MultiTimer();
 
@@ -97,10 +93,6 @@ public class Reranker {
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
     this.beamWidth = beamWidth;
-    this.actionTypes = new ActionType[] {
-        ActionType.COMMIT,
-        //ActionType.COMMIT_AND_PRUNE,
-    };
     this.rand = rand;
   }
 
@@ -180,7 +172,7 @@ public class Reranker {
 
   public State randomDecodingState(FNTagging frames, Random rand) {
     TransitionFunction transF =
-        new ActionDrivenTransitionFunction(actionTypes);
+        new TransitionFunction.Tricky(Params.Stateful.NONE);
     State init = State.initialState(frames);
     StateSequence frontier = new StateSequence(null, null, init, null);
     int TK = init.numFrameRoleInstances();
@@ -233,34 +225,16 @@ public class Reranker {
     return yhat;
   }
   public FNParse predict(FNTagging frames) {
-    assert !useItemsForPruning : "need the items then!";
     if (frames.numFrameInstances() == 0)
       return new FNParse(frames.getSentence(), Collections.emptyList());
     return predict(State.initialState(frames));
   }
-  public FNParse predict(FNTagging frames, List<Item> items) {
-    assert useItemsForPruning : "probably should use the other one";
-    if (frames.numFrameInstances() == 0)
-      return new FNParse(frames.getSentence(), Collections.emptyList());
-    return predict(State.initialState(frames, items));
-  }
 
   // Batch predict
   public <T extends FNTagging> List<FNParse> predict(List<T> frames) {
-    assert !useItemsForPruning : "need the items then!";
     List<FNParse> r = new ArrayList<>();
     for (T t : frames)
       r.add(predict(t));
-    return r;
-  }
-  public List<FNParse> predict(ItemProvider ip) {
-    assert useItemsForPruning : "probably should use the other one";
-    List<FNParse> r = new ArrayList<>();
-    int n = ip.size();
-    for (int i = 0; i < n; i++) {
-      FNTagging frames = DataUtil.convertParseToTagging(ip.label(i));
-      r.add(predict(frames, ip.items(i)));
-    }
     return r;
   }
 
@@ -275,7 +249,6 @@ public class Reranker {
     LOG.info(desc + " #committed=" + init.numCommitted()
         + " #unCommitted=" + init.numUncommitted());
     StringBuilder sb = new StringBuilder("action types:");
-    for (ActionType at : actionTypes) sb.append(" " + at.getName());
     LOG.info(desc + " " + sb.toString());
     LOG.info(desc + " " + init.show());
   }

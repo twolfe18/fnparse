@@ -26,7 +26,6 @@ import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
 import edu.jhu.hlt.fnparse.experiment.grid.FinalResults;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.HasId;
 
 public interface ItemProvider {
@@ -36,13 +35,14 @@ public interface ItemProvider {
 
   public static List<Item> allItems(FNParse y) {
     List<Item> l = new ArrayList<>();
-    State s = State.initialState(y);
+    int n = y.getSentence().size();
     int T = y.numFrameInstances();
     for (int t = 0; t < T; t++) {
       int K = y.getFrameInstance(t).getFrame().numRoles();
       for (int k = 0; k < K; k++)
-        for (Span arg : s.naiveAllowableSpans(t, k))
-          l.add(new Item(t, k, arg, 0d));
+        for (int i = 0; i < n; i++)
+          for (int j = i + 1; j <= n; j++)
+            l.add(new Item(t, k, Span.getSpan(i, j), 0d));
     }
     return l;
   }
