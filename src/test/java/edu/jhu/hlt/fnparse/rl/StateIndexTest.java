@@ -1,11 +1,9 @@
 package edu.jhu.hlt.fnparse.rl;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
 
 import java.util.BitSet;
 import java.util.List;
-import java.util.Random;
 
 import org.apache.log4j.Logger;
 import org.junit.Test;
@@ -16,12 +14,10 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.StateIndex.TKS;
-import edu.jhu.hlt.fnparse.util.RandomSpan;
 
 public class StateIndexTest {
   public static final Logger LOG = Logger.getLogger(StateIndexTest.class);
 
-  private Random rand = new Random(9001);
   private int thoroughness = 1;
 
   // TODO similar to testParses(), have a method called testIndices() which returns
@@ -64,36 +60,6 @@ public class StateIndexTest {
                 assertEquals(end, tks.end);
               }
             }
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * @deprecated updating is now done through ActionType.apply and unapply
-   */
-  @Test
-  public void testUpdate() {
-    for (FNParse y : testParses()) {
-      for (int iter = 0; iter < thoroughness * 2; iter++) {
-        int n = y.getSentence().size();
-        StateIndex si = new StateIndex.SpanMajor(y.getFrameInstances(), n);
-        int T = y.numFrameInstances();
-        for (int t = 0; t < T; t++) {
-          int K = y.getFrameInstance(t).getFrame().numRoles();
-          for (int k = 0; k < K; k++) {
-            Span span = RandomSpan.draw(n, rand);
-            Action a = new Action(t, k, ActionType.COMMIT.getIndex(), span);
-            BitSet poss = State.initialState(y).getPossible();
-            int idx = si.index(t, k, span.start, span.end);
-            assertEquals(true, poss.get(idx));
-            BitSet poss2 = si.update(a, poss);
-            assertNotEquals(poss, poss2);
-            assertEquals(true, poss.get(idx));
-            assertEquals(false, poss2.get(idx));
-            assertPossibleRange(false, poss2, si, y, t, k);
-            assertPossibleRange(true, poss, si, y, t, k);
           }
         }
       }

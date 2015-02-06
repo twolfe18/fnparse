@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl;
 
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -17,13 +16,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
  * @author travis
  */
 public interface StateIndex {
-
-  /**
-   * Returns a BitSet which reflects the state after applying the given action.
-   * 
-   * @deprecated this has now moved to ActionType.apply and unapply
-   */
-  public BitSet update(Action a, BitSet currentState);
 
   /**
    * Returns the index of the given (t,k,span).
@@ -58,54 +50,6 @@ public interface StateIndex {
   // TODO include other methods like eliminate all possibilities that match
   // pieces of (t,k,start,end), e.g. "all spans more than 10 words from t"
   // TODO this means that the bitset will need to be internal to this class.
-
-  /**
-   * @deprecated
-   */
-  public static BitSet naiveUpdate(Action a, BitSet currentState, StateIndex si) {
-    assert false : "use ActionType.apply";
-    BitSet next = new BitSet(currentState.cardinality());
-    next.xor(currentState);
-    if (a.mode == ActionType.COMMIT.getIndex() || a.mode == ActionType.COMMIT_AND_PRUNE.getIndex()) {
-
-      // Commit to this (t,k)
-      int n = si.sentenceSize();
-      for (int i = 0; i < n; i++)
-        for (int j = i + 1; j <= n; j++)
-          next.set(si.index(a.t, a.k, i, j), false);
-
-      // Rule out other spans
-      if (a.mode == ActionType.COMMIT_AND_PRUNE.getIndex()) {
-        assert a.start >= 0;
-        assert a.width() > 1;
-        for (int t = 0; t < si.numFrameInstances(); t++) {
-          for (int k = 0; k < si.numRoles(t); k++) {
-
-            if (t == a.t && k == a.k)
-              continue;
-
-            // Spans that end in this span.
-            for (int i = 0; i < a.start; i++) {
-              for (int j = a.start; j < a.end; j++) {
-                next.set(si.index(t, k, i, j), false);
-              }
-            }
-
-            // Spans that start in this span.
-            for (int i = a.start + 1; i < a.end; i++) {
-              for (int j = a.end; j <= n; j++) {
-                next.set(si.index(t, k, i, j), false);
-              }
-            }
-          }
-        }
-      }
-
-    } else {
-      throw new RuntimeException("not supported");
-    }
-    return next;
-  }
 
   static class SpanMajor implements StateIndex {
     private int n;
@@ -185,11 +129,6 @@ public interface StateIndex {
       }
 
       return new TKS(t, k, start, end);
-    }
-
-    @Override
-    public BitSet update(Action a, BitSet currentState) {
-      return naiveUpdate(a, currentState, this);
     }
 
     @Override
