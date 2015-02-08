@@ -9,8 +9,16 @@ public class RandomSpan {
 
   private final Random rand;
 
+  public RandomSpan() {
+    this(new Random(9001));
+  }
+
   public RandomSpan(Random rand) {
     this.rand = rand;
+  }
+
+  public void setSeed(int seed) {
+    rand.setSeed(seed);
   }
 
   public Span draw(int n) {

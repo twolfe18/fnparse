@@ -3,21 +3,25 @@ package edu.jhu.hlt.fnparse.rl;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.List;
 
-import edu.jhu.gm.feat.FeatureVector;
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.hlt.fnparse.util.FrameRolePacking;
-import edu.jhu.prim.vector.IntDoubleDenseVector;
-import edu.jhu.prim.vector.IntDoubleVector;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 
 /**
  * A class representing a type of Action which provides the information needed
  * to plug into ForwardSearch/learning.
+ *
+ * RULE: Every Action must be monotonic in State.possible (i.e. it eliminates at
+ * least one possible item) so that the search space is guaranteed to be finite.
  *
  * Previously, I had required (via this interface) that reverse search be
  * supported (by implementing prev() and unapply()), but this became inefficient
@@ -42,10 +46,7 @@ public interface ActionType {
 
   /**
    * Given action a (of this action type), and a current State's possible items
-   * b, return the BitSet resulting from applying the given action.
-   *
-   * Remember, this must be monotonic in State.possible, so this could be
-   * represented as a bitwise &=
+   * b, return the State resulting from applying the given action.
    */
   public State apply(Action a, State s);
 
@@ -57,36 +58,45 @@ public interface ActionType {
 
   /**
    * The increase in the loss function associated with taking action a in state
-   * s when the correct answer is y.
+   * s when the correct answer is y. Should not return negative values
+   * and 0 means no loss.
    */
   public double deltaLoss(State s, Action a, FNParse y);
 
 
   public static class CommitActionType implements ActionType {
+    public static final Logger LOG = Logger.getLogger(CommitActionType.class);
     private final int index;
+
     public CommitActionType(int index) {
       this.index = index;
     }
+
     @Override
     public int getIndex() {
       return index;
     }
+
     @Override
     public String getName() {
       return "COMMIT";
     }
+
     @Override
     public String toString() {
       return getName();
     }
+
     @Override
     public State apply(Action a, State s) {
+      assert a.mode == index;
+
       // Copy the possible BitSet
       BitSet cur = s.getPossible();
       BitSet next = new BitSet(cur.cardinality());
       next.xor(cur);
 
-      // Update possible
+      // Eliminate all other spans that this (t,k) could be assigned to.
       StateIndex si = s.getStateIndex();
       int n = si.sentenceSize();
       for (int i = 0; i < n; i++)
@@ -112,10 +122,23 @@ public interface ActionType {
           Span a = st.committed(t, k);
           if (a != null) continue;
           // Consider all possible spans
-          for (int i = 0; i < n; i++)
-            for (int j = i + 1; j <= n; j++)
-              if (st.possible(t, k, i, j))
+          boolean somePossible = false;
+          for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j <= n; j++) {
+              if (st.possible(t, k, i, j)) {
                 actions.add(new Action(t, k, index, Span.getSpan(i, j)));
+                somePossible = true;
+              }
+            }
+          }
+          // A secondary role of this method is to clean up after PRUNE,
+          // which man prune away all possibilities for a (t,k) without
+          // realizing it, as it only checks whether the items it is pruning
+          // are possible rather than the items it is *not pruning* (for a given t,k)
+          if (!somePossible) {
+            LOG.info("COMMIT.next cleaned up a (t,k) from PRUNE");
+            st.noPossibleItems(t, k);
+          }
         }
       }
       return actions;
@@ -125,6 +148,7 @@ public interface ActionType {
     public double deltaLoss(State s, Action a, FNParse y) {
       if (y == null)
         throw new IllegalArgumentException("you need a label!");
+      // NOTE: Do not change these costs!
       final double costFP = 1d;
       final double costFN = 1d;
       Span hyp = a.getSpanSafe();
@@ -191,6 +215,7 @@ public interface ActionType {
    * a term of -max_i{score(COMMIT_i)}.
    */
   public static class PruneActionType implements ActionType {
+    public static final Logger LOG = Logger.getLogger(PruneActionType.class);
     private final int index;
 
     public PruneActionType(int index) {
@@ -243,13 +268,69 @@ public interface ActionType {
           + "TransitionFunction.Tricky and should use the other method instead.");
     }
 
-    public List<PruneAdjoints> next(State s, List<Adjoints> commitActions) {
+    // TODO I'm beginning to think that I want to be handed the COMMIT Adjoints
+    // in an indexed data structure where I can just ask for 0 or 1 Adjoints
+    // given (t,k,i,j)
+    // This probably isn't a problem because I can force ActionType.COMMIT.next
+    // to generate this data structure, which is passed to TransitionFunction.Tricky
+    // then here.
+    public List<PruneAdjoints> next(State s,
+        ActionSpanIndex<Adjoints.HasSpan> commitAdjoints,
+        Params.PruneThreshold tauParams,
+        boolean onlySimplePrunes) {
 
       List<PruneAdjoints> prunes = new ArrayList<>();
+      
+      
+      // Constraints:
 
-      // 1) crossing
-      // 1a) any committed action that we haven't chosen a crossing prune action for
-      // TODO
+      // 1) every PRUNE action must eliminate at least 1 possible item
+      //    this can be checked here.
+
+      // 2) every PRUNE must also have the Adjoints of a COMMIT action
+      //    the COMMIT action must be possible(t,k,i,j) (and implicitly !committed[t][k])
+
+      // 3) if !possible(t,k,i,j) \forall i,j => committed must be updated with i,j
+      //    possible is only ever updated at application time
+      //    if a COMMIT action is taken, clear how to enforce this
+      //    if a PRUNE action is taken, then... we must check
+      //      \exists i,j s.t. possible(t,k,i,j) && !(i,j).prunedBy(this)
+      //      we can do this check at PRUNE construction or application time
+      //      if @CONSTRUCTION: cache this info so at application we can know if we should flip committed
+      //      if @APPLICATOIN: loop at application to see if committed needs to be updated
+
+
+      // Think of a PRUNE action as a set of COMMIT actions.
+      // Let S^c be the complement of S (assume PRUNE pertains to one t,k)
+      // 1 says that we must loop over the set PRUNE, checking possible
+      // 2 says the same thing
+      // 3 says that we need to check PRUNE^c when deciding to update State.commmitted or not
+      // I'm worried about looping over PRUNE^c
+      
+      // NOTE: If you only used PRUNE(t,k) (i.e. all i,j for a given t,k)
+      // then you never need to loop over PRUNE^c, because its emptySet!
+      
+      // What happens if you just fail to update committed[t][k]?
+      // i.e. [committed[t][k] == null] => ![\exists i,j s.t. possible(t,k,i,j)]
+      // but not bidirectional/iff.
+      // COMMIT.next will try to loop over everything, checking possible!
+      // AHA, we can just make COMMIT.next update committed!
+      // AND COMMIT.next will only run if we choose that action that lead to the partial update (of possible but not committed!)
+      
+      
+      // AH! We can use State.possible to determine which pruning actions
+      // should be introduced.
+      
+
+
+      // 1) crossing span(s)
+      // 1a) (i,j) = the span of the last COMMIT action
+      // 1b) every span (i,j) s.t. (i,j) is the span of a previous COMMIT action
+      // 1c) every span (i,j) s.t. i is the start t and j is the end of (t+d) where d >= 1
+      // 1d) every span (i,j) s.t. i is the start of a span filling (t,k) and j is the end of t (and the reverse for right-args)
+      // 1e) every span (i,j) s.t. i is the start of an arg and j is the end of an arg
+      
+
 
       // 2) contained
       int n = s.getSentence().size();
@@ -263,62 +344,104 @@ public interface ActionType {
         int K = f.numRoles();
         for (int k = 0; k < K; k++) {
 
-          // TODO upon construction, here, pass along an indicator
-          // feature/string/int saying how we made this pruning rule
+          // 2a) all words (i.e. COMMIT to nullSpan for this t,k)
+          // (nothing is contained within nullSpan)
+          tryAddPruneNotContainedIt(
+              t, k, Span.nullSpan, s, commitAdjoints, "nullSpan", tauParams, onlySimplePrunes, prunes);
 
-          // 2a) left/right of target
-          if (leftOfTarget != null)
-            prunes.add(pruneNotContainedIn(t, k, leftOfTarget));
-          if (rightOfTarget != null)
-            prunes.add(pruneNotContainedIn(t, k, rightOfTarget));
-          if (k == 0) {
-            if (leftOfTarget != null)
-              prunes.add(pruneNotContainedIn(t, leftOfTarget));
-            if (rightOfTarget != null)
-              prunes.add(pruneNotContainedIn(t, rightOfTarget));
-          }
+          if (onlySimplePrunes)
+            continue;
 
-          // 2b) inside boundary set by K targets in both directions
+          // 2b) left/right of target
+          tryAddPruneNotContainedIt(
+              t, k, leftOfTarget, s, commitAdjoints, "leftOfTarget", tauParams, onlySimplePrunes, prunes);
+          tryAddPruneNotContainedIt(
+              t, k, rightOfTarget, s, commitAdjoints, "rightOfTarget", tauParams, onlySimplePrunes, prunes);
+
+          // 2c) inside boundary set by K targets in both directions
           // TODO
 
-          // 2c) R words from target
+          // 2d) R words from target
           for (int dist : Arrays.asList(8, 16)) {
-            if (target.start - dist < 0 || target.end > n)
+            if (target.start - dist < 0 || target.end + dist > n)
               continue;
             Span window = Span.getSpan(target.start - dist, target.end + dist);
-            prunes.add(pruneNotContainedIn(t, k, window));
-            if (k == 0)
-              prunes.add(pruneNotContainedIn(t, window));
+            tryAddPruneNotContainedIt(
+                t, k, window, s, commitAdjoints, "window" + dist, tauParams, onlySimplePrunes, prunes);
           }
         }
-      }
-
-      // Give PRUNE actions the Adjoints/scores/features of the COMMIT actions
-      // that they prohibit.
-      // TODO is there an efficient way to do this? I think a real answer for
-      // this will have to wait, just do n^2 loop for now.
-      for (PruneAdjoints p : prunes) {
-        List<Adjoints> commitsThatWillBePruned = new ArrayList<>();
-        for (Adjoints comm : commitActions)
-          if (isPrunedBy(comm.getAction(), p))
-            commitsThatWillBePruned.add(comm);
-        Frame f = s.getFrame(p.t);
-        Adjoints tau = getThresholdFeatures(f, p.k);
-        p.turnIntoAdjoints(tau, commitsThatWillBePruned);
       }
 
       return prunes;
     }
 
-    // TODO This ActionType currently has params/weights, and these should get
-    // moved out to something non-global.
-    private FrameRolePacking frPacking = new FrameRolePacking();
-    private IntDoubleVector tauWeights = new IntDoubleDenseVector(frPacking.size() + 1);
-    private Adjoints getThresholdFeatures(Frame frame, int k) {
-      FeatureVector fv = new FeatureVector();
-      fv.add(frPacking.index(frame, k), 1d);
-      fv.add(frPacking.index(frame), 1d);
-      return new Adjoints.Vector(null, tauWeights, fv, 0d, 1d);
+    /**
+     * Checks that there is at least one item that would be prune by only allowing
+     * (t,k,arg) s.t. arg in container, and if there is, adds this PRUNE action
+     * to addTo.
+     *
+     * TODO take a (t,k,i,j)-indexed COMMIT Action data structure so that
+     * we can complete the PruneAdjoints.
+     *
+     * @param container may be null, and nothing will be added to addTo.
+     * @param providenceFeature is how this span was chosen, e.g. "leftOfTarget"
+     */
+    private void tryAddPruneNotContainedIt(
+        int t, int k, Span container,
+        State s,
+        ActionSpanIndex<Adjoints.HasSpan> commitActions,
+        String providenceFeature,
+        Params.PruneThreshold tauParams,
+        boolean onlySimplePrunes,
+        Collection<PruneAdjoints> addTo) {
+
+      if (container == null)
+        return;
+
+      FNTagging frames = s.getFrames();
+
+      // (t,k)
+      LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=" + k
+          + " container=" + container.shortString() + " providence=" + providenceFeature);
+      List<Adjoints.HasSpan> tkCommActions = new ArrayList<>();
+      commitActions.containedIn(t, k, container, tkCommActions);
+      if (tkCommActions.size() > 0) {
+        PruneAdjoints tkPrune = pruneNotContainedIn(t, k, container);
+        Adjoints tkTau = tauParams.score(frames, tkPrune, providenceFeature);
+        tkPrune.turnIntoAdjoints(tkTau, tkCommActions);
+        addTo.add(tkPrune);
+      }
+
+      if (onlySimplePrunes)
+        return;
+
+      // (t,*)
+      if (k == 0) {   // don't double-create this action
+        LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=*"
+            + " container=" + container.shortString() + " providence=" + providenceFeature);
+        List<Adjoints.HasSpan> tCommActions = new ArrayList<>();
+        commitActions.containedIn(t, container, tCommActions);
+        if (tCommActions.size() > 0) {
+          PruneAdjoints tPrune = pruneNotContainedIn(t, container);
+          Adjoints tTau = tauParams.score(frames, tPrune, providenceFeature);
+          tPrune.turnIntoAdjoints(tTau, tCommActions);
+          addTo.add(tPrune);
+        }
+      }
+
+      // (*,*)
+      if (t == 0 && k == 0) {   // don't double-create this action
+        LOG.info("[tryAddPruneNotContainedIn] t=* k=*"
+            + " container=" + container.shortString() + " providence=" + providenceFeature);
+        List<Adjoints.HasSpan> allCommActions = new ArrayList<>();
+        commitActions.containedIn(container, allCommActions);
+        if (allCommActions.size() > 0) {
+          PruneAdjoints prune = pruneNotContainedIn(container);
+          Adjoints tau = tauParams.score(frames, prune, providenceFeature);
+          prune.turnIntoAdjoints(tau, allCommActions);
+          addTo.add(prune);
+        }
+      }
     }
 
     @Override

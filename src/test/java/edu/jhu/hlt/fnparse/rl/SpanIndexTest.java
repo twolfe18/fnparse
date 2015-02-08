@@ -15,14 +15,14 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.RandomSpan;
 
-public class ActionIndexTest {
+public class SpanIndexTest {
   private Random rand = new Random(9001);
   private RandomSpan randSpanGen = new RandomSpan(rand);
 
   @Test
   public void test0() {
     int n = 10;
-    ActionIndex ai = new ActionIndex(n);
+    SpanIndex<Action> ai = new SpanIndex<Action>(n);
 
     // After initialization, should be empty
     for (int i = 0; i < n; i++) {
@@ -36,19 +36,19 @@ public class ActionIndexTest {
 
     Span s1 = Span.getSpan(3, 6);
     Action a1 = new Action(0, 0, 0, s1);
-    ActionIndex ai2 = ai.updateIndex(a1);
+    SpanIndex<Action> ai2 = ai.persistentUpdate(a1);
     System.out.println("ai2: " + ai2);
 
     // startsAt
     assertNotNull(ai2.startsAt(3));
-    assertTrue(ai2.startsAt(3).action == a1);
+    assertTrue(ai2.startsAt(3).payload == a1);
     for (int i = 0; i < n; i++)
       if (i != 3)
         assertNull(ai2.startsAt(i));
 
     // endsAt
     assertNotNull(ai2.endsAt(5));
-    assertTrue(ai2.endsAt(5).action == a1);
+    assertTrue(ai2.endsAt(5).payload == a1);
     for (int i = 0; i < n; i++)
       if (i != 5)
         assertNull(ai2.endsAt(i));
@@ -93,12 +93,12 @@ public class ActionIndexTest {
   @Test
   public void visual() {
     int n = 10;
-    ActionIndex ai = new ActionIndex(n);
+    SpanIndex<Action> ai = new SpanIndex<>(n);
     for (int i = 0; i < 20; i++) {
       Span s = randSpanGen.draw(n);
       Action a = new Action(0, 0, 0, s);
       System.out.println("adding: " + a);
-      ai = ai.updateIndex(a);
+      ai = ai.persistentUpdate(a);
       System.out.println(ai);
       System.out.println();
     }

@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.rl;
 
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -8,6 +7,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.util.FakeIterable;
 
 public interface TransitionFunction {
 
@@ -36,23 +36,38 @@ public interface TransitionFunction {
    */
   public static class Tricky implements TransitionFunction {
     public static final Logger LOG = Logger.getLogger(Tricky.class);
-    private Actions useOnce;  // Iterable<Action> for the StateSequence provided at each call of nextStates()
+
+    // These are particular to each call of nextStates
+    // The first three are needed to compute scores when ForwardSearch skips the
+    // model score due to bFunc.
     private Params.Stateful model;
-    public Tricky(Params.Stateful model) {
-      this.useOnce = null;
+    private State state;
+    private SpanIndex<Action> previousActions;
+    private Actions allActionIter;
+
+    // Used to compute tau
+    private Params.PruneThreshold tauParams;
+
+    // If true, only build PRUNE actions which apply to all spans for a (t,k)
+    private boolean onlySimplePrunes = true;
+
+    public Tricky(Params.Stateful model, Params.PruneThreshold tauParams) {
       this.model = model;
+      this.tauParams = tauParams;
     }
+
     @Override
     public Iterable<Action> nextStates(StateSequence ss) {
-      State s = ss.getCur();
-      ActionIndex ai = ss.getActionIndex();
-      List<Action> commits = (List<Action>) ActionType.COMMIT.next(s);
-      useOnce = this.new Actions(s, ai, commits);
-      return useOnce;
+      state = ss.getCur();
+      previousActions = ss.getActionIndex();
+      List<Action> commits = (List<Action>) ActionType.COMMIT.next(state);
+      allActionIter = this.new Actions(commits);
+      return new FakeIterable<>(allActionIter);
     }
+
     @Override
     public void observeAdjoints(Adjoints scoredAction) {
-      useOnce.observeAdjoints(scoredAction);
+      allActionIter.observeAdjoints(scoredAction);
     }
 
     /**
@@ -64,29 +79,26 @@ public interface TransitionFunction {
      * ActionType.PRUNE.next(State,FNParse,commitActions) to get the rest of the
      * prune Action/Adjoints!
      */
-    class Actions implements Iterable<Action>, Iterator<Action> {
-      private State state;
-      private ActionIndex ai;
-      private List<Action> commitActions;
-      private List<Adjoints> commitAdjoints;
-      private int commitActionsPtr; // points at the next elem of commitActions to pop
-      private List<PruneAdjoints> prunes;
-      private int prunesPtr;  // points at the next elem of prunes to pop
+    class Actions implements Iterator<Action> {
 
-      public Actions(State state, ActionIndex ai, List<Action> commitActions) {
-        this.state = state;
-        this.ai = ai;
+      // Stores scores of COMMIT actions, either from observeAdjoints or from
+      // computing them within this class.
+      private ActionSpanIndex<Adjoints.HasSpan> commitAdjoints;
+
+      // COMMIT actions and the state of the iterator through them.
+      private List<Action> commitActions;
+      private int commitActionsPtr;
+
+      // PRUNE actions and the state of the iterator through them.
+      private List<PruneAdjoints> prunes;
+      private int prunesPtr;
+
+      public Actions(List<Action> commitActions) {
         this.commitActions = commitActions;
-        this.commitAdjoints = new ArrayList<>();
         this.commitActionsPtr = 0;
         this.prunesPtr = 0;
-      }
-
-      public void buildPruneActions() {
-        assert prunes == null;
-        assert commitActionsPtr == commitActions.size();
-        assert commitActions.size() == commitAdjoints.size();
-        prunes = ActionType.PRUNE.next(state, commitAdjoints);
+        int n = state.getSentence().size();
+        this.commitAdjoints = new ActionSpanIndex.SpaceEfficient<>(n);
       }
 
       @Override
@@ -108,7 +120,16 @@ public interface TransitionFunction {
           return c;
         } else {
           if (commitActionsPtr == commitActions.size()) {
-            buildPruneActions();
+            assert prunes == null;
+            assert commitActionsPtr == commitActions.size();
+            prunes = ActionType.PRUNE.next(state, commitAdjoints, tauParams, onlySimplePrunes);
+
+            assert prunes.size() > 0 : "no prunes?";
+
+            assert commitActions.size() == commitAdjoints.size();
+            int n = state.getSentence().size();
+            LOG.info("[Trick.Actions] nWords=" + n + " nCommits=" + commitActions.size() + " nPrunes=" + prunes.size());
+
             commitActionsPtr++; // So that we only do this once
           }
           return prunes.get(prunesPtr++);
@@ -125,16 +146,11 @@ public interface TransitionFunction {
           if (commitScores == null) {
             //LOG.info("[Trick.Actions observeAdjoints] computing adjoints because they were not provided");
             Action a = commitActions.get(commitActionsPtr - 1);
-            commitScores = model.score(state, ai, a);
+            commitScores = model.score(state, previousActions, a);
           }
-          commitAdjoints.add(commitScores);
+          commitAdjoints.mutableUpdate(new Adjoints.HasSpan(commitScores));
         }
         // else these are Adjoints for a PRUNE Action
-      }
-
-      @Override
-      public Iterator<Action> iterator() {
-        return this;
       }
     }
   }

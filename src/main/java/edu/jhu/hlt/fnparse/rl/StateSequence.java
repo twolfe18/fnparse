@@ -15,7 +15,7 @@ public class StateSequence {
   private Adjoints action;
 
   // Indexes all the Actions in this sequence for the use by features.
-  private ActionIndex actionIndex;
+  private SpanIndex<Action> actionIndex;
 
   public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
     assert !(prev != null && next != null);
@@ -28,14 +28,14 @@ public class StateSequence {
 
   public void initActionIndexFromPrev() {
     assert next == null : "did you decide to do bi-directional search again?";
-    actionIndex = prev.actionIndex.updateIndex(action.getAction());
+    actionIndex = prev.actionIndex.persistentUpdate(action.getAction());
   }
 
   public void initActionIndexFromScratch() {
-    actionIndex = new ActionIndex(cur.getSentence().size());
+    actionIndex = new SpanIndex<>(cur.getSentence().size());
   }
 
-  public ActionIndex getActionIndex() {
+  public SpanIndex<Action> getActionIndex() {
     return actionIndex;
   }
 

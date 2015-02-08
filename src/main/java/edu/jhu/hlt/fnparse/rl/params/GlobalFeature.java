@@ -8,9 +8,9 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.ActionIndex;
+import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.State;
-import edu.jhu.hlt.fnparse.rl.ActionIndex.IndexItem;
+import edu.jhu.hlt.fnparse.rl.SpanIndex.IndexItem;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 
@@ -58,7 +58,7 @@ public interface GlobalFeature extends Params.Stateful {
       this.learningRate = learningRate;
     }
     @Override
-    public FeatureVector getFeatures(State state, ActionIndex ai, Action a2) {
+    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
       // must be >0 because 0 is the implicit backoff label
       final int SAME_TARGET = 1;
       final int BEFORE = 2;
@@ -74,8 +74,8 @@ public interface GlobalFeature extends Params.Stateful {
       da2 = da2 << REL_BITS; // move over to make room for rel type
 
       FeatureVector fv = new FeatureVector();
-      for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
-        Action a = i.action;
+      for (IndexItem<Action> i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
+        Action a = i.payload;
         FrameInstance fi = state.getFrameInstance(a.t);
         Frame f = fi.getFrame();
         int da1 = frPacking.index(f, a.k);
@@ -131,7 +131,7 @@ public interface GlobalFeature extends Params.Stateful {
     // X = {x} = set of spans already committed to
     // find x s.t. q.s < x.s < q.e < x.e
     @Override
-    public FeatureVector getFeatures(State s, ActionIndex ai, Action a) {
+    public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
       if (a.hasSpan()) {
         FeatureVector fv = new FeatureVector();
         List<Action> overlappingActions = new ArrayList<>();
@@ -175,14 +175,14 @@ public interface GlobalFeature extends Params.Stateful {
     }
 
     @Override
-    public FeatureVector getFeatures(State state, ActionIndex ai, Action a) {
+    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a) {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
 
-      IndexItem mStart = ai.startsAt(s.start);
-      IndexItem mEnd = ai.endsAt(s.end - 1);
-      IndexItem mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
-      IndexItem mRight = s.end < ai.size() ? ai.startsAt(s.end) : null;
+      IndexItem<Action> mStart = ai.startsAt(s.start);
+      IndexItem<Action> mEnd = ai.endsAt(s.end - 1);
+      IndexItem<Action> mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
+      IndexItem<Action> mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
 
       FeatureVector fv = new FeatureVector();
 
@@ -191,7 +191,7 @@ public interface GlobalFeature extends Params.Stateful {
       if (mStart != null) {
         if (mStart.size == 1) {
           fv.add(MSTART1, 1d);
-          if (mStart.action.t == a.t)
+          if (mStart.payload.t == a.t)
             fv.add(MSTART1_TMATCH, 1d);
         } else if (mStart.size > 1) {
           fv.add(MSTART2P, 1d);
@@ -201,7 +201,7 @@ public interface GlobalFeature extends Params.Stateful {
       if (mEnd != null) {
         if (mEnd.size == 1) {
           fv.add(MEND1, 1d);
-          if (mEnd.action.t == a.t)
+          if (mEnd.payload.t == a.t)
             fv.add(MEND1_TMATCH, 1d);
         } else if (mEnd.size > 1) {
           fv.add(MEND2P, 1d);

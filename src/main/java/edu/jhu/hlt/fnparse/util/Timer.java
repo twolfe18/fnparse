@@ -102,6 +102,7 @@ public class Timer {
     return count;
   }
 
+  public long totalTimeInMilliseconds() { return time; }
   public double totalTimeInSeconds() { return time / 1000d; }
 
   public static final class NoOp extends Timer {

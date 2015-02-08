@@ -19,7 +19,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.ActionIndex;
+import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
@@ -83,6 +83,7 @@ public class Reranker {
 
   private Params.Stateful thetaStateful;
   private Params.Stateless thetaStateless;
+  private Params.PruneThreshold tauParams;
 
   private Random rand;
   private int beamWidth;
@@ -94,6 +95,7 @@ public class Reranker {
     this.thetaStateless = thetaStateless;
     this.beamWidth = beamWidth;
     this.rand = rand;
+    this.tauParams = new Params.PruneThreshold.Impl(1e-10);
   }
 
   public String toString() {
@@ -171,8 +173,8 @@ public class Reranker {
   }
 
   public State randomDecodingState(FNTagging frames, Random rand) {
-    TransitionFunction transF =
-        new TransitionFunction.Tricky(Params.Stateful.NONE);
+    TransitionFunction transF = new TransitionFunction.Tricky(
+        Params.Stateful.NONE, Params.PruneThreshold.Const.ONE);
     State init = State.initialState(frames);
     StateSequence frontier = new StateSequence(null, null, init, null);
     int TK = init.numFrameRoleInstances();
@@ -304,12 +306,16 @@ public class Reranker {
    * {@link edu.jhu.hlt.fnparse.rl.rerank.Reranker.ForwardSearch}
    */
   public static interface BFunc {
-    public double score(State s, ActionIndex ai, Action a);
+    /**
+     * Give the score of taking action a in state s, with the additional resource
+     * that ai is an index on all of the actions take so far to get to s.
+     */
+    public double score(State s, SpanIndex<Action> ai, Action a);
 
     /** Returns a score of 0 always */
     public static class None implements BFunc {
       @Override
-      public double score(State s, ActionIndex ai, Action a) {
+      public double score(State s, SpanIndex<Action> ai, Action a) {
         return 0d;
       }
       @Override
@@ -326,7 +332,7 @@ public class Reranker {
         this.params = params;
       }
       @Override
-      public double score(State s, ActionIndex ai, Action a) {
+      public double score(State s, SpanIndex<Action> ai, Action a) {
         Adjoints adj = params.score(s, ai, a);
         return adj.forwards();
       }
@@ -344,12 +350,22 @@ public class Reranker {
         this.solveMax = solveMax;
       }
       @Override
-      public double score(State s, ActionIndex ai, Action a) {
-        FrameInstance fi = gold.getFrameInstance(a.t);
-        Span arg = fi.getArgument(a.k);
-        if (arg != a.getSpanSafe())
+      public double score(State s, SpanIndex<Action> ai, Action a) {
+        // Old COMMIT implementation:
+//        FrameInstance fi = gold.getFrameInstance(a.t);
+//        Span arg = fi.getArgument(a.k);
+//        if (arg != a.getSpanSafe())
+//          return solveMax ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
+//        return 0d;
+        ActionType at = a.getActionType();
+        double dl = at.deltaLoss(s, a, gold);
+        assert dl >= 0;
+        if (dl > 0d) {
+          // Incurred some loss: not on the oracle decode, skip in ForwardSearch
           return solveMax ? Double.NEGATIVE_INFINITY : Double.POSITIVE_INFINITY;
-        return 0d;
+        } else {
+          return 0d;
+        }
       }
       @Override
       public String toString() {
@@ -369,7 +385,7 @@ public class Reranker {
         this.gold = gold;
       }
       @Override
-      public double score(State s, ActionIndex ai, Action a) {
+      public double score(State s, SpanIndex<Action> ai, Action a) {
         ActionType at = a.getActionType();
         double dl = at.deltaLoss(s, a, gold);
         assert dl >= 0;
@@ -396,7 +412,7 @@ public class Reranker {
         this.rand = rand;
       }
       @Override
-      public double score(State s, ActionIndex ai, Action a) {
+      public double score(State s, SpanIndex<Action> ai, Action a) {
         double deltaLoss = super.score(s, ai, a);
         if (deltaLoss > 0) {
           // Negative action, skip it with some probability
@@ -515,8 +531,7 @@ public class Reranker {
         LOG.info(desc + " starting...");
 
       TransitionFunction transF =
-          //new ActionDrivenTransitionFunction(actionTypes);
-          new TransitionFunction.Tricky(model);
+          new TransitionFunction.Tricky(model, tauParams);
       StateSequence frontier = new StateSequence(null, null, initialState, null);
       final boolean useActionIndex = hasStatefulFeatures();
       if (useActionIndex)
@@ -531,7 +546,7 @@ public class Reranker {
         // We are going to score Actions leaving that StateSequence.getCur (s).
         frontier = beam.pop();
         State s = frontier.getCur();
-        ActionIndex ai = frontier.getActionIndex();
+        SpanIndex<Action> ai = frontier.getActionIndex();
         if (verbose && LOG_FORWARD_SEARCH)
           logStateInfo(desc + " @ iter=" + iter, s);
 

@@ -6,9 +6,12 @@ import java.util.Random;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.ActionIndex;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
+import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.State;
 
 /**
@@ -34,16 +37,86 @@ public interface Params {
   // its not listed here.
 
   /**
+   * Parameters that specify tau in ActionType.PRUNE.
+   */
+  public static interface PruneThreshold extends Params {
+    // TODO add a stateful version of this?
+    public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo);
+
+    public static class Const implements PruneThreshold {
+      public static final Const ZERO = new Const(0);
+      public static final Const ONE = new Const(1);
+      public final double intercept;
+      public Const(double intercept) {
+        this.intercept = intercept;
+      }
+      @Override
+      public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+        return new Adjoints.Explicit(intercept, pruneAction, "tauConst");
+      }
+    }
+
+    // TODO move this over to use FrameRolePacking and bit-shifting
+    /** Implementation */
+    public static class Impl extends FeatureParams implements PruneThreshold {
+      public Impl(double l2Penalty) {
+        super(l2Penalty);
+      }
+      public Impl(double l2Penalty, int hashBuckets) {
+        super(l2Penalty, hashBuckets);
+      }
+      @Override
+      public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+        Frame f = null;
+        if (pruneAction.t >= 0)
+          f = frames.getFrameInstance(pruneAction.t).getFrame();
+        int k = pruneAction.k;
+        FeatureVector fv = new FeatureVector();
+        bb(fv, f, k, null);
+        for (String pi : providenceInfo)
+          bb(fv, f, k, pi);
+        return fv;
+      }
+      private void bb(FeatureVector fv, Frame f, int k, String provInfo) {
+        if (f != null) {
+          if (provInfo == null)
+            b(fv, "frame=" + f.getName());
+          else
+            b(fv, "frame=" + f.getName(), provInfo);
+          if (k >= 0) {
+            if (provInfo == null)
+              b(fv, "role=" + f.getRole(k));
+            else
+              b(fv, "role=" + f.getRole(k), provInfo);
+            if (provInfo == null)
+              b(fv, "frameRole=" + f.getName() + "." + f.getRole(k));
+            else
+              b(fv, "frameRole=" + f.getName() + "." + f.getRole(k), provInfo);
+          }
+        } else {
+          if (provInfo == null)
+            b(fv, "allTargets");
+          else
+            b(fv, "allTargets", provInfo);
+        }
+      }
+    }
+  }
+
+  /**
    * Features that need to look at the state of the parser (uncacheable)
    */
   public static interface Stateful extends Params {
 
-    // TODO make this the only method required!
-    // This is just a bandaid so I don't have to fix a bunch of code right away.
-    public Adjoints score(State s, ActionIndex ai, Action a);
+    /**
+     * @param s is the state of the decoding.
+     * @param ai is an index of all of the Actions that have been taken so far.
+     * @param a is the action to be scored.
+     */
+    public Adjoints score(State s, SpanIndex<Action> ai, Action a);
 
     public static final Stateful NONE = new Stateful() {
-      @Override public Adjoints score(State s, ActionIndex ai, final Action a) {
+      @Override public Adjoints score(State s, SpanIndex<Action> ai, final Action a) {
         return new Adjoints() {
           @Override public String toString() { return "0"; }
           @Override public double forwards() { return 0d; }
@@ -66,7 +139,7 @@ public interface Params {
           return "(Lifted " + theta + ")";
         }
         @Override
-        public Adjoints score(State s, ActionIndex ai, Action a) {
+        public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
           return theta.score(s.getFrames(), a);
         }
         @Override
@@ -254,7 +327,7 @@ public interface Params {
       return stateful + " + " + stateless;
     }
     @Override
-    public Adjoints score(State s, ActionIndex ai, Action a) {
+    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
       FNTagging f = s.getFrames();
       return new SumAdj(stateful.score(s, ai, a), stateless.score(f, a));
     }
@@ -309,7 +382,7 @@ public interface Params {
       return left + " + " + right;
     }
     @Override
-    public Adjoints score(State s, ActionIndex ai, Action a) {
+    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
       return new SumAdj(left.score(s, ai, a), right.score(s, ai, a));
     }
     @Override
@@ -336,7 +409,7 @@ public interface Params {
       return String.format("(Rand %.1f)", variance);
     }
     @Override
-    public Adjoints score(State s, ActionIndex ai, Action a) {
+    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
       double r = (rand.nextDouble() - 0.5) * 2 * variance;
       return new Adjoints.Explicit(r, a, "rand");
     }

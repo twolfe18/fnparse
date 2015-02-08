@@ -5,12 +5,13 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.HasSpan;
 
 /**
  * represents a constraint on the set of arguments a particular
  * (frame,target,role) can take on.
  */
-public class Action {
+public class Action implements HasSpan {
 
   public int t;     // (frame,target), i.e. frameInstance index
   public int k;     // role
@@ -48,6 +49,7 @@ public class Action {
     return getSpan();
   }
 
+  @Override
   public Span getSpan() {
     assert hasSpan();
     return Span.getSpan(start, end);

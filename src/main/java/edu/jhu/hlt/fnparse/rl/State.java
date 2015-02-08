@@ -30,7 +30,17 @@ public class State {
 
   protected FNTagging frames;
   private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
+
+  // Represents which spans a given t,k can be assigned to.
+  // Does not represent (t,k,i,j) s.t. i=0,j=0 (i.e. nullSpan).
+  // A (t,k) being assigned to nullSpan is only captured by committed[t][k] = nullSpan.
   private BitSet possible;
+
+  // [committed[t][k] != null] => [\not\exists i,j s.t. possible(t,k,i,j)]
+  // NOTE the direction of that implication!
+  // It is the job of COMMIT.next to update committed if it loops over i,j and
+  // finds no possible(t,k,i,j). This can happen because PRUNE.apply only loops
+  // over the i,j that are pruned, not those that aren't!
   private Span[][] committed;
 
   public State(FNTagging frames, StateIndex stateIndex, BitSet possible, Span[][] committed) {
@@ -160,6 +170,7 @@ public class State {
     return committed[t][k];
   }
 
+  // TODO if slow, an index can be maintained for this
   public int numCommitted() {
     int comm = 0;
     for (Span[] c : committed)
@@ -169,6 +180,7 @@ public class State {
     return comm;
   }
 
+  // TODO if slow, an index can be maintained for this
   public int numUncommitted() {
     int uncomm = 0;
     for (Span[] c : committed)
@@ -178,6 +190,14 @@ public class State {
     return uncomm;
   }
 
+  /**
+   * Sets committed[t][k] = Span.nullSpan.
+   * Should only really be called by COMMIT.next.
+   */
+  public void noPossibleItems(int t, int k) {
+    assert committed[t][k] == null;
+    committed[t][k] = Span.nullSpan;
+  }
 
   /**
    * Adds all committed spans that are not nullSpan to addTo and returns it.

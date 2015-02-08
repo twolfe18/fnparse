@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.function.Supplier;
 
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
@@ -21,6 +22,45 @@ public interface Adjoints {
 
   public void backwards(double dScore_dForwards);
 
+
+  /**
+   * For when you need Adjoints to extend HasSpan.
+   * ...and more generally when you want your Adjoints to look like an Action.
+   */
+  public static class HasSpan implements Adjoints, edu.jhu.hlt.fnparse.util.HasSpan {
+    private Adjoints wrapped;
+    public HasSpan(Adjoints a) {
+      this.wrapped = a;
+    }
+    public int getT() {
+      return wrapped.getAction().t;
+    }
+    public int getK() {
+      return wrapped.getAction().k;
+    }
+    @Override
+    public Span getSpan() {
+      Action a = wrapped.getAction();
+      if (a.hasSpan()) {
+        Span s = a.getSpan();
+        assert s.end >= 0;
+        return s;
+      }
+      throw new RuntimeException("be more careful");
+    }
+    @Override
+    public Action getAction() {
+      return wrapped.getAction();
+    }
+    @Override
+    public double forwards() {
+      return wrapped.forwards();
+    }
+    @Override
+    public void backwards(double dScore_dForwards) {
+      wrapped.backwards(dScore_dForwards);
+    }
+  }
 
   /**
    * Replaces Dense and Sparse

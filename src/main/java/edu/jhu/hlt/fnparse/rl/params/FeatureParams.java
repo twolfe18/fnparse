@@ -7,7 +7,8 @@ import org.apache.log4j.Logger;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.ActionIndex;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
+import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.AveragedWeights;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
@@ -60,7 +61,13 @@ public abstract class FeatureParams {
   }
 
   /** Override one of the getFeatures methods */
-  public FeatureVector getFeatures(State s, ActionIndex ai, Action a) {
+  public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
+    throw new RuntimeException("you should have either overriden this "
+        + "method or called the other one");
+  }
+
+  /** Override one of the getFeatures methods */
+  public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
     throw new RuntimeException("you should have either overriden this "
         + "method or called the other one");
   }
@@ -122,7 +129,7 @@ public abstract class FeatureParams {
     return adj;
   }
 
-  public Adjoints score(State s, ActionIndex ai, Action a) {
+  public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
     FeatureVector fv = getFeatures(s, ai, a);
 
     // Make sure that theta is big enough
@@ -130,6 +137,17 @@ public abstract class FeatureParams {
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
     Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    return adj;
+  }
+
+  public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+    FeatureVector fv = getFeatures(frames, pruneAction, providenceInfo);
+
+    // Make sure that theta is big enough
+    checkSize();
+
+    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
+    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty, learningRate);
     return adj;
   }
 

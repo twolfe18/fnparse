@@ -446,7 +446,7 @@ public class RerankerTrainer {
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
-    //Reranker.LOG_FORWARD_SEARCH = true;
+    Reranker.LOG_FORWARD_SEARCH = true;
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
