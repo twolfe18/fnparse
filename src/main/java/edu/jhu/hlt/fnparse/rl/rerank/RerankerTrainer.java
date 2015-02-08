@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
+import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
 
@@ -52,6 +53,7 @@ import edu.jhu.hlt.fnparse.util.Timer;
 public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
+  public static boolean PRUNE_DEBUG = false;
 
   // may differ across pretrain/train
   public class Config {
@@ -439,14 +441,20 @@ public class RerankerTrainer {
     trainer.reporters = ResultReporter.getReporters(config);
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-        .subList(0, nTrain));
+        .stream().filter(p -> p.numFrameInstances() <= 5).limit(nTrain)
+        .collect(Collectors.toList()));
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
-    Reranker.LOG_FORWARD_SEARCH = true;
+    
+    
+    // FOR DEBUGGING
+//    RerankerTrainer.PRUNE_DEBUG = true;
+//    Reranker.LOG_FORWARD_SEARCH = true;
+
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {

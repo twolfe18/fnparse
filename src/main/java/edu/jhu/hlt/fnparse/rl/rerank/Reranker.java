@@ -560,7 +560,7 @@ public class Reranker {
           double bias = biasFunction.score(s, ai, a);
           if (Double.isInfinite(bias)) {
             if (verbose && LOG_FORWARD_SEARCH)
-              LOG.info("skipping due to bFunc");
+              LOG.info("skipping due to bFunc=" + biasFunction);
             if (solvingMax) assert bias < 0;
             else assert bias > 0;
             transF.observeAdjoints(null);

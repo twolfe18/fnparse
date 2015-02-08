@@ -14,7 +14,8 @@ public class StateSequence {
   // or     (cur -> action -> next)   <= currently deprecated
   private Adjoints action;
 
-  // Indexes all the Actions in this sequence for the use by features.
+  // Indexes all the COMMIT Actions in this sequence for the use by features.
+  // TODO Have another index for PRUNE Actions -- can't do that with SpanIndex
   private SpanIndex<Action> actionIndex;
 
   public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
@@ -28,7 +29,13 @@ public class StateSequence {
 
   public void initActionIndexFromPrev() {
     assert next == null : "did you decide to do bi-directional search again?";
-    actionIndex = prev.actionIndex.persistentUpdate(action.getAction());
+    Action a = action.getAction();
+    if (a.mode == ActionType.COMMIT.getIndex()) {
+      actionIndex = prev.actionIndex.persistentUpdate(action.getAction());
+    } else {
+      assert a.mode == ActionType.PRUNE.getIndex();
+      actionIndex = prev.actionIndex;
+    }
   }
 
   public void initActionIndexFromScratch() {

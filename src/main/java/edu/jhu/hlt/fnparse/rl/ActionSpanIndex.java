@@ -26,6 +26,10 @@ public interface ActionSpanIndex<T extends HasSpan> {
   public <C extends Collection<T>> C containedIn(int t, Span container, C addTo);
   public <C extends Collection<T>> C containedIn(Span container, C addTo);
 
+  public <C extends Collection<T>> C notContainedIn(int t, int k, Span container, C addTo);
+  public <C extends Collection<T>> C notContainedIn(int t, Span container, C addTo);
+  public <C extends Collection<T>> C notContainedIn(Span container, C addTo);
+
   public <C extends Collection<T>> C crosses(int t, int k, Span s, C addTo);
   public <C extends Collection<T>> C crosses(int t, Span s, C addTo);
   public <C extends Collection<T>> C crosses(Span s, C addTo);
@@ -53,6 +57,11 @@ public interface ActionSpanIndex<T extends HasSpan> {
 
     @Override
     public <C extends Collection<A>> C containedIn(int t, int k, Span container, C addTo) {
+      assert implies(t < 0, k < 0);
+      if (t < 0 && k < 0) {
+        // No filtering
+        return all.containedIn(container, addTo);
+      }
       List<A> temp = all.containedIn(container, new ArrayList<>());
       for (A a : temp) {
         if ((t < 0 || t == a.getT())
@@ -70,8 +79,39 @@ public interface ActionSpanIndex<T extends HasSpan> {
     public <C extends Collection<A>> C containedIn(Span container, C addTo) {
       return containedIn(-1, -1, container, addTo);
     }
+
+    @Override
+    public <C extends Collection<A>> C notContainedIn(int t, int k, Span container, C addTo) {
+      assert implies(t < 0, k < 0);
+      if (t < 0 && k < 0) {
+        // No filtering
+        return all.notContainedIn(container, addTo);
+      }
+      List<A> temp = all.notContainedIn(container, new ArrayList<>());
+      for (A a : temp) {
+        if ((t < 0 || t == a.getT())
+            && (k < 0 || k == a.getK())) {
+          addTo.add(a);
+        }
+      }
+      return addTo;
+    }
+    @Override
+    public <C extends Collection<A>> C notContainedIn(int t, Span container, C addTo) {
+      return notContainedIn(t, -1, container, addTo);
+    }
+    @Override
+    public <C extends Collection<A>> C notContainedIn(Span container, C addTo) {
+      return notContainedIn(-1, -1, container, addTo);
+    }
+
     @Override
     public <C extends Collection<A>> C crosses(int t, int k, Span s, C addTo) {
+      assert implies(t < 0, k < 0);
+      if (t < 0 && k < 0) {
+        // No filtering
+        return all.crosses(s, addTo);
+      }
       List<A> temp = all.crosses(s, new ArrayList<>());
       for (A a : temp) {
         if ((t < 0 || t == a.getT())
@@ -89,6 +129,10 @@ public interface ActionSpanIndex<T extends HasSpan> {
     public <C extends Collection<A>> C crosses(Span s, C addTo) {
       return crosses(-1, -1, s, addTo);
     }
+  }
+
+  public static boolean implies(boolean a, boolean b) {
+    return !a || (a && b);
   }
 
   /**

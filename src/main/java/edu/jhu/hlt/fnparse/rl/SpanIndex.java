@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.util.HasSpan;
 
 /**
@@ -43,7 +44,7 @@ public class SpanIndex<T extends HasSpan> {
     this.all = null;
     this.coversToken = new IndexItem[sentenceLength];
     this.startsAt = new IndexItem[sentenceLength];
-    this.endsAt = new IndexItem[sentenceLength];
+    this.endsAt = new IndexItem[sentenceLength + 1];
   }
 
   private SpanIndex(IndexItem<T> all, IndexItem<T>[] coversToken, IndexItem<T>[] startsAt, IndexItem<T>[] endsAt) {
@@ -55,7 +56,7 @@ public class SpanIndex<T extends HasSpan> {
 
   public int getSentenceSize() {
     assert coversToken.length == startsAt.length;
-    assert startsAt.length == endsAt.length;
+    assert startsAt.length == endsAt.length - 1;
     return coversToken.length;
   }
 
@@ -66,7 +67,7 @@ public class SpanIndex<T extends HasSpan> {
       sb.append("covers[" + i + "] " + coversToken[i] + "\n");
     for (int i = 0; i < n; i++)
       sb.append("startsAt[" + i + "] " + startsAt[i] + "\n");
-    for (int i = 0; i < n; i++)
+    for (int i = 1; i <= n; i++)
       sb.append("endsAt[" + i + "] " + endsAt[i] + "\n");
     sb.append(">");
     return sb.toString();
@@ -101,6 +102,8 @@ public class SpanIndex<T extends HasSpan> {
       addTo.add(a);
     }
     for (IndexItem<T> ei = coversToken[send - 1]; ei != null; ei = ei.prevNonEmptyItem) {
+      // JVM can't figure out that this is always Actions.HasSpan and inline calls
+      // TODO try casting, or maybe putting in a type you know better?
       T a = ei.payload;
       Span aSpan = a.getSpan();
       boolean coversStart = aSpan.start <= sstart && sstart < aSpan.end;
@@ -131,6 +134,31 @@ public class SpanIndex<T extends HasSpan> {
     return addTo;
   }
 
+  /**
+   * Finds all Actions that have a span which is not contained within the given
+   * container (token subset).
+   */
+  public <C extends Collection<T>> C notContainedIn(Span container, C addTo) {
+    // Union of:
+    // 1) s : s.start < container.start && s.end <= conainer.end
+    for (int i = 0; i < container.start; i++) {
+      for (IndexItem<T> ii = startsAt[i]; ii != null; ii = ii.prevNonEmptyItem) {
+        Span s = ii.payload.getSpan();
+        if (s.end <= container.end)
+          addTo.add(ii.payload);
+      }
+    }
+    // 2) s : s.end > container.end && s.start >= container.start
+    for (int j = container.end + 1; j < endsAt.length; j++) {
+      for (IndexItem<T> jj = endsAt[j]; jj != null; jj = jj.prevNonEmptyItem) {
+        Span s = jj.payload.getSpan();
+        if (s.start >= container.start)
+          addTo.add(jj.payload);
+      }
+    }
+    return addTo;
+  }
+
   public IndexItem<T> allActions() {
     return all;
   }
@@ -145,9 +173,8 @@ public class SpanIndex<T extends HasSpan> {
   }
 
   /**
-   * Returns a linked list of Actions such that their last token was i
-   * (NOTE this is not that span.end == i, but rather span.end-1 == i because
-   *  Spans are exclusive in end).
+   * Returns a linked list of Actions such that their end was i
+   * (i.e. span.end == i)
    * May return null if there are no such Actions.
    */
   public IndexItem<T> endsAt(int i) {
@@ -160,7 +187,7 @@ public class SpanIndex<T extends HasSpan> {
     for (int i = s.start; i < s.end; i++)
       coversToken[i] = new IndexItem<>(a, coversToken[i]);
     startsAt[s.start] = new IndexItem<>(a, startsAt[s.start]);
-    endsAt[s.end - 1] = new IndexItem<>(a, endsAt[s.end - 1]);
+    endsAt[s.end] = new IndexItem<>(a, endsAt[s.end]);
   }
 
   /**
@@ -175,14 +202,13 @@ public class SpanIndex<T extends HasSpan> {
 //    }
     // NOTE: sparse update
     Span s = a.getSpan();
-    int n = coversToken.length;
-    IndexItem<T>[] nCrossesToken = Arrays.copyOf(coversToken, n);
-    IndexItem<T>[] nStartsAt = Arrays.copyOf(startsAt, n);
-    IndexItem<T>[] nEndsAt = Arrays.copyOf(endsAt, n);
+    IndexItem<T>[] nCrossesToken = Arrays.copyOf(coversToken, coversToken.length);
+    IndexItem<T>[] nStartsAt = Arrays.copyOf(startsAt, startsAt.length);
+    IndexItem<T>[] nEndsAt = Arrays.copyOf(endsAt, endsAt.length);
     for (int i = s.start; i < s.end; i++)
       nCrossesToken[i] = new IndexItem<>(a, nCrossesToken[i]);
     nStartsAt[s.start] = new IndexItem<>(a, nStartsAt[s.start]);
-    nEndsAt[s.end - 1] = new IndexItem<>(a, nEndsAt[s.end - 1]);
+    nEndsAt[s.end] = new IndexItem<>(a, nEndsAt[s.end]);
     return new SpanIndex<>(all, nCrossesToken, nStartsAt, nEndsAt);
   }
 }

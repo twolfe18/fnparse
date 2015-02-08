@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -7,6 +9,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 import edu.jhu.hlt.fnparse.util.FakeIterable;
 
 public interface TransitionFunction {
@@ -61,6 +64,12 @@ public interface TransitionFunction {
       state = ss.getCur();
       previousActions = ss.getActionIndex();
       List<Action> commits = (List<Action>) ActionType.COMMIT.next(state);
+      if (commits.isEmpty()) {
+        state = null;
+        previousActions = null;
+        allActionIter = null;
+        return Collections.emptyList();
+      }
       allActionIter = this.new Actions(commits);
       return new FakeIterable<>(allActionIter);
     }
@@ -94,6 +103,8 @@ public interface TransitionFunction {
       private int prunesPtr;
 
       public Actions(List<Action> commitActions) {
+        if (commitActions.isEmpty())
+          throw new IllegalArgumentException();
         this.commitActions = commitActions;
         this.commitActionsPtr = 0;
         this.prunesPtr = 0;
@@ -105,7 +116,7 @@ public interface TransitionFunction {
       public boolean hasNext() {
         boolean hn = commitActionsPtr < commitActions.size()
             || prunes == null || prunesPtr < prunes.size();
-        if (!hn) {
+        if (!hn && RerankerTrainer.PRUNE_DEBUG) {
           // This will be called before the last call to observeAdjoints
           LOG.info("[Tricky.Actions hasNext] doesn't have next!");
         }
@@ -124,11 +135,18 @@ public interface TransitionFunction {
             assert commitActionsPtr == commitActions.size();
             prunes = ActionType.PRUNE.next(state, commitAdjoints, tauParams, onlySimplePrunes);
 
+            if (prunes.size() == 0) {
+              prunes = ActionType.PRUNE.next(state, commitAdjoints, tauParams, onlySimplePrunes);
+            }
             assert prunes.size() > 0 : "no prunes?";
 
             assert commitActions.size() == commitAdjoints.size();
-            int n = state.getSentence().size();
-            LOG.info("[Trick.Actions] nWords=" + n + " nCommits=" + commitActions.size() + " nPrunes=" + prunes.size());
+            if (RerankerTrainer.PRUNE_DEBUG) {
+              int n = state.getSentence().size();
+              LOG.info("[Trick.Actions] nWords=" + n
+                  + " nCommits=" + commitActions.size()
+                  + " nPrunes=" + prunes.size());
+            }
 
             commitActionsPtr++; // So that we only do this once
           }

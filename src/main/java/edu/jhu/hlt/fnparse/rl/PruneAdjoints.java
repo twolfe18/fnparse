@@ -2,8 +2,11 @@ package edu.jhu.hlt.fnparse.rl;
 
 import java.util.List;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 import edu.jhu.hlt.fnparse.util.HasSpan;
 
 /**
@@ -18,13 +21,16 @@ import edu.jhu.hlt.fnparse.util.HasSpan;
  * @author travis
  */
 public class PruneAdjoints extends Action implements Adjoints, HasSpan {
+  public static final Logger LOG = Logger.getLogger(PruneAdjoints.class);
 
   private List<? extends Adjoints> commitActions;
   private Adjoints tau;
-  private double score = Double.NaN;
+  private int maxIndex;
+  private double score;
 
   public PruneAdjoints(int t, int k, int mode, int start, int end) {
     super(t, k, mode, start, end);
+    maxIndex = -1;
   }
 
   @Override
@@ -37,28 +43,46 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
     return ActionType.PRUNE.isPrunedBy(t, k, arg, this);
   }
 
+  // Just a link to impl
+  public String toString() {
+    return ActionType.PRUNE.describe(this);
+  }
+
   /**
    * Before this method is called, this is just an Action.
    * @param tau is the parameters that control the offset for the pruning score.
    * @param commitActions is the set of COMMIT actions that are pruned by this action.
    */
   public void turnIntoAdjoints(Adjoints tau, List<? extends Adjoints> commitActions) {
+    if (commitActions.isEmpty()) {
+      throw new IllegalArgumentException("Every PRUNE must get rid of at least "
+          + "one possible item, and the only witness to that that I now of is "
+          + "the existence of a COMMIT action for that item.\n"
+          + "Plus, the score of this action doesn't make much sense if there "
+          + "are no COMMIT Actions.");
+    }
     this.tau = tau;
     this.commitActions = commitActions;
+    if (RerankerTrainer.PRUNE_DEBUG) {
+      LOG.info("[turnIntoAdjoints] " + toString()
+          + " nCommitActions=" + commitActions.size());
+    }
   }
 
   @Override
   public double forwards() {
     if (tau == null)
       throw new IllegalStateException("call turnIntoAdjoints first");
-    if (Double.isNaN(score)) {
+    if (maxIndex < 0) {
       double thresh = tau.forwards();
       double maxCommScore = 0;
       for (int i = 0; i < commitActions.size(); i++) {
         Adjoints ai = commitActions.get(i);
         double ais = ai.forwards();
-        if (i == 0 || ais > maxCommScore)
+        if (i == 0 || ais > maxCommScore) {
+          maxIndex = i;
           maxCommScore = ais;
+        }
       }
       score = thresh - maxCommScore;
     }
@@ -69,6 +93,10 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
   public void backwards(double dScore_dForwards) {
     if (tau == null)
       throw new IllegalStateException("call turnIntoAdjoints first");
+    if (maxIndex < 0)
+      throw new IllegalStateException("call forwards first");
+    Adjoints cScore = commitActions.get(maxIndex);
     tau.backwards(dScore_dForwards);
+    cScore.backwards(-dScore_dForwards);
   }
 }

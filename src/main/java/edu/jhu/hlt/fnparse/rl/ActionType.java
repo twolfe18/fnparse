@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 
 /**
  * A class representing a type of Action which provides the information needed
@@ -136,7 +137,8 @@ public interface ActionType {
           // realizing it, as it only checks whether the items it is pruning
           // are possible rather than the items it is *not pruning* (for a given t,k)
           if (!somePossible) {
-            LOG.info("COMMIT.next cleaned up a (t,k) from PRUNE");
+            if (RerankerTrainer.PRUNE_DEBUG)
+              LOG.info("COMMIT.next cleaned up a (t,k) from PRUNE");
             st.noPossibleItems(t, k);
           }
         }
@@ -165,6 +167,14 @@ public interface ActionType {
   };
 
   /**
+   * TODO Remove cruft below and clarify!
+   * 
+   * PRUNE.contained: prunes all COMMIT actions that are *not contained within a given span*
+   * PRUNE.crossing: prunes all COMMIT actions that *cross a given span*
+   * PRUNE.POS_at_pos: (TODO) prunes all COMMIT actions that *have a given POS at a given position*
+   * 
+   * 
+   * 
    * The idea of this action is to decide to give up on a given (t,k).
    *
    * WAIT: If I implement PRUNE instead, I'll get this for free... but more on
@@ -251,7 +261,7 @@ public interface ActionType {
         for (int k = 0; k < K; k++)
           for (int i = 0; i < n; i++)
             for (int j = i + 1; j <= n; j++)
-              if (isPrunedBy(t, k, Span.getSpan(i, j), a))
+              if (s.possible(t, k, i, j) && isPrunedBy(t, k, Span.getSpan(i, j), a))
                 next.set(si.index(a.t, a.k, i, j), false);
       }
 
@@ -370,6 +380,13 @@ public interface ActionType {
                 t, k, window, s, commitAdjoints, "window" + dist, tauParams, onlySimplePrunes, prunes);
           }
         }
+        
+        
+        // 3) TODO near by POS
+        // 3a) starts with POS X
+        // 3b) ends with POS X
+        // 3c) left POS is X
+        // 3d) right POS is X
       }
 
       return prunes;
@@ -401,10 +418,12 @@ public interface ActionType {
       FNTagging frames = s.getFrames();
 
       // (t,k)
-      LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=" + k
-          + " container=" + container.shortString() + " providence=" + providenceFeature);
+      if (RerankerTrainer.PRUNE_DEBUG) {
+        LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=" + k
+            + " container=" + container.shortString() + " providence=" + providenceFeature);
+      }
       List<Adjoints.HasSpan> tkCommActions = new ArrayList<>();
-      commitActions.containedIn(t, k, container, tkCommActions);
+      commitActions.notContainedIn(t, k, container, tkCommActions);
       if (tkCommActions.size() > 0) {
         PruneAdjoints tkPrune = pruneNotContainedIn(t, k, container);
         Adjoints tkTau = tauParams.score(frames, tkPrune, providenceFeature);
@@ -417,10 +436,12 @@ public interface ActionType {
 
       // (t,*)
       if (k == 0) {   // don't double-create this action
-        LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=*"
-            + " container=" + container.shortString() + " providence=" + providenceFeature);
+        if (RerankerTrainer.PRUNE_DEBUG) {
+          LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=*"
+              + " container=" + container.shortString() + " providence=" + providenceFeature);
+        }
         List<Adjoints.HasSpan> tCommActions = new ArrayList<>();
-        commitActions.containedIn(t, container, tCommActions);
+        commitActions.notContainedIn(t, container, tCommActions);
         if (tCommActions.size() > 0) {
           PruneAdjoints tPrune = pruneNotContainedIn(t, container);
           Adjoints tTau = tauParams.score(frames, tPrune, providenceFeature);
@@ -431,10 +452,12 @@ public interface ActionType {
 
       // (*,*)
       if (t == 0 && k == 0) {   // don't double-create this action
-        LOG.info("[tryAddPruneNotContainedIn] t=* k=*"
-            + " container=" + container.shortString() + " providence=" + providenceFeature);
+        if (RerankerTrainer.PRUNE_DEBUG) {
+          LOG.info("[tryAddPruneNotContainedIn] t=* k=*"
+              + " container=" + container.shortString() + " providence=" + providenceFeature);
+        }
         List<Adjoints.HasSpan> allCommActions = new ArrayList<>();
-        commitActions.containedIn(container, allCommActions);
+        commitActions.notContainedIn(container, allCommActions);
         if (allCommActions.size() > 0) {
           PruneAdjoints prune = pruneNotContainedIn(container);
           Adjoints tau = tauParams.score(frames, prune, providenceFeature);
@@ -474,6 +497,27 @@ public interface ActionType {
       return isPrunedBy(commitAction.t, commitAction.k, arg, pruneAction);
     }
 
+    public String describe(PruneAdjoints a) {
+      boolean crossing = a.end < 0;
+      String tk;
+      if (a.t < 0 && a.k < 0)
+        tk = "t=* k=*";
+      else if (a.t >= 0 && a.k < 0)
+        tk = "t=" + a.t + " k=*";
+      else if (a.t >= 0 && a.k >= 0)
+        tk = "t=" + a.t + " k=" + a.k;
+      else
+        throw new RuntimeException();
+      if (crossing) {
+        Span s = Span.getSpan(a.start, -a.end);
+        return "(PRUNE.crossing " + tk + " " + s.shortString() + ")";
+      } else {
+        // contained
+        Span s = Span.getSpan(a.start, a.end);
+        return "(PRUNE.notContainedIn " + tk + " " + s.shortString() + ")";
+      }
+    }
+
     /**
      * @return true if (t,k,arg) is pruned by a.
      */
@@ -488,7 +532,6 @@ public interface ActionType {
       // sign should be given some possibly sign-flipped start and ends.
       // => lets say that if end < 0, then use OVERLAP instead of CONTAINED
 
-      assert a.end != 0;
       boolean crossing = a.end < 0;
       if (crossing) {
         assert a.start < -a.end;
@@ -498,10 +541,10 @@ public interface ActionType {
             && arg.crosses(s);
       } else {
         // contained
-        assert a.start < a.end;
+        boolean contained = a.start <= arg.start && arg.end <= a.end;
         return (a.t < 0 || a.t == t)
             && (a.k < 0 || a.k == k)
-            && a.start <= arg.start && arg.end <= a.end;
+            && !contained;
       }
     }
 
@@ -537,7 +580,7 @@ public interface ActionType {
      * (i.e. subset relation on spans as token sets).
      */
     public PruneAdjoints pruneNotContainedIn(int t, int k, Span s) {
-      assert s.start < s.end && s.start >= 0;
+      assert s.end >= 0;
       return new PruneAdjoints(t, k, getIndex(), s.start, s.end);
     }
   };
