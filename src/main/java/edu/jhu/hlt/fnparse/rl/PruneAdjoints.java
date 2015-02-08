@@ -54,18 +54,24 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
    * @param commitActions is the set of COMMIT actions that are pruned by this action.
    */
   public void turnIntoAdjoints(Adjoints tau, List<? extends Adjoints> commitActions) {
-    if (commitActions.isEmpty()) {
-      throw new IllegalArgumentException("Every PRUNE must get rid of at least "
-          + "one possible item, and the only witness to that that I now of is "
-          + "the existence of a COMMIT action for that item.\n"
-          + "Plus, the score of this action doesn't make much sense if there "
-          + "are no COMMIT Actions.");
-    }
     this.tau = tau;
-    this.commitActions = commitActions;
-    if (RerankerTrainer.PRUNE_DEBUG) {
-      LOG.info("[turnIntoAdjoints] " + toString()
-          + " nCommitActions=" + commitActions.size());
+    if (commitActions == null) {
+      if (RerankerTrainer.PRUNE_DEBUG)
+        LOG.info("[turnIntoAdjoints] not using score of COMMIT actions");
+      this.commitActions = null;
+    } else {
+      if (commitActions.isEmpty()) {
+        throw new IllegalArgumentException("Every PRUNE must get rid of at least "
+            + "one possible item, and the only witness to that that I now of is "
+            + "the existence of a COMMIT action for that item.\n"
+            + "Plus, the score of this action doesn't make much sense if there "
+            + "are no COMMIT Actions.");
+      }
+      this.commitActions = commitActions;
+      if (RerankerTrainer.PRUNE_DEBUG) {
+        LOG.info("[turnIntoAdjoints] " + toString()
+            + " nCommitActions=" + commitActions.size());
+      }
     }
   }
 
@@ -74,17 +80,22 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
     if (tau == null)
       throw new IllegalStateException("call turnIntoAdjoints first");
     if (maxIndex < 0) {
-      double thresh = tau.forwards();
-      double maxCommScore = 0;
-      for (int i = 0; i < commitActions.size(); i++) {
-        Adjoints ai = commitActions.get(i);
-        double ais = ai.forwards();
-        if (i == 0 || ais > maxCommScore) {
-          maxIndex = i;
-          maxCommScore = ais;
+      if (commitActions == null) {
+        maxIndex = Integer.MAX_VALUE;
+        score = tau.forwards();
+      } else {
+        double thresh = tau.forwards();
+        double maxCommScore = 0;
+        for (int i = 0; i < commitActions.size(); i++) {
+          Adjoints ai = commitActions.get(i);
+          double ais = ai.forwards();
+          if (i == 0 || ais > maxCommScore) {
+            maxIndex = i;
+            maxCommScore = ais;
+          }
         }
+        score = thresh - maxCommScore;
       }
-      score = thresh - maxCommScore;
     }
     return score;
   }
@@ -95,8 +106,10 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
       throw new IllegalStateException("call turnIntoAdjoints first");
     if (maxIndex < 0)
       throw new IllegalStateException("call forwards first");
-    Adjoints cScore = commitActions.get(maxIndex);
     tau.backwards(dScore_dForwards);
-    cScore.backwards(-dScore_dForwards);
+    if (commitActions != null) {
+      Adjoints cScore = commitActions.get(maxIndex);
+      cScore.backwards(-dScore_dForwards);
+    }
   }
 }

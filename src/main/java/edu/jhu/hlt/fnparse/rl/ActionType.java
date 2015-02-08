@@ -251,6 +251,11 @@ public interface ActionType {
       BitSet next = new BitSet(cur.cardinality());
       next.xor(cur);
 
+      // If we need to mutate this, we will do so in the following loops
+      // (by asking for a copy). If it makes it through these loops, then the
+      // same array can be re-used.
+      Span[][] c = null;
+
       // Update possible
       StateIndex si = s.getStateIndex();
       int n = si.sentenceSize();
@@ -258,16 +263,32 @@ public interface ActionType {
       for (int t = 0; t < T; t++) {
         FrameInstance fi = s.getFrameInstance(t);
         int K = fi.getFrame().numRoles();
-        for (int k = 0; k < K; k++)
-          for (int i = 0; i < n; i++)
-            for (int j = i + 1; j <= n; j++)
-              if (s.possible(t, k, i, j) && isPrunedBy(t, k, Span.getSpan(i, j), a))
+        for (int k = 0; k < K; k++) {
+          // Check if this action lead to no more options for (t,k)
+          boolean prunedEverything = true;
+          for (int i = 0; i < n; i++) {
+            for (int j = i + 1; j <= n; j++) {
+              if (!s.possible(t, k, i, j))
+                continue;
+              else if (isPrunedBy(t, k, Span.getSpan(i, j), a))
                 next.set(si.index(a.t, a.k, i, j), false);
+              else
+                prunedEverything = false;
+            }
+          }
+          if (prunedEverything && s.committed(t, k) == null) {
+            if (c == null)
+              c = s.copyOfCommitted();
+            c[t][k] = Span.nullSpan;
+          }
+        }
       }
 
       // Update committed
       // no-op (NOTE no copy)
-      Span[][] c = s.getCommitted();
+//      Span[][] c = s.getCommitted();
+      if (c == null)    // no-mutate => no-copy
+        c = s.getCommitted();
 
       return new State(s.getFrames(), si, next, c);
     }
@@ -415,6 +436,9 @@ public interface ActionType {
       if (container == null)
         return;
 
+      if (s.committed(t, k) != null)
+        return;
+
       FNTagging frames = s.getFrames();
 
       // (t,k)
@@ -422,9 +446,9 @@ public interface ActionType {
         LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=" + k
             + " container=" + container.shortString() + " providence=" + providenceFeature);
       }
-      List<Adjoints.HasSpan> tkCommActions = new ArrayList<>();
-      commitActions.notContainedIn(t, k, container, tkCommActions);
-      if (tkCommActions.size() > 0) {
+      List<Adjoints.HasSpan> tkCommActions =
+          commitActions.notContainedIn(t, k, container, new ArrayList<>());
+      if (tkCommActions == null || tkCommActions.size() > 0) {
         PruneAdjoints tkPrune = pruneNotContainedIn(t, k, container);
         Adjoints tkTau = tauParams.score(frames, tkPrune, providenceFeature);
         tkPrune.turnIntoAdjoints(tkTau, tkCommActions);
@@ -440,9 +464,9 @@ public interface ActionType {
           LOG.info("[tryAddPruneNotContainedIn] t=" + t + " k=*"
               + " container=" + container.shortString() + " providence=" + providenceFeature);
         }
-        List<Adjoints.HasSpan> tCommActions = new ArrayList<>();
-        commitActions.notContainedIn(t, container, tCommActions);
-        if (tCommActions.size() > 0) {
+        List<Adjoints.HasSpan> tCommActions =
+            commitActions.notContainedIn(t, container, new ArrayList<>());
+        if (tCommActions == null || tCommActions.size() > 0) {
           PruneAdjoints tPrune = pruneNotContainedIn(t, container);
           Adjoints tTau = tauParams.score(frames, tPrune, providenceFeature);
           tPrune.turnIntoAdjoints(tTau, tCommActions);
@@ -456,9 +480,9 @@ public interface ActionType {
           LOG.info("[tryAddPruneNotContainedIn] t=* k=*"
               + " container=" + container.shortString() + " providence=" + providenceFeature);
         }
-        List<Adjoints.HasSpan> allCommActions = new ArrayList<>();
-        commitActions.notContainedIn(container, allCommActions);
-        if (allCommActions.size() > 0) {
+        List<Adjoints.HasSpan> allCommActions =
+            commitActions.notContainedIn(container, new ArrayList<>());
+        if (allCommActions == null || allCommActions.size() > 0) {
           PruneAdjoints prune = pruneNotContainedIn(container);
           Adjoints tau = tauParams.score(frames, prune, providenceFeature);
           prune.turnIntoAdjoints(tau, allCommActions);

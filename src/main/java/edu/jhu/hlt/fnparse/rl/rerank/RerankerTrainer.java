@@ -441,7 +441,9 @@ public class RerankerTrainer {
     trainer.reporters = ResultReporter.getReporters(config);
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-        .stream().filter(p -> p.numFrameInstances() <= 5).limit(nTrain)
+        .stream()
+        .filter(p -> p.numFrameInstances() <= 5)
+        .limit(nTrain)
         .collect(Collectors.toList()));
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
@@ -449,8 +451,6 @@ public class RerankerTrainer {
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
-    
-    
     // FOR DEBUGGING
 //    RerankerTrainer.PRUNE_DEBUG = true;
 //    Reranker.LOG_FORWARD_SEARCH = true;

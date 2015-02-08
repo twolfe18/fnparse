@@ -54,6 +54,11 @@ public interface TransitionFunction {
     // If true, only build PRUNE actions which apply to all spans for a (t,k)
     private boolean onlySimplePrunes = true;
 
+    // If true, PruneAdjoints.forwards
+    //    = tau.forwards - max_{c : COMMIT pruned by this prune} c.forwards
+    // otherwise PruneAdjoints.forwards = tau.forwards
+    private boolean useCommitScore = false;
+
     public Tricky(Params.Stateful model, Params.PruneThreshold tauParams) {
       this.model = model;
       this.tauParams = tauParams;
@@ -65,6 +70,7 @@ public interface TransitionFunction {
       previousActions = ss.getActionIndex();
       List<Action> commits = (List<Action>) ActionType.COMMIT.next(state);
       if (commits.isEmpty()) {
+        // This can happen at the end of search
         state = null;
         previousActions = null;
         allActionIter = null;
@@ -109,7 +115,10 @@ public interface TransitionFunction {
         this.commitActionsPtr = 0;
         this.prunesPtr = 0;
         int n = state.getSentence().size();
-        this.commitAdjoints = new ActionSpanIndex.SpaceEfficient<>(n);
+        if (useCommitScore)
+          this.commitAdjoints = new ActionSpanIndex.SpaceEfficient<>(n);
+        else
+          this.commitAdjoints = new ActionSpanIndex.None<>();
       }
 
       @Override
@@ -140,10 +149,11 @@ public interface TransitionFunction {
             }
             assert prunes.size() > 0 : "no prunes?";
 
-            assert commitActions.size() == commitAdjoints.size();
+            assert !useCommitScore || commitActions.size() == commitAdjoints.size();
             if (RerankerTrainer.PRUNE_DEBUG) {
               int n = state.getSentence().size();
-              LOG.info("[Trick.Actions] nWords=" + n
+              LOG.info("[Trick.Actions] useCommitScore=" + useCommitScore
+                  + " nWords=" + n
                   + " nCommits=" + commitActions.size()
                   + " nPrunes=" + prunes.size());
             }
@@ -159,6 +169,8 @@ public interface TransitionFunction {
        * into this method. This should happen very soon after a call to next().
        */
       public void observeAdjoints(Adjoints commitScores) {
+        if (!useCommitScore)
+          return;
         if (commitAdjoints.size() < commitActions.size()) {
           assert prunesPtr == 0 && prunes == null;
           if (commitScores == null) {

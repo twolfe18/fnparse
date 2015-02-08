@@ -35,6 +35,59 @@ public interface ActionSpanIndex<T extends HasSpan> {
   public <C extends Collection<T>> C crosses(Span s, C addTo);
 
   /**
+   * Keeps track of size but doesn't index or store any of the actions.
+   * All index lookup methods will return null.
+   */
+  public static class None<A extends Adjoints.HasSpan>
+      implements ActionSpanIndex<A> {
+    private int size = 0;
+    @Override
+    public void mutableUpdate(A a) {
+      size++;
+    }
+    @Override
+    public int size() {
+      return size;
+    }
+    @Override
+    public <C extends Collection<A>> C containedIn(int t, int k, Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C containedIn(int t, Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C containedIn(Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C notContainedIn(int t, int k, Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C notContainedIn(int t, Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C notContainedIn(Span container, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C crosses(int t, int k, Span s, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C crosses(int t, Span s, C addTo) {
+      return null;
+    }
+    @Override
+    public <C extends Collection<A>> C crosses(Span s, C addTo) {
+      return null;
+    }
+  }
+
+  /**
    * Keeps one ActionIndex and does (t,k) filtering at query time.
    */
   public static class SpaceEfficient<A extends Adjoints.HasSpan>

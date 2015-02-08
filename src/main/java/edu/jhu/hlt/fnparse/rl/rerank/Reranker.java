@@ -257,10 +257,12 @@ public class Reranker {
 
   /** Shows some info about the Action (wrapped in a StateSequence for ancillary info) */
   private void logAction(String desc, int iteration, double score, StateSequence ss, FNParse y, boolean showDeltaLoss) {
-    StringBuilder sb = new StringBuilder(desc);
+    StringBuilder sb = new StringBuilder("[logAction] ");
+    sb.append(desc);
     if (iteration >= 0)
       sb.append(" iter=" + iteration);
-    sb.append(" id=" + ss.getCur().getFrames().getId());
+    //sb.append(" id=" + ss.getCur().getFrames().getId());  // this forces State.apply unnecessarily
+    sb.append(" id=" + ss.neighbor().getCur().getFrames().getId());
     sb.append(" " + ss.getAction());
     sb.append(" score=" + score);
     sb.append(" actionScore=" + ss.getAdjoints().forwards());
@@ -568,8 +570,15 @@ public class Reranker {
           }
 
           // model score
-          Adjoints adj = a instanceof Adjoints
-              ? (Adjoints) a : model.score(s, ai, a);
+          Adjoints adj;
+          if (a.mode == ActionType.PRUNE.getIndex()) {
+            adj = (Adjoints) a;
+          } else {
+            assert a.mode == ActionType.COMMIT.getIndex();
+            adj = model.score(s, ai, a);
+          }
+//          Adjoints adj = a instanceof Adjoints
+//              ? (Adjoints) a : model.score(s, ai, a);
           transF.observeAdjoints(adj);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
@@ -673,6 +682,8 @@ public class Reranker {
     boolean oracleSolveMax = false;
     ForwardSearch oracleSearch = fullSearch(
         init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, cachingModelParams);
+    if (LOG_FORWARD_SEARCH)
+      oracleSearch.gold = y;
     oracleSearch.run();
     if (oracleTimer != null) oracleTimer.stop();
 
@@ -682,6 +693,8 @@ public class Reranker {
     boolean mvSolveMax = true;
     ForwardSearch mvSearch =
         fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, cachingModelParams);
+    if (LOG_FORWARD_SEARCH)
+      mvSearch.gold = y;
     mvSearch.run();
     if (mvTimer != null) mvTimer.stop();
 
