@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.rl.State;
-import edu.jhu.hlt.fnparse.rl.params.ActionTypeParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -129,6 +128,7 @@ public class RerankerTrainer {
   // Model parameters
   public Params.Stateful statefulParams = Stateful.NONE;
   public Params.Stateless statelessParams = Stateless.NONE;
+  public Params.PruneThreshold tauParams = Params.PruneThreshold.Const.ONE;
 
   public RerankerTrainer(Random rand) {
     this.rand = rand;
@@ -176,9 +176,9 @@ public class RerankerTrainer {
    */
   private double tuneModelForF1(Reranker model, Config conf, ItemProvider dev) {
     // Insert the bias into the model
-    Params.Stateless theta = model.getStatelessParams();
+    Params.PruneThreshold tau = model.getPruningParams();
     DecoderBias bias = new DecoderBias();
-    model.setStatelessParams(new Params.SumStateless(bias, theta));
+    model.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
 
     // Compute the log-spaced bias values to try
     assert conf.recallBiasLo < conf.recallBiasHi;
@@ -214,7 +214,11 @@ public class RerankerTrainer {
       throw new IllegalStateException("you need to set the params");
 
     Reranker m = new Reranker(
-        Params.Stateful.NONE, statelessParams, pretrainConf.beamSize, rand);
+        Params.Stateful.NONE,
+        statelessParams,
+        tauParams,
+        pretrainConf.beamSize,
+        rand);
     if (performPretrain) {
       LOG.info("[train1] local train");
       train2(m, ip, pretrainConf);
@@ -316,7 +320,7 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
-    double secsBetweenUpdates = 3 * 60d;
+    double secsBetweenUpdates = 0.5 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -334,6 +338,7 @@ public class RerankerTrainer {
         if (t.enoughTimePassed(secsBetweenUpdates)) {
           r.getStatelessParams().showWeights();
           r.getStatefulParams().showWeights();
+          r.getPruningParams().showWeights();
           if (showViolation)
             LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
           if (showTime) {
@@ -442,14 +447,14 @@ public class RerankerTrainer {
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
         .stream()
-        .filter(p -> p.numFrameInstances() <= 5)
+        //.filter(p -> p.numFrameInstances() <= 5)
         .limit(nTrain)
         .collect(Collectors.toList()));
 
-    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 4);
-    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 2);
+    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
+    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
-    trainer.performPretrain = config.getBoolean("performPretrain", false);
+    trainer.performPretrain = config.getBoolean("performPretrain", true);
 
     // FOR DEBUGGING
 //    RerankerTrainer.PRUNE_DEBUG = true;
@@ -502,8 +507,12 @@ public class RerankerTrainer {
         trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
       }
 
-      trainer.addParams(new ActionTypeParams(l2Penalty));
+      //trainer.addParams(new ActionTypeParams(l2Penalty));
     }
+
+    double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
+    trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty);
+//    trainer.tauParams = Params.PruneThreshold.Const.ZERO;
 
     if (useGlobalFeatures) {
       double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);

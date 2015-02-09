@@ -55,6 +55,19 @@ public interface Params {
         return new Adjoints.Explicit(intercept, pruneAction, "tauConst");
       }
     }
+    public static class Sum implements PruneThreshold {
+      private PruneThreshold left, right;
+      public Sum(PruneThreshold left, PruneThreshold right) {
+        this.left = left;
+        this.right = right;
+      }
+      @Override
+      public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+        Adjoints l = left.score(frames, pruneAction, providenceInfo);
+        Adjoints r = right.score(frames, pruneAction, providenceInfo);
+        return new SumAdj(l, r);
+      }
+    }
 
     // TODO move this over to use FrameRolePacking and bit-shifting
     /** Implementation */
@@ -78,26 +91,32 @@ public interface Params {
         return fv;
       }
       private void bb(FeatureVector fv, Frame f, int k, String provInfo) {
+        double interceptW = 0.2d;
+        double nonInterceptW = 0.1d;
+        if (provInfo == null)
+          b(fv, interceptW, "intercept");
+        else
+          b(fv, interceptW, "intercept-" + provInfo);
         if (f != null) {
           if (provInfo == null)
-            b(fv, "frame=" + f.getName());
+            b(fv, nonInterceptW,  "frame=" + f.getName());
           else
-            b(fv, "frame=" + f.getName(), provInfo);
+            b(fv, nonInterceptW, "frame=" + f.getName(), provInfo);
           if (k >= 0) {
             if (provInfo == null)
-              b(fv, "role=" + f.getRole(k));
+              b(fv, nonInterceptW, "role=" + f.getRole(k));
             else
-              b(fv, "role=" + f.getRole(k), provInfo);
+              b(fv, nonInterceptW, "role=" + f.getRole(k), provInfo);
             if (provInfo == null)
-              b(fv, "frameRole=" + f.getName() + "." + f.getRole(k));
+              b(fv, nonInterceptW, "frameRole=" + f.getName() + "." + f.getRole(k));
             else
-              b(fv, "frameRole=" + f.getName() + "." + f.getRole(k), provInfo);
+              b(fv, nonInterceptW, "frameRole=" + f.getName() + "." + f.getRole(k), provInfo);
           }
         } else {
           if (provInfo == null)
-            b(fv, "allTargets");
+            b(fv, nonInterceptW, "allTargets");
           else
-            b(fv, "allTargets", provInfo);
+            b(fv, nonInterceptW, "allTargets", provInfo);
         }
       }
     }
@@ -285,6 +304,7 @@ public interface Params {
     }
   }
 
+  // TODO move into Adjoints as static inner class
   static class SumAdj implements Adjoints {
     private final Adjoints left, right;
     public SumAdj(Adjoints stateful, Adjoints stateless) {

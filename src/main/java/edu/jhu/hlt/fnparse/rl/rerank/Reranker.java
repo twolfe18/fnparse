@@ -14,9 +14,7 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.SpanIndex;
@@ -90,12 +88,17 @@ public class Reranker {
 
   private MultiTimer timer = new MultiTimer();
 
-  public Reranker(Params.Stateful thetaStateful, Params.Stateless thetaStateless, int beamWidth, Random rand) {
+  public Reranker(
+      Params.Stateful thetaStateful,
+      Params.Stateless thetaStateless,
+      Params.PruneThreshold tauParams,
+      int beamWidth,
+      Random rand) {
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
     this.beamWidth = beamWidth;
     this.rand = rand;
-    this.tauParams = new Params.PruneThreshold.Impl(1e-10);
+    this.tauParams = tauParams;
   }
 
   public String toString() {
@@ -110,12 +113,20 @@ public class Reranker {
     return thetaStateful;
   }
 
+  public Params.PruneThreshold getPruningParams() {
+    return tauParams;
+  }
+
   public void setStatelessParams(Params.Stateless theta) {
     this.thetaStateless = theta;
   }
 
   public void setStatefulParams(Params.Stateful theta) {
     this.thetaStateful = theta;
+  }
+
+  public void setPruningParams(Params.PruneThreshold tauParams) {
+    this.tauParams = tauParams;
   }
 
   public boolean hasStatefulFeatures() {
@@ -853,9 +864,10 @@ public class Reranker {
       }
 
       int skipped;
+      double v = violation();
 
       skipped = 0;
-      final double upOracle = learningRate * -hinge / oracle.length();
+      final double upOracle = learningRate * v;
       for (StateSequence cur = oracle; cur != null; cur = cur.neighbor()) {
         Adjoints a = cur.getAdjoints();
         if (a != null)
@@ -866,7 +878,7 @@ public class Reranker {
       assert skipped <= 1;
 
       skipped = 0;
-      final double upMV = learningRate * hinge / mostViolated.length();
+      final double upMV = learningRate * -v;
       for (StateSequence cur = mostViolated; cur != null; cur = cur.neighbor()) {
         Adjoints a = cur.getAdjoints();
         if (a != null)

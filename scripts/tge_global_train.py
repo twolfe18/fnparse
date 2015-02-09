@@ -37,8 +37,9 @@ class Config(tge.Item):
   def build_command(self, name):
     cmd = []
     cmd.append('java')
-    cmd.append('-ea')
-    cmd.append('-Xmx7G')
+    #cmd.append('-ea')
+	cmd.append('-server')
+    cmd.append('-Xmx9G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-cp')
     cmd.append(':'.join(self.jars()))
@@ -63,11 +64,11 @@ def learning_curves(working_dir):
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
   for n in [100, 500, 1500, 3000]:
-    for batch_size in [1, 4, 16]: #, 64]:
-      for l2p in [1e-6, 1e-8, 1e-10]:
+    for batch_size in [2, 8, 32]:
+      for l2p in [1e-4, 1e-6, 1e-8]:
         cl = Config(working_dir)
         cl.l2Penalty = l2p
-        cl.pretrainBatchSize = batch_size
+        cl.pretrainBatchSize = 1
         cl.trainBatchSize = batch_size
         cl.nTrain = n
         cl.useGlobalFeatures = False
@@ -78,7 +79,7 @@ def learning_curves(working_dir):
             cg.useRoleCooc = useRoleCooc
             cg.l2Penalty = l2p
             cg.globalL2Penalty = l2pg
-            cg.pretrainBatchSize = batch_size
+            cg.pretrainBatchSize = 1
             cg.trainBatchSize = batch_size
             cg.nTrain = n
             cg.useGlobalFeatures = True

@@ -4,7 +4,6 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.util.HasSpan;
 
 /**

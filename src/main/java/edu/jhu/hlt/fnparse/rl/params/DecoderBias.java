@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 
 /**
  * This is a type of Param which adds a value to actions that result in a
@@ -12,7 +12,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
  * 
  * @author travis
  */
-public class DecoderBias implements Params.Stateless {
+public class DecoderBias implements Params.PruneThreshold {
 
   private double recallBias = 0d;
 
@@ -30,9 +30,8 @@ public class DecoderBias implements Params.Stateless {
   }
 
   @Override
-  public Adjoints score(FNTagging f, Action a) {
-    double score = a.hasSpan() ? recallBias : 0d;
-    return new Adjoints.Explicit(score, a, getClass().getName());
+  public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+    return new Adjoints.Explicit(recallBias, pruneAction, "decoderBias");
   }
 
   @Override

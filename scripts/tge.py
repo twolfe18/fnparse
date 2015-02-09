@@ -375,7 +375,7 @@ class SgeJobTracker(object):
     assert isinstance(name, str)
     cmd = ['qsub', '-N', name, '-j', 'y', '-V', '-b', 'y', '-cwd']
     # TODO take these as args!
-    cmd += ['-q', 'all.q', '-l', 'num_proc=1,mem_free=8G,h_rt=72:00:00']
+    cmd += ['-q', 'all.q', '-l', 'num_proc=1,mem_free=10G,h_rt=72:00:00']
     if self.logging_dir:
       cmd += ['-o', self.logging_dir]
     cmd += args
