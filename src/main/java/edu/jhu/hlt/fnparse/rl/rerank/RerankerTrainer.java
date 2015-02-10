@@ -67,8 +67,8 @@ public class RerankerTrainer {
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
 
     // Tuning parameters
-    public double propDev = 0.2d;
-    public int maxDev = 50;
+    private double propDev = 0.2d;
+    private int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -88,6 +88,22 @@ public class RerankerTrainer {
 
     public Config(String name) {
       this.name = name;
+    }
+
+    public void setPropDev(double propDev) {
+      this.maxDev = Integer.MAX_VALUE;
+      this.propDev = propDev;
+    }
+
+    public void setMaxDev(int maxDev) {
+      this.maxDev = maxDev;
+      this.propDev = 0.99d;
+    }
+
+    public void autoPropDev(int nTrain) {
+      int nDev = (int) Math.pow(nTrain, 0.7d);
+      setMaxDev(nDev);
+      assert this.propDev > 0.01 && this.propDev < 0.99;
     }
 
     /**
@@ -251,6 +267,7 @@ public class RerankerTrainer {
       dev = new ItemProvider.Slice(ip, Math.min(ip.size(), conf.maxDev), rand);
     } else {
       LOG.info("[train] tuneOnTrainingData=false, splitting data");
+      conf.autoPropDev(ip.size());
       ItemProvider.TrainTestSplit trainDev =
           new ItemProvider.TrainTestSplit(ip, conf.propDev, conf.maxDev, rand);
       train = trainDev.getTrain();
