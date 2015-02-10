@@ -21,6 +21,7 @@ class LogResults:
 		# config = {nTrainLimit=50, batchSize=4, passes=1, regularizer=1000.0, useGoldFrames=false}
 
 		self.mode = '???'
+		self.working_dir = '???'
 		self.syntax_mode = '???'
 		self.alphabet_model = '???'
 		self.log_file = filename
@@ -77,6 +78,9 @@ class LogResults:
 					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
 					self.dev_info['recallBias' + version] = m.group(1)
 					self.dev_info[m.group(2) + version] = m.group(3)
+				m = re.match('^workingDir=(.*)$', line)
+				if m:
+					self.working_dir = m.group(1)
 
 				try:
 					# Logging will dump the number of ms since starting
@@ -97,6 +101,7 @@ class LogResults:
 		self.all_values['alphabet_model'] = self.alphabet_model
 		self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
 		self.all_values['log_file'] = filename
+		self.all_values['working_dir'] = self.working_dir
 
 	def result_string(self, show_keys=True):
 		toks = []
