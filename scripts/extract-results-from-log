@@ -1,14 +1,18 @@
 #!/usr/bin/env python
 
+import re
+
 output_keys = True
 
 class LogResults:
 
-	keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1']
-	keys_to_print += ['train.GenerousMacroF1', 'test.GenerousMacroF1']
-	keys_to_print += ['train.ArgumentMicroF1', 'test.ArgumentMicroF1']
-	keys_to_print += ['syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer']
-	keys_to_print += ['total_time', 'log_file']
+	# Deprecated: use key-values to pull out what you want instead
+	#keys_to_print = ['train.TargetMicroF1', 'test.TargetMicroF1']
+	#keys_to_print += ['train.GenerousMacroF1', 'test.GenerousMacroF1']
+	#keys_to_print += ['train.ArgumentMicroF1', 'test.ArgumentMicroF1']
+	#keys_to_print += ['syntax_mode', 'nTrainLimit', 'batchSize', 'passes', 'regularizer']
+	#keys_to_print += ['total_time', 'log_file']
+	#keys_to_print += ['dev.recallBias', 'dev.ArgumentMicroF1']
 
 	def __init__(self, filename):
 
@@ -16,11 +20,17 @@ class LogResults:
 		# [main] workingDir = experiments/argId/1
 		# config = {nTrainLimit=50, batchSize=4, passes=1, regularizer=1000.0, useGoldFrames=false}
 
+		self.mode = '???'
+		self.syntax_mode = '???'
+		self.alphabet_model = '???'
 		self.log_file = filename
 		self.test_perf = {}
 		self.train_perf = {}
 		self.config = {}
 		self.total_time = '???'
+
+		# Stores things like what the recallBias was and what dev set perf was
+		self.dev_info = {}
 
 		with open(filename) as f:
 			for line in f:
@@ -54,6 +64,20 @@ class LogResults:
 					self.syntax_mode = ar[4]
 					self.alphabet_model = ar[3]
 
+				# NOTE: This was added feb10, after new log format, some stuff didn't change
+				m = re.match('^\[main\]: ArgumentMicro(F1|PRECISION|RECALL) = (0.\d+)$', line)
+				if m:
+					k = 'ArgumentMicro' + m.group(1)
+					assert k not in self.test_perf
+					self.test_perf[k] = m.group(2)
+				m = re.match('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$', line)
+				if m:
+					# There can be multiple versions of this (e.g. pretrain and train)
+					#version = '' if not self.dev_info else '-' + str(len(self.dev_info) / 2)
+					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
+					self.dev_info['recallBias' + version] = m.group(1)
+					self.dev_info[m.group(2) + version] = m.group(3)
+
 				try:
 					# Logging will dump the number of ms since starting
 					# as the first token on every line
@@ -66,6 +90,7 @@ class LogResults:
 		self.all_values = {}
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
 		self.all_values.update({'test.' + k: v for k,v in self.test_perf.iteritems()})
+		self.all_values.update({'dev.' + k: v for k,v in self.dev_info.iteritems()})
 		self.all_values.update(self.config)
 		self.all_values['mode'] = self.mode
 		self.all_values['syntax_mode'] = self.syntax_mode
@@ -75,8 +100,11 @@ class LogResults:
 
 	def result_string(self, show_keys=True):
 		toks = []
-		for k in LogResults.keys_to_print:
-			v = self.all_values.get(k, '???')
+		for k in sorted(self.all_values.keys()):
+			v = self.all_values[k]
+			if v == '???': continue
+		#for k in LogResults.keys_to_print:
+		#	v = self.all_values.get(k, '???')
 			if show_keys:
 				toks.append(k + '=' + v)
 			else:
