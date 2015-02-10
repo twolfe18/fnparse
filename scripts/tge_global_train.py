@@ -38,7 +38,7 @@ class Config(tge.Item):
     cmd = []
     cmd.append('java')
     #cmd.append('-ea')
-	cmd.append('-server')
+    cmd.append('-server')
     cmd.append('-Xmx9G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-cp')
