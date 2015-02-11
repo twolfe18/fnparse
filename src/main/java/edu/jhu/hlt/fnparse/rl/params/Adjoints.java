@@ -66,16 +66,27 @@ public interface Adjoints {
    * Replaces Dense and Sparse
    */
   public static class Vector implements Adjoints {
+
     private final Action action;
+
     private final IntDoubleVector features;
     private final IntDoubleVector weights;  // not owned by this class
+
+    // L2 update is dense, don't want to do it every iteration.
+    // Also don't want to implement a vector * scalar trick.
+    private int iter = 0;
+    private int itersBetweenL2Updates = 10;
+
     private final double l2Penalty;
     private final double learningRate;
+
     private double score;
     private boolean computed;
+
     public Vector(Action a, double[] weights, double[] features, double l2Penalty, double learningRate) {
       this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty, learningRate);
     }
+
     public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty, double learningRate) {
       this.action = a;
       this.weights = weights;
@@ -84,14 +95,17 @@ public interface Adjoints {
       this.l2Penalty = l2Penalty;
       this.learningRate = learningRate;
     }
+
     @Override
     public String toString() {
       return "(Adjoints.Vector " + action + ")";
     }
+
     @Override
     public Action getAction() {
       return action;
     }
+
     @Override
     public double forwards() {
       if (!computed) {
@@ -100,18 +114,28 @@ public interface Adjoints {
       }
       return score;
     }
+
     @Override
     public void backwards(double dScore_dForwards) {
       assert computed;
+      // Only do the l2Penalty update every k iterations for efficiency.
+      if (l2Penalty > 0) {
+        if (iter++ % itersBetweenL2Updates == 0) {
+          weights.apply(new FnIntDoubleToDouble() {
+            private double s = learningRate * itersBetweenL2Updates / 2;
+            @Override
+            public double call(int i, double w_i) {
+              double g = -2 * w_i;
+              return w_i + s * g;
+            }
+          });
+        }
+      }
       features.apply(new FnIntDoubleToDouble() {
         @Override
         public double call(int i, double f_i) {
           double g = dScore_dForwards * f_i;
-          double l2p = 0d;
-          if (l2Penalty > 0)
-            l2p = weights.get(i) * l2Penalty;
-          double u = learningRate * (g - l2p);
-          weights.add(i, u);
+          weights.add(i, learningRate * g);
           return f_i;
         }
       });

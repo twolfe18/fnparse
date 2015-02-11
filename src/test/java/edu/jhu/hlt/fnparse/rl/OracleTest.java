@@ -29,8 +29,9 @@ public class OracleTest {
 
   @Test
   public void test0() {
+    Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     Reranker model = new Reranker(
-        Params.Stateful.NONE, Params.Stateless.NONE, 1, rand);
+        Params.Stateful.NONE, Params.Stateless.NONE, tau, 1, rand);
     for (FNParse y : getParses()) {
       if (y.numFrameInstances() == 0)
         continue;

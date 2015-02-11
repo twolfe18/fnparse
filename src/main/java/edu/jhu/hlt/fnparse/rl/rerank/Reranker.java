@@ -306,6 +306,11 @@ public class Reranker {
    * Right now this only caches for a single FNTagging, and it will likely have
    * to stay this way, because otherwise it would need to cache for an entire
    * data set, which is likely too much.
+   *
+   * Should tauParams be included here?
+   * => NO, not really. Those features are called upon Action/Adjoint construction
+   *    in TransitionFunction.Tricky. It would be nice to cache those calls, but
+   *    it does not take the same form as this.
    */
   private Params.Stateful getFullParams(boolean caching) {
     Params.Stateless stateless = caching
@@ -721,9 +726,9 @@ public class Reranker {
       return Update.NONE;
     }
     Params.Stateful model = Params.Stateful.lift(thetaStateless);
-    //BFunc deltaLoss = new BFunc.MostViolated(y);
-    double negSubsampleRate = 0.75d;
-    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);
+    BFunc deltaLoss = new BFunc.MostViolated(y);
+//    double negSubsampleRate = 0.9d;
+//    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);
     boolean solveMax = true;
     ForwardSearch initialActions =
         initialActionsSearch(init, deltaLoss, solveMax, model);

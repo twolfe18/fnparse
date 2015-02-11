@@ -148,6 +148,10 @@ public interface StoppingCondition {
      * @param devLossFunc computes the loss on the dev set
      * @param alpha should be between 0 and 1, where small values will stop
      * quickly and large values will stop late.
+     * @param d: This class will only call the devLossFunc if d * (average time
+     * to compute devLossFunc) has passed. This guarantees that approximately
+     * (d-1)/d of the time will be spent on updates rather than computing the
+     * stopping conditions.
      */
     public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double d) {
       if (!rScript.isFile())

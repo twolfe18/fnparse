@@ -107,6 +107,7 @@ public class LearningTest {
   @Test
   public void noTrainPrereq() {
     List<FNParse> parses = testParses();
+    Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     CheatingParams thetaCheat = new CheatingParams(parses);
     thetaCheat.setWeightsByHand();
     Params.Stateful theta = Params.Stateful.lift(thetaCheat);
@@ -116,7 +117,7 @@ public class LearningTest {
         State init = State.initialState(y);
         StateSequence ss = new StateSequence(null, null, init, null);
         TransitionFunction oracleScoreTf =
-            new TransitionFunction.Tricky(theta);
+            new TransitionFunction.Tricky(theta, tau);
 
         // Initial state should have an Action that is consistent with the label
         // Recursively?
@@ -152,7 +153,8 @@ public class LearningTest {
     theta.setWeightsByHand();
 
     int beamWidth = 10;
-    Reranker model = new Reranker(Stateful.NONE, theta, beamWidth, rand);
+    Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
+    Reranker model = new Reranker(Stateful.NONE, theta, tau, beamWidth, rand);
     Reranker.LOG_FORWARD_SEARCH = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
@@ -211,12 +213,13 @@ public class LearningTest {
     Reranker model;
 
     // Train a model based on the items
+    Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     if (train) {
       boolean byHand = false;
       PriorScoreParams theta = new PriorScoreParams(ip, true);
       if (byHand) {
         theta.setParamsByHand();
-        model = new Reranker(Stateful.NONE, theta, beamWidth, rand);
+        model = new Reranker(Stateful.NONE, theta, tau, beamWidth, rand);
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand);
         trainer.statelessParams = theta;
@@ -228,7 +231,7 @@ public class LearningTest {
       // check how good the score can be.
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
-      model = new Reranker(Stateful.NONE, oracle, beamWidth, rand);
+      model = new Reranker(Stateful.NONE, oracle, tau, beamWidth, rand);
       Assert.assertTrue("I dumped support for using items for pruning", false);
     }
 

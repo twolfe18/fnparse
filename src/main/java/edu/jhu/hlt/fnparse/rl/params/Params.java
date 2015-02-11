@@ -51,13 +51,19 @@ public interface Params {
         this.intercept = intercept;
       }
       @Override
+      public String toString() {
+        return String.format("(Constant %.1f)", intercept);
+      }
+      @Override
       public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
         return new Adjoints.Explicit(intercept, pruneAction, "tauConst");
       }
     }
     public static class Sum implements PruneThreshold {
-      private PruneThreshold left, right;
+      private final PruneThreshold left, right;
       public Sum(PruneThreshold left, PruneThreshold right) {
+        if (left == null || right == null)
+          throw new IllegalArgumentException();
         this.left = left;
         this.right = right;
       }
@@ -72,11 +78,11 @@ public interface Params {
     // TODO move this over to use FrameRolePacking and bit-shifting
     /** Implementation */
     public static class Impl extends FeatureParams implements PruneThreshold {
-      public Impl(double l2Penalty) {
-        super(l2Penalty);
+      public Impl(double l2Penalty, double learningRate) {
+        super(l2Penalty, learningRate);
       }
-      public Impl(double l2Penalty, int hashBuckets) {
-        super(l2Penalty, hashBuckets);
+      public Impl(double l2Penalty, double learningRate, int hashBuckets) {
+        super(l2Penalty, learningRate, hashBuckets);
       }
       @Override
       public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {

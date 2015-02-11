@@ -36,7 +36,8 @@ public abstract class FeatureParams {
   protected int numBuckets;
 
   /** For AlphabetBased implementation */
-  public FeatureParams(double l2Penalty) {
+  public FeatureParams(double l2Penalty, double learningRate) {
+    this.learningRate = learningRate;
     this.featureIndices = new Alphabet<>();
     this.featureIndices.startGrowth(); // stops growing when doneTraining is called
     this.numBuckets = -1;
@@ -46,7 +47,8 @@ public abstract class FeatureParams {
   }
 
   /** For HashBased implementation */
-  public FeatureParams(double l2Penalty, int numBuckets) {
+  public FeatureParams(double l2Penalty, double learningRate, int numBuckets) {
+    this.learningRate = learningRate;
     this.featureIndices = null;
     this.numBuckets = numBuckets;
     this.theta = new AveragedWeights(1024, averageFeatures);

@@ -3,11 +3,13 @@ package edu.jhu.hlt.fnparse.rl.params;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 
 /**
  * Lifts TemplatedFeatures into Stateless.Params. Does so by only looking at the
@@ -20,7 +22,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
  * @author travis
  */
 public class TemplatedFeatureParams
-    extends FeatureParams implements Params.Stateless {
+    extends FeatureParams implements Params.Stateless, Params.PruneThreshold {
 
   // if true, call featurizeDebug, which shows all the features that were just
   // computed on every call (very slow -- debug only).
@@ -31,19 +33,33 @@ public class TemplatedFeatureParams
   private HeadFinder headFinder;
 
   /** Use alphabet */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty) {
-    super(l2Penalty);
+  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, double learningRate) {
+    super(l2Penalty, learningRate);
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
 
   /** Use feature hashing */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, int numBuckets) {
-    super(l2Penalty, numBuckets);
+  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, double learningRate, int numBuckets) {
+    super(l2Penalty, learningRate, numBuckets);
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
 
+  /**
+   * This implementation is specifically for PRUNE(t,k,*) actions.
+   */
+  @Override
+  public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+    // How COMMIT(t,k,nullSpan) used to be implemented.
+    assert !pruneAction.hasSpan();
+    assert pruneAction.getSpanSafe() == Span.nullSpan;
+    return getFeatures(frames, pruneAction);
+  }
+
+  /**
+   * This implementation is used for COMMIT(t,k,*) actions.
+   */
   @Override
   public FeatureVector getFeatures(FNTagging f, Action a) {
     // Capture the context for the TemplatedFeatures
