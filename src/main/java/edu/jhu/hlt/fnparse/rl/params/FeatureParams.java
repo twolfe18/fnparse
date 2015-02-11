@@ -30,30 +30,25 @@ public abstract class FeatureParams {
 
   protected AveragedWeights theta;
   protected double l2Penalty;
-  protected double learningRate;
 
   protected Alphabet<String> featureIndices;
   protected int numBuckets;
 
   /** For AlphabetBased implementation */
-  public FeatureParams(double l2Penalty, double learningRate) {
-    this.learningRate = learningRate;
+  public FeatureParams(double l2Penalty) {
     this.featureIndices = new Alphabet<>();
     this.featureIndices.startGrowth(); // stops growing when doneTraining is called
     this.numBuckets = -1;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
-    this.learningRate = 1;
   }
 
   /** For HashBased implementation */
-  public FeatureParams(double l2Penalty, double learningRate, int numBuckets) {
-    this.learningRate = learningRate;
+  public FeatureParams(double l2Penalty, int numBuckets) {
     this.featureIndices = null;
     this.numBuckets = numBuckets;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
-    this.learningRate = 1;
   }
 
   /** Override one of the getFeatures methods */
@@ -127,7 +122,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -138,7 +133,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -149,7 +144,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty);
     return adj;
   }
 

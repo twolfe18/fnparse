@@ -78,11 +78,11 @@ public interface Params {
     // TODO move this over to use FrameRolePacking and bit-shifting
     /** Implementation */
     public static class Impl extends FeatureParams implements PruneThreshold {
-      public Impl(double l2Penalty, double learningRate) {
-        super(l2Penalty, learningRate);
+      public Impl(double l2Penalty) {
+        super(l2Penalty);
       }
-      public Impl(double l2Penalty, double learningRate, int hashBuckets) {
-        super(l2Penalty, learningRate, hashBuckets);
+      public Impl(double l2Penalty, int hashBuckets) {
+        super(l2Penalty, hashBuckets);
       }
       @Override
       public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {

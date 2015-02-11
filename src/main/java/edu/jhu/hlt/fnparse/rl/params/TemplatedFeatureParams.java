@@ -33,15 +33,15 @@ public class TemplatedFeatureParams
   private HeadFinder headFinder;
 
   /** Use alphabet */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, double learningRate) {
-    super(l2Penalty, learningRate);
+  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty) {
+    super(l2Penalty);
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
 
   /** Use feature hashing */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, double learningRate, int numBuckets) {
-    super(l2Penalty, learningRate, numBuckets);
+  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, int numBuckets) {
+    super(l2Penalty, numBuckets);
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }

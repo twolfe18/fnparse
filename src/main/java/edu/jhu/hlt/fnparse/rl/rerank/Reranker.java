@@ -65,7 +65,7 @@ public class Reranker {
 
   // NOTE: Do not change this without considerable consideration. This is related
   // to how margins are computed, and I think a lot will break if this isn't 1.
-  public static final double COST_FN = 1d;
+  public static final double COST_FN = 2d;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -83,6 +83,7 @@ public class Reranker {
   private Params.Stateless thetaStateless;
   private Params.PruneThreshold tauParams;
 
+  @SuppressWarnings("unused")
   private Random rand;
   private int beamWidth;
 
@@ -463,30 +464,46 @@ public class Reranker {
    */
   public static class ScoredAction2 implements Update {
     public final Adjoints adjoints;
-    public final double y;
+    public final double y;  // either -1 or +1
     public final double wx;
-    public final double hinge;
-    public ScoredAction2(Adjoints a, double deltaLoss) {
-      if (deltaLoss != 0d && deltaLoss != 1d)
-        throw new IllegalArgumentException("deltaLoss should be 0 or 1");
-      this.adjoints = a;
-      this.y = (deltaLoss - 0.5) * -2;  // {0,1} => {1,-1}
-      this.wx = adjoints.forwards();
-      hinge = Math.max(0d, 1d - y * wx);
+    public final double cost;
 
-      if (hinge > 10)
-        LOG.warn("wat? badHinge=" + hinge);
+    public ScoredAction2(Adjoints a, double deltaLoss) {
+      if (deltaLoss < 0)
+        throw new RuntimeException("deltaLoss=" + deltaLoss);
+      this.adjoints = a;
+      this.wx = a.forwards();
+
+      this.y = ((deltaLoss == 0) ^ (wx > 0)) ? +1 : -1;
+
+      // HO SHIT I'M DUMB
+      // y=1,yhat=0 for COMMIT has cost 5
+      // y=1,yhat=0 for PRUNE has cost 1
+      boolean commit = a.getAction().getActionType() == ActionType.COMMIT;
+      assert commit || a.getAction().getActionType() == ActionType.PRUNE;
+      this.cost = commit
+          ? (y == +1 ? Reranker.COST_FN : 1)
+          : (y == +1 ? 1 : Reranker.COST_FN);
+
+      //LOG.info("y=" + y + " cost=" + cost + " wx=" + wx + " deltaLoss=" + deltaLoss + " adjoints=" + adjoints.getAction().getActionType().getName());
     }
+
     @Override
     public double apply(double learningRate) {
-      //LOG.info("hinge=" + hinge + " wx=" + wx + " y=" + y);
-      if (hinge > 0)
-        adjoints.backwards(learningRate * y * hinge);
-      return hinge;
+      assert learningRate > 0;
+      double v = violation();
+      if (v > 0) {
+        double step = learningRate * y * cost;
+        //if (adjoints.getAction().getActionType() == ActionType.PRUNE)
+        //LOG.info("[apply] y=" + y + " cost=" + cost + " wx=" + wx + " step=" + step + " adjoints=" + adjoints.getAction().getActionType().getName());
+        adjoints.backwards(step);
+      }
+      return v;
     }
+
     @Override
     public double violation() {
-      return hinge;
+      return Math.max(0d, 1d - y * wx) * cost;
     }
   }
 
@@ -615,8 +632,15 @@ public class Reranker {
           
 
           // Save the initial actions and their scores
-          if (initialActions != null && iter == 0)
+          if (initialActions != null && iter == 0) {
+            // bias == deltaLoss
+            // deltaLoss \in {0, costFN, costFP}
+            // I somehow need to communicate up from deltaLoss if this example
+            // was a false positive or false negative.
+            // If I knew the gold answer, I could tell.
+            // TODO Maybe another implementation of bFunc is in order?
             initialActions.add(new ScoredAction2(adj, bias));
+          }
 
           // Add to the beam
           if (fullSearch) {
@@ -777,8 +801,13 @@ public class Reranker {
         assert updates.size() > 0;
         double s = learningRate / updates.size();
         double u = 0d;
-        for (T up : updates)
+        for (T up : updates) {
           u += up.apply(s);
+//          if (Double.isInfinite(u) || Double.isNaN(u)) {
+//            up.apply(s);
+//            throw new RuntimeException();
+//          }
+        }
         return u / updates.size();
       }
       @Override
@@ -840,7 +869,7 @@ public class Reranker {
       FNParse yHat = mostViolated.getCur().decode();
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
-      double loss = se.argOnlyFP() + se.argOnlyFN();
+      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       assert !Double.isNaN(hinge);
       assert Double.isFinite(hinge);

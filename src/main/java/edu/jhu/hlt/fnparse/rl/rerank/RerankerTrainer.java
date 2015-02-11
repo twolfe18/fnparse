@@ -277,13 +277,13 @@ public class RerankerTrainer {
     }
 
     LOG.info("[train1] global train");
-    if (statefulParams != Params.Stateful.NONE) {
+//    if (statefulParams != Params.Stateful.NONE) {
       m.setStatefulParams(statefulParams);
       m.setBeamWidth(trainConf.beamSize);
       train2(m, ip, trainConf);
-    } else {
-      LOG.info("[train1] skipping global train because there are no stateful params");
-    }
+//    } else {
+//      LOG.info("[train1] skipping global train because there are no stateful params");
+//    }
 
     LOG.info("[train1] done, times:\n" + timer);
     return m;
@@ -313,6 +313,8 @@ public class RerankerTrainer {
     // Use dev data for stopping condition
     StoppingCondition.DevSet dynamicStopping = null;
     if (conf.allowDynamicStopping) {
+      if (dev.size() == 0)
+        throw new RuntimeException("no dev data!");
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.2d;  // Lower numbers mean stop earlier.
@@ -578,7 +580,6 @@ public class RerankerTrainer {
 
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
-    final double learningRate = 1d; // Use config.learningRate
     LOG.info("[main] using l2Penalty=" + l2Penalty);
     TemplatedFeatureParams templatedFeatures = null;
     if (useCheatingParams) {
@@ -599,17 +600,17 @@ public class RerankerTrainer {
         EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
         ep.learnTheta(true);
         if (useEmbeddingParamsDebug)
-          ep.debug(new TemplatedFeatureParams(featureTemplates, learningRate, hashBuckets), l2Penalty);
+          ep.debug(new TemplatedFeatureParams(featureTemplates, hashBuckets), l2Penalty);
         trainer.addParams(ep);
       } else {
         if (useFeatureHashing) {
           LOG.info("[main] using TemplatedFeatureParams with feature hashing");
           templatedFeatures = trainer.addParams(
-              new TemplatedFeatureParams(featureTemplates, l2Penalty, learningRate, hashBuckets));
+              new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
         } else {
           LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
           templatedFeatures = trainer.addParams(
-              new TemplatedFeatureParams(featureTemplates, l2Penalty, learningRate));
+              new TemplatedFeatureParams(featureTemplates, l2Penalty));
         }
 
         //trainer.addParams(new ActionTypeParams(l2Penalty));
@@ -633,19 +634,17 @@ public class RerankerTrainer {
 
       if (useGlobalFeatures) {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
-        double globalLearningRate = 0.05;
-        LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
-
+        LOG.info("[main] using global features with l2p=" + globalL2Penalty);
         if (config.getBoolean("useRoleCooc", false)) {
-          trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
-              globalL2Penalty, globalLearningRate));
+          trainer.addParams(
+              new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
         }
 
-        trainer.addParams(new GlobalFeature.ArgOverlapFeature(
-            globalL2Penalty, globalLearningRate));
+        trainer.addParams(
+            new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
 
-        trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
-            globalL2Penalty, globalLearningRate));
+        trainer.addParams(
+            new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
       }
     }
 

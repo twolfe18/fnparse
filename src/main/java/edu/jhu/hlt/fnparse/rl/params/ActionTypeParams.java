@@ -14,8 +14,8 @@ public class ActionTypeParams extends FeatureParams implements Params.Stateless 
   private boolean includeFrameRole;
   private boolean includeRole;
 
-  public ActionTypeParams(double l2Penalty, double learningRate) {
-    super(l2Penalty, learningRate); // use Alphabet
+  public ActionTypeParams(double l2Penalty) {
+    super(l2Penalty); // use Alphabet
     includeFrame = true;
     includeFrameRole = true;
     includeRole = true;
