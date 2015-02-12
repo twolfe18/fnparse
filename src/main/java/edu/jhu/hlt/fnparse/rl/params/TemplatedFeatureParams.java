@@ -83,7 +83,7 @@ public class TemplatedFeatureParams
     // Compute the features
     FeatureVector fv = new FeatureVector();
     if (showFeatures)
-      features.featurizeDebug(fv, context, "[OldFeatureParams]");
+      features.featurizeDebug(fv, context, "[TemplatedFeatureParams]");
     else
       features.featurize(fv, context);
 

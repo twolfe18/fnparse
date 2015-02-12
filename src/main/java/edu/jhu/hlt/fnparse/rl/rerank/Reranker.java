@@ -60,12 +60,16 @@ import edu.jhu.hlt.fnparse.util.Timer;
  */
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
+
+  // If true, show the oracle and most violated paths for getFullUpdate
   public static boolean LOG_UPDATE = false;
+
+  // If true, show a bunch of details about forward search (verbose and slow)
   public static boolean LOG_FORWARD_SEARCH = false;
 
   // NOTE: Do not change this without considerable consideration. This is related
   // to how margins are computed, and I think a lot will break if this isn't 1.
-  public static final double COST_FN = 2d;
+  public static final double COST_FN = 3d;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -131,7 +135,8 @@ public class Reranker {
   }
 
   public boolean hasStatefulFeatures() {
-    return thetaStateful != Params.Stateful.NONE;
+    return true;
+    //return thetaStateful != Params.Stateful.NONE;
   }
 
   public int getBeamWidth() {
@@ -141,6 +146,15 @@ public class Reranker {
   public void setBeamWidth(int w) {
     if (w < 1) throw new IllegalArgumentException();
     beamWidth = w;
+  }
+
+  public void showWeights() {
+    LOG.info("[showWeights] stateful:");
+    thetaStateful.showWeights();
+    LOG.info("[showWeights] stateless:");
+    thetaStateless.showWeights();
+    LOG.info("[showWeights] tau:");
+    tauParams.showWeights();
   }
 
   public static ItemProvider getItemProvider() {
@@ -593,6 +607,7 @@ public class Reranker {
 
           actionsTried++;
           double bias = biasFunction.score(s, ai, a);
+          assert !Double.isNaN(bias);
           if (Double.isInfinite(bias)) {
             if (verbose && LOG_FORWARD_SEARCH)
               LOG.info("skipping due to bFunc=" + biasFunction);
@@ -610,13 +625,12 @@ public class Reranker {
             assert a.mode == ActionType.COMMIT.getIndex();
             adj = model.score(s, ai, a);
           }
-//          Adjoints adj = a instanceof Adjoints
-//              ? (Adjoints) a : model.score(s, ai, a);
           transF.observeAdjoints(adj);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
           if (!solvingMax)
             score = -score;
+          assert Double.isFinite(score) && !Double.isNaN(score);
 
           if (verbose && LOG_FORWARD_SEARCH) {
             LOG.info("score=" + score + " bias=" + bias
@@ -737,6 +751,11 @@ public class Reranker {
       mvSearch.gold = y;
     mvSearch.run();
     if (mvTimer != null) mvTimer.stop();
+
+    if (LOG_UPDATE) {
+      logSolution("[fullUpdate oracle]", oracleSearch.getPath());
+      logSolution("[fullUpdate mostViolated]", mvSearch.getPath());
+    }
 
     return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
   }

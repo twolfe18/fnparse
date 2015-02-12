@@ -111,12 +111,14 @@ public interface Adjoints {
       if (!computed) {
         score = features.dot(weights);
         computed = true;
+        assert Double.isFinite(score) && !Double.isNaN(score);
       }
       return score;
     }
 
     @Override
     public void backwards(double dScore_dForwards) {
+      assert Double.isFinite(dScore_dForwards) && !Double.isNaN(dScore_dForwards);
       assert computed;
       // Only do the l2Penalty update every k iterations for efficiency.
       if (l2Penalty > 0) {
@@ -134,7 +136,9 @@ public interface Adjoints {
       features.apply(new FnIntDoubleToDouble() {
         @Override
         public double call(int i, double f_i) {
-          weights.add(i, dScore_dForwards * f_i);
+          double u = dScore_dForwards * f_i;
+          assert Double.isFinite(u) && !Double.isNaN(u);
+          weights.add(i, u);
           return f_i;
         }
       });
