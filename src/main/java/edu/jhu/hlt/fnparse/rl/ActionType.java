@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 
 /**
@@ -152,7 +153,7 @@ public interface ActionType {
         throw new IllegalArgumentException("you need a label!");
       // NOTE: Do not change these costs!
       final double costFP = 1d;
-      final double costFN = 1d;
+      final double costFN = Reranker.COST_FN;
       Span hyp = a.getSpanSafe();
       Span gold = y.getFrameInstance(a.t).getArgument(a.k);
       if (hyp != gold) {
@@ -508,7 +509,7 @@ public interface ActionType {
             pruned++;
         }
       }
-      return pruned;
+      return pruned * Reranker.COST_FN;
     }
 
     /**

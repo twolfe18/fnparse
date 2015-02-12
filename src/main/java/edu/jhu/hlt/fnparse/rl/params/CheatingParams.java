@@ -10,9 +10,10 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
-public class CheatingParams implements Params.Stateless {
+public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
   public static final Logger LOG = Logger.getLogger(CheatingParams.class);
   public static boolean SHOW_ON_UPDATE = false;
 
@@ -42,6 +43,11 @@ public class CheatingParams implements Params.Stateless {
         + goldParseIds.size() + " parses");
   }
 
+  @Override
+  public String toString() {
+    return "(CheatingParams)";
+  }
+
   public void setWeightsByHand() {
     theta[0] = -1d;
     theta[1] =  2d;
@@ -65,11 +71,16 @@ public class CheatingParams implements Params.Stateless {
     f[0] = 1d;
     f[1] = isGold ? 1d : 0d;
     double l2Penalty = 0;
-    double learningRate = 1;
     return new Adjoints.Vector(a,
         new IntDoubleDenseVector(theta),
         new IntDoubleDenseVector(f),
-        l2Penalty, learningRate);
+        l2Penalty);
+  }
+
+  @Override
+  public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+    assert pruneAction.getSpanSafe() == Span.nullSpan;
+    return score(frames, pruneAction);
   }
 
   @Override

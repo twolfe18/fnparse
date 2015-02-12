@@ -53,9 +53,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static final int BUCKETS = 1<<20;
     public static final int DA_BITS = 14;
     public static final int REL_BITS = 3;
-    public RoleCooccurenceFeatureStateful(double l2Penalty, double learningRate) {
+    public RoleCooccurenceFeatureStateful(double l2Penalty) {
       super(l2Penalty, BUCKETS); // use Hashing
-      this.learningRate = learningRate;
     }
     @Override
     public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
@@ -123,9 +122,8 @@ public interface GlobalFeature extends Params.Stateful {
   public static class ArgOverlapFeature
       extends FeatureParams implements Params.Stateful {
     public static final int BUCKETS = 6;
-    public ArgOverlapFeature(double l2Penalty, double learningRate) {
+    public ArgOverlapFeature(double l2Penalty) {
       super(l2Penalty, BUCKETS);   // use Hashing
-      this.learningRate = learningRate;
     }
     // q = query span
     // X = {x} = set of spans already committed to
@@ -169,9 +167,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static final int MRIGHT = 10;
     public static final int MLEFT_MRIGHT = 11;
 
-    public SpanBoundaryFeature(double l2Penalty, double learningRate) {
+    public SpanBoundaryFeature(double l2Penalty) {
       super(l2Penalty, 12);
-      this.learningRate = learningRate;
     }
 
     @Override

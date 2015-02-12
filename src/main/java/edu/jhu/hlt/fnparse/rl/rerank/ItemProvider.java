@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
 import java.util.zip.GZIPInputStream;
@@ -28,7 +29,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.util.HasId;
 
-public interface ItemProvider {
+public interface ItemProvider extends Iterable<FNParse> {
   public int size();
   public FNParse label(int i);
   public List<Item> items(int i);
@@ -45,6 +46,20 @@ public interface ItemProvider {
             l.add(new Item(t, k, Span.getSpan(i, j), 0d));
     }
     return l;
+  }
+
+  default public Iterator<FNParse> iterator() {
+    return new Iterator<FNParse>() {
+      private int i = 0;
+      @Override
+      public boolean hasNext() {
+        return i < size();
+      }
+      @Override
+      public FNParse next() {
+        return label(i++);
+      }
+    };
   }
 
   public static class ParseWrapper implements ItemProvider {

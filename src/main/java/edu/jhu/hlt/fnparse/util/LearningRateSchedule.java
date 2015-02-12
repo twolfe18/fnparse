@@ -10,11 +10,19 @@ public interface LearningRateSchedule {
 
   public double learningRate();
 
+  default public void scale(double factor) {
+    throw new RuntimeException("need to implement scale for " + toString());
+  }
 
   public static class Constant implements LearningRateSchedule {
-    private final double learningRate;
+    private double learningRate;
     public Constant(double learningRate) {
       this.learningRate = learningRate;
+    }
+    @Override
+    public void scale(double factor) {
+      assert factor != 0d;
+      this.learningRate *= factor;
     }
     @Override
     public void observe(int iteration, double violation, int batchSize) {
@@ -41,6 +49,11 @@ public interface LearningRateSchedule {
       this.smooth = smooth;
       this.squish = squish;
       this.iter = 0;
+    }
+    @Override
+    public void scale(double factor) {
+      assert factor != 0d;
+      this.initial *= factor;
     }
     @Override
     public void observe(int iteration, double violation, int batchSize) {

@@ -17,6 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
@@ -29,6 +30,7 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -40,8 +42,10 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.ThresholdFinder;
 import edu.jhu.hlt.fnparse.util.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Training logic can get out of hand (e.g. checking against dev data, etc).
@@ -62,13 +66,22 @@ public class RerankerTrainer {
     // General parameters
     public int threads = 1;
     public int beamSize = 1;
-    public int batchSize = 4;
-    public StoppingCondition stopping = new StoppingCondition.Time(6 * 60);
+    public int batchSize = 4;	 // If 0, compute an exact gradient
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
+    public StoppingCondition stopping = new StoppingCondition.Time(4 * 60);
+
+    // If true (and dev settings permit), train2 will automatically add a
+    // StoppingCondition.DevSet to the list of stopping conditions.
+    public boolean allowDynamicStopping = true;
+
+    // Normally if a model has no Params.Stateful features, then getStatelessUpdate
+    // is used to train the model. If this is true, getFullUpdate will always
+    // be used, regardless of params.
+    public boolean forceGlobalTrain = true;
 
     // Tuning parameters
-    public double propDev = 0.2d;
-    public int maxDev = 50;
+    private double propDev = 0.2d;
+    private int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -90,12 +103,41 @@ public class RerankerTrainer {
       this.name = name;
     }
 
+    public void setPropDev(double propDev) {
+      this.maxDev = Integer.MAX_VALUE;
+      this.propDev = propDev;
+    }
+
+    public void setMaxDev(int maxDev) {
+      this.maxDev = maxDev;
+      this.propDev = 0.99d;
+    }
+
+    public void autoPropDev(int nTrain) {
+      int nDev = (int) Math.pow(nTrain, 0.7d);
+      setMaxDev(nDev);
+    }
+
+    public void scaleLearningRateToBatchSize(int batchSizeWithLearningRateOf1) {
+      if (batchSize == 0) {
+        LOG.warn("[scaleLearningRateToBatchSize] batchSize=0 (exact gradient), "
+            + "so leaving learning rate as-is: " + learningRate);
+        return;
+      }
+      double f = Math.sqrt(batchSize) / Math.sqrt(batchSizeWithLearningRateOf1);
+      LOG.info("[scaleLearningRateToBatchSize] scaling learning rate of name="
+          + name + " by factor=" + f);
+      learningRate.scale(f);
+    }
+
     /**
      * After this method, will stop if the previous stopping condition says so
      * OR if the given stopping condition does.
      * @return what is passed in.
      */
     public <T extends StoppingCondition> T addStoppingCondition(T s) {
+      if (!allowDynamicStopping && !(s instanceof StoppingCondition.Time))
+        throw new RuntimeException("can't add " + s);
       stopping = new StoppingCondition.Conjunction(stopping, s);
       return s;
     }
@@ -139,18 +181,34 @@ public class RerankerTrainer {
     this.performPretrain = true;
   }
 
-  public void addParams(Params.Stateful p) {
+  /** Returns what you passed in */
+  public <T extends Params.Stateful> T addParams(T p) {
+    if (p == null)
+      throw new IllegalArgumentException();
     if (this.statefulParams == Params.Stateful.NONE)
       this.statefulParams = p;
     else
       this.statefulParams = new Params.SumStateful(this.statefulParams, p);
+    return p;
   }
 
-  public void addParams(Params.Stateless p) {
+  /** Returns what you passed in */
+  public <T extends Params.Stateless> T addParams(T p) {
+    if (p == null)
+      throw new IllegalArgumentException();
     if (this.statelessParams == Params.Stateless.NONE)
       this.statelessParams = p;
     else
       this.statelessParams = new Params.SumStateless(this.statelessParams, p);
+    return p;
+  }
+
+  /** Returns what you passed in */
+  public <T extends Params.PruneThreshold> T addPruningParams(T p) {
+    if (p == null)
+      throw new IllegalArgumentException();
+    this.tauParams = new Params.PruneThreshold.Sum(this.tauParams, p);
+    return p;
   }
 
   /** If you don't want anything to print, just provide showStr=null */
@@ -180,32 +238,31 @@ public class RerankerTrainer {
     DecoderBias bias = new DecoderBias();
     model.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
 
-    // Compute the log-spaced bias values to try
-    assert conf.recallBiasLo < conf.recallBiasHi;
-    assert conf.tuneSteps > 1;
-    double step = (conf.recallBiasHi - conf.recallBiasLo) / (conf.tuneSteps - 1);  // linear steps
-
-    // Sweep the bias for the best performance.
-    double bestPerf = 0d;
-    double bestRecallBias = 0d;
-    for (int i = 0; i < conf.tuneSteps; i++) {
-      timer.start("tuneModelForF1.eval");
-      bias.setRecallBias(conf.recallBiasLo + step * i);
-      Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
-          ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null);
-      double perf = results.get(conf.objective.getName());
-      if (i == 0 || perf > bestPerf) {
-        bestPerf = perf;
-        bestRecallBias = bias.getRecallBias();
+    // Make a function which computes the dev set loss given a threshold
+    Function<Double, Double> thresholdPerf = new Function<Double, Double>() {
+      @Override
+      public Double apply(Double threshold) {
+        timer.start("tuneModelForF1.eval");
+        bias.setRecallBias(threshold);
+        Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
+            ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null);
+        double perf = results.get(conf.objective.getName());
+        LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
+            bias.getRecallBias(), perf));
+        timer.stop("tuneModelForF1.eval");
+        return perf;
       }
-      LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
-          bias.getRecallBias(), perf));
-      timer.stop("tuneModelForF1.eval");
-    }
-    LOG.info("[tuneModelForF1] chose recallBias=" + bestRecallBias
-        + " with " + conf.objective.getName() + "=" + bestPerf);
-    bias.setRecallBias(bestRecallBias);
-    return bestPerf;
+    };
+
+    // Let ThresholdFinder do the heavy lifting
+    Pair<Double, Double> best = ThresholdFinder.search(
+        thresholdPerf, conf.recallBiasLo, conf.recallBiasHi, conf.tuneSteps);
+
+    // Log and set the best value
+    LOG.info("[tuneModelForF1] chose recallBias=" + best.get1()
+        + " with " + conf.objective.getName() + "=" + best.get2());
+    bias.setRecallBias(best.get1());
+    return best.get2();
   }
 
   /** Trains and tunes a full model */
@@ -227,13 +284,13 @@ public class RerankerTrainer {
     }
 
     LOG.info("[train1] global train");
-    if (statefulParams != Params.Stateful.NONE) {
+//    if (statefulParams != Params.Stateful.NONE) {
       m.setStatefulParams(statefulParams);
       m.setBeamWidth(trainConf.beamSize);
       train2(m, ip, trainConf);
-    } else {
-      LOG.info("[train1] skipping global train because there are no stateful params");
-    }
+//    } else {
+//      LOG.info("[train1] skipping global train because there are no stateful params");
+//    }
 
     LOG.info("[train1] done, times:\n" + timer);
     return m;
@@ -246,50 +303,64 @@ public class RerankerTrainer {
     // Split the data
     final ItemProvider train, dev;
     if (conf.tuneOnTrainingData) {
-      LOG.info("[train] tuneOnTrainingData=true");
+      LOG.info("[train2] tuneOnTrainingData=true");
       train = ip;
       dev = new ItemProvider.Slice(ip, Math.min(ip.size(), conf.maxDev), rand);
     } else {
-      LOG.info("[train] tuneOnTrainingData=false, splitting data");
+      LOG.info("[train2] tuneOnTrainingData=false, splitting data");
+      conf.autoPropDev(ip.size());
       ItemProvider.TrainTestSplit trainDev =
           new ItemProvider.TrainTestSplit(ip, conf.propDev, conf.maxDev, rand);
       train = trainDev.getTrain();
       dev = trainDev.getTest();
     }
-    LOG.info("[train] nTrain=" + train.size() + " nDev=" + dev.size());
+    LOG.info("[train2] nTrain=" + train.size() + " nDev=" + dev.size()
+        + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
-    File rScript = new File("scripts/stop.sh");
-    double alpha = 0.2d;
-    double d = 8;
-    DoubleSupplier devLossFunc = new DoubleSupplier() {
-      @Override
-      public double getAsDouble() {
-        LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
-        double loss = 0d;
-        for (int i = 0; i < dev.size(); i++) {
-          FNParse y = ip.label(i);
-          List<Item> rerank = ip.items(i);
-          State init = State.initialState(y, rerank);
-          Update u = m.hasStatefulFeatures()
-              ? m.getFullUpdate(init, y, rand, null, null)
-              : m.getStatelessUpdate(init, y);
-          loss += u.violation();
+    StoppingCondition.DevSet dynamicStopping = null;
+    if (conf.allowDynamicStopping) {
+      if (dev.size() == 0)
+        throw new RuntimeException("no dev data!");
+      LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
+      File rScript = new File("scripts/stop.sh");
+      double alpha = 0.2d;  // Lower numbers mean stop earlier.
+      double d = 5; // Lower numbers mean compute dev set err more frequently
+      DoubleSupplier devLossFunc = new DoubleSupplier() {
+        @Override
+        public double getAsDouble() {
+          LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
+          double loss = 0d;
+          for (int i = 0; i < dev.size(); i++) {
+            FNParse y = ip.label(i);
+            List<Item> rerank = ip.items(i);
+            State init = State.initialState(y, rerank);
+            Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
+                ? m.getFullUpdate(init, y, rand, null, null)
+                : m.getStatelessUpdate(init, y);
+            loss += u.violation();
+            assert Double.isFinite(loss) && !Double.isNaN(loss);
+          }
+          loss /= dev.size();
+          LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size() + " for conf=" + conf.name);
+          return loss;
         }
-        loss /= dev.size();
-        LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size());
-        return loss;
-      }
-    };
-    StoppingCondition.DevSet dynamicStopping = conf.addStoppingCondition(
-        new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d));
+      };
+      dynamicStopping = conf.addStoppingCondition(
+          new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d));
+    } else {
+      LOG.info("[train2] allowDynamicStopping=false leaving stopping condition as is");
+    }
 
     try {
       // Train the model
       hammingTrain(m, train, conf);
+      LOG.info("[train2] done hammingTrain, params:");
+      m.showWeights();
 
       // Tune the model
       if (conf.performTuning()) {
+        //Reranker.LOG_FORWARD_SEARCH = true;   // TODO REMOVE, FOR DEBUGGING
         tuneModelForF1(m, conf, dev);
       }
     } catch (Exception e) {
@@ -297,8 +368,11 @@ public class RerankerTrainer {
     }
 
     // StoppingCondition.DevSet writes to a file, this closes that.
-    dynamicStopping.close();
-    LOG.info("[train2] done, times:\n" + timer);
+    if (dynamicStopping != null)
+      dynamicStopping.close();
+    LOG.info("[train2] done conf=" + conf.name);
+    LOG.info("[train2] times: " + timer);
+    LOG.info("[train2] totally done conf=" + conf.name);
   }
 
   /**
@@ -320,7 +394,7 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
-    double secsBetweenUpdates = 3 * 60d;
+    double secsBetweenUpdates = 0.5 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -336,9 +410,7 @@ public class RerankerTrainer {
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
         if (t.enoughTimePassed(secsBetweenUpdates)) {
-          r.getStatelessParams().showWeights();
-          r.getStatefulParams().showWeights();
-          r.getPruningParams().showWeights();
+          r.showWeights();
           if (showViolation)
             LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
           if (showTime) {
@@ -359,6 +431,7 @@ public class RerankerTrainer {
     LOG.info("[hammingTrain] telling Params that training is over");
     r.getStatelessParams().doneTraining();
     r.getStatefulParams().doneTraining();
+    r.getPruningParams().doneTraining();
 
     LOG.info("[hammingTrain] times:\n" + timer);
     timer.stop(timerStr);
@@ -378,20 +451,33 @@ public class RerankerTrainer {
     Timer to = timer.get(timerStrPartial + ".oracle", true).setPrintInterval(10).ignoreFirstTime();
     Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
     t.start();
-    boolean verbose = false;
+
+    // Compute the batch
     int n = ip.size();
+    int[] batch;
+    if (conf.batchSize == 0) {
+      batch = new int[n];
+      for (int i = 0; i < batch.length; i++)
+        batch[i] = i;
+    } else {
+      batch = new int[conf.batchSize];
+      for (int i = 0; i < batch.length; i++)
+        batch[i] = rand.nextInt(n);
+    }
+
+    // Compute updates for the batch
+    boolean verbose = false;
     List<Update> finishedUpdates = new ArrayList<>();
     if (es == null) {
       if (verbose)
         LOG.info("[hammingTrainBatch] running serial");
-      for (int i = 0; i < conf.batchSize; i++) {
-        int idx = rand.nextInt(n);
+      for (int idx : batch) {
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
         State init = State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        Update u = r.hasStatefulFeatures()
+        Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
           ? r.getFullUpdate(init, y, rand, to, tmv)
           : r.getStatelessUpdate(init, y);
         finishedUpdates.add(u);
@@ -400,8 +486,7 @@ public class RerankerTrainer {
       if (verbose)
         LOG.info("[hammingTrainBatch] running with ExecutorService");
       List<Future<Update>> updates = new ArrayList<>();
-      for (int i = 0; i < conf.batchSize; i++) {
-        int idx = rand.nextInt(n);
+      for (int idx : batch) {
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
         if (verbose)
@@ -414,9 +499,10 @@ public class RerankerTrainer {
     }
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
-    assert finishedUpdates.size() == conf.batchSize;
+    assert finishedUpdates.size() == conf.batchSize
+        || (finishedUpdates.size() == n && conf.batchSize == 0);
 
-    // Apply the update
+    // Apply the updates
     double learningRate = conf.learningRate.learningRate();
     double violation = new Update.Batch<>(finishedUpdates).apply(learningRate);
     conf.learningRate.observe(iter, violation, conf.batchSize);
@@ -439,8 +525,12 @@ public class RerankerTrainer {
     boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
     boolean useFeatureHashing = config.getBoolean("useFeatureHashing", true);
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
+    boolean useCheatingParams = config.getBoolean("useCheatingParams", false);
 
-    int nTrain = config.getInt("nTrain", 100);
+    Reranker.COST_FN = config.getDouble("costFN", 1);
+    LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
+
+    int nTrain = config.getInt("nTrain", 10);
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand);
     trainer.reporters = ResultReporter.getReporters(config);
@@ -451,15 +541,27 @@ public class RerankerTrainer {
         .limit(nTrain)
         .collect(Collectors.toList()));
 
-    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
+    //trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
+    trainer.pretrainConf.batchSize = 0;
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
     trainer.performPretrain = config.getBoolean("performPretrain", true);
 
+    // Set learning rate based on batch size
+    int batchSizeThatShouldHaveLearningRateOf1 = 200;
+    //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
+    //trainer.pretrainConf.learningRate.scale(10);
+    trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
+
     // FOR DEBUGGING
+    Reranker.LOG_UPDATE = true;
 //    RerankerTrainer.PRUNE_DEBUG = true;
 //    Reranker.LOG_FORWARD_SEARCH = true;
-
+    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
+    trainer.pretrainConf.allowDynamicStopping = false;
+    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(15));
+    trainer.trainConf.addStoppingCondition(new StoppingCondition.Fixed(100));
+    //trainer.trainConf.allowDynamicStopping = false;
 
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < ip.size(); i++) {
@@ -473,9 +575,9 @@ public class RerankerTrainer {
       train = ip;
       test = ip;
       trainer.pretrainConf.tuneOnTrainingData = true;
-      trainer.pretrainConf.maxDev = 15;
+      trainer.pretrainConf.maxDev = 25;
       trainer.trainConf.tuneOnTrainingData = true;
-      trainer.trainConf.maxDev = 15;
+      trainer.trainConf.maxDev = 25;
     } else {
       double propTest = 0.25;
       int maxTest = 9999;
@@ -490,50 +592,87 @@ public class RerankerTrainer {
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
     LOG.info("[main] using l2Penalty=" + l2Penalty);
-    if (useEmbeddingParams) {
-      LOG.info("[main] using embedding params");
-      int embeddingSize = 2;
-      EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
-      ep.learnTheta(true);
-      if (useEmbeddingParamsDebug)
-        ep.debug(new TemplatedFeatureParams(featureTemplates, hashBuckets), l2Penalty);
-      trainer.addParams(ep);
+    if (useCheatingParams) {
+      // For debugging, invalidates a lot of other settings.
+      // Note there is one wrinkle: CheatingParams extends Params.Stateless but
+      // not Params.PruneThreshold, so it must produce positive or negative
+      // scores for COMMIT actions, and ZERO must be used for tauParams.
+      LOG.warn("[main] using cheating params with pruning threshold of 0");
+      //trainer.tauParams = Params.PruneThreshold.Const.ZERO;
+      trainer.tauParams = new CheatingParams(ip);
+      trainer.addParams(new CheatingParams(ip));
+      trainer.pretrainConf.dontPerformTuning();
     } else {
-      if (useFeatureHashing) {
-        LOG.info("[main] using TemplatedFeatureParams with feature hashing");
-        trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
+      // This is the path that will be executed when not debugging
+      if (useEmbeddingParams) {
+        LOG.info("[main] using embedding params");
+        int embeddingSize = 2;
+        EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
+        ep.learnTheta(true);
+        if (useEmbeddingParamsDebug)
+          ep.debug(new TemplatedFeatureParams(featureTemplates, hashBuckets), l2Penalty);
+        trainer.addParams(ep);
       } else {
-        LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
-        trainer.addParams(new TemplatedFeatureParams(featureTemplates, l2Penalty));
+        if (useFeatureHashing) {
+          LOG.info("[main] using TemplatedFeatureParams with feature hashing");
+          trainer.addParams(
+              new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
+        } else {
+          LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
+          trainer.addParams(
+              new TemplatedFeatureParams(featureTemplates, l2Penalty));
+        }
+
+        //trainer.addParams(new ActionTypeParams(l2Penalty));
       }
 
-      //trainer.addParams(new ActionTypeParams(l2Penalty));
-    }
+      // Setup tau/pruning parameters
+      if (config.getBoolean("useDynamicTau", true)) {
+        // Old way: very simple features
+        //      double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
+        //      double tauLearningRate = config.getDouble("taulLearningRate", Math.sqrt(trainer.trainConf.batchSize) / 10d);
+        //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
 
-    double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
-    trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty);
-//    trainer.tauParams = Params.PruneThreshold.Const.ZERO;
-
-    if (useGlobalFeatures) {
-      double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
-      double globalLearningRate = 0.05;
-      LOG.info("[main] using global features with l2p=" + globalL2Penalty + " lr=" + globalLearningRate);
-
-      if (config.getBoolean("useRoleCooc", false)) {
-        trainer.addParams(new GlobalFeature.RoleCooccurenceFeatureStateful(
-            globalL2Penalty, globalLearningRate));
+        // Older way: very rich features.
+        LOG.info("[main] using TemplatedFeatureParams for tau");
+        if (useFeatureHashing) {
+          LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
+          trainer.addPruningParams(
+              new TemplatedFeatureParams(featureTemplates, l2Penalty, hashBuckets));
+        } else {
+          LOG.info("[main] using TemplatedFeatureParams with an Alphabet for tau");
+          trainer.addPruningParams(
+              new TemplatedFeatureParams(featureTemplates, l2Penalty));
+        }
+      } else {
+        LOG.warn("[main] you probably don't want to use constante params for tau!");
+        trainer.tauParams = Params.PruneThreshold.Const.ZERO;
       }
 
-      trainer.addParams(new GlobalFeature.ArgOverlapFeature(
-          globalL2Penalty, globalLearningRate));
+      if (useGlobalFeatures) {
+        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
+        LOG.info("[main] using global features with l2p=" + globalL2Penalty);
+        if (config.getBoolean("useRoleCooc", false)) {
+          trainer.addParams(
+              new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
+        }
 
-      trainer.addParams(new GlobalFeature.SpanBoundaryFeature(
-          globalL2Penalty, globalLearningRate));
+        trainer.addParams(
+            new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+
+        trainer.addParams(
+            new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+      }
     }
 
+    // Train
     LOG.info("[main] starting training, config:");
     config.store(System.out, null);
     Reranker model = trainer.train1(train);
+
+    //Reranker.LOG_FORWARD_SEARCH = true;
+
+    // Evaluate
     LOG.info("[main] done training, evaluating");
     Map<String, Double> perfResults = eval(model, test, "[main]");
     Map<String, String> results = new HashMap<>();

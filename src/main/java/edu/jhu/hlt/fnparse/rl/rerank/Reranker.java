@@ -60,12 +60,16 @@ import edu.jhu.hlt.fnparse.util.Timer;
  */
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
+
+  // If true, show the oracle and most violated paths for getFullUpdate
   public static boolean LOG_UPDATE = false;
+
+  // If true, show a bunch of details about forward search (verbose and slow)
   public static boolean LOG_FORWARD_SEARCH = false;
 
   // NOTE: Do not change this without considerable consideration. This is related
   // to how margins are computed, and I think a lot will break if this isn't 1.
-  public static final double COST_FN = 1d;
+  public static double COST_FN = 1d;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -83,6 +87,7 @@ public class Reranker {
   private Params.Stateless thetaStateless;
   private Params.PruneThreshold tauParams;
 
+  @SuppressWarnings("unused")
   private Random rand;
   private int beamWidth;
 
@@ -140,6 +145,15 @@ public class Reranker {
   public void setBeamWidth(int w) {
     if (w < 1) throw new IllegalArgumentException();
     beamWidth = w;
+  }
+
+  public void showWeights() {
+    LOG.info("[showWeights] stateful:");
+    thetaStateful.showWeights();
+    LOG.info("[showWeights] stateless:");
+    thetaStateless.showWeights();
+    LOG.info("[showWeights] tau:");
+    tauParams.showWeights();
   }
 
   public static ItemProvider getItemProvider() {
@@ -306,6 +320,11 @@ public class Reranker {
    * Right now this only caches for a single FNTagging, and it will likely have
    * to stay this way, because otherwise it would need to cache for an entire
    * data set, which is likely too much.
+   *
+   * Should tauParams be included here?
+   * => NO, not really. Those features are called upon Action/Adjoint construction
+   *    in TransitionFunction.Tricky. It would be nice to cache those calls, but
+   *    it does not take the same form as this.
    */
   private Params.Stateful getFullParams(boolean caching) {
     Params.Stateless stateless = caching
@@ -458,30 +477,46 @@ public class Reranker {
    */
   public static class ScoredAction2 implements Update {
     public final Adjoints adjoints;
-    public final double y;
+    public final double y;  // either -1 or +1
     public final double wx;
-    public final double hinge;
-    public ScoredAction2(Adjoints a, double deltaLoss) {
-      if (deltaLoss != 0d && deltaLoss != 1d)
-        throw new IllegalArgumentException("deltaLoss should be 0 or 1");
-      this.adjoints = a;
-      this.y = (deltaLoss - 0.5) * -2;  // {0,1} => {1,-1}
-      this.wx = adjoints.forwards();
-      hinge = Math.max(0d, 1d - y * wx);
+    public final double cost;
 
-      if (hinge > 10)
-        LOG.warn("wat? badHinge=" + hinge);
+    public ScoredAction2(Adjoints a, double deltaLoss) {
+      if (deltaLoss < 0)
+        throw new RuntimeException("deltaLoss=" + deltaLoss);
+      this.adjoints = a;
+      this.wx = a.forwards();
+
+      this.y = ((deltaLoss == 0) ^ (wx > 0)) ? +1 : -1;
+
+      // HO SHIT I'M DUMB
+      // y=1,yhat=0 for COMMIT has cost 5
+      // y=1,yhat=0 for PRUNE has cost 1
+      boolean commit = a.getAction().getActionType() == ActionType.COMMIT;
+      assert commit || a.getAction().getActionType() == ActionType.PRUNE;
+      this.cost = commit
+          ? (y == +1 ? Reranker.COST_FN : 1)
+          : (y == +1 ? 1 : Reranker.COST_FN);
+
+      //LOG.info("y=" + y + " cost=" + cost + " wx=" + wx + " deltaLoss=" + deltaLoss + " adjoints=" + adjoints.getAction().getActionType().getName());
     }
+
     @Override
     public double apply(double learningRate) {
-      //LOG.info("hinge=" + hinge + " wx=" + wx + " y=" + y);
-      if (hinge > 0)
-        adjoints.backwards(learningRate * y * hinge);
-      return hinge;
+      assert learningRate > 0;
+      double v = violation();
+      if (v > 0) {
+        double step = learningRate * y * cost;
+        //if (adjoints.getAction().getActionType() == ActionType.PRUNE)
+        //LOG.info("[apply] y=" + y + " cost=" + cost + " wx=" + wx + " step=" + step + " adjoints=" + adjoints.getAction().getActionType().getName());
+        adjoints.backwards(step);
+      }
+      return v;
     }
+
     @Override
     public double violation() {
-      return hinge;
+      return Math.max(0d, 1d - y * wx) * cost;
     }
   }
 
@@ -571,6 +606,7 @@ public class Reranker {
 
           actionsTried++;
           double bias = biasFunction.score(s, ai, a);
+          assert !Double.isNaN(bias);
           if (Double.isInfinite(bias)) {
             if (verbose && LOG_FORWARD_SEARCH)
               LOG.info("skipping due to bFunc=" + biasFunction);
@@ -588,13 +624,12 @@ public class Reranker {
             assert a.mode == ActionType.COMMIT.getIndex();
             adj = model.score(s, ai, a);
           }
-//          Adjoints adj = a instanceof Adjoints
-//              ? (Adjoints) a : model.score(s, ai, a);
           transF.observeAdjoints(adj);
           double modelScore = adj.forwards();
           double score = bias + modelScore;
           if (!solvingMax)
             score = -score;
+          assert Double.isFinite(score) && !Double.isNaN(score);
 
           if (verbose && LOG_FORWARD_SEARCH) {
             LOG.info("score=" + score + " bias=" + bias
@@ -610,8 +645,15 @@ public class Reranker {
           
 
           // Save the initial actions and their scores
-          if (initialActions != null && iter == 0)
+          if (initialActions != null && iter == 0) {
+            // bias == deltaLoss
+            // deltaLoss \in {0, costFN, costFP}
+            // I somehow need to communicate up from deltaLoss if this example
+            // was a false positive or false negative.
+            // If I knew the gold answer, I could tell.
+            // TODO Maybe another implementation of bFunc is in order?
             initialActions.add(new ScoredAction2(adj, bias));
+          }
 
           // Add to the beam
           if (fullSearch) {
@@ -709,6 +751,11 @@ public class Reranker {
     mvSearch.run();
     if (mvTimer != null) mvTimer.stop();
 
+    if (LOG_UPDATE) {
+      logSolution("[fullUpdate oracle]", oracleSearch.getPath());
+      logSolution("[fullUpdate mostViolated]", mvSearch.getPath());
+    }
+
     return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
   }
 
@@ -721,9 +768,9 @@ public class Reranker {
       return Update.NONE;
     }
     Params.Stateful model = Params.Stateful.lift(thetaStateless);
-    //BFunc deltaLoss = new BFunc.MostViolated(y);
-    double negSubsampleRate = 0.75d;
-    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);
+    BFunc deltaLoss = new BFunc.MostViolated(y);
+//    double negSubsampleRate = 0.9d;
+//    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);
     boolean solveMax = true;
     ForwardSearch initialActions =
         initialActionsSearch(init, deltaLoss, solveMax, model);
@@ -772,8 +819,13 @@ public class Reranker {
         assert updates.size() > 0;
         double s = learningRate / updates.size();
         double u = 0d;
-        for (T up : updates)
+        for (T up : updates) {
           u += up.apply(s);
+//          if (Double.isInfinite(u) || Double.isNaN(u)) {
+//            up.apply(s);
+//            throw new RuntimeException();
+//          }
+        }
         return u / updates.size();
       }
       @Override
@@ -835,7 +887,7 @@ public class Reranker {
       FNParse yHat = mostViolated.getCur().decode();
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
-      double loss = se.argOnlyFP() + se.argOnlyFN();
+      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       assert !Double.isNaN(hinge);
       assert Double.isFinite(hinge);

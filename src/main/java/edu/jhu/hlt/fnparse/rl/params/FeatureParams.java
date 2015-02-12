@@ -30,7 +30,6 @@ public abstract class FeatureParams {
 
   protected AveragedWeights theta;
   protected double l2Penalty;
-  protected double learningRate;
 
   protected Alphabet<String> featureIndices;
   protected int numBuckets;
@@ -42,7 +41,6 @@ public abstract class FeatureParams {
     this.numBuckets = -1;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
-    this.learningRate = 1;
   }
 
   /** For HashBased implementation */
@@ -51,7 +49,6 @@ public abstract class FeatureParams {
     this.numBuckets = numBuckets;
     this.theta = new AveragedWeights(1024, averageFeatures);
     this.l2Penalty = l2Penalty;
-    this.learningRate = 1;
   }
 
   /** Override one of the getFeatures methods */
@@ -125,7 +122,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -136,7 +133,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -147,7 +144,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty, learningRate);
+    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty);
     return adj;
   }
 

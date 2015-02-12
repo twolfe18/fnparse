@@ -2,6 +2,8 @@ package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.function.Supplier;
 
+import org.apache.log4j.Logger;
+
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
@@ -66,55 +68,81 @@ public interface Adjoints {
    * Replaces Dense and Sparse
    */
   public static class Vector implements Adjoints {
+    public static final Logger LOG = Logger.getLogger(Vector.class);
+
     private final Action action;
+
     private final IntDoubleVector features;
     private final IntDoubleVector weights;  // not owned by this class
-    private final double l2Penalty;
-    private final double learningRate;
+
     private double score;
     private boolean computed;
-    public Vector(Action a, double[] weights, double[] features, double l2Penalty, double learningRate) {
-      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty, learningRate);
+
+    // L2 update is dense, don't want to do it every iteration.
+    // Also don't want to implement a vector * scalar trick.
+    private int iter = 0;
+    private int itersBetweenL2Updates = 10;
+    private final double l2Penalty;
+
+    public Vector(Action a, double[] weights, double[] features, double l2Penalty) {
+      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
     }
-    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty, double learningRate) {
+
+    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
       this.action = a;
       this.weights = weights;
       this.features = features;
       this.computed = false;
       this.l2Penalty = l2Penalty;
-      this.learningRate = learningRate;
     }
+
     @Override
     public String toString() {
       return "(Adjoints.Vector " + action + ")";
     }
+
     @Override
     public Action getAction() {
       return action;
     }
+
     @Override
     public double forwards() {
       if (!computed) {
         score = features.dot(weights);
         computed = true;
+        assert Double.isFinite(score) && !Double.isNaN(score);
       }
       return score;
     }
+
     @Override
     public void backwards(double dScore_dForwards) {
+      assert Double.isFinite(dScore_dForwards) && !Double.isNaN(dScore_dForwards);
       assert computed;
+      // Only do the l2Penalty update every k iterations for efficiency.
+      if (l2Penalty > 0) {
+        if (iter++ % itersBetweenL2Updates == 0) {
+          weights.apply(new FnIntDoubleToDouble() {
+            private double s = itersBetweenL2Updates / 2;
+            @Override
+            public double call(int i, double w_i) {
+              double g = -2 * w_i;
+              return w_i + s * g;
+            }
+          });
+        }
+      }
       features.apply(new FnIntDoubleToDouble() {
         @Override
         public double call(int i, double f_i) {
-          double g = dScore_dForwards * f_i;
-          double l2p = 0d;
-          if (l2Penalty > 0)
-            l2p = weights.get(i) * l2Penalty;
-          double u = learningRate * (g - l2p);
+          double u = dScore_dForwards * f_i;
+          assert Double.isFinite(u) && !Double.isNaN(u);
           weights.add(i, u);
           return f_i;
         }
       });
+      //LOG.info("weight=" + weights);
     }
   }
 

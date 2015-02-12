@@ -128,6 +128,7 @@ public class StateSequence {
         return 0d;
       StateSequence n = neighbor();
       score = action.forwards() +  (n == null ? 0d : n.getScore());
+      assert Double.isFinite(score) && !Double.isNaN(score);
     }
     return score;
   }

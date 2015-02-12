@@ -31,7 +31,7 @@ public class DecoderBias implements Params.PruneThreshold {
 
   @Override
   public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
-    return new Adjoints.Explicit(recallBias, pruneAction, "decoderBias");
+    return new Adjoints.Explicit(-recallBias, pruneAction, "decoderBias");
   }
 
   @Override

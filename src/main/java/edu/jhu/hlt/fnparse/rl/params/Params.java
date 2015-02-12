@@ -51,13 +51,19 @@ public interface Params {
         this.intercept = intercept;
       }
       @Override
+      public String toString() {
+        return String.format("(Constant %.1f)", intercept);
+      }
+      @Override
       public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
         return new Adjoints.Explicit(intercept, pruneAction, "tauConst");
       }
     }
     public static class Sum implements PruneThreshold {
-      private PruneThreshold left, right;
+      private final PruneThreshold left, right;
       public Sum(PruneThreshold left, PruneThreshold right) {
+        if (left == null || right == null)
+          throw new IllegalArgumentException();
         this.left = left;
         this.right = right;
       }
