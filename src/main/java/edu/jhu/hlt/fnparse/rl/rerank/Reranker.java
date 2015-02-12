@@ -69,7 +69,7 @@ public class Reranker {
 
   // NOTE: Do not change this without considerable consideration. This is related
   // to how margins are computed, and I think a lot will break if this isn't 1.
-  public static final double COST_FN = 3d;
+  public static double COST_FN = 1d;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
@@ -135,8 +135,7 @@ public class Reranker {
   }
 
   public boolean hasStatefulFeatures() {
-    return true;
-    //return thetaStateful != Params.Stateful.NONE;
+    return thetaStateful != Params.Stateful.NONE;
   }
 
   public int getBeamWidth() {

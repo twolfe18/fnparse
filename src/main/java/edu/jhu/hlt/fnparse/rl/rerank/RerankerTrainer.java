@@ -74,6 +74,11 @@ public class RerankerTrainer {
     // StoppingCondition.DevSet to the list of stopping conditions.
     public boolean allowDynamicStopping = true;
 
+    // Normally if a model has no Params.Stateful features, then getStatelessUpdate
+    // is used to train the model. If this is true, getFullUpdate will always
+    // be used, regardless of params.
+    public boolean forceGlobalTrain = true;
+
     // Tuning parameters
     private double propDev = 0.2d;
     private int maxDev = 50;
@@ -330,7 +335,7 @@ public class RerankerTrainer {
             FNParse y = ip.label(i);
             List<Item> rerank = ip.items(i);
             State init = State.initialState(y, rerank);
-            Update u = m.hasStatefulFeatures()
+            Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
                 ? m.getFullUpdate(init, y, rand, null, null)
                 : m.getStatelessUpdate(init, y);
             loss += u.violation();
@@ -472,7 +477,7 @@ public class RerankerTrainer {
         State init = State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        Update u = r.hasStatefulFeatures()
+        Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
           ? r.getFullUpdate(init, y, rand, to, tmv)
           : r.getStatelessUpdate(init, y);
         finishedUpdates.add(u);
@@ -521,6 +526,9 @@ public class RerankerTrainer {
     boolean useFeatureHashing = config.getBoolean("useFeatureHashing", true);
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
     boolean useCheatingParams = config.getBoolean("useCheatingParams", false);
+
+    Reranker.COST_FN = config.getDouble("costFN", 1);
+    LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
     int nTrain = config.getInt("nTrain", 10);
     Random rand = new Random(9001);
