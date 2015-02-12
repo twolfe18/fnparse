@@ -4,7 +4,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 
 /**
- * Used to get a dense integer representing (frame,role).
+ * Used to get a dense non-negative integer representing (frame,role).
  *
  * @author travis
  */

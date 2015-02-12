@@ -62,16 +62,19 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
     LOG.info(sb.toString());
   }
 
+  public boolean isGold(FNTagging frames, Action a) {
+    return goldItems.contains(PriorScoreParams.itemKey(frames, a));
+  }
+
   @Override
   public Adjoints score(FNTagging frames, Action a) {
     if (!goldParseIds.contains(frames.getId()))
       throw new IllegalStateException("this parse is unknown, can't cheat");
-    boolean isGold = goldItems.contains(PriorScoreParams.itemKey(frames, a));
     double[] f = new double[theta.length];
     f[0] = 1d;
-    f[1] = isGold ? 1d : 0d;
+    f[1] = isGold(frames, a) ? 1d : 0d;
     double l2Penalty = 0;
-    return new Adjoints.Vector(a,
+    return new Adjoints.Vector(this, a,
         new IntDoubleDenseVector(theta),
         new IntDoubleDenseVector(f),
         l2Penalty);

@@ -69,6 +69,18 @@ public interface Adjoints {
    */
   public static class Vector implements Adjoints {
     public static final Logger LOG = Logger.getLogger(Vector.class);
+    public static final boolean PARANOID = false;
+    public static final FnIntDoubleToDouble VECTOR_VALUE_CHECK = new FnIntDoubleToDouble() {
+      @Override
+      public double call(int arg0, double arg1) {
+        if (Double.isInfinite(arg1) || Double.isNaN(arg1))
+          throw new RuntimeException();
+        return arg1;
+      }
+    };
+
+    // The Params that gave birth to these Adjoints
+    private final Object parent;
 
     private final Action action;
 
@@ -84,21 +96,30 @@ public interface Adjoints {
     private int itersBetweenL2Updates = 10;
     private final double l2Penalty;
 
-    public Vector(Action a, double[] weights, double[] features, double l2Penalty) {
-      this(a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
+    public Vector(Object parent, Action a, double[] weights, double[] features, double l2Penalty) {
+      this(parent, a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
     }
 
-    public Vector(Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
+    public Vector(Object parent, Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
+      this.parent = parent;
       this.action = a;
       this.weights = weights;
       this.features = features;
       this.computed = false;
       this.l2Penalty = l2Penalty;
+      if (PARANOID) {
+//        weights.apply(VECTOR_VALUE_CHECK);
+        features.apply(VECTOR_VALUE_CHECK);
+      }
     }
 
     @Override
     public String toString() {
-      return "(Adjoints.Vector " + action + ")";
+      if (parent != null) {
+        return String.format("(Adjoints.Vector score=%+.2f parent=%s %s)",
+            forwards(), parent.getClass().getSimpleName(), action);
+      }
+      return String.format("(Adjoints.Vector score=%+.2f %s)", forwards(), action);
     }
 
     @Override
@@ -111,7 +132,8 @@ public interface Adjoints {
       if (!computed) {
         score = features.dot(weights);
         computed = true;
-        assert Double.isFinite(score) && !Double.isNaN(score);
+        if (PARANOID && (Double.isInfinite(score) || Double.isNaN(score)))
+          throw new RuntimeException();
       }
       return score;
     }
@@ -127,10 +149,12 @@ public interface Adjoints {
             private double s = itersBetweenL2Updates / 2;
             @Override
             public double call(int i, double w_i) {
-              double g = -2 * w_i;
+              double g = -2 * l2Penalty * w_i;
               return w_i + s * g;
             }
           });
+          if (PARANOID)
+            weights.apply(VECTOR_VALUE_CHECK);
         }
       }
       features.apply(new FnIntDoubleToDouble() {
@@ -142,6 +166,10 @@ public interface Adjoints {
           return f_i;
         }
       });
+      if (PARANOID) {
+        features.apply(VECTOR_VALUE_CHECK);
+        weights.apply(VECTOR_VALUE_CHECK);
+      }
       //LOG.info("weight=" + weights);
     }
   }

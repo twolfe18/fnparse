@@ -47,10 +47,10 @@ public class SpanIndexTest {
         assertNull(ai2.startsAt(i));
 
     // endsAt
-    assertNotNull(ai2.endsAt(5));
-    assertTrue(ai2.endsAt(5).payload == a1);
+    assertNotNull(ai2.endsAt(6));
+    assertTrue(ai2.endsAt(6).payload == a1);
     for (int i = 0; i < n; i++)
-      if (i != 5)
+      if (i != 6)
         assertNull(ai2.endsAt(i));
 
     // Share a starting point => No overlap

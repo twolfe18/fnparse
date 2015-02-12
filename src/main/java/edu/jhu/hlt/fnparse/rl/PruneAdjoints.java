@@ -45,7 +45,9 @@ public class PruneAdjoints extends Action implements Adjoints, HasSpan {
 
   // Just a link to impl
   public String toString() {
-    return ActionType.PRUNE.describe(this);
+    //return ActionType.PRUNE.describe(this);
+    return String.format("(PRUNE t=%d k=%d s=%+2f tau=%s)",
+        t, k, forwards(), tau.getClass().getSimpleName());
   }
 
   /**

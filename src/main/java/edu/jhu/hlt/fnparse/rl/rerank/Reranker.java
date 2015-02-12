@@ -14,7 +14,9 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.SpanIndex;
@@ -281,26 +283,26 @@ public class Reranker {
   }
 
   /** Shows some info about the Action (wrapped in a StateSequence for ancillary info) */
-  private void logAction(String desc, int iteration, double score, StateSequence ss, FNParse y, boolean showDeltaLoss) {
+  //private void logAction(String desc, int iteration, double score, StateSequence ss, FNParse y, boolean showDeltaLoss) {
+  private void logAction(String desc, int iteration, Adjoints action, FNParse y, boolean showDeltaLoss) {
     StringBuilder sb = new StringBuilder("[logAction] ");
     sb.append(desc);
     if (iteration >= 0)
       sb.append(" iter=" + iteration);
-    //sb.append(" id=" + ss.getCur().getFrames().getId());  // this forces State.apply unnecessarily
-    sb.append(" id=" + ss.neighbor().getCur().getFrames().getId());
-    sb.append(" " + ss.getAction());
-    sb.append(" score=" + score);
-    sb.append(" actionScore=" + ss.getAdjoints().forwards());
-    if (showDeltaLoss) {
-      Action a = ss.getAction();
-      ActionType at = a.getActionType();
-      //State s = ss.getCur();          // State after applying a
-      State s = ss.neighbor().getCur(); // State before applying a
-      double dl = at.deltaLoss(s, a, y);
-      sb.append(" deltaLoss=" + dl);
-      //sb.append(" totalLoss=" + ss.getLoss(y));
-    }
-    sb.append(" totalScore=" + ss.getScore());
+    sb.append(" id=" + y.getId());
+    sb.append(" " + action);
+    //sb.append(" score=" + score);
+    //sb.append(" actionScore=" + ss.getAdjoints().forwards());
+//    if (showDeltaLoss) {
+//      Action a = ss.getAction();
+//      ActionType at = a.getActionType();
+//      //State s = ss.getCur();          // State after applying a
+//      State s = ss.neighbor().getCur(); // State before applying a
+//      double dl = at.deltaLoss(s, a, y);
+//      sb.append(" deltaLoss=" + dl);
+//      //sb.append(" totalLoss=" + ss.getLoss(y));
+//    }
+//    sb.append(" totalScore=" + ss.getScore());
     LOG.info(sb.toString());
   }
 
@@ -565,6 +567,9 @@ public class Reranker {
       this.path = null;
       this.fullSearch = fullSearch;
       this.hasRun = false;
+
+      if (initialState.getFrames() instanceof FNParse)
+        gold = (FNParse) initialState.getFrames();
     }
 
     @Override
@@ -598,11 +603,9 @@ public class Reranker {
         if (verbose && LOG_FORWARD_SEARCH)
           logStateInfo(desc + " @ iter=" + iter, s);
 
-        int added = 0, actionsTried = 0;
+        int added = 0, actionsTried = 0, beamAdds = 0;
         Iterable<Action> nextStates = transF.nextStates(frontier);
         for (Action a : nextStates) {
-          if (verbose && LOG_FORWARD_SEARCH)
-            LOG.info("trying out " + a);
 
           actionsTried++;
           double bias = biasFunction.score(s, ai, a);
@@ -632,8 +635,10 @@ public class Reranker {
           assert Double.isFinite(score) && !Double.isNaN(score);
 
           if (verbose && LOG_FORWARD_SEARCH) {
-            LOG.info("score=" + score + " bias=" + bias
-                + " modelScore=" + modelScore + " adjoints=" + adj);
+            logAction(desc, iter, adj, gold, false);
+            //LOG.info("trying out " + a);
+            //LOG.info("score=" + score + " bias=" + bias
+            //    + " modelScore=" + modelScore + " adjoints=" + adj);
           }
           
           // TODO speed up stateless decoding
@@ -660,6 +665,7 @@ public class Reranker {
             added++;
             StateSequence ss = new StateSequence(frontier, null, null, adj);
             boolean onBeam = beam.push(ss, score);
+            if (onBeam) beamAdds++;
             if (useActionIndex && onBeam) {
               // Important to delay this until you know this will add to the
               // beam because this is much slower than the rest of the
@@ -667,12 +673,15 @@ public class Reranker {
               ss.initActionIndexFromPrev();
             }
             if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
-              logAction(desc, iter, score, ss, gold, false);
+              logAction(desc + " beamAdd", iter, adj, gold, false);
+              //logAction(desc, iter, score, ss, gold, false);
           }
         }
 
-        if (LOG_FORWARD_SEARCH)
-          LOG.info(desc + " added=" + added + " of=" + actionsTried);
+        if (LOG_FORWARD_SEARCH) {
+          LOG.info(desc + " scored " + added + "/" + actionsTried
+              + " actions and " + beamAdds + " were put on the beam");
+        }
 
         if (!fullSearch || added == 0) {
           if (LOG_FORWARD_SEARCH)
@@ -861,7 +870,7 @@ public class Reranker {
       this.mostViolated = mostViolated;
 
       // The oracle is supposed to find the highest/lowest scoring derivation
-      // of the gold parse.
+      // of the gold parse (i.e. have loss=0 and be equal to gold).
       State os = oracle.getCur();
       if (os == null) {
         logSolution("[oracle]", oracle);
@@ -884,10 +893,33 @@ public class Reranker {
         }
       }
 
+      // Use the decode of mostViolated as the loss, but...
       FNParse yHat = mostViolated.getCur().decode();
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
       double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
+
+      // ...the loss should math the sum of the deltaLosses
+      double sumDeltaLoss = mostViolated.getLoss(gold);
+      if (Math.abs(loss - sumDeltaLoss) > 1e-5) {
+        LOG.error("loss=" + loss + " sumDeltaLoss=" + sumDeltaLoss);
+        StateSequence cur = mostViolated;
+        while (cur != null) {
+          System.out.println("after " + cur.getActionSafe() + " loss=" + cur.getLoss(gold));
+          cur = cur.neighbor();
+        }
+        int T = gold.numFrameInstances();
+        for (int t = 0; t < T; t++) {
+          FrameInstance fi = gold.getFrameInstance(t);
+          int K = fi.getFrame().numRoles();
+          for (int k = 0; k < K; k++) {
+            Span arg = fi.getArgument(k);
+            System.out.printf("t=%d k=%d\targ=%s\n", t, k, arg.shortString());
+          }
+        }
+        assert false;
+      }
+
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       assert !Double.isNaN(hinge);
       assert Double.isFinite(hinge);

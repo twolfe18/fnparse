@@ -122,7 +122,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -133,7 +133,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(a, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, a, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -144,7 +144,7 @@ public abstract class FeatureParams {
     checkSize();
 
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(pruneAction, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, pruneAction, weights, fv, l2Penalty);
     return adj;
   }
 
@@ -163,14 +163,31 @@ public abstract class FeatureParams {
 
   /** This will override Params.showWeights for extending classes */
   public void showWeights() {
+    Alphabet<String> featureIndices = getAlphabetForShowingWeights();
     if (featureIndices == null) {
-      log.info("[showFeatures] can't show features because we're using feature hashing");
+      log.info("[showFeatures] can't show features because we're using feature "
+          + "hashing with no custom getAlphabetForShowingWeights.");
       return;
     }
     String msg = getClass().getName();
     int k = 15; // how many of the most extreme features to show
     List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
     ModelViewer.showBiggestWeights(w, k, msg, log);
+  }
+
+  /**
+   * You can override this method for implementations that use hashing. Hashing
+   * means that you don't have to do a HashMap lookup during inference, but
+   * you probably still want to be able to look at the weights. In some cases
+   * you can manually define this alphabet (or a subset of it) so that you can
+   * know the weight names for debugging even though you never use them during
+   * inference.
+   */
+  public Alphabet<String> getAlphabetForShowingWeights() {
+    if (!isAlphabetBased())
+      return null;
+    assert featureIndices != null;
+    return featureIndices;
   }
 
   /**

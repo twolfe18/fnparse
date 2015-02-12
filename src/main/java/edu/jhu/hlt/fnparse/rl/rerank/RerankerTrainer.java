@@ -214,8 +214,7 @@ public class RerankerTrainer {
   /** If you don't want anything to print, just provide showStr=null */
   public static Map<String, Double> eval(Reranker m, ItemProvider ip, String showStr) {
     List<FNParse> y = ItemProvider.allLabels(ip);
-    List<FNTagging> f = DataUtil.convertParsesToTaggings(y);
-    List<FNParse> yHat = m.predict(f);
+    List<FNParse> yHat = m.predict(y);
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
     if (showStr != null)
       BasicEvaluation.showResults(showStr, results);
@@ -237,12 +236,15 @@ public class RerankerTrainer {
     Params.PruneThreshold tau = model.getPruningParams();
     DecoderBias bias = new DecoderBias();
     model.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
+    
+    Reranker.LOG_FORWARD_SEARCH = true;
 
     // Make a function which computes the dev set loss given a threshold
     Function<Double, Double> thresholdPerf = new Function<Double, Double>() {
       @Override
       public Double apply(Double threshold) {
         timer.start("tuneModelForF1.eval");
+        LOG.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
         bias.setRecallBias(threshold);
         Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
             ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null);
@@ -254,9 +256,19 @@ public class RerankerTrainer {
       }
     };
 
+    // Encourage the search to stay near 0 if it doesn't make much of a
+    // difference to F1
+    Function<Double, Double> thresholdPerfR = new Function<Double, Double>() {
+      @Override
+      public Double apply(Double threshold) {
+        double f1 = thresholdPerf.apply(threshold);
+        return f1 - (Math.abs(threshold) / 200);  // threshold=3 => penalty 0.015
+      }
+    };
+
     // Let ThresholdFinder do the heavy lifting
     Pair<Double, Double> best = ThresholdFinder.search(
-        thresholdPerf, conf.recallBiasLo, conf.recallBiasHi, conf.tuneSteps);
+        thresholdPerfR, conf.recallBiasLo, conf.recallBiasHi, conf.tuneSteps);
 
     // Log and set the best value
     LOG.info("[tuneModelForF1] chose recallBias=" + best.get1()
@@ -537,7 +549,7 @@ public class RerankerTrainer {
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
         .stream()
-        //.filter(p -> p.numFrameInstances() <= 5)
+        .filter(p -> p.numFrameInstances() <= 5)
         .limit(nTrain)
         .collect(Collectors.toList()));
 
@@ -554,7 +566,7 @@ public class RerankerTrainer {
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
     // FOR DEBUGGING
-    Reranker.LOG_UPDATE = true;
+//    Reranker.LOG_UPDATE = true;
 //    RerankerTrainer.PRUNE_DEBUG = true;
 //    Reranker.LOG_FORWARD_SEARCH = true;
     trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
@@ -600,8 +612,13 @@ public class RerankerTrainer {
       LOG.warn("[main] using cheating params with pruning threshold of 0");
       //trainer.tauParams = Params.PruneThreshold.Const.ZERO;
       trainer.tauParams = new CheatingParams(ip);
-      trainer.addParams(new CheatingParams(ip));
+      CheatingParams cheat = trainer.addParams(new CheatingParams(ip));
       trainer.pretrainConf.dontPerformTuning();
+
+      if (useGlobalFeatures) {
+        LOG.info("[main] adding global cheating params");
+        trainer.addParams(new GlobalFeature.Cheating(cheat, 0));
+      }
     } else {
       // This is the path that will be executed when not debugging
       if (useEmbeddingParams) {

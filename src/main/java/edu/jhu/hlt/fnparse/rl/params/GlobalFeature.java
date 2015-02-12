@@ -1,45 +1,66 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.Supplier;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.SpanIndex;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.SpanIndex.IndexItem;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.util.Alphabet;
 
 /**
- * GlobalFeatures are expected to keep their own indexes up to date.
- * 
- * There is a problem: GlobalFeatures (or Params.Stateful if they're merged)
- * cannot keep their own index, they must be able to read off their answers from
- * State, because we are reasoning about many States on the beam at any given
- * time.
- * 
- * New design: GlobalFeatures will inject an observer into every new state...
- * no that wont work either, States are forked with State.apply
- * 
- * First thing to do is to avoid the problem of indexing by simply ignoring it
- * and seeing if things are too slow.
+ * More of a namespace than an interface, used for things that need to
+ * efficiently known about previous actions take. See ActionSpanIndex for how
+ * the indices are kept.
  *
  * @author travis
  */
 public interface GlobalFeature extends Params.Stateful {
 
-  /**
-   * Called every time an action is committed to.
-   */
-  public void observe(State s, Action a);
 
-  public void clear();
 
-  public FeatureVector featurize(State s, Action a);
+  public static class Cheating extends FeatureParams implements Params.Stateful {
+    private CheatingParams cheat;
+    /**
+     * Uses cheat to determine when this feature should fire.
+     */
+    public Cheating(CheatingParams cheat, double l2Penalty) {
+      super(l2Penalty);   // Use Alphabet
+      this.cheat = cheat;
+    }
+    @Override
+    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+      FeatureVector fv = new FeatureVector();
+      FNTagging frames = state.getFrames();
+      b(fv, "intercept");
+      if (cheat.isGold(frames, a2)) {
+        b(fv, "currentActionIsGold");
+        for (IndexItem<Action> ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+          Action a1 = ii.payload;
+          if (cheat.isGold(frames, a1))
+            b(fv, "pairOfActionsAreBothGold");
+        }
+      }
+      return fv;
+    }
+
+    public void setParamsByHand() {
+      theta.add(featureIndex("intercept"), -2.5d);
+      theta.add(featureIndex("currentActionIsGold"), 1d);
+      theta.add(featureIndex("pairOfActionsAreBothGold"), 1d);
+    }
+  }
 
 
   /**
@@ -64,6 +85,7 @@ public interface GlobalFeature extends Params.Stateful {
       final int AFTER = 3;
       final int WAT = 4;
 
+      // An int that encodes the (frame,role) of the action being considered.
       int da2;
       if (a2.hasSpan()) {
         da2 = frPacking.index(state.getFrame(a2.t), a2.k);
@@ -72,13 +94,19 @@ public interface GlobalFeature extends Params.Stateful {
       }
       da2 = da2 << REL_BITS; // move over to make room for rel type
 
+      int previousActions = 0;
       FeatureVector fv = new FeatureVector();
       for (IndexItem<Action> i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
+        previousActions++;
         Action a = i.payload;
+        assert a.getActionType() == ActionType.COMMIT;
         FrameInstance fi = state.getFrameInstance(a.t);
         Frame f = fi.getFrame();
+
+        // An int that encodes the (frame,role) of a previous action.
         int da1 = frPacking.index(f, a.k);
         da1 = da1 << (REL_BITS + DA_BITS);
+
         if (a.t == a2.t) {
           fv.add(mod(da1 ^ da2 ^ SAME_TARGET, BUCKETS), 1d);
           fv.add(mod(da1 ^ da2, BUCKETS), 1d);
@@ -90,15 +118,22 @@ public interface GlobalFeature extends Params.Stateful {
           Span s2 = state.getFrameInstance(a2.t).getTarget();
           if (s1.before(s2)) {
             fv.add(mod(da1 ^ da2 ^ BEFORE, BUCKETS), 1d);
-            fv.add(mod(da1 ^ da2, BUCKETS), 1d);
+            //fv.add(mod(da1 ^ da2, BUCKETS), 1d);
           } else if (s1.after(s2)) {
             fv.add(mod(da1 ^ da2 ^ AFTER, BUCKETS), 1d);
-            fv.add(mod(da1 ^ da2, BUCKETS), 1d);
+            //fv.add(mod(da1 ^ da2, BUCKETS), 1d);
           } else {
             fv.add(mod(da1 ^ da2 ^ WAT, BUCKETS), 1d);
           }
         }
       }
+
+      // Feature for committing to this (frame,role) given that there have
+      // been a certain number of actions previously committed to.
+      // This can be used to push certain frame-roles to the beginning or end
+      // of decoding.
+      fv.add(mod((-(previousActions/4)) ^ da2 ^ WAT, BUCKETS), 1d);
+
       return fv;
     }
 
@@ -121,9 +156,36 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class ArgOverlapFeature
       extends FeatureParams implements Params.Stateful {
+
+    // How many you want to bucket your collisions up to.
+    // This is not the dimension of the feature vector because we have to
+    // variants of this bucketing, one for all collisions and another for when
+    // there is a collision for the same frame-target.
     public static final int BUCKETS = 6;
+
+    public static final Alphabet<String> FEATURE_NAMES = new Supplier<Alphabet<String>>() {
+      @Override
+      public Alphabet<String> get() {
+        Alphabet<String> a = new Alphabet<>();
+        for (String prefix : Arrays.asList("anyT", "tMatch")) {
+          for (int i = 0; i < BUCKETS; i++) {
+            String f = prefix + "_overlap=" + i;
+            if (i == BUCKETS-1)
+              f += "+";
+            a.lookupIndex(f, true);
+          }
+        }
+        return a;
+      }
+    }.get();
+
+    @Override
+    public Alphabet<String> getAlphabetForShowingWeights() {
+      return FEATURE_NAMES;
+    }
+
     public ArgOverlapFeature(double l2Penalty) {
-      super(l2Penalty, BUCKETS);   // use Hashing
+      super(l2Penalty, BUCKETS * 2);   // use Hashing
     }
     // q = query span
     // X = {x} = set of spans already committed to
@@ -134,10 +196,22 @@ public interface GlobalFeature extends Params.Stateful {
         FeatureVector fv = new FeatureVector();
         List<Action> overlappingActions = new ArrayList<>();
         ai.crosses(a.start, a.end, overlappingActions);
+
+        // All overlapping
         int ovlp = overlappingActions.size();
         if (ovlp >= BUCKETS)
           ovlp = BUCKETS - 1;
         fv.add(ovlp, 1d);
+
+        // Overlapping for the same frame-target
+        int ovlpT = 0;
+        for (Action oa : overlappingActions)
+          if (oa.t == a.t)
+            ovlpT++;
+        if (ovlpT >= BUCKETS)
+          ovlpT = BUCKETS - 1;
+        fv.add(BUCKETS + ovlpT, 1d);
+
         return fv;
       } else {
         return FeatureUtils.emptyFeatures;
@@ -166,6 +240,34 @@ public interface GlobalFeature extends Params.Stateful {
     public static final int MLEFT = 9;
     public static final int MRIGHT = 10;
     public static final int MLEFT_MRIGHT = 11;
+
+    // This will be used to support feature names for showWeights
+    public static final Alphabet<String> FEATURE_NAMES = new Supplier<Alphabet<String>>() {
+      @Override
+      public Alphabet<String> get() {
+        Alphabet<String> a = new Alphabet<>();
+        a.lookupIndex("MSTART1", true);
+        a.lookupIndex("MSTART1_TMATCH", true);
+        a.lookupIndex("MSTART2P", true);
+        a.lookupIndex("MSTART2P_TMATCH", true);
+
+        a.lookupIndex("MEND1", true);
+        a.lookupIndex("MEND1_TMATCH", true);
+        a.lookupIndex("MEND2P", true);
+        a.lookupIndex("MEND2P_TMATCH", true);
+
+        a.lookupIndex("MSTART_MEND", true);
+        a.lookupIndex("MLEFT", true);
+        a.lookupIndex("MRIGHT", true);
+        a.lookupIndex("MLEFT_MRIGHT", true);
+        return a;
+      }
+    }.get();
+
+    @Override
+    public Alphabet<String> getAlphabetForShowingWeights() {
+      return FEATURE_NAMES;
+    }
 
     public SpanBoundaryFeature(double l2Penalty) {
       super(l2Penalty, 12);

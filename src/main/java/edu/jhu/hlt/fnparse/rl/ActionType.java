@@ -151,18 +151,20 @@ public interface ActionType {
     public double deltaLoss(State s, Action a, FNParse y) {
       if (y == null)
         throw new IllegalArgumentException("you need a label!");
-      // NOTE: Do not change these costs!
       final double costFP = 1d;
       final double costFN = Reranker.COST_FN;
       Span hyp = a.getSpanSafe();
       Span gold = y.getFrameInstance(a.t).getArgument(a.k);
-      if (hyp != gold) {
-        if (gold == Span.nullSpan)
-          return costFP;
-        else
-          return costFN;
+      if (hyp == Span.nullSpan && gold == Span.nullSpan) {
+        return 0;
+      } else if (hyp != Span.nullSpan && gold == Span.nullSpan) {
+        return costFP;
+      } else if (hyp == Span.nullSpan && gold != Span.nullSpan) {
+        return costFN;
+      } else if (hyp != Span.nullSpan && gold != Span.nullSpan) {
+        return hyp == gold ? 0 : costFP + costFN;
       } else {
-        return 0d;
+        throw new RuntimeException("wat");
       }
     }
   };

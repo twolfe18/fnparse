@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 
@@ -44,6 +45,21 @@ public class StateSequence {
 
   public SpanIndex<Action> getActionIndex() {
     return actionIndex;
+  }
+
+  private double loss = -1;
+  public double getLoss(FNParse y) {
+    if (loss < 0) {
+      if (neighbor() == null) {
+        loss = 0;
+      } else {
+        State prev = neighbor().getCur();
+        Action a = getAction();
+        double dl = a.getActionType().deltaLoss(prev, a, y);
+        loss = dl + neighbor().getLoss(y);
+      }
+    }
+    return loss;
   }
 
   /** You can only call this from a node which has a pointer out of it */
@@ -138,6 +154,12 @@ public class StateSequence {
   }
 
   public Action getAction() {
+    return action.getAction();
+  }
+
+  public Action getActionSafe() {
+    if (action == null)
+      return null;
     return action.getAction();
   }
 
