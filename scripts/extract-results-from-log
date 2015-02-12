@@ -21,7 +21,8 @@ class LogResults:
 		# config = {nTrainLimit=50, batchSize=4, passes=1, regularizer=1000.0, useGoldFrames=false}
 
 		self.mode = '???'
-		self.working_dir = '???'
+		#self.working_dir = '???'
+		#self.n_train = '???'
 		self.syntax_mode = '???'
 		self.alphabet_model = '???'
 		self.log_file = filename
@@ -32,6 +33,8 @@ class LogResults:
 
 		# Stores things like what the recallBias was and what dev set perf was
 		self.dev_info = {}
+
+		self.global_train_info = {}
 
 		with open(filename) as f:
 			for line in f:
@@ -78,9 +81,10 @@ class LogResults:
 					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
 					self.dev_info['recallBias' + version] = m.group(1)
 					self.dev_info[m.group(2) + version] = m.group(3)
-				m = re.match('^workingDir=(.*)$', line)
-				if m:
-					self.working_dir = m.group(1)
+				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures']:
+					m = re.match('^' + k + '=(.+)$', line)
+					if m:
+						self.global_train_info[k] = m.group(1)
 
 				try:
 					# Logging will dump the number of ms since starting
@@ -95,13 +99,13 @@ class LogResults:
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
 		self.all_values.update({'test.' + k: v for k,v in self.test_perf.iteritems()})
 		self.all_values.update({'dev.' + k: v for k,v in self.dev_info.iteritems()})
+		self.all_values.update({'globalTrain.' + k: v for k,v in self.global_train_info.iteritems()})
 		self.all_values.update(self.config)
 		self.all_values['mode'] = self.mode
 		self.all_values['syntax_mode'] = self.syntax_mode
 		self.all_values['alphabet_model'] = self.alphabet_model
 		self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
 		self.all_values['log_file'] = filename
-		self.all_values['working_dir'] = self.working_dir
 
 	def result_string(self, show_keys=True):
 		toks = []
