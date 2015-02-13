@@ -66,7 +66,7 @@ public class RerankerTrainer {
     // General parameters
     public int threads = 1;
     public int beamSize = 1;
-    public int batchSize = 4; // If 0, compute an exact gradient
+    public int batchSize = 4;	 // If 0, compute an exact gradient
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
     public StoppingCondition stopping = new StoppingCondition.Time(4 * 60);
 
@@ -406,7 +406,7 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
-    double secsBetweenUpdates = 0.1 * 60d;
+    double secsBetweenUpdates = 0.5 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
