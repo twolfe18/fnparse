@@ -14,10 +14,7 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -31,7 +28,6 @@ import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.Beam.Beam1;
 import edu.jhu.hlt.fnparse.util.Beam.BeamN;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 
@@ -245,11 +241,12 @@ public class Reranker {
     boolean cacheAdjoints = true;
     Params.Stateful model = getFullParams(cacheAdjoints);
     boolean solveMax = true;
-    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, solveMax, model);
+    boolean decode = true;
+    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, solveMax, decode, model);
     fs.run();
     StateSequence ss = fs.getPath();
     FNParse yhat = ss.getCur().decode();
-    assert yhat != null;
+    assert yhat != null;    // split maxbeam.pop and beam.pop? path vs decode?
     LOG.info("[predict] done");
     return yhat;
   }
@@ -466,12 +463,13 @@ public class Reranker {
     }
   }
 
-  public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
-    return this.new ForwardSearch(initialState, biasFunction, solveMax, model, null, true);
+  public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, boolean decode, Params.Stateful model) {
+    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, null, true);
   }
 
   public ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
-    return this.new ForwardSearch(initialState, biasFunction, solveMax, model, new ArrayList<>(), false);
+    boolean decode = false;
+    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, new ArrayList<>(), false);
   }
 
   /**
@@ -539,11 +537,17 @@ public class Reranker {
     private final BFunc biasFunction;
     private final Params.Stateful model;
     private final boolean solvingMax;
-    private boolean fullSearch;
     private boolean hasRun;
 
-    private StateSequence path;                 // to be used if fullSearch (oracle, mostViolated)
-    private List<ScoredAction2> initialActions;  // to be used if !fullSearch (statelessTrain)
+    // If true, take the actions out of initialState and build ScoredActions
+    // for each for pretrain.
+    private boolean fullSearch;
+
+    // If true, then require that path is a path to a final (decodable) state.
+    private boolean decode;
+
+    private StateSequence path;                 // to be used if fullSearch (decode, oracle, mostViolated)
+    private List<ScoredAction2> initialActions; // to be used if !fullSearch (statelessTrain)
 
     public FNParse gold = null;  // purely for debugging
 
@@ -557,12 +561,20 @@ public class Reranker {
      * to short-circuiting the model score function, but not +infinity. For
      * solvingMax=false, the reverse is true, +infinity is allowed, not -infinity.
      */
-    ForwardSearch(State initialState, BFunc biasFunction, boolean solvingMax, Params.Stateful model, List<ScoredAction2> initialActions, boolean fullSearch) {
+    public ForwardSearch(
+        State initialState,
+        Params.Stateful model,
+        BFunc biasFunction,
+        boolean solvingMax,
+        boolean decode,
+        List<ScoredAction2> initialActions,
+        boolean fullSearch) {
       assert initialState.numCommitted() == 0;
       this.initialState = initialState;
+      this.model = model;
       this.biasFunction = biasFunction;
       this.solvingMax = solvingMax;
-      this.model = model;
+      this.decode = decode;
       this.initialActions = initialActions;
       this.path = null;
       this.fullSearch = fullSearch;
@@ -589,15 +601,32 @@ public class Reranker {
       final boolean useActionIndex = hasStatefulFeatures();
       if (useActionIndex)
         frontier.initActionIndexFromScratch();
+
+      // This is the beam used to explore.
+      // The score of the elements on this beam are the model score + bias:
+      //   \sum_{i=1}^n s(z_i) + bias(z_i)
+      // If oracle is used, bias will not affect score except to take a subset.
+      // If decode is used, bias = 0.
+      // If mostViolated is used, bias = deltaLoss, and this is the beam of
+      // states being explored, where we only push items that are children of
+      // things that were previously on the beam.
       Beam<StateSequence> beam = beamWidth == 1
           ? new Beam1<>() : new BeamN<>(beamWidth);
       beam.push(frontier, 0d);
 
+      // This beam keeps a running max over all n of:
+      //   \sum_{i=1}^n s(z_i) + bias(z_i)
+      // Every time an item is popped off of the other beam, it is put onto this
+      // beam and its children are considered for adding to the other beam.
+      Beam<StateSequence> maxBeam = new Beam1<>();
+
       for (int iter = 0; beam.size() > 0; iter++) {
 
-        // Pop the best StateSequence off the beam.
+        // Pop the highest scoring z off of the beam and use it to find a next
+        // z' (which may be a maxViolator, oracle, or just a decode).
         // We are going to score Actions leaving that StateSequence.getCur (s).
-        frontier = beam.pop();
+        Beam.Item<StateSequence> frontierItem = beam.popItem();
+        frontier = frontierItem.getItem();
         State s = frontier.getCur();
         SpanIndex<Action> ai = frontier.getActionIndex();
         if (verbose && LOG_FORWARD_SEARCH)
@@ -632,38 +661,22 @@ public class Reranker {
           double score = bias + modelScore;
           if (!solvingMax)
             score = -score;
-          assert Double.isFinite(score) && !Double.isNaN(score);
 
-          if (verbose && LOG_FORWARD_SEARCH) {
+          if (verbose && LOG_FORWARD_SEARCH)
             logAction(desc, iter, adj, gold, false);
-            //LOG.info("trying out " + a);
-            //LOG.info("score=" + score + " bias=" + bias
-            //    + " modelScore=" + modelScore + " adjoints=" + adj);
-          }
-          
-          // TODO speed up stateless decoding
-          // (certainly works for only COMMIT, other action types... ???)
-          // if (!fullSearch && only stateless params) {
-          //   if (score > 0) applyThis action;
-          //   break;
-          // }
-          
 
           // Save the initial actions and their scores
-          if (initialActions != null && iter == 0) {
-            // bias == deltaLoss
-            // deltaLoss \in {0, costFN, costFP}
-            // I somehow need to communicate up from deltaLoss if this example
-            // was a false positive or false negative.
-            // If I knew the gold answer, I could tell.
-            // TODO Maybe another implementation of bFunc is in order?
+          if (initialActions != null && iter == 0)
             initialActions.add(new ScoredAction2(adj, bias));
-          }
 
           // Add to the beam
           if (fullSearch) {
             added++;
             StateSequence ss = new StateSequence(frontier, null, null, adj);
+            // Only add to maxBeam if not doing decode. Decode requires z be a
+            // final state.
+            if (!decode && maxBeam.push(ss, score) && LOG_FORWARD_SEARCH)
+              LOG.info("found new most violator: " + frontierItem);
             boolean onBeam = beam.push(ss, score);
             if (onBeam) beamAdds++;
             if (useActionIndex && onBeam) {
@@ -674,37 +687,37 @@ public class Reranker {
             }
             if (verbose && onBeam && LOG_FORWARD_SEARCH && gold != null)
               logAction(desc + " beamAdd", iter, adj, gold, false);
-              //logAction(desc, iter, score, ss, gold, false);
           }
+        }     // end loop over next actions
+
+        if (actionsTried == 0   // This implies we are at a final state, which
+            && decode           // is required when decode=true.
+            && maxBeam.push(frontierItem)) {
+          LOG.info("found new most violator: " + frontierItem);
         }
 
         if (LOG_FORWARD_SEARCH) {
           LOG.info(desc + " scored " + added + "/" + actionsTried
               + " actions and " + beamAdds + " were put on the beam");
         }
-
-        if (!fullSearch || added == 0) {
-          if (LOG_FORWARD_SEARCH)
-            LOG.info(desc + " done on iteration " + iter);
-          if (fullSearch) {
-            logSolution(desc, frontier);
-            this.path = frontier;
-//            if (ORACLE_DEBUG) {
-//              State finalState = frontier.getCur();
-//              int nu = finalState.numUncommitted();
-//              int nc = finalState.numCommitted();
-//              int TK = finalState.numFrameRoleInstances();
-//              assert nu == 0;
-//              assert nc == TK;
-//            }
-          }
+        if (!fullSearch) {
           this.hasRun = true;
           FS_TIMER.stop();
           return;
         }
+      }       // end loop while beam.size > 0
 
+      // When we've done exploring items on the beam, take the biggest violator
+      // we found on maxBeam.
+      assert fullSearch;
+      if (decode) {
+        this.path = frontier;
+      } else {
+        this.path = maxBeam.pop();
       }
-      throw new RuntimeException("how did you run out of items on the beam?");
+      this.hasRun = true;
+      logSolution(desc, this.path);
+      FS_TIMER.stop();
     }
 
     /**
@@ -742,8 +755,9 @@ public class Reranker {
     if (oracleTimer != null) oracleTimer.start();
     Params.Stateful cachingModelParams = getFullParams(true);
     boolean oracleSolveMax = false;
+    boolean oracleDecode = true;
     ForwardSearch oracleSearch = fullSearch(
-        init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, cachingModelParams);
+        init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, oracleDecode, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       oracleSearch.gold = y;
     oracleSearch.run();
@@ -753,17 +767,13 @@ public class Reranker {
     if (mvTimer != null) mvTimer.start();
     cachingModelParams = getFullParams(true); // release old cache, not worth it
     boolean mvSolveMax = true;
+    boolean mvDecode = true;
     ForwardSearch mvSearch =
-        fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, cachingModelParams);
+        fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, mvDecode, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       mvSearch.gold = y;
     mvSearch.run();
     if (mvTimer != null) mvTimer.stop();
-
-    if (LOG_UPDATE) {
-      logSolution("[fullUpdate oracle]", oracleSearch.getPath());
-      logSolution("[fullUpdate mostViolated]", mvSearch.getPath());
-    }
 
     return new FullUpdate(y, oracleSearch.getPath(), mvSearch.getPath());
   }
@@ -850,8 +860,57 @@ public class Reranker {
 
   /**
    * Sub-gradient step on loss of:
-   * max(0, s(y,z) - [s(y',z') + loss(y,y')])
+   *   max_{z,z',y'} s(x,z,y) - (s(x,z',y') + loss(y,y'))
+   *
+   * Remember that z are sets of y, so that equation is a bit of a pun for:
+   *   max_{z,z':z={y}} s(x,z) - (s(x,z') + max_{y' \in z'} loss(y,y'))
+   *   
+   * BAHHH, trying to make this asymmetric loss work.
+   * In a regular SVM you might have
+   *  min ||w||^2_2 + C * max_{y'} (s(y') + loss(y,y') - s(y))
+   * There is no reason why you can't push that C inside the max and make it a
+   * function of y':
+   *  min ||w||^2_2 + max_{y'} C(y') * (s(y') + loss(y,y') - s(y))
+   * Now we need to ensure that we can solve that max in a step wise fashion. We
+   * know that s and loss decompose over i, but does C?
    * 
+   *
+   * loss need not be \in {0,1}, it can be any arbitrary non-negative value.
+   * We will use an asymmetric Hamming loss.
+   *
+   * Wait a sec, what's the reason that I can't have a multiplicative loss term
+   * on the outside?
+   * I think it has something to do with the fact that we are doing greedy/beam
+   * search and we want to say something about our correctness in finding the
+   * maxViolated (z,z',y').
+   * What do we want to say about our ability to do that?
+   * The reach-ability argument: that if we can reach it under normal decoding
+   * we can reach it under the most violation search.
+   * If we add a loss value in {0,1} AND THEN scale by a factor >= 1, then it is
+   * still the case that if we're on a beam, anything that looked good before
+   * that operation would have looked better afterwards.
+   *
+   * BUT I still need to write down the objective!
+   * Can we admit general loss functions or just hamming?
+   * Its easy to push this through if you say that the margin is the loss, but
+   * its not clear if it works when you want "the margin to be 1, and the cost
+   * to be scaled by the class label"...
+   *
+   * That loss term on the outside makes it seem like we can't necessarily find
+   * the most violated (z,z',y') efficiently, but this is a bit misleading.
+   * Think of that loss term as C in the regular SVM formulation. For example in
+   * the binary case, you can use different C_{y=1} and C_{y=-1} to re-weight
+   * a lob-sided training set.
+   * AH, just like if we were doing the max only once, I think the loss bit should
+   * be recorded for each particular z_i'.
+   * This is saying that we want a margin of 1, and more strongly that we want
+   * it to hold for the entire trajectory, but that when considering those actions
+   * on their own, they should
+   * 1) have a local margin?
+   * 2) take an update which is comesurate with the local deltaLoss?
+   * ....
+   * I think both of these seem desirable, but not directly implied by the SSVM math.
+   *
    * where (y,z) = oracle
    *       (y',z') = mostViolated
    *       max(0, s(y,z) - [s(y',z') + loss(y,y')]) = loss
@@ -860,70 +919,116 @@ public class Reranker {
    */
   public class FullUpdate implements Update {
     public final FNParse gold;
-    public final StateSequence oracle;
-    public final StateSequence mostViolated;
-    public final double hinge;
+    private StateSequence oracle;
+    private StateSequence mostViolated;
+    private double hinge;
 
     public FullUpdate(FNParse gold, StateSequence oracle, StateSequence mostViolated) {
       this.gold = gold;
       this.oracle = oracle;
       this.mostViolated = mostViolated;
 
-      // The oracle is supposed to find the highest/lowest scoring derivation
-      // of the gold parse (i.e. have loss=0 and be equal to gold).
-      State os = oracle.getCur();
-      if (os == null) {
-        logSolution("[oracle]", oracle);
-        LOG.debug("null1");
-      } else {
-        FNParse osd = os.decode();
-        if (osd == null) {
-          logSolution("[oracle]", oracle);
-          logStateInfo("[oracle]", os);
-          LOG.debug("null2");
-        } else {
-          if (!osd.equals(gold)) {
-            LOG.info(FNDiff.diffArgs(osd, gold, true));
-            logSolution("[oracle]", oracle);
-            logStateInfo("[oracle]", os);
-            LOG.info("oracle isn't gold?");
-          } else {
-            // good!
-          }
+      assert oracle.getLoss(gold) == 0;
+      assert mostViolated.getLoss(gold) >= 0;
+
+      oracle.getScore();
+      mostViolated.getScore();
+      mostViolated.getLoss(gold);
+
+      // Start from the beginning of the trajectory and find the most violated point
+      this.hinge = 0;
+      StateSequence oraclePtr = oracle.rewind();
+      StateSequence mvPtr = mostViolated.rewind();
+      while (oraclePtr != null && mvPtr != null) {
+        double loss = mvPtr.getLoss(gold);
+        double h = oraclePtr.getScore() - (mvPtr.getScore() + loss);
+        if (LOG_UPDATE) {
+          LOG.info("[FullUpdate init] oraclePtr.score=" + oraclePtr.getScore()
+              + " mvPtr.score=" + mvPtr.getScore() + " mvPtr.loss=" + loss
+              + " hinge=" + h);
         }
+        if (h < this.hinge) {
+          this.hinge = h;
+          this.oracle = oraclePtr;
+          this.mostViolated = mvPtr;
+        }
+        oraclePtr = oraclePtr.getNext();
+        mvPtr = mvPtr.getNext();
       }
 
-      // Use the decode of mostViolated as the loss, but...
-      FNParse yHat = mostViolated.getCur().decode();
-      assert yHat != null : "mostViolated returned non-terminal state?";
-      SentenceEval se = new SentenceEval(gold, yHat);
-      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
 
-      // ...the loss should math the sum of the deltaLosses
-      double sumDeltaLoss = mostViolated.getLoss(gold);
-      if (Math.abs(loss - sumDeltaLoss) > 1e-5) {
-        LOG.error("loss=" + loss + " sumDeltaLoss=" + sumDeltaLoss);
-        StateSequence cur = mostViolated;
-        while (cur != null) {
-          System.out.println("after " + cur.getActionSafe() + " loss=" + cur.getLoss(gold));
-          cur = cur.neighbor();
-        }
-        int T = gold.numFrameInstances();
-        for (int t = 0; t < T; t++) {
-          FrameInstance fi = gold.getFrameInstance(t);
-          int K = fi.getFrame().numRoles();
-          for (int k = 0; k < K; k++) {
-            Span arg = fi.getArgument(k);
-            System.out.printf("t=%d k=%d\targ=%s\n", t, k, arg.shortString());
-          }
-        }
-        assert false;
-      }
+      // Oracle does not need to return a full sequence now.
+//      // The oracle is supposed to find the highest/lowest scoring derivation
+//      // of the gold parse (i.e. have loss=0 and be equal to gold).
+//      State os = oracle.getCur();
+//      if (os == null) {
+//        logSolution("[oracle]", oracle);
+//        LOG.debug("null1");
+//      } else {
+//        FNParse osd = os.decode();
+//        if (osd == null) {
+//          logSolution("[oracle]", oracle);
+//          logStateInfo("[oracle]", os);
+//          LOG.debug("null2");
+//        } else {
+//          if (!osd.equals(gold)) {
+//            LOG.info(FNDiff.diffArgs(osd, gold, true));
+//            logSolution("[oracle]", oracle);
+//            logStateInfo("[oracle]", os);
+//            LOG.info("oracle isn't gold?");
+//          } else {
+//            // good!
+//          }
+//        }
+//      }
 
-      this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
-      assert !Double.isNaN(hinge);
-      assert Double.isFinite(hinge);
+      // mostViolated need not be decodable any more!
+      // Instead of using SentenceEval, have to rely on StateSequence.getLoss
+//      double loss = mostViolated.getLoss(gold);
+////      // Use the decode of mostViolated as the loss, but...
+////      FNParse yHat = mostViolated.getCur().decode();
+////      assert yHat != null : "mostViolated returned non-terminal state?";
+////      SentenceEval se = new SentenceEval(gold, yHat);
+////      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
+////      // ...the loss should math the sum of the deltaLosses
+////      double sumDeltaLoss = mostViolated.getLoss(gold);
+////      if (Math.abs(loss - sumDeltaLoss) > 1e-5) {
+////        logStateSequence(mostViolated, "loss=" + loss);
+////        throw new RuntimeException();
+////      }
+//
+//      // This is the loss before we put it though a max(0,-)
+//      this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
+//      assert !Double.isNaN(hinge);
+//      assert Double.isFinite(hinge);
+//
+//      if (LOG_UPDATE) {
+//        LOG.info("[FullUpdate init] hinge=" + hinge
+//            + " oracle.length=" + oracle.length() + " oracle.score=" + oracle.getScore()
+//            + " mv.length=" + mostViolated.length() + " mv.score=" + mostViolated.getScore()
+//            + " mv.loss=" + mostViolated.getLoss(gold));
+//      }
     }
+
+//    /** Only use for errors */
+//    private void logStateSequence(StateSequence mostViolated, String msg) {
+//      double sumDeltaLoss = mostViolated.getLoss(gold);
+//      LOG.error(msg + " sumDeltaLoss=" + sumDeltaLoss);
+//      StateSequence cur = mostViolated;
+//      while (cur != null) {
+//        System.out.println("after " + cur.getActionSafe() + " loss=" + cur.getLoss(gold));
+//        cur = cur.neighbor();
+//      }
+//      int T = gold.numFrameInstances();
+//      for (int t = 0; t < T; t++) {
+//        FrameInstance fi = gold.getFrameInstance(t);
+//        int K = fi.getFrame().numRoles();
+//        for (int k = 0; k < K; k++) {
+//          Span arg = fi.getArgument(k);
+//          System.out.printf("t=%d k=%d\targ=%s\n", t, k, arg.shortString());
+//        }
+//      }
+//    }
 
     public boolean isViolated() {
       return hinge < 0d;
@@ -931,8 +1036,8 @@ public class Reranker {
 
     public double violation() {
       if (hinge < 0d) {
-        double z = oracle.length() + mostViolated.length();
-        return -hinge / z;
+        //return -hinge / (oracle.length() + mostViolated.length());
+        return -hinge;
       } else {
         return 0d;
       }
@@ -950,27 +1055,39 @@ public class Reranker {
       int skipped;
       double v = violation();
 
+      int z = 0;
+      for (StateSequence s = oracle; s != null; s = s.getPrev(), z++);
+      for (StateSequence s = mostViolated; s != null; s = s.getPrev(), z++);
+
       skipped = 0;
-      final double upOracle = learningRate * v;
-      for (StateSequence cur = oracle; cur != null; cur = cur.neighbor()) {
+      final double upOracle = learningRate * v / z;
+      for (StateSequence cur = oracle; cur != null; cur = cur.getPrev()) {
         Adjoints a = cur.getAdjoints();
-        if (a != null)
+        if (a != null) {
+          if (LOG_UPDATE)
+            LOG.info("[FullUpdate apply] upOracle=" + upOracle + " action=" + a.getAction());
           a.backwards(upOracle);
-        else
+        } else {
           skipped++;
+        }
       }
       assert skipped <= 1;
 
       skipped = 0;
-      final double upMV = learningRate * -v;
-      for (StateSequence cur = mostViolated; cur != null; cur = cur.neighbor()) {
+      final double upMV = learningRate * -v / z;
+      for (StateSequence cur = mostViolated; cur != null; cur = cur.getPrev()) {
         Adjoints a = cur.getAdjoints();
-        if (a != null)
+        if (a != null) {
+          if (LOG_UPDATE)
+            LOG.info("[FullUpdate apply] upMV=" + upMV + " action=" + a.getAction());
           a.backwards(upMV);
-        else
+        } else {
           skipped++;
+        }
       }
       assert skipped <= 1;
+
+//      showWeights();
 
       timer.stop("Update.getUpdate");
       return violation();

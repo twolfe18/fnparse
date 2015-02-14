@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.AveragedWeights;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
@@ -87,6 +88,13 @@ public abstract class FeatureParams {
       fv.add(idx, w);
   }
 
+  public String featureName(int index) {
+    Alphabet<String> featureIndices = getAlphabetForShowingWeights();
+    if (featureIndices == null)
+      return index + "?";
+    return featureIndices.lookupObject(index);
+  }
+
   public int featureIndex(String featureName) {
     if (isAlphabetBased()) {
       return featureIndices.lookupIndex(featureName);
@@ -146,6 +154,19 @@ public abstract class FeatureParams {
     IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
     Adjoints.Vector adj = new Adjoints.Vector(this, pruneAction, weights, fv, l2Penalty);
     return adj;
+  }
+
+  public String describeFeatures(IntDoubleVector features) {
+    StringBuilder sb = new StringBuilder();
+    features.apply(new FnIntDoubleToDouble() {
+      @Override
+      public double call(int arg0, double arg1) {
+        String k = featureName(arg0);
+        sb.append(String.format(" %s:%.2f", k, arg1));
+        return arg1;
+      }
+    });
+    return sb.toString();
   }
 
   protected void checkSize() {

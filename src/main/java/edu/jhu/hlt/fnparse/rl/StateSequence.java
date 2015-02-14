@@ -47,7 +47,66 @@ public class StateSequence {
     return actionIndex;
   }
 
-  private double loss = -1;
+  // This is now in Reranker.Update's constructor
+//  public double violation(FNParse y, double modelScoreOfY) {
+//  /*
+//   * Sum of the local hinge losses for every action.
+//   *
+//   * I shouldn't have to have a local margin! The whole point of putting constraints
+//   * on every z (including non-terminal z) is that these are smaller constraints
+//   * that do not allow the large-structure-margin problem [1] to happen.
+//   *
+//   * [1] In a large structure, you can easily satisfy a margin on the total loss
+//   * function by putting a very high deltaScore on easy indices in the label and
+//   * meet no local margin at all for difficult indices in the label.
+//   */
+//
+//    // Global margin (must consider all z -- including non-terminals -- if you
+//    // want this to work).
+//    return Math.max(0, (getScore() + getHamming(y)) - modelScoreOfY) * getLoss(y);
+//
+//    // Local margin (useful if you only consider terminal z)
+////    if (violation < 0) {
+////      State prev = neighbor().getCur();
+////      Action a = getAction();
+////      double deltaLoss  = a.getActionType().deltaLoss(prev, a, y);
+////      double signedMargin = deltaLoss == 0
+////          ? (-action.forwards() + 1)
+////          : (+action.forwards() - 1);
+////      double cost = Math.max(1, deltaLoss);   // slope of hinge loss
+////      violation = Math.max(0, signedMargin) * cost
+////          + neighbor().violation(y);
+////    }
+////    return violation;
+//  }
+////  private double violation = -1;
+
+  // I don't think I need this anywhere
+//  /**
+//   * Returns the number of z, or parser actions, that lead to non-zero loss.
+//   */
+//  public int getHamming(FNParse y) {
+//    if (hamming < 0) {
+//      if (neighbor() == null) {
+//        hamming = 0;
+//      } else {
+//        State prev = neighbor().getCur();
+//        Action a = getAction();
+//        double dl = a.getActionType().deltaLoss(prev, a, y);
+//        int h = (dl > 0) ? 1 : 0;
+//        hamming = h + neighbor().getHamming(y);
+//      }
+//    }
+//    return hamming;
+//  }
+//  private int hamming = -1;
+
+  /**
+   * Returns the accumulated loss of this trajectory so far. If this is a final
+   * state (i.e. yHat = this.getCur().decode() is non-null), then this should be
+   * equal to se.numFP + costFN + se.numFN, where se = SentenceEval(y, yHat).
+   * If this is an oracle trajectory, this should return 0.
+   */
   public double getLoss(FNParse y) {
     if (loss < 0) {
       if (neighbor() == null) {
@@ -61,6 +120,7 @@ public class StateSequence {
     }
     return loss;
   }
+  private double loss = -1;
 
   /** You can only call this from a node which has a pointer out of it */
   public String showActions() {
@@ -86,6 +146,7 @@ public class StateSequence {
       len++;
       l = l.neighbor();
     }
+    len--;
     return len;
   }
 
@@ -175,5 +236,17 @@ public class StateSequence {
     while (cur.prev != null)
       cur = cur.prev;
     return cur;
+  }
+
+  /** Like getFirst but sets next pointers on the way back */
+  public StateSequence rewind() {
+    StateSequence next = null;
+    StateSequence cur = this;
+    while (cur != null) {
+      cur.next = next;
+      next = cur;
+      cur = cur.prev;
+    }
+    return next;
   }
 }

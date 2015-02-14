@@ -127,6 +127,7 @@ public interface Adjoints {
       return action;
     }
 
+    @SuppressWarnings("unused")
     @Override
     public double forwards() {
       if (!computed) {
@@ -142,6 +143,10 @@ public interface Adjoints {
     public void backwards(double dScore_dForwards) {
       assert Double.isFinite(dScore_dForwards) && !Double.isNaN(dScore_dForwards);
       assert computed;
+//      if (parent != null && parent instanceof FeatureParams) {
+//        LOG.info("[backwards] parent: " + System.identityHashCode(parent) + " features:" + ((FeatureParams) parent).describeFeatures(features));
+//        //LOG.info("check me!");
+//      }
       // Only do the l2Penalty update every k iterations for efficiency.
       if (l2Penalty > 0) {
         if (iter++ % itersBetweenL2Updates == 0) {

@@ -21,11 +21,15 @@ public interface Beam<T> extends Iterable<T> {
   public T pop();
   public T peek();
 
+  public Beam.Item<T> popItem();
+  public Beam.Item<T> peekItem();
+
   /**
    * Returns true if this item was added to the beam.
    */
   public boolean push(T item, double score);
 
+  public boolean push(Beam.Item<T> item);
 
   /**
    * An efficient width-1 beam.
@@ -47,13 +51,31 @@ public interface Beam<T> extends Iterable<T> {
     }
     @Override
     public T pop() {
+      if (size() == 0)
+        throw new RuntimeException();
       T temp = item;
       item = null;
       return temp;
     }
     @Override
+    public Beam.Item<T> popItem() {
+      if (size() == 0)
+        throw new RuntimeException();
+      Beam.Item<T> i = new Beam.Item<T>(item, score);
+      item = null;
+      return i;
+    }
+    @Override
     public T peek() {
+      if (size() == 0)
+        throw new RuntimeException();
       return item;
+    }
+    @Override
+    public Beam.Item<T> peekItem() {
+      if (size() == 0)
+        throw new RuntimeException();
+      return new Beam.Item<T>(item, score);
     }
     @Override
     public boolean push(T item, double score) {
@@ -65,15 +87,24 @@ public interface Beam<T> extends Iterable<T> {
         return false;
       }
     }
+    @Override
+    public boolean push(Beam.Item<T> item) {
+      return push(item.item, item.score);
+    }
   }
 
   public static class Item<T> implements Comparable<Item<?>> {
-    T item;
-    double score;
+    private T item;
+    private double score;
 
     public Item(T item, double score) {
       this.item = item;
       this.score = score;
+    }
+
+    @Override
+    public String toString() {
+      return String.format("(Beam.Item %s %+.2f)", item, score);
     }
 
     @Override
@@ -84,6 +115,9 @@ public interface Beam<T> extends Iterable<T> {
         return -1;
       return 0;
     }
+
+    public T getItem() { return item; }
+    public double getScore() { return score; }
   }
 
   /**
@@ -110,6 +144,11 @@ public interface Beam<T> extends Iterable<T> {
       }
     }
 
+    @Override
+    public boolean push(Beam.Item<T> item) {
+      return push(item.item, item.score);
+    }
+
     /**
      * Returns the k item with the highest scores and adds them to addTo.
      * Highest score items are added to addTo first.
@@ -131,6 +170,15 @@ public interface Beam<T> extends Iterable<T> {
     }
 
     @Override
+    public Beam.Item<T> popItem() {
+      if (beam.size() == 0)
+        throw new RuntimeException();
+      Item<T> it = beam.first();
+      beam.remove(it);
+      return it;
+    }
+
+    @Override
     public Iterator<T> iterator() {
       return beam.stream().map(i -> i.item).iterator();
     }
@@ -147,7 +195,16 @@ public interface Beam<T> extends Iterable<T> {
 
     @Override
     public T peek() {
+      if (beam.size() == 0)
+        throw new RuntimeException();
       return beam.first().item;
+    }
+
+    @Override
+    public Beam.Item<T> peekItem() {
+      if (beam.size() == 0)
+        throw new RuntimeException();
+      return beam.first();
     }
   }
 }

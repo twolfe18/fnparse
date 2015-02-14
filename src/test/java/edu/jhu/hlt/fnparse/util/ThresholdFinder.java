@@ -28,6 +28,8 @@ public class ThresholdFinder {
     // Run maxCalls+2 probes
     List<Pair<Double, Double>> probes = new ArrayList<>();
     probes.add(new Pair<>(initLeft, probeThreshold.apply(initLeft)));
+    double m = initLeft + (initRight - initLeft)/2;
+    probes.add(new Pair<>(m, probeThreshold.apply(m)));
     probes.add(new Pair<>(initRight, probeThreshold.apply(initRight)));
     for (int i = 0; i < maxCalls; i++) {
       step(probeThreshold, probes);

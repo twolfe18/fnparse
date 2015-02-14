@@ -28,20 +28,23 @@ public class TemplatedFeatureParams
   // computed on every call (very slow -- debug only).
   private boolean showFeatures = false;
 
+  private String name;
   private TemplatedFeatures features;
   private String featureTemplateString;
   private HeadFinder headFinder;
 
   /** Use alphabet */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty) {
+  public TemplatedFeatureParams(String name, String featureTemplateString, double l2Penalty) {
     super(l2Penalty);
+    this.name = name;
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
 
   /** Use feature hashing */
-  public TemplatedFeatureParams(String featureTemplateString, double l2Penalty, int numBuckets) {
+  public TemplatedFeatureParams(String name, String featureTemplateString, double l2Penalty, int numBuckets) {
     super(l2Penalty, numBuckets);
+    this.name = name;
     headFinder = new SemaforicHeadFinder();
     setFeatures(featureTemplateString);
   }
@@ -93,11 +96,9 @@ public class TemplatedFeatureParams
   public void setFeatures(String desc) {
     featureTemplateString = desc;
     if (isAlphabetBased()) {
-      features = new TemplatedFeatures.AlphabetBased(
-          getClass().getName(), desc, featureIndices);
+      features = new TemplatedFeatures.AlphabetBased(name, desc, featureIndices);
     } else {
-      features = new TemplatedFeatures.HashBased(
-          getClass().getName(), desc, numBuckets);
+      features = new TemplatedFeatures.HashBased(name, desc, numBuckets);
     }
   }
 
