@@ -549,14 +549,14 @@ public class RerankerTrainer {
         .limit(nTrain)
         .collect(Collectors.toList()));
 
-    //trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
-    trainer.pretrainConf.batchSize = 0;
+    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
     trainer.performPretrain = config.getBoolean("performPretrain", true);
 
     // Set learning rate based on batch size
-    int batchSizeThatShouldHaveLearningRateOf1 = 1280;
+    //int batchSizeThatShouldHaveLearningRateOf1 = 1280;
+    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1280);
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     //trainer.pretrainConf.learningRate.scale(10);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);

@@ -64,26 +64,29 @@ def learning_curves(working_dir):
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
   for n in [100, 500, 1500, 3000]:
-    for batch_size in [2, 8, 32]:
-      for l2p in [1e-4, 1e-6, 1e-8]:
-        cl = Config(working_dir)
-        cl.l2Penalty = l2p
-        cl.pretrainBatchSize = 1
-        cl.trainBatchSize = batch_size
-        cl.nTrain = n
-        cl.useGlobalFeatures = False
-        q_local.add(cl)
-        for l2pg in [1e-1, 1e-2, 1e-3]:
-          for useRoleCooc in [True, False]:
-            cg = Config(working_dir)
-            cg.useRoleCooc = useRoleCooc
-            cg.l2Penalty = l2p
-            cg.globalL2Penalty = l2pg
-            cg.pretrainBatchSize = 1
-            cg.trainBatchSize = batch_size
-            cg.nTrain = n
-            cg.useGlobalFeatures = True
-            q_global.add(cg)
+    for lrBatchScale in [1280, 128, 12800]:
+      for batch_size in [1, 4, 16]:
+        for l2p in [1e-6, 1e-8, 1e-10]:
+          cl = Config(working_dir)
+          cl.lrBatchScale = lrBatchScale
+          cl.l2Penalty = l2p
+          cl.pretrainBatchSize = 1
+          cl.trainBatchSize = batch_size
+          cl.nTrain = n
+          cl.useGlobalFeatures = False
+          q_local.add(cl)
+          for l2pg in [1e-1, 1e-2, 1e-3]:
+            for useRoleCooc in [True, False]:
+              cg = Config(working_dir)
+              cg.lrBatchScale = lrBatchScale
+              cg.useRoleCooc = useRoleCooc
+              cg.l2Penalty = l2p
+              cg.globalL2Penalty = l2pg
+              cg.pretrainBatchSize = 1
+              cg.trainBatchSize = batch_size
+              cg.nTrain = n
+              cg.useGlobalFeatures = True
+              q_global.add(cg)
 
   return q
 

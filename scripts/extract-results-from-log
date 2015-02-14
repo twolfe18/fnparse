@@ -81,7 +81,7 @@ class LogResults:
 					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
 					self.dev_info['recallBias' + version] = m.group(1)
 					self.dev_info[m.group(2) + version] = m.group(3)
-				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures']:
+				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty']:
 					m = re.match('^' + k + '=(.+)$', line)
 					if m:
 						self.global_train_info[k] = m.group(1)
@@ -104,8 +104,13 @@ class LogResults:
 		self.all_values['mode'] = self.mode
 		self.all_values['syntax_mode'] = self.syntax_mode
 		self.all_values['alphabet_model'] = self.alphabet_model
-		self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
 		self.all_values['log_file'] = filename
+
+		self.all_values['total_time'] = self.total_time
+		try:
+			self.all_values['total_time'] = "%.1f" % (float(self.total_time) / (1000.0 * 60.0))
+		except:
+			pass
 
 	def result_string(self, show_keys=True):
 		toks = []
