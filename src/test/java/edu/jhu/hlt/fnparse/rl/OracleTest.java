@@ -36,9 +36,10 @@ public class OracleTest {
       if (y.numFrameInstances() == 0)
         continue;
       boolean oracleSolveMax = false;
+      boolean decode = true;
       BFunc bf = new BFunc.Oracle(y, oracleSolveMax);
       ForwardSearch oracleSearch = model.fullSearch(
-          State.initialState(y), bf, oracleSolveMax, Params.Stateful.NONE);
+          State.initialState(y), bf, oracleSolveMax, decode, Params.Stateful.NONE);
       oracleSearch.run();
       StateSequence oracle = oracleSearch.getPath();
       State last = oracle.getCur();
