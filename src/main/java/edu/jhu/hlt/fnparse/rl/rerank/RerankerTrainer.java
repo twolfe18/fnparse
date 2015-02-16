@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -27,7 +26,10 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
@@ -41,9 +43,11 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
 import edu.jhu.hlt.fnparse.util.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Timer;
@@ -552,6 +556,46 @@ public class RerankerTrainer {
         .limit(nTrain)
         .collect(Collectors.toList()));
 
+    // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
+    if (config.getBoolean("precomputeShape", true)) {
+      long t = System.currentTimeMillis();
+      for (FNParse y : ip) {
+        Sentence s = y.getSentence();
+        int n = s.size();
+        for (int i = 0; i < n; i++) {
+          String shape = PosPatternGenerator.shapeNormalize(s.getWord(i));
+          s.setShape(i, shape);
+        }
+      }
+      LOG.info("[main] done computing word shapes, took "
+          + (System.currentTimeMillis() - t)/1000d + " seconds");
+    }
+
+    // Data does not come with Stanford parses straight off of disk, add them
+    if (config.getBoolean("addStanfordParses", true)) {
+      long t = System.currentTimeMillis();
+      LOG.info("[main] running Stanford parser on all training/test data...");
+      ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
+      for (FNParse y : ip) {
+        Sentence s = y.getSentence();
+
+        // Get and set the Stanford constituency parse
+        if (s.getStanfordParse(false) == null) {
+          ConstituencyParse cp = parser.getCParse(s);
+          s.setStanfordParse(cp);
+        }
+
+        // Get and set the Stanford basic dependency parse
+        if (s.getBasicDeps(false) == null) {
+          DependencyParse dp = parser.getBasicDParse(s);
+          s.setBasicDeps(dp);
+        }
+      }
+      LOG.info("[main] done parsing, took "
+          + (System.currentTimeMillis() - t)/1000d + " seconds");
+      // Note, could also precompute word shapes, but that is memoized on the fly
+    }
+
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
@@ -603,6 +647,11 @@ public class RerankerTrainer {
     final int hashBuckets = 8 * 1000 * 1000;
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
     LOG.info("[main] using l2Penalty=" + l2Penalty);
+
+    // What features to use (if features are being used)
+    String fs = config.getBoolean("simpleFeatures", false)
+        ? featureTemplates : featureTemplatesSearch;
+
     if (useCheatingParams) {
       // For debugging, invalidates a lot of other settings.
       // Note there is one wrinkle: CheatingParams extends Params.Stateless but
@@ -629,14 +678,15 @@ public class RerankerTrainer {
           ep.debug(new TemplatedFeatureParams("embD", featureTemplates, hashBuckets), l2Penalty);
         trainer.statelessParams = ep;
       } else {
+        LOG.info("[main] using features=" + fs);
         if (useFeatureHashing) {
           LOG.info("[main] using TemplatedFeatureParams with feature hashing");
           trainer.statelessParams =
-              new TemplatedFeatureParams("statelessA", featureTemplates, l2Penalty, hashBuckets);
+              new TemplatedFeatureParams("statelessA", fs, l2Penalty, hashBuckets);
         } else {
           LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
           trainer.statelessParams =
-              new TemplatedFeatureParams("statelessH", featureTemplates, l2Penalty);
+              new TemplatedFeatureParams("statelessH", fs, l2Penalty);
         }
 
         //trainer.addParams(new ActionTypeParams(l2Penalty));
@@ -653,11 +703,11 @@ public class RerankerTrainer {
         if (useFeatureHashing) {
           LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
           trainer.tauParams =
-              new TemplatedFeatureParams("tauA", featureTemplates, l2Penalty, hashBuckets);
+              new TemplatedFeatureParams("tauA", fs, l2Penalty, hashBuckets);
         } else {
           LOG.info("[main] using TemplatedFeatureParams with an Alphabet for tau");
           trainer.tauParams =
-              new TemplatedFeatureParams("tauH", featureTemplates, l2Penalty);
+              new TemplatedFeatureParams("tauH", fs, l2Penalty);
         }
       } else {
         LOG.warn("[main] you probably don't want to use constante params for tau!");
@@ -760,7 +810,7 @@ public class RerankerTrainer {
       BufferedReader br = new BufferedReader(new FileReader(f));
       String line = br.readLine();
       String[] toks = line.split("\t", 2);
-      String features = toks[2];
+      String features = toks[1];
       br.close();
       return features;
     } catch (IOException e) {

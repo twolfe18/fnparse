@@ -94,12 +94,29 @@ def learning_curves(working_dir):
   print 'len(q_global) =', len(q_global)
   return q
 
+def fs_test(working_dir):
+  '''
+  Returns a queue.
+  Tests if the features chosen by feature-selection a while ago work
+  better than the simple ones I put in the source code.
+  '''
+  if not os.path.isdir(working_dir):
+    raise Exception('not a dir: ' + working_dir)
+
+  q = tge.ExplicitQueue()
+  for n in [100, 200, 400, 800, 1600]:
+    for sf in [True, False]:
+      c = Config(working_dir)
+      c.nTrain = n
+      c.simpleFeatures = sf
+  return q
+
 def run(q, working_dir, local=True):
   print 'running', q, 'and putting the results in', working_dir
 
   # Create the job tracker
   if local:
-    job_tracker = tge.LocalJobTracker(max_concurrent_jobs=2)
+    job_tracker = tge.LocalJobTracker(max_concurrent_jobs=12)
     job_tracker.remove_all_jobs()
   else:
     d = os.path.join(working_dir, 'sge-logs')
@@ -117,7 +134,8 @@ if __name__ == '__main__':
     print 'please provide a working dir'
     sys.exit(-1)
   wd = sys.argv[1]
-  run(learning_curves(wd), wd, local=False)
+  #run(learning_curves(wd), wd, local=False)
+  run(fs_test(wd), local=True)
 
 
 
