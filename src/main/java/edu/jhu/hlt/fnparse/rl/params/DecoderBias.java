@@ -38,4 +38,9 @@ public class DecoderBias implements Params.PruneThreshold {
   public void doneTraining() {
     // no-op
   }
+
+  @Override
+  public void showWeights() {
+    LOG.info("[DecoderBias] recallBias=" + recallBias);
+  }
 }

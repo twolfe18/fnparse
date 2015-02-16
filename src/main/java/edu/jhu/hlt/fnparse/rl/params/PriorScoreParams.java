@@ -200,4 +200,9 @@ public class PriorScoreParams implements Params.Stateless {
   public void doneTraining() {
     LOG.info("[doneTraining] currently doesn't support weight averaging");
   }
+
+  @Override
+  public void showWeights() {
+    throw new RuntimeException("implement me!");
+  }
 }

@@ -24,13 +24,9 @@ public interface Params {
    * This is called after training is complete. This is a useful hook for
    * switching from regular perceptron weights to averaged ones.
    */
-  default public void doneTraining() {
-    // no-op
-  }
+  public void doneTraining();
 
-  default public void showWeights() {
-    // no-op
-  }
+  public void showWeights();
 
   // score is in an extending class
   // because its signature differs between Stateful and Stateless,
@@ -58,6 +54,14 @@ public interface Params {
       public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
         return new Adjoints.Explicit(intercept, pruneAction, "tauConst");
       }
+      @Override
+      public void showWeights() {
+        LOG.info("[Const showWeights] intercept=" + intercept);
+      }
+      @Override
+      public void doneTraining() {
+        LOG.info("[Const doneTraining] no-op");
+      }
     }
     public static class Sum implements PruneThreshold {
       private final PruneThreshold left, right;
@@ -72,6 +76,16 @@ public interface Params {
         Adjoints l = left.score(frames, pruneAction, providenceInfo);
         Adjoints r = right.score(frames, pruneAction, providenceInfo);
         return new SumAdj(l, r);
+      }
+      @Override
+      public void showWeights() {
+        left.showWeights();
+        right.showWeights();
+      }
+      @Override
+      public void doneTraining() {
+        left.doneTraining();
+        right.doneTraining();
       }
     }
 
@@ -155,6 +169,14 @@ public interface Params {
         };
       }
       @Override public String toString() { return "0"; }
+      @Override
+      public void showWeights() {
+        LOG.info("[Stateful.NONE showWeights] none");
+      }
+      @Override
+      public void doneTraining() {
+        LOG.info("[Stateful.NONE doneTraining] no-op");
+      }
     };
 
     public static Stateful lift(final Stateless theta) {
@@ -204,6 +226,14 @@ public interface Params {
         };
       }
       @Override public String toString() { return "0"; }
+      @Override
+      public void showWeights() {
+        LOG.info("[Stateless.NONE showWeights] none");
+      }
+      @Override
+      public void doneTraining() {
+        LOG.info("[Stateless.NONE doneTraining] no-op");
+      }
     };
 
     /**
@@ -443,6 +473,14 @@ public interface Params {
     public Adjoints score(FNTagging f, Action a) {
       double r = (rand.nextDouble() - 0.5) * 2 * variance;
       return new Adjoints.Explicit(r, a, "rand");
+    }
+    @Override
+    public void showWeights() {
+      LOG.info("[RandScore showWeights] variance=" + variance);
+    }
+    @Override
+    public void doneTraining() {
+      LOG.info("[RandScore doneTraining] no-op");
     }
   }
 
