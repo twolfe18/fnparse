@@ -152,7 +152,7 @@ if __name__ == '__main__':
     raise Exception('jar file must be file: ' + Config.jar_file)
 
   # Check if the jar is in the working dir, if not copy it in
-  if not os.path.abspath(Config.jar_file).startswith(wd):
+  if not os.path.abspath(Config.jar_file).startswith(os.path.abspath(wd)):
     print 'moving jar into working directory so that it is stable'
     jn = os.path.basename(Config.jar_file)
     j = os.path.join(wd, jn)

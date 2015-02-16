@@ -375,7 +375,6 @@ public class RerankerTrainer {
 
       // Tune the model
       if (conf.performTuning()) {
-        //Reranker.LOG_FORWARD_SEARCH = true;   // TODO REMOVE, FOR DEBUGGING
         tuneModelForF1(m, conf, dev);
       }
     } catch (Exception e) {
@@ -602,17 +601,15 @@ public class RerankerTrainer {
     trainer.performPretrain = config.getBoolean("performPretrain", true);
 
     // Set learning rate based on batch size
-    //int batchSizeThatShouldHaveLearningRateOf1 = 1280;
     int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1280);
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
-    //trainer.pretrainConf.learningRate.scale(10);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
     // FOR DEBUGGING
 //    Reranker.LOG_UPDATE = true;
 //    RerankerTrainer.PRUNE_DEBUG = true;
 //    Reranker.LOG_FORWARD_SEARCH = true;
-    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
+//    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
 //    trainer.pretrainConf.allowDynamicStopping = false;
 //    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(15));
 //    trainer.trainConf.addStoppingCondition(new StoppingCondition.Fixed(5000));
@@ -688,8 +685,6 @@ public class RerankerTrainer {
           trainer.statelessParams =
               new TemplatedFeatureParams("statelessH", fs, l2Penalty);
         }
-
-        //trainer.addParams(new ActionTypeParams(l2Penalty));
       }
 
       // Setup tau/pruning parameters
@@ -698,7 +693,6 @@ public class RerankerTrainer {
         //      double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
         //      double tauLearningRate = config.getDouble("taulLearningRate", Math.sqrt(trainer.trainConf.batchSize) / 10d);
         //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
-
         // Older way: very rich features.
         if (useFeatureHashing) {
           LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
