@@ -61,6 +61,8 @@ class ExplicitQueue(Queue):
     return len(self.items)
   def add(self, item):
     self.items.append(item)
+  def append(self, item):
+    self.items.append(item)
   def pop(self):
     if self.items:
       r = self.items[0]

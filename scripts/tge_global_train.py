@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import os
+import shutil
 import socket
 import sys
 import tge
@@ -20,6 +21,9 @@ redis_config = {
 
 class Config(tge.Item):
   ''' Represents a parser configuration, stored in __dict__ '''
+
+  # You can set this to override the 'find all jars in target/' behavior
+  jar_file = None
 
   def __init__(self, working_dir_parent):
     '''
@@ -42,7 +46,10 @@ class Config(tge.Item):
     cmd.append('-Xmx9G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-cp')
-    cmd.append(':'.join(self.jars()))
+    if Config.jar_file:
+      cmd.append(Config.jar_file)
+    else:
+      cmd.append(':'.join(self.jars()))
     cmd.append('edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer')
     cmd.append(name)
     for k, v in self.__dict__.iteritems():
@@ -109,6 +116,7 @@ def fs_test(working_dir):
       c = Config(working_dir)
       c.nTrain = n
       c.simpleFeatures = sf
+      q.append(c)
   return q
 
 def run(q, working_dir, local=True):
@@ -130,12 +138,31 @@ def run(q, working_dir, local=True):
 
 
 if __name__ == '__main__':
-  if len(sys.argv) != 2:
-    print 'please provide a working dir'
+  if len(sys.argv) != 3:
+    print 'please provide:'
+    print '1) a working dir for output'
+    print '2) a jar with all dependencies'
     sys.exit(-1)
   wd = sys.argv[1]
+  Config.jar_file = sys.argv[2]
+
+  if not os.path.isdir(wd):
+    raise Exception('wd must be dir: ' + wd)
+  if not os.path.isfile(Config.jar_file):
+    raise Exception('jar file must be file: ' + Config.jar_file)
+
+  # Check if the jar is in the working dir, if not copy it in
+  if not os.path.abspath(Config.jar_file).startswith(wd):
+    print 'moving jar into working directory so that it is stable'
+    jn = os.path.basename(Config.jar_file)
+    j = os.path.join(wd, jn)
+    shutil.copyfile(Config.jar_file, j)
+    Config.jar_file = j
+    assert os.path.isfile(Config.jar_file)
+    print 'now using jar=' + Config.jar_file
+
   #run(learning_curves(wd), wd, local=False)
-  run(fs_test(wd), local=True)
+  run(fs_test(wd), wd, local=True)
 
 
 
