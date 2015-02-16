@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -89,5 +92,15 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
   @Override
   public void doneTraining() {
     LOG.info("[doneTraining] currently doesn't support weight averaging");
+  }
+
+  @Override
+  public void serialize(DataOutputStream out) throws IOException {
+    throw new RuntimeException("you should never do this");
+  }
+
+  @Override
+  public void deserialize(DataInputStream in) throws IOException {
+    throw new RuntimeException("you should never do this");
   }
 }

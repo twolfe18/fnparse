@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Arrays;
 
 import org.apache.log4j.Logger;
@@ -37,6 +40,37 @@ public class AveragedWeights {
     else
       thetaSum = null;
   }
+
+  public void serialize(DataOutputStream out) throws IOException {
+    out.writeInt(theta.length);
+    for (double d : theta)
+      out.writeDouble(d);
+    if (thetaSum == null) {
+      out.writeBoolean(false);
+    } else {
+      assert theta.length == thetaSum.length;
+      out.writeBoolean(true);
+      for (double d : thetaSum)
+        out.writeDouble(d);
+    }
+    out.writeInt(c);
+  }
+
+  public void deserialize(DataInputStream in) throws IOException {
+    int n = in.readInt();
+    theta = new double[n];
+    for (int i = 0; i < n; i++)
+      theta[i] = in.readDouble();
+    if (in.readBoolean()) {
+      thetaSum = new double[n];
+      for (int i = 0; i < n; i++)
+        thetaSum[i] = in.readDouble();
+    } else {
+      thetaSum = null;
+    }
+    c = in.readInt();
+  }
+
 
   public AveragedWeights(AveragedWeights weights, boolean average) {
     c = weights.c;

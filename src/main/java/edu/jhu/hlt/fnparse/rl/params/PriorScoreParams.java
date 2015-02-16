@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -203,6 +206,16 @@ public class PriorScoreParams implements Params.Stateless {
 
   @Override
   public void showWeights() {
+    throw new RuntimeException("implement me!");
+  }
+
+  @Override
+  public void serialize(DataOutputStream out) throws IOException {
+    throw new RuntimeException("implement me!");
+  }
+
+  @Override
+  public void deserialize(DataInputStream in) throws IOException {
     throw new RuntimeException("implement me!");
   }
 }

@@ -12,7 +12,6 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
-import edu.jhu.hlt.fnparse.util.TimeMarker;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 
@@ -121,10 +120,6 @@ public interface StoppingCondition {
    * 2) the (mean,var) of the next predicted value under a locally-weighted
    *    linear regression.
    * If the t-statistic is greater than the given value (alpha), then stop.
-   *
-   * Will actually perform this test (which requires decoding on dev data and
-   * can be slow), every d*T seconds, where T is the average time to evaluate
-   * on dev and d is a parameter (e.g. 10).
    */
   public static class DevSet implements StoppingCondition {
 
@@ -135,12 +130,8 @@ public interface StoppingCondition {
 
     private DoubleSupplier devLossFunc;
     private final double alpha;
-    private final int k = 25;
-
-    private final double d;
+    private final double k;
     private Timer rScriptTimer;
-    private Timer devLossFuncTimer;
-    private TimeMarker timeMarker;
 
     /**
      * @param rScript is a path to a 3-arg shell script which prints either
@@ -148,12 +139,10 @@ public interface StoppingCondition {
      * @param devLossFunc computes the loss on the dev set
      * @param alpha should be between 0 and 1, where small values will stop
      * quickly and large values will stop late.
-     * @param d: This class will only call the devLossFunc if d * (average time
-     * to compute devLossFunc) has passed. This guarantees that approximately
-     * (d-1)/d of the time will be spent on updates rather than computing the
-     * stopping conditions.
+     * @param k is the width of the kernel (larger values indicate more history
+     * is taken into consideration). Good default is 25.
      */
-    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double d) {
+    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double k) {
       if (!rScript.isFile())
         throw new IllegalArgumentException(rScript.getPath() + " is not a file");
       this.rScript = rScript;
@@ -165,21 +154,17 @@ public interface StoppingCondition {
         throw new RuntimeException(e);
       }
       this.alpha = alpha;
+      this.k = k;
       this.devLossFunc = devLossFunc;
-      this.d = d;
       this.rScriptTimer = new Timer()
         .setPrintInterval(1)
         .ignoreFirstTime(false);
-      this.devLossFuncTimer = new Timer()
-        .setPrintInterval(1)
-        .ignoreFirstTime(false);
-      this.timeMarker = new TimeMarker();
     }
 
     @Override
     public String toString() {
-      return String.format("DevSet(%s,alpha=%.2f,k=%d,d=%.1f)",
-          historyFile.getPath(), alpha, k, d);
+      return String.format("DevSet(%s,alpha=%.2f,k=%.2f)",
+          historyFile.getPath(), alpha, k);
     }
 
     /**
@@ -197,20 +182,10 @@ public interface StoppingCondition {
     /** You must override this method with one that might return true */
     @Override
     public boolean stop(int iter, double violation) {
-      if (this.historySize > 0) {
-        double enoughSeconds = this.d * devLossFuncTimer.secPerCall();
-        if (!timeMarker.enoughTimePassed(enoughSeconds)) {
-          LOG.info("[DevSet stop] continuing because less than "
-              + enoughSeconds + " seconds have passed");
-          return false;
-        }
-      }
 
       // Compute held-out loss
       LOG.info("[DevSet stop] calling dev set loss function");
-      devLossFuncTimer.start();
       double devLoss = devLossFunc.getAsDouble();
-      devLossFuncTimer.stop();
       LOG.info("[DevSet stop] writing loss=" + devLoss + " to file=" + historyFile.getPath());
       assert Double.isFinite(devLoss);
       assert !Double.isNaN(devLoss);
@@ -497,8 +472,8 @@ public interface StoppingCondition {
 
   public static void main(String[] args) {
     File rScript = new File("scripts/stop.sh");
-    double alpha = 0.25;
-    int d = 5;
+    double alpha = 0.15;
+    double k = 25;
     DoubleSupplier devLossFunc = new DoubleSupplier() {
       private Random rand = new Random(9001);
       private int iter = 0;
@@ -511,7 +486,7 @@ public interface StoppingCondition {
         return y + n;
       }
     };
-    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d);
+    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k);
     for (int i = 0; i < 200; i++) {
       boolean s = stop.stop(i, 0);
       System.out.println("stop=" + s);

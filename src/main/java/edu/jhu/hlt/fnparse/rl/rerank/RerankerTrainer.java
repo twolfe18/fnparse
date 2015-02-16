@@ -1,7 +1,10 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.BufferedReader;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
@@ -45,6 +48,7 @@ import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
+import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
@@ -73,8 +77,11 @@ public class RerankerTrainer {
     public int threads = 1;
     public int beamSize = 1;
     public int batchSize = 4;	 // If 0, compute an exact gradient
-    public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public StoppingCondition stopping = new StoppingCondition.Time(4 * 60);
+
+    // Stopping condition
+    public StoppingCondition stopping = new StoppingCondition.Time(6 * 60);
+    public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
+
 
     // If true (and dev settings permit), train2 will automatically add a
     // StoppingCondition.DevSet to the list of stopping conditions.
@@ -85,7 +92,15 @@ public class RerankerTrainer {
     // be used, regardless of params.
     public boolean forceGlobalTrain = true;
 
-    // Tuning parameters
+    // Learning rate estimation parameters
+    public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
+    public double estimateLearningRateFreq = 4;       // Higher means estimate less frequently, time multiple of hammingTrain
+    public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
+    public double estimateLearningRateSpread = 7.5;   // Higher means more spread out
+    public int estimateLearningRateSteps = 8;         // How many batche steps to take when evaluating a lr
+    public int estimateLearningRateDevLimit = 40;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
+
+    // F1-Tuning parameters
     private double propDev = 0.2d;
     private int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
@@ -94,6 +109,8 @@ public class RerankerTrainer {
     public boolean tuneOnTrainingData = false;
 
     // Convenient extras
+    public final File workingDir;
+    public final Random rand;
     public Consumer<Integer> calledEveryEpoch = i -> {};
     public boolean performTuning() { return propDev > 0 && maxDev > 0; }
     public void dontPerformTuning() { propDev = 0; maxDev = 0; }
@@ -105,8 +122,17 @@ public class RerankerTrainer {
       recallBiasHi *= factor;
     }
 
-    public Config(String name) {
+    // Timers for how long stuff has taken.
+    public Timer tHammingTrain = new Timer("hammingTrain", 10, false);
+    public Timer tLearningRateEstimation = new Timer("learningRateEstimation", 1, false);
+    public Timer tStoppingCondition = new Timer("stoppingCondition", 1, false);
+
+    public Config(String name, File workingDir, Random rand) {
+      if (!workingDir.isDirectory())
+        throw new IllegalArgumentException();
       this.name = name;
+      this.workingDir = workingDir;
+      this.rand = rand;
     }
 
     public void setPropDev(double propDev) {
@@ -178,11 +204,19 @@ public class RerankerTrainer {
   public Params.Stateless statelessParams = Stateless.NONE;
   public Params.PruneThreshold tauParams = Params.PruneThreshold.Const.ONE;
 
-  public RerankerTrainer(Random rand) {
+  public RerankerTrainer(Random rand, File workingDir) {
+    if (!workingDir.isDirectory())
+      throw new IllegalArgumentException();
     this.rand = rand;
-    this.pretrainConf = new Config("pretrain");
+    File pwd = new File(workingDir, "wd-pretrain");
+    if (!pwd.isDirectory())
+      pwd.mkdir();
+    this.pretrainConf = new Config("pretrain", pwd, rand);
     this.pretrainConf.beamSize = 1;
-    this.trainConf = new Config("train");
+    File twd = new File(workingDir, "wd-train");
+    if (!twd.isDirectory())
+      twd.mkdir();
+    this.trainConf = new Config("train", twd, rand);
     this.performPretrain = false;
   }
 
@@ -312,6 +346,113 @@ public class RerankerTrainer {
   }
 
   /**
+   * WARNING: Will clobber a learning rate and replace it with Constant. That said
+   * it will use the current learning rate as a jumping off point.
+   */
+  public void estimateLearningRate(Reranker m, ItemProvider train, ItemProvider dev, Config conf) {
+    // Set a new learning rate so that we know exactly what we're dealing with.
+    LearningRateSchedule lrOld = conf.learningRate;
+    double lrOldV = lrOld.learningRate();
+    conf.learningRate = new LearningRateSchedule.Constant(lrOldV);
+    LOG.info("[estimateLearningRate] starting at lr=" + lrOldV);
+
+    // Create the directory that model params will be saved into
+    final File paramDir = new File(conf.workingDir, "lrEstParams");
+    if (!paramDir.isDirectory())
+      paramDir.mkdir();
+    assert paramDir.isDirectory();
+
+    // Only use some of the dev data for estimating the learning rate
+    final ItemProvider devSmall;
+    if (dev.size() > conf.estimateLearningRateDevLimit) {
+      LOG.info("[estimateLearningRate] chopping down dev down: "
+          + dev.size() + " => " + conf.estimateLearningRateDevLimit);
+      devSmall = new ItemProvider.Slice(dev, conf.estimateLearningRateDevLimit, conf.rand);
+    } else {
+      devSmall = dev;
+    }
+
+    // Make an adapter for LearningRateEstimator
+    LearningRateEstimator.Model model = new LearningRateEstimator.Model() {
+      private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf);
+      @Override
+      public void train() {
+        try {
+          for (int i = 0; i < conf.estimateLearningRateSteps; i++)
+            hammingTrainBatch(m, null, train, conf, -1, "lrEst");
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      @Override
+      public void setLearningRate(double learningRate) {
+        conf.learningRate = new LearningRateSchedule.Constant(learningRate);
+      }
+      public File getFileFor(String name) {
+        return new File(paramDir, name);
+      }
+      @Override
+      public void saveParams(String identifier) {
+        try {
+          File f = getFileFor(identifier);
+          DataOutputStream dos = new DataOutputStream(new FileOutputStream(f));
+          m.serializeParams(dos);
+          dos.close();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      @Override
+      public void loadParams(String identifier) {
+        try {
+          File f = getFileFor(identifier);
+          DataInputStream dis = new DataInputStream(new FileInputStream(f));
+          m.deserializeParams(dis);
+          dis.close();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      @Override
+      public double loss() {
+        return devLoss.getAsDouble();
+      }
+      @Override
+      public double getLearningRate() {
+        return conf.learningRate.learningRate();
+      }
+    };
+
+    // Find the best learning rate
+    int queries = conf.estimateLearningRateGranularity;
+    double spread = conf.estimateLearningRateSpread;
+    LearningRateEstimator.estimateLearningRate(model, queries, spread);
+  }
+
+  private static DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
+    return new DoubleSupplier() {
+      @Override
+      public double getAsDouble() {
+        LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
+        double loss = 0d;
+        for (int i = 0; i < dev.size(); i++) {
+          FNParse y = dev.label(i);
+          List<Item> rerank = dev.items(i);
+          State init = State.initialState(y, rerank);
+          Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
+              ? m.getFullUpdate(init, y, conf.rand, null, null)
+              : m.getStatelessUpdate(init, y);
+          loss += u.violation();
+          assert Double.isFinite(loss) && !Double.isNaN(loss);
+        }
+        loss /= dev.size();
+        LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size() + " for conf=" + conf.name);
+        return loss;
+      }
+    };
+  }
+
+  /**
    * Adds a stopping condition based on the dev set performance.
    */
   public void train2(Reranker m, ItemProvider ip, Config conf) {
@@ -340,36 +481,17 @@ public class RerankerTrainer {
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.15d;  // Lower numbers mean stop earlier.
-      double d = 5; // Lower numbers mean compute dev set err more frequently
-      DoubleSupplier devLossFunc = new DoubleSupplier() {
-        @Override
-        public double getAsDouble() {
-          LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
-          double loss = 0d;
-          for (int i = 0; i < dev.size(); i++) {
-            FNParse y = ip.label(i);
-            List<Item> rerank = ip.items(i);
-            State init = State.initialState(y, rerank);
-            Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
-                ? m.getFullUpdate(init, y, rand, null, null)
-                : m.getStatelessUpdate(init, y);
-            loss += u.violation();
-            assert Double.isFinite(loss) && !Double.isNaN(loss);
-          }
-          loss /= dev.size();
-          LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size() + " for conf=" + conf.name);
-          return loss;
-        }
-      };
+      double k = 25;         // Size of history
+      DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
       dynamicStopping = conf.addStoppingCondition(
-          new StoppingCondition.DevSet(rScript, devLossFunc, alpha, d));
+          new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k));
     } else {
       LOG.info("[train2] allowDynamicStopping=false leaving stopping condition as is");
     }
 
     try {
       // Train the model
-      hammingTrain(m, train, conf);
+      hammingTrain(m, train, dev, conf);
       LOG.info("[train2] done hammingTrain, params:");
       m.showWeights();
 
@@ -394,7 +516,7 @@ public class RerankerTrainer {
    * Stateful params of the model will not be fit, but updates should be much
    * faster to solve for as they don't require any forwards/backwards pass.
    */
-  public void hammingTrain(Reranker r, ItemProvider ip, Config conf)
+  public void hammingTrain(Reranker r, ItemProvider train, ItemProvider dev, Config conf)
       throws InterruptedException, ExecutionException {
     LOG.info("[hammingTrain] starting, conf=" + conf);
     String timerStr = "hammingTrain." + conf.name;
@@ -413,13 +535,12 @@ public class RerankerTrainer {
     boolean showViolation = true;
     outer:
     for (int iter = 0; true; ) {
-      for (int i = 0; i < ip.size(); i += conf.batchSize) {
-        double violation = hammingTrainBatch(r, es, ip, conf, iter, timerStr);
-        boolean stop = conf.stopping.stop(iter, violation);
-        if (stop) {
-          LOG.info("[hammingTrain] stopping due to " + conf.stopping);
-          break outer;
-        }
+      for (int i = 0; i < train.size(); i += conf.batchSize) {
+
+        // Batch step
+        conf.tHammingTrain.start();
+        double violation = hammingTrainBatch(r, es, train, conf, iter, timerStr);
+        conf.tHammingTrain.stop();
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
@@ -435,6 +556,36 @@ public class RerankerTrainer {
                 bt.getCount(), totalUpdates, bt.minutesUntil(totalUpdates)));
           }
         }
+
+        // See if we should stop
+        double tStopRatio = conf.tHammingTrain.totalTimeInSeconds()
+            / conf.tStoppingCondition.totalTimeInSeconds();
+        LOG.info("[hammingTrain] train/stop=" + tStopRatio
+            + " threshold=" + conf.stoppingConditionFrequency);
+        if (tStopRatio > conf.stoppingConditionFrequency) {
+          LOG.info("[hammingTrain] evaluating the stopping condition");
+          conf.tStoppingCondition.start();
+          boolean stop = conf.stopping.stop(iter, violation);
+          conf.tStoppingCondition.stop();
+          if (stop) {
+            LOG.info("[hammingTrain] stopping due to " + conf.stopping);
+            break outer;
+          }
+        }
+
+        // See if we should re-estimate the learning rate.
+        double tLrEstRatio = conf.tHammingTrain.totalTimeInSeconds()
+            / conf.tLearningRateEstimation.totalTimeInSeconds();
+        LOG.info("[hammingTrain] train/lrEstimate=" + tLrEstRatio
+            + " threshold=" + conf.estimateLearningRateFreq);
+        if (tLrEstRatio > conf.estimateLearningRateFreq) {
+          LOG.info("[hammingTrain] restimating the learning rate");
+          conf.tLearningRateEstimation.start();
+          LOG.info("[hammingTrain] re-estimating the learning rate");
+          estimateLearningRate(r, train, dev, conf);
+          conf.tLearningRateEstimation.stop();
+        }
+
         iter++;
       }
       conf.calledEveryEpoch.accept(iter);
@@ -546,7 +697,7 @@ public class RerankerTrainer {
 
     int nTrain = config.getInt("nTrain", 10);
     Random rand = new Random(9001);
-    RerankerTrainer trainer = new RerankerTrainer(rand);
+    RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
     ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
         FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
@@ -601,11 +752,13 @@ public class RerankerTrainer {
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
     // Set learning rate based on batch size
-    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1280);
+    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 128);
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
     // FOR DEBUGGING
+//    trainer.trainConf.estimateLearningRateFreq = 0.1;
+//    trainer.trainConf.stoppingConditionFrequency = 0.1;
 //    Reranker.LOG_UPDATE = true;
 //    RerankerTrainer.PRUNE_DEBUG = true;
 //    Reranker.LOG_FORWARD_SEARCH = true;
@@ -641,7 +794,7 @@ public class RerankerTrainer {
 
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
-    final int hashBuckets = 8 * 1000 * 1000;
+    final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
     LOG.info("[main] using l2Penalty=" + l2Penalty);
 
@@ -805,6 +958,8 @@ public class RerankerTrainer {
       String line = br.readLine();
       String[] toks = line.split("\t", 2);
       String features = toks[1];
+      // Don't need the stage prefixes that we had before.
+      features = features.replaceAll("RoleSpan(Labeling|Pruning)Stage-(regular|latent|none)\\*", "");
       br.close();
       return features;
     } catch (IOException e) {

@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -11,6 +14,7 @@ import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.AveragedWeights;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
@@ -69,6 +73,24 @@ public abstract class FeatureParams {
   public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
     throw new RuntimeException("you should have either overriden this "
         + "method or called the other one");
+  }
+
+  public void serialize(DataOutputStream out) throws IOException {
+    out.writeBoolean(averageFeatures);
+    theta.serialize(out);
+    out.writeDouble(l2Penalty);
+    if (featureIndices != null)
+      log.warn("[serialize] not writing alphabet!");
+    out.writeInt(numBuckets);
+  }
+
+  public void deserialize(DataInputStream in) throws IOException {
+    averageFeatures = in.readBoolean();
+    theta.deserialize(in);
+    l2Penalty = in.readDouble();
+    if (featureIndices != null)
+      log.warn("[deserialize] not reading alphabet!");
+    numBuckets = in.readInt();
   }
 
   public boolean isAlphabetBased() {

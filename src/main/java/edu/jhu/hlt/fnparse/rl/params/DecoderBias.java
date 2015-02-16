@@ -1,5 +1,9 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 
@@ -42,5 +46,15 @@ public class DecoderBias implements Params.PruneThreshold {
   @Override
   public void showWeights() {
     LOG.info("[DecoderBias] recallBias=" + recallBias);
+  }
+
+  @Override
+  public void serialize(DataOutputStream out) throws IOException {
+    out.writeDouble(recallBias);
+  }
+
+  @Override
+  public void deserialize(DataInputStream in) throws IOException {
+    recallBias = in.readDouble();
   }
 }

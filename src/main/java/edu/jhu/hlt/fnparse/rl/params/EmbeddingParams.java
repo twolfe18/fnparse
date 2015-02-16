@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.Random;
 
 import org.apache.log4j.Logger;
@@ -355,6 +358,16 @@ public class EmbeddingParams implements Params.Stateless {
 
   @Override
   public void showWeights() {
+    throw new RuntimeException("implement me!");
+  }
+
+  @Override
+  public void serialize(DataOutputStream out) throws IOException {
+    throw new RuntimeException("implement me!");
+  }
+
+  @Override
+  public void deserialize(DataInputStream in) throws IOException {
     throw new RuntimeException("implement me!");
   }
 }

@@ -1,5 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -28,6 +31,9 @@ public interface Params {
 
   public void showWeights();
 
+  public void serialize(DataOutputStream out) throws IOException;
+  public void deserialize(DataInputStream in) throws IOException;
+
   // score is in an extending class
   // because its signature differs between Stateful and Stateless,
   // its not listed here.
@@ -42,7 +48,7 @@ public interface Params {
     public static class Const implements PruneThreshold {
       public static final Const ZERO = new Const(0);
       public static final Const ONE = new Const(1);
-      public final double intercept;
+      public double intercept;
       public Const(double intercept) {
         this.intercept = intercept;
       }
@@ -61,6 +67,14 @@ public interface Params {
       @Override
       public void doneTraining() {
         LOG.info("[Const doneTraining] no-op");
+      }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        out.writeDouble(intercept);
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        intercept = in.readDouble();
       }
     }
     public static class Sum implements PruneThreshold {
@@ -86,6 +100,16 @@ public interface Params {
       public void doneTraining() {
         left.doneTraining();
         right.doneTraining();
+      }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        left.serialize(out);
+        right.serialize(out);
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        left.deserialize(in);
+        right.deserialize(in);
       }
     }
 
@@ -178,6 +202,14 @@ public interface Params {
       public void doneTraining() {
         LOG.info("[Stateful.NONE doneTraining] no-op");
       }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        LOG.info("[Stateful.NONE serialize] no-op");
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        LOG.info("[Stateful.NONE deserialize] no-op");
+      }
     };
 
     public static Stateful lift(final Stateless theta) {
@@ -197,6 +229,14 @@ public interface Params {
         @Override
         public void showWeights() {
           theta.showWeights();
+        }
+        @Override
+        public void serialize(DataOutputStream out) throws IOException {
+          theta.serialize(out);
+        }
+        @Override
+        public void deserialize(DataInputStream in) throws IOException {
+          theta.deserialize(in);
         }
       };
     }
@@ -234,6 +274,14 @@ public interface Params {
       @Override
       public void doneTraining() {
         LOG.info("[Stateless.NONE doneTraining] no-op");
+      }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        LOG.info("[Stateless.NONE serialize] no-op");
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        LOG.info("[Stateless.NONE deserialize] no-op");
       }
     };
 
@@ -338,6 +386,15 @@ public interface Params {
       public void showWeights() {
         wrapping.showWeights();
       }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        wrapping.serialize(out);
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        flush();
+        wrapping.deserialize(in);
+      }
     }
   }
 
@@ -399,6 +456,16 @@ public interface Params {
       stateful.showWeights();
       stateless.showWeights();
     }
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      stateful.serialize(out);
+      stateless.serialize(out);
+    }
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      stateful.deserialize(in);
+      stateless.deserialize(in);
+    }
   }
 
   /** Params is closed under addition */
@@ -425,6 +492,16 @@ public interface Params {
     public void showWeights() {
       left.showWeights();
       right.showWeights();
+    }
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      left.serialize(out);
+      right.serialize(out);
+    }
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      left.deserialize(in);
+      right.deserialize(in);
     }
   }
 
@@ -453,6 +530,16 @@ public interface Params {
     public void showWeights() {
       left.showWeights();
       right.showWeights();
+    }
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      left.serialize(out);
+      right.serialize(out);
+    }
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      left.deserialize(in);
+      right.deserialize(in);
     }
   }
 
@@ -485,6 +572,14 @@ public interface Params {
     @Override
     public void doneTraining() {
       LOG.info("[RandScore doneTraining] no-op");
+    }
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      out.writeDouble(variance);
+    }
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      variance = in.readDouble();
     }
   }
 

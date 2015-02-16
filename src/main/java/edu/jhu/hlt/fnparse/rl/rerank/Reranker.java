@@ -1,6 +1,9 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -152,6 +155,26 @@ public class Reranker {
     thetaStateless.showWeights();
     LOG.info("[showWeights] tau:");
     tauParams.showWeights();
+  }
+
+  public void serializeParams(DataOutputStream dos) throws IOException {
+    long start = System.currentTimeMillis();
+    LOG.info("[serialize] saving model params");
+    thetaStateful.serialize(dos);
+    thetaStateless.serialize(dos);
+    tauParams.serialize(dos);
+    LOG.info("[serialize] done saving model params, took "
+        + (System.currentTimeMillis() - start)/1000d + " seconds");
+  }
+
+  public void deserializeParams(DataInputStream in) throws IOException {
+    long start = System.currentTimeMillis();
+    LOG.info("[deserialize] loading model params");
+    thetaStateful.deserialize(in);
+    thetaStateless.deserialize(in);
+    tauParams.deserialize(in);
+    LOG.info("[deserialize] done loading model params, took "
+        + (System.currentTimeMillis() - start)/1000d + " seconds");
   }
 
   public static ItemProvider getItemProvider() {
@@ -682,8 +705,9 @@ public class Reranker {
             StateSequence ss = new StateSequence(frontier, null, null, adj);
             // Only add to maxBeam if not doing decode. Decode requires z be a
             // final state.
-            if (!decode && maxBeam.push(ss, score) && LOG_FORWARD_SEARCH)
-              LOG.info("found new most violator: " + frontierItem);
+            if (!decode) maxBeam.push(ss, score);
+//            if (!decode && maxBeam.push(ss, score) && LOG_FORWARD_SEARCH)
+//              LOG.info("found new most violator: " + frontierItem);
             boolean onBeam = beam.push(ss, score);
             if (onBeam) beamAdds++;
             if (useActionIndex && onBeam) {
@@ -700,7 +724,7 @@ public class Reranker {
         if (actionsTried == 0   // This implies we are at a final state, which
             && decode           // is required when decode=true.
             && maxBeam.push(frontierItem)) {
-          LOG.info("found new most violator: " + frontierItem);
+//          LOG.info("found new most violator: " + frontierItem);
         }
 
         if (LOG_FORWARD_SEARCH) {

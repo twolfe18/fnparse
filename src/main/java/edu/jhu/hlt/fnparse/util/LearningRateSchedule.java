@@ -17,6 +17,8 @@ public interface LearningRateSchedule {
   public static class Constant implements LearningRateSchedule {
     private double learningRate;
     public Constant(double learningRate) {
+      if (Double.isInfinite(learningRate) || Double.isNaN(learningRate))
+        throw new RuntimeException();
       this.learningRate = learningRate;
     }
     @Override
