@@ -10,8 +10,8 @@ import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
-import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.State;
 
 /**
@@ -152,10 +152,11 @@ public interface Params {
      * @param ai is an index of all of the Actions that have been taken so far.
      * @param a is the action to be scored.
      */
-    public Adjoints score(State s, SpanIndex<Action> ai, Action a);
+    //public Adjoints score(State s, SpanIndex<Action> ai, Action a);
+    public Adjoints score(State s, CommitIndex ai, Action a);
 
     public static final Stateful NONE = new Stateful() {
-      @Override public Adjoints score(State s, SpanIndex<Action> ai, final Action a) {
+      @Override public Adjoints score(State s, CommitIndex ai, final Action a) {
         return new Adjoints() {
           @Override public String toString() { return "0"; }
           @Override public double forwards() { return 0d; }
@@ -186,7 +187,7 @@ public interface Params {
           return "(Lifted " + theta + ")";
         }
         @Override
-        public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+        public Adjoints score(State s, CommitIndex ai, Action a) {
           return theta.score(s.getFrames(), a);
         }
         @Override
@@ -383,7 +384,8 @@ public interface Params {
       return stateful + " + " + stateless;
     }
     @Override
-    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    //public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    public Adjoints score(State s, CommitIndex ai, Action a) {
       FNTagging f = s.getFrames();
       return new SumAdj(stateful.score(s, ai, a), stateless.score(f, a));
     }
@@ -438,7 +440,8 @@ public interface Params {
       return left + " + " + right;
     }
     @Override
-    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    //public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    public Adjoints score(State s, CommitIndex ai, Action a) {
       return new SumAdj(left.score(s, ai, a), right.score(s, ai, a));
     }
     @Override
@@ -465,7 +468,8 @@ public interface Params {
       return String.format("(Rand %.1f)", variance);
     }
     @Override
-    public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    //public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
+    public Adjoints score(State s, CommitIndex ai, Action a) {
       double r = (rand.nextDouble() - 0.5) * 2 * variance;
       return new Adjoints.Explicit(r, a, "rand");
     }

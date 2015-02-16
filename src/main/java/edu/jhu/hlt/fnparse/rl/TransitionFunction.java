@@ -44,7 +44,8 @@ public interface TransitionFunction {
     // model score due to bFunc.
     private Params.Stateful model;
     private State state;
-    private SpanIndex<Action> previousActions;
+    //private SpanIndex<Action> previousActions;
+    private CommitIndex previousActions;
     private Actions allActionIter;
 
     // Used to compute tau

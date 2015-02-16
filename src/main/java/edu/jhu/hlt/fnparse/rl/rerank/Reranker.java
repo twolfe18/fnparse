@@ -16,8 +16,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.Action;
-import edu.jhu.hlt.fnparse.rl.SpanIndex;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
@@ -341,12 +341,14 @@ public class Reranker {
      * Give the score of taking action a in state s, with the additional resource
      * that ai is an index on all of the actions take so far to get to s.
      */
-    public double score(State s, SpanIndex<Action> ai, Action a);
+    //public double score(State s, SpanIndex<Action> ai, Action a);
+    public double score(State s, CommitIndex ai, Action a);
 
     /** Returns a score of 0 always */
     public static class None implements BFunc {
       @Override
-      public double score(State s, SpanIndex<Action> ai, Action a) {
+      //public double score(State s, SpanIndex<Action> ai, Action a) {
+      public double score(State s, CommitIndex ai, Action a) {
         return 0d;
       }
       @Override
@@ -363,7 +365,8 @@ public class Reranker {
         this.params = params;
       }
       @Override
-      public double score(State s, SpanIndex<Action> ai, Action a) {
+      //public double score(State s, SpanIndex<Action> ai, Action a) {
+      public double score(State s, CommitIndex ai, Action a) {
         Adjoints adj = params.score(s, ai, a);
         return adj.forwards();
       }
@@ -381,7 +384,8 @@ public class Reranker {
         this.solveMax = solveMax;
       }
       @Override
-      public double score(State s, SpanIndex<Action> ai, Action a) {
+      //public double score(State s, SpanIndex<Action> ai, Action a) {
+      public double score(State s, CommitIndex ai, Action a) {
         // Old COMMIT implementation:
 //        FrameInstance fi = gold.getFrameInstance(a.t);
 //        Span arg = fi.getArgument(a.k);
@@ -416,7 +420,8 @@ public class Reranker {
         this.gold = gold;
       }
       @Override
-      public double score(State s, SpanIndex<Action> ai, Action a) {
+      //public double score(State s, SpanIndex<Action> ai, Action a) {
+      public double score(State s, CommitIndex ai, Action a) {
         ActionType at = a.getActionType();
         double dl = at.deltaLoss(s, a, gold);
         assert dl >= 0;
@@ -443,7 +448,8 @@ public class Reranker {
         this.rand = rand;
       }
       @Override
-      public double score(State s, SpanIndex<Action> ai, Action a) {
+      //public double score(State s, SpanIndex<Action> ai, Action a) {
+      public double score(State s, CommitIndex ai, Action a) {
         double deltaLoss = super.score(s, ai, a);
         if (deltaLoss > 0) {
           // Negative action, skip it with some probability
@@ -628,7 +634,8 @@ public class Reranker {
         Beam.Item<StateSequence> frontierItem = beam.popItem();
         frontier = frontierItem.getItem();
         State s = frontier.getCur();
-        SpanIndex<Action> ai = frontier.getActionIndex();
+        //SpanIndex<Action> ai = frontier.getActionIndex();
+        CommitIndex ai = frontier.getActionIndex();
         if (verbose && LOG_FORWARD_SEARCH)
           logStateInfo(desc + " @ iter=" + iter, s);
 
