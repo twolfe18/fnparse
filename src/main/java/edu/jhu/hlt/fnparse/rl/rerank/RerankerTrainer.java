@@ -1,7 +1,10 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -700,7 +703,9 @@ public class RerankerTrainer {
       rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
   }
 
-  private static final String featureTemplates = "1"
+  private static final String featureTemplatesSearch = getFeatureSetFromFile("feaureSet.full.txt");
+  private static final String featureTemplates =
+      "1"
       + " + frameRole * 1"
       + " + frameRoleArg * 1"
       + " + role * 1"
@@ -746,4 +751,20 @@ public class RerankerTrainer {
       */
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
+
+  public static String getFeatureSetFromFile(String path) {
+    File f = new File(path);
+    if (!f.isFile())
+      throw new RuntimeException("not a file: " + path);
+    try {
+      BufferedReader br = new BufferedReader(new FileReader(f));
+      String line = br.readLine();
+      String[] toks = line.split("\t", 2);
+      String features = toks[2];
+      br.close();
+      return features;
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+  }
 }
