@@ -332,7 +332,7 @@ public class RerankerTrainer {
         throw new RuntimeException("no dev data!");
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
-      double alpha = 0.1d;  // Lower numbers mean stop earlier.
+      double alpha = 0.2d;  // Lower numbers mean stop earlier.
       double d = 5; // Lower numbers mean compute dev set err more frequently
       DoubleSupplier devLossFunc = new DoubleSupplier() {
         @Override

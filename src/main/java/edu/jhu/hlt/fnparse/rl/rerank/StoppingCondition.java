@@ -135,7 +135,7 @@ public interface StoppingCondition {
 
     private DoubleSupplier devLossFunc;
     private final double alpha;
-    private final int k = 10;
+    private final int k = 30;
 
     private final double d;
     private Timer rScriptTimer;
