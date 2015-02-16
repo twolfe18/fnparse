@@ -55,11 +55,18 @@ class Config(tge.Item):
     for k, v in self.__dict__.iteritems():
       assert isinstance(k, str)
       cmd += [k, str(v)]
-    cmd.append('resultsReporter')
-    cmd.append('redis:' + redis_config['host'] + ',' \
-      + redis_config['channel'] + ',' + redis_config['port'])
+
     cmd.append('workingDir')
-    cmd.append(os.path.join(self.working_dir_parent, 'wd-' + name))
+    wd = os.path.join(self.working_dir_parent, 'wd-' + name)
+    cmd.append(wd)
+
+    cmd.append('resultsReporter')
+    reporters = 'redis:' + redis_config['host'] + ',' \
+      + redis_config['channel'] + ',' + redis_config['port']
+    reporters += '\tfile:' + os.path.join(wd, 'results.txt')
+    reporters += '\tfile:' + os.path.join(self.working_dir_parent, 'results.txt')
+    cmd.append(reporters)
+
     return cmd
 
 def learning_curves(working_dir):
@@ -114,6 +121,7 @@ def fs_test(working_dir):
   for n in [100, 200, 400, 800, 1600]:
     for sf in [True, False]:
       c = Config(working_dir)
+      c.performPretrain = False
       c.nTrain = n
       c.simpleFeatures = sf
       q.append(c)
