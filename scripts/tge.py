@@ -392,10 +392,18 @@ class LocalJobTracker(object):
   '''
   A mock job tracker which uses redis instead of qsub.
   '''
-  def __init__(self, max_concurrent_jobs=2):
+  def __init__(self, max_concurrent_jobs=2, logging_dir=None):
     self.key = 'dummy-job-tracker.jobs'
     self.redis = redis.StrictRedis(host='localhost', port=6379, db=0)
     self.max_concurrent_jobs = max_concurrent_jobs
+
+    # Need to open file descriptors to redirect stdout from launched
+    # jobs to a file (similar to how SGE does logging). I give popen
+    # a fd at spawn and then close the df at set_job_done.
+    self.name2fd = {}
+    if logging_dir and not os.path.isdir(logging_dir):
+      os.mkdir(logging_dir)
+    self.logging_dir = logging_dir
 
   def remove_all_jobs(self):
     ''' ensures that there are no jobs running (for testing) '''
@@ -410,23 +418,32 @@ class LocalJobTracker(object):
     return self.redis.lrange(self.key, 0, -1)
 
   def set_job_done(self, name):
-    print '[set_job_done] name=' + name
+    print '[LocalJobTracker set_job_done] name=' + name
     self.redis.lrem(self.key, 0, name)
+
+    # Try to close the fd associated with this jobs log
+    try:
+      fd = self.name2fd[name]
+      fd.close()
+    except Exception as e:
+      print name, 'caused', e
 
   def jobs_queued(self):
     return []
 
-  # NOTE this implementation is a bit annoying because stdout from the spawned process
-  # dumps into the main process's stdout, BUT this is only a problem locally. This appears
-  # difficult to solve in python because there is no way to properly close the file that
-  # you would route stdout to.
   def spawn(self, name, args):
-    ''' args should be a dictionary of values to pass to grid.Runner '''
     assert isinstance(args, list)
     assert isinstance(name, str)
     self.redis.rpush(self.key, name)
-    print '[spawn] about to spawn:', ' '.join(["'" + x + "'" for x in args])
-    subprocess.Popen(args)
+    print '[LocalJobTracker spawn] about to spawn:', ' '.join(["'" + x + "'" for x in args])
+    if self.logging_dir:
+      log_name = os.path.join(self.logging_dir, name + '.log')
+      log_fd = open(log_name, 'w')
+      self.name2fd[name] = log_fd
+      print '[LocalJobTracker spawn]', name, 'is using log file', log_name, log_fd
+      subprocess.Popen(args, stdout=log_fd, stderr=log_fd)
+    else:
+      subprocess.Popen(args)
 
 
 class JobEngine:

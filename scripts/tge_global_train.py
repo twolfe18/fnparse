@@ -132,7 +132,8 @@ def run(q, working_dir, local=True):
 
   # Create the job tracker
   if local:
-    job_tracker = tge.LocalJobTracker(max_concurrent_jobs=12)
+    d = os.path.join(working_dir, 'local-logs')
+    job_tracker = tge.LocalJobTracker(max_concurrent_jobs=12, logging_dir=d)
     job_tracker.remove_all_jobs()
   else:
     d = os.path.join(working_dir, 'sge-logs')
