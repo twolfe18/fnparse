@@ -63,13 +63,14 @@ def learning_curves(working_dir):
   q_local = q.add_queue('local', tge.ExplicitQueue())
   q_global = q.add_queue('global', tge.ExplicitQueue())
   
-  for n in [100, 500, 1500, 3000]:
-    for lrBatchScale in [1280, 128, 12800]:
+  for lrBatchScale in [1280, 128, 12800]:
+    for n in [100, 500, 1500, 3000]:
       for batch_size in [1, 4, 16]:
         for l2p in [1e-6, 1e-8, 1e-10]:
           cl = Config(working_dir)
           cl.lrBatchScale = lrBatchScale
           cl.l2Penalty = l2p
+          cl.performPretrain = False
           cl.pretrainBatchSize = 1
           cl.trainBatchSize = batch_size
           cl.nTrain = n
@@ -81,6 +82,7 @@ def learning_curves(working_dir):
               cg.lrBatchScale = lrBatchScale
               cg.useRoleCooc = useRoleCooc
               cg.l2Penalty = l2p
+              cg.performPretrain = False
               cg.globalL2Penalty = l2pg
               cg.pretrainBatchSize = 1
               cg.trainBatchSize = batch_size
@@ -88,6 +90,8 @@ def learning_curves(working_dir):
               cg.useGlobalFeatures = True
               q_global.add(cg)
 
+  print 'len(q_local) =', len(q_local)
+  print 'len(q_global) =', len(q_global)
   return q
 
 def run(q, working_dir, local=True):
