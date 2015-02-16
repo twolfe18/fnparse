@@ -17,7 +17,8 @@ public class StateSequence {
 
   // Indexes all the COMMIT Actions in this sequence for the use by features.
   // TODO Have another index for PRUNE Actions -- can't do that with SpanIndex
-  private SpanIndex<Action> actionIndex;
+  //private SpanIndex<Action> actionIndex;
+  private CommitIndex actionIndex;
 
   public StateSequence(StateSequence prev, StateSequence next, State cur, Adjoints action) {
     assert !(prev != null && next != null);
@@ -40,10 +41,12 @@ public class StateSequence {
   }
 
   public void initActionIndexFromScratch() {
-    actionIndex = new SpanIndex<>(cur.getSentence().size());
+    //actionIndex = new SpanIndex<>(cur.getSentence().size());
+    actionIndex = new CommitIndex(cur.getSentence().size());
   }
 
-  public SpanIndex<Action> getActionIndex() {
+  //public SpanIndex<Action> getActionIndex() {
+  public CommitIndex getActionIndex() {
     return actionIndex;
   }
 

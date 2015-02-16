@@ -12,8 +12,8 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
-import edu.jhu.hlt.fnparse.rl.SpanIndex;
-import edu.jhu.hlt.fnparse.rl.SpanIndex.IndexItem;
+import edu.jhu.hlt.fnparse.rl.CommitIndex;
+import edu.jhu.hlt.fnparse.rl.CommitIndex.IndexItem;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -40,13 +40,15 @@ public interface GlobalFeature extends Params.Stateful {
       this.cheat = cheat;
     }
     @Override
-    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
       FeatureVector fv = new FeatureVector();
       FNTagging frames = state.getFrames();
       b(fv, "intercept");
       if (cheat.isGold(frames, a2)) {
         b(fv, "currentActionIsGold");
-        for (IndexItem<Action> ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+        //for (IndexItem<Action> ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+        for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
           Action a1 = ii.payload;
           if (cheat.isGold(frames, a1))
             b(fv, "pairOfActionsAreBothGold");
@@ -78,7 +80,8 @@ public interface GlobalFeature extends Params.Stateful {
       super(l2Penalty, BUCKETS); // use Hashing
     }
     @Override
-    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
       // must be >0 because 0 is the implicit backoff label
       final int SAME_TARGET = 1;
       final int BEFORE = 2;
@@ -96,7 +99,8 @@ public interface GlobalFeature extends Params.Stateful {
 
       int previousActions = 0;
       FeatureVector fv = new FeatureVector();
-      for (IndexItem<Action> i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
+      //for (IndexItem<Action> i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
+      for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
         previousActions++;
         Action a = i.payload;
         assert a.getActionType() == ActionType.COMMIT;
@@ -191,7 +195,8 @@ public interface GlobalFeature extends Params.Stateful {
     // X = {x} = set of spans already committed to
     // find x s.t. q.s < x.s < q.e < x.e
     @Override
-    public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
+    //public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
+    public FeatureVector getFeatures(State s, CommitIndex ai, Action a) {
       if (a.hasSpan()) {
         FeatureVector fv = new FeatureVector();
         List<Action> overlappingActions = new ArrayList<>();
@@ -274,14 +279,19 @@ public interface GlobalFeature extends Params.Stateful {
     }
 
     @Override
-    public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a) {
+    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a) {
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a) {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
 
-      IndexItem<Action> mStart = ai.startsAt(s.start);
-      IndexItem<Action> mEnd = ai.endsAt(s.end - 1);
-      IndexItem<Action> mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
-      IndexItem<Action> mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
+//      IndexItem<Action> mStart = ai.startsAt(s.start);
+//      IndexItem<Action> mEnd = ai.endsAt(s.end - 1);
+//      IndexItem<Action> mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
+//      IndexItem<Action> mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
+      IndexItem mStart = ai.startsAt(s.start);
+      IndexItem mEnd = ai.endsAt(s.end - 1);
+      IndexItem mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
+      IndexItem mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
 
       FeatureVector fv = new FeatureVector();
 

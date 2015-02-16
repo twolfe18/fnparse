@@ -61,7 +61,7 @@ public class SpanIndex<T extends HasSpan> {
 
   public String toString() {
     int n = coversToken.length;
-    StringBuilder sb = new StringBuilder("<ActionIndex " + n + "\n");
+    StringBuilder sb = new StringBuilder("<SpanIndex " + n + "\n");
     for (int i = 0; i < n; i++)
       sb.append("covers[" + i + "] " + coversToken[i] + "\n");
     for (int i = 0; i < n; i++)
