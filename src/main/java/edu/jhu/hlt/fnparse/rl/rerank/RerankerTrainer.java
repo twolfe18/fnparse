@@ -183,7 +183,7 @@ public class RerankerTrainer {
     this.pretrainConf = new Config("pretrain");
     this.pretrainConf.beamSize = 1;
     this.trainConf = new Config("train");
-    this.performPretrain = true;
+    this.performPretrain = false;
   }
 
   /** Returns what you passed in */
@@ -598,7 +598,7 @@ public class RerankerTrainer {
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
-    trainer.performPretrain = config.getBoolean("performPretrain", true);
+    trainer.performPretrain = config.getBoolean("performPretrain", false);
 
     // Set learning rate based on batch size
     int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1280);
