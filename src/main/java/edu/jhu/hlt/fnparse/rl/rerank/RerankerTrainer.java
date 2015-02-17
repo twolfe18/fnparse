@@ -68,6 +68,12 @@ public class RerankerTrainer {
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
   public static boolean PRUNE_DEBUG = false;
 
+  public static enum OracleMode {
+    MAX,
+    MIN,
+    RAND,
+  }
+
   // may differ across pretrain/train
   public class Config {
     // Meta
@@ -82,7 +88,6 @@ public class RerankerTrainer {
     public StoppingCondition stopping = new StoppingCondition.Time(6 * 60);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
 
-
     // If true (and dev settings permit), train2 will automatically add a
     // StoppingCondition.DevSet to the list of stopping conditions.
     public boolean allowDynamicStopping = true;
@@ -92,11 +97,14 @@ public class RerankerTrainer {
     // be used, regardless of params.
     public boolean forceGlobalTrain = true;
 
+    // How to implement bFunc for oracle
+    public OracleMode oracleMode = OracleMode.RAND;
+
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
     public double estimateLearningRateFreq = 4;       // Higher means estimate less frequently, time multiple of hammingTrain
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
-    public double estimateLearningRateSpread = 7.5;   // Higher means more spread out
+    public double estimateLearningRateSpread = 5;     // Higher means more spread out
     public int estimateLearningRateSteps = 8;         // How many batche steps to take when evaluating a lr
     public int estimateLearningRateDevLimit = 40;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
 
@@ -440,7 +448,7 @@ public class RerankerTrainer {
           List<Item> rerank = dev.items(i);
           State init = State.initialState(y, rerank);
           Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
-              ? m.getFullUpdate(init, y, conf.rand, null, null)
+              ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : m.getStatelessUpdate(init, y);
           loss += u.violation();
           assert Double.isFinite(loss) && !Double.isNaN(loss);
@@ -643,7 +651,7 @@ public class RerankerTrainer {
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
-          ? r.getFullUpdate(init, y, rand, to, tmv)
+          ? r.getFullUpdate(init, y, conf.oracleMode, rand, to, tmv)
           : r.getStatelessUpdate(init, y);
         finishedUpdates.add(u);
       }
@@ -656,8 +664,8 @@ public class RerankerTrainer {
         List<Item> rerank = ip.items(idx);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
-        updates.add(es.submit(() ->
-          r.getFullUpdate(State.initialState(y, rerank), y, rand, null, null)));
+        updates.add(es.submit(() -> r.getFullUpdate(
+            State.initialState(y, rerank), y, conf.oracleMode, rand, null, null)));
       }
       for (Future<Update> u : updates)
         finishedUpdates.add(u.get());
@@ -745,6 +753,9 @@ public class RerankerTrainer {
           + (System.currentTimeMillis() - t)/1000d + " seconds");
       // Note, could also precompute word shapes, but that is memoized on the fly
     }
+
+    trainer.trainConf.oracleMode = OracleMode.valueOf(
+        config.getString("oracleMode", "RAND").toUpperCase());
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);

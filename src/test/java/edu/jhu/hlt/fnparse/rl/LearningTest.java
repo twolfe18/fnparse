@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -168,7 +169,7 @@ public class LearningTest {
   public void getsItRight(int iters) {
     Reranker.LOG_UPDATE = true;
     CheatingParams.SHOW_ON_UPDATE = true;
-    RerankerTrainer trainer = new RerankerTrainer(rand);
+    RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
     trainer.pretrainConf.beamSize = 10;
     ItemProvider ip = Reranker.getItemProvider(100, false);
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
@@ -221,7 +222,7 @@ public class LearningTest {
         theta.setParamsByHand();
         model = new Reranker(Stateful.NONE, theta, tau, beamWidth, rand);
       } else {
-        RerankerTrainer trainer = new RerankerTrainer(rand);
+        RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
         trainer.statelessParams = theta;
         trainer.pretrainConf.batchSize = 20;
         model = trainer.train1(ip);
