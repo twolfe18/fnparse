@@ -170,8 +170,8 @@ if __name__ == '__main__':
     assert os.path.isfile(Config.jar_file)
     print 'now using jar=' + Config.jar_file
 
-  #run(learning_curves(wd), wd, local=False)
-  run(fs_test(wd), wd, local=True)
+  run(learning_curves(wd), wd, local=False)
+  #run(fs_test(wd), wd, local=True)
 
 
 
