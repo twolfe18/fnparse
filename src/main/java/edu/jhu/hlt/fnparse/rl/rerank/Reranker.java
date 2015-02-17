@@ -27,6 +27,7 @@ import edu.jhu.hlt.fnparse.rl.TransitionFunction;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.Beam.Beam1;
 import edu.jhu.hlt.fnparse.util.Beam.BeamN;
@@ -381,11 +382,37 @@ public class Reranker {
     }
     public static BFunc NONE = new None();
 
+    public static class Sum implements BFunc {
+      private BFunc left, right;
+      public Sum(BFunc left, BFunc right) {
+        this.left = left;
+        this.right = right;
+      }
+      @Override
+      public String toString() {
+        return left.toString() + " + " + right.toString();
+      }
+      @Override
+      public double score(State s, CommitIndex ai, Action a) {
+        double l = left.score(s, ai, a);
+        assert !Double.isNaN(l);
+        if (Double.isInfinite(l))
+          return l;
+        double r = right.score(s, ai, a);
+        assert !Double.isNaN(r);
+        return l + r;
+      }
+    }
+
     /** Lifts a Params.Stateful to a BFunc */
     public static class StatefulAdapter implements BFunc {
       public Stateful params;
       public StatefulAdapter(Stateful params) {
         this.params = params;
+      }
+      @Override
+      public String toString() {
+        return params.toString();
       }
       @Override
       //public double score(State s, SpanIndex<Action> ai, Action a) {
@@ -776,7 +803,7 @@ public class Reranker {
    * @param oracleTimer may be null
    * @param mvTimer may be null
    */
-  public Update getFullUpdate(State init, FNParse y, Random rand, Timer oracleTimer, Timer mvTimer) {
+  public Update getFullUpdate(State init, FNParse y, OracleMode oracleMode, Random rand, Timer oracleTimer, Timer mvTimer) {
     if (y.numFrameInstances() == 0) {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
@@ -785,10 +812,13 @@ public class Reranker {
     // Find the oracle parse
     if (oracleTimer != null) oracleTimer.start();
     Params.Stateful cachingModelParams = getFullParams(true);
-    boolean oracleSolveMax = false;
+    boolean oracleSolveMax = oracleMode != OracleMode.MIN;
     boolean oracleDecode = true;
+    BFunc bfunc = new BFunc.Oracle(y, oracleSolveMax);
+    if (oracleMode == OracleMode.RAND)
+      bfunc = new BFunc.Sum(bfunc, new BFunc.StatefulAdapter(new Params.RandScore(rand, 1d)));
     ForwardSearch oracleSearch = fullSearch(
-        init, new BFunc.Oracle(y, oracleSolveMax), oracleSolveMax, oracleDecode, cachingModelParams);
+        init, bfunc, oracleSolveMax, oracleDecode, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       oracleSearch.gold = y;
     oracleSearch.run();

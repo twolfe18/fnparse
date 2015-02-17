@@ -14,7 +14,6 @@ import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.AveragedWeights;
-import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
