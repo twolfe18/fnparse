@@ -789,6 +789,16 @@ public class RerankerTrainer {
       // Note, could also precompute word shapes, but that is memoized on the fly
     }
 
+    if (config.getBoolean("noSyntax", false)) {
+      LOG.info("[main] stripping all syntax out of data!");
+      for (FNParse y : ip) {
+        Sentence s = y.getSentence();
+        s.setBasicDeps(null);
+        s.setCollapsedDeps(null);
+        s.setStanfordParse(null);
+      }
+    }
+
     trainer.trainConf.oracleMode = OracleMode.valueOf(
         config.getString("oracleMode", "RAND").toUpperCase());
 
