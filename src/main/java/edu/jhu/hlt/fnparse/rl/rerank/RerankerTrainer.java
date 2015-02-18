@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -46,8 +47,10 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.util.BatchProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
@@ -82,7 +85,8 @@ public class RerankerTrainer {
     // General parameters
     public int threads = 1;
     public int beamSize = 1;
-    public int batchSize = 4;	 // If 0, compute an exact gradient
+    public int batchSize = 4;  // If 0, compute an exact gradient (batchSize == train.size)
+    public boolean batchWithReplacement = false;
 
     // Stopping condition
     public StoppingCondition stopping = new StoppingCondition.Time(6 * 60);
@@ -258,19 +262,40 @@ public class RerankerTrainer {
     return p;
   }
 
-  /** If you don't want anything to print, just provide showStr=null */
-  public static Map<String, Double> eval(Reranker m, ItemProvider ip, String showStr) {
+  /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
+  public static Map<String, Double> eval(Reranker m, ItemProvider ip, String showStr, File diffArgsFile) {
     List<FNParse> y = ItemProvider.allLabels(ip);
     List<FNParse> yHat = m.predict(y);
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
     if (showStr != null)
       BasicEvaluation.showResults(showStr, results);
+    if (diffArgsFile != null) {
+      try {
+        writeErrors(y, yHat, diffArgsFile);
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
     return results;
+  }
+
+  public static void writeErrors(List<FNParse> gold, List<FNParse> hyp, File f) throws IOException {
+    if (gold.size() != hyp.size())
+      throw new IllegalArgumentException();
+    FileWriter fw = new FileWriter(f);
+    int n = gold.size();
+    for (int i = 0; i < n; i++) {
+      String diff = FNDiff.diffArgs(gold.get(i), hyp.get(i), true);
+      fw.write(diff);
+      fw.write("\n");
+    }
+    fw.close();
   }
 
   public static double eval(Reranker m, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
-    Map<String, Double> results = eval(m, ip, showStr);
+    File diffArgsFile = null;
+    Map<String, Double> results = eval(m, ip, showStr, diffArgsFile);
     return results.get(objective.getName());
   }
 
@@ -291,8 +316,9 @@ public class RerankerTrainer {
         timer.start("tuneModelForF1.eval");
         LOG.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
         bias.setRecallBias(threshold);
+        File diffArgsFile = null;
         Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
-            ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null);
+            ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null, diffArgsFile);
         double perf = results.get(conf.objective.getName());
         LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -383,11 +409,17 @@ public class RerankerTrainer {
     // Make an adapter for LearningRateEstimator
     LearningRateEstimator.Model model = new LearningRateEstimator.Model() {
       private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf);
+      private int seed = conf.rand.nextInt();
       @Override
       public void train() {
         try {
-          for (int i = 0; i < conf.estimateLearningRateSteps; i++)
-            hammingTrainBatch(m, null, train, conf, -1, "lrEst");
+          // We want every rollout to use the same batches to reduce variance.
+          Random r = new Random(seed);
+          BatchProvider bp = new BatchProvider(r, train.size());
+          for (int i = 0; i < conf.estimateLearningRateSteps; i++) {
+            List<Integer> batch = bp.getBatch(conf.batchSize, conf.batchWithReplacement);
+            hammingTrainBatch(m, batch, null, train, conf, -1, "lrEst");
+          }
         } catch (Exception e) {
           throw new RuntimeException(e);
         }
@@ -488,8 +520,8 @@ public class RerankerTrainer {
         throw new RuntimeException("no dev data!");
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
-      double alpha = 0.15d;  // Lower numbers mean stop earlier.
-      double k = 25;         // Size of history
+      double alpha = 0.15d;   // Lower numbers mean stop earlier.
+      double k = 25;          // Size of history
       DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
       dynamicStopping = conf.addStoppingCondition(
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k));
@@ -530,6 +562,8 @@ public class RerankerTrainer {
     String timerStr = "hammingTrain." + conf.name;
     timer.start(timerStr);
 
+    BatchProvider batchProvider = new BatchProvider(conf.rand, train.size());
+
     ExecutorService es = null;
     if (conf.threads > 1) {
       String msg = "i'm pretty sure multi-threaded features do not work";
@@ -543,11 +577,13 @@ public class RerankerTrainer {
     boolean showViolation = true;
     outer:
     for (int iter = 0; true; ) {
-      for (int i = 0; i < train.size(); i += conf.batchSize) {
+      int step = conf.batchSize == 0 ? train.size() : conf.batchSize;
+      for (int i = 0; i < train.size(); i += step) {
 
         // Batch step
         conf.tHammingTrain.start();
-        double violation = hammingTrainBatch(r, es, train, conf, iter, timerStr);
+        List<Integer> batch = batchProvider.getBatch(conf.batchSize, conf.batchWithReplacement);
+        double violation = hammingTrainBatch(r, batch, es, train, conf, iter, timerStr);
         conf.tHammingTrain.stop();
 
         // Print some data every once in a while.
@@ -615,6 +651,7 @@ public class RerankerTrainer {
    */
   private double hammingTrainBatch(
       Reranker r,
+      List<Integer> batch,
       ExecutorService es,
       ItemProvider ip,
       Config conf,
@@ -624,19 +661,6 @@ public class RerankerTrainer {
     Timer to = timer.get(timerStrPartial + ".oracle", true).setPrintInterval(10).ignoreFirstTime();
     Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
     t.start();
-
-    // Compute the batch
-    int n = ip.size();
-    int[] batch;
-    if (conf.batchSize == 0) {
-      batch = new int[n];
-      for (int i = 0; i < batch.length; i++)
-        batch[i] = i;
-    } else {
-      batch = new int[conf.batchSize];
-      for (int i = 0; i < batch.length; i++)
-        batch[i] = rand.nextInt(n);
-    }
 
     // Compute updates for the batch
     boolean verbose = false;
@@ -672,8 +696,7 @@ public class RerankerTrainer {
     }
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
-    assert finishedUpdates.size() == conf.batchSize
-        || (finishedUpdates.size() == n && conf.batchSize == 0);
+    assert finishedUpdates.size() == batch.size();
 
     // Apply the updates
     double learningRate = conf.learningRate.learningRate();
@@ -703,7 +726,7 @@ public class RerankerTrainer {
     Reranker.COST_FN = config.getDouble("costFN", 1);
     LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
-    int nTrain = config.getInt("nTrain", 10);
+    int nTrain = config.getInt("nTrain", 100);
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
@@ -761,6 +784,8 @@ public class RerankerTrainer {
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
+
+    trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
 
     // Set learning rate based on batch size
     int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 128);
@@ -873,7 +898,7 @@ public class RerankerTrainer {
       }
 
       if (useGlobalFeatures) {
-        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
+        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-6);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
         if (config.getBoolean("useRoleCooc", false)) {
           trainer.addGlobalParams(
@@ -895,7 +920,8 @@ public class RerankerTrainer {
 
     // Evaluate
     LOG.info("[main] done training, evaluating");
-    Map<String, Double> perfResults = eval(model, test, "[main]");
+    File diffArgsFile = new File(workingDir, "diffArgs.txt");
+    Map<String, Double> perfResults = eval(model, test, "[main]", diffArgsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
