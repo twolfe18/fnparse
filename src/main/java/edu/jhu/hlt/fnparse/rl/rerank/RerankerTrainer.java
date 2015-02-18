@@ -20,7 +20,6 @@ import java.util.Random;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
@@ -33,11 +32,17 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -210,7 +215,11 @@ public class RerankerTrainer {
   public List<ResultReporter> reporters;
   public Config pretrainConf; // for training statelessParams
   public Config trainConf;    // for training statelessParams + statefulParams
-  public boolean performPretrain;
+  public boolean performPretrain = false;
+
+  // If true, use DeterministicRolePruning to cut down the set of (t,k,spans)
+  // that are considered ahead of time. Requires that parsing be in effect.
+  public boolean useSyntaxSpanPruning = false;
 
   // Model parameters
   public Params.Stateful statefulParams = Stateful.NONE;
@@ -266,7 +275,9 @@ public class RerankerTrainer {
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
   public static Map<String, Double> eval(Reranker m, ItemProvider ip, File semaforEvalDir, String showStr, File diffArgsFile) {
     List<FNParse> y = ItemProvider.allLabels(ip);
-    List<FNParse> yHat = m.predict(y);
+    List<State> initialStates = new ArrayList<>();
+    for (FNParse p : y) initialStates.add(getInitialStateWithPruning(p, p));
+    List<FNParse> yHat = m.predict(initialStates);
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
     if (showStr != null)
       BasicEvaluation.showResults(showStr, results);
@@ -481,7 +492,7 @@ public class RerankerTrainer {
     LearningRateEstimator.estimateLearningRate(model, queries, spread);
   }
 
-  private static DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
+  private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
     return new DoubleSupplier() {
       @Override
       public double getAsDouble() {
@@ -490,7 +501,9 @@ public class RerankerTrainer {
         for (int i = 0; i < dev.size(); i++) {
           FNParse y = dev.label(i);
           List<Item> rerank = dev.items(i);
-          State init = State.initialState(y, rerank);
+          State init = useSyntaxSpanPruning
+              ? getInitialStateWithPruning(y, y)
+              : State.initialState(y, rerank);
           Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
               ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : m.getStatelessUpdate(init, y);
@@ -659,6 +672,45 @@ public class RerankerTrainer {
   }
 
   /**
+   * @param gold may be null. If not, add gold spans if they're not already
+   * included in the prune mask.
+   */
+  public static State getInitialStateWithPruning(FNTagging frames, FNParse gold) {
+    Sentence s = frames.getSentence();
+    if (s.getStanfordParse(false) == null)
+      throw new IllegalArgumentException();
+    double priorScore = 0;
+    List<Item> items = new ArrayList<>();
+    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    FNParseSpanPruning mask = drp.setupInference(Arrays.asList(frames), null).decodeAll().get(0);
+    int T = mask.numFrameInstances();
+    for (int t = 0; t < T; t++) {
+      int K = mask.getFrame(t).numRoles();
+      for (Span arg : mask.getPossibleArgs(t))
+        for (int k = 0; k < K; k++)
+          items.add(new Item(t, k, arg, priorScore));
+      // Always include the target as a possibility
+      for (int k = 0; k < K; k++)
+        items.add(new Item(t, k, mask.getTarget(t), priorScore));
+      // Add gold args if gold is provided
+      if (gold != null) {
+        FrameInstance goldFI = gold.getFrameInstance(t);
+        assert mask.getFrame(t) == goldFI.getFrame();
+        assert mask.getTarget(t) == goldFI.getTarget();
+        for (int k = 0; k < K; k++) {
+          Span goldArg = goldFI.getArgument(k);
+          if (goldArg != Span.nullSpan)
+            items.add(new Item(t, k, goldArg, priorScore));
+        }
+      }
+    }
+    LOG.info("[getInitialStateWithPruning] cut size down from "
+        + mask.numPossibleArgsNaive() + " to "
+        + mask.numPossibleArgs());
+    return State.initialState(frames, items);
+  }
+
+  /**
    * Returns the average violation over this batch.
    */
   private double hammingTrainBatch(
@@ -683,7 +735,9 @@ public class RerankerTrainer {
       for (int idx : batch) {
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
-        State init = State.initialState(y, rerank);
+        State init = useSyntaxSpanPruning
+            ? getInitialStateWithPruning(y, y)
+            : State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
@@ -692,19 +746,7 @@ public class RerankerTrainer {
         finishedUpdates.add(u);
       }
     } else {
-      if (verbose)
-        LOG.info("[hammingTrainBatch] running with ExecutorService");
-      List<Future<Update>> updates = new ArrayList<>();
-      for (int idx : batch) {
-        FNParse y = ip.label(idx);
-        List<Item> rerank = ip.items(idx);
-        if (verbose)
-          LOG.info("[hammingTrainBatch] submitting " + idx);
-        updates.add(es.submit(() -> r.getFullUpdate(
-            State.initialState(y, rerank), y, conf.oracleMode, rand, null, null)));
-      }
-      for (Future<Update> u : updates)
-        finishedUpdates.add(u.get());
+      throw new IllegalStateException("currently threading not supported");
     }
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
@@ -799,6 +841,8 @@ public class RerankerTrainer {
       }
     }
 
+    trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", false);
+
     trainer.trainConf.oracleMode = OracleMode.valueOf(
         config.getString("oracleMode", "RAND").toUpperCase());
 
@@ -822,7 +866,7 @@ public class RerankerTrainer {
 //    Reranker.LOG_FORWARD_SEARCH = true;
 //    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
 //    trainer.pretrainConf.allowDynamicStopping = false;
-//    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(15));
+    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(5));
 //    trainer.trainConf.addStoppingCondition(new StoppingCondition.Fixed(5000));
 //    trainer.trainConf.allowDynamicStopping = false;
 

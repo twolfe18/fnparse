@@ -184,24 +184,25 @@ public class LearningTest {
   }
 
   private void evaluate(Reranker model, ItemProvider ip, double f1ThreshForEachParse, double f1ThreshAggregate) {
-    // Show the parses one by one
-    for (int i = 0; i < ip.size(); i++) {
-      FNParse y = ip.label(i);
-      FNParse yhat = model.predict(DataUtil.convertParseToTagging(y));
-      SentenceEval se = new SentenceEval(y, yhat);
-      double f1 = BasicEvaluation.argOnlyMicroF1.evaluate(se);
-      double prec = BasicEvaluation.argOnlyMicroPrecision.evaluate(se);
-      double rec = BasicEvaluation.argOnlyMicroRecall.evaluate(se);
-      LOG.info("f1=" + f1 + " p=" + prec + " r=" + rec
-          + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
-      Assert.assertTrue(f1 >= f1ThreshForEachParse);
-    }
-
-    // Evaluate performance on all parses
-    Map<String, Double> results =
-        RerankerTrainer.eval(model, ip, "[using PriorScoreParams]", null);
-    Assert.assertTrue(results.get(BasicEvaluation.argOnlyMicroF1.getName())
-        >= f1ThreshAggregate);
+    throw new RuntimeException("fixme");
+//    // Show the parses one by one
+//    for (int i = 0; i < ip.size(); i++) {
+//      FNParse y = ip.label(i);
+//      FNParse yhat = model.predict(DataUtil.convertParseToTagging(y));
+//      SentenceEval se = new SentenceEval(y, yhat);
+//      double f1 = BasicEvaluation.argOnlyMicroF1.evaluate(se);
+//      double prec = BasicEvaluation.argOnlyMicroPrecision.evaluate(se);
+//      double rec = BasicEvaluation.argOnlyMicroRecall.evaluate(se);
+//      LOG.info("f1=" + f1 + " p=" + prec + " r=" + rec
+//          + "  diff:\n" + FNDiff.diffArgs(y, yhat, true));
+//      Assert.assertTrue(f1 >= f1ThreshForEachParse);
+//    }
+//
+//    // Evaluate performance on all parses
+//    Map<String, Double> results =
+//        RerankerTrainer.eval(model, ip, "[using PriorScoreParams]", null);
+//    Assert.assertTrue(results.get(BasicEvaluation.argOnlyMicroF1.getName())
+//        >= f1ThreshAggregate);
   }
 
   public void fromPriorScores() {

@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -274,17 +273,12 @@ public class Reranker {
     LOG.info("[predict] done");
     return yhat;
   }
-  public FNParse predict(FNTagging frames) {
-    if (frames.numFrameInstances() == 0)
-      return new FNParse(frames.getSentence(), Collections.emptyList());
-    return predict(State.initialState(frames));
-  }
 
   // Batch predict
-  public <T extends FNTagging> List<FNParse> predict(List<T> frames) {
+  public List<FNParse> predict(List<State> initialStates) {
     List<FNParse> r = new ArrayList<>();
-    for (T t : frames)
-      r.add(predict(t));
+    for (State is : initialStates)
+      r.add(predict(is));
     return r;
   }
 
