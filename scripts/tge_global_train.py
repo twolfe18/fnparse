@@ -73,15 +73,22 @@ def learning_curves(working_dir):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
-  q = tge.MultiQueue()
-  q_local = q.add_queue('local', tge.ExplicitQueue())
-  q_global = q.add_queue('global', tge.ExplicitQueue())
+
+  # Give local and global the same bandwidth
+  #q = tge.MultiQueue()
+  #q_local = q.add_queue('local', tge.ExplicitQueue())
+  #q_global = q.add_queue('global', tge.ExplicitQueue())
+
+  # First come first serve
+  q = tge.ExplicitQueue()
+  q_local = q
+  q_global = q
   
   lrBatchScale = 128
   for oracleMode in ['RAND', 'MAX', 'MIN']:
     for n in [100, 500, 1500, 3000]:
-      for batch_size in [1, 4, 16]:
-        for l2p in [1e-6, 1e-8, 1e-10]:
+      for batch_size in [1, 4]:
+        for l2p in [1e-8, 1e-9, 1e-10, 1e-11]:
           cl = Config(working_dir)
           cl.oracleMode = oracleMode
           cl.lrBatchScale = lrBatchScale
@@ -92,7 +99,7 @@ def learning_curves(working_dir):
           cl.nTrain = n
           cl.useGlobalFeatures = False
           q_local.add(cl)
-          for l2pg in [1e-4, 1e-6, 1e-8]:
+          for l2pg in [1e-5, 1e-6, 1e-7, 1e-8]:
             for useRoleCooc in [True, False]:
               cg = Config(working_dir)
               cg.oracleMode = oracleMode

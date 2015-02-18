@@ -81,7 +81,7 @@ class LogResults:
 					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
 					self.dev_info['recallBias' + version] = m.group(1)
 					self.dev_info[m.group(2) + version] = m.group(3)
-				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale']:
+				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
 					m = re.match('^' + k + '=(.+)$', line)
 					if m:
 						self.global_train_info[k] = m.group(1)
