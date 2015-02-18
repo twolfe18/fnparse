@@ -35,6 +35,7 @@ import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.rl.State;
@@ -263,7 +264,7 @@ public class RerankerTrainer {
   }
 
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
-  public static Map<String, Double> eval(Reranker m, ItemProvider ip, String showStr, File diffArgsFile) {
+  public static Map<String, Double> eval(Reranker m, ItemProvider ip, File semaforEvalDir, String showStr, File diffArgsFile) {
     List<FNParse> y = ItemProvider.allLabels(ip);
     List<FNParse> yHat = m.predict(y);
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
@@ -275,6 +276,13 @@ public class RerankerTrainer {
       } catch (Exception e) {
         e.printStackTrace();
       }
+    }
+    if (semaforEvalDir != null) {
+      LOG.info("[eval] calling semafor eval in " + semaforEvalDir.getPath());
+      if (!semaforEvalDir.isDirectory())
+        throw new IllegalArgumentException();
+      SemaforEval semEval = new SemaforEval(semaforEvalDir);
+      semEval.evaluate(y, yHat, new File(semaforEvalDir, "results.txt"));
     }
     return results;
   }
@@ -295,7 +303,8 @@ public class RerankerTrainer {
   public static double eval(Reranker m, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
     File diffArgsFile = null;
-    Map<String, Double> results = eval(m, ip, showStr, diffArgsFile);
+    File semEvalDir = null;
+    Map<String, Double> results = eval(m, ip, semEvalDir, showStr, diffArgsFile);
     return results.get(objective.getName());
   }
 
@@ -317,8 +326,11 @@ public class RerankerTrainer {
         LOG.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
         bias.setRecallBias(threshold);
         File diffArgsFile = null;
-        Map<String, Double> results = eval(model, dev, SHOW_FULL_EVAL_IN_TUNE
-            ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null, diffArgsFile);
+        File semEvalDir = null;
+        Map<String, Double> results = eval(model, dev, semEvalDir,
+            SHOW_FULL_EVAL_IN_TUNE
+              ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null,
+                  diffArgsFile);
         double perf = results.get(conf.objective.getName());
         LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -921,7 +933,9 @@ public class RerankerTrainer {
     // Evaluate
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
-    Map<String, Double> perfResults = eval(model, test, "[main]", diffArgsFile);
+    File semDir = new File(workingDir, "semaforEval");
+    if (!semDir.isDirectory()) semDir.mkdir();
+    Map<String, Double> perfResults = eval(model, test, semDir, "[main]", diffArgsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
