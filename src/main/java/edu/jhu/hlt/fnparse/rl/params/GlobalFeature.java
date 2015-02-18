@@ -10,6 +10,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
@@ -28,8 +29,9 @@ import edu.jhu.util.Alphabet;
  */
 public interface GlobalFeature extends Params.Stateful {
 
-
-
+  /**
+   * Utilizes information about the gold parse in the feature.
+   */
   public static class Cheating extends FeatureParams implements Params.Stateful {
     private CheatingParams cheat;
     /**
@@ -64,11 +66,131 @@ public interface GlobalFeature extends Params.Stateful {
     }
   }
 
+  /**
+   * Says what frames an argument covers.
+   * TODO Remove from this class, this is not a global feature.
+   */
+  public static class CoversFrames extends FeatureParams implements Params.Stateless {
+    public static boolean SHOW_FEATURES = false;
+    public static final int BUCKETS = 1<<18;
+    public CoversFrames(double l2Penalty) {
+      super(l2Penalty);   // Use Alphabet
+//      super(l2Penalty, BUCKETS);  // Use Hashing
+    }
+    @Override
+    //public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+    public FeatureVector getFeatures(FNTagging frames, Action a2) {
+      if (!a2.hasSpan())
+        return FeatureUtils.emptyFeatures;
+      FeatureVector fv = new FeatureVector();
+      FrameInstance fi = frames.getFrameInstance(a2.t);
+      Frame frame = fi.getFrame();
+      String f = frame.getName();
+      String fr = f + "." + frame.getRole(a2.k);
+      Span s = a2.getSpan();
+      Span st = fi.getTarget();
+      int T = frames.numFrameInstances();
+      double w = 1d / T;
+      for (int t = 0; t < T; t++) {
+        if (t == a2.t) continue;
+        FrameInstance fit = frames.getFrameInstance(t);
+        Span target = fit.getTarget();
+        if (s.covers(target)) {
+          String dir = BasicFeatureTemplates.spanPosRel(st, target);
+          String c = "covers=" + fit.getFrame().getName();
+          b(fv, w, fr, c, dir);
+          b(fv, w, fr, c);
+          b(fv, w, f, c, dir);
+          if (s.width() <= 5) {
+            b(fv, w, fr, "narrow", c, dir);
+            b(fv, w, fr, "narrow", c);
+            b(fv, w, f, "narrow", c, dir);
+          }
+        }
+      }
+      if (SHOW_FEATURES)
+        logFeatures(fv, null, a2);
+      return fv;
+    }
+  }
+
+  /**
+   * Describes a new arguments location relative to the target and other args
+   * laid down already.
+   */
+  public static class ArgLoc extends FeatureParams implements Params.Stateful {
+    public static boolean SHOW_FEATURES = false;
+    public static final int BUCKETS = 1<<18;
+    public ArgLoc(double l2Penalty) {
+      super(l2Penalty);   // Use Alphabet
+//      super(l2Penalty, BUCKETS);  // Use Hashing
+    }
+    @Override
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+      if (!a2.hasSpan())
+        return FeatureUtils.emptyFeatures;
+      FeatureVector fv = new FeatureVector();
+      List<Action> rel = new ArrayList<>();
+      for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+        Action a = ii.payload;
+        if (a.t == a2.t && a.getActionType() == ActionType.COMMIT)
+          rel.add(a);
+      }
+      Frame frame = state.getFrame(a2.t);
+      String f = frame.getName();
+      String r = frame.getRole(a2.k);
+      String fr = f + "." + r;
+      Span s = a2.getSpan();
+      String r1 = "r1=" + BasicFeatureTemplates.spanPosRel(state.getTarget(a2.t), s);
+      String r1d = r1 + "_" + r;
+      double w = 1d / rel.size();
+      for (Action a : rel) {
+        String r2 = "r2=" + BasicFeatureTemplates.spanPosRel(a.getSpan(), s);
+        String r2d = r2 + "_" + frame.getRole(a.k);
+        b(fv, w, fr, r1d, r2d);
+        b(fv, w, f, r1d, r2d);
+        b(fv, w, f, r1d, r2);
+        b(fv, w, f, r1, r2);
+      }
+      if (SHOW_FEATURES)
+        logFeatures(fv, state, a2);
+      return fv;
+    }
+  }
+
+  /**
+   * Says how many args have been committed to already for the target of the
+   * given action, conjoins this info with frame, frameRole, and "1".
+   */
+  public static class NumArgs extends FeatureParams implements Params.Stateful {
+    public static boolean SHOW_FEATURES = false;
+    public static final int BUCKETS = 1<<16;
+    public NumArgs(double l2Penalty) {
+      super(l2Penalty);   // Use Alphabet
+//      super(l2Penalty, BUCKETS);  // Use Hashing
+    }
+    @Override
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+      FeatureVector fv = new FeatureVector();
+      int decArgs = 0;
+      for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+        Action a = ii.payload;
+        if (a.t == a2.t && a.getActionType() == ActionType.COMMIT)
+          decArgs++;
+      }
+      Frame f = state.getFrame(a2.t);
+      String da = "decArgs=" + (decArgs < 5 ? String.valueOf(decArgs) : "5+");
+      b(fv, da);
+      b(fv, f.getName(), da);
+      b(fv, f.getName(), f.getRole(a2.k), da);
+      if (SHOW_FEATURES)
+        logFeatures(fv, state, a2);
+      return fv;
+    }
+  }
 
   /**
    * Fires when roles co-occur.
-   * Captures "stopping features", e.g. "commit to (t,k) = nullSpan even though
-   * (t',k') = nonNullSpan".
    */
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams implements Params.Stateful {
@@ -284,10 +406,6 @@ public interface GlobalFeature extends Params.Stateful {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
 
-//      IndexItem<Action> mStart = ai.startsAt(s.start);
-//      IndexItem<Action> mEnd = ai.endsAt(s.end - 1);
-//      IndexItem<Action> mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
-//      IndexItem<Action> mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
       IndexItem mStart = ai.startsAt(s.start);
       IndexItem mEnd = ai.endsAt(s.end - 1);
       IndexItem mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
