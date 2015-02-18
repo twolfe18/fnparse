@@ -199,7 +199,7 @@ public class LearningTest {
 
     // Evaluate performance on all parses
     Map<String, Double> results =
-        RerankerTrainer.eval(model, ip, "[using PriorScoreParams]");
+        RerankerTrainer.eval(model, ip, "[using PriorScoreParams]", null);
     Assert.assertTrue(results.get(BasicEvaluation.argOnlyMicroF1.getName())
         >= f1ThreshAggregate);
   }
