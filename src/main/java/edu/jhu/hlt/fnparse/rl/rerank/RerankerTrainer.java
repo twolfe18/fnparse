@@ -520,7 +520,7 @@ public class RerankerTrainer {
         throw new RuntimeException("no dev data!");
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
-      double alpha = 0.1d;    // Lower numbers mean stop earlier.
+      double alpha = 0.15d;   // Lower numbers mean stop earlier.
       double k = 25;          // Size of history
       DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
       dynamicStopping = conf.addStoppingCondition(
@@ -726,7 +726,7 @@ public class RerankerTrainer {
     Reranker.COST_FN = config.getDouble("costFN", 1);
     LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
-    int nTrain = config.getInt("nTrain", 10);
+    int nTrain = config.getInt("nTrain", 100);
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
@@ -784,6 +784,8 @@ public class RerankerTrainer {
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
+
+    trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
 
     // Set learning rate based on batch size
     int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 128);
@@ -896,7 +898,7 @@ public class RerankerTrainer {
       }
 
       if (useGlobalFeatures) {
-        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-2);
+        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-6);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
         if (config.getBoolean("useRoleCooc", false)) {
           trainer.addGlobalParams(

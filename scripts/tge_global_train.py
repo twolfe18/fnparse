@@ -130,6 +130,28 @@ def fs_test(working_dir):
       q.append(c)
   return q
 
+def last_minute(working_dir):
+  q = tge.MultiQueue()
+  q_batch = q.add_queue('batch', tge.ExplicitQueue())
+  q_cost_fn = q.add_queue('cost_fn', tge.ExplicitQueue())
+
+  n = 150
+
+  for batch_with_replacement in [True, False]:
+    c = Config(working_dir)
+    c.nTrain = n
+    c.batchWithReplacement = batch_with_replacement
+    q_batch.append(c)
+
+  for cost_fn in [1, 2, 4, 8]:
+    c = Config(working_dir)
+    c.nTrain = n
+    c.costFN = cost_fn
+    q_cost_fn.append(c)
+
+  return q
+
+
 def run(q, working_dir, local=True):
   print 'running', q, 'and putting the results in', working_dir
 
@@ -173,8 +195,9 @@ if __name__ == '__main__':
     assert os.path.isfile(Config.jar_file)
     print 'now using jar=' + Config.jar_file
 
-  run(learning_curves(wd), wd, local=False)
+  #run(learning_curves(wd), wd, local=False)
   #run(fs_test(wd), wd, local=True)
+  run(last_minute(wd), wd, local=True)
 
 
 
