@@ -85,7 +85,7 @@ def learning_curves(working_dir):
   q_global = q
   
   lrBatchScale = 128
-  for no_syntax in [False, True]:
+  for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
     for oracleMode in ['RAND', 'MAX', 'MIN']:
       for n in [100, 500, 1500, 3000]:
         for batch_size in [1, 4]:
@@ -101,13 +101,13 @@ def learning_curves(working_dir):
             cl.nTrain = n
             cl.useGlobalFeatures = False
             q_local.add(cl)
-            for l2pg in [1e-6, 1e-7, 1e-8]:
+            for l2pg in [1e-5, 1e-6, 1e-7, 1e-8]:
               cg = Config(working_dir)
               cg.noSyntax = no_syntax
               cg.oracleMode = oracleMode
               cg.lrBatchScale = lrBatchScale
-              cg.globalFeatRoleCooc = False
-              cg.globalFeatCoversFrames = False
+              cg.globalFeatRoleCooc = True
+              cg.globalFeatCoversFrames = True
               cg.globalFeatArgLoc = True
               cg.globalFeatNumArgs = True
               cg.globalFeatArgOverlap = True

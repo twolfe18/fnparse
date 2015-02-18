@@ -219,7 +219,7 @@ public class RerankerTrainer {
 
   // If true, use DeterministicRolePruning to cut down the set of (t,k,spans)
   // that are considered ahead of time. Requires that parsing be in effect.
-  public boolean useSyntaxSpanPruning = false;
+  public boolean useSyntaxSpanPruning = true;
 
   // Model parameters
   public Params.Stateful statefulParams = Stateful.NONE;
@@ -841,7 +841,7 @@ public class RerankerTrainer {
       }
     }
 
-    trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", false);
+    trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
     trainer.trainConf.oracleMode = OracleMode.valueOf(
         config.getString("oracleMode", "RAND").toUpperCase());
