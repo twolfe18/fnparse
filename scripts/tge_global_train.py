@@ -86,40 +86,43 @@ def learning_curves(working_dir):
   
   lrBatchScale = 128
   for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
-    for oracleMode in ['RAND', 'MAX', 'MIN']:
-      for n in [100, 500, 1500, 3000]:
-        for batch_size in [1, 4]:
-          for l2p in [1e-8, 1e-9, 1e-10]:
-            cl = Config(working_dir)
-            cl.noSyntax = no_syntax
-            cl.oracleMode = oracleMode
-            cl.lrBatchScale = lrBatchScale
-            cl.l2Penalty = l2p
-            cl.performPretrain = False
-            cl.pretrainBatchSize = 1
-            cl.trainBatchSize = batch_size
-            cl.nTrain = n
-            cl.useGlobalFeatures = False
-            q_local.add(cl)
-            for l2pg in [1e-5, 1e-6, 1e-7, 1e-8]:
-              cg = Config(working_dir)
-              cg.noSyntax = no_syntax
-              cg.oracleMode = oracleMode
-              cg.lrBatchScale = lrBatchScale
-              cg.globalFeatRoleCooc = True
-              cg.globalFeatCoversFrames = True
-              cg.globalFeatArgLoc = True
-              cg.globalFeatNumArgs = True
-              cg.globalFeatArgOverlap = True
-              cg.globalFeatSpanBoundary = True
-              cg.l2Penalty = l2p
-              cg.performPretrain = False
-              cg.globalL2Penalty = l2pg
-              cg.pretrainBatchSize = 1
-              cg.trainBatchSize = batch_size
-              cg.nTrain = n
-              cg.useGlobalFeatures = True
-              q_global.add(cg)
+    for cost_fn in [1, 2, 4]:
+      for oracleMode in ['RAND', 'MAX', 'MIN']:
+        for n in [100, 500, 1500, 3000]:
+          for batch_size in [1, 4]:
+            for l2p in [1e-8, 1e-9, 1e-10]:
+              cl = Config(working_dir)
+              cl.costFN = cost_fn
+              cl.noSyntax = no_syntax
+              cl.oracleMode = oracleMode
+              cl.lrBatchScale = lrBatchScale
+              cl.l2Penalty = l2p
+              cl.performPretrain = False
+              cl.pretrainBatchSize = 1
+              cl.trainBatchSize = batch_size
+              cl.nTrain = n
+              cl.useGlobalFeatures = False
+              q_local.add(cl)
+              for l2pg in [1e-5, 1e-6, 1e-7, 1e-8]:
+                cg = Config(working_dir)
+                cg.costFN = cost_fn
+                cg.noSyntax = no_syntax
+                cg.oracleMode = oracleMode
+                cg.lrBatchScale = lrBatchScale
+                cg.globalFeatRoleCooc = True
+                cg.globalFeatCoversFrames = True
+                cg.globalFeatArgLoc = True
+                cg.globalFeatNumArgs = True
+                cg.globalFeatArgOverlap = True
+                cg.globalFeatSpanBoundary = True
+                cg.l2Penalty = l2p
+                cg.performPretrain = False
+                cg.globalL2Penalty = l2pg
+                cg.pretrainBatchSize = 1
+                cg.trainBatchSize = batch_size
+                cg.nTrain = n
+                cg.useGlobalFeatures = True
+                q_global.add(cg)
 
   print 'len(q_local) =', len(q_local)
   print 'len(q_global) =', len(q_global)

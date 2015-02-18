@@ -866,7 +866,7 @@ public class RerankerTrainer {
 //    Reranker.LOG_FORWARD_SEARCH = true;
 //    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
 //    trainer.pretrainConf.allowDynamicStopping = false;
-    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(5));
+//    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(5));
 //    trainer.trainConf.addStoppingCondition(new StoppingCondition.Fixed(5000));
 //    trainer.trainConf.allowDynamicStopping = false;
 
