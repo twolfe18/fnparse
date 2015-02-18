@@ -107,11 +107,11 @@ public class RerankerTrainer {
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public double estimateLearningRateFreq = 4;       // Higher means estimate less frequently, time multiple of hammingTrain
+    public double estimateLearningRateFreq = 5;       // Higher means estimate less frequently, time multiple of hammingTrain
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
-    public double estimateLearningRateSpread = 5;     // Higher means more spread out
-    public int estimateLearningRateSteps = 8;         // How many batche steps to take when evaluating a lr
-    public int estimateLearningRateDevLimit = 40;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
+    public double estimateLearningRateSpread = 10;    // Higher means more spread out
+    public int estimateLearningRateSteps = 10;        // How many batche steps to take when evaluating a lr
+    public int estimateLearningRateDevLimit = 30;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
@@ -922,16 +922,24 @@ public class RerankerTrainer {
       if (useGlobalFeatures) {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-6);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
-        if (config.getBoolean("useRoleCooc", false)) {
-          trainer.addGlobalParams(
-              new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
-        }
 
-        trainer.addGlobalParams(
-            new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+        if (config.getBoolean("globalFeatRoleCooc", false))
+          trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
 
-        trainer.addGlobalParams(
-            new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+        if (config.getBoolean("globalFeatCoversFrames", false))
+          trainer.addStatelessParams(new GlobalFeature.CoversFrames(globalL2Penalty));
+
+        if (config.getBoolean("globalFeatArgLoc", true))
+          trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
+
+        if (config.getBoolean("globalFeatNumArgs", true))
+          trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
+
+        if (config.getBoolean("globalFeatArgOverlap", true))
+          trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+
+        if (config.getBoolean("globalFeatSpanBoundary", true))
+          trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
       }
     }
 

@@ -192,6 +192,12 @@ public abstract class FeatureParams {
     return sb.toString();
   }
 
+  public void logFeatures(IntDoubleVector features, State s, Action a) {
+    String fs = features.getNumImplicitEntries() == 0
+        ? "EMPTY" : describeFeatures(features);
+    log.info("[logFeatures] " + a + " " + fs);
+  }
+
   protected void checkSize() {
     if (isAlphabetBased()) {
       int n = featureIndices.size();
