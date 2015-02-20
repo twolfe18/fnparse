@@ -239,4 +239,76 @@ public class ModelIO {
       throw new RuntimeException(e);
     }
   }
+
+  /** Only works for hyper-cubic tensors */
+  public static double[][][] readTensor3(DataInputStream dis) throws IOException {
+    int x = dis.readInt();
+    int y = dis.readInt();
+    int z = dis.readInt();
+    double[][][] t3 = new double[x][y][z];
+    for (int i = 0; i < x; i++)
+      for (int j = 0; j < y; j++)
+        for (int k = 0; k < z; k++)
+          t3[i][j][k] = dis.readDouble();
+    return t3;
+  }
+
+  /** Only works for hyper-cubic tensors */
+  public static double[][] readTensor2(DataInputStream dis) throws IOException {
+    int x = dis.readInt();
+    int y = dis.readInt();
+    double[][] t2 = new double[x][y];
+    for (int i = 0; i < x; i++)
+      for (int j = 0; j < y; j++)
+        t2[i][j] = dis.readDouble();
+    return t2;
+  }
+
+  /** Only works for hyper-cubic tensors */
+  public static double[] readTensor1(DataInputStream dis) throws IOException {
+    int x = dis.readInt();
+    double[] t1 = new double[x];
+    for (int i = 0; i < x; i++)
+      t1[i] = dis.readDouble();
+    return t1;
+  }
+
+  /** Only works for hyper-cubic tensors */
+  public static void writeTensor3(double[][][] t3, DataOutputStream dos) throws IOException {
+    int x = t3.length;
+    int y = t3[0].length;
+    int z = t3[0][0].length;
+    dos.writeInt(x);
+    dos.writeInt(y);
+    dos.writeInt(z);
+    for (int i = 0; i < x; i++) {
+      assert t3[i].length == y;
+      for (int j = 0; j < y; j++) {
+        assert t3[i][j].length == z;
+        for (int k = 0; k < z; k++)
+          dos.writeDouble(t3[i][j][k]);
+      }
+    }
+  }
+
+  /** Only works for hyper-cubic tensors */
+  public static void writeTensor2(double[][] t2, DataOutputStream dos) throws IOException {
+    int x = t2.length;
+    int y = t2[0].length;
+    dos.writeInt(x);
+    dos.writeInt(y);
+    for (int i = 0; i < x; i++) {
+      assert t2[i].length == y;
+      for (int j = 0; j < y; j++)
+        dos.writeDouble(t2[i][j]);
+    }
+  }
+
+  /** Only works for hyper-cubic tensors */
+  public static void writeTensor1(double[] t1, DataOutputStream dos) throws IOException {
+    int x = t1.length;
+    dos.writeInt(x);
+    for (int i = 0; i < x; i++)
+      dos.writeDouble(t1[i]);
+  }
 }
