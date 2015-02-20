@@ -70,7 +70,7 @@ public class Counts<T> {
         int c0 = getCount(arg0);
         int c1 = getCount(arg1);
         if(c0 == c1) return 0;
-        if(c1 > c0 ^ descending)
+        if(c1 < c0 ^ descending)
           return 1;
         else
           return -1;
