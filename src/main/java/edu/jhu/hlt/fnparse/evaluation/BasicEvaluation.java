@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -136,6 +137,21 @@ public class BasicEvaluation {
     int n = evaluationFunctions.length;
     for(int i=0; i<n; i++) {
       EvalFunc ef = evaluationFunctions[i];
+      double v = ef.evaluate(se);
+      results.put(ef.getName(), v);
+    }
+    return results;
+  }
+
+  public static Map<String, Double> evaluateFrameId(
+      List<? extends FNTagging> gold, List<? extends FNTagging> hyp) {
+    return evaluateFrameId(zip(gold, hyp));
+  }
+  public static Map<String, Double> evaluateFrameId(List<SentenceEval> se) {
+    Map<String, Double> results = new HashMap<String, Double>();
+    for (EvalFunc ef : Arrays.asList(
+        targetMacroF1, targetMacroPrecision, targetMacroRecall,
+        targetMicroF1, targetMicroPrecision, targetMicroRecall)) {
       double v = ef.evaluate(se);
       results.put(ef.getName(), v);
     }
