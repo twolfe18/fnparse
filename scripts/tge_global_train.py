@@ -60,7 +60,7 @@ class Config(tge.Item):
     wd = os.path.join(self.working_dir_parent, 'wd-' + name)
     cmd.append(wd)
 
-    cmd.append('resultsReporter')
+    cmd.append('resultReporter')
     reporters = 'redis:' + redis_config['host'] + ',' \
       + redis_config['channel'] + ',' + redis_config['port']
     reporters += '\tfile:' + os.path.join(wd, 'results.txt')
@@ -69,7 +69,7 @@ class Config(tge.Item):
 
     return cmd
 
-def learning_curves(working_dir):
+def learning_curves(working_dir, real_test_set=False):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
@@ -88,10 +88,11 @@ def learning_curves(working_dir):
   for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
     for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
       for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
-        for n in [100, 500, 1500, 3000]:
+        for n in [100, 400, 1000, 2000, 9999]:
           for batch_size in [1, 4]:
             for l2p in [1e-8, 1e-9, 1e-10]:
               cl = Config(working_dir)
+              cl.realTestSet = real_test_set
               cl.costFN = cost_fn
               cl.noSyntax = no_syntax
               cl.oracleMode = oracleMode
@@ -104,6 +105,7 @@ def learning_curves(working_dir):
               q_local.add(cl)
               for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
                 cg = Config(working_dir)
+                cg.realTestSet = real_test_set
                 cg.costFN = cost_fn
                 cg.noSyntax = no_syntax
                 cg.oracleMode = oracleMode
@@ -206,7 +208,7 @@ if __name__ == '__main__':
     assert os.path.isfile(Config.jar_file)
     print 'now using jar=' + Config.jar_file
 
-  run(learning_curves(wd), wd, local=False)
+  run(learning_curves(wd, True), wd, local=False)
   #run(fs_test(wd), wd, local=True)
   #run(last_minute(wd), wd, local=True)
 
