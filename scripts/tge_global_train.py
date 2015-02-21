@@ -98,7 +98,6 @@ def learning_curves(working_dir):
               cl.lrBatchScale = lrBatchScale
               cl.l2Penalty = l2p
               cl.performPretrain = False
-              cl.pretrainBatchSize = 1
               cl.trainBatchSize = batch_size
               cl.nTrain = n
               cl.useGlobalFeatures = False
@@ -109,16 +108,11 @@ def learning_curves(working_dir):
                 cg.noSyntax = no_syntax
                 cg.oracleMode = oracleMode
                 cg.lrBatchScale = lrBatchScale
-                cg.globalFeatRoleCooc = True
-                cg.globalFeatCoversFrames = True
                 cg.globalFeatArgLoc = True
                 cg.globalFeatNumArgs = True
-                cg.globalFeatArgOverlap = True
-                cg.globalFeatSpanBoundary = True
+                cg.globalFeatRoleCooc = True
                 cg.l2Penalty = l2p
-                cg.performPretrain = False
                 cg.globalL2Penalty = l2pg
-                cg.pretrainBatchSize = 1
                 cg.trainBatchSize = batch_size
                 cg.nTrain = n
                 cg.useGlobalFeatures = True

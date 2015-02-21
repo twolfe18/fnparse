@@ -115,6 +115,69 @@ public interface GlobalFeature extends Params.Stateful {
   }
 
   /**
+   * Described in paper.
+   *
+   * ArgOverlap and SpanBoundary are no loner really needed due to XUE_PALMER
+   * or STANFORD_CONSTITUENT pruning, which already prunes crossing spans.
+   */
+  public static class ArgLocSimple extends FeatureParams implements Params.Stateful {
+    public static boolean SHOW_FEATURES = false;
+    public static boolean ALLOW_REL_ON_OTHER_TARGETS = true;
+    public static final int BUCKETS = 1<<18;
+    public ArgLocSimple(double l2Penalty) {
+      super(l2Penalty);   // Use Alphabet
+//      super(l2Penalty, BUCKETS);  // Use Hashing
+    }
+    @Override
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+      if (!a2.hasSpan())
+        return FeatureUtils.emptyFeatures;
+      Span s2 = a2.getSpan();
+
+      // Collect all actions
+      int numMatchT = 0;
+      List<Action> actions = new ArrayList<>();
+      for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
+        Action a = ii.payload;
+        if (!ALLOW_REL_ON_OTHER_TARGETS && a.t != a2.t)
+          continue;
+        actions.add(a);
+        if (a.t == a2.t && a.getActionType() == ActionType.COMMIT)
+          numMatchT++;
+      }
+
+      // Make some features
+      FeatureVector fv = new FeatureVector();
+      Frame frame = state.getFrame(a2.t);
+      String f = frame.getName();
+      String r = frame.getRole(a2.k);
+      String fr = f + "." + r;
+      String rT = "r1=" + BasicFeatureTemplates.spanPosRel(state.getTarget(a2.t), s2);
+      b(fv, rT);
+      b(fv, rT);
+      b(fv, rT, f);
+      b(fv, rT, fr);
+      double w = 2d / (2d + numMatchT);  // / actions.size();
+      for (Action a : actions) {
+        // Relation between this arg and a previous
+        String rA = "r2=" + BasicFeatureTemplates.spanPosRel(a.getSpan(), s2);
+
+        // Relation between this target and previous
+        String t = BasicFeatureTemplates.posRel(a2.t, a.t);
+        rA += "_t=" + t;
+
+        b(fv, w, rA);
+        b(fv, w, rA, rT);
+        b(fv, w, rA, f);
+        b(fv, w, rA, fr);
+      }
+      if (SHOW_FEATURES)
+        logFeatures(fv, state, a2);
+      return fv;
+    }
+  }
+
+  /**
    * Describes a new arguments location relative to the target and other args
    * laid down already.
    */

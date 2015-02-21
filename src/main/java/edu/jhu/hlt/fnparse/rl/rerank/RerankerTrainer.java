@@ -384,6 +384,7 @@ public class RerankerTrainer {
         pretrainConf.beamSize,
         rand);
     if (performPretrain) {
+      LOG.warn("[train1] you probably don't want pretrain/local train!");
       LOG.info("[train1] local train");
       train2(m, ip, pretrainConf);
     } else {
@@ -943,6 +944,10 @@ public class RerankerTrainer {
         }
       }
 
+      if (config.getBoolean("featCoversFrames", true))
+        trainer.addStatelessParams(new GlobalFeature.CoversFrames(l2Penalty));
+
+
       // Setup tau/pruning parameters
       if (config.getBoolean("useDynamicTau", true)) {
         // Old way: very simple features
@@ -968,23 +973,27 @@ public class RerankerTrainer {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-6);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
-        if (config.getBoolean("globalFeatRoleCooc", false))
-          trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
-
-        if (config.getBoolean("globalFeatCoversFrames", false))
-          trainer.addStatelessParams(new GlobalFeature.CoversFrames(globalL2Penalty));
 
         if (config.getBoolean("globalFeatArgLoc", true))
-          trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
+          trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
 
         if (config.getBoolean("globalFeatNumArgs", true))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatArgOverlap", true))
-          trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+        if (config.getBoolean("globalFeatRoleCooc", true))
+          trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatSpanBoundary", true))
-          trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+
+
+        if (config.getBoolean("globalFeatArgOverlap", false)) {
+          LOG.warn("[main] globalFeatArgOverlap has been removed!");
+          //trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+        }
+
+        if (config.getBoolean("globalFeatSpanBoundary", false)) {
+          LOG.warn("[main] globalFeatSpanBoundary has been removed!");
+          //trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+        }
       }
     }
 
