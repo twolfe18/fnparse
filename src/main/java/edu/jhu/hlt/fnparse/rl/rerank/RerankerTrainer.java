@@ -762,6 +762,53 @@ public class RerankerTrainer {
     return violation;
   }
 
+  public static void computeShape(ItemProvider ip) {
+    long t = System.currentTimeMillis();
+    for (FNParse y : ip) {
+      Sentence s = y.getSentence();
+      int n = s.size();
+      for (int i = 0; i < n; i++) {
+        String shape = PosPatternGenerator.shapeNormalize(s.getWord(i));
+        s.setShape(i, shape);
+      }
+    }
+    LOG.info("[computeShape] done computing word shapes, took "
+        + (System.currentTimeMillis() - t)/1000d + " seconds");
+  }
+
+  public static void addParses(ItemProvider ip) {
+    long t = System.currentTimeMillis();
+    LOG.info("[addParses] running Stanford parser on all training/test data...");
+    ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
+    for (FNParse y : ip) {
+      Sentence s = y.getSentence();
+
+      // Get and set the Stanford constituency parse
+      if (s.getStanfordParse(false) == null) {
+        ConstituencyParse cp = parser.getCParse(s);
+        s.setStanfordParse(cp);
+      }
+
+      // Get and set the Stanford basic dependency parse
+      if (s.getBasicDeps(false) == null) {
+        DependencyParse dp = parser.getBasicDParse(s);
+        s.setBasicDeps(dp);
+      }
+    }
+    LOG.info("[addParses] done parsing, took "
+        + (System.currentTimeMillis() - t)/1000d + " seconds");
+  }
+
+  public static void stripSyntax(ItemProvider ip) {
+    LOG.info("[stripSyntax] stripping all syntax out of data!");
+    for (FNParse y : ip) {
+      Sentence s = y.getSentence();
+      s.setBasicDeps(null);
+      s.setCollapsedDeps(null);
+      s.setStanfordParse(null);
+    }
+  }
+
   /**
    * First arg must be the job name (for tie-ins with tge) and the remaining are
    * key-value pairs.
@@ -786,61 +833,58 @@ public class RerankerTrainer {
     Random rand = new Random(9001);
     RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
-    ItemProvider ip = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-        .stream()
-        //.filter(p -> p.numFrameInstances() <= 5)
-        .limit(nTrain)
-        .collect(Collectors.toList()));
+
+    // Get train and test data.
+    ItemProvider train, test, trainAndTest = null;
+    if (config.getBoolean("realTestSet", false)) {
+      LOG.info("[main] running on real test set");
+      train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+          FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
+          .stream()
+          .limit(nTrain)
+          .collect(Collectors.toList()));
+      test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+          FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
+    } else {
+      trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+          FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
+          .stream()
+          //.filter(p -> p.numFrameInstances() <= 5)
+          .limit(nTrain)
+          .collect(Collectors.toList()));
+      if (testOnTrain) {
+        train = trainAndTest;
+        test = trainAndTest;
+        trainer.pretrainConf.tuneOnTrainingData = true;
+        trainer.pretrainConf.maxDev = 25;
+        trainer.trainConf.tuneOnTrainingData = true;
+        trainer.trainConf.maxDev = 25;
+      } else {
+        double propTest = 0.25;
+        int maxTest = 9999;
+        ItemProvider.TrainTestSplit trainTest =
+            new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, rand);
+        train = trainTest.getTrain();
+        test = trainTest.getTest();
+      }
+    }
+    LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
     // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
     if (config.getBoolean("precomputeShape", true)) {
-      long t = System.currentTimeMillis();
-      for (FNParse y : ip) {
-        Sentence s = y.getSentence();
-        int n = s.size();
-        for (int i = 0; i < n; i++) {
-          String shape = PosPatternGenerator.shapeNormalize(s.getWord(i));
-          s.setShape(i, shape);
-        }
-      }
-      LOG.info("[main] done computing word shapes, took "
-          + (System.currentTimeMillis() - t)/1000d + " seconds");
+      computeShape(train);
+      computeShape(test);
     }
 
     // Data does not come with Stanford parses straight off of disk, add them
     if (config.getBoolean("addStanfordParses", true)) {
-      long t = System.currentTimeMillis();
-      LOG.info("[main] running Stanford parser on all training/test data...");
-      ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
-      for (FNParse y : ip) {
-        Sentence s = y.getSentence();
-
-        // Get and set the Stanford constituency parse
-        if (s.getStanfordParse(false) == null) {
-          ConstituencyParse cp = parser.getCParse(s);
-          s.setStanfordParse(cp);
-        }
-
-        // Get and set the Stanford basic dependency parse
-        if (s.getBasicDeps(false) == null) {
-          DependencyParse dp = parser.getBasicDParse(s);
-          s.setBasicDeps(dp);
-        }
-      }
-      LOG.info("[main] done parsing, took "
-          + (System.currentTimeMillis() - t)/1000d + " seconds");
-      // Note, could also precompute word shapes, but that is memoized on the fly
+      addParses(train);
+      addParses(test);
     }
 
     if (config.getBoolean("noSyntax", false)) {
-      LOG.info("[main] stripping all syntax out of data!");
-      for (FNParse y : ip) {
-        Sentence s = y.getSentence();
-        s.setBasicDeps(null);
-        s.setCollapsedDeps(null);
-        s.setStanfordParse(null);
-      }
+      stripSyntax(train);
+      stripSyntax(test);
     }
 
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
@@ -860,43 +904,11 @@ public class RerankerTrainer {
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
-    // FOR DEBUGGING
-//    trainer.trainConf.estimateLearningRateFreq = 0.1;
-//    trainer.trainConf.stoppingConditionFrequency = 0.1;
-//    Reranker.LOG_UPDATE = true;
-//    RerankerTrainer.PRUNE_DEBUG = true;
-//    Reranker.LOG_FORWARD_SEARCH = true;
-//    trainer.pretrainConf.stopping = new StoppingCondition.Fixed(10);
-//    trainer.pretrainConf.allowDynamicStopping = false;
-//    trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(5));
-//    trainer.trainConf.addStoppingCondition(new StoppingCondition.Fixed(5000));
-//    trainer.trainConf.allowDynamicStopping = false;
-
     // Show how many roles we need to make predictions for (in train and test)
-    for (int i = 0; i < ip.size(); i++) {
-      State s = State.initialState(ip.label(i));
+    for (int i = 0; i < train.size(); i++) {
+      State s = State.initialState(train.label(i));
       LOG.info("TK=" + s.numFrameRoleInstances());
     }
-
-    // Split into train and test sets
-    ItemProvider train, test;
-    if (testOnTrain) {
-      train = ip;
-      test = ip;
-      trainer.pretrainConf.tuneOnTrainingData = true;
-      trainer.pretrainConf.maxDev = 25;
-      trainer.trainConf.tuneOnTrainingData = true;
-      trainer.trainConf.maxDev = 25;
-    } else {
-      double propTest = 0.25;
-      int maxTest = 9999;
-      ItemProvider.TrainTestSplit trainTest =
-          new ItemProvider.TrainTestSplit(ip, propTest, maxTest, rand);
-      train = trainTest.getTrain();
-      test = trainTest.getTest();
-    }
-
-    LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
 
     final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
@@ -913,8 +925,10 @@ public class RerankerTrainer {
       // scores for COMMIT actions, and ZERO must be used for tauParams.
       LOG.warn("[main] using cheating params with pruning threshold of 0");
       //trainer.tauParams = Params.PruneThreshold.Const.ZERO;
-      trainer.tauParams = new CheatingParams(ip);
-      CheatingParams cheat = trainer.addStatelessParams(new CheatingParams(ip));
+      if (trainAndTest == null)
+        throw new RuntimeException();
+      trainer.tauParams = new CheatingParams(trainAndTest);
+      CheatingParams cheat = trainer.addStatelessParams(new CheatingParams(trainAndTest));
       trainer.pretrainConf.dontPerformTuning();
 
       if (useGlobalFeatures) {
@@ -999,7 +1013,7 @@ public class RerankerTrainer {
 
     // Train
     LOG.info("[main] starting training, config:");
-    config.store(System.out, null);
+    config.store(System.out, null);   // show the config for posterity
     Reranker model = trainer.train1(train);
 
     // Evaluate
