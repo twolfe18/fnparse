@@ -91,34 +91,41 @@ def learning_curves(working_dir, real_test_set=False):
         for n in [100, 400, 1000, 2000, 9999]:
           for batch_size in [1, 4]:
             for l2p in [1e-8, 1e-9, 1e-10]:
-              cl = Config(working_dir)
-              cl.realTestSet = real_test_set
-              cl.costFN = cost_fn
-              cl.noSyntax = no_syntax
-              cl.oracleMode = oracleMode
-              cl.lrBatchScale = lrBatchScale
-              cl.l2Penalty = l2p
-              cl.performPretrain = False
-              cl.trainBatchSize = batch_size
-              cl.nTrain = n
-              cl.useGlobalFeatures = False
-              q_local.add(cl)
-              for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
-                cg = Config(working_dir)
-                cg.realTestSet = real_test_set
-                cg.costFN = cost_fn
-                cg.noSyntax = no_syntax
-                cg.oracleMode = oracleMode
-                cg.lrBatchScale = lrBatchScale
-                cg.globalFeatArgLoc = True
-                cg.globalFeatNumArgs = True
-                cg.globalFeatRoleCooc = True
-                cg.l2Penalty = l2p
-                cg.globalL2Penalty = l2pg
-                cg.trainBatchSize = batch_size
-                cg.nTrain = n
-                cg.useGlobalFeatures = True
-                q_global.add(cg)
+              for force_left_right_inference in [False, True]:
+                if force_left_right_inference and oracle_mode != 'MAX':
+                  # Choose a canonical oralceMode for forceLeftRightInference=True,
+                  # because they're all equivalent in that case.
+                  continue
+                cl = Config(working_dir)
+                cl.forceLeftRightInference = force_left_right_inference
+                cl.realTestSet = real_test_set
+                cl.costFN = cost_fn
+                cl.noSyntax = no_syntax
+                cl.oracleMode = oracleMode
+                cl.lrBatchScale = lrBatchScale
+                cl.l2Penalty = l2p
+                cl.performPretrain = False
+                cl.trainBatchSize = batch_size
+                cl.nTrain = n
+                cl.useGlobalFeatures = False
+                q_local.add(cl)
+                for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
+                  cg = Config(working_dir)
+                  cg.forceLeftRightInference = force_left_right_inference
+                  cg.realTestSet = real_test_set
+                  cg.costFN = cost_fn
+                  cg.noSyntax = no_syntax
+                  cg.oracleMode = oracleMode
+                  cg.lrBatchScale = lrBatchScale
+                  cg.globalFeatArgLoc = True
+                  cg.globalFeatNumArgs = True
+                  cg.globalFeatRoleCooc = True
+                  cg.l2Penalty = l2p
+                  cg.globalL2Penalty = l2pg
+                  cg.trainBatchSize = batch_size
+                  cg.nTrain = n
+                  cg.useGlobalFeatures = True
+                  q_global.add(cg)
 
   print 'len(q_local) =', len(q_local)
   print 'len(q_global) =', len(q_global)

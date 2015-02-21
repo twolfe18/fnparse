@@ -127,6 +127,41 @@ public class State {
     return new State(parse, stateIndex, possible, committed);
   }
 
+  /**
+   * Find the first (t,k) such that committed[t][k] == null. Used for forcing
+   * left-right inference.
+   *
+   * @param tk should be a length 2 array, after calling will be populated with
+   * a t value in the first index and a k value in the second.
+   * @return true if it found an uncommitted (t,k) and false otherwise.
+   */
+  public boolean findFirstNonCommitted(int[] tk) {
+    assert tk.length == 2;
+    int tForce = -1, kForce = -1;
+    for (int t = 0; t < committed.length; t++) {
+      int K = committed[t].length;
+      for (int k = 0; k < K; k++) {
+        Span a = committed[t][k];
+        if (a == null && tForce < 0 && kForce < 0) {
+          // Set for the first time
+          tForce = t;
+          kForce = k;
+        } else {
+          // Check that we're only setting it exactly once
+          assert (tForce < 0 && kForce < 0) // we haven't set it yet
+          || (a == null);               // we're not resetting it
+        }
+      }
+    }
+    if (tForce >= 0 && kForce >= 0) {
+      tk[0] = tForce;
+      tk[1] = kForce;
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   public double recall() {
     int recalled = 0, total = 0;
     for (int t = 0; t < frames.numFrameInstances(); t++) {

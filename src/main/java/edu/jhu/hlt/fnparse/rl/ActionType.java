@@ -69,9 +69,18 @@ public interface ActionType {
   public static class CommitActionType implements ActionType {
     public static final Logger LOG = Logger.getLogger(CommitActionType.class);
     private final int index;
+    private boolean forceLeftRightInference = false;
 
     public CommitActionType(int index) {
       this.index = index;
+    }
+
+    public void forceLeftRightInference() {
+      forceLeftRightInference(true);
+    }
+    public void forceLeftRightInference(boolean doForce) {
+      LOG.info("[COMMIT forceLeftRightInference] doForce=" + doForce);
+      this.forceLeftRightInference = doForce;
     }
 
     @Override
@@ -118,9 +127,25 @@ public interface ActionType {
       List<Action> actions = new ArrayList<>();
       int n = st.getSentence().size();
       int T = st.numFrameInstance();
+
+      int tForce = -1, kForce = -1;
+      if (forceLeftRightInference) {
+        // Choose the first (t,k) that we haven't State.committed to.
+        int[] tk = new int[2];
+        if (st.findFirstNonCommitted(tk)) {
+          tForce = tk[0];
+          kForce = tk[1];
+        }
+      }
+
+      // Build the commit actions.
       for (int t = 0; t < T; t++) {
         int K = st.getFrame(t).numRoles();
         for (int k = 0; k < K; k++) {
+
+          if (forceLeftRightInference && (t != tForce || k != kForce))
+            continue;
+
           Span a = st.committed(t, k);
           if (a != null) continue;
           // Consider all possible spans
@@ -230,6 +255,7 @@ public interface ActionType {
   public static class PruneActionType implements ActionType {
     public static final Logger LOG = Logger.getLogger(PruneActionType.class);
     private final int index;
+    private boolean forceLeftRightInference = false;
 
     public PruneActionType(int index) {
       this.index = index;
@@ -238,6 +264,14 @@ public interface ActionType {
     @Override
     public int getIndex() {
       return index;
+    }
+
+    public void forceLeftRightInference() {
+      forceLeftRightInference(true);
+    }
+    public void forceLeftRightInference(boolean doForce) {
+      LOG.info("[PRUNE forceLeftRightInference] doForce=" + doForce);
+      this.forceLeftRightInference = doForce;
     }
 
     @Override
@@ -314,8 +348,18 @@ public interface ActionType {
         boolean onlySimplePrunes) {
 
       List<PruneAdjoints> prunes = new ArrayList<>();
-      
-      
+
+      int tForce = -1, kForce = -1;
+      if (forceLeftRightInference) {
+        // Choose the first (t,k) that we haven't State.committed to.
+        int[] tk = new int[2];
+        if (s.findFirstNonCommitted(tk)) {
+          tForce = tk[0];
+          kForce = tk[1];
+        }
+      }
+
+
       // Constraints:
 
       // 1) every PRUNE action must eliminate at least 1 possible item
@@ -377,6 +421,9 @@ public interface ActionType {
         Span rightOfTarget = target.end < n ? Span.getSpan(target.end, n) : null;
         int K = f.numRoles();
         for (int k = 0; k < K; k++) {
+
+          if (forceLeftRightInference && (t != tForce || k != kForce))
+            continue;
 
           // 2a) all words (i.e. COMMIT to nullSpan for this t,k)
           // (nothing is contained within nullSpan)

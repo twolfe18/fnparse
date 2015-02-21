@@ -43,6 +43,7 @@ import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -1009,6 +1010,16 @@ public class RerankerTrainer {
           //trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
         }
       }
+    }
+
+    if (config.getBoolean("forceLeftRightInference", false)) {
+      LOG.info("[main] forcing left right inference");
+      // Don't need to set these because oracle.bFunc should only return a finite
+      // value for one action (these modes are all equivalent then).
+//      trainer.trainConf.oracleMode = OracleMode.MAX;
+//      trainer.pretrainConf.oracleMode = OracleMode.MAX;
+      ActionType.COMMIT.forceLeftRightInference();
+      ActionType.PRUNE.forceLeftRightInference();
     }
 
     // Train
