@@ -1012,14 +1012,15 @@ public class RerankerTrainer {
       }
     }
 
-    if (config.getBoolean("forceLeftRightInference", false)) {
-      LOG.info("[main] forcing left right inference");
+    if (config.getBoolean("lhMostViolated", false)) {
+      LOG.info("[main] using L.H.'s notion of most violated, which forces left-right inference");
       // Don't need to set these because oracle.bFunc should only return a finite
       // value for one action (these modes are all equivalent then).
 //      trainer.trainConf.oracleMode = OracleMode.MAX;
 //      trainer.pretrainConf.oracleMode = OracleMode.MAX;
       ActionType.COMMIT.forceLeftRightInference();
       ActionType.PRUNE.forceLeftRightInference();
+      Reranker.LH_MOST_VIOLATED = true;
     }
 
     // Train

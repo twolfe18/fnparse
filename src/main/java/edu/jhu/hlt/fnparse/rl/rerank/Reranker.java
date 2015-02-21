@@ -72,6 +72,11 @@ public class Reranker {
   // to how margins are computed, and I think a lot will break if this isn't 1.
   public static double COST_FN = 1d;
 
+  // If true, in the mostVoilated search, you should *not* use loss augmented
+  // inference, but rather just decode. In this case, oracle and most violated
+  // must also be limited to (COMMIT|PRUNE).forceLeftRightInference=true.
+  public static boolean LH_MOST_VIOLATED = false;
+
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
     @Override
@@ -517,6 +522,7 @@ public class Reranker {
     return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, null, true);
   }
 
+  /** @deprecated doesn't work for some reason */
   public ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
     boolean decode = false;
     return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, new ArrayList<>(), false);
@@ -824,8 +830,9 @@ public class Reranker {
     cachingModelParams = getFullParams(true); // release old cache, not worth it
     boolean mvSolveMax = true;
     boolean mvDecode = true;
+    BFunc mvBFunc = LH_MOST_VIOLATED ? BFunc.NONE : new BFunc.MostViolated(y);
     ForwardSearch mvSearch =
-        fullSearch(init, new BFunc.MostViolated(y), mvSolveMax, mvDecode, cachingModelParams);
+        fullSearch(init, mvBFunc, mvSolveMax, mvDecode, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       mvSearch.gold = y;
     mvSearch.run();
@@ -997,6 +1004,8 @@ public class Reranker {
       StateSequence mvPtr = mostViolated.rewind();
       while (oraclePtr != null && mvPtr != null) {
         double loss = mvPtr.getLoss(gold);
+        if (LH_MOST_VIOLATED)
+          loss = loss > 0 ? 1 : 0;
         double h = oraclePtr.getScore() - (mvPtr.getScore() + loss);
         if (LOG_UPDATE) {
           LOG.info("[FullUpdate init] oraclePtr.score=" + oraclePtr.getScore()

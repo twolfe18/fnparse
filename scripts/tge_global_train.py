@@ -91,13 +91,13 @@ def learning_curves(working_dir, real_test_set=False):
         for n in [100, 400, 1000, 2000, 9999]:
           for batch_size in [1, 4]:
             for l2p in [1e-8, 1e-9, 1e-10]:
-              for force_left_right_inference in [False, True]:
-                if force_left_right_inference and oracleMode != 'MAX':
+              for lh_most_violated in [False, True]:
+                if lh_most_violated and oracleMode != 'MAX':
                   # Choose a canonical oralceMode for forceLeftRightInference=True,
                   # because they're all equivalent in that case.
                   continue
                 cl = Config(working_dir)
-                cl.forceLeftRightInference = force_left_right_inference
+                cl.lhMostViolated = lh_most_violated
                 cl.realTestSet = real_test_set
                 cl.costFN = cost_fn
                 cl.noSyntax = no_syntax
@@ -111,7 +111,7 @@ def learning_curves(working_dir, real_test_set=False):
                 q_local.add(cl)
                 for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
                   cg = Config(working_dir)
-                  cg.forceLeftRightInference = force_left_right_inference
+                  cg.lhMostViolated = lh_most_violated
                   cg.realTestSet = real_test_set
                   cg.costFN = cost_fn
                   cg.noSyntax = no_syntax
