@@ -66,10 +66,15 @@ public class BasicFeatureTemplates {
   public static final Logger LOG = Logger.getLogger(BasicFeatureTemplates.class);
 
   public static String spanPosRel(Span s1, Span s2) {
-    return posRel(s1.start, s2.start) + "-" + posRel(s1.end, s2.end);
+    return posRel(s1.start, s2.start)
+        + "-" + posRel(s1.end, s2.end)
+        + "-" + posRel(s1.start, s2.end)
+        + "-" + posRel(s1.end, s2.start);
   }
 
   public static String posRel(int i, int j) {
+    if (i+1 == j) return "B";
+    if (j+1 == i) return "A";
     if (i < j) return "L";
     if (j > i) return "R";
     return "E";
