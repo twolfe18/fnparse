@@ -80,7 +80,8 @@ public class RerankerTrainer {
   public static enum OracleMode {
     MAX,
     MIN,
-    RAND,
+    RAND_MAX,
+    RAND_MIN,
   }
 
   // may differ across pretrain/train
@@ -108,7 +109,7 @@ public class RerankerTrainer {
     public boolean forceGlobalTrain = true;
 
     // How to implement bFunc for oracle
-    public OracleMode oracleMode = OracleMode.RAND;
+    public OracleMode oracleMode = OracleMode.RAND_MAX;
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);

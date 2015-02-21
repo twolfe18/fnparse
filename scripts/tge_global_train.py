@@ -86,8 +86,8 @@ def learning_curves(working_dir):
   
   lrBatchScale = 128
   for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
-    for cost_fn in [1, 2, 4]:
-      for oracleMode in ['RAND', 'MAX', 'MIN']:
+    for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
+      for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
         for n in [100, 500, 1500, 3000]:
           for batch_size in [1, 4]:
             for l2p in [1e-8, 1e-9, 1e-10]:
@@ -103,7 +103,7 @@ def learning_curves(working_dir):
               cl.nTrain = n
               cl.useGlobalFeatures = False
               q_local.add(cl)
-              for l2pg in [1e-5, 1e-6, 1e-7, 1e-8]:
+              for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
                 cg = Config(working_dir)
                 cg.costFN = cost_fn
                 cg.noSyntax = no_syntax

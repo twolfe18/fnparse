@@ -806,10 +806,11 @@ public class Reranker {
     // Find the oracle parse
     if (oracleTimer != null) oracleTimer.start();
     Params.Stateful cachingModelParams = getFullParams(true);
-    boolean oracleSolveMax = oracleMode != OracleMode.MIN;
+    boolean oracleSolveMax = oracleMode == OracleMode.MAX
+        || oracleMode == OracleMode.RAND_MAX;
     boolean oracleDecode = true;
     BFunc bfunc = new BFunc.Oracle(y, oracleSolveMax);
-    if (oracleMode == OracleMode.RAND)
+    if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.RAND_MIN)
       bfunc = new BFunc.Sum(bfunc, new BFunc.StatefulAdapter(new Params.RandScore(rand, 1d)));
     ForwardSearch oracleSearch = fullSearch(
         init, bfunc, oracleSolveMax, oracleDecode, cachingModelParams);
