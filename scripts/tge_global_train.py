@@ -92,7 +92,7 @@ def learning_curves(working_dir, real_test_set=False):
           for batch_size in [1, 4]:
             for l2p in [1e-8, 1e-9, 1e-10]:
               for force_left_right_inference in [False, True]:
-                if force_left_right_inference and oracle_mode != 'MAX':
+                if force_left_right_inference and oracleMode != 'MAX':
                   # Choose a canonical oralceMode for forceLeftRightInference=True,
                   # because they're all equivalent in that case.
                   continue

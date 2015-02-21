@@ -143,8 +143,11 @@ public interface ActionType {
         int K = st.getFrame(t).numRoles();
         for (int k = 0; k < K; k++) {
 
-          if (forceLeftRightInference && (t != tForce || k != kForce))
+          if (forceLeftRightInference
+              && (tForce >= 0 && kForce >= 0)
+              && (t != tForce || k != kForce)) {
             continue;
+          }
 
           Span a = st.committed(t, k);
           if (a != null) continue;
@@ -422,8 +425,11 @@ public interface ActionType {
         int K = f.numRoles();
         for (int k = 0; k < K; k++) {
 
-          if (forceLeftRightInference && (t != tForce || k != kForce))
+          if (forceLeftRightInference
+              && (tForce >= 0 && kForce >= 0)
+              && (t != tForce || k != kForce)) {
             continue;
+          }
 
           // 2a) all words (i.e. COMMIT to nullSpan for this t,k)
           // (nothing is contained within nullSpan)
