@@ -890,6 +890,10 @@ public class RerankerTrainer {
     if (config.getBoolean("addStanfordParses", true)) {
       addParses(train);
       addParses(test);
+      LOG.info("[main] addStanfordParses before GC: " + Describe.memoryUsage());
+      ConcreteStanfordWrapper.dumpSingletons();
+      System.gc();
+      LOG.info("[main] addStanfordParses after GC:  " + Describe.memoryUsage());
     }
 
     if (config.getBoolean("noSyntax", false)) {
