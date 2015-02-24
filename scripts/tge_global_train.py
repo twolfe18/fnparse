@@ -85,13 +85,13 @@ def learning_curves(working_dir, real_test_set=False):
   q_local = q
   q_global = q
   
-  lrBatchScale = 128
+  lrBatchScale = 256
   for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
     for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
-      for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
-        for n in [100, 400, 1000, 2000, 9999]:
-          for batch_size in [1, 4]:
-            for l2p in [1e-8, 1e-9, 1e-10]:
+      for batch_size in [1, 4]:
+        for n in [9999, 100, 400, 1000, 2000]:
+          for l2p in [1e-8, 1e-9, 1e-10]:
+            for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
               for lh_most_violated in [False, True]:
                 if lh_most_violated and oracleMode != 'MAX':
                   # Choose a canonical oralceMode for forceLeftRightInference=True,
@@ -110,7 +110,8 @@ def learning_curves(working_dir, real_test_set=False):
                 cl.nTrain = n
                 cl.useGlobalFeatures = False
                 q_local.add(cl)
-                for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
+                for l2pg in [l2p * 10, l2p * 100, l2p * 1000]:
+                #for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
                   cg = Config(working_dir)
                   cg.lhMostViolated = lh_most_violated
                   cg.realTestSet = real_test_set
