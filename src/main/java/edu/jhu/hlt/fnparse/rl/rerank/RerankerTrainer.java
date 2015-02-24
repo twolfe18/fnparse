@@ -56,6 +56,7 @@ import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.BatchProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
@@ -384,6 +385,10 @@ public class RerankerTrainer {
         tauParams,
         pretrainConf.beamSize,
         rand);
+
+    if (4 % 2 == 0)
+      return m;   // TODO: FOR DEBUGGING, REMOVE
+
     if (performPretrain) {
       LOG.warn("[train1] you probably don't want pretrain/local train!");
       LOG.info("[train1] local train");
@@ -579,6 +584,9 @@ public class RerankerTrainer {
     LOG.info("[train2] totally done conf=" + conf.name);
   }
 
+  // Only relevant to hammingTrain
+  public double secsBetweenShowingWeights = 0.5 * 60d;
+
   /**
    * Trains the model to minimize hamming loss. If onlyStatelss is true, then
    * Stateful params of the model will not be fit, but updates should be much
@@ -600,7 +608,6 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
-    double secsBetweenUpdates = 0.5 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -616,7 +623,8 @@ public class RerankerTrainer {
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
-        if (t.enoughTimePassed(secsBetweenUpdates)) {
+        if (t.enoughTimePassed(secsBetweenShowingWeights)) {
+          LOG.info("[hammingTrain] " + Describe.memoryUsage());
           r.showWeights();
           if (showViolation)
             LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
@@ -870,6 +878,7 @@ public class RerankerTrainer {
       }
     }
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
+    LOG.info("[main] " + Describe.memoryUsage());
 
     // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
     if (config.getBoolean("precomputeShape", true)) {
@@ -887,6 +896,8 @@ public class RerankerTrainer {
       stripSyntax(train);
       stripSyntax(test);
     }
+
+    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 10 * 60);
 
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
@@ -1024,9 +1035,17 @@ public class RerankerTrainer {
     }
 
     // Train
+    LOG.info("[main] " + Describe.memoryUsage());
     LOG.info("[main] starting training, config:");
     config.store(System.out, null);   // show the config for posterity
     Reranker model = trainer.train1(train);
+
+    // Release some memory
+    LOG.info("[main] before GC: " + Describe.memoryUsage());
+    ConcreteStanfordWrapper.dumpSingletons();
+    train = null;
+    System.gc();
+    LOG.info("[main] after GC: " + Describe.memoryUsage());
 
     // Evaluate
     LOG.info("[main] done training, evaluating");

@@ -64,6 +64,11 @@ public class ConcreteStanfordWrapper {
     }
   }
 
+  public static void dumpSingletons() {
+    cachingSingleton = null;
+    nonCachingSingleton = null;
+  }
+
   private UUID aUUID;
   private AnnotationMetadata metadata;
   private AnnotateTokenizedConcrete anno;
