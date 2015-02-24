@@ -78,11 +78,11 @@ public class DeterministicRolePruning
 
   private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
   private final FgModel weights = new FgModel(0);
-  private ConcreteStanfordWrapper parser =
-      ConcreteStanfordWrapper.getSingleton(false);
+  private ConcreteStanfordWrapper parser;
 
-  public DeterministicRolePruning(Mode mode) {
+  public DeterministicRolePruning(Mode mode, ConcreteStanfordWrapper parser) {
     this.mode = mode;
+    this.parser = parser;
   }
 
   public Mode getMode() {
@@ -355,7 +355,8 @@ public class DeterministicRolePruning
   // shows spans
   public static void main(String[] args) {
     DeterministicRolePruning prune =
-        new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN);
+        new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN,
+            ConcreteStanfordWrapper.getSingleton(false));
     for (FNParse parse : DataUtil.iter2list(
         FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       FNParseSpanPruning mask = prune.setupInference(

@@ -56,6 +56,7 @@ import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.BatchProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
@@ -77,6 +78,8 @@ public class RerankerTrainer {
   public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
   public static boolean PRUNE_DEBUG = false;
+
+  public static ConcreteStanfordWrapper PARSER = null;
 
   public static enum OracleMode {
     MAX,
@@ -384,6 +387,7 @@ public class RerankerTrainer {
         tauParams,
         pretrainConf.beamSize,
         rand);
+
     if (performPretrain) {
       LOG.warn("[train1] you probably don't want pretrain/local train!");
       LOG.info("[train1] local train");
@@ -579,6 +583,9 @@ public class RerankerTrainer {
     LOG.info("[train2] totally done conf=" + conf.name);
   }
 
+  // Only relevant to hammingTrain
+  public double secsBetweenShowingWeights = 0.5 * 60d;
+
   /**
    * Trains the model to minimize hamming loss. If onlyStatelss is true, then
    * Stateful params of the model will not be fit, but updates should be much
@@ -600,7 +607,6 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
-    double secsBetweenUpdates = 0.5 * 60d;
     boolean showTime = false;
     boolean showViolation = true;
     outer:
@@ -616,7 +622,8 @@ public class RerankerTrainer {
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
-        if (t.enoughTimePassed(secsBetweenUpdates)) {
+        if (t.enoughTimePassed(secsBetweenShowingWeights)) {
+          LOG.info("[hammingTrain] " + Describe.memoryUsage());
           r.showWeights();
           if (showViolation)
             LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
@@ -684,7 +691,7 @@ public class RerankerTrainer {
       throw new IllegalArgumentException();
     double priorScore = 0;
     List<Item> items = new ArrayList<>();
-    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN, null);
     FNParseSpanPruning mask = drp.setupInference(Arrays.asList(frames), null).decodeAll().get(0);
     int T = mask.numFrameInstances();
     for (int t = 0; t < T; t++) {
@@ -780,19 +787,20 @@ public class RerankerTrainer {
   public static void addParses(ItemProvider ip) {
     long t = System.currentTimeMillis();
     LOG.info("[addParses] running Stanford parser on all training/test data...");
-    ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
     for (FNParse y : ip) {
       Sentence s = y.getSentence();
 
       // Get and set the Stanford constituency parse
       if (s.getStanfordParse(false) == null) {
-        ConstituencyParse cp = parser.getCParse(s);
+        if (PARSER == null) throw new RuntimeException();
+        ConstituencyParse cp = PARSER.getCParse(s);
         s.setStanfordParse(cp);
       }
 
       // Get and set the Stanford basic dependency parse
       if (s.getBasicDeps(false) == null) {
-        DependencyParse dp = parser.getBasicDParse(s);
+        if (PARSER == null) throw new RuntimeException();
+        DependencyParse dp = PARSER.getBasicDParse(s);
         s.setBasicDeps(dp);
       }
     }
@@ -870,6 +878,7 @@ public class RerankerTrainer {
       }
     }
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
+    LOG.info("[main] " + Describe.memoryUsage());
 
     // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
     if (config.getBoolean("precomputeShape", true)) {
@@ -879,8 +888,14 @@ public class RerankerTrainer {
 
     // Data does not come with Stanford parses straight off of disk, add them
     if (config.getBoolean("addStanfordParses", true)) {
+      PARSER = ConcreteStanfordWrapper.getSingleton(true);
       addParses(train);
       addParses(test);
+      LOG.info("[main] addStanfordParses before GC: " + Describe.memoryUsage());
+      PARSER = null;
+      ConcreteStanfordWrapper.dumpSingletons();
+      System.gc();
+      LOG.info("[main] addStanfordParses after GC:  " + Describe.memoryUsage());
     }
 
     if (config.getBoolean("noSyntax", false)) {
@@ -888,10 +903,12 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
+    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 10 * 60);
+
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
     trainer.trainConf.oracleMode = OracleMode.valueOf(
-        config.getString("oracleMode", "RAND").toUpperCase());
+        config.getString("oracleMode", "RAND_MIN").toUpperCase());
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
@@ -1024,9 +1041,17 @@ public class RerankerTrainer {
     }
 
     // Train
+    LOG.info("[main] " + Describe.memoryUsage());
     LOG.info("[main] starting training, config:");
     config.store(System.out, null);   // show the config for posterity
     Reranker model = trainer.train1(train);
+
+    // Release some memory
+    LOG.info("[main] before GC: " + Describe.memoryUsage());
+    ConcreteStanfordWrapper.dumpSingletons();
+    train = null;
+    System.gc();
+    LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
     // Evaluate
     LOG.info("[main] done training, evaluating");
