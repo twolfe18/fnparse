@@ -45,6 +45,7 @@ class Config(tge.Item):
     cmd.append('-server')
     cmd.append('-Xmx9G')
     cmd.append('-XX:+UseSerialGC')
+	cmd.append('-Dlog4j.configurationFile=/home/travis/code/fnparse/src/main/resources/log4j2.json')
     cmd.append('-cp')
     if Config.jar_file:
       cmd.append(Config.jar_file)
