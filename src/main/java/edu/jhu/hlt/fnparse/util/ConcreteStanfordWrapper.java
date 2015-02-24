@@ -65,6 +65,8 @@ public class ConcreteStanfordWrapper {
   }
 
   public static void dumpSingletons() {
+    LOG.info("[dumpSingletons] cachingSingleton=" + cachingSingleton
+        + " nonCachingSingleton=" + nonCachingSingleton);
     cachingSingleton = null;
     nonCachingSingleton = null;
   }

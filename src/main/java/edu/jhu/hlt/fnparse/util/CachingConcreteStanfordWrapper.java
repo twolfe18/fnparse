@@ -53,13 +53,13 @@ public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
 
   public void load() {
     if (bdParseCacheFile.isFile()) {
-      LOG.info("loading from " + bdParseCacheFile.getPath());
+      LOG.info("[load] addToCache=" + addToCache + " loading from " + bdParseCacheFile.getPath());
       CacheSerUtil.load(bdParseCacheFile, bdParseCache, DependencyParse.DESERIALIZATION_FUNC);
     } else {
       LOG.info("no bdParseCache file: " + bdParseCacheFile.getPath());
     }
     if (cParseCacheFile.isFile()) {
-      LOG.info("loading from " + cParseCacheFile.getPath());
+      LOG.info("[load] addToCache=" + addToCache + " loading from " + cParseCacheFile.getPath());
       CacheSerUtil.load(cParseCacheFile, cParseCache, ConstituencyParse.DESERIALIZATION_FUNC);
     } else {
       LOG.info("no cParseCache file: " + cParseCacheFile.getPath());

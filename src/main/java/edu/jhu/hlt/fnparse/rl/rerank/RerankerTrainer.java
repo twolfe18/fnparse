@@ -79,6 +79,8 @@ public class RerankerTrainer {
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
   public static boolean PRUNE_DEBUG = false;
 
+  public static ConcreteStanfordWrapper PARSER = null;
+
   public static enum OracleMode {
     MAX,
     MIN,
@@ -386,9 +388,6 @@ public class RerankerTrainer {
         pretrainConf.beamSize,
         rand);
 
-    if (4 % 2 == 0)
-      return m;   // TODO: FOR DEBUGGING, REMOVE
-
     if (performPretrain) {
       LOG.warn("[train1] you probably don't want pretrain/local train!");
       LOG.info("[train1] local train");
@@ -692,7 +691,7 @@ public class RerankerTrainer {
       throw new IllegalArgumentException();
     double priorScore = 0;
     List<Item> items = new ArrayList<>();
-    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN);
+    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN, null);
     FNParseSpanPruning mask = drp.setupInference(Arrays.asList(frames), null).decodeAll().get(0);
     int T = mask.numFrameInstances();
     for (int t = 0; t < T; t++) {
@@ -788,19 +787,20 @@ public class RerankerTrainer {
   public static void addParses(ItemProvider ip) {
     long t = System.currentTimeMillis();
     LOG.info("[addParses] running Stanford parser on all training/test data...");
-    ConcreteStanfordWrapper parser = new ConcreteStanfordWrapper();
     for (FNParse y : ip) {
       Sentence s = y.getSentence();
 
       // Get and set the Stanford constituency parse
       if (s.getStanfordParse(false) == null) {
-        ConstituencyParse cp = parser.getCParse(s);
+        if (PARSER == null) throw new RuntimeException();
+        ConstituencyParse cp = PARSER.getCParse(s);
         s.setStanfordParse(cp);
       }
 
       // Get and set the Stanford basic dependency parse
       if (s.getBasicDeps(false) == null) {
-        DependencyParse dp = parser.getBasicDParse(s);
+        if (PARSER == null) throw new RuntimeException();
+        DependencyParse dp = PARSER.getBasicDParse(s);
         s.setBasicDeps(dp);
       }
     }
@@ -888,8 +888,11 @@ public class RerankerTrainer {
 
     // Data does not come with Stanford parses straight off of disk, add them
     if (config.getBoolean("addStanfordParses", true)) {
+      PARSER = ConcreteStanfordWrapper.getSingleton(true);
       addParses(train);
       addParses(test);
+      PARSER = null;
+      ConcreteStanfordWrapper.dumpSingletons();
     }
 
     if (config.getBoolean("noSyntax", false)) {
@@ -1045,7 +1048,7 @@ public class RerankerTrainer {
     ConcreteStanfordWrapper.dumpSingletons();
     train = null;
     System.gc();
-    LOG.info("[main] after GC: " + Describe.memoryUsage());
+    LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
     // Evaluate
     LOG.info("[main] done training, evaluating");
