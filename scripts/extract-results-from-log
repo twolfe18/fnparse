@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import re
+import subprocess
 
 output_keys = True
 
@@ -36,64 +37,81 @@ class LogResults:
 
 		self.global_train_info = {}
 
-		with open(filename) as f:
-			for line in f:
-				if line.startswith('[RoleVars]'): continue
-				if line.startswith('[ArgPruner]'): continue
-				if line.startswith('[test]'):
-					ar = line.split()
-					assert ar[-2] == '='
-					self.test_perf[ar[-3]] = ar[-1]
-				if line.startswith('[train]'):
-					ar = line.split()
-					if ar[-2] == '=':
-						self.train_perf[ar[-3]] = ar[-1]
+		arg_micro_re = re.compile('^\[main\]: ArgumentMicro(F1|PRECISION|RECALL) = (0.\d+)$')
+		recall_bias_re = re.compile('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$')
 
-				s = 'config = {'
-				i = line.find(s)
-				if i >= 0:
-					line = line[i+len(s):-2]
-					for chunk in line.replace(',', '').split():
-						ar = chunk.split('=')
-						assert len(ar) == 2
-						self.config[ar[0]] = ar[1]
+		global_key_re = []
+		for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
+			#m = re.match('^' + k + '=(.+)$', line)
+			global_key_re.append(re.compile('^' + k + '=(.+)$'))
 
-				s = '[main] args=['
-				i = line.find(s)
-				if i >= 0:
-					line = line[i+len(s):-2].replace(',', '')
-					#print 'main line:', line
-					ar = line.split()
-					self.mode = ar[0]
-					self.syntax_mode = ar[4]
-					self.alphabet_model = ar[3]
+		# grep out the junky lines to make runtime much faster
+		lines = subprocess.check_output(['grep', '-v', 'InMemoryAnnoPipeline\|AnnotateTokenizedConcrete', filename])
+		lines = lines.split('\n')
 
-				# NOTE: This was added feb10, after new log format, some stuff didn't change
-				m = re.match('^\[main\]: ArgumentMicro(F1|PRECISION|RECALL) = (0.\d+)$', line)
+		#with open(filename) as f:
+		#	for line in f:
+		for line in lines:
+			if line.startswith('[RoleVars]'): continue
+			if line.startswith('[ArgPruner]'): continue
+			if line.startswith('[test]'):
+				ar = line.split()
+				assert ar[-2] == '='
+				self.test_perf[ar[-3]] = ar[-1]
+			if line.startswith('[train]'):
+				ar = line.split()
+				if ar[-2] == '=':
+					self.train_perf[ar[-3]] = ar[-1]
+
+			s = 'config = {'
+			i = line.find(s)
+			if i >= 0:
+				line = line[i+len(s):-2]
+				for chunk in line.replace(',', '').split():
+					ar = chunk.split('=')
+					assert len(ar) == 2
+					self.config[ar[0]] = ar[1]
+
+			s = '[main] args=['
+			i = line.find(s)
+			if i >= 0:
+				line = line[i+len(s):-2].replace(',', '')
+				#print 'main line:', line
+				ar = line.split()
+				self.mode = ar[0]
+				self.syntax_mode = ar[4]
+				self.alphabet_model = ar[3]
+
+			# NOTE: This was added feb10, after new log format, some stuff didn't change
+			#m = re.match('^\[main\]: ArgumentMicro(F1|PRECISION|RECALL) = (0.\d+)$', line)
+			m = arg_micro_re.match(line)
+			if m:
+				k = 'ArgumentMicro' + m.group(1)
+				assert k not in self.test_perf
+				self.test_perf[k] = m.group(2)
+			#m = re.match('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$', line)
+			m = recall_bias_re.match(line)
+			if m:
+				# There can be multiple versions of this (e.g. pretrain and train)
+				#version = '' if not self.dev_info else '-' + str(len(self.dev_info) / 2)
+				version = '-' + (['A', 'B'][len(self.dev_info) / 2])
+				self.dev_info['recallBias' + version] = m.group(1)
+				self.dev_info[m.group(2) + version] = m.group(3)
+			#for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
+			#	m = re.match('^' + k + '=(.+)$', line)
+			for p in global_key_re:
+				m = p.match(line)
 				if m:
-					k = 'ArgumentMicro' + m.group(1)
-					assert k not in self.test_perf
-					self.test_perf[k] = m.group(2)
-				m = re.match('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$', line)
-				if m:
-					# There can be multiple versions of this (e.g. pretrain and train)
-					#version = '' if not self.dev_info else '-' + str(len(self.dev_info) / 2)
-					version = '-' + (['A', 'B'][len(self.dev_info) / 2])
-					self.dev_info['recallBias' + version] = m.group(1)
-					self.dev_info[m.group(2) + version] = m.group(3)
-				for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
-					m = re.match('^' + k + '=(.+)$', line)
-					if m:
-						self.global_train_info[k] = m.group(1)
+					self.global_train_info[k] = m.group(1)
 
-				try:
-					# Logging will dump the number of ms since starting
-					# as the first token on every line
-					self.total_time = int(line.split()[0])
-				except:
-					pass
-				#if line.startswith('[ParserExperiment] done, took'):
-				#	self.total_time = line.split()[3]
+			try:
+				# Logging will dump the number of ms since starting
+				# as the first token on every line
+				self.total_time = int(line.split()[0])
+			except:
+				pass
+			#if line.startswith('[ParserExperiment] done, took'):
+			#	self.total_time = line.split()[3]
 
 		self.all_values = {}
 		self.all_values.update({'train.' + k: v for k,v in self.train_perf.iteritems()})
