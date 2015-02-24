@@ -902,7 +902,7 @@ public class RerankerTrainer {
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
     trainer.trainConf.oracleMode = OracleMode.valueOf(
-        config.getString("oracleMode", "RAND").toUpperCase());
+        config.getString("oracleMode", "RAND_MIN").toUpperCase());
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
