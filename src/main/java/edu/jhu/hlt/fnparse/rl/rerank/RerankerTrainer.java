@@ -891,8 +891,11 @@ public class RerankerTrainer {
       PARSER = ConcreteStanfordWrapper.getSingleton(true);
       addParses(train);
       addParses(test);
+      LOG.info("[main] addStanfordParses before GC: " + Describe.memoryUsage());
       PARSER = null;
       ConcreteStanfordWrapper.dumpSingletons();
+      System.gc();
+      LOG.info("[main] addStanfordParses after GC:  " + Describe.memoryUsage());
     }
 
     if (config.getBoolean("noSyntax", false)) {
