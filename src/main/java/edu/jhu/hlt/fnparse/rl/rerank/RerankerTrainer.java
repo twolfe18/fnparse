@@ -100,7 +100,7 @@ public class RerankerTrainer {
     public boolean batchWithReplacement = false;
 
     // Stopping condition
-    public StoppingCondition stopping = new StoppingCondition.Time(6 * 60);
+    public StoppingCondition stopping = new StoppingCondition.Time(8 * 60);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
 
     // If true (and dev settings permit), train2 will automatically add a
@@ -1006,8 +1006,10 @@ public class RerankerTrainer {
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
 
-        if (config.getBoolean("globalFeatArgLoc", true))
+        if (config.getBoolean("globalFeatArgLoc", true)) {
           trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
+          trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+        }
 
         if (config.getBoolean("globalFeatNumArgs", true))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
