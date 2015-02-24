@@ -9,3 +9,4 @@ target/
 *~
 /experiments
 *.pyc
+/stanford-logs
