@@ -74,8 +74,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<18;
     public CoversFrames(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-//      super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     //public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -125,8 +125,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static boolean ALLOW_REL_ON_OTHER_TARGETS = true;
     public static final int BUCKETS = 1<<18;
     public ArgLocSimple(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-//      super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -185,8 +185,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<18;
     public ArgLoc(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-//      super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -229,8 +229,8 @@ public interface GlobalFeature extends Params.Stateful {
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<16;
     public NumArgs(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-//      super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
