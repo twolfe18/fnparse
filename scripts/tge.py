@@ -6,6 +6,7 @@ import operator
 import os
 import pickle
 import random
+import re
 import redis
 import subprocess
 import sys

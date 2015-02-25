@@ -49,7 +49,7 @@ class Config(tge.Item):
       cmd.append('-Xmx10G')
     elif self.nTrain <= 1500:
       cmd.append('-Xmx12G')
-    else
+    else:
       cmd.append('-Xmx16G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-Dlog4j.configurationFile=/home/travis/code/fnparse/src/main/resources/log4j2.json')
