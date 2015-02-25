@@ -378,8 +378,21 @@ class SgeJobTracker(object):
     assert isinstance(args, list)
     assert isinstance(name, str)
     cmd = ['qsub', '-N', name, '-j', 'y', '-V', '-b', 'y', '-cwd']
-    # TODO take these as args!
-    cmd += ['-q', 'all.q', '-l', 'num_proc=1,mem_free=10G,h_rt=72:00:00']
+
+    # If there is an arg that looks like Xmx, then use that to set mem_free
+    xmx = None
+    for a in args:
+      m = re.match('^-Xmx(\d+)[gG]$', a)
+      if m:
+        if xmx:
+          xmx = None
+          print '[sge spawn] WARN: you set Xmx twice!'
+          break
+        xmx = int(m.group(1)) + 1
+    if not xmx:
+      xmx = 10 # Gb
+
+    cmd += ['-q', 'all.q', '-l', 'num_proc=1,mem_free=' + str(xmx) + 'G,h_rt=72:00:00']
     if self.logging_dir:
       cmd += ['-o', self.logging_dir]
     cmd += args
