@@ -45,7 +45,7 @@ class Config(tge.Item):
     cmd.append('-server')
     cmd.append('-Xmx9G')
     cmd.append('-XX:+UseSerialGC')
-	cmd.append('-Dlog4j.configurationFile=/home/travis/code/fnparse/src/main/resources/log4j2.json')
+    cmd.append('-Dlog4j.configurationFile=/home/travis/code/fnparse/src/main/resources/log4j2.json')
     cmd.append('-cp')
     if Config.jar_file:
       cmd.append(Config.jar_file)
@@ -84,7 +84,7 @@ def learning_curves(working_dir, real_test_set=False):
   q = tge.ExplicitQueue()
   q_local = q
   q_global = q
-  
+
   for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
     for batch_size in [1, 4]:
       for n in [9999, 100, 400, 1000, 2000]:
@@ -125,6 +125,39 @@ def learning_curves(working_dir, real_test_set=False):
 
   print 'len(q_local) =', len(q_local)
   print 'len(q_global) =', len(q_global)
+  return q
+
+def ablation(working_dir, real_test_set=False):
+  # nothing, +arg-loc, +num-args, +role-cooc
+  # take full from learning_curves run
+  q = tge.ExplicitQueue()
+
+  c_local = Config(working_dir)
+  c_local.realTestSet = real_test_set
+  c_local.useGlobalFeatures = False
+  q.append(c_local)
+
+  c_arg_loc = Config(working_dir)
+  c_arg_loc.realTestSet = real_test_set
+  c_arg_loc.globalFeatArgLoc = True
+  c_arg_loc.globalFeatNumArgs = False
+  c_arg_loc.globalFeatRoleCooc = False
+  q.append(c_arg_loc)
+
+  c_num_args = Config(working_dir)
+  c_num_args.realTestSet = real_test_set
+  c_num_args.globalFeatArgLoc = False
+  c_num_args.globalFeatNumArgs = True
+  c_num_args.globalFeatRoleCooc = False
+  q.append(c_num_args)
+
+  c_role_cooc = Config(working_dir)
+  c_role_cooc.realTestSet = real_test_set
+  c_role_cooc.globalFeatArgLoc = False
+  c_role_cooc.globalFeatNumArgs = False
+  c_role_cooc.globalFeatRoleCooc = True
+  q.append(c_role_cooc)
+
   return q
 
 def fs_test(working_dir):
@@ -211,10 +244,14 @@ if __name__ == '__main__':
     assert os.path.isfile(Config.jar_file)
     print 'now using jar=' + Config.jar_file
 
-  run(learning_curves(wd, True), wd, local=False)
+  #run(learning_curves(wd, True), wd, local=False)
   #run(fs_test(wd), wd, local=True)
   #run(last_minute(wd), wd, local=True)
 
+  mq = tge.MultiQueue()
+  mq.add_queue('learning_curves', learning_curves(wd, True))
+  mq.add_queue('ablation', ablation(wd, True))
+  run(mq, wd, local=False)
 
 
 
