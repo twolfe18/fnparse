@@ -44,13 +44,13 @@ class Config(tge.Item):
     #cmd.append('-ea')
     cmd.append('-server')
     if self.nTrain <= 500:
-      cmd.append('-Xmx8G')
+      cmd.append('-Xmx7G')
     elif self.nTrain <= 1000:
-      cmd.append('-Xmx10G')
+      cmd.append('-Xmx9G')
     elif self.nTrain <= 1500:
-      cmd.append('-Xmx12G')
+      cmd.append('-Xmx11G')
     else
-      cmd.append('-Xmx16G')
+      cmd.append('-Xmx15G')
     cmd.append('-XX:+UseSerialGC')
     cmd.append('-Dlog4j.configurationFile=/home/travis/code/fnparse/src/main/resources/log4j2.json')
     cmd.append('-cp')

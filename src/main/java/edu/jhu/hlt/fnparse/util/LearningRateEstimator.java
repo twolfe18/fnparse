@@ -88,12 +88,21 @@ public class LearningRateEstimator {
       double lrSum = 0, lrZ = 0;
       for (int i = 0; i < queries; i++) {
         double r = gamma * (loss[i] - bestLoss) + lambda * i;
+        if (Double.isNaN(r))
+          r = -10;
+        if (r < -15) r = -15;
+        if (r > 15) r = 15;
         double w = Math.exp(-r);
         lrSum += lr[i] * w;
         lrZ += w;
         LOG.info("[estimateLearningRate] smooth lr=" + lr[i] + " r=" + r + " w=" + w);
       }
       lrFinal = lrSum / lrZ;
+      if (Double.isInfinite(lrFinal) || Double.isNaN(lrFinal)) {
+        LOG.info("[estimateLearningRate] final learning rate is bunk: "
+            + "lrFinal=" + lrFinal + " = lrSum=" + lrSum + " / lrZ=" + lrZ);
+        lrFinal = lr[0] / 2;
+      }
     }
     LOG.info("[estimateLearningRate] done, took "
         + (System.currentTimeMillis() - start)/1000d + " seconds, lr=" + lrFinal);
