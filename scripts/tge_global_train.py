@@ -85,49 +85,43 @@ def learning_curves(working_dir, real_test_set=False):
   q_local = q
   q_global = q
   
-  lrBatchScale = 256
-  for no_syntax in [False]:   # Iterferes with useSyntaxSpanPrune, get this working with syntax first (more important)
-    for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
-      for batch_size in [1, 4]:
-        for n in [9999, 100, 400, 1000, 2000]:
-          for l2p in [1e-8, 1e-9, 1e-10]:
-            for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
-              for lh_most_violated in [False, True]:
-                if lh_most_violated and oracleMode != 'MAX':
-                  # Choose a canonical oralceMode for forceLeftRightInference=True,
-                  # because they're all equivalent in that case.
-                  continue
-                cl = Config(working_dir)
-                cl.lhMostViolated = lh_most_violated
-                cl.realTestSet = real_test_set
-                cl.costFN = cost_fn
-                cl.noSyntax = no_syntax
-                cl.oracleMode = oracleMode
-                cl.lrBatchScale = lrBatchScale
-                cl.l2Penalty = l2p
-                cl.performPretrain = False
-                cl.trainBatchSize = batch_size
-                cl.nTrain = n
-                cl.useGlobalFeatures = False
-                q_local.add(cl)
-                for l2pg in [l2p * 10, l2p * 100, l2p * 1000]:
-                #for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
-                  cg = Config(working_dir)
-                  cg.lhMostViolated = lh_most_violated
-                  cg.realTestSet = real_test_set
-                  cg.costFN = cost_fn
-                  cg.noSyntax = no_syntax
-                  cg.oracleMode = oracleMode
-                  cg.lrBatchScale = lrBatchScale
-                  cg.globalFeatArgLoc = True
-                  cg.globalFeatNumArgs = True
-                  cg.globalFeatRoleCooc = True
-                  cg.l2Penalty = l2p
-                  cg.globalL2Penalty = l2pg
-                  cg.trainBatchSize = batch_size
-                  cg.nTrain = n
-                  cg.useGlobalFeatures = True
-                  q_global.add(cg)
+  for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
+    for batch_size in [1, 4]:
+      for n in [9999, 100, 400, 1000, 2000]:
+        for l2p in [1e-7, 1e-8, 1e-9, 1e-10]:
+          for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
+            for lh_most_violated in [False, True]:
+              if lh_most_violated and oracleMode != 'MAX':
+                # Choose a canonical oralceMode for forceLeftRightInference=True,
+                # because they're all equivalent in that case.
+                continue
+              cl = Config(working_dir)
+              cl.lhMostViolated = lh_most_violated
+              cl.realTestSet = real_test_set
+              cl.costFN = cost_fn
+              cl.oracleMode = oracleMode
+              cl.l2Penalty = l2p
+              cl.performPretrain = False
+              cl.trainBatchSize = batch_size
+              cl.nTrain = n
+              cl.useGlobalFeatures = False
+              q_local.add(cl)
+              for l2pg in [l2p * 10, l2p * 100, l2p * 1000]:
+              #for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
+                cg = Config(working_dir)
+                cg.lhMostViolated = lh_most_violated
+                cg.realTestSet = real_test_set
+                cg.costFN = cost_fn
+                cg.oracleMode = oracleMode
+                cg.globalFeatArgLoc = True
+                cg.globalFeatNumArgs = True
+                cg.globalFeatRoleCooc = True
+                cg.l2Penalty = l2p
+                cg.globalL2Penalty = l2pg
+                cg.trainBatchSize = batch_size
+                cg.nTrain = n
+                cg.useGlobalFeatures = True
+                q_global.add(cg)
 
   print 'len(q_local) =', len(q_local)
   print 'len(q_global) =', len(q_global)

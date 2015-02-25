@@ -96,7 +96,7 @@ public class RerankerTrainer {
     // General parameters
     public int threads = 1;
     public int beamSize = 1;
-    public int batchSize = 4;  // If 0, compute an exact gradient (batchSize == train.size)
+    public int batchSize = 1;  // If 0, compute an exact gradient (batchSize == train.size)
     public boolean batchWithReplacement = false;
 
     // Stopping condition
@@ -117,11 +117,11 @@ public class RerankerTrainer {
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public double estimateLearningRateFreq = 5;       // Higher means estimate less frequently, time multiple of hammingTrain
+    public double estimateLearningRateFreq = 7;       // Higher means estimate less frequently, time multiple of hammingTrain
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
-    public double estimateLearningRateSpread = 10;    // Higher means more spread out
+    public double estimateLearningRateSpread = 8;     // Higher means more spread out
     public int estimateLearningRateSteps = 10;        // How many batche steps to take when evaluating a lr
-    public int estimateLearningRateDevLimit = 30;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
+    public int estimateLearningRateDevLimit = 40;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
@@ -620,13 +620,14 @@ public class RerankerTrainer {
         double violation = hammingTrainBatch(r, batch, es, train, conf, iter, timerStr);
         conf.tHammingTrain.stop();
 
+        if (showViolation && iter % 10 == 0)
+          LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
+
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
         if (t.enoughTimePassed(secsBetweenShowingWeights)) {
           LOG.info("[hammingTrain] " + Describe.memoryUsage());
           r.showWeights();
-          if (showViolation)
-            LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
           if (showTime) {
             Timer bt = timer.get(timerStr + ".batch", false);
             int totalUpdates = conf.stopping.estimatedNumberOfIterations();
@@ -911,14 +912,14 @@ public class RerankerTrainer {
         config.getString("oracleMode", "RAND_MIN").toUpperCase());
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
-    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 8);
+    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 1);
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
     trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
 
     // Set learning rate based on batch size
-    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 128);
+    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1024 * 1024);
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
@@ -929,7 +930,7 @@ public class RerankerTrainer {
     }
 
     final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
-    final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
+    final double l2Penalty = config.getDouble("l2Penalty", 1e-6);
     LOG.info("[main] using l2Penalty=" + l2Penalty);
 
     // What features to use (if features are being used)
@@ -1002,7 +1003,7 @@ public class RerankerTrainer {
       }
 
       if (useGlobalFeatures) {
-        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-6);
+        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-5);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
 

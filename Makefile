@@ -5,7 +5,7 @@ argIdQ = text.q
 argSpansQ = text.q
 
 jar:
-	time rm -f target/*.jar
+	rm -f target/*.jar
 	time mvn clean compile package assembly:assembly -DskipTests
 
 frameIdTrain:

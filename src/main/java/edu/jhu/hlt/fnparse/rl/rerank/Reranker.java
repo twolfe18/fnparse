@@ -645,7 +645,9 @@ public class Reranker {
       assert !hasRun;
 
       FS_TIMER.start();
-      String desc = "[forwardSearch " + (fullSearch ? "full" : "init")
+      String desc = "[forwardSearch "
+          + (fullSearch ? "full" : "init")
+          + (solvingMax ? " MAX" : " MIN")
           + " bFunc=" + biasFunction.toString() + "]";
       boolean verbose = true;
       if (verbose && LOG_FORWARD_SEARCH)

@@ -73,6 +73,7 @@ public class LearningRateEstimator {
     }
 
     // Set the state to the best config
+    LOG.info("[estimateLearningRate] loading configuration from lr=" + lr[bestConf]);
     m.loadParams(ids[bestConf]);
 
     // Choose the learning rate that is a exp(regret) + lambda*lrMult weighted average
