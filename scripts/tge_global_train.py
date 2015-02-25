@@ -133,11 +133,13 @@ def ablation(working_dir, real_test_set=False):
   q = tge.ExplicitQueue()
 
   c_local = Config(working_dir)
+  c_local.nTrain = 9999
   c_local.realTestSet = real_test_set
   c_local.useGlobalFeatures = False
   q.append(c_local)
 
   c_arg_loc = Config(working_dir)
+  c_arg_loc.nTrain = 9999
   c_arg_loc.realTestSet = real_test_set
   c_arg_loc.globalFeatArgLoc = True
   c_arg_loc.globalFeatNumArgs = False
@@ -145,6 +147,7 @@ def ablation(working_dir, real_test_set=False):
   q.append(c_arg_loc)
 
   c_num_args = Config(working_dir)
+  c_num_args.nTrain = 9999
   c_num_args.realTestSet = real_test_set
   c_num_args.globalFeatArgLoc = False
   c_num_args.globalFeatNumArgs = True
@@ -152,6 +155,7 @@ def ablation(working_dir, real_test_set=False):
   q.append(c_num_args)
 
   c_role_cooc = Config(working_dir)
+  c_role_cooc.nTrain = 9999
   c_role_cooc.realTestSet = real_test_set
   c_role_cooc.globalFeatArgLoc = False
   c_role_cooc.globalFeatNumArgs = False
