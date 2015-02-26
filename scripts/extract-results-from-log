@@ -41,7 +41,8 @@ class LogResults:
 		recall_bias_re = re.compile('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$')
 
 		global_key_re = []
-		for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
+		global_key = ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']
+		for k in global_key:
 			#m = re.match('^' + k + '=(.+)$', line)
 			global_key_re.append(re.compile('^' + k + '=(.+)$'))
 
@@ -99,9 +100,11 @@ class LogResults:
 				self.dev_info[m.group(2) + version] = m.group(3)
 			#for k in ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']:
 			#	m = re.match('^' + k + '=(.+)$', line)
-			for p in global_key_re:
+			#for p in global_key_re:
+			for i, p in enumerate(global_key_re):
 				m = p.match(line)
 				if m:
+					k = global_key[i]
 					self.global_train_info[k] = m.group(1)
 
 			try:
