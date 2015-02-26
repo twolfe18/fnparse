@@ -134,6 +134,28 @@ def learning_curves(working_dir, real_test_set=False):
   print 'len(q_global) =', len(q_global)
   return q
 
+def ablation2(working_dir, real_test_set=False):
+  q = tge.ExplicitQueue()
+  options = ['NumArgs', 'ArgLoc', 'ArgLocSimple', 'ArgOverlap', 'SpanBoundaryFeature', 'RoleCooc']
+  options = ['globalFeat' + x for x in options]
+  def use_only(conf, opt=None):
+    for opt2 in options:
+      conf.__dict__[opt2] = False
+    if opt:
+      conf.__dict__[opt] = True
+  for n_train in [300, 9999]:
+    # +nil
+    c = Config(working_dir)
+    c.nTrain = n_train
+    use_only(c)
+    q.append(c)
+    for opt in options:
+      c = Config(working_dir)
+      c.nTrain = n_train
+      use_only(c, opt)
+      q.append(c)
+  return q
+
 def ablation(working_dir, real_test_set=False):
   # nothing, +arg-loc, +num-args, +role-cooc
   # take full from learning_curves run
@@ -259,10 +281,11 @@ if __name__ == '__main__':
   #run(fs_test(wd), wd, local=True)
   #run(last_minute(wd), wd, local=True)
 
-  mq = tge.MultiQueue()
-  mq.add_queue('learning_curves', learning_curves(wd, True))
-  mq.add_queue('ablation', ablation(wd, True))
-  run(mq, wd, local=False)
+  #mq = tge.MultiQueue()
+  #mq.add_queue('learning_curves', learning_curves(wd, True))
+  #mq.add_queue('ablation', ablation(wd, True))
+  #run(mq, wd, local=False)
 
+  run(ablation2(wd, False), wd, local=True)
 
 

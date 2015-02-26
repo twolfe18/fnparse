@@ -46,7 +46,7 @@ class LogResults:
 
 		# TODO join these into one regex
 		global_key_re = []
-		global_key = ['nTrain', 'lhMostViolated', 'useGlobalFeatures', 'globalFeatArgLoc', 'globalFeatNumArgs', 'globalFeatRoleCooc', 'l2Penalty', 'costFN', 'trainBatchSize', 'globalL2Penalty', 'oracleMode']
+		global_key = ['nTrain', 'lhMostViolated', 'useGlobalFeatures', 'globalFeatArgLoc', 'globalFeatNumArgs', 'globalFeatRoleCooc', 'l2Penalty', 'globalL2Penalty', 'costFN', 'trainBatchSize', 'oracleMode']
 		for k in global_key:
 			#m = re.match('^' + k + '=(.+)$', line)
 			global_key_re.append(re.compile('^' + k + '=(.+)$'))
