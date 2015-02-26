@@ -10,3 +10,7 @@ target/
 /experiments
 *.pyc
 /stanford-logs
+/src/main/resources/*
+*.pdf
+/temp
+/fs-global-train*
