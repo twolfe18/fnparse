@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import os
 import re
 import subprocess
 
@@ -21,6 +22,9 @@ class LogResults:
 		# [main] workingDir = experiments/argId/1
 		# config = {nTrainLimit=50, batchSize=4, passes=1, regularizer=1000.0, useGoldFrames=false}
 
+		if not os.path.isfile(filename):
+			raise Exception('not a real log file: ' + str(filename))
+
 		self.mode = '???'
 		#self.working_dir = '???'
 		#self.n_train = '???'
@@ -40,13 +44,14 @@ class LogResults:
 		arg_micro_re = re.compile('^\[main\]: ArgumentMicro(F1|PRECISION|RECALL) = (0.\d+)$')
 		recall_bias_re = re.compile('.*chose recallBias=(-?\d+\.\d+) with (\S+?)=(0.\d+)$')
 
+		# TODO join these into one regex
 		global_key_re = []
-		global_key = ['workingDir', 'nTrain', 'useRoleCooc', 'useGlobalFeatures', 'l2Penalty', 'performPretrain', 'costFN', 'trainBatchSize', 'lrBatchScale', 'globalL2Penalty', 'lrBatchScale', 'oracleMode']
+		global_key = ['nTrain', 'useGlobalFeatures', 'globalFeatArgLoc', 'globalFeatNumArgs', 'globalFeatRoleCooc', 'l2Penalty', 'costFN', 'trainBatchSize', 'globalL2Penalty', 'oracleMode']
 		for k in global_key:
 			#m = re.match('^' + k + '=(.+)$', line)
 			global_key_re.append(re.compile('^' + k + '=(.+)$'))
 
-		# grep out the junky lines to make runtime much faster
+		# grep out the junky lines to make runtime much faster (...if you forgot to turn logging off)
 		lines = subprocess.check_output(['grep', '-v', 'InMemoryAnnoPipeline\|AnnotateTokenizedConcrete', filename])
 		lines = lines.split('\n')
 
