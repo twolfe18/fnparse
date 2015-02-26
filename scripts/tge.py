@@ -491,6 +491,8 @@ class JobEngine:
     if item:
       # TODO this name needs to start with the queue name so MultiQueue knows
       # what to do when you call .observe_score()
+	  # TODO Perhaps the best solution to this is to let queues decide on a name
+	  # HISTORY: "fs" used to stand for "feature selection"
       name = "fs-%s-%d" % (self.name, len(self.name2item))
       assert name not in self.name2item
       self.name2item[name] = item
