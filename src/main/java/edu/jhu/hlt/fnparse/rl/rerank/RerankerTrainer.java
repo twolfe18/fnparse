@@ -128,7 +128,7 @@ public class RerankerTrainer {
     private int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
-    public int tuneSteps = 5;
+    public int tuneSteps = 6;
     public boolean tuneOnTrainingData = false;
 
     // Convenient extras
@@ -907,7 +907,7 @@ public class RerankerTrainer {
 
     trainer.trainConf.beamSize = config.getInt("beamSize", 1);
 
-    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 10 * 60);
+    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
 
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
