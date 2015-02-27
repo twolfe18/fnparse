@@ -77,6 +77,54 @@ class Config(tge.Item):
 
     return cmd
 
+def last_last_minute(working_dir, real_test_set=False):
+  if not os.path.isdir(working_dir):
+    raise Exception('not a dir: ' + working_dir)
+
+  q = tge.ExplicitQueue()
+  q_local = q
+  q_global = q
+
+  for cost_fn in [1, 2, 4]:
+    for batch_size in [1, 4]:
+      for n in [9999, 100, 400, 1000, 2000]:
+        for l2p in [1e-9, 1e-8]:
+          for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
+            for lh_most_violated in [False, True]:
+              if lh_most_violated and oracleMode != 'MAX':
+                # Choose a canonical oralceMode for forceLeftRightInference=True,
+                # because they're all equivalent in that case.
+                continue
+              cl = Config(working_dir)
+              cl.lhMostViolated = lh_most_violated
+              cl.realTestSet = real_test_set
+              cl.costFN = cost_fn
+              cl.oracleMode = oracleMode
+              cl.l2Penalty = l2p
+              cl.performPretrain = False
+              cl.trainBatchSize = batch_size
+              cl.nTrain = n
+              cl.useGlobalFeatures = False
+              q_local.add(cl)
+              for l2pg in [l2p * 10, l2p * 100]:
+                cg = Config(working_dir)
+                cg.lhMostViolated = lh_most_violated
+                cg.realTestSet = real_test_set
+                cg.costFN = cost_fn
+                cg.oracleMode = oracleMode
+                cg.globalFeatArgLoc = True
+                cg.globalFeatNumArgs = True
+                cg.globalFeatRoleCooc = True
+                cg.l2Penalty = l2p
+                cg.globalL2Penalty = l2pg
+                cg.trainBatchSize = batch_size
+                cg.nTrain = n
+                cg.useGlobalFeatures = True
+                q_global.add(cg)
+  print 'len(q_local) =', len(q_local)
+  print 'len(q_global) =', len(q_global)
+  return q
+
 def learning_curves(working_dir, real_test_set=False):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
@@ -286,6 +334,8 @@ if __name__ == '__main__':
   #mq.add_queue('ablation', ablation(wd, True))
   #run(mq, wd, local=False)
 
-  run(ablation2(wd, False), wd, local=True)
+  #run(ablation2(wd, False), wd, local=True)
+
+  run(last_last_minute(wd, True), wd, local=False)
 
 

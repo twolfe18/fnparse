@@ -127,6 +127,7 @@ public interface StoppingCondition {
     private File historyFile;
     private FileWriter historyFileWriter;
     private int historySize;
+    private int skipFirst = 1;
 
     private DoubleSupplier devLossFunc;
     private final double alpha;
@@ -141,11 +142,17 @@ public interface StoppingCondition {
      * quickly and large values will stop late.
      * @param k is the width of the kernel (larger values indicate more history
      * is taken into consideration). Good default is 25.
+     * @param skipFirst is how many calls to devLossFunc should be skipped, as
+     * the first value returned is typically no-where near convergence, and can
+     * mess up the variance estimates.
      */
-    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double k) {
+    public DevSet(File rScript, DoubleSupplier devLossFunc, double alpha, double k, int skipFirst) {
       if (!rScript.isFile())
         throw new IllegalArgumentException(rScript.getPath() + " is not a file");
+      if (skipFirst < 0)
+        throw new IllegalArgumentException("skipFirst=" + skipFirst);
       this.rScript = rScript;
+      this.skipFirst = skipFirst;
       try {
         this.historySize = 0;
         this.historyFile = File.createTempFile("devSetLoss", ".txt");
@@ -163,8 +170,8 @@ public interface StoppingCondition {
 
     @Override
     public String toString() {
-      return String.format("DevSet(%s,alpha=%.2f,k=%.2f)",
-          historyFile.getPath(), alpha, k);
+      return String.format("DevSet(%s,alpha=%.2f,k=%.2f,s=%d)",
+          historyFile.getPath(), alpha, k, skipFirst);
     }
 
     /**
@@ -190,15 +197,17 @@ public interface StoppingCondition {
       assert Double.isFinite(devLoss);
       assert !Double.isNaN(devLoss);
       assert devLoss >= 0 : "technically this isn't needed...";
-      try {
-        this.historySize++;
-        this.historyFileWriter.write(devLoss + "\n");
-        this.historyFileWriter.flush();
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+      this.historySize++;
+      if (historySize > skipFirst) {
+        try {
+          this.historyFileWriter.write(devLoss + "\n");
+          this.historyFileWriter.flush();
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
       }
 
-      if (this.historySize < 5)
+      if (historySize - skipFirst < (int) (0.5 * k) + 1)
         return false;
 
       // Call rScript
@@ -486,7 +495,7 @@ public interface StoppingCondition {
         return y + n;
       }
     };
-    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k);
+    StoppingCondition.DevSet stop = new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, 0);
     for (int i = 0; i < 200; i++) {
       boolean s = stop.stop(i, 0);
       System.out.println("stop=" + s);

@@ -529,6 +529,7 @@ public class Reranker {
 
   /**
    * This is now an update.
+   * @deprecated pretraining works terribly.
    */
   public static class ScoredAction2 implements Update {
     public final Adjoints adjoints;
@@ -683,6 +684,7 @@ public class Reranker {
         // We are going to score Actions leaving that StateSequence.getCur (s).
         Beam.Item<StateSequence> frontierItem = beam.popItem();
         frontier = frontierItem.getItem();
+        if (!decode) maxBeam.push(frontierItem);
         State s = frontier.getCur();
         //SpanIndex<Action> ai = frontier.getActionIndex();
         CommitIndex ai = frontier.getActionIndex();
@@ -730,11 +732,6 @@ public class Reranker {
           if (fullSearch) {
             added++;
             StateSequence ss = new StateSequence(frontier, null, null, adj);
-            // Only add to maxBeam if not doing decode. Decode requires z be a
-            // final state.
-            if (!decode) maxBeam.push(ss, score);
-//            if (!decode && maxBeam.push(ss, score) && LOG_FORWARD_SEARCH)
-//              LOG.info("found new most violator: " + frontierItem);
             boolean onBeam = beam.push(ss, score);
             if (onBeam) beamAdds++;
             if (useActionIndex && onBeam) {

@@ -553,10 +553,11 @@ public class RerankerTrainer {
       LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.15d;   // Lower numbers mean stop earlier.
-      double k = 25;          // Size of history
+      double k = 20;          // Size of history
+      int skipFirst = 1;      // Drop the first value(s) to get the variance est. right.
       DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
       dynamicStopping = conf.addStoppingCondition(
-          new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k));
+          new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
     } else {
       LOG.info("[train2] allowDynamicStopping=false leaving stopping condition as is");
     }
