@@ -905,7 +905,7 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
-	trainer.trainConf.beamSize = config.getInt("beamSize", 1);
+    trainer.trainConf.beamSize = config.getInt("beamSize", 1);
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 10 * 60);
 
@@ -1009,17 +1009,20 @@ public class RerankerTrainer {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
-        if (config.getBoolean("globalFeatArgLoc", true))
+        if (config.getBoolean("globalFeatArgLoc", false))
           trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatArgLocSimple", true))
+        if (config.getBoolean("globalFeatArgLocSimple", false))
           trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatNumArgs", true))
+        if (config.getBoolean("globalFeatNumArgs", false))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatRoleCooc", true))
+        if (config.getBoolean("globalFeatRoleCooc", false))
           trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
+
+        if (config.getBoolean("globalFeatRoleCoocSimple", false))
+          trainer.addGlobalParams(new GlobalFeature.RoleCoocSimple(globalL2Penalty));
 
         if (config.getBoolean("globalFeatArgOverlap", false))
           trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));

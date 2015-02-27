@@ -184,7 +184,7 @@ def learning_curves(working_dir, real_test_set=False):
 
 def ablation2(working_dir, real_test_set=False):
   q = tge.ExplicitQueue()
-  options = ['NumArgs', 'ArgLoc', 'ArgLocSimple', 'ArgOverlap', 'SpanBoundary', 'RoleCooc']
+  options = ['NumArgs', 'ArgLoc', 'ArgLocSimple', 'ArgOverlap', 'SpanBoundary', 'RoleCooc', 'RoleCoocSimple']
   options = ['globalFeat' + x for x in options]
   def use_only(conf, opt=None):
     for opt2 in options:

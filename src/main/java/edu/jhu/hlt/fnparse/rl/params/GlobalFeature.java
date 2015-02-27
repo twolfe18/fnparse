@@ -252,6 +252,45 @@ public interface GlobalFeature extends Params.Stateful {
     }
   }
 
+  public static class RoleCoocSimple
+      extends FeatureParams implements Params.Stateful {
+    public static FrameRolePacking frPacking = new FrameRolePacking();
+    public static final int BUCKETS = 1<<20;
+    public static final int DA_BITS = 14;
+    public static final int REL_BITS = 3;
+    public RoleCoocSimple(double l2Penalty) {
+      //super(l2Penalty, BUCKETS); // use Hashing
+      super(l2Penalty); // Use Alphabet
+    }
+    @Override
+    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+      Frame f = state.getFrame(a2.t);
+      FeatureVector fv = new FeatureVector();
+      for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
+        Action a = i.payload;
+        if (a.t != a2.t)
+          continue;
+        assert a.getActionType() == ActionType.COMMIT;
+        if (a.k < a2.k) {
+          b(fv, f.getRole(a.k), f.getRole(a2.k), f.getName());
+          b(fv, f.getRole(a.k), f.getRole(a2.k));
+        } else if (a.k > a2.k) {
+          b(fv, f.getRole(a2.k), f.getRole(a.k), f.getName());
+          b(fv, f.getRole(a2.k), f.getRole(a.k));
+        } else {
+          b(fv, f.getRole(a.k), "same", f.getName());
+          b(fv, f.getRole(a.k), "same");
+        }
+      }
+      return fv;
+    }
+
+    @Override
+    public void doneTraining() {
+      LOG.info("[doneTraining] not freezing alphabet");
+    }
+  }
+
   /**
    * Fires when roles co-occur.
    */
@@ -326,16 +365,16 @@ public interface GlobalFeature extends Params.Stateful {
       return fv;
     }
 
-    /** Returns a non-negative version of i % b */
-    public static int mod(int i, int b) {
-      int y = i % b;
-      return y < 0 ? ~y : y;
-    }
-
     @Override
     public void doneTraining() {
       LOG.info("[doneTraining] not freezing alphabet");
     }
+  }
+
+  /** Returns a non-negative version of i % b */
+  public static int mod(int i, int b) {
+    int y = i % b;
+    return y < 0 ? ~y : y;
   }
 
 
