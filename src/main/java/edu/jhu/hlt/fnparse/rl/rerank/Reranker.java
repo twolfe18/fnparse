@@ -745,12 +745,6 @@ public class Reranker {
           }
         }     // end loop over next actions
 
-        if (actionsTried == 0   // This implies we are at a final state, which
-            && decode           // is required when decode=true.
-            && maxBeam.push(frontierItem)) {
-//          LOG.info("found new most violator: " + frontierItem);
-        }
-
         if (LOG_FORWARD_SEARCH) {
           LOG.info(desc + " scored " + added + "/" + actionsTried
               + " actions and " + beamAdds + " were put on the beam");
