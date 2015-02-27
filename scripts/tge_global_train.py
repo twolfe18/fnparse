@@ -301,14 +301,30 @@ def run(q, working_dir, local=True):
   engine.run(os.path.join(working_dir, 'results.txt'))
 
 
+def str2bool(s):
+  b = s.lower() in ['true', 't', '1']
+  assert b or s.lower() in ['false', 'f', '0']
+  return b
+
 if __name__ == '__main__':
-  if len(sys.argv) != 3:
+  if len(sys.argv) != 6:
     print 'please provide:'
     print '1) a working dir for output'
     print '2) a jar with all dependencies'
+    print '3) a task to run (in \'ablation2\', \'last_last_minute\')'
+    print '4) whether to run locally (\'True\') or on the grid (\'False\')'
+    print '5) whether or not to run on the full test set'
     sys.exit(-1)
   wd = sys.argv[1]
   Config.jar_file = sys.argv[2]
+  task = sys.argv[3]
+  local = str2bool(sys.argv[4])
+  full_test_set = str2bool(sys.argv[5])
+
+  print 'task =', task
+  print 'local =', local
+  print 'full_test_set =', full_test_set
+  print 'working_dir =', wd
 
   if not os.path.isdir(wd):
     raise Exception('wd must be dir: ' + wd)
@@ -334,8 +350,11 @@ if __name__ == '__main__':
   #mq.add_queue('ablation', ablation(wd, True))
   #run(mq, wd, local=False)
 
-  #run(ablation2(wd, False), wd, local=True)
-
-  run(last_last_minute(wd, True), wd, local=False)
+  if task == 'ablation2':
+    run(ablation2(wd, full_test_set), wd, local=local)
+  elif task == 'last_last_minute':
+    run(last_last_minute(wd, True), wd, local=local)
+  else:
+    print 'unknown task:', task
 
 
