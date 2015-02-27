@@ -491,8 +491,8 @@ class JobEngine:
     if item:
       # TODO this name needs to start with the queue name so MultiQueue knows
       # what to do when you call .observe_score()
-	  # TODO Perhaps the best solution to this is to let queues decide on a name
-	  # HISTORY: "fs" used to stand for "feature selection"
+      # TODO Perhaps the best solution to this is to let queues decide on a name
+      # HISTORY: "fs" used to stand for "feature selection"
       name = "fs-%s-%d" % (self.name, len(self.name2item))
       assert name not in self.name2item
       self.name2item[name] = item
@@ -518,6 +518,9 @@ class JobEngine:
       # parse out (score, name, config), do what we were doing before
       score, name, config = rest.split('\t', 2)
       score = float(score)
+      if name not in self.name2item:
+        print '[handle_message] WARNING: orphan job, dont know the name:', name, 'has score', score, 'and config', config
+        return
       item = self.name2item[name]
       print '[__handle_message]', name, '/', config, 'finished successfully with a score', score
       perf_file.write("%f\t%s\t%s\n" % (score, name, config))

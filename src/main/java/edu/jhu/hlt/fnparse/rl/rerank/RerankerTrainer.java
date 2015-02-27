@@ -904,6 +904,8 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
+	trainer.trainConf.beamSize = config.getInt("beamSize", 1);
+
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 10 * 60);
 
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
@@ -930,7 +932,7 @@ public class RerankerTrainer {
     }
 
     final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
-    final double l2Penalty = config.getDouble("l2Penalty", 1e-9);
+    final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
     LOG.info("[main] using l2Penalty=" + l2Penalty);
 
     // What features to use (if features are being used)
@@ -1005,7 +1007,6 @@ public class RerankerTrainer {
       if (useGlobalFeatures) {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
-
 
         if (config.getBoolean("globalFeatArgLoc", true))
           trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
