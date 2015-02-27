@@ -271,13 +271,17 @@ public interface GlobalFeature extends Params.Stateful {
         if (a.t != a2.t)
           continue;
         assert a.getActionType() == ActionType.COMMIT;
+        String r = "rel=" + BasicFeatureTemplates.spanPosRel(a2.getSpan(), a.getSpan());
         if (a.k < a2.k) {
+          b(fv, f.getRole(a.k), f.getRole(a2.k), r);
           b(fv, f.getRole(a.k), f.getRole(a2.k), f.getName());
           b(fv, f.getRole(a.k), f.getRole(a2.k));
         } else if (a.k > a2.k) {
+          b(fv, f.getRole(a2.k), f.getRole(a.k), r);
           b(fv, f.getRole(a2.k), f.getRole(a.k), f.getName());
           b(fv, f.getRole(a2.k), f.getRole(a.k));
         } else {
+          b(fv, f.getRole(a.k), "same", r);
           b(fv, f.getRole(a.k), "same", f.getName());
           b(fv, f.getRole(a.k), "same");
         }
