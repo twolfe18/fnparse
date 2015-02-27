@@ -31,6 +31,113 @@ public interface Beam<T> extends Iterable<T> {
 
   public boolean push(Beam.Item<T> item);
 
+
+  public static <T> Beam<T> getMostEfficientImpl(int beamSize) {
+    if (beamSize == 1)
+      return new Beam1<>();
+    if (beamSize == 4)
+      return new Beam4<>();
+    return new BeamN<>(beamSize);
+  }
+
+  /**
+   * An efficient width-4 beam.
+   */
+  public static class Beam4<T> implements Beam<T> {
+    private T i1, i2, i3, i4;
+    private double s1, s2, s3, s4;
+    private int size = 0;
+    @Override
+    public Iterator<T> iterator() {
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public int size() {
+      return size;
+    }
+    @Override
+    public int width() {
+      return 4;
+    }
+    @Override
+    public T pop() {
+      assert size > 0;
+      T r = i1;
+      i1 = i2;
+      i2 = i3;
+      i3 = i4;
+      s1 = s2;
+      s2 = s3;
+      s3 = s4;
+      size--;
+      return r;
+    }
+    @Override
+    public T peek() {
+      assert size > 0;
+      return i1;
+    }
+    @Override
+    public Item<T> popItem() {
+      assert size > 0;
+      Item<T> i = new Item<>(i1, s1);
+      i1 = i2;
+      i2 = i3;
+      i3 = i4;
+      s1 = s2;
+      s2 = s3;
+      s3 = s4;
+      size--;
+      return i;
+    }
+    @Override
+    public Item<T> peekItem() {
+      return new Item<>(i1, s1);
+    }
+    @Override
+    public boolean push(T item, double score) {
+      if (score > s1 || size < 1) {
+        i4 = i3;
+        i3 = i2;
+        i2 = i1;
+        i1 = item;
+        s4 = s3;
+        s3 = s2;
+        s2 = s1;
+        s1 = score;
+        if (size < 4) size++;
+        return true;
+      } else if (score > s2 || size < 2) {
+        i4 = i3;
+        i3 = i2;
+        i2 = item;
+        s4 = s3;
+        s3 = s2;
+        s2 = score;
+        if (size < 4) size++;
+        return true;
+      } else if (score > s3 || size < 3) {
+        i4 = i3;
+        i3 = item;
+        s4 = s3;
+        s3 = score;
+        if (size < 4) size++;
+        return true;
+      } else if (score > s4 || size < 4) {
+        i4 = item;
+        s4 = score;
+        if (size < 4) size++;
+        return true;
+      } else {
+        return false;
+      }
+    }
+    @Override
+    public boolean push(Item<T> item) {
+      return push(item.item, item.score);
+    }
+  }
+
   /**
    * An efficient width-1 beam.
    */

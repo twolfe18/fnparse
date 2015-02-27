@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.util.Beam;
 import edu.jhu.hlt.fnparse.util.Beam.Beam1;
-import edu.jhu.hlt.fnparse.util.Beam.BeamN;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
@@ -668,8 +667,7 @@ public class Reranker {
       // If mostViolated is used, bias = deltaLoss, and this is the beam of
       // states being explored, where we only push items that are children of
       // things that were previously on the beam.
-      Beam<StateSequence> beam = beamWidth == 1
-          ? new Beam1<>() : new BeamN<>(beamWidth);
+      Beam<StateSequence> beam = Beam.getMostEfficientImpl(beamWidth);
       beam.push(frontier, 0d);
 
       // This beam keeps a running max over all n of:
