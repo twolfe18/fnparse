@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import math
 import os
 import shutil
 import socket
@@ -215,29 +216,32 @@ def ablation3(working_dir, real_test_set=False):
       conf.__dict__[opt2] = False
     if opt:
       conf.__dict__[opt] = True
-  n_train = 700
-  for lr_batch_scale in [5120 * math.exp(x) for x in [0, -1, 2]]:
-    def conf():
-      c = Config(working_dir)
-      c.nTrain = n_train
-      c.secsBetweenShowingWeights = 2 * 60
-      c.estimateLearningRateFreq = 0
-      c.lrBatchScale = lr_batch_scale
-      c.trainTimeLimit = 30
-      return c
+  n_train = 9999
+  for l2p in [1e-9, 1e-8, 1e-7, 1e-6]:
+    for gl2p in [l2p * 10]: #[l2p, l2p * 10, l2p * 100]:
+      for lr_batch_scale in [2560 * math.exp(x) for x in [0, -1.5, 1.5]]:
+        def conf():
+          c = Config(working_dir)
+          c.realTestSet = real_test_set
+          c.nTrain = n_train
+          c.secsBetweenShowingWeights = 3 * 60
+          c.estimateLearningRateFreq = 0
+          c.lrBatchScale = int(lr_batch_scale)
+          c.trainTimeLimit = 4 * 60
+          return c
 
-    # +nil
-    c = conf()
-    use_only(c)
-    q.append(c)
+        # +nil
+        c = conf()
+        use_only(c)
+        q.append(c)
 
-    # +foo
-    for opt in options:
-      if opt == 'ArgLocSimple':
-        continue
-      c = conf()
-      use_only(c, opt)
-      q.append(c)
+        # +foo
+        for opt in options:
+          if opt == 'ArgLocSimple':
+            continue
+          c = conf()
+          use_only(c, opt)
+          q.append(c)
 
   return q
 
