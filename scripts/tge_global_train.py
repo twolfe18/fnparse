@@ -78,52 +78,39 @@ class Config(tge.Item):
 
     return cmd
 
-def last_last_minute(working_dir, real_test_set=False):
+def beam_size(working_dir, real_test_set=False):
+  ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
 
   q = tge.ExplicitQueue()
-  q_local = q
-  q_global = q
-
-  for cost_fn in [1, 2, 4]:
-    for batch_size in [1, 4]:
-      for n in [9999, 100, 400, 1000, 2000]:
-        for l2p in [1e-9, 1e-8]:
-          for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
-            for lh_most_violated in [False, True]:
-              if lh_most_violated and oracleMode != 'MAX':
-                # Choose a canonical oralceMode for forceLeftRightInference=True,
-                # because they're all equivalent in that case.
-                continue
-              cl = Config(working_dir)
-              cl.lhMostViolated = lh_most_violated
-              cl.realTestSet = real_test_set
-              cl.costFN = cost_fn
-              cl.oracleMode = oracleMode
-              cl.l2Penalty = l2p
-              cl.performPretrain = False
-              cl.trainBatchSize = batch_size
-              cl.nTrain = n
-              cl.useGlobalFeatures = False
-              q_local.add(cl)
-              for l2pg in [l2p * 10, l2p * 100]:
-                cg = Config(working_dir)
-                cg.lhMostViolated = lh_most_violated
-                cg.realTestSet = real_test_set
-                cg.costFN = cost_fn
-                cg.oracleMode = oracleMode
-                cg.globalFeatArgLoc = True
-                cg.globalFeatNumArgs = True
-                cg.globalFeatRoleCooc = True
-                cg.l2Penalty = l2p
-                cg.globalL2Penalty = l2pg
-                cg.trainBatchSize = batch_size
-                cg.nTrain = n
-                cg.useGlobalFeatures = True
-                q_global.add(cg)
-  print 'len(q_local) =', len(q_local)
-  print 'len(q_global) =', len(q_global)
+  #for n in [100, 400, 1000, 2000, 9999]:
+  for n in [100, 1000, 9999]:
+    for beam_size in [1, 4, 16]:
+      for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
+        for lh_most_violated in [False, True]:
+          if lh_most_violated and oracleMode != 'MAX':
+            # Choose a canonical oralceMode for forceLeftRightInference=True,
+            # because they're all equivalent in that case.
+            continue
+          cg = Config(working_dir)
+          cg.beamSize = beam_size
+          cg.lhMostViolated = lh_most_violated
+          cg.realTestSet = real_test_set
+          cg.costFN = cost_fn
+          cg.oracleMode = oracleMode
+          cg.globalFeatArgLocSimple = True
+          cg.globalFeatNumArgs = True
+          cg.globalFeatRoleCoocSimple = True
+          cg.globalFeatArgOverlap = True
+          cg.globalFeatSpanBoundary = True
+          cg.l2Penalty = l2p
+          cg.globalL2Penalty = l2pg
+          cg.trainBatchSize = batch_size
+          cg.nTrain = n
+          cg.useGlobalFeatures = True
+          q_global.add(cg)
+  
   return q
 
 def learning_curves(working_dir, real_test_set=False):
@@ -143,7 +130,7 @@ def learning_curves(working_dir, real_test_set=False):
 
   for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
     for batch_size in [1, 4]:
-      for n in [9999, 100, 400, 1000, 2000]:
+      for n in [100, 400, 1000, 2000, 9999]:
         for l2p in [1e-7, 1e-8, 1e-9, 1e-10]:
           for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
             for lh_most_violated in [False, True]:
@@ -169,9 +156,11 @@ def learning_curves(working_dir, real_test_set=False):
                 cg.realTestSet = real_test_set
                 cg.costFN = cost_fn
                 cg.oracleMode = oracleMode
-                cg.globalFeatArgLoc = True
+                cg.globalFeatArgLocSimple = True
                 cg.globalFeatNumArgs = True
-                cg.globalFeatRoleCooc = True
+                cg.globalFeatRoleCoocSimple = True
+                cg.globalFeatArgOverlap = True
+                cg.globalFeatSpanBoundary = True
                 cg.l2Penalty = l2p
                 cg.globalL2Penalty = l2pg
                 cg.trainBatchSize = batch_size
@@ -192,7 +181,7 @@ def ablation2(working_dir, real_test_set=False):
       conf.__dict__[opt2] = False
     if opt:
       conf.__dict__[opt] = True
-  for n_train in [9999, 700]:
+  for n_train in [400, 9999]:
     # +nil
     c = Config(working_dir)
     c.realTestSet = real_test_set
@@ -207,50 +196,13 @@ def ablation2(working_dir, real_test_set=False):
       q.append(c)
   return q
 
-def ablation3(working_dir, real_test_set=False):
-  q = tge.ExplicitQueue()
-  options = ['NumArgs', 'ArgLoc', 'ArgLocSimple', 'ArgOverlap', 'SpanBoundary', 'RoleCooc', 'RoleCoocSimple']
-  options = ['globalFeat' + x for x in options]
-  def use_only(conf, opt=None):
-    for opt2 in options:
-      conf.__dict__[opt2] = False
-    if opt:
-      conf.__dict__[opt] = True
-  n_train = 9999
-  for l2p in [1e-9, 1e-8, 1e-7, 1e-6]:
-    for gl2p in [l2p * 10]: #[l2p, l2p * 10, l2p * 100]:
-      for lr_batch_scale in [2560 * math.exp(x) for x in [0, -1.5, 1.5]]:
-        def conf():
-          c = Config(working_dir)
-          c.realTestSet = real_test_set
-          c.nTrain = n_train
-          c.secsBetweenShowingWeights = 3 * 60
-          c.estimateLearningRateFreq = 0
-          c.lrBatchScale = int(lr_batch_scale)
-          c.trainTimeLimit = 4 * 60
-          return c
-
-        # +nil
-        c = conf()
-        use_only(c)
-        q.append(c)
-
-        # +foo
-        for opt in options:
-          if opt == 'ArgLocSimple':
-            continue
-          c = conf()
-          use_only(c, opt)
-          q.append(c)
-
-  return q
 
 def ablation(working_dir, real_test_set=False):
   # nothing, +arg-loc, +num-args, +role-cooc
   # take full from learning_curves run
   q = tge.ExplicitQueue()
 
-  for n_train in [200, 800, 9999]:
+  for n_train in [100, 1000, 9999]:
     c_local = Config(working_dir)
     c_local.nTrain = n_train
     c_local.realTestSet = real_test_set
@@ -280,46 +232,6 @@ def ablation(working_dir, real_test_set=False):
     c_role_cooc.globalFeatNumArgs = False
     c_role_cooc.globalFeatRoleCoocSimple = True
     q.append(c_role_cooc)
-
-  return q
-
-def fs_test(working_dir):
-  '''
-  Returns a queue.
-  Tests if the features chosen by feature-selection a while ago work
-  better than the simple ones I put in the source code.
-  '''
-  if not os.path.isdir(working_dir):
-    raise Exception('not a dir: ' + working_dir)
-
-  q = tge.ExplicitQueue()
-  for n in [100, 200, 400, 800, 1600]:
-    for sf in [True, False]:
-      c = Config(working_dir)
-      c.performPretrain = False
-      c.nTrain = n
-      c.simpleFeatures = sf
-      q.append(c)
-  return q
-
-def last_minute(working_dir):
-  q = tge.MultiQueue()
-  q_batch = q.add_queue('batch', tge.ExplicitQueue())
-  q_cost_fn = q.add_queue('cost_fn', tge.ExplicitQueue())
-
-  n = 150
-
-  for batch_with_replacement in [True, False]:
-    c = Config(working_dir)
-    c.nTrain = n
-    c.batchWithReplacement = batch_with_replacement
-    q_batch.append(c)
-
-  for cost_fn in [1, 2, 4, 8]:
-    c = Config(working_dir)
-    c.nTrain = n
-    c.costFN = cost_fn
-    q_cost_fn.append(c)
 
   return q
 
@@ -383,16 +295,12 @@ if __name__ == '__main__':
     assert os.path.isfile(Config.jar_file)
     print 'now using jar=' + Config.jar_file
 
-  #run(learning_curves(wd, True), wd, local=False)
-  #run(fs_test(wd), wd, local=True)
-  #run(last_minute(wd), wd, local=True)
-
-  #mq = tge.MultiQueue()
-  #mq.add_queue('learning_curves', learning_curves(wd, True))
-  #mq.add_queue('ablation', ablation(wd, True))
-  #run(mq, wd, local=False)
-
-  if task == 'ablation':
+  if task == 'the-new-one':
+    mq = tge.MultiQueue()
+    mq.add_queue('beam_search', beam_serach(wd, full_test_set))
+    mq.add_queue('ablation2', ablation2(wd, full_test_set))
+    run(mq, wd, local=local)
+  elif task == 'ablation':
     run(ablation(wd, full_test_set), wd, local=local)
   elif task == 'ablation2':
     run(ablation2(wd, full_test_set), wd, local=local)
