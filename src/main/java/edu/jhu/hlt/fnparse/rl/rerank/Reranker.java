@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
@@ -34,29 +35,9 @@ import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.Timer;
 
 /**
- * Lets think about how this model compares to the previous one I have, which
- * roughly parameterizes the same set of variables (but just not sequences over
- * how to label them).
- * I could just use the previous model for p(s|t,k) and then just learn a decoder.
- * What would this look like?
- * Features would all look like "reranking" features, consider a lot of state
- * like what roles have been assigned where.
- * 
- * Sort all of the (t,k,s) by probability, indexed by rank as i
- * The set of items chosen so far and the parse so far is represented as state s
- * Each item therefore gets features f(i,s) which add to the original log-prob p(i)
- * Algorithm:
- * 1) sort list by s(i) = p(i) + theta * f(i,s)
- * 2) if s(0) < 0, the parse is done.
- * 2) else take top item and add it to the parse, s += i, goto 1
- * 
- * This is a nice proving-ground for my idea. We already have a model which is
- * decent (has some idea about what a good (t,k,s) is). We should be able to
- * improve it. Probably with just the decoder, but if not, we can start throwing
- * in more realistic scoring features (e.g. embedding stuff) and anneal p(i)
- * towards the uniform distribution.
+ * See paper.
  *
- * NOTE: ^^^I totally didn't do this^^^
+ * @author travis
  */
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
@@ -732,7 +713,7 @@ public class Reranker {
           if (fullSearch) {
             added++;
             StateSequence ss = new StateSequence(frontier, null, null, adj);
-            boolean onBeam = beam.push(ss, score);
+            boolean onBeam = beam.push(ss, frontierItem.getScore() + score);
             if (onBeam) beamAdds++;
             if (useActionIndex && onBeam) {
               // Important to delay this until you know this will add to the
@@ -820,7 +801,7 @@ public class Reranker {
     if (mvTimer != null) mvTimer.start();
     cachingModelParams = getFullParams(true); // release old cache, not worth it
     boolean mvSolveMax = true;
-    boolean mvDecode = true;
+    boolean mvDecode = false;
     BFunc mvBFunc = LH_MOST_VIOLATED ? BFunc.NONE : new BFunc.MostViolated(y);
     ForwardSearch mvSearch =
         fullSearch(init, mvBFunc, mvSolveMax, mvDecode, cachingModelParams);
@@ -985,106 +966,23 @@ public class Reranker {
       assert oracle.getLoss(gold) == 0;
       assert mostViolated.getLoss(gold) >= 0;
 
-      oracle.getScore();
-      mostViolated.getScore();
-      mostViolated.getLoss(gold);
+      FNParse yHat = mostViolated.getCur().decode();
+      assert yHat != null : "mostViolated returned non-terminal state?";
+      SentenceEval se = new SentenceEval(gold, yHat);
+      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
 
-      // Start from the beginning of the trajectory and find the most violated point
-      this.hinge = 0;
-      StateSequence oraclePtr = oracle.rewind();
-      StateSequence mvPtr = mostViolated.rewind();
-      while (oraclePtr != null && mvPtr != null) {
-        double loss = mvPtr.getLoss(gold);
-        if (LH_MOST_VIOLATED)
-          loss = loss > 0 ? 1 : 0;
-        double h = oraclePtr.getScore() - (mvPtr.getScore() + loss);
-        if (LOG_UPDATE) {
-          LOG.info("[FullUpdate init] oraclePtr.score=" + oraclePtr.getScore()
-              + " mvPtr.score=" + mvPtr.getScore() + " mvPtr.loss=" + loss
-              + " hinge=" + h);
-        }
-        if (h < this.hinge) {
-          this.hinge = h;
-          this.oracle = oraclePtr;
-          this.mostViolated = mvPtr;
-        }
-        oraclePtr = oraclePtr.getNext();
-        mvPtr = mvPtr.getNext();
+      // This is the loss before we put it though a max(0,-)
+      this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
+      assert !Double.isNaN(hinge);
+      assert Double.isFinite(hinge);
+
+      if (LOG_UPDATE) {
+        LOG.info("[FullUpdate init] hinge=" + hinge
+            + " oracle.length=" + oracle.length() + " oracle.score=" + oracle.getScore()
+            + " mv.length=" + mostViolated.length() + " mv.score=" + mostViolated.getScore()
+            + " mv.loss=" + mostViolated.getLoss(gold));
       }
-
-
-      // Oracle does not need to return a full sequence now.
-//      // The oracle is supposed to find the highest/lowest scoring derivation
-//      // of the gold parse (i.e. have loss=0 and be equal to gold).
-//      State os = oracle.getCur();
-//      if (os == null) {
-//        logSolution("[oracle]", oracle);
-//        LOG.debug("null1");
-//      } else {
-//        FNParse osd = os.decode();
-//        if (osd == null) {
-//          logSolution("[oracle]", oracle);
-//          logStateInfo("[oracle]", os);
-//          LOG.debug("null2");
-//        } else {
-//          if (!osd.equals(gold)) {
-//            LOG.info(FNDiff.diffArgs(osd, gold, true));
-//            logSolution("[oracle]", oracle);
-//            logStateInfo("[oracle]", os);
-//            LOG.info("oracle isn't gold?");
-//          } else {
-//            // good!
-//          }
-//        }
-//      }
-
-      // mostViolated need not be decodable any more!
-      // Instead of using SentenceEval, have to rely on StateSequence.getLoss
-//      double loss = mostViolated.getLoss(gold);
-////      // Use the decode of mostViolated as the loss, but...
-////      FNParse yHat = mostViolated.getCur().decode();
-////      assert yHat != null : "mostViolated returned non-terminal state?";
-////      SentenceEval se = new SentenceEval(gold, yHat);
-////      double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();
-////      // ...the loss should math the sum of the deltaLosses
-////      double sumDeltaLoss = mostViolated.getLoss(gold);
-////      if (Math.abs(loss - sumDeltaLoss) > 1e-5) {
-////        logStateSequence(mostViolated, "loss=" + loss);
-////        throw new RuntimeException();
-////      }
-//
-//      // This is the loss before we put it though a max(0,-)
-//      this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
-//      assert !Double.isNaN(hinge);
-//      assert Double.isFinite(hinge);
-//
-//      if (LOG_UPDATE) {
-//        LOG.info("[FullUpdate init] hinge=" + hinge
-//            + " oracle.length=" + oracle.length() + " oracle.score=" + oracle.getScore()
-//            + " mv.length=" + mostViolated.length() + " mv.score=" + mostViolated.getScore()
-//            + " mv.loss=" + mostViolated.getLoss(gold));
-//      }
     }
-
-//    /** Only use for errors */
-//    private void logStateSequence(StateSequence mostViolated, String msg) {
-//      double sumDeltaLoss = mostViolated.getLoss(gold);
-//      LOG.error(msg + " sumDeltaLoss=" + sumDeltaLoss);
-//      StateSequence cur = mostViolated;
-//      while (cur != null) {
-//        System.out.println("after " + cur.getActionSafe() + " loss=" + cur.getLoss(gold));
-//        cur = cur.neighbor();
-//      }
-//      int T = gold.numFrameInstances();
-//      for (int t = 0; t < T; t++) {
-//        FrameInstance fi = gold.getFrameInstance(t);
-//        int K = fi.getFrame().numRoles();
-//        for (int k = 0; k < K; k++) {
-//          Span arg = fi.getArgument(k);
-//          System.out.printf("t=%d k=%d\targ=%s\n", t, k, arg.shortString());
-//        }
-//      }
-//    }
 
     public boolean isViolated() {
       return hinge < 0d;
@@ -1093,7 +991,8 @@ public class Reranker {
     public double violation() {
       if (hinge < 0d) {
         //return -hinge / (oracle.length() + mostViolated.length());
-        return -hinge;
+        //return -hinge;
+        return -hinge / oracle.length();
       } else {
         return 0d;
       }
@@ -1110,10 +1009,11 @@ public class Reranker {
 
       int skipped;
       double v = violation();
-
-      int z = 0;
-      for (StateSequence s = oracle; s != null; s = s.getPrev(), z++);
-      for (StateSequence s = mostViolated; s != null; s = s.getPrev(), z++);
+//
+//      int z = 0;
+//      for (StateSequence s = oracle; s != null; s = s.getPrev(), z++);
+//      for (StateSequence s = mostViolated; s != null; s = s.getPrev(), z++);
+      double z = 1;
 
       skipped = 0;
       final double upOracle = learningRate * v / z;

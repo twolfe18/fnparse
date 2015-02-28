@@ -554,7 +554,7 @@ public class RerankerTrainer {
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.15d;   // Lower numbers mean stop earlier.
       double k = 20;          // Size of history
-      int skipFirst = 1;      // Drop the first value(s) to get the variance est. right.
+      int skipFirst = 2;      // Drop the first value(s) to get the variance est. right.
       DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
       dynamicStopping = conf.addStoppingCondition(
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
@@ -926,7 +926,7 @@ public class RerankerTrainer {
     trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
 
     // Set learning rate based on batch size
-    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 1024 * 1024);
+    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 16 * 1024);
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
@@ -1044,7 +1044,7 @@ public class RerankerTrainer {
           trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
 
         // helps
-        if (config.getBoolean("globalFeatSpanBoundary", true))
+        if (config.getBoolean("globalFeatSpanBoundary", false))
           trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
       }
     }

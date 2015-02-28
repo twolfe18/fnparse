@@ -62,6 +62,8 @@ public class SentenceEval {
   }
 
   public SentenceEval(FNTagging gold, FNTagging hyp, boolean storeDebugInfo) {
+    if (gold == null || hyp == null)
+      throw new IllegalArgumentException();
     if (!gold.getSentence().getId().equals(hyp.getSentence().getId())) {
       String msg = "goldSent=" + gold.getSentence().getId()
           + " hypSent=" + hyp.getSentence().getId();

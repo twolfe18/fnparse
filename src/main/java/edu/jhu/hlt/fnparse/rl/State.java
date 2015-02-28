@@ -258,10 +258,11 @@ public class State {
     int T = numFrameInstance();
     for (int t = 0; t < T; t++) {
       int K = committed[t].length;
+      Span[] args = Arrays.copyOf(committed[t], K);
       for (int k = 0; k < K; k++)
         if (committed[t][k] == null)
-          return null;
-      fis.add(FrameInstance.newFrameInstance(getFrame(t), getTarget(t), committed[t], s));
+          args[k] = Span.nullSpan;
+      fis.add(FrameInstance.newFrameInstance(getFrame(t), getTarget(t), args, s));
     }
     return new FNParse(s, fis);
   }
