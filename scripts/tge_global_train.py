@@ -204,6 +204,41 @@ def ablation2(working_dir, real_test_set=False):
       q.append(c)
   return q
 
+def ablation3(working_dir, real_test_set=False):
+  q = tge.ExplicitQueue()
+  options = ['NumArgs', 'ArgLoc', 'ArgLocSimple', 'ArgOverlap', 'SpanBoundary', 'RoleCooc', 'RoleCoocSimple']
+  options = ['globalFeat' + x for x in options]
+  def use_only(conf, opt=None):
+    for opt2 in options:
+      conf.__dict__[opt2] = False
+    if opt:
+      conf.__dict__[opt] = True
+  n_train = 700
+  for lr_batch_scale in [5120 * math.exp(x) for x in [0, -1, 2]]:
+    def conf():
+      c = Config(working_dir)
+      c.nTrain = n_train
+      c.secsBetweenShowingWeights = 2 * 60
+      c.estimateLearningRateFreq = 0
+      c.lrBatchScale = lr_batch_scale
+      c.trainTimeLimit = 30
+      return c
+
+    # +nil
+    c = conf()
+    use_only(c)
+    q.append(c)
+
+    # +foo
+    for opt in options:
+      if opt == 'ArgLocSimple':
+        continue
+      c = conf()
+      use_only(c, opt)
+      q.append(c)
+
+  return q
+
 def ablation(working_dir, real_test_set=False):
   # nothing, +arg-loc, +num-args, +role-cooc
   # take full from learning_curves run
@@ -352,6 +387,8 @@ if __name__ == '__main__':
 
   if task == 'ablation2':
     run(ablation2(wd, full_test_set), wd, local=local)
+  elif task == 'ablation3':
+    run(ablation3(wd, full_test_set), wd, local=local)
   elif task == 'last_last_minute':
     run(last_last_minute(wd, True), wd, local=local)
   else:

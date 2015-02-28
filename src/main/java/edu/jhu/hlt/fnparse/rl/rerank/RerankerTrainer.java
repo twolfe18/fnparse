@@ -117,7 +117,7 @@ public class RerankerTrainer {
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public double estimateLearningRateFreq = 7;       // Higher means estimate less frequently, time multiple of hammingTrain
+    public double estimateLearningRateFreq = 7;       // Higher means estimate less frequently, time multiple of hammingTrain, <=0 means disabled
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
     public double estimateLearningRateSpread = 8;     // Higher means more spread out
     public int estimateLearningRateSteps = 10;        // How many batche steps to take when evaluating a lr
@@ -128,7 +128,7 @@ public class RerankerTrainer {
     private int maxDev = 50;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
-    public int tuneSteps = 6;
+    public int tuneSteps = 5;
     public boolean tuneOnTrainingData = false;
 
     // Convenient extras
@@ -655,16 +655,20 @@ public class RerankerTrainer {
         }
 
         // See if we should re-estimate the learning rate.
-        double tLrEstRatio = conf.tHammingTrain.totalTimeInSeconds()
-            / conf.tLearningRateEstimation.totalTimeInSeconds();
-        LOG.info("[hammingTrain] train/lrEstimate=" + tLrEstRatio
-            + " threshold=" + conf.estimateLearningRateFreq);
-        if (tLrEstRatio > conf.estimateLearningRateFreq) {
-          LOG.info("[hammingTrain] restimating the learning rate");
-          conf.tLearningRateEstimation.start();
-          LOG.info("[hammingTrain] re-estimating the learning rate");
-          estimateLearningRate(r, train, dev, conf);
-          conf.tLearningRateEstimation.stop();
+        if (conf.estimateLearningRateFreq > 0) {
+          double tLrEstRatio = conf.tHammingTrain.totalTimeInSeconds()
+              / conf.tLearningRateEstimation.totalTimeInSeconds();
+          LOG.info("[hammingTrain] train/lrEstimate=" + tLrEstRatio
+              + " threshold=" + conf.estimateLearningRateFreq);
+          if (tLrEstRatio > conf.estimateLearningRateFreq) {
+            LOG.info("[hammingTrain] restimating the learning rate");
+            conf.tLearningRateEstimation.start();
+            LOG.info("[hammingTrain] re-estimating the learning rate");
+            estimateLearningRate(r, train, dev, conf);
+            conf.tLearningRateEstimation.stop();
+          }
+        } else {
+          LOG.info("[hammingTrain] not restimating learning rate");
         }
 
         iter++;
@@ -926,6 +930,14 @@ public class RerankerTrainer {
     //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
+    trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
+
+    if (config.containsKey("trainTimeLimit")) {
+      double mins = config.getDouble("trainTimeLimit");
+      LOG.info("[main] limiting train to " + mins + " minutes");
+      trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(mins));
+    }
+
     // Show how many roles we need to make predictions for (in train and test)
     for (int i = 0; i < train.size(); i++) {
       State s = State.initialState(train.label(i));
@@ -1009,25 +1021,25 @@ public class RerankerTrainer {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
-        if (config.getBoolean("globalFeatArgLoc", false))
+        if (config.getBoolean("globalFeatArgLoc", true))
           trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
 
         if (config.getBoolean("globalFeatArgLocSimple", false))
           trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatNumArgs", false))
+        if (config.getBoolean("globalFeatNumArgs", true))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
 
         if (config.getBoolean("globalFeatRoleCooc", false))
           trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatRoleCoocSimple", false))
+        if (config.getBoolean("globalFeatRoleCoocSimple", true))
           trainer.addGlobalParams(new GlobalFeature.RoleCoocSimple(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatArgOverlap", false))
+        if (config.getBoolean("globalFeatArgOverlap", true))
           trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
 
-        if (config.getBoolean("globalFeatSpanBoundary", false))
+        if (config.getBoolean("globalFeatSpanBoundary", true))
           trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
       }
     }
