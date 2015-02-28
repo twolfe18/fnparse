@@ -244,35 +244,36 @@ def ablation(working_dir, real_test_set=False):
   # take full from learning_curves run
   q = tge.ExplicitQueue()
 
-  c_local = Config(working_dir)
-  c_local.nTrain = 9999
-  c_local.realTestSet = real_test_set
-  c_local.useGlobalFeatures = False
-  q.append(c_local)
+  for n_train in [200, 800, 9999]:
+    c_local = Config(working_dir)
+    c_local.nTrain = n_train
+    c_local.realTestSet = real_test_set
+    c_local.useGlobalFeatures = False
+    q.append(c_local)
 
-  c_arg_loc = Config(working_dir)
-  c_arg_loc.nTrain = 9999
-  c_arg_loc.realTestSet = real_test_set
-  c_arg_loc.globalFeatArgLoc = True
-  c_arg_loc.globalFeatNumArgs = False
-  c_arg_loc.globalFeatRoleCooc = False
-  q.append(c_arg_loc)
+    c_arg_loc = Config(working_dir)
+    c_arg_loc.nTrain = n_train
+    c_arg_loc.realTestSet = real_test_set
+    c_arg_loc.globalFeatArgLocSimple = True
+    c_arg_loc.globalFeatNumArgs = False
+    c_arg_loc.globalFeatRoleCoocSimple = False
+    q.append(c_arg_loc)
 
-  c_num_args = Config(working_dir)
-  c_num_args.nTrain = 9999
-  c_num_args.realTestSet = real_test_set
-  c_num_args.globalFeatArgLoc = False
-  c_num_args.globalFeatNumArgs = True
-  c_num_args.globalFeatRoleCooc = False
-  q.append(c_num_args)
+    c_num_args = Config(working_dir)
+    c_num_args.nTrain = n_train
+    c_num_args.realTestSet = real_test_set
+    c_num_args.globalFeatArgLocSimple = False
+    c_num_args.globalFeatNumArgs = True
+    c_num_args.globalFeatRoleCoocSimple = False
+    q.append(c_num_args)
 
-  c_role_cooc = Config(working_dir)
-  c_role_cooc.nTrain = 9999
-  c_role_cooc.realTestSet = real_test_set
-  c_role_cooc.globalFeatArgLoc = False
-  c_role_cooc.globalFeatNumArgs = False
-  c_role_cooc.globalFeatRoleCooc = True
-  q.append(c_role_cooc)
+    c_role_cooc = Config(working_dir)
+    c_role_cooc.nTrain = n_train
+    c_role_cooc.realTestSet = real_test_set
+    c_role_cooc.globalFeatArgLocSimple = False
+    c_role_cooc.globalFeatNumArgs = False
+    c_role_cooc.globalFeatRoleCoocSimple = True
+    q.append(c_role_cooc)
 
   return q
 
@@ -385,7 +386,9 @@ if __name__ == '__main__':
   #mq.add_queue('ablation', ablation(wd, True))
   #run(mq, wd, local=False)
 
-  if task == 'ablation2':
+  if task == 'ablation':
+    run(ablation(wd, full_test_set), wd, local=local)
+  elif task == 'ablation2':
     run(ablation2(wd, full_test_set), wd, local=local)
   elif task == 'ablation3':
     run(ablation3(wd, full_test_set), wd, local=local)
