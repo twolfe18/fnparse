@@ -191,14 +191,16 @@ def ablation2(working_dir, real_test_set=False):
       conf.__dict__[opt2] = False
     if opt:
       conf.__dict__[opt] = True
-  for n_train in [700, 9999]:
+  for n_train in [9999, 700]:
     # +nil
     c = Config(working_dir)
+    c.realTestSet = real_test_set
     c.nTrain = n_train
     use_only(c)
     q.append(c)
     for opt in options:
       c = Config(working_dir)
+      c.realTestSet = real_test_set
       c.nTrain = n_train
       use_only(c, opt)
       q.append(c)
@@ -393,7 +395,7 @@ if __name__ == '__main__':
   elif task == 'ablation3':
     run(ablation3(wd, full_test_set), wd, local=local)
   elif task == 'last_last_minute':
-    run(last_last_minute(wd, True), wd, local=local)
+    run(last_last_minute(wd, full_test_set), wd, local=local)
   else:
     print 'unknown task:', task
 
