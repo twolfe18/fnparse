@@ -122,11 +122,11 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class ArgLocSimple extends FeatureParams implements Params.Stateful {
     public static boolean SHOW_FEATURES = false;
-    public static boolean ALLOW_REL_ON_OTHER_TARGETS = true;
+    public static boolean ALLOW_REL_ON_OTHER_TARGETS = false;
     public static final int BUCKETS = 1<<18;
     public ArgLocSimple(double l2Penalty) {
-      //super(l2Penalty);   // Use Alphabet
-      super(l2Penalty, BUCKETS);  // Use Hashing
+      super(l2Penalty);   // Use Alphabet
+      //super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {

@@ -1028,6 +1028,7 @@ public class RerankerTrainer {
         if (config.getBoolean("globalFeatArgLocSimple", false))
           trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
 
+        // helps
         if (config.getBoolean("globalFeatNumArgs", false))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
 
