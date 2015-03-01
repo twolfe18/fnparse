@@ -5,46 +5,68 @@
 
 # Returns true if the history up to this point looks like you should stop
 # alpha is the required confidence for lowering the 
-stop = function(y, alpha, k=60, inf.window=T, plot.t=F) {
+stop = function(y, alpha, k=60, inf.window=F, plot.t=F) {
   n = length(y)
   x = 1:n
   inf.window.decay = 10 * k
   t.star = qt(1 - alpha, k - 1)  # significant @ alpha if t > t.star
 
+  debug = T
   if (inf.window) {
     rel = 1:n
     w = exp(-(n - x)**2 / inf.window.decay)
     m = lm(y ~ x, subset=rel, weights=w)
+    if (debug)
+      print(cbind(y, w))
   } else {
     rel = (n-k):n
     w = ifelse(x >= (n-k), 1, 0)
     m = lm(y ~ x, subset=rel)
+    if (debug)
+      print(y[rel])
   }
 
-  p = predict(m, data.frame(x=c(n+1)), se.fit=T)
+  new.way = T
+  if (new.way) {
+    a = anova.lm(m)
+    p = a["Pr(>F)"][1,1]
+    if (debug)
+      print(paste("p", p, "alpha", alpha))
+    return(p > alpha)
+  } else {
+    p = predict(m, data.frame(x=c(n+1)), se.fit=T)
 
-  # Compare this prediction to the noise we've seen.
-  # We should be confident that our next step will be
-  # lower than our previous samples *in expectation*.
-  # var = E[x^2] - E[x]^2
-  #     = E[x^2 - mu^2]
-  mu = weighted.mean(y, w)
-  se = weighted.mean(y**2 - mu**2, w)
+    # Compare this prediction to the noise we've seen.
+    # We should be confident that our next step will be
+    # lower than our previous samples *in expectation*.
+    # var = E[x^2] - E[x]^2
+    #     = E[x^2 - mu^2]
+    mu = weighted.mean(y, w)
+    se = weighted.mean(y**2 - mu**2, w)
 
-  # NOTE: The reason we compute the mean/variance of the
-  # the current window is that we need something to compare
-  # the prediction to. There is no "zero" that we can run
-  # a significance test against (i.e. H_0 is E[next] == 0),
-  # we need it to be measured against the current estimate
-  # of recent loss.
+    # NOTE: The reason we compute the mean/variance of the
+    # the current window is that we need something to compare
+    # the prediction to. There is no "zero" that we can run
+    # a significance test against (i.e. H_0 is E[next] == 0),
+    # we need it to be measured against the current estimate
+    # of recent loss.
 
-  # We want this to be positive if we should keep going
-  diff = mu - p$fit
-  diff.se = sqrt(p$se.fit + se)
-  t = diff / diff.se
-  if (plot.t)
-    points(c(length(y)), t, col="green")
-  return((t < t.star))
+    # We want this to be positive if we should keep going
+    diff = mu - p$fit
+    diff.se = sqrt(p$se.fit + se)  # not at all right...
+    #diff.se = sqrt(p$se.fit * p$se.fit + se * se)  # technically correct
+    #diff.se = p$se.fit # closer to what you want
+    t = diff / diff.se
+    if (plot.t)
+      points(c(length(y)), t, col="green")
+    if (debug) {
+      print(m)
+      print(p)
+      print(paste("diff", diff, "diff.se", diff.se))
+      print(paste("t", t, "t.star", t.star))
+    }
+    return((t < t.star))
+  }
 }
 
 # Plots and executes stopping strategy
