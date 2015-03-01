@@ -103,8 +103,8 @@ def beam_size(working_dir, real_test_set=False):
                 continue
               if oracleMode not ['MIN', 'RAND_MIN']:
                 continue
-              if train_beam_size != test_beam_size:
-                continue
+              #if train_beam_size != test_beam_size:
+              #  continue
 
             cg = Config(working_dir)
             cg.nTrain = n
