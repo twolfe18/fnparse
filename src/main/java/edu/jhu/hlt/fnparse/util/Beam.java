@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.util;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.SortedSet;
 import java.util.TreeSet;
@@ -31,6 +32,21 @@ public interface Beam<T> extends Iterable<T> {
 
   public boolean push(Beam.Item<T> item);
 
+  public Iterator<Item<T>> itemIterator();
+
+
+
+  default public String show() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("<Beam " + size() + "/" + width());
+    Iterator<Item<T>> it = itemIterator();
+    while (it.hasNext()) {
+      Item<T> i = it.next();
+      sb.append(String.format("\n\t%.2f:%s", i.score, i.item));
+    }
+    sb.append(">");
+    return sb.toString();
+  }
 
   public static <T> Beam<T> getMostEfficientImpl(int beamSize) {
     if (beamSize == 1)
@@ -49,6 +65,10 @@ public interface Beam<T> extends Iterable<T> {
     private int size = 0;
     @Override
     public Iterator<T> iterator() {
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public Iterator<edu.jhu.hlt.fnparse.util.Beam.Item<T>> itemIterator() {
       throw new RuntimeException("implement me");
     }
     @Override
@@ -136,6 +156,10 @@ public interface Beam<T> extends Iterable<T> {
     public boolean push(Item<T> item) {
       return push(item.item, item.score);
     }
+    @Override
+    public String toString() {
+      return show();
+    }
   }
 
   /**
@@ -146,7 +170,15 @@ public interface Beam<T> extends Iterable<T> {
     private double score;
     @Override
     public Iterator<T> iterator() {
+      if (size() == 0)
+        return Collections.emptyIterator();
       return Arrays.asList(item).iterator();
+    }
+    @Override
+    public Iterator<edu.jhu.hlt.fnparse.util.Beam.Item<T>> itemIterator() {
+      if (size() == 0)
+        return Collections.emptyIterator();
+      return Arrays.asList(new Item<>(item, score)).iterator();
     }
     @Override
     public int size() {
@@ -197,6 +229,10 @@ public interface Beam<T> extends Iterable<T> {
     @Override
     public boolean push(Beam.Item<T> item) {
       return push(item.item, item.score);
+    }
+    @Override
+    public String toString() {
+      return show();
     }
   }
 
@@ -291,6 +327,11 @@ public interface Beam<T> extends Iterable<T> {
     }
 
     @Override
+    public Iterator<Item<T>> itemIterator() {
+      return beam.iterator();
+    }
+
+    @Override
     public int size() {
       return beam.size();
     }
@@ -312,6 +353,11 @@ public interface Beam<T> extends Iterable<T> {
       if (beam.size() == 0)
         throw new RuntimeException();
       return beam.first();
+    }
+
+    @Override
+    public String toString() {
+      return show();
     }
   }
 }

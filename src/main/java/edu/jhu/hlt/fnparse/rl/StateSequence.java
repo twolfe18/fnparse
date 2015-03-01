@@ -141,6 +141,33 @@ public class StateSequence {
     return sb.toString();
   }
 
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("<SS");
+    String sep = " + ";
+    FNTagging frames = getCur().getFrames();
+    for (StateSequence cur = this; cur != null; cur = cur.neighbor()) {
+      sb.append(sep);
+      String s, a;
+      if (cur.action == null) {
+        s = "score=0.0";
+        a = "action=NONE";
+      } else {
+        s = String.format("score=%.2f", cur.getScore());
+        a = "action=" + cur.getAction().show(frames);
+      }
+      if (frames instanceof FNParse) {
+        String loss = String.format("loss=%.2f", cur.getLoss((FNParse) frames));
+        sb.append(loss + " " + s + " " + a);
+      } else {
+        sb.append(s + " " + a);
+      }
+    }
+    sb.append(">");
+    return sb.toString();
+  }
+
   /** You can only call this from a node which has a pointer out of it */
   public int length() {
     StateSequence l = this;
