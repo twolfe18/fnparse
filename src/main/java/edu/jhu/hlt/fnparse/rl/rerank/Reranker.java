@@ -42,6 +42,8 @@ import edu.jhu.hlt.fnparse.util.Timer;
 public class Reranker {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
 
+  public static boolean BUG_FIX = true;
+
   // If true, show the oracle and most violated paths for getFullUpdate
   public static boolean LOG_UPDATE = false;
 
@@ -666,7 +668,9 @@ public class Reranker {
         // We are going to score Actions leaving that StateSequence.getCur (s).
         Beam.Item<StateSequence> frontierItem = beam.popItem();
         frontier = frontierItem.getItem();
-        if (!decode) maxBeam.push(frontierItem);
+
+        if (!BUG_FIX && !decode) maxBeam.push(frontierItem);
+
         State s = frontier.getCur();
         //SpanIndex<Action> ai = frontier.getActionIndex();
         CommitIndex ai = frontier.getActionIndex();
@@ -727,6 +731,12 @@ public class Reranker {
           }
         }     // end loop over next actions
 
+        if (BUG_FIX) {
+          boolean finalState = actionsTried == 0;
+          if ((decode && finalState) || !decode)
+            maxBeam.push(frontierItem);
+        }
+
         if (LOG_FORWARD_SEARCH) {
           LOG.info(desc + " scored " + added + "/" + actionsTried
               + " actions and " + beamAdds + " were put on the beam");
@@ -741,10 +751,14 @@ public class Reranker {
       // When we've done exploring items on the beam, take the biggest violator
       // we found on maxBeam.
       assert fullSearch;
-      if (decode) {
-        this.path = frontier;
-      } else {
+      if (BUG_FIX) {
         this.path = maxBeam.pop();
+      } else {
+        if (decode) {
+          this.path = frontier;
+        } else {
+          this.path = maxBeam.pop();
+        }
       }
       this.hasRun = true;
       logSolution(desc, this.path);
