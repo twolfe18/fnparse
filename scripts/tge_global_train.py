@@ -82,9 +82,13 @@ def beam_size(working_dir, real_test_set=False):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
+
+  # If true, only run a subset of the full experiment
+  hurry_up = True
+
   q = tge.ExplicitQueue()
   #for n in [100, 400, 1000, 2000, 9999]:
-  for n in [100, 1000, 9999]:
+  for n in [400, 1000, 9999]:
     for train_beam_size in [1, 4, 16]:
       for test_beam_size in [1, 4, 16]:
         for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
@@ -93,6 +97,15 @@ def beam_size(working_dir, real_test_set=False):
               # Choose a canonical oralceMode for forceLeftRightInference=True,
               # because they're all equivalent in that case.
               continue
+
+            if hurry_up:
+              if n == 1000:
+                continue
+              if oracleMode not ['MIN', 'RAND_MIN']:
+                continue
+              if train_beam_size != test_beam_size:
+                continue
+
             cg = Config(working_dir)
             cg.nTrain = n
             cg.trainBeamSize = train_beam_size
@@ -291,6 +304,8 @@ if __name__ == '__main__':
     #mq.add_queue('ablation2', ablation2(wd, full_test_set))
     mq.add_queue('learning_curves', learning_curves(wd, full_test_set))
     run(mq, wd, local=local)
+  elif task == 'beam_size':
+    run(beam_size(wd, full_test_set), wd, local=local)
   elif task == 'ablation':
     run(ablation(wd, full_test_set), wd, local=local)
   elif task == 'ablation2':
