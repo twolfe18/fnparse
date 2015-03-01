@@ -82,7 +82,6 @@ def beam_size(working_dir, real_test_set=False):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
-
   q = tge.ExplicitQueue()
   #for n in [100, 400, 1000, 2000, 9999]:
   for n in [100, 1000, 9999]:
@@ -114,21 +113,16 @@ def learning_curves(working_dir, real_test_set=False):
   ''' Returns a queue '''
   if not os.path.isdir(working_dir):
     raise Exception('not a dir: ' + working_dir)
-
-  # Give local and global the same bandwidth
-  #q = tge.MultiQueue()
+  #q = tge.MultiQueue() # Give local and global the same bandwidth
   #q_local = q.add_queue('local', tge.ExplicitQueue())
   #q_global = q.add_queue('global', tge.ExplicitQueue())
-
-  # First come first serve
-  q = tge.ExplicitQueue()
+  q = tge.ExplicitQueue() # First come first serve
   q_local = q
   q_global = q
-
   for cost_fn in [1, 2]:    # 2 usually wins, 1 can win at large N, never saw 4 win
     for batch_size in [1, 4]:
-      for n in [100, 400, 1000, 2000, 9999]:
-        for l2p in [1e-7, 1e-8, 1e-9, 1e-10]:
+      for l2p in [1e-8, 1e-7, 1e-9, 1e-10]:
+        for n in [9999, 100, 400, 1000, 2000]:
           for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
             for lh_most_violated in [False, True]:
               if lh_most_violated and oracleMode != 'MAX':
@@ -136,35 +130,34 @@ def learning_curves(working_dir, real_test_set=False):
                 # because they're all equivalent in that case.
                 continue
               cl = Config(working_dir)
+              cl.nTrain = n
               cl.lhMostViolated = lh_most_violated
               cl.realTestSet = real_test_set
               cl.costFN = cost_fn
               cl.oracleMode = oracleMode
               cl.l2Penalty = l2p
-              cl.performPretrain = False
               cl.trainBatchSize = batch_size
-              cl.nTrain = n
               cl.useGlobalFeatures = False
               q_local.add(cl)
-              for l2pg in [l2p * 10, l2p * 100, l2p * 1000]:
-              #for l2pg in [1e-6, 1e-7, 1e-8, 1e-9]:
+              for l2pg in [l2p * 10, l2p, l2p * 100]:
                 cg = Config(working_dir)
+                cg.nTrain = n
                 cg.lhMostViolated = lh_most_violated
+                cg.oracleMode = oracleMode
                 cg.realTestSet = real_test_set
                 cg.costFN = cost_fn
-                cg.oracleMode = oracleMode
-                cg.globalFeatArgLocSimple = True
-                cg.globalFeatNumArgs = True
-                cg.globalFeatRoleCoocSimple = True
-                cg.globalFeatArgOverlap = True
-                cg.globalFeatSpanBoundary = True
                 cg.l2Penalty = l2p
                 cg.globalL2Penalty = l2pg
                 cg.trainBatchSize = batch_size
-                cg.nTrain = n
                 cg.useGlobalFeatures = True
+                cg.globalFeatNumArgs = True
+                cg.globalFeatArgLoc = False
+                cg.globalFeatArgLocSimple = True
+                cg.globalFeatArgOverlap = False
+                cg.globalFeatSpanBoundary = False
+                cg.globalFeatRoleCooc = True
+                cg.globalFeatRoleCoocSimple = False
                 q_global.add(cg)
-
   print 'len(q_local) =', len(q_local)
   print 'len(q_global) =', len(q_global)
   return q
@@ -294,8 +287,9 @@ if __name__ == '__main__':
 
   if task == 'the-new-one':
     mq = tge.MultiQueue()
-    mq.add_queue('beam_size', beam_size(wd, full_test_set))
-    mq.add_queue('ablation2', ablation2(wd, full_test_set))
+    #mq.add_queue('beam_size', beam_size(wd, full_test_set))
+    #mq.add_queue('ablation2', ablation2(wd, full_test_set))
+    mq.add_queue('learning_curves', learning_curves(wd, full_test_set))
     run(mq, wd, local=local)
   elif task == 'ablation':
     run(ablation(wd, full_test_set), wd, local=local)
