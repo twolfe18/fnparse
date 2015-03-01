@@ -1021,6 +1021,7 @@ public class RerankerTrainer {
         double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
         LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
+        // helps
         if (config.getBoolean("globalFeatArgLoc", false))
           trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
 
@@ -1032,10 +1033,11 @@ public class RerankerTrainer {
         if (config.getBoolean("globalFeatNumArgs", false))
           trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
 
+        // helps
         if (config.getBoolean("globalFeatRoleCooc", false))
           trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
 
-        // better than non-simple version
+        // worse than non-simple version
         if (config.getBoolean("globalFeatRoleCoocSimple", false))
           trainer.addGlobalParams(new GlobalFeature.RoleCoocSimple(globalL2Penalty));
 

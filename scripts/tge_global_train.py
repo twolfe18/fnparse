@@ -97,19 +97,15 @@ def beam_size(working_dir, real_test_set=False):
           cg.beamSize = beam_size
           cg.lhMostViolated = lh_most_violated
           cg.realTestSet = real_test_set
-          cg.costFN = cost_fn
           cg.oracleMode = oracleMode
+          cg.useGlobalFeatures = True
           cg.globalFeatArgLocSimple = True
           cg.globalFeatNumArgs = True
           cg.globalFeatRoleCoocSimple = True
           cg.globalFeatArgOverlap = True
           cg.globalFeatSpanBoundary = True
-          cg.l2Penalty = l2p
-          cg.globalL2Penalty = l2pg
-          cg.trainBatchSize = batch_size
           cg.nTrain = n
-          cg.useGlobalFeatures = True
-          q_global.add(cg)
+          q.add(cg)
   
   return q
 
@@ -297,7 +293,7 @@ if __name__ == '__main__':
 
   if task == 'the-new-one':
     mq = tge.MultiQueue()
-    mq.add_queue('beam_search', beam_serach(wd, full_test_set))
+    mq.add_queue('beam_size', beam_size(wd, full_test_set))
     mq.add_queue('ablation2', ablation2(wd, full_test_set))
     run(mq, wd, local=local)
   elif task == 'ablation':
