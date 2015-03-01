@@ -86,31 +86,33 @@ def beam_size(working_dir, real_test_set=False):
   q = tge.ExplicitQueue()
   #for n in [100, 400, 1000, 2000, 9999]:
   for n in [100, 1000, 9999]:
-    for beam_size in [1, 4, 16]:
-      for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
-        for lh_most_violated in [False, True]:
-          if lh_most_violated and oracleMode != 'MAX':
-            # Choose a canonical oralceMode for forceLeftRightInference=True,
-            # because they're all equivalent in that case.
-            continue
-          cg = Config(working_dir)
-          cg.beamSize = beam_size
-          cg.lhMostViolated = lh_most_violated
-          cg.realTestSet = real_test_set
-          cg.costFN = cost_fn
-          cg.oracleMode = oracleMode
-          cg.globalFeatArgLocSimple = True
-          cg.globalFeatNumArgs = True
-          cg.globalFeatRoleCoocSimple = True
-          cg.globalFeatArgOverlap = True
-          cg.globalFeatSpanBoundary = True
-          cg.l2Penalty = l2p
-          cg.globalL2Penalty = l2pg
-          cg.trainBatchSize = batch_size
-          cg.nTrain = n
-          cg.useGlobalFeatures = True
-          q_global.add(cg)
-  
+    for train_beam_size in [1, 4, 16]:
+      for test_beam_size in [1, 4, 16]:
+        for oracleMode in ['RAND_MAX', 'RAND_MIN', 'MAX', 'MIN']:
+          for lh_most_violated in [False, True]:
+            if lh_most_violated and oracleMode != 'MAX':
+              # Choose a canonical oralceMode for forceLeftRightInference=True,
+              # because they're all equivalent in that case.
+              continue
+            cg = Config(working_dir)
+            cg.trainBeamSize = train_beam_size
+            cg.testBeamSize = test_beam_size
+            cg.lhMostViolated = lh_most_violated
+            cg.realTestSet = real_test_set
+            cg.costFN = cost_fn
+            cg.oracleMode = oracleMode
+            cg.globalFeatArgLocSimple = True
+            cg.globalFeatNumArgs = True
+            cg.globalFeatRoleCoocSimple = True
+            cg.globalFeatArgOverlap = True
+            cg.globalFeatSpanBoundary = True
+            cg.l2Penalty = l2p
+            cg.globalL2Penalty = l2pg
+            cg.trainBatchSize = batch_size
+            cg.nTrain = n
+            cg.useGlobalFeatures = True
+            q_global.add(cg)
+
   return q
 
 def learning_curves(working_dir, real_test_set=False):

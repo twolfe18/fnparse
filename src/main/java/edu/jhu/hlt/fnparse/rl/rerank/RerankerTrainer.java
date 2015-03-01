@@ -909,7 +909,15 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
-    trainer.trainConf.beamSize = config.getInt("beamSize", 1);
+    final int trainBeamSize, testBeamSize;
+    if (config.containsKey("beamSize")) {
+      LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
+      trainBeamSize = testBeamSize = config.getInt("beamSize");
+    } else {
+      trainBeamSize = config.getInt("trainBeamSize", 1);
+      testBeamSize = config.getInt("testBeamSize", 1);
+    }
+    trainer.trainConf.beamSize = trainBeamSize;
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
 
@@ -1074,6 +1082,7 @@ public class RerankerTrainer {
     LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
     // Evaluate
+    model.setBeamWidth(testBeamSize); // NOTE: This may work poorly because we've chosen a recallBias already
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File semDir = new File(workingDir, "semaforEval");

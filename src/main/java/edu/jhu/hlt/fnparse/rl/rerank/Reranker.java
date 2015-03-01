@@ -129,6 +129,7 @@ public class Reranker {
   }
 
   public void setBeamWidth(int w) {
+    LOG.info("[setBeamWidth] setting beamWidth=" + w);
     if (w < 1) throw new IllegalArgumentException();
     beamWidth = w;
   }
