@@ -11,7 +11,7 @@ stop = function(y, alpha, k=60, inf.window=F, plot.t=F) {
   inf.window.decay = 10 * k
   t.star = qt(1 - alpha, k - 1)  # significant @ alpha if t > t.star
 
-  debug = T
+  debug = F
   if (inf.window) {
     rel = 1:n
     w = exp(-(n - x)**2 / inf.window.decay)
