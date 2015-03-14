@@ -36,6 +36,13 @@ public class ModelViewer {
     }
   }
 
+  public static void showBiggestCounts(List<FeatureWeight> sortedCounts, int k, String desc, Logger log) {
+    int n = Math.min(k, sortedCounts.size());
+    log.info(desc + " " + k + " most biggest counts:");
+    for (int i = 0; i < n; i++)
+      log.info(desc + " " + sortedCounts.get(sortedCounts.size() - (i + 1)));
+  }
+
   public static void showBiggestWeights(List<FeatureWeight> sortedWeights, int k, String desc, Logger log) {
     int n = Math.min(k, sortedWeights.size());
     log.info(desc + " " + k + " most negative weights:");
@@ -50,6 +57,14 @@ public class ModelViewer {
     FgModel model = new FgModel(weights.length);
     model.updateModelFromDoubles(weights);
     return getSortedWeights(model, names);
+  }
+
+  public static List<FeatureWeight> getSortedWeights(double[] weights, List<String> names) {
+    List<FeatureWeight> w = new ArrayList<>();
+    for (int i = 0; i < weights.length; i++)
+      w.add(new FeatureWeight(names.get(i), weights[i]));
+    Collections.sort(w);
+    return w;
   }
 
   public static List<FeatureWeight> getSortedWeights(FgModel weights, Alphabet<String> names) {

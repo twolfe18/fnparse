@@ -39,6 +39,10 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 public class FNAnnotator implements DummyAnnotator {
   public static final Logger LOG = Logger.getLogger(FNAnnotator.class);
 
+  // Don't change this! You can depend on this project to robustly check if
+  // annotations came from this tool using this string.
+  public static final String FN_ANNOTATOR_TOOL_NAME = "JHU-fnparse";
+
   // Location of the model to use (should be span-regular)
   public File bestRegularModelDir = new File(
       "/home/hltcoe/twolfe/fnparse/saved-models/agiga/best-regular-model/trainDevModel");
@@ -113,8 +117,9 @@ public class FNAnnotator implements DummyAnnotator {
     LOG.info("conversion complete, calling parser");
     List<FNParse> parses = parser.parse(sentences, null);
 
-    // Convert each FNParses into a SituationSet and SituationMentionSet
-    addSituations(addTo, cSentences, parses);
+    // Convert each FNParses into a SituationMentionSet
+    addSituations(addTo, cSentences, parses, kBest,
+        includeSituationMentionText, uuidFactory);
 
     LOG.info("done annotating " + c.getId());
     return addTo;
@@ -130,16 +135,19 @@ public class FNAnnotator implements DummyAnnotator {
     return sb.toString();
   }
 
-  public void addSituations(
+  public static void addSituations(
       Communication c,
       List<ConcreteSentenceAdapter> sentences,
-      List<FNParse> parses) {
+      List<FNParse> parses,
+      int kBest,
+      boolean includeSituationMentionText,
+      ConcreteUUIDFactory uuidFactory) {
     if (sentences.size() != parses.size())
       throw new IllegalArgumentException();
     SituationMentionSet sms = new SituationMentionSet();
     sms.setUuid(uuidFactory.getConcreteUUID());
     AnnotationMetadata meta = new AnnotationMetadata();
-    meta.setTool("JHU-fnparse");
+    meta.setTool(FN_ANNOTATOR_TOOL_NAME);
     meta.setTimestamp(System.currentTimeMillis() / 1000);
     meta.setKBest(kBest);
     sms.setMetadata(meta);

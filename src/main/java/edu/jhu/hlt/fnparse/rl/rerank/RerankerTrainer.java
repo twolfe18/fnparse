@@ -45,7 +45,6 @@ import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
-import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -59,6 +58,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.FNDiff;
+import edu.jhu.hlt.fnparse.util.FileUtil;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.MultiTimer;
@@ -95,7 +95,9 @@ public class RerankerTrainer {
 
     // General parameters
     public int threads = 1;
-    public int beamSize = 1;
+    //public int beamSize = 1;
+    public int trainBeamSize = 1;
+    public int testBeamSize = 1;
     public int batchSize = 1;  // If 0, compute an exact gradient (batchSize == train.size)
     public boolean batchWithReplacement = false;
 
@@ -200,7 +202,7 @@ public class RerankerTrainer {
     public String toString() {
       return "(Config " + name
           + " threads=" + threads
-          + " beam=" + beamSize
+          + " beam=" + trainBeamSize + "/" + testBeamSize
           + " batch=" + batchSize
           + " stopping=" + stopping
           + " learningRate=" + learningRate
@@ -239,7 +241,8 @@ public class RerankerTrainer {
     if (!pwd.isDirectory())
       pwd.mkdir();
     this.pretrainConf = new Config("pretrain", pwd, rand);
-    this.pretrainConf.beamSize = 1;
+    this.pretrainConf.trainBeamSize = 1;
+    this.pretrainConf.testBeamSize = 1;
     File twd = new File(workingDir, "wd-train");
     if (!twd.isDirectory())
       twd.mkdir();
@@ -376,17 +379,23 @@ public class RerankerTrainer {
     return best.get2();
   }
 
+  public Reranker instantiate() {
+    return new Reranker(
+        //Params.Stateful.NONE,
+        statefulParams,
+        statelessParams,
+        tauParams,
+        pretrainConf.trainBeamSize,
+        pretrainConf.testBeamSize,
+        rand);
+  }
+
   /** Trains and tunes a full model */
   public Reranker train1(ItemProvider ip) {
     if (statefulParams == Stateful.NONE && statelessParams == Stateless.NONE)
       throw new IllegalStateException("you need to set the params");
 
-    Reranker m = new Reranker(
-        Params.Stateful.NONE,
-        statelessParams,
-        tauParams,
-        pretrainConf.beamSize,
-        rand);
+    Reranker m = instantiate();
 
     if (performPretrain) {
       LOG.warn("[train1] you probably don't want pretrain/local train!");
@@ -397,13 +406,8 @@ public class RerankerTrainer {
     }
 
     LOG.info("[train1] global train");
-//    if (statefulParams != Params.Stateful.NONE) {
-      m.setStatefulParams(statefulParams);
-      m.setBeamWidth(trainConf.beamSize);
-      train2(m, ip, trainConf);
-//    } else {
-//      LOG.info("[train1] skipping global train because there are no stateful params");
-//    }
+    m.setStatefulParams(statefulParams);
+    train2(m, ip, trainConf);
 
     LOG.info("[train1] done, times:\n" + timer);
     return m;
@@ -497,6 +501,9 @@ public class RerankerTrainer {
     int queries = conf.estimateLearningRateGranularity;
     double spread = conf.estimateLearningRateSpread;
     LearningRateEstimator.estimateLearningRate(model, queries, spread);
+
+    // Clean up
+    FileUtil.rm_rf(paramDir);
   }
 
   private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
@@ -824,6 +831,156 @@ public class RerankerTrainer {
     }
   }
 
+  public static RerankerTrainer configure(ExperimentProperties config) {
+    File workingDir = config.getOrMakeDir("workingDir");
+    boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
+    boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
+    boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
+    boolean useFeatureHashing = config.getBoolean("useFeatureHashing", true);
+
+    Random rand = new Random(9001);
+    RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
+    trainer.reporters = ResultReporter.getReporters(config);
+
+    if (config.containsKey("beamSize")) {
+      LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
+      trainer.trainConf.trainBeamSize =
+          trainer.trainConf.testBeamSize =
+          config.getInt("beamSize");
+    } else {
+      trainer.trainConf.trainBeamSize = config.getInt("trainBeamSize", 1);
+      trainer.trainConf.testBeamSize = config.getInt("testBeamSize", 1);
+    }
+
+    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
+
+    trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
+
+    trainer.trainConf.oracleMode = OracleMode.valueOf(
+        config.getString("oracleMode", "RAND_MIN").toUpperCase());
+
+    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
+    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 1);
+
+    trainer.performPretrain = config.getBoolean("performPretrain", false);
+
+    trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
+
+    // Set learning rate based on batch size
+    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 16 * 1024);
+    //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
+    trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
+
+    trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
+
+    if (config.containsKey("trainTimeLimit")) {
+      double mins = config.getDouble("trainTimeLimit");
+      LOG.info("[main] limiting train to " + mins + " minutes");
+      trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(mins));
+    }
+
+    final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
+    final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
+    LOG.info("[main] using l2Penalty=" + l2Penalty);
+
+    // What features to use (if features are being used)
+    String fs = config.getBoolean("simpleFeatures", false)
+        ? featureTemplates : featureTemplatesSearch;
+
+    // This is the path that will be executed when not debugging
+    if (useEmbeddingParams) {
+      LOG.info("[main] using embedding params");
+      int embeddingSize = 2;
+      EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
+      ep.learnTheta(true);
+      if (useEmbeddingParamsDebug)
+        ep.debug(new TemplatedFeatureParams("embD", featureTemplates, hashBuckets), l2Penalty);
+      trainer.statelessParams = ep;
+    } else {
+      LOG.info("[main] using features=" + fs);
+      if (useFeatureHashing) {
+        LOG.info("[main] using TemplatedFeatureParams with feature hashing");
+        trainer.statelessParams =
+            new TemplatedFeatureParams("statelessA", fs, l2Penalty, hashBuckets);
+      } else {
+        LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
+        trainer.statelessParams =
+            new TemplatedFeatureParams("statelessH", fs, l2Penalty);
+      }
+    }
+
+    if (config.getBoolean("featCoversFrames", true))
+      trainer.addStatelessParams(new GlobalFeature.CoversFrames(l2Penalty));
+
+
+    // Setup tau/pruning parameters
+    if (config.getBoolean("useDynamicTau", true)) {
+      // Old way: very simple features
+      //      double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
+      //      double tauLearningRate = config.getDouble("taulLearningRate", Math.sqrt(trainer.trainConf.batchSize) / 10d);
+      //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
+      // Older way: very rich features.
+      if (useFeatureHashing) {
+        LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
+        trainer.tauParams =
+            new TemplatedFeatureParams("tauA", fs, l2Penalty, hashBuckets);
+      } else {
+        LOG.info("[main] using TemplatedFeatureParams with an Alphabet for tau");
+        trainer.tauParams =
+            new TemplatedFeatureParams("tauH", fs, l2Penalty);
+      }
+    } else {
+      LOG.warn("[main] you probably don't want to use constante params for tau!");
+      trainer.tauParams = Params.PruneThreshold.Const.ZERO;
+    }
+
+    if (useGlobalFeatures) {
+      double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
+      LOG.info("[main] using global features with l2p=" + globalL2Penalty);
+
+      // helps
+      if (config.getBoolean("globalFeatArgLoc", false))
+        trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
+
+      // slow, but better than non-simple version
+      if (config.getBoolean("globalFeatArgLocSimple", false))
+        trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
+
+      // helps
+      if (config.getBoolean("globalFeatNumArgs", false))
+        trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
+
+      // helps
+      if (config.getBoolean("globalFeatRoleCooc", false))
+        trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
+
+      // worse than non-simple version
+      if (config.getBoolean("globalFeatRoleCoocSimple", false))
+        trainer.addGlobalParams(new GlobalFeature.RoleCoocSimple(globalL2Penalty));
+
+      // helps
+      if (config.getBoolean("globalFeatArgOverlap", false))
+        trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
+
+      // helps
+      if (config.getBoolean("globalFeatSpanBoundary", false))
+        trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
+    }
+
+    if (config.getBoolean("lhMostViolated", false)) {
+      LOG.info("[main] using L.H.'s notion of most violated, which forces left-right inference");
+      // Don't need to set these because oracle.bFunc should only return a finite
+      // value for one action (these modes are all equivalent then).
+//      trainer.trainConf.oracleMode = OracleMode.MAX;
+//      trainer.pretrainConf.oracleMode = OracleMode.MAX;
+      ActionType.COMMIT.forceLeftRightInference();
+      ActionType.PRUNE.forceLeftRightInference();
+      Reranker.LH_MOST_VIOLATED = true;
+    }
+
+    return trainer;
+  }
+  
   /**
    * First arg must be the job name (for tie-ins with tge) and the remaining are
    * key-value pairs.
@@ -833,21 +990,15 @@ public class RerankerTrainer {
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
+
     File workingDir = config.getOrMakeDir("workingDir");
-    boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
-    boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
-    boolean useEmbeddingParamsDebug = config.getBoolean("useEmbeddingParamsDebug", false);
-    boolean useFeatureHashing = config.getBoolean("useFeatureHashing", true);
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
-    boolean useCheatingParams = config.getBoolean("useCheatingParams", false);
 
     Reranker.COST_FN = config.getDouble("costFN", 1);
     LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
     int nTrain = config.getInt("nTrain", 100);
-    Random rand = new Random(9001);
-    RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
-    trainer.reporters = ResultReporter.getReporters(config);
+    RerankerTrainer trainer = configure(config);
 
     // Get train and test data.
     ItemProvider train, test, trainAndTest = null;
@@ -878,7 +1029,7 @@ public class RerankerTrainer {
         double propTest = 0.25;
         int maxTest = 9999;
         ItemProvider.TrainTestSplit trainTest =
-            new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, rand);
+            new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, trainer.rand);
         train = trainTest.getTrain();
         test = trainTest.getTest();
       }
@@ -909,172 +1060,23 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
-    final int trainBeamSize, testBeamSize;
-    if (config.containsKey("beamSize")) {
-      LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
-      trainBeamSize = testBeamSize = config.getInt("beamSize");
+    Reranker model = null;
+    String modelFileKey = "loadModelFromFile";
+    if (config.containsKey(modelFileKey)) {
+      // Load a model from file
+      File modelFile = config.getExistingFile(modelFileKey);
+      model = trainer.instantiate();
+      model.deserializeParams(modelFile);
     } else {
-      trainBeamSize = config.getInt("trainBeamSize", 1);
-      testBeamSize = config.getInt("testBeamSize", 1);
+      // Train
+      config.store(System.out, null);   // show the config for posterity
+      LOG.info("[main] " + Describe.memoryUsage());
+      LOG.info("[main] starting training, config:");
+      model = trainer.train1(train);
+
+      // Save the model
+      model.serializeParams(new File(workingDir, "model.bin"));
     }
-    trainer.trainConf.beamSize = trainBeamSize;
-
-    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
-
-    trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
-
-    trainer.trainConf.oracleMode = OracleMode.valueOf(
-        config.getString("oracleMode", "RAND_MIN").toUpperCase());
-
-    trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
-    trainer.trainConf.batchSize = config.getInt("trainBatchSize", 1);
-
-    trainer.performPretrain = config.getBoolean("performPretrain", false);
-
-    trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
-
-    // Set learning rate based on batch size
-    int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 16 * 1024);
-    //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
-    trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
-
-    trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
-
-    if (config.containsKey("trainTimeLimit")) {
-      double mins = config.getDouble("trainTimeLimit");
-      LOG.info("[main] limiting train to " + mins + " minutes");
-      trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(mins));
-    }
-
-    // Show how many roles we need to make predictions for (in train and test)
-    for (int i = 0; i < train.size(); i++) {
-      State s = State.initialState(train.label(i));
-      LOG.info("TK=" + s.numFrameRoleInstances());
-    }
-
-    final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
-    final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
-    LOG.info("[main] using l2Penalty=" + l2Penalty);
-
-    // What features to use (if features are being used)
-    String fs = config.getBoolean("simpleFeatures", false)
-        ? featureTemplates : featureTemplatesSearch;
-
-    if (useCheatingParams) {
-      // For debugging, invalidates a lot of other settings.
-      // Note there is one wrinkle: CheatingParams extends Params.Stateless but
-      // not Params.PruneThreshold, so it must produce positive or negative
-      // scores for COMMIT actions, and ZERO must be used for tauParams.
-      LOG.warn("[main] using cheating params with pruning threshold of 0");
-      //trainer.tauParams = Params.PruneThreshold.Const.ZERO;
-      if (trainAndTest == null)
-        throw new RuntimeException();
-      trainer.tauParams = new CheatingParams(trainAndTest);
-      CheatingParams cheat = trainer.addStatelessParams(new CheatingParams(trainAndTest));
-      trainer.pretrainConf.dontPerformTuning();
-
-      if (useGlobalFeatures) {
-        LOG.info("[main] adding global cheating params");
-        trainer.addGlobalParams(new GlobalFeature.Cheating(cheat, 0));
-      }
-    } else {
-      // This is the path that will be executed when not debugging
-      if (useEmbeddingParams) {
-        LOG.info("[main] using embedding params");
-        int embeddingSize = 2;
-        EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
-        ep.learnTheta(true);
-        if (useEmbeddingParamsDebug)
-          ep.debug(new TemplatedFeatureParams("embD", featureTemplates, hashBuckets), l2Penalty);
-        trainer.statelessParams = ep;
-      } else {
-        LOG.info("[main] using features=" + fs);
-        if (useFeatureHashing) {
-          LOG.info("[main] using TemplatedFeatureParams with feature hashing");
-          trainer.statelessParams =
-              new TemplatedFeatureParams("statelessA", fs, l2Penalty, hashBuckets);
-        } else {
-          LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
-          trainer.statelessParams =
-              new TemplatedFeatureParams("statelessH", fs, l2Penalty);
-        }
-      }
-
-      if (config.getBoolean("featCoversFrames", true))
-        trainer.addStatelessParams(new GlobalFeature.CoversFrames(l2Penalty));
-
-
-      // Setup tau/pruning parameters
-      if (config.getBoolean("useDynamicTau", true)) {
-        // Old way: very simple features
-        //      double tauL2Penalty = config.getDouble("tauL2Penalty", 2e-2);
-        //      double tauLearningRate = config.getDouble("taulLearningRate", Math.sqrt(trainer.trainConf.batchSize) / 10d);
-        //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
-        // Older way: very rich features.
-        if (useFeatureHashing) {
-          LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
-          trainer.tauParams =
-              new TemplatedFeatureParams("tauA", fs, l2Penalty, hashBuckets);
-        } else {
-          LOG.info("[main] using TemplatedFeatureParams with an Alphabet for tau");
-          trainer.tauParams =
-              new TemplatedFeatureParams("tauH", fs, l2Penalty);
-        }
-      } else {
-        LOG.warn("[main] you probably don't want to use constante params for tau!");
-        trainer.tauParams = Params.PruneThreshold.Const.ZERO;
-      }
-
-      if (useGlobalFeatures) {
-        double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
-        LOG.info("[main] using global features with l2p=" + globalL2Penalty);
-
-        // helps
-        if (config.getBoolean("globalFeatArgLoc", false))
-          trainer.addGlobalParams(new GlobalFeature.ArgLoc(globalL2Penalty));
-
-        // slow, but better than non-simple version
-        if (config.getBoolean("globalFeatArgLocSimple", false))
-          trainer.addGlobalParams(new GlobalFeature.ArgLocSimple(globalL2Penalty));
-
-        // helps
-        if (config.getBoolean("globalFeatNumArgs", false))
-          trainer.addGlobalParams(new GlobalFeature.NumArgs(globalL2Penalty));
-
-        // helps
-        if (config.getBoolean("globalFeatRoleCooc", false))
-          trainer.addGlobalParams(new GlobalFeature.RoleCooccurenceFeatureStateful(globalL2Penalty));
-
-        // worse than non-simple version
-        if (config.getBoolean("globalFeatRoleCoocSimple", false))
-          trainer.addGlobalParams(new GlobalFeature.RoleCoocSimple(globalL2Penalty));
-
-        // helps
-        if (config.getBoolean("globalFeatArgOverlap", false))
-          trainer.addGlobalParams(new GlobalFeature.ArgOverlapFeature(globalL2Penalty));
-
-        // helps
-        if (config.getBoolean("globalFeatSpanBoundary", false))
-          trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
-      }
-    }
-
-    if (config.getBoolean("lhMostViolated", false)) {
-      LOG.info("[main] using L.H.'s notion of most violated, which forces left-right inference");
-      // Don't need to set these because oracle.bFunc should only return a finite
-      // value for one action (these modes are all equivalent then).
-//      trainer.trainConf.oracleMode = OracleMode.MAX;
-//      trainer.pretrainConf.oracleMode = OracleMode.MAX;
-      ActionType.COMMIT.forceLeftRightInference();
-      ActionType.PRUNE.forceLeftRightInference();
-      Reranker.LH_MOST_VIOLATED = true;
-    }
-
-    // Train
-    LOG.info("[main] " + Describe.memoryUsage());
-    LOG.info("[main] starting training, config:");
-    config.store(System.out, null);   // show the config for posterity
-    Reranker model = trainer.train1(train);
 
     // Release some memory
     LOG.info("[main] before GC: " + Describe.memoryUsage());
@@ -1084,7 +1086,6 @@ public class RerankerTrainer {
     LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
     // Evaluate
-    model.setBeamWidth(testBeamSize); // NOTE: This may work poorly because we've chosen a recallBias already
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File semDir = new File(workingDir, "semaforEval");

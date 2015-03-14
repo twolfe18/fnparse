@@ -78,8 +78,15 @@ public abstract class FeatureParams {
     out.writeBoolean(averageFeatures);
     theta.serialize(out);
     out.writeDouble(l2Penalty);
-    if (featureIndices != null)
-      log.warn("[serialize] not writing alphabet!");
+    if (featureIndices != null) {
+      out.writeBoolean(true);
+      int n = featureIndices.size();
+      out.writeInt(n);
+      for (int i = 0; i < n; i++)
+        out.writeUTF(featureIndices.lookupObject(i));
+    } else {
+      out.writeBoolean(false);
+    }
     out.writeInt(numBuckets);
   }
 
@@ -87,8 +94,13 @@ public abstract class FeatureParams {
     averageFeatures = in.readBoolean();
     theta.deserialize(in);
     l2Penalty = in.readDouble();
-    if (featureIndices != null)
-      log.warn("[deserialize] not reading alphabet!");
+    boolean alphabetBased = in.readBoolean();
+    if (alphabetBased) {
+      int n = in.readInt();
+      featureIndices = new Alphabet<>();
+      for (int i = 0; i < n; i++)
+        featureIndices.lookupIndex(in.readUTF(), true);
+    }
     numBuckets = in.readInt();
   }
 

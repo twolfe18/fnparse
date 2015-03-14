@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 import org.apache.log4j.Logger;
@@ -13,11 +12,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
-import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
@@ -26,7 +22,6 @@ import edu.jhu.hlt.fnparse.rl.params.PriorScoreParams;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
-import edu.jhu.hlt.fnparse.util.FNDiff;
 
 /**
  * If the algorithm is given an indicator feature for whether an item is in the
@@ -155,7 +150,7 @@ public class LearningTest {
 
     int beamWidth = 10;
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
-    Reranker model = new Reranker(Stateful.NONE, theta, tau, beamWidth, rand);
+    Reranker model = new Reranker(Stateful.NONE, theta, tau, beamWidth, beamWidth, rand);
     Reranker.LOG_FORWARD_SEARCH = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
@@ -170,7 +165,8 @@ public class LearningTest {
     Reranker.LOG_UPDATE = true;
     CheatingParams.SHOW_ON_UPDATE = true;
     RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
-    trainer.pretrainConf.beamSize = 10;
+    trainer.pretrainConf.trainBeamSize = 10;
+    trainer.pretrainConf.testBeamSize = 10;
     ItemProvider ip = Reranker.getItemProvider(100, false);
     List<FNParse> gold = ItemProvider.allLabels(ip, new ArrayList<>());
     CheatingParams theta = new CheatingParams(gold);
@@ -221,7 +217,7 @@ public class LearningTest {
       PriorScoreParams theta = new PriorScoreParams(ip, true);
       if (byHand) {
         theta.setParamsByHand();
-        model = new Reranker(Stateful.NONE, theta, tau, beamWidth, rand);
+        model = new Reranker(Stateful.NONE, theta, tau, beamWidth, beamWidth, rand);
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
         trainer.statelessParams = theta;
@@ -233,7 +229,7 @@ public class LearningTest {
       // check how good the score can be.
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
-      model = new Reranker(Stateful.NONE, oracle, tau, beamWidth, rand);
+      model = new Reranker(Stateful.NONE, oracle, tau, beamWidth, beamWidth, rand);
       Assert.assertTrue("I dumped support for using items for pruning", false);
     }
 
