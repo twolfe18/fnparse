@@ -6,14 +6,9 @@
 
   <groupId>edu.jhu.hlt</groupId>
   <artifactId>fnparse</artifactId>
-  <version>1.0.3</version>
+  <version>1.0.4</version>
 
   <dependencies>
-    <dependency>
-      <groupId>edu.jhu.hlt</groupId>
-      <artifactId>concrete-core</artifactId>
-      <version>3.10.7</version>
-    </dependency>
     <dependency>
       <groupId>edu.jhu.pacaya</groupId>
       <artifactId>pacaya</artifactId>
@@ -38,7 +33,7 @@
     <dependency>
       <groupId>edu.jhu.hlt.concrete</groupId>
       <artifactId>concrete-stanford</artifactId>
-      <version>3.10.3</version>
+      <version>4.2.1</version>
     </dependency>
     <dependency>
       <groupId>redis.clients</groupId>
