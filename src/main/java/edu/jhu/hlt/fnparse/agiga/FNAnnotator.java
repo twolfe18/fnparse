@@ -16,7 +16,7 @@ import edu.jhu.hlt.concrete.MentionArgument;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
-import edu.jhu.hlt.concrete.serialization.ThreadSafeCompactCommunicationSerializer;
+import edu.jhu.hlt.concrete.serialization.TarGzCompactCommunicationSerializer;
 import edu.jhu.hlt.concrete.util.ConcreteUUIDFactory;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -196,15 +196,16 @@ public class FNAnnotator implements DummyAnnotator {
     anno.init();
     File f = new File("agiga2/input-data/concrete-3.8.0-post-stanford");
     assert f.isDirectory();
-    ThreadSafeCompactCommunicationSerializer deser =
-        new ThreadSafeCompactCommunicationSerializer();
+    TarGzCompactCommunicationSerializer ts = new TarGzCompactCommunicationSerializer();
+//    ThreadSafeCompactCommunicationSerializer deser =
+//        new ThreadSafeCompactCommunicationSerializer();
     for (File commFile : f.listFiles()) {
       if (commFile.getName().endsWith(".json"))
         continue;
       if (commFile.getName().contains(".anno"))
         continue;
       LOG.info("reading " + commFile.toPath());
-      Communication comm = deser.fromPath(commFile.toPath());
+      Communication comm = ts.fromPath(commFile.toPath());
 
       //LOG.info(comm);
       comm.write(new TSimpleJSONProtocol(

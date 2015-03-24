@@ -126,7 +126,7 @@ public class BasicLatentDepTest {
           if (parent == child) continue;
           LinkVar l_ij = depTree.getLinkVar(parent, child);
           FeTypedFactor phi = new FeTypedFactor(new VarSet(l_ij),
-              DepParseFactorTemplate.LINK_UNARY, fe);
+              DepParseFactorTemplate.UNARY, fe);
           fg.addFactor(phi);
 
           // Create binary factors between link variables and

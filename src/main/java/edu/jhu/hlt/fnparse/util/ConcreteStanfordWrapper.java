@@ -19,7 +19,6 @@ import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.TextSpan;
 import edu.jhu.hlt.concrete.Token;
 import edu.jhu.hlt.concrete.TokenList;
-import edu.jhu.hlt.concrete.TokenRefSequence;
 import edu.jhu.hlt.concrete.TokenTagging;
 import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.TokenizationKind;
@@ -102,10 +101,8 @@ public class ConcreteStanfordWrapper {
       c.setId(i);
       c.setTag("X");
       c.setChildList(new ArrayList<>());
-      TokenRefSequence trs = new TokenRefSequence();
-      trs.setTokenizationId(aUUID); // TODO this isn't right, but I don't think I ever use it
-      trs.setTokenIndexList(Arrays.asList(i));
-      c.setTokenSequence(trs);
+      c.setStart(i);
+      c.setEnding(i + 1);
       cons.add(c);
       preterms.add(i);
     }
@@ -113,12 +110,8 @@ public class ConcreteStanfordWrapper {
     root.setId(s.size());
     root.setTag("S");
     root.setChildList(preterms);
-    /*
-    TokenRefSequence trs = new TokenRefSequence();
-    trs.setTokenizationId(aUUID); // TODO this isn't right, but I don't think I ever use it
-    trs.setTokenIndexList(preterms);
-    root.setTokenSequence(trs);
-    */
+    root.setStart(0);
+    root.setEnding(s.size());
     cons.add(root);
     p.setConstituentList(cons);
     p.setUuid(aUUID);
@@ -190,21 +183,24 @@ public class ConcreteStanfordWrapper {
    Section section = communication.getSectionList().get(0);
    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
    Tokenization tokenization = sentence.getTokenization();
-   int n = tokenization.getTokenList().getTokenListSize();
-   for (Constituent c : tokenization.getParseList().get(0).getConstituentList()) {
-     if (!c.isSetTokenSequence())
-       continue;
-     for (int t : c.getTokenSequence().getTokenIndexList()) {
-       if (t >= n) {
-         for (Constituent cc : tokenization.getParseList().get(0).getConstituentList())
-           LOG.warn(cc);
-         LOG.warn("there are " + n + " tokens in the tokenization");
-         //throw new RuntimeException("concrete-stanford messed up");
-         LOG.warn("concrete-stanford messed up");
-         return dummyCParse(s);
-       }
-     }
-   }
+
+//   // Check for a bad parse
+//   int n = tokenization.getTokenList().getTokenListSize();
+//   for (Constituent c : tokenization.getParseList().get(0).getConstituentList()) {
+//     if (!c.isSetTokenSequence())
+//       continue;
+//     for (int t : c.getTokenSequence().getTokenIndexList()) {
+//       if (t >= n) {
+//         for (Constituent cc : tokenization.getParseList().get(0).getConstituentList())
+//           LOG.warn(cc);
+//         LOG.warn("there are " + n + " tokens in the tokenization");
+//         //throw new RuntimeException("concrete-stanford messed up");
+//         LOG.warn("concrete-stanford messed up");
+//         return dummyCParse(s);
+//       }
+//     }
+//   }
+
    return new ConstituencyParse(tokenization.getParseList().get(0), s.size());
   }
 
@@ -228,14 +224,7 @@ public class ConcreteStanfordWrapper {
   }
 
   public static Span constituentToSpan(Constituent c) {
-    int start = -1, end = -1;
-    for (int x : c.getTokenSequence().getTokenIndexList()) {
-      if (start < 0 || x < start)
-        start = x;
-      if (end < 0 || x > end)
-        end = x;
-    }
-    return Span.getSpan(start, end + 1);
+    return Span.getSpan(c.getStart(), c.getEnding());
   }
 
   public static String normalizeToken(String token) {
