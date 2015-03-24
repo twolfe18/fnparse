@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.util;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.Arrays;
 
 import org.apache.log4j.Logger;
@@ -21,7 +22,7 @@ import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
  *
  * @author travis
  */
-public class AveragedWeights {
+public class AveragedWeights implements Serializable {
   public static final Logger LOG = Logger.getLogger(AveragedWeights.class);
 
   private double[] theta;

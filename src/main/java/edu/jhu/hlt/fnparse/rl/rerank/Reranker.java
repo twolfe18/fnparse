@@ -8,6 +8,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -45,7 +46,7 @@ import edu.jhu.hlt.fnparse.util.Timer;
  *
  * @author travis
  */
-public class Reranker {
+public class Reranker implements Serializable {
   public static final Logger LOG = Logger.getLogger(Reranker.class);
 
   public static boolean BUG_FIX = true;
@@ -86,7 +87,7 @@ public class Reranker {
   private int trainBeamWidth;
   private int testBeamWidth;
 
-  private MultiTimer timer = new MultiTimer();
+  private transient MultiTimer timer;
 
   public Reranker(
       Params.Stateful thetaStateful,
@@ -1057,10 +1058,10 @@ public class Reranker {
 
     @Override
     public double apply(double learningRate) {
-      timer.start("Update.getUpdate");
+      getTimer().start("Update.getUpdate");
 
       if (!isViolated()) {
-        timer.stop("Update.getUpdate");
+        getTimer().stop("Update.getUpdate");
         return 0d;
       }
 
@@ -1102,8 +1103,14 @@ public class Reranker {
 
 //      showWeights();
 
-      timer.stop("Update.getUpdate");
+      getTimer().stop("Update.getUpdate");
       return violation();
     }
+  }
+
+  private MultiTimer getTimer() {
+    if (timer == null)
+      timer = new MultiTimer();
+    return timer;
   }
 }

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -20,7 +21,7 @@ import edu.jhu.hlt.fnparse.rl.State;
 /**
  * Parameterizes a score function on (state,action) pairs
  */
-public interface Params {
+public interface Params extends Serializable {
   public static final Logger LOG = Logger.getLogger(Params.class);
 
   /**

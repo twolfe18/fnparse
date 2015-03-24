@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -27,8 +28,13 @@ import edu.jhu.util.Alphabet;
  *
  * @author travis
  */
-public abstract class FeatureParams {
-  public final Logger log = Logger.getLogger(getClass());
+public abstract class FeatureParams implements Serializable {
+  private transient Logger log = Logger.getLogger(getClass());
+  Logger getLog() {
+    if (log == null)
+      log = Logger.getLogger(getClass());
+    return log;
+  }
 
   public boolean averageFeatures = false;  // only applies upon construction
 
@@ -207,7 +213,7 @@ public abstract class FeatureParams {
   public void logFeatures(IntDoubleVector features, State s, Action a) {
     String fs = features.getNumImplicitEntries() == 0
         ? "EMPTY" : describeFeatures(features);
-    log.info("[logFeatures] " + a + " " + fs);
+    getLog().info("[logFeatures] " + a + " " + fs);
   }
 
   protected void checkSize() {
@@ -227,14 +233,14 @@ public abstract class FeatureParams {
   public void showWeights() {
     Alphabet<String> featureIndices = getAlphabetForShowingWeights();
     if (featureIndices == null) {
-      log.info("[showFeatures] can't show features because we're using feature "
+      getLog().info("[showFeatures] can't show features because we're using feature "
           + "hashing with no custom getAlphabetForShowingWeights.");
       return;
     }
     String msg = getClass().getName();
     int k = 15; // how many of the most extreme features to show
     List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
-    ModelViewer.showBiggestWeights(w, k, msg, log);
+    ModelViewer.showBiggestWeights(w, k, msg, getLog());
   }
 
   /**
@@ -258,7 +264,7 @@ public abstract class FeatureParams {
    */
   public void doneTraining() {
     if (featureIndices != null) {
-      log.info("[doneTraining] stopping alphabet growth");
+      getLog().info("[doneTraining] stopping alphabet growth");
       featureIndices.stopGrowth();
     }
     showWeights();

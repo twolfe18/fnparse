@@ -9,6 +9,8 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -95,7 +97,6 @@ public class RerankerTrainer {
 
     // General parameters
     public int threads = 1;
-    //public int beamSize = 1;
     public int trainBeamSize = 1;
     public int testBeamSize = 1;
     public int batchSize = 1;  // If 0, compute an exact gradient (batchSize == train.size)
@@ -980,12 +981,12 @@ public class RerankerTrainer {
 
     return trainer;
   }
-  
+
   /**
    * First arg must be the job name (for tie-ins with tge) and the remaining are
    * key-value pairs.
    */
-  public static void main(String[] args) throws IOException {
+  public static void main(String[] args) throws Exception {
     assert args.length % 2 == 1;
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
@@ -1065,8 +1066,11 @@ public class RerankerTrainer {
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
-      model = trainer.instantiate();
-      model.deserializeParams(modelFile);
+//      model = trainer.instantiate();
+//      model.deserializeParams(modelFile);
+      ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
+      model = (Reranker) ois.readObject();
+      ois.close();
     } else {
       // Train
       config.store(System.out, null);   // show the config for posterity
@@ -1094,6 +1098,14 @@ public class RerankerTrainer {
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
+
+    // Serialize the model
+    File jserFile = new File(workingDir, "model.jser");
+    LOG.info("[main] serializing model to " + jserFile.getPath());
+    ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
+    oos.writeObject(model);
+    oos.close();
+    LOG.info("[main] done serializing.");
 
     // Save the configuration
     OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
