@@ -157,7 +157,12 @@ public class FNAnnotator implements DummyAnnotator {
       FNParse parse = parses.get(i);
       for (FrameInstance fi : parse.getFrameInstances()) {
         Frame f = fi.getFrame();
-        WeightedFrameInstance wfi = (WeightedFrameInstance) fi;
+        WeightedFrameInstance wfi;
+        try {
+          wfi = (WeightedFrameInstance) fi;
+        } catch (ClassCastException cce) {
+          wfi = WeightedFrameInstance.withWeightOne(fi);
+        }
         SituationMention sm = new SituationMention();
         sm.setUuid(uuidFactory.getConcreteUUID());
         sm.setSituationKind(f.getName());
@@ -180,6 +185,7 @@ public class FNAnnotator implements DummyAnnotator {
           }
         }
         sm.setArgumentList(args);
+        //System.out.println(sm);
         smsMentionList.add(sm);
       }
     }
