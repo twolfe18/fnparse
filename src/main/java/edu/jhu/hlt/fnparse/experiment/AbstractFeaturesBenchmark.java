@@ -5,7 +5,7 @@ import java.util.Random;
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.features.Refinements;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.Timer;
 
 /**
  * the best i could get is 19% with StringBuilder.setLength(0)

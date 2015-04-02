@@ -28,11 +28,11 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.head.NoRolesStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
 import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ParseSelector;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.util.Alphabet;
 
 /**

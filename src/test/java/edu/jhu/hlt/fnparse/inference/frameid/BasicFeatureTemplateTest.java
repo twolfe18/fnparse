@@ -12,7 +12,7 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.Timer;
 
 public class BasicFeatureTemplateTest {
   static Logger LOG = Logger.getLogger(BasicFeatureTemplateTest.class);

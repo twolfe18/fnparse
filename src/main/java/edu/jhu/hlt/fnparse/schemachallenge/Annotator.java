@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.ObjectInputStream;
 import java.nio.file.Files;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -14,7 +13,6 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.serialization.TarGzCompactCommunicationSerializer;
-import edu.jhu.hlt.concrete.util.ConcreteUUIDFactory;
 import edu.jhu.hlt.fnparse.agiga.ConcreteSentenceAdapter;
 import edu.jhu.hlt.fnparse.agiga.FNAnnotator;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -87,40 +85,34 @@ public class Annotator {
     List<FNParse> parses = argId.predict(initialStates);
 
     // Add parses to the Communication
-    FNAnnotator.addSituations(
-        doc, cSentences, parses, 1, true, new ConcreteUUIDFactory());
-    //System.out.println(doc);
+    FNAnnotator.addSituations(doc, cSentences, parses, 1, true);
   }
 
   public static void main(String[] args) throws Exception {
-    //File frameId = new File("/home/hltcoe/twolfe/fnparse/saved-models/agiga/");
-    File frameId = new File("/home/travis/code/fnparse/saved-models/agiga/");
-    File argId = new File("/tmp/reranker-train/model.jser");
-    File concreteInput = new File("/home/travis/code/schema-challenge/data/dpr/dpr-train.tar.gz");
-    File concreteOutput = new File("/home/travis/code/schema-challenge/data/dpr/dpr-train.fnparse.tar.gz");
+    if (args.length != 4) {
+      System.err.println("please provide:");
+      System.err.println("1) a frame id model directory");
+      System.err.println("2) an arg id model file");
+      System.err.println("3) an input concrete tar gz file");
+      System.err.println("4) an output concrete tar gz file");
+      System.exit(-1);
+    }
+    File frameId = new File(args[0]);
+    File argId = new File(args[1]);
+    File concreteInput = new File(args[2]);
+    File concreteOutput = new File(args[3]);
 
     Annotator anno = new Annotator(frameId, argId);
 
     TarGzCompactCommunicationSerializer ts = new TarGzCompactCommunicationSerializer();
-//    ThreadSafeCompactCommunicationSerializer deser =
-//        new ThreadSafeCompactCommunicationSerializer();
-//
-//    Communication doc = deser.fromPath(concreteInput.toPath());
-//
-//    anno.annotate(doc);
-    Iterator<Communication> itr = ts.fromTarGz(Files.newInputStream(
-        concreteInput.toPath(), StandardOpenOption.READ));
-    int i = 0;
+    Iterator<Communication> itr = ts.fromTarGz(Files.newInputStream(concreteInput.toPath()));
     List<Communication> annotated = new ArrayList<>();
-    while (itr.hasNext() && i++ < 10) {
+    while (itr.hasNext()) {
       Communication c = itr.next();
       anno.annotate(c);
       annotated.add(c);
     }
+    LOG.info("Saving " + annotated.size() + " Communications to " + concreteOutput.getPath());
     ts.toTarGz(annotated, concreteOutput.toPath());
-
-//    doc.write(new TCompactProtocol(
-//        new TIOStreamTransport(
-//            new FileOutputStream(concreteOutput))));
   }
 }

@@ -47,6 +47,7 @@ public interface Params extends Serializable {
     public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo);
 
     public static class Const implements PruneThreshold {
+      private static final long serialVersionUID = 1L;
       public static final Const ZERO = new Const(0);
       public static final Const ONE = new Const(1);
       public double intercept;
@@ -79,6 +80,7 @@ public interface Params extends Serializable {
       }
     }
     public static class Sum implements PruneThreshold {
+      private static final long serialVersionUID = 1L;
       private final PruneThreshold left, right;
       public Sum(PruneThreshold left, PruneThreshold right) {
         if (left == null || right == null)
@@ -117,6 +119,7 @@ public interface Params extends Serializable {
     // TODO move this over to use FrameRolePacking and bit-shifting
     /** Implementation */
     public static class Impl extends FeatureParams implements PruneThreshold {
+      private static final long serialVersionUID = 1L;
       public Impl(double l2Penalty) {
         super(l2Penalty);
       }
@@ -181,6 +184,7 @@ public interface Params extends Serializable {
     public Adjoints score(State s, CommitIndex ai, Action a);
 
     public static final Stateful NONE = new Stateful() {
+      private static final long serialVersionUID = 1L;
       @Override public Adjoints score(State s, CommitIndex ai, final Action a) {
         return new Adjoints() {
           @Override public String toString() { return "0"; }
@@ -215,6 +219,7 @@ public interface Params extends Serializable {
 
     public static Stateful lift(final Stateless theta) {
       return new Stateful() {
+        private static final long serialVersionUID = 1L;
         @Override
         public String toString() {
           return "(Lifted " + theta + ")";
@@ -250,6 +255,7 @@ public interface Params extends Serializable {
     public Adjoints score(FNTagging f, Action a);
 
     public static final Stateless NONE = new Stateless() {
+      private static final long serialVersionUID = 1L;
       @Override public Adjoints score(FNTagging frames, final Action a) {
         return new Adjoints() {
           @Override public String toString() { return "0"; }
@@ -294,6 +300,7 @@ public interface Params extends Serializable {
      * really only be caching Stateless Params anyway.
      */
     public static class Caching implements Stateless {
+      private static final long serialVersionUID = 1L;
       private int cache = 2;  // 0=none, 1=hashmap, 2=array
       private Stateless wrapping;
       private Map<Action, Adjoints> cache1;
@@ -431,6 +438,7 @@ public interface Params extends Serializable {
 
   /** Params is closed under addition */
   public static class SumMixed implements Stateful {
+    private static final long serialVersionUID = 1L;
     private final Stateful stateful;
     private final Stateless stateless;
     public SumMixed(Stateful stateful, Stateless stateless) {
@@ -471,6 +479,7 @@ public interface Params extends Serializable {
 
   /** Params is closed under addition */
   public static class SumStateless implements Stateless {
+    private static final long serialVersionUID = 1L;
     private final Stateless left, right;
     public SumStateless(Stateless left, Stateless right) {
       this.left = left;
@@ -508,6 +517,7 @@ public interface Params extends Serializable {
 
   /** Params is closed under addition */
   public static class SumStateful implements Stateful {
+    private static final long serialVersionUID = 1L;
     private final Stateful left, right;
     public SumStateful(Stateful left, Stateful right) {
       this.left = left;
@@ -545,6 +555,7 @@ public interface Params extends Serializable {
   }
 
   public static class RandScore implements Stateless, Stateful {
+    private static final long serialVersionUID = 1L;
     private java.util.Random rand;
     private double variance;
     public RandScore(Random rand, double variance) {

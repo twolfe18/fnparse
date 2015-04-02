@@ -28,7 +28,7 @@ import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 

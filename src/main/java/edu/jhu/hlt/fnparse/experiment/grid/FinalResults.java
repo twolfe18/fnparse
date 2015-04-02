@@ -33,8 +33,8 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Config;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Counts;
 
 /**
  * Given a working directory made by Runner, this loads the parser and can be

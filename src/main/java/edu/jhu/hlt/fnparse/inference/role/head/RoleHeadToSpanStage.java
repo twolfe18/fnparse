@@ -38,9 +38,9 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.tutils.Counts;
 
 /**
  * Takes a FNParse where all of the arguments are headwords (spans of width 1)

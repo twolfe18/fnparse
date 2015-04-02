@@ -35,11 +35,10 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
-import edu.jhu.hlt.fnparse.util.Beam;
-import edu.jhu.hlt.fnparse.util.Beam.Beam1;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.Beam;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 
 /**
  * See paper.
@@ -47,6 +46,8 @@ import edu.jhu.hlt.fnparse.util.Timer;
  * @author travis
  */
 public class Reranker implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   public static final Logger LOG = Logger.getLogger(Reranker.class);
 
   public static boolean BUG_FIX = true;
@@ -702,7 +703,7 @@ public class Reranker implements Serializable {
       //   \sum_{i=1}^n s(z_i) + bias(z_i)
       // Every time an item is popped off of the other beam, it is put onto this
       // beam and its children are considered for adding to the other beam.
-      Beam<StateSequence> maxBeam = new Beam1<>();
+      Beam<StateSequence> maxBeam = Beam.getMostEfficientImpl(1);
 
       for (int iter = 0; beam.size() > 0; iter++) {
 

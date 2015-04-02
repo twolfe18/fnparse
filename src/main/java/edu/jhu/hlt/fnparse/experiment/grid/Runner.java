@@ -33,10 +33,10 @@ import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.util.Config;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.prim.util.math.FastMath;
 
 /**

@@ -18,7 +18,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
-import edu.jhu.hlt.fnparse.util.Counts;
+import edu.jhu.hlt.tutils.Counts;
 
 /**
  * I'm trying to decide if using just headwords to predict arguments/roles is

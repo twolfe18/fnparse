@@ -37,12 +37,12 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 

@@ -10,6 +10,11 @@
 
   <dependencies>
     <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-util</artifactId>
+      <version>4.4.3</version>
+    </dependency>
+    <dependency>
       <groupId>edu.jhu.pacaya</groupId>
       <artifactId>pacaya</artifactId>
       <version>3.0.9</version>

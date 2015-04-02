@@ -17,7 +17,7 @@ import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
 import edu.jhu.hlt.concrete.serialization.TarGzCompactCommunicationSerializer;
-import edu.jhu.hlt.concrete.util.ConcreteUUIDFactory;
+import edu.jhu.hlt.concrete.uuid.UUIDFactory;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -60,12 +60,9 @@ public class FNAnnotator implements DummyAnnotator {
   public boolean attemptToPreloadResources = false;
 
   private LatentConstituencyPipelinedParser parser;
-  private ConcreteUUIDFactory uuidFactory;
 
   @Override
   public void init() {
-    uuidFactory = new ConcreteUUIDFactory();
-
     LOG.info("loading models...");
     parser = new LatentConstituencyPipelinedParser();
     parser.quiet();
@@ -118,8 +115,7 @@ public class FNAnnotator implements DummyAnnotator {
     List<FNParse> parses = parser.parse(sentences, null);
 
     // Convert each FNParses into a SituationMentionSet
-    addSituations(addTo, cSentences, parses, kBest,
-        includeSituationMentionText, uuidFactory);
+    addSituations(addTo, cSentences, parses, kBest, includeSituationMentionText);
 
     LOG.info("done annotating " + c.getId());
     return addTo;
@@ -140,12 +136,11 @@ public class FNAnnotator implements DummyAnnotator {
       List<ConcreteSentenceAdapter> sentences,
       List<FNParse> parses,
       int kBest,
-      boolean includeSituationMentionText,
-      ConcreteUUIDFactory uuidFactory) {
+      boolean includeSituationMentionText) {
     if (sentences.size() != parses.size())
       throw new IllegalArgumentException();
     SituationMentionSet sms = new SituationMentionSet();
-    sms.setUuid(uuidFactory.getConcreteUUID());
+    sms.setUuid(UUIDFactory.newUUID());
     AnnotationMetadata meta = new AnnotationMetadata();
     meta.setTool(FN_ANNOTATOR_TOOL_NAME);
     meta.setTimestamp(System.currentTimeMillis() / 1000);
@@ -164,7 +159,7 @@ public class FNAnnotator implements DummyAnnotator {
           wfi = WeightedFrameInstance.withWeightOne(fi);
         }
         SituationMention sm = new SituationMention();
-        sm.setUuid(uuidFactory.getConcreteUUID());
+        sm.setUuid(UUIDFactory.newUUID());
         sm.setSituationKind(f.getName());
         sm.setTokens(sentence.getTokenRefSequence(fi.getTarget()));
         if (includeSituationMentionText)
@@ -193,6 +188,7 @@ public class FNAnnotator implements DummyAnnotator {
     c.addToSituationMentionSetList(sms);
   }
 
+  /** @deprecated */
   public static void main(String[] args) throws Exception {
     FNAnnotator anno = new FNAnnotator();
     if (args.length == 1) {

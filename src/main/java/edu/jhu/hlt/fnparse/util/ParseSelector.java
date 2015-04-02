@@ -9,6 +9,8 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 
 /**
  * The purpose of this class is to sort parses by their utility to the

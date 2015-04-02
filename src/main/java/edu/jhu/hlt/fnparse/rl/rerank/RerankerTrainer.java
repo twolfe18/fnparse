@@ -6,9 +6,10 @@ import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
@@ -63,11 +64,11 @@ import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FileUtil;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
-import edu.jhu.hlt.fnparse.util.TimeMarker;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -1118,7 +1119,8 @@ public class RerankerTrainer {
       rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
   }
 
-  private static final String featureTemplatesSearch = getFeatureSetFromFile("feaureSet.full.txt");
+  private static final String featureTemplatesSearch =
+      getFeatureSetFromFile("featureSet.full.txt");
   private static final String featureTemplates =
       "1"
       + " + frameRole * 1"
@@ -1168,19 +1170,17 @@ public class RerankerTrainer {
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 
   public static String getFeatureSetFromFile(String path) {
-    File f = new File(path);
-    if (!f.isFile())
-      throw new RuntimeException("not a file: " + path);
-    try {
-      BufferedReader br = new BufferedReader(new FileReader(f));
+    ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+    try (InputStream is = classLoader.getResourceAsStream(path)) {
+      assert is != null : "couldn't find: " + path;
+      BufferedReader br = new BufferedReader(new InputStreamReader(is));
       String line = br.readLine();
       String[] toks = line.split("\t", 2);
       String features = toks[1];
       // Don't need the stage prefixes that we had before.
       features = features.replaceAll("RoleSpan(Labeling|Pruning)Stage-(regular|latent|none)\\*", "");
-      br.close();
       return features;
-    } catch (IOException e) {
+    } catch (Exception e) {
       throw new RuntimeException(e);
     }
   }

@@ -7,6 +7,7 @@ import java.util.zip.GZIPOutputStream;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 

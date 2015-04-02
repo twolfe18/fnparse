@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Timer;
 
 public class ConcreteStanfordWrapper {
   public static final Logger LOG = Logger.getLogger(ConcreteStanfordWrapper.class);
