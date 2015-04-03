@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.tutils.Timer;
 
 public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
   private File bdParseCacheFile;

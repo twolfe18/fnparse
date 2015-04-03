@@ -37,6 +37,15 @@ public class WeightedFrameInstance extends FrameInstance {
       argTheories[i] = new ArrayList<>();
   }
 
+  public static WeightedFrameInstance withWeightOne(FrameInstance fi) {
+    WeightedFrameInstance wfi =
+        new WeightedFrameInstance(fi.getFrame(), fi.getTarget(), fi.getArguments(), fi.getSentence());
+    int K = fi.getFrame().numRoles();
+    for (int k = 0; k < K; k++)
+      wfi.addArgumentTheory(k, fi.getArgument(k), 1);
+    return wfi;
+  }
+
   public static WeightedFrameInstance newWeightedFrameInstance(
       Frame f, Span t, Sentence s) {
     Span[] arguments = new Span[f.numRoles()];

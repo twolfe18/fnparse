@@ -36,13 +36,11 @@ import edu.jhu.hlt.fnparse.features.FeatureCountFilter;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.HasSentence;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.fnparse.util.ModelViewer;
 import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
-import edu.jhu.hlt.fnparse.util.Timer;
 //import edu.jhu.hlt.optimize.AdaGrad;
 //import edu.jhu.hlt.optimize.AdaGrad.AdaGradPrm;
 import edu.jhu.hlt.optimize.AdaGradSchedule;
@@ -51,6 +49,8 @@ import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.optimize.SGD.SGDPrm;
 import edu.jhu.hlt.optimize.function.Regularizer;
 import edu.jhu.hlt.optimize.functions.L2;
+import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.arrays.Multinomials;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -584,13 +584,9 @@ public abstract class AbstractStage<I, O extends FNTagging>
 
     // Setup model and train
     CrfTrainer trainer = new CrfTrainer(trainerParams);
-    try {
-      // TODO the reason that this is deprecated is because it wants a validator
-      // function, presumably for knowning when to stop.
-      weights = trainer.train(weights, exs);
-    } catch(cc.mallet.optimize.OptimizationException oe) {
-      oe.printStackTrace();
-    }
+    // TODO the reason that this is deprecated is because it wants a validator
+    // function, presumably for knowning when to stop.
+    weights = trainer.train(weights, exs);
     long timeTrain = System.currentTimeMillis() - start;
     log.info(String.format(
         "[train] Done training on %d examples for %.1f minutes, using %d features",

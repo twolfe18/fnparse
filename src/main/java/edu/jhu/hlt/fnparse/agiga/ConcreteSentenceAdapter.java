@@ -129,7 +129,7 @@ public class ConcreteSentenceAdapter implements HasSentence {
   public TokenRefSequence getTokenRefSequence(Span s) {
     TokenRefSequence trs = new TokenRefSequence();
     trs.setTokenizationId(cSent.getTokenization().getUuid());
-    trs.setTextSpan(getTextSpan(s));
+    //trs.setTextSpan(getTextSpan(s));  // should be characters, not tokens
     for (int i = s.start; i < s.end; i++)
       trs.addToTokenIndexList(i);
     return trs;

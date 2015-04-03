@@ -119,7 +119,7 @@ public class DepParseFactorFactory implements FactorFactory<Object> {
         if (ijVar == null)
           continue;
         FeTypedFactor phi = new FeTypedFactor(new VarSet(ijVar),
-            DepParseFactorTemplate.LINK_UNARY, fe);
+            DepParseFactorTemplate.UNARY, fe);
         factors.add(phi);
       }
     }

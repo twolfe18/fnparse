@@ -3,11 +3,18 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
@@ -28,18 +35,19 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
-import edu.jhu.hlt.fnparse.util.Beam;
-import edu.jhu.hlt.fnparse.util.Beam.Beam1;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.Beam;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 
 /**
  * See paper.
  *
  * @author travis
  */
-public class Reranker {
+public class Reranker implements Serializable {
+  private static final long serialVersionUID = 1L;
+
   public static final Logger LOG = Logger.getLogger(Reranker.class);
 
   public static boolean BUG_FIX = true;
@@ -77,25 +85,29 @@ public class Reranker {
 
   @SuppressWarnings("unused")
   private Random rand;
-  private int beamWidth;
+  private int trainBeamWidth;
+  private int testBeamWidth;
 
-  private MultiTimer timer = new MultiTimer();
+  private transient MultiTimer timer;
 
   public Reranker(
       Params.Stateful thetaStateful,
       Params.Stateless thetaStateless,
       Params.PruneThreshold tauParams,
-      int beamWidth,
+      int trainBeamWidth,
+      int testBeamWidth,
       Random rand) {
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
-    this.beamWidth = beamWidth;
+    this.trainBeamWidth = trainBeamWidth;
+    this.testBeamWidth = testBeamWidth;
     this.rand = rand;
     this.tauParams = tauParams;
   }
 
   public String toString() {
-    return "<Reranker beam=" + beamWidth + " " + thetaStateful + " " + thetaStateless + ">";
+    return "<Reranker beam=" + trainBeamWidth + "/" + testBeamWidth + " "
+        + thetaStateful + " " + thetaStateless + ">";
   }
 
   public Params.Stateless getStatelessParams() {
@@ -126,14 +138,13 @@ public class Reranker {
     return thetaStateful != Params.Stateful.NONE;
   }
 
-  public int getBeamWidth() {
-    return beamWidth;
-  }
-
-  public void setBeamWidth(int w) {
-    LOG.info("[setBeamWidth] setting beamWidth=" + w);
+  public void setBeamWidth(int w, boolean train) {
+    LOG.info("[setBeamWidth] setting train=" + train + " beamWidth=" + w);
     if (w < 1) throw new IllegalArgumentException();
-    beamWidth = w;
+    if (train)
+      trainBeamWidth = w;
+    else
+      testBeamWidth = w;
   }
 
   public void showWeights() {
@@ -143,6 +154,34 @@ public class Reranker {
     thetaStateless.showWeights();
     LOG.info("[showWeights] tau:");
     tauParams.showWeights();
+  }
+
+  public void serializeParams(File f) throws IOException {
+    LOG.info("[serializeParams] writing to " + f.getPath());
+    if (f.isFile())
+      LOG.warn("about to overwrite " + f.getPath());
+    try (OutputStream os = new FileOutputStream(f)) {
+      if (f.getName().toLowerCase().endsWith(".gz"))
+        serializeParams(new DataOutputStream(new GZIPOutputStream(os)));
+      else
+        serializeParams(new DataOutputStream(os));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public void deserializeParams(File f) throws IOException {
+    LOG.info("[deserializeParams] reading from " + f.getPath());
+    if (!f.isFile())
+      throw new IllegalArgumentException("not a file: " + f.getPath());
+    try (InputStream is = new FileInputStream(f)) {
+      if (f.getName().toLowerCase().endsWith(".gz"))
+        deserializeParams(new DataInputStream(new GZIPInputStream(is)));
+      else
+        deserializeParams(new DataInputStream(is));
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public void serializeParams(DataOutputStream dos) throws IOException {
@@ -253,7 +292,8 @@ public class Reranker {
     Params.Stateful model = getFullParams(cacheAdjoints);
     boolean solveMax = true;
     boolean decode = true;
-    ForwardSearch fs = fullSearch(initialState, BFunc.NONE, solveMax, decode, model);
+    ForwardSearch fs = fullSearch(
+        initialState, BFunc.NONE, solveMax, decode, testBeamWidth, model);
     fs.run();
     StateSequence ss = fs.getPath();
     FNParse yhat = ss.getCur().decode();
@@ -501,14 +541,15 @@ public class Reranker {
     }
   }
 
-  public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, boolean decode, Params.Stateful model) {
-    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, null, true);
+  public ForwardSearch fullSearch(State initialState, BFunc biasFunction, boolean solveMax, boolean decode, int beamSize, Params.Stateful model) {
+    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, null, true, beamSize);
   }
 
   /** @deprecated doesn't work for some reason */
   public ForwardSearch initialActionsSearch(State initialState, BFunc biasFunction, boolean solveMax, Params.Stateful model) {
     boolean decode = false;
-    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, new ArrayList<>(), false);
+    int beamSize = 1;
+    return this.new ForwardSearch(initialState, model, biasFunction, solveMax, decode, new ArrayList<>(), false, beamSize);
   }
 
   /**
@@ -578,6 +619,7 @@ public class Reranker {
     private final Params.Stateful model;
     private final boolean solvingMax;
     private boolean hasRun;
+    private int beamSize;
 
     // If true, take the actions out of initialState and build ScoredActions
     // for each for pretrain.
@@ -608,8 +650,10 @@ public class Reranker {
         boolean solvingMax,
         boolean decode,
         List<ScoredAction2> initialActions,
-        boolean fullSearch) {
+        boolean fullSearch,
+        int beamSize) {
       assert initialState.numCommitted() == 0;
+      this.beamSize = beamSize;
       this.initialState = initialState;
       this.model = model;
       this.biasFunction = biasFunction;
@@ -652,14 +696,14 @@ public class Reranker {
       // If mostViolated is used, bias = deltaLoss, and this is the beam of
       // states being explored, where we only push items that are children of
       // things that were previously on the beam.
-      Beam<StateSequence> beam = Beam.getMostEfficientImpl(beamWidth);
+      Beam<StateSequence> beam = Beam.getMostEfficientImpl(beamSize);
       beam.push(frontier, 0d);
 
       // This beam keeps a running max over all n of:
       //   \sum_{i=1}^n s(z_i) + bias(z_i)
       // Every time an item is popped off of the other beam, it is put onto this
       // beam and its children are considered for adding to the other beam.
-      Beam<StateSequence> maxBeam = new Beam1<>();
+      Beam<StateSequence> maxBeam = Beam.getMostEfficientImpl(1);
 
       for (int iter = 0; beam.size() > 0; iter++) {
 
@@ -806,7 +850,7 @@ public class Reranker {
     if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.RAND_MIN)
       bfunc = new BFunc.Sum(bfunc, new BFunc.StatefulAdapter(new Params.RandScore(rand, 1d)));
     ForwardSearch oracleSearch = fullSearch(
-        init, bfunc, oracleSolveMax, oracleDecode, cachingModelParams);
+        init, bfunc, oracleSolveMax, oracleDecode, trainBeamWidth, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       oracleSearch.gold = y;
     oracleSearch.run();
@@ -819,7 +863,7 @@ public class Reranker {
     boolean mvDecode = false;
     BFunc mvBFunc = LH_MOST_VIOLATED ? BFunc.NONE : new BFunc.MostViolated(y);
     ForwardSearch mvSearch =
-        fullSearch(init, mvBFunc, mvSolveMax, mvDecode, cachingModelParams);
+        fullSearch(init, mvBFunc, mvSolveMax, mvDecode, trainBeamWidth, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
       mvSearch.gold = y;
     mvSearch.run();
@@ -1015,10 +1059,10 @@ public class Reranker {
 
     @Override
     public double apply(double learningRate) {
-      timer.start("Update.getUpdate");
+      getTimer().start("Update.getUpdate");
 
       if (!isViolated()) {
-        timer.stop("Update.getUpdate");
+        getTimer().stop("Update.getUpdate");
         return 0d;
       }
 
@@ -1060,8 +1104,14 @@ public class Reranker {
 
 //      showWeights();
 
-      timer.stop("Update.getUpdate");
+      getTimer().stop("Update.getUpdate");
       return violation();
     }
+  }
+
+  private MultiTimer getTimer() {
+    if (timer == null)
+      timer = new MultiTimer();
+    return timer;
   }
 }

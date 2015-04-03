@@ -16,8 +16,8 @@ import edu.jhu.hlt.concrete.MentionArgument;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.SituationMention;
 import edu.jhu.hlt.concrete.SituationMentionSet;
-import edu.jhu.hlt.concrete.serialization.ThreadSafeCompactCommunicationSerializer;
-import edu.jhu.hlt.concrete.util.ConcreteUUIDFactory;
+import edu.jhu.hlt.concrete.serialization.TarGzCompactCommunicationSerializer;
+import edu.jhu.hlt.concrete.uuid.UUIDFactory;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -39,6 +39,10 @@ import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 public class FNAnnotator implements DummyAnnotator {
   public static final Logger LOG = Logger.getLogger(FNAnnotator.class);
 
+  // Don't change this! You can depend on this project to robustly check if
+  // annotations came from this tool using this string.
+  public static final String FN_ANNOTATOR_TOOL_NAME = "JHU-fnparse";
+
   // Location of the model to use (should be span-regular)
   public File bestRegularModelDir = new File(
       "/home/hltcoe/twolfe/fnparse/saved-models/agiga/best-regular-model/trainDevModel");
@@ -56,12 +60,9 @@ public class FNAnnotator implements DummyAnnotator {
   public boolean attemptToPreloadResources = false;
 
   private LatentConstituencyPipelinedParser parser;
-  private ConcreteUUIDFactory uuidFactory;
 
   @Override
   public void init() {
-    uuidFactory = new ConcreteUUIDFactory();
-
     LOG.info("loading models...");
     parser = new LatentConstituencyPipelinedParser();
     parser.quiet();
@@ -113,8 +114,8 @@ public class FNAnnotator implements DummyAnnotator {
     LOG.info("conversion complete, calling parser");
     List<FNParse> parses = parser.parse(sentences, null);
 
-    // Convert each FNParses into a SituationSet and SituationMentionSet
-    addSituations(addTo, cSentences, parses);
+    // Convert each FNParses into a SituationMentionSet
+    addSituations(addTo, cSentences, parses, kBest, includeSituationMentionText);
 
     LOG.info("done annotating " + c.getId());
     return addTo;
@@ -130,16 +131,18 @@ public class FNAnnotator implements DummyAnnotator {
     return sb.toString();
   }
 
-  public void addSituations(
+  public static void addSituations(
       Communication c,
       List<ConcreteSentenceAdapter> sentences,
-      List<FNParse> parses) {
+      List<FNParse> parses,
+      int kBest,
+      boolean includeSituationMentionText) {
     if (sentences.size() != parses.size())
       throw new IllegalArgumentException();
     SituationMentionSet sms = new SituationMentionSet();
-    sms.setUuid(uuidFactory.getConcreteUUID());
+    sms.setUuid(UUIDFactory.newUUID());
     AnnotationMetadata meta = new AnnotationMetadata();
-    meta.setTool("JHU-fnparse");
+    meta.setTool(FN_ANNOTATOR_TOOL_NAME);
     meta.setTimestamp(System.currentTimeMillis() / 1000);
     meta.setKBest(kBest);
     sms.setMetadata(meta);
@@ -149,9 +152,14 @@ public class FNAnnotator implements DummyAnnotator {
       FNParse parse = parses.get(i);
       for (FrameInstance fi : parse.getFrameInstances()) {
         Frame f = fi.getFrame();
-        WeightedFrameInstance wfi = (WeightedFrameInstance) fi;
+        WeightedFrameInstance wfi;
+        try {
+          wfi = (WeightedFrameInstance) fi;
+        } catch (ClassCastException cce) {
+          wfi = WeightedFrameInstance.withWeightOne(fi);
+        }
         SituationMention sm = new SituationMention();
-        sm.setUuid(uuidFactory.getConcreteUUID());
+        sm.setUuid(UUIDFactory.newUUID());
         sm.setSituationKind(f.getName());
         sm.setTokens(sentence.getTokenRefSequence(fi.getTarget()));
         if (includeSituationMentionText)
@@ -172,6 +180,7 @@ public class FNAnnotator implements DummyAnnotator {
           }
         }
         sm.setArgumentList(args);
+        //System.out.println(sm);
         smsMentionList.add(sm);
       }
     }
@@ -179,6 +188,7 @@ public class FNAnnotator implements DummyAnnotator {
     c.addToSituationMentionSetList(sms);
   }
 
+  /** @deprecated */
   public static void main(String[] args) throws Exception {
     FNAnnotator anno = new FNAnnotator();
     if (args.length == 1) {
@@ -188,15 +198,16 @@ public class FNAnnotator implements DummyAnnotator {
     anno.init();
     File f = new File("agiga2/input-data/concrete-3.8.0-post-stanford");
     assert f.isDirectory();
-    ThreadSafeCompactCommunicationSerializer deser =
-        new ThreadSafeCompactCommunicationSerializer();
+    TarGzCompactCommunicationSerializer ts = new TarGzCompactCommunicationSerializer();
+//    ThreadSafeCompactCommunicationSerializer deser =
+//        new ThreadSafeCompactCommunicationSerializer();
     for (File commFile : f.listFiles()) {
       if (commFile.getName().endsWith(".json"))
         continue;
       if (commFile.getName().contains(".anno"))
         continue;
       LOG.info("reading " + commFile.toPath());
-      Communication comm = deser.fromPath(commFile.toPath());
+      Communication comm = ts.fromPath(commFile.toPath());
 
       //LOG.info(comm);
       comm.write(new TSimpleJSONProtocol(

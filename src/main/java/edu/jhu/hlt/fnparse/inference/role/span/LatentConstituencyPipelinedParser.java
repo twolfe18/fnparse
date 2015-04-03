@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
@@ -37,12 +36,13 @@ import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.OracleStage;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.Counts;
 import edu.jhu.hlt.fnparse.util.DataSplitReader;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
+import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 
@@ -531,31 +531,40 @@ public class LatentConstituencyPipelinedParser implements Parser {
 
   @Override
   public void loadModel(File directory) {
+    loadModel(directory, true, true, true);
+  }
+
+  public void loadModel(File directory,
+      boolean readFrameId, boolean readRolePrune, boolean readRoleLabel) {
     LOG.info("loading model from " + directory.getPath());
     if (!directory.isDirectory())
       throw new IllegalArgumentException();
     globals.getFeatureNames().startGrowth();
     DataInputStream dis;
     try {
-      dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
-      frameId.loadModel(dis, globals);
-      dis.close();
+      if (readFrameId) {
+        dis = Parser.getDIStreamFor(directory, FRAME_ID_MODEL_NAME);
+        frameId.loadModel(dis, globals);
+        dis.close();
+        if (frameId instanceof AbstractStage)
+          ((AbstractStage) frameId).showExtremeFeatures(30);
+      }
 
-      dis = Parser.getDIStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
-      rolePruning.loadModel(dis, globals);
-      dis.close();
+      if (readRolePrune) {
+        dis = Parser.getDIStreamFor(directory, ROLE_PRUNE_MODEL_NAME);
+        rolePruning.loadModel(dis, globals);
+        dis.close();
+        if (rolePruning instanceof AbstractStage)
+          ((AbstractStage) rolePruning).showExtremeFeatures(30);
+      }
 
-      dis = Parser.getDIStreamFor(directory, ROLE_LABEL_MODEL_NAME);
-      roleLabeling.loadModel(dis, globals);
-      dis.close();
-
-      if (frameId instanceof AbstractStage)
-        ((AbstractStage) frameId).showExtremeFeatures(30);
-      if (rolePruning instanceof AbstractStage)
-        ((AbstractStage) rolePruning).showExtremeFeatures(30);
-      if (roleLabeling instanceof AbstractStage)
-        ((AbstractStage) roleLabeling).showExtremeFeatures(30);
-
+      if (readRoleLabel) {
+        dis = Parser.getDIStreamFor(directory, ROLE_LABEL_MODEL_NAME);
+        roleLabeling.loadModel(dis, globals);
+        dis.close();
+        if (roleLabeling instanceof AbstractStage)
+          ((AbstractStage) roleLabeling).showExtremeFeatures(30);
+      }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.params;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.List;
 
 import org.apache.log4j.Logger;
@@ -27,8 +28,13 @@ import edu.jhu.util.Alphabet;
  *
  * @author travis
  */
-public abstract class FeatureParams {
-  public final Logger log = Logger.getLogger(getClass());
+public abstract class FeatureParams implements Serializable {
+  private transient Logger log = Logger.getLogger(getClass());
+  Logger getLog() {
+    if (log == null)
+      log = Logger.getLogger(getClass());
+    return log;
+  }
 
   public boolean averageFeatures = false;  // only applies upon construction
 
@@ -78,8 +84,15 @@ public abstract class FeatureParams {
     out.writeBoolean(averageFeatures);
     theta.serialize(out);
     out.writeDouble(l2Penalty);
-    if (featureIndices != null)
-      log.warn("[serialize] not writing alphabet!");
+    if (featureIndices != null) {
+      out.writeBoolean(true);
+      int n = featureIndices.size();
+      out.writeInt(n);
+      for (int i = 0; i < n; i++)
+        out.writeUTF(featureIndices.lookupObject(i));
+    } else {
+      out.writeBoolean(false);
+    }
     out.writeInt(numBuckets);
   }
 
@@ -87,8 +100,13 @@ public abstract class FeatureParams {
     averageFeatures = in.readBoolean();
     theta.deserialize(in);
     l2Penalty = in.readDouble();
-    if (featureIndices != null)
-      log.warn("[deserialize] not reading alphabet!");
+    boolean alphabetBased = in.readBoolean();
+    if (alphabetBased) {
+      int n = in.readInt();
+      featureIndices = new Alphabet<>();
+      for (int i = 0; i < n; i++)
+        featureIndices.lookupIndex(in.readUTF(), true);
+    }
     numBuckets = in.readInt();
   }
 
@@ -195,7 +213,7 @@ public abstract class FeatureParams {
   public void logFeatures(IntDoubleVector features, State s, Action a) {
     String fs = features.getNumImplicitEntries() == 0
         ? "EMPTY" : describeFeatures(features);
-    log.info("[logFeatures] " + a + " " + fs);
+    getLog().info("[logFeatures] " + a + " " + fs);
   }
 
   protected void checkSize() {
@@ -215,14 +233,14 @@ public abstract class FeatureParams {
   public void showWeights() {
     Alphabet<String> featureIndices = getAlphabetForShowingWeights();
     if (featureIndices == null) {
-      log.info("[showFeatures] can't show features because we're using feature "
+      getLog().info("[showFeatures] can't show features because we're using feature "
           + "hashing with no custom getAlphabetForShowingWeights.");
       return;
     }
     String msg = getClass().getName();
     int k = 15; // how many of the most extreme features to show
     List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
-    ModelViewer.showBiggestWeights(w, k, msg, log);
+    ModelViewer.showBiggestWeights(w, k, msg, getLog());
   }
 
   /**
@@ -246,7 +264,7 @@ public abstract class FeatureParams {
    */
   public void doneTraining() {
     if (featureIndices != null) {
-      log.info("[doneTraining] stopping alphabet growth");
+      getLog().info("[doneTraining] stopping alphabet growth");
       featureIndices.stopGrowth();
     }
     showWeights();

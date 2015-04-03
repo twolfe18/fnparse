@@ -9,8 +9,8 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.ModelIO;
-import edu.jhu.hlt.fnparse.util.MultiTimer;
-import edu.jhu.hlt.fnparse.util.Timer;
+import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.util.stats.Multinomials;
 import edu.jhu.util.Alphabet;
 

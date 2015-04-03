@@ -52,10 +52,10 @@ import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.BrownClusters;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
+import edu.jhu.hlt.tutils.BrownClusters;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -64,6 +64,9 @@ import edu.mit.jwi.item.IWordID;
 
 public class BasicFeatureTemplates {
   public static final Logger LOG = Logger.getLogger(BasicFeatureTemplates.class);
+
+  public static BrownClusters bc256 = new BrownClusters(BrownClusters.bc256dir);
+  public static BrownClusters bc1000 = new BrownClusters(BrownClusters.bc1000dir);
 
   public static String spanPosRel(Span s1, Span s2) {
     return posRel(s1.start, s2.start)
@@ -297,7 +300,7 @@ public class BasicFeatureTemplates {
       tokenExtractors.put(name, x -> {
         if (x.indexInSent()) {
           String w = x.sentence.getWord(x.index);
-          return name + "=" + BrownClusters.getBc256().getPath(w, maxLen);
+          return name + "=" + bc256.getPath(w, maxLen);
         } else {
           return null;
         }
@@ -306,7 +309,7 @@ public class BasicFeatureTemplates {
       tokenExtractors.put(name2, x -> {
         if (x.indexInSent()) {
           String w = x.sentence.getWord(x.index);
-          return name2 + "=" + BrownClusters.getBc1000().getPath(w, maxLen);
+          return name2 + "=" + bc1000.getPath(w, maxLen);
         } else {
           return null;
         }

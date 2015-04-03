@@ -29,9 +29,10 @@ public class OracleTest {
 
   @Test
   public void test0() {
+    int beam = 1;
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     Reranker model = new Reranker(
-        Params.Stateful.NONE, Params.Stateless.NONE, tau, 1, rand);
+        Params.Stateful.NONE, Params.Stateless.NONE, tau, beam, beam, rand);
     for (FNParse y : getParses()) {
       if (y.numFrameInstances() == 0)
         continue;
@@ -39,7 +40,7 @@ public class OracleTest {
       boolean decode = true;
       BFunc bf = new BFunc.Oracle(y, oracleSolveMax);
       ForwardSearch oracleSearch = model.fullSearch(
-          State.initialState(y), bf, oracleSolveMax, decode, Params.Stateful.NONE);
+          State.initialState(y), bf, oracleSolveMax, decode, beam, Params.Stateful.NONE);
       oracleSearch.run();
       StateSequence oracle = oracleSearch.getPath();
       State last = oracle.getCur();
