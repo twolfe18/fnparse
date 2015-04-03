@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
-import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.inference.Parser;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
@@ -43,6 +42,7 @@ import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 

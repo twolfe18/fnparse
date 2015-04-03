@@ -9,6 +9,7 @@ import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.tutils.FPR;
 
 public class BasicEvaluation {
 

@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.tutils.FPR;
 
 /**
  * Tries to see how well we're doing on roleId by seeing if we can at least get

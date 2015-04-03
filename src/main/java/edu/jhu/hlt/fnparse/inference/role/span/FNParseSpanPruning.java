@@ -19,8 +19,8 @@ import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
-import edu.jhu.hlt.fnparse.evaluation.FPR;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.FPR;
 
 /**
  * This specifies a set of frames marked in text (FNTagging) as well as a pruned

@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.tutils.FPR;
 
 /**
  * This class defines EvalFunc functions which given precision, recall, and F1
