@@ -101,10 +101,12 @@ def beam_size(working_dir, real_test_set=False):
             if hurry_up:
               if n == 1000:
                 continue
-              if oracleMode not in ['MIN', 'RAND_MIN']:
-                continue
-              #if train_beam_size != test_beam_size:
+              #if oracleMode not in ['MIN', 'RAND_MIN']:
               #  continue
+              if train_beam_size != test_beam_size:
+                continue
+              if oracleMode != 'RAND_MAX':
+                continue
 
             cg = Config(working_dir)
             cg.nTrain = n

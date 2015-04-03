@@ -28,7 +28,7 @@ stop = function(y, alpha, k=60, inf.window=F, plot.t=F) {
 
   new.way = T
   if (new.way) {
-    a = anova.lm(m)
+    a = anova(m)
     p = a["Pr(>F)"][1,1]
     if (debug)
       print(paste("p", p, "alpha", alpha))
