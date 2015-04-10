@@ -240,7 +240,7 @@ public class DeterministicRolePruning
                 parse.getConstituent(fi.getTarget());
             Set<Span> spanSet = new HashSet<>();
             if (pred == null) {
-              LOG.warn("[XUE_PALMER decode] target is not a span! "
+              LOG.warn("[" + mode + " decode] target is not a span! "
                   + Describe.span(fi.getTarget(), fi.getSentence()));
             } else {
               xuePalmerHelper(pred, spanSet);

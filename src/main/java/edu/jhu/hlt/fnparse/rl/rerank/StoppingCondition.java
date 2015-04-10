@@ -222,9 +222,11 @@ public interface StoppingCondition {
         stdout.start();
         stderr.start();
         int r = p.waitFor();
-        if (r != 0) {
-          //throw new RuntimeException("exit value: " + r);
+        if (r != 0 || stdout.getLines().isEmpty()) {
+          LOG.warn("stderr: " + stderr.getLines());
+          LOG.warn(p);
           LOG.warn("[DevSet stop] error during call: " + r);
+          //throw new RuntimeException("exit value: " + r);
           return false;
         }
         String guidance = stdout.getLines().get(0).trim();
