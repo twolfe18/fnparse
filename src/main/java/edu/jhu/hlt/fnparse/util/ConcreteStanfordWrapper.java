@@ -179,8 +179,10 @@ public class ConcreteStanfordWrapper {
 
   public ConstituencyParse getCParse(Sentence s) {
    Communication communication = parse(s);
-   if (communication == null)
+   if (communication == null) {
+     LOG.warn("inserting dummy parse into " + s.getId());
      return dummyCParse(s);
+   }
    Section section = communication.getSectionList().get(0);
    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
    Tokenization tokenization = sentence.getTokenization();

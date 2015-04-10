@@ -196,8 +196,9 @@ public class DeterministicRolePruning
     }
     public ConstituencyParse getConstituencyParse() {
       Sentence s = input.getSentence();
-      if (s.getStanfordParse() != null)
-        return s.getStanfordParse();
+      ConstituencyParse p = s.getStanfordParse(false);
+      if (p != null)
+        return p;
       return parser.getCParse(s);
     }
     @Override
