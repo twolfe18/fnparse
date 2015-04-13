@@ -15,9 +15,9 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.WordNetPosUtil;
 
 /**
  * Identifies frames that are possible at a given location in a sentence.
@@ -47,7 +47,7 @@ public class TargetIndex {
       this.words = words;
       this.inParens = inParens;
       fnPos = fnPos.toUpperCase();
-      this.ptbPos = PosUtil.getFrameNetPosToAllPennTags().get(fnPos);
+      this.ptbPos = WordNetPosUtil.getFrameNetPosToAllPennTags().get(fnPos);
       if (ptbPos == null)
         throw new RuntimeException();
       if (words.length == 1 && "the".equals(words[0]))

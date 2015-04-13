@@ -22,7 +22,6 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
@@ -32,6 +31,7 @@ import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.RedisFileCache;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.hlt.tutils.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IWord;
@@ -290,7 +290,7 @@ public class ArgPruner implements Serializable, IArgPruner {
               ws = new HashSet<LexicalUnit>();
               roleSynset[k] = ws;
             }
-            POS pos = PosUtil.fn2wordNet(lu.pos);
+            POS pos = WordNetPosUtil.fn2wordNet(lu.pos);
             if(pos == null) continue;
             List<String> stems = stemmer.findStems(lu.word, pos);
             if(stems == null) continue;

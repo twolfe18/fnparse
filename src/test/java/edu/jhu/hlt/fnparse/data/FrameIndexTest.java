@@ -13,7 +13,7 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
-import edu.jhu.hlt.fnparse.datatypes.PosUtil;
+import edu.jhu.hlt.tutils.WordNetPosUtil;
 
 public class FrameIndexTest {
 		
@@ -44,7 +44,7 @@ public class FrameIndexTest {
 			for(int i=0; i<f.numLexicalUnits(); i++) {
 				LexicalUnit lu = f.getLexicalUnit(i);
 				String msg = String.format("%s does not have a POS in the Lexical Unit FrameNet conversion tagset", lu.toString());
-				assertTrue(msg, PosUtil.getFrameNetPosToPennPrefixesMap().containsKey(lu.pos));
+				assertTrue(msg, WordNetPosUtil.getFrameNetPosToPennPrefixesMap().containsKey(lu.pos));
 			}
 		}
 		System.out.printf("reading %d frames took %.2f sec\n", allFrames.size(), time/1000d);

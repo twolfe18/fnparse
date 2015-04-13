@@ -88,7 +88,7 @@ public class ConcreteStanfordWrapper {
 
   private AnnotateTokenizedConcrete getAnno() {
     if (anno == null)
-      anno = new AnnotateTokenizedConcrete();
+      anno = new AnnotateTokenizedConcrete("en");
     return anno;
   }
 

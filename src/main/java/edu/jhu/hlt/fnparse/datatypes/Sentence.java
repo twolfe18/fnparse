@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.tutils.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
@@ -106,14 +107,14 @@ public class Sentence implements HasId {
 
   public LexicalUnit getFNStyleLUUnsafe(
       int i, IDictionary dict, boolean lowercase) {
-    String fnTag = PosUtil.getPennToFrameNetTags().get(pos[i]);
+    String fnTag = WordNetPosUtil.getPennToFrameNetTags().get(pos[i]);
     if(fnTag == null) return null;
     WordnetStemmer stemmer = new WordnetStemmer(dict);
     List<String> allStems = Collections.emptyList();
     String w = null;
     try {
       w = lowercase ? tokens[i].toLowerCase() : tokens[i];
-      allStems = stemmer.findStems(w, PosUtil.ptb2wordNet(pos[i]));
+      allStems = stemmer.findStems(w, WordNetPosUtil.ptb2wordNet(pos[i]));
     }
     catch(java.lang.IllegalArgumentException e) {
       LOG.warn("bad word? " + getLU(i));
@@ -152,7 +153,7 @@ public class Sentence implements HasId {
       IRAMDictionary dict = tpd.getWordnetDict();
       WordnetStemmer stemmer = tpd.getStemmer();
       for (int idx = 0; idx < tokens.length; idx++) {
-        edu.mit.jwi.item.POS tag = PosUtil.ptb2wordNet(getPos(idx));
+        edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(getPos(idx));
         if (tag == null)
           continue;
         String w = getWord(idx).trim().replace("_", "");

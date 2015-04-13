@@ -5,10 +5,18 @@ import java.util.*;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.fnparse.data.*;
-import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
-import edu.mit.jwi.*;
+import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.mit.jwi.IRAMDictionary;
+import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
 import edu.mit.jwi.item.POS;
 import edu.mit.jwi.morph.WordnetStemmer;
@@ -79,7 +87,7 @@ public class TargetPruningData implements Serializable {
         if(target.width() != 1)
           continue;
         String word = s.getWord(target.start);
-        POS pos = PosUtil.ptb2wordNet(s.getPos(target.start));
+        POS pos = WordNetPosUtil.ptb2wordNet(s.getPos(target.start));
 
         // TODO talk to pushpendre about why this is happening
         if(word.length() == 0) {
@@ -125,7 +133,7 @@ public class TargetPruningData implements Serializable {
     String word = s.getWord(headIdx);
     if (lowercase)
       word = word.toLowerCase();
-    POS pos = PosUtil.ptb2wordNet(s.getPos(headIdx));
+    POS pos = WordNetPosUtil.ptb2wordNet(s.getPos(headIdx));
     List<String> stems = null;
     try { stems = stemmer.findStems(word, pos); }
     catch(IllegalArgumentException e) {
