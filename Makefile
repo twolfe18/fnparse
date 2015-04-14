@@ -6,7 +6,7 @@ argSpansQ = text.q
 
 jar:
 	rm -f target/*.jar
-	time mvn clean compile package assembly:assembly -DskipTests
+	time mvn clean compile assembly:single -DskipTests
 
 frameIdTrain:
 	qsub -N frameId-regular -t 1-36 -q $(frameIdQ) ParserExperimentWrapper.qsub frameId regular
