@@ -37,9 +37,9 @@ public class Annotator {
 
   public Annotator(File frameId, File argId) {
     if (!frameId.isDirectory())
-      throw new IllegalArgumentException("frameId must be a directory");
+      throw new IllegalArgumentException("frameId must be a directory: " + frameId.getPath());
     if (!argId.isFile())
-      throw new IllegalArgumentException("argId must be a jser file");
+      throw new IllegalArgumentException("argId must be a jser file: " + argId.getPath());
     LOG.info("[Annoator init] loading frame id model...");
     LatentConstituencyPipelinedParser parser =
         new LatentConstituencyPipelinedParser();

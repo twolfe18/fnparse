@@ -241,6 +241,9 @@ public class DeterministicRolePruning
                 parse.getConstituent(fi.getTarget());
             Set<Span> spanSet = new HashSet<>();
             if (pred == null) {
+              // TODO: single-token targets are gauranteed to be nodes in the
+              // tree, but multi-word targets often won't be.
+              // Solution: take the smallest node that dominates the entire target.
               LOG.warn("[" + mode + " decode] target is not a span! "
                   + Describe.span(fi.getTarget(), fi.getSentence()));
             } else {

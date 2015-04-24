@@ -188,7 +188,7 @@ public class FNAnnotator implements DummyAnnotator {
     c.addToSituationMentionSetList(sms);
   }
 
-  /** @deprecated */
+  /** @deprecated, see edu.jhu.hlt.fnparse.schemachallenge.Annotator.main */
   public static void main(String[] args) throws Exception {
     FNAnnotator anno = new FNAnnotator();
     if (args.length == 1) {
