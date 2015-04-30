@@ -29,6 +29,10 @@ public class ConcreteSentenceAdapter implements HasSentence {
 
   private edu.jhu.hlt.concrete.Sentence cSent;
   private Sentence sentCache;
+  public boolean requireCollapsedDeps = true;
+  public boolean requireBasicDeps = true;
+  public boolean requireConstituencyParse = true;
+  public boolean debug = false;
 
   public ConcreteSentenceAdapter(edu.jhu.hlt.concrete.Sentence adapted) {
     cSent = adapted;
@@ -76,8 +80,9 @@ public class ConcreteSentenceAdapter implements HasSentence {
       // get basic dependency parse
       // get collapsed dependency parse
       for (edu.jhu.hlt.concrete.DependencyParse dep : toks.getDependencyParseList()) {
-        boolean basic = dep.getMetadata().getTool().toLowerCase().contains("basic");
-        boolean collapsed = dep.getMetadata().getTool().toLowerCase().contains("collapsed");
+        boolean basic = dep.getMetadata().getTool().toLowerCase().contains("basic-deps");
+        //boolean collapsed = dep.getMetadata().getTool().toLowerCase().contains("col-deps");
+        boolean collapsed = dep.getMetadata().getTool().toLowerCase().contains("col-ccproc-deps");
         DependencyParse dp = null;
         if ((basic && sentCache.getBasicDeps() == null)
             || (collapsed && sentCache.getCollapsedDeps() == null)) {
@@ -85,8 +90,14 @@ public class ConcreteSentenceAdapter implements HasSentence {
           Arrays.fill(heads, -3);
           String[] labels = new String[n];
           for (edu.jhu.hlt.concrete.Dependency d : dep.getDependencyList()) {
-            assert heads[d.getDep()] == -3;
-            assert labels[d.getDep()] == null;
+            if (debug)
+              LOG.info("adding " + d + " for basic=" + basic + " collapsed=" + collapsed);
+            if (basic) {
+              String msg = "should be no more than one head for each token";
+              assert heads[d.getDep()] == -3 : msg;
+              assert labels[d.getDep()] == null : msg;
+            }
+            // TODO This is wrong for non-basic deps (non-tree structures)!
             heads[d.getDep()] = d.getGov();
             labels[d.getDep()] = d.getEdgeType();
           }
@@ -97,6 +108,10 @@ public class ConcreteSentenceAdapter implements HasSentence {
         if (collapsed && sentCache.getCollapsedDeps() == null)
           sentCache.setCollapsedDeps(dp);
       }
+      if (requireBasicDeps && sentCache.getBasicDeps(false) == null)
+        throw new RuntimeException();
+      if (requireCollapsedDeps && sentCache.getCollapsedDeps(false) == null)
+        throw new RuntimeException();
 
       // get constituency parse
       for (Parse p : toks.getParseList()) {
@@ -105,8 +120,13 @@ public class ConcreteSentenceAdapter implements HasSentence {
           break;
         }
       }
-      if (sentCache.getStanfordParse() == null && toks.getParseListSize() > 0)
+      if (requireConstituencyParse && sentCache.getStanfordParse(false) == null)
+        throw new RuntimeException();
+      // If not required, check if you can pull anything old parse out:
+      if (sentCache.getStanfordParse(false) == null && toks.getParseListSize() > 0) {
+        LOG.warn("taking the first constituency parse");
         sentCache.setStanfordParse(new ConstituencyParse(toks.getParseList().get(0)));
+      }
     }
     return sentCache;
   }
