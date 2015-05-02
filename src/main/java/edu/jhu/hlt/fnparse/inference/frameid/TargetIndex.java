@@ -63,7 +63,7 @@ public class TargetIndex {
         int i,
         Sentence s,
         boolean requireInParens,
-        boolean requirePosMatchOneSingleWord) {
+        boolean ignorePos) {
       // Check the words are the same
       int end = i;
       for (int offset = 0; offset < words.length; offset++) {
@@ -74,18 +74,14 @@ public class TargetIndex {
         if (j >= s.size())
           return null;
 
-        if (words[offset].equalsIgnoreCase(s.getWord(j))
-            || words[offset].equalsIgnoreCase(s.getLemma(j))) {
+        boolean wordMatch = words[offset].equalsIgnoreCase(s.getWord(j))
+            || words[offset].equalsIgnoreCase(s.getLemma(j));
+        boolean posMatch = ignorePos || ptbPos.contains(s.getPos(j));
+        if (wordMatch && posMatch) {
           end++;
         } else {
           return null;
         }
-      }
-      if (requirePosMatchOneSingleWord && words.length == 1) {
-        if (ptbPos.contains(s.getPos(i)))
-          return Span.widthOne(i);
-        else
-          return null;
       }
       return Span.getSpan(i, end);
     }
@@ -176,21 +172,16 @@ public class TargetIndex {
   private Map<Frame, List<LuMatcher>> matchers =
       LuMatcher.getLuMatchersFromLuIndex();
 
-  /**
-   * 
-   * @param requirePosMatchOneSingleWord - slightly higher performance with
-   *        crappy features if true, higher recall if false
-   */
   public Map<Span, Set<Frame>> findFrames(
       Sentence s,
       boolean requireInParens,
-      boolean requirePosMatchOneSingleWord) {
+      boolean ignorePos) {
     Map<Span, Set<Frame>> byTarget = new HashMap<>();
     for (Map.Entry<Frame, List<LuMatcher>> x : matchers.entrySet()) {
       Frame f = x.getKey();
       for (LuMatcher m : x.getValue()) {
         for (int i = 0; i < s.size(); i++) {
-          Span t = m.matches(i, s, requireInParens, requirePosMatchOneSingleWord);
+          Span t = m.matches(i, s, requireInParens, ignorePos);
           if (t != null) {
             assert t.start >= 0 && t.end <= s.size();
             Set<Frame> possible = byTarget.get(t);
