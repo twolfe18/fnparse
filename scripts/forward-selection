@@ -810,6 +810,8 @@ class ConfigJobStarter:
 class JobEngine:
   def __init__(self, name, job_tracker, config_q, job_starter, redis_config, poll_interval=8.0):
     print '[JobEngine] attempting to use redis server at', redis_config
+    if not config_q:
+      raise Exception('you cant give a None config_q')
     self.name = name
     self.job_tracker = job_tracker    # talks to qsub
     self.config_q = config_q          # provides pop() and observe_score(score, name, item)
@@ -1272,6 +1274,12 @@ def ab_test_queue(template_info_filename):
   return mq
 
 
+def agiga_model_queue_frameid(template_info_filename):
+  return agiga_model_queue(template_info_filename, True)
+
+def agiga_model_queue_full(template_info_filename):
+  return agiga_model_queue(template_info_filename, False)
+
 def agiga_model_queue(template_info_filename, run_feature_selection=False):
   template_info, configs = experiments('span', 'regular', template_info_filename)
   c = configs[0]
@@ -1329,20 +1337,36 @@ def debug_queue(template_info_filename):
   return ExplicitQueue([c_reg_fix, c_reg, c_dup_fix, c_dup])
 
 
-def run_experiments(template_info_filename, where):
+def run_experiments(template_info_filename, queue_name, working_dir, where):
 
   local = where == 'local'
   assert local or where == 'grid'
 
-  # Work to be done
-  mq = forward_selection_queue(template_info_filename)
-  working_dir = 'experiments/forward-selection/role/omni'
-  #mq = ab_test_queue(template_info_filename)
-  #working_dir = 'experiments/ab-test'
-  #mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
-  #working_dir = 'experiments/agiga'
-  #mq = debug_queue(template_info_filename)
-  #working_dir = 'experiments/debug'
+  if not os.path.isdir(working_dir):
+    raise Exception('invalid working_dir: ' + working_dir)
+
+  q_func = globals()[queue_name]
+  if not q_func:
+    raise Exception('unknown queue_name: ' + queue_name)
+  print 'running', queue_name
+  mq = q_func(template_info_filename)
+  ## Work to be done
+  #if job_name == 'fs-role':
+  #  mq = forward_selection_queue(template_info_filename)
+  #  working_dir = 'experiments/forward-selection/role/omni'
+  #elif job_name == 'ab-test':
+  #  mq = ab_test_queue(template_info_filename)
+  #  working_dir = 'experiments/ab-test'
+  #elif job_name == 'agiga':
+  #  mq = agiga_model_queue(template_info_filename, run_feature_selection=False)
+  #  working_dir = 'experiments/agiga'
+  #elif job_name == 'debug':
+  #  mq = debug_queue(template_info_filename)
+  #  working_dir = 'experiments/debug'
+  #else:
+  #  raise Exception('unknown job_name: ' + job_name)
+  if not mq:
+    raise Exception('something went wrong retrieving: ' + queue_name)
 
   # Create the job tracker
   if local:
@@ -1373,11 +1397,13 @@ if __name__ == '__main__':
   # Make stdout flush regularly
   sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
 
-  if len(sys.argv) == 3:
+  if len(sys.argv) == 5:
     run_experiments(*(sys.argv[1:]))
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/feature-cardinality-estimation/template.real.txt)'
-    print '2) where to run (i.e. \"grid\" or \"local\")'
+    print '2) the name of a function that returns a queue, e.g. "forward_selection_queue" or "agiga_model_queue"'
+    print '3) a working directory'
+    print '4) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)
 
