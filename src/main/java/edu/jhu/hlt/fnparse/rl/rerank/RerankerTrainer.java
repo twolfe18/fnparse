@@ -117,7 +117,7 @@ public class RerankerTrainer {
     public boolean forceGlobalTrain = true;
 
     // How to implement bFunc for oracle
-    public OracleMode oracleMode = OracleMode.RAND_MAX;
+    public OracleMode oracleMode = OracleMode.MAX;
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
@@ -1080,7 +1080,7 @@ public class RerankerTrainer {
       model = trainer.train1(train);
 
       // Save the model
-      model.serializeParams(new File(workingDir, "model.bin"));
+      model.serializeParams(new File(workingDir, "model.bin_deprecated"));
     }
 
     // Release some memory

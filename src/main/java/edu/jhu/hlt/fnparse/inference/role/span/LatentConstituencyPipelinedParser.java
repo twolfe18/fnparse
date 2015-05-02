@@ -257,8 +257,10 @@ public class LatentConstituencyPipelinedParser implements Parser {
     }
 
     frameId.configure(configuration);
-    rolePruning.configure(configuration);
-    roleLabeling.configure(configuration);
+    if (rolePruning != null)
+      rolePruning.configure(configuration);
+    if (roleLabeling != null)
+      roleLabeling.configure(configuration);
   }
 
   @Override

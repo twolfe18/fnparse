@@ -812,7 +812,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
       return;
 
     final int n = x.size();
-    for (int i=0; i<n; i++) {
+    for (int i = 0; i < n; i++) {
       boolean train = r.nextDouble() > propDev;
       if (train) {
         xTrain.add(x.get(i));

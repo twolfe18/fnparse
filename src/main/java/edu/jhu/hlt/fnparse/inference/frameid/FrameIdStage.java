@@ -46,12 +46,16 @@ import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.stages.AbstractStage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.tutils.FPR;
 
 public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
   public static final Logger LOG = Logger.getLogger(FrameIdStage.class);
   public static boolean SHOW_FEATURES = false;
 
   private ApproxF1MbrDecoder decoder = new ApproxF1MbrDecoder(true, 1.0d);
+  private FPR triage = new FPR(false);
+  private boolean ignorePosForFrameTriage = false;
+  private boolean addGoldFrameIfNotInTriage = true;
 
   public FrameIdStage(GlobalParameters globals, String featureTemplateString) {
     super(globals, featureTemplateString);
@@ -139,11 +143,14 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
     assert labels == null || labels.size() == n;
     for (int i = 0; i < n; i++) {
       Sentence s = input.get(i);
+//      if (s.getWord(2).equalsIgnoreCase("landed"))
+//        LOG.info("debug me");
       if(labels == null)
         data.add(this.new FrameIdDatum(s));//, this));
       else
         data.add(this.new FrameIdDatum(s, /*this,*/ labels.get(i)));
     }
+    LOG.info("[FrameIdStage setupInference] triage: " + triage);
     return new StageDatumExampleList<Sentence, FNTagging>(data);
   }
 
@@ -263,14 +270,21 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
       assert possibleFrames.size() == 0;
       TargetIndex ti = TargetIndex.getInstance();
       boolean requireInParens = false;
-      boolean requirePosMatchOneSingleWord = false;
       Map<Span, Set<Frame>> byTarget = ti.findFrames(
-          sentence, requireInParens, requirePosMatchOneSingleWord);
+          sentence, requireInParens, ignorePosForFrameTriage);
+      Map<Span, FrameInstance> goldFIs = null;
+      if (addGoldFrameIfNotInTriage && gold != null)
+        goldFIs = gold.getFrameLocations();
       for (Map.Entry<Span, Set<Frame>> x : byTarget.entrySet()) {
         Span target = x.getKey();
         List<Frame> frames = new ArrayList<>();
         frames.addAll(x.getValue());
-        FrameVars fv = new FrameVars(target, null, frames);
+        if (addGoldFrameIfNotInTriage && gold != null) {
+          FrameInstance g = goldFIs.get(target);
+          if (g != null && !frames.contains(g.getFrame()))
+            frames.add(g.getFrame());
+        }
+        FrameVars fv = new FrameVars(target, frames);
         possibleFrames.add(fv);
         frameVarInstantiated();
       }
@@ -299,7 +313,11 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
               + "target head word, choosing the first one");
           continue;
         }
-        fHyp.setGold(fi);
+        boolean triageWorked = fHyp.setGold(fi);
+        if (triageWorked)
+          triage.accumTP();
+        else
+          triage.accumFN();
         boolean removed = haventSet.remove(fHyp);
         if (!removed) {
           throw new RuntimeException(
@@ -310,8 +328,10 @@ public class FrameIdStage extends AbstractStage<Sentence, FNTagging> {
 
       // The remaining hypotheses must be null because they didn't
       // correspond to a FI in the parse
-      for (FrameVars fHyp : haventSet)
+      for (FrameVars fHyp : haventSet) {
+        triage.accumFP();
         fHyp.setGoldIsNull();
+      }
     }
 
     @Override

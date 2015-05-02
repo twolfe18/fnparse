@@ -332,7 +332,7 @@ public class Reranker implements Serializable {
     sb.append(desc);
     if (iteration >= 0)
       sb.append(" iter=" + iteration);
-    sb.append(" id=" + y.getId());
+    sb.append(" id=" + (y == null ? "NULL" : y.getId()));
     sb.append(" " + action);
     //sb.append(" score=" + score);
     //sb.append(" actionScore=" + ss.getAdjoints().forwards());
