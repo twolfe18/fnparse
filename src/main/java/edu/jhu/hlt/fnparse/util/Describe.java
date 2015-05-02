@@ -31,12 +31,35 @@ public class Describe {
     return spanWithDeps(Span.getSpan(0, sent.size()), sent, basicDeps);
   }
 
+  public static String spanWithPos(Span s, Sentence sent) {
+    return spanWithPos(s, sent, 0);
+  }
+  public static String spanWithPos(Span s, Sentence sent, int context) {
+    StringBuilder sb = new StringBuilder();
+    int start = Math.max(0, s.start - context);
+    int end = Math.min(sent.size(), s.end + context);
+    for (int i = start; i < end; i++) {
+      if (i > start)
+        sb.append(' ');
+      if (i == s.start)
+        sb.append('[');
+      sb.append(sent.getWord(i));
+      sb.append('/');
+      sb.append(sent.getPos(i));
+      if (i == s.end - 1)
+        sb.append(']');
+    }
+    return sb.toString();
+  }
+
   public static String spanWithDeps(Span s, Sentence sent) {
     return spanWithDeps(s, sent, false);
   }
   public static String spanWithDeps(Span s, Sentence sent, boolean basicDeps) {
     DependencyParse deps =
         basicDeps ? sent.getBasicDeps() : sent.getCollapsedDeps();
+    if (deps == null)
+      throw new IllegalStateException("deps not populated or wrong deps");
     StringBuilder sb = new StringBuilder();
     for (int i = s.start; i < s.end; i++) {
       int head = deps.getHead(i);
