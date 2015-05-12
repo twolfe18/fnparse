@@ -41,7 +41,7 @@ public class FrameRoleEmbeddings implements FrameRoleEmbeddingParams {
     this.dFrameRole = dFrameRole;
     this.dRole = dRole;
     this.l2Penalty = l2Penalty;
-    List<Frame> frames = FrameIndex.getInstance().allFrames();
+    List<Frame> frames = FrameIndex.getFrameNet().allFrames();
     int nF = frames.size();
     assert nF > 0;
     numParams = 0;

@@ -45,7 +45,7 @@ public class ParserTests {
     Sentence s = new Sentence("test", "sent1", tokens, pos, lemmas);
     s.setCollapsedDeps(new DependencyParse(gov, depType));
 
-    FrameIndex frameIdx = FrameIndex.getInstance();
+    FrameIndex frameIdx = FrameIndex.getFrameNet();
     List<FrameInstance> instances = new ArrayList<FrameInstance>();
 
     Frame speed = frameIdx.getFrame("Speed");

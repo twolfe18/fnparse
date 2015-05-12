@@ -23,14 +23,76 @@ import org.w3c.dom.NodeList;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.Document.ConstituentItr;
+import edu.jhu.hlt.tutils.Document.ConstituentType;
 
 public class DataUtil {
   public static final Logger LOG = Logger.getLogger(DataUtil.class);
+
+  /**
+   * Converts a tutils.Document with a Propbank parse (as a constituency parse)
+   * into a collection of FNParses. Alphabet must be set for doc.
+   */
+  public static List<FNParse> convert(edu.jhu.hlt.tutils.Document doc) {
+    if (doc.getAlphabet() == null)
+      throw new IllegalArgumentException();
+    List<FNParse> l = new ArrayList<>();
+
+    Iterator<edu.jhu.hlt.tutils.Document.Sentence> si = doc.getSentences();
+    while (si.hasNext()) {
+      edu.jhu.hlt.tutils.Document.Sentence s = si.next();
+
+      // Build the sentence that the parse lies in.
+      String dataset = null;
+      Sentence sent = Sentence.convertFromTutils(dataset, s);
+
+      // Build the parse itself.
+
+      // Find the first token which has a Propbank parent
+      edu.jhu.hlt.tutils.Document.Constituent root = null;
+      for (edu.jhu.hlt.tutils.Document.Token t : s.getTokens()) {
+        int p = t.getConstituentParentIndex(ConstituentType.PROPBANK_GOLD);
+        if (p < 0)
+          continue;
+        root = doc.getConstituent(p);
+        if (!root.isRoot())
+          root = root.getParent();
+        assert root.isRoot();
+        assert root.getLeftChild() >= 0;
+        break;
+      }
+
+      // Lookup the frame
+      MultiAlphabet alph = doc.getAlphabet();
+      FrameIndex propbank = FrameIndex.getPropbank();
+      Frame f = propbank.getFrame(alph.cfg(root.getLhs()));
+      Span target = Span.getSpan(root.getFirstToken(), root.getLastToken() + 1);
+
+      // Add the arguments
+      Span[] args = new Span[f.numRoles()];
+      for (ConstituentItr argItr = doc.getConstituentItr(root.getLeftChild());
+          argItr.isValid();
+          argItr.gotoRightSib()) {
+        String roleName = alph.cfg(argItr.getLhs());
+        int k = propbank.getRoleIdx(f, roleName);
+        args[k] = Span.getSpan(argItr.getStart(), argItr.getLastToken() + 1);
+      }
+
+      // TODO I'm assuming 1 predicate per sentence, check this.
+      FrameInstance fi = FrameInstance.newFrameInstance(f, target, args, sent);
+      FNParse p = new FNParse(sent, Arrays.asList(fi));
+      l.add(p);
+    }
+
+    return l;
+  }
 
   public static List<Sentence> stripAnnotations(
       List<? extends FNTagging> tagged) {

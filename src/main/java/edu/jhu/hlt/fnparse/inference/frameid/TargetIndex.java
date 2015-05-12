@@ -134,20 +134,20 @@ public class TargetIndex {
           }
           // Store the LuMatcher
           LuMatcher lum = new LuMatcher(words, inParens, pos);
-          Frame frame = FrameIndex.getInstance().getFrame(frameName);
+          Frame frame = FrameIndex.getFrameNet().getFrame(frameName);
           addlum(f2lum, frame, lum);
         }
         r.close();
 
         // Special cases that are common in training data
         addlum(f2lum,
-            FrameIndex.getInstance().getFrame("Existence"),
+            FrameIndex.getFrameNet().getFrame("Existence"),
             new LuMatcher(new String[] {"there"}, new boolean[] {false}, "n"));
         addlum(f2lum,
-            FrameIndex.getInstance().getFrame("Quantity"),
+            FrameIndex.getFrameNet().getFrame("Quantity"),
             new LuMatcher(new String[] {"lot"}, new boolean[] {false}, "n"));
         addlum(f2lum,
-            FrameIndex.getInstance().getFrame("Intentionally_act"),
+            FrameIndex.getFrameNet().getFrame("Intentionally_act"),
             new LuMatcher(new String[] {"carry"}, new boolean[] {false}, "v"));
 
         return f2lum;

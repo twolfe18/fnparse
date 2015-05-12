@@ -247,7 +247,7 @@ public class ArgPruner implements Serializable, IArgPruner {
       LOG.info("[ArgPruner] building role word and synset maps...");
       roleWordMap = new Set[FrameIndex.framesInFrameNet+1][];
       roleSynsetMap = new Set[FrameIndex.framesInFrameNet+1][];
-      FrameIndex fi = FrameIndex.getInstance();
+      FrameIndex fi = FrameIndex.getFrameNet();
       IDictionary dict = targetPruningData.getWordnetDict();
       WordnetStemmer stemmer = new WordnetStemmer(dict);
       for (Frame f : fi.allFrames()) {
@@ -362,7 +362,7 @@ public class ArgPruner implements Serializable, IArgPruner {
     LOG.info("[ArgPruner readLUTensor] reading from " + f.getPath());
     try {
       Set<LexicalUnit>[][] saa = new Set[FrameIndex.framesInFrameNet+1][];
-      FrameIndex fi = FrameIndex.getInstance();
+      FrameIndex fi = FrameIndex.getFrameNet();
       for(Frame fr : fi.allFrames())
         saa[fr.getId()] = new Set[fr.numRoles()];
 

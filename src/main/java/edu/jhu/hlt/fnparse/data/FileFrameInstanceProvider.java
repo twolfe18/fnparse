@@ -56,7 +56,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
 			try {
 				litrFrames = new LineIterator(new FileReader(frameFile));
 				litrConll = new LineIterator(new FileReader(conllFile));
-				frameByName = FrameIndex.getInstance().nameToFrameMap();
+				frameByName = FrameIndex.getFrameNet().nameToFrameMap();
 				// The frame preamble is the first line
 				// These line have been run for side effect
 				litrFrames.nextLine();

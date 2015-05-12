@@ -23,7 +23,7 @@ public class FrameInstanceCorrupter {
 
   public FrameInstanceCorrupter() {
     rand = new Random(9001);
-    allFrames = new ArrayList<>(FrameIndex.getInstance().allFrames());
+    allFrames = new ArrayList<>(FrameIndex.getFrameNet().allFrames());
     Collections.shuffle(allFrames, rand);
   }
 

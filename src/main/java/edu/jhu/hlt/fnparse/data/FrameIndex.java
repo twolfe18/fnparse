@@ -29,8 +29,9 @@ public class FrameIndex implements FrameIndexInterface {
    */
   public static final Frame nullFrame = Frame.nullFrame;
   public static final int framesInFrameNet = 1019;	// The number of frames in Framenet 1.5
+  public static final int framesInPropbank = 9999;  // TODO
 
-  public static class FrameIndexIterator implements Iterable<Frame>{
+  public static class FrameNetIterator implements Iterable<Frame>{
     // The reader that points to the frameindex file
     private LineIterator litFE; 
     private LineIterator litLU;
@@ -44,7 +45,7 @@ public class FrameIndex implements FrameIndexInterface {
     private String prevFrameID;
 
     private String prevFrameName = null;
-    public FrameIndexIterator(){
+    public FrameNetIterator(){
       try {
         litFE = FileUtils.lineIterator(UsefulConstants.frameIndexPath, "UTF-8");
         litLU = FileUtils.lineIterator(UsefulConstants.frameIndexLUPath, "UTF-8");
@@ -132,54 +133,65 @@ public class FrameIndex implements FrameIndexInterface {
     }
   }
 
-  private static FrameIndex singleton;
-  private List<Frame> allFrames = new ArrayList<Frame>(framesInFrameNet);;
-  private Map<String, Frame> nameToFrameMap = new HashMap<String, Frame>();
-  private Map<Integer, String> indexToNameMap = new HashMap<Integer, String>();
-  private Frame[] byId = new Frame[framesInFrameNet + 1];
+  private static FrameIndex frameNet;
+  private static FrameIndex propbank;
 
-  private FrameIndex() { 
-    // singleton
-    // Since its a singleton and its really lightweight.
-    // Just populate it during construction.
-    LOG.info("reading frames");
-    int idx = 0;
-    for(Frame f: new FrameIndexIterator()){
-      allFrames.add(f);
-      nameToFrameMap.put(f.getName(), f);
-      indexToNameMap.put(idx, f.getName());
-      assert byId[f.getId()] == null;
-      byId[f.getId()] = f;
-    }
+  private List<Frame> allFrames;
+  private Map<String, Frame> nameToFrameMap;
+  private Map<Integer, String> indexToNameMap;
+  private Frame[] byId;
 
-    // Read in information about what the core roles are
-    try {
-      File coreFile = new File("toydata/core-roles.txt");
-      LOG.info("reading role core types from " + coreFile.getPath());
-      BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(coreFile)));
-      while (r.ready()) {
-        String line = r.readLine();
-        String[] toks = line.split("\\t");
-        assert toks.length == 3;
-        Frame f = nameToFrameMap.get(toks[0]);
-        int k = Arrays.asList(f.getRoles()).indexOf(toks[1]);
-        if (k < 0) {
-          LOG.warn("missing " + toks[1] + " role for " + toks[0] + "?");
-        } else {
-          f.setRoleType(k, toks[2]);
-        }
-      }
-      r.close();
-      LOG.info("done reading role core types");
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
+  public FrameIndex(int nFrames) {
+    allFrames = new ArrayList<Frame>(nFrames);;
+    nameToFrameMap = new HashMap<String, Frame>();
+    indexToNameMap = new HashMap<Integer, String>();
+    byId = new Frame[nFrames + 1];
   }
 
-  public static FrameIndex getInstance() {
-    if(singleton == null)
-      singleton = new FrameIndex();
-    return singleton;
+  public static FrameIndex getPropbank() {
+    if (propbank == null) {
+      throw new RuntimeException("implement me");
+    }
+    return propbank;
+  }
+
+  public static FrameIndex getFrameNet() {
+    if(frameNet == null) {
+      LOG.info("reading frames");
+      frameNet = new FrameIndex(framesInFrameNet);
+      int idx = 0;
+      for(Frame f: new FrameNetIterator()){
+        frameNet.allFrames.add(f);
+        frameNet.nameToFrameMap.put(f.getName(), f);
+        frameNet.indexToNameMap.put(idx, f.getName());
+        assert frameNet.byId[f.getId()] == null;
+        frameNet.byId[f.getId()] = f;
+      }
+
+      // Read in information about what the core roles are
+      try {
+        File coreFile = new File("toydata/core-roles.txt");
+        LOG.info("reading role core types from " + coreFile.getPath());
+        BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(coreFile)));
+        while (r.ready()) {
+          String line = r.readLine();
+          String[] toks = line.split("\\t");
+          assert toks.length == 3;
+          Frame f = frameNet.nameToFrameMap.get(toks[0]);
+          int k = Arrays.asList(f.getRoles()).indexOf(toks[1]);
+          if (k < 0) {
+            LOG.warn("missing " + toks[1] + " role for " + toks[0] + "?");
+          } else {
+            f.setRoleType(k, toks[2]);
+          }
+        }
+        r.close();
+        LOG.info("done reading role core types");
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return frameNet;
   }
 
   public Frame getFrame(int id) {

@@ -15,7 +15,7 @@ public class TargetPruningDataTests {
 
 	@Test
 	public void checkForAFewLUs() {
-		FrameIndex fi = FrameIndex.getInstance();
+		FrameIndex fi = FrameIndex.getFrameNet();
 		checkLU(new LexicalUnit("area", "N"), fi.getFrame("Dimension"));
 		checkLU(new LexicalUnit("year", "N"), fi.getFrame("Calendric_unit"));
 	}

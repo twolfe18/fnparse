@@ -21,7 +21,7 @@ public class FrameIndexTest {
 	public void basic() {
 		
 		long start = System.currentTimeMillis();
-		FrameIndex frameIndex = FrameIndex.getInstance();
+		FrameIndex frameIndex = FrameIndex.getFrameNet();
 		List<Frame> allFrames = frameIndex.allFrames();
 		Map<String, Frame> frameMap = frameIndex.nameToFrameMap();
 		List<Frame> allFrames2 = frameIndex.allFrames();
@@ -54,7 +54,7 @@ public class FrameIndexTest {
 	@Test
 	public void listFNposTags() {
 		Set<String> all = new HashSet<String>();
-		for(Frame f : FrameIndex.getInstance().allFrames())
+		for(Frame f : FrameIndex.getFrameNet().allFrames())
 			for(int i=0; i<f.numLexicalUnits(); i++)
 				all.add(f.getLexicalUnit(i).pos);
 		System.out.println("\nAll POS tags used in lexical units for frames:");
@@ -63,7 +63,7 @@ public class FrameIndexTest {
 		
 		// lets get all words listed as ART = article
 		all.clear();
-		for(Frame f : FrameIndex.getInstance().allFrames())
+		for(Frame f : FrameIndex.getFrameNet().allFrames())
 			for(int i=0; i<f.numLexicalUnits(); i++)
 				if(f.getLexicalUnit(i).pos.equalsIgnoreCase("ART"))
 					all.add(f.getLexicalUnit(i).word);

@@ -201,7 +201,7 @@ public class TargetPruningData implements Serializable {
   private synchronized void initLexicalUnitData() {
     LOG.info("[TargetPruningData] building LU => List<Frame> index...");
     word2pos2frames = new HashMap<String, Map<String, List<Frame>>>();
-    for(Frame f : FrameIndex.getInstance().allFrames()) {
+    for(Frame f : FrameIndex.getFrameNet().allFrames()) {
       int nLU = f.numLexicalUnits();
       for(int i=0; i<nLU; i++) {
         LexicalUnit lu = f.getLexicalUnit(i);

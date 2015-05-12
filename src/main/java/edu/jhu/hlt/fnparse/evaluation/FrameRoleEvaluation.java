@@ -47,7 +47,7 @@ public class FrameRoleEvaluation {
 
   private static Map<String, FREvalFunc> genByFrameRole() {
     Map<String, FREvalFunc> m = new HashMap<>();
-    for (Frame f : FrameIndex.getInstance().allFrames()) {
+    for (Frame f : FrameIndex.getFrameNet().allFrames()) {
       int K = f.numRoles();
       for (int k = 0; k < K; k++) {
         for (FPR.Mode mode : FPR.Mode.values()) {

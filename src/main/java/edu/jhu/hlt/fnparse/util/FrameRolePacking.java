@@ -19,7 +19,7 @@ public class FrameRolePacking {
     int n = FrameIndex.framesInFrameNet + 1;
     roleOffsets = new int[n];
     size = 0;
-    for (Frame f : FrameIndex.getInstance().allFrames()) {
+    for (Frame f : FrameIndex.getFrameNet().allFrames()) {
       roleOffsets[f.getId()] = size;
       size += f.numRoles() + specialValues;
     }
