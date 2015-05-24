@@ -18,6 +18,8 @@ import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TIOStreamTransport;
 
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.tutils.Document;
+import edu.jhu.hlt.tutils.Document.Constituent;
 
 /**
  * Wraps edu.jhu.hlt.concrete.Parse and builds a tree (with pointers)
@@ -40,6 +42,7 @@ public class ConstituencyParse {
 
   public static class Node {
     edu.jhu.hlt.concrete.Constituent base;
+    edu.jhu.hlt.tutils.Document.Constituent base2;
     Span span;
     Node parent;
     Node headChild;
@@ -48,6 +51,15 @@ public class ConstituencyParse {
 
     public Node(edu.jhu.hlt.concrete.Constituent c) {
       base = c;
+      base2 = null;
+      span = null;
+      parent = null;
+      children = new ArrayList<>();
+    }
+
+    public Node(edu.jhu.hlt.tutils.Document.Constituent c) {
+      base = null;
+      base2 = c;
       span = null;
       parent = null;
       children = new ArrayList<>();
@@ -136,7 +148,6 @@ public class ConstituencyParse {
     }
   }
 
-  //private List<Node> nodes = new ArrayList<>();
   private Node[] nodes;
   private Map<Span, List<Node>> index;
   private boolean builtPointers = false;
@@ -172,6 +183,20 @@ public class ConstituencyParse {
     checkSpans(n);
   }
 
+  public ConstituencyParse(edu.jhu.hlt.tutils.Document.Constituent parse) {
+    helper(parse);
+  }
+  private void helper(edu.jhu.hlt.tutils.Document.Constituent node) {
+    addConstituent(node);
+    Document d = node.getDocument();
+    int child = node.getLeftChild();
+    while (child >= 0) {
+      Constituent c = d.getConstituent(child);
+      helper(c);
+      child = c.getRightSib();
+    }
+  }
+
   /**
    * Converts a labeled parse tree to an unlabeled one.
    * Before: (S (NP John) (VP (V loves) (NP Mary)))
@@ -189,6 +214,16 @@ public class ConstituencyParse {
       assert n.getSpan().start >= 0;
       assert n.getSpan().start < n.getSpan().end;
     }
+  }
+
+  public void addConstituent(edu.jhu.hlt.tutils.Document.Constituent c) {
+    if (nodes == null)
+      nodes = new Node[c.getIndex() + 1];
+    else if (c.getIndex() >= nodes.length)
+      nodes = Arrays.copyOf(nodes, c.getIndex() + 1);
+    Node n = new Node(c);
+    //LOG.info("[addConstituent] " + c.getId() + " = " + n);
+    nodes[c.getIndex()] = n;
   }
 
   public void addConstituent(edu.jhu.hlt.concrete.Constituent c) {
@@ -253,8 +288,15 @@ public class ConstituencyParse {
   private void percolateUp(Node n) {
     if (n.parent == null)
       return;
-    if (n.isLeaf())
-      n.span = ConcreteStanfordWrapper.constituentToSpan(n.base);
+    if (n.isLeaf()) {
+      if (n.base2 != null) {
+        assert n.base2.getFirstToken() >= 0;
+        assert n.base2.getLastToken() >= 0;
+        n.span = Span.getSpan(n.base2.getFirstToken(), n.base2.getLastToken() + 1);
+      } else {
+        n.span = ConcreteStanfordWrapper.constituentToSpan(n.base);
+      }
+    }
     if (n.parent.span == null) {
       assert n.span != null;
       n.parent.span = n.span;
@@ -269,23 +311,47 @@ public class ConstituencyParse {
   public void buildPointers() {
     if (builtPointers)
       return;
+
     //LOG.info("building pointers");
     //TIMER.start();
-    for (int i = 0; i < nodes.length; i++) {
-      Node cur = nodes[i];
-      if (cur == null) {
-        LOG.warn("gap in the nodes?");
-        assert false;
-        continue;
+
+    if (nodes[0].base2 != null) {
+      // Use tutils representation
+      Document d = nodes[0].base2.getDocument();
+      for (int i = 0; i < nodes.length; i++) {
+        // Parent
+        Node cur = nodes[i];
+        if (cur.base2.getParent() != Document.NONE) {
+          Node parent = nodes[cur.base2.getParent()];
+          cur.parent = parent;
+        }
+
+        // Children
+        cur.children = new ArrayList<>();
+        int child = cur.base2.getLeftChild();
+        while (child >= 0) {
+          cur.children.add(nodes[child]);
+          child = d.getRightSib(child);
+        }
       }
-      //LOG.info("[buildPointers] " + i + " = " + cur);
-      if (cur.base.getHeadChildIndex() >= 0)
-        cur.headChild = nodes[cur.base.getHeadChildIndex()];
-      for (int childIdx : cur.base.getChildList()) {
-        Node child = nodes[childIdx];
-        assert child.parent == null || child.parent == cur;
-        child.parent = cur;
-        cur.children.add(child);
+    } else {
+      // Use concrete representation
+      for (int i = 0; i < nodes.length; i++) {
+        Node cur = nodes[i];
+        if (cur == null) {
+          LOG.warn("gap in the nodes?");
+          assert false;
+          continue;
+        }
+        //LOG.info("[buildPointers] " + i + " = " + cur);
+        if (cur.base.getHeadChildIndex() >= 0)
+          cur.headChild = nodes[cur.base.getHeadChildIndex()];
+        for (int childIdx : cur.base.getChildList()) {
+          Node child = nodes[childIdx];
+          assert child.parent == null || child.parent == cur;
+          child.parent = cur;
+          cur.children.add(child);
+        }
       }
     }
 
