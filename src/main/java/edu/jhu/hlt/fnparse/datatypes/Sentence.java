@@ -46,7 +46,7 @@ public class Sentence implements HasId {
   private ConstituencyParse stanfordParse;
   private boolean hideSyntax = false;
 
-  public static Sentence convertFromTutils(String dataset, edu.jhu.hlt.tutils.Document.Sentence s) {
+  public static Sentence convertFromTutils(String dataset, String id, edu.jhu.hlt.tutils.Document.Sentence s) {
     int n = s.getWidth();
     String[] tokens = new String[n];
     String[] pos = new String[n];
@@ -55,9 +55,9 @@ public class Sentence implements HasId {
       edu.jhu.hlt.tutils.Document.Token t = s.getToken(i);
       tokens[i] = t.getWordStr();
       pos[i] = t.getPosStr();
-      lemmas[i] = s.getAlphabet().lemma(t.getLemma());
+      if (t.getLemma() >= 0)
+        lemmas[i] = s.getAlphabet().lemma(t.getLemma());
     }
-    String id = null;
     return new Sentence(dataset, id, tokens, pos, lemmas);
   }
 

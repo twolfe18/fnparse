@@ -21,6 +21,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -29,6 +30,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.Document.ConstituentType;
@@ -45,15 +47,24 @@ public class DataUtil {
       throw new IllegalArgumentException();
     List<FNParse> l = new ArrayList<>();
 
+    int i = 0;
     Iterator<edu.jhu.hlt.tutils.Document.Sentence> si = doc.getSentences();
     while (si.hasNext()) {
       edu.jhu.hlt.tutils.Document.Sentence s = si.next();
 
       // Build the sentence that the parse lies in.
       String dataset = null;
-      Sentence sent = Sentence.convertFromTutils(dataset, s);
+      String id = "s" + (i++);
+      Sentence sent = Sentence.convertFromTutils(dataset, id, s);
 
       // Build the parse itself.
+      Constituent node = doc.getConstituentParent(
+          s.getStart(), ConstituentType.PTB_GOLD);
+      while (node.getParent() >= 0)
+        node = node.getParentC();
+      ConstituencyParse parse = new ConstituencyParse(node);
+      parse.buildPointers();
+      sent.setStanfordParse(parse);
 
       // Find the first token which has a Propbank parent
       edu.jhu.hlt.tutils.Document.Constituent root = null;
@@ -63,7 +74,7 @@ public class DataUtil {
           continue;
         root = doc.getConstituent(p);
         if (!root.isRoot())
-          root = root.getParent();
+          root = root.getParentC();
         assert root.isRoot();
         assert root.getLeftChild() >= 0;
         break;

@@ -30,6 +30,7 @@ import java.util.stream.Collectors;
 
 import org.apache.log4j.Logger;
 
+import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -66,6 +67,8 @@ import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
+import edu.jhu.hlt.tutils.ConcreteIO;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
@@ -1004,7 +1007,30 @@ public class RerankerTrainer {
 
     // Get train and test data.
     ItemProvider train, test, trainAndTest = null;
-    if (config.getBoolean("realTestSet", false)) {
+    if (config.getBoolean("propbank", false)) {
+      LOG.info("[main] running on propbank data");
+      // Ontonotes => Concrete via concrete-conll code (or move it)
+      // Concrete => tutils.Document via tutils code
+      // tutils.Document => List<FNParse> via DataUtils
+      List<Communication> ontonotes = null; // TODO
+      List<FNParse> parses = new ArrayList<>();
+      MultiAlphabet alph = new MultiAlphabet();
+      ConcreteIO cio = ConcreteIO.makeInstance();
+      for (int i = 0; i < ontonotes.size(); i++) {
+        edu.jhu.hlt.tutils.Document d =
+            cio.communication2Document(ontonotes.get(i), i, alph);
+        for (FNParse p : DataUtil.convert(d))
+          parses.add(p);
+      }
+      LOG.info("[main] done reading propbank");
+      trainAndTest = new ItemProvider.ParseWrapper(parses);
+      // TODO split in the same fashion as below
+      throw new RuntimeException("implement me!");
+      
+      
+      
+
+    } else if (config.getBoolean("realTestSet", false)) {
       LOG.info("[main] running on real test set");
       train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
           FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
