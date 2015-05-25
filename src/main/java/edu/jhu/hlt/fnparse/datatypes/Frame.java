@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
+
 public class Frame {
 
   private int idx;
@@ -21,6 +23,17 @@ public class Frame {
     this.name = name;
     this.lexicalUnits = lexicalUnits;
     this.roles = roles;
+  }
+
+  public Frame(PropbankFrame pf, int idx) {
+    this.idx = idx;
+    this.name = pf.id;
+    this.lexicalUnits = null;
+    this.roleTypes = null;
+    this.roles = new String[pf.numRoles()];
+    for (int i = 0; i < roles.length; i++) {
+      this.roles[i] = pf.getRole(i).name;
+    }
   }
 
   private Frame() {

@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -18,6 +20,8 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex;
+import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
 
 /**
  * Reads frames from disk and provides access to them
@@ -150,7 +154,31 @@ public class FrameIndex implements FrameIndexInterface {
 
   public static FrameIndex getPropbank() {
     if (propbank == null) {
-      throw new RuntimeException("implement me");
+      File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-4.0/data/files/data/english/metadata/frames");
+      PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
+      // Sort the frames by name to prevent any change in ids (unless a frame is
+      // added or removed...)
+      List<PropbankFrame> frames = pfi.getAllFrames();
+      Collections.sort(frames, new Comparator<PropbankFrame>() {
+        @Override
+        public int compare(PropbankFrame o1, PropbankFrame o2) {
+          return o1.id.compareTo(o2.id);
+        }
+      });
+      FrameIndex fi = new FrameIndex(frames.size());
+      int numericId = 0;
+      for (PropbankFrame pf : frames) {
+        Frame f = new Frame(pf, numericId);
+        fi.allFrames.add(f);
+        assert fi.byId[f.getId()] == null;
+        fi.byId[f.getId()] = f;
+        String old1 = fi.indexToNameMap.put(f.getId(), f.getName());
+        assert old1 == null;
+        Frame old2 = fi.nameToFrameMap.put(f.getName(), f);
+        assert old2 == null;
+        numericId++;
+      }
+      propbank = fi;
     }
     return propbank;
   }

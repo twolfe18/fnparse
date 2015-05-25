@@ -79,10 +79,15 @@ public class DataUtil {
         assert root.getLeftChild() >= 0;
         break;
       }
+      if (root == null) {
+        throw new RuntimeException("didn't find any propositions?");
+      }
+      System.out.println("did find props!");
 
       // Lookup the frame
       MultiAlphabet alph = doc.getAlphabet();
       FrameIndex propbank = FrameIndex.getPropbank();
+      System.out.println("frame=" + alph.cfg(root.getLhs()));
       Frame f = propbank.getFrame(alph.cfg(root.getLhs()));
       Span target = Span.getSpan(root.getFirstToken(), root.getLastToken() + 1);
 
