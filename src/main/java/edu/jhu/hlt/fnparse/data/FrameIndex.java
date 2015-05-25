@@ -168,7 +168,7 @@ public class FrameIndex implements FrameIndexInterface {
       FrameIndex fi = new FrameIndex(frames.size());
       int numericId = 0;
       for (PropbankFrame pf : frames) {
-        Frame f = new Frame(pf, numericId);
+        Frame f = new Frame(pf, numericId, PropbankFrameIndex.MODIFIER_ROLES);
         fi.allFrames.add(f);
         assert fi.byId[f.getId()] == null;
         fi.byId[f.getId()] = f;
@@ -224,7 +224,7 @@ public class FrameIndex implements FrameIndexInterface {
 
   public Frame getFrame(int id) {
     Frame f = byId[id];
-    if(f == null)
+    if (f == null)
       throw new RuntimeException();
     return f;
   }
@@ -234,10 +234,11 @@ public class FrameIndex implements FrameIndexInterface {
   }
 
   public int getRoleIdx(Frame f, String roleName) {
-    for(int i=0; i<f.numRoles(); i++)
-      if(f.getRole(i).equals(roleName))
+    for (int i=0; i<f.numRoles(); i++)
+      if (f.getRole(i).equals(roleName))
         return i;
-    throw new IllegalStateException("frame=" + f + ", roleName=" + roleName);
+    throw new IllegalStateException("Can't find that role! frame.roles="
+        + Arrays.toString(f.getRoles()) + ", roleName=" + roleName);
   }
 
   public List<Frame> allFrames() {

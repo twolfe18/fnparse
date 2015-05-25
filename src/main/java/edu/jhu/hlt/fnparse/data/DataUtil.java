@@ -21,7 +21,6 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
-import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -31,9 +30,9 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Document.Constituent;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
-import edu.jhu.hlt.tutils.Document.ConstituentType;
 
 public class DataUtil {
   public static final Logger LOG = Logger.getLogger(DataUtil.class);
@@ -46,65 +45,59 @@ public class DataUtil {
     if (doc.getAlphabet() == null)
       throw new IllegalArgumentException();
     List<FNParse> l = new ArrayList<>();
+    MultiAlphabet alph = doc.getAlphabet();
+    FrameIndex propbank = FrameIndex.getPropbank();
 
     int i = 0;
-    Iterator<edu.jhu.hlt.tutils.Document.Sentence> si = doc.getSentences();
-    while (si.hasNext()) {
-      edu.jhu.hlt.tutils.Document.Sentence s = si.next();
+    ConstituentItr sent = doc.getConstituentItr(doc.cons_sentences);
+    ConstituentItr prop = doc.getConstituentItr(doc.cons_propbank_gold);
+    for (; sent.isValid(); sent.gotoRightSib()) {
 
-      // Build the sentence that the parse lies in.
+      // Build the sentence that the parses lies in
       String dataset = null;
       String id = "s" + (i++);
-      Sentence sent = Sentence.convertFromTutils(dataset, id, s);
+      Sentence s = Sentence.convertFromTutils(
+          dataset, id, doc, sent.getFirstToken(), sent.getLastToken());
+      Log.info("working on sentence " + id);
+      Log.info(Describe.sentence(s));
 
-      // Build the parse itself.
-      Constituent node = doc.getConstituentParent(
-          s.getStart(), ConstituentType.PTB_GOLD);
-      while (node.getParent() >= 0)
-        node = node.getParentC();
-      ConstituencyParse parse = new ConstituencyParse(node);
-      parse.buildPointers();
-      sent.setStanfordParse(parse);
+      // Add every proposition which is in this sentence
+      List<FrameInstance> fis = new ArrayList<>();
+      for (; prop.isValid() && prop.getLastToken() <= sent.getLastToken(); prop.gotoRightSib()) {
+        assert prop.getFirstToken() >= sent.getFirstToken() : "prop crosses sentence";
+        String lhs = alph.srl(prop.getLhs());
+        Log.info("  adding prop [" + prop.getFirstToken() + ", " + prop.getLastToken() + "] " + lhs);
+        assert "propbank".equals(lhs);
 
-      // Find the first token which has a Propbank parent
-      edu.jhu.hlt.tutils.Document.Constituent root = null;
-      for (edu.jhu.hlt.tutils.Document.Token t : s.getTokens()) {
-        int p = t.getConstituentParentIndex(ConstituentType.PROPBANK_GOLD);
-        if (p < 0)
-          continue;
-        root = doc.getConstituent(p);
-        if (!root.isRoot())
-          root = root.getParentC();
-        assert root.isRoot();
-        assert root.getLeftChild() >= 0;
-        break;
+        // Lookup the frame
+        Constituent pred = prop.getLeftChildC();
+        System.out.println("frame=" + alph.srl(pred.getLhs()));
+        Frame f = propbank.getFrame(alph.srl(pred.getLhs()));
+        int start = pred.getFirstToken() - sent.getFirstToken();
+        int end = (pred.getLastToken() - sent.getFirstToken()) + 1;
+        Span target = Span.getSpan(start, end);
+
+        System.out.println("rightSib=" + pred.getRightSib());
+        System.out.println("prop.rightSib=" + prop.getRightSib());
+        System.out.println("target=" + target);
+
+        // Add the arguments
+        Span[] args = new Span[f.numRoles()];
+        Arrays.fill(args, Span.nullSpan);
+        for (ConstituentItr argItr = doc.getConstituentItr(pred.getRightSib());
+            argItr.isValid();
+            argItr.gotoRightSib()) {
+          String roleName = alph.srl(argItr.getLhs());
+          System.out.println("  argItr.index=" + argItr.getIndex() + " lhs=" + roleName);
+          int k = propbank.getRoleIdx(f, roleName);
+          start = argItr.getFirstToken() - sent.getFirstToken();
+          end = (argItr.getLastToken() - sent.getFirstToken()) + 1;
+          args[k] = Span.getSpan(start, end);
+        }
+
+        fis.add(FrameInstance.newFrameInstance(f, target, args, s));
       }
-      if (root == null) {
-        throw new RuntimeException("didn't find any propositions?");
-      }
-      System.out.println("did find props!");
-
-      // Lookup the frame
-      MultiAlphabet alph = doc.getAlphabet();
-      FrameIndex propbank = FrameIndex.getPropbank();
-      System.out.println("frame=" + alph.cfg(root.getLhs()));
-      Frame f = propbank.getFrame(alph.cfg(root.getLhs()));
-      Span target = Span.getSpan(root.getFirstToken(), root.getLastToken() + 1);
-
-      // Add the arguments
-      Span[] args = new Span[f.numRoles()];
-      for (ConstituentItr argItr = doc.getConstituentItr(root.getLeftChild());
-          argItr.isValid();
-          argItr.gotoRightSib()) {
-        String roleName = alph.cfg(argItr.getLhs());
-        int k = propbank.getRoleIdx(f, roleName);
-        args[k] = Span.getSpan(argItr.getStart(), argItr.getLastToken() + 1);
-      }
-
-      // TODO I'm assuming 1 predicate per sentence, check this.
-      FrameInstance fi = FrameInstance.newFrameInstance(f, target, args, sent);
-      FNParse p = new FNParse(sent, Arrays.asList(fi));
-      l.add(p);
+      l.add(new FNParse(s, fis));
     }
 
     return l;
