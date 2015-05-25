@@ -47,16 +47,23 @@ public class Sentence implements HasId {
   private boolean hideSyntax = false;
 
   public static Sentence convertFromTutils(String dataset, String id, edu.jhu.hlt.tutils.Document.Sentence s) {
-    int n = s.getWidth();
-    String[] tokens = new String[n];
-    String[] pos = new String[n];
-    String[] lemmas = new String[n];
-    for (int i = 0; i < n; i++) {
-      edu.jhu.hlt.tutils.Document.Token t = s.getToken(i);
+    return convertFromTutils(dataset, id, s.getDocument(), s.getStart(), s.getStart() + s.getWidth() - 1);
+  }
+  public static Sentence convertFromTutils(String dataset, String id, edu.jhu.hlt.tutils.Document doc, int firstToken, int lastToken) {
+    if (firstToken < 0)
+      throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
+    if (lastToken < 0 || lastToken < firstToken)
+      throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
+    int width = (lastToken - firstToken) + 1;
+    String[] tokens = new String[width];
+    String[] pos = new String[width];
+    String[] lemmas = new String[width];
+    for (int i = 0; i < width; i++) {
+      edu.jhu.hlt.tutils.Document.Token t = doc.getToken(firstToken + i);
       tokens[i] = t.getWordStr();
       pos[i] = t.getPosStr();
       if (t.getLemma() >= 0)
-        lemmas[i] = s.getAlphabet().lemma(t.getLemma());
+        lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
     return new Sentence(dataset, id, tokens, pos, lemmas);
   }
