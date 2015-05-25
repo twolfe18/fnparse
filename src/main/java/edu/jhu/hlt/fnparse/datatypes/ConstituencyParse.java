@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -148,9 +147,12 @@ public class ConstituencyParse {
     }
   }
 
-  private Node[] nodes;
+  //private Node[] nodes;
+  private Map<Integer, Node> nodes;
   private Map<Span, List<Node>> index;
   private boolean builtPointers = false;
+  private boolean usingTutils = false;
+  private boolean usingConcrete = false;
   private transient edu.jhu.hlt.concrete.Parse createdFrom;
 
   public static final Function<DataInputStream, ConstituencyParse> DESERIALIZATION_FUNC = dis -> {
@@ -171,12 +173,16 @@ public class ConstituencyParse {
   };
 
   public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse) {
+    this.nodes = new HashMap<>();
+    this.usingConcrete = true;
     this.createdFrom = parse;
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
   }
 
   public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse, int n) {
+    this.nodes = new HashMap<>();
+    this.usingConcrete = true;
     this.createdFrom = parse;
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
@@ -184,6 +190,8 @@ public class ConstituencyParse {
   }
 
   public ConstituencyParse(edu.jhu.hlt.tutils.Document.Constituent parse) {
+    this.nodes = new HashMap<>();
+    this.usingTutils = true;
     helper(parse);
   }
   private void helper(edu.jhu.hlt.tutils.Document.Constituent node) {
@@ -203,13 +211,13 @@ public class ConstituencyParse {
    * After:  (X (X John) (X (X loves) (X Mary)))
    */
   public void stripCategories() {
-    for (Node n : nodes)
+    for (Node n : nodes.values())
       n.clearTag();
   }
 
   public void checkSpans(int sentSize) {
     buildPointers();
-    for (Node n : nodes) {
+    for (Node n : nodes.values()) {
       assert n.getSpan().end <= sentSize;
       assert n.getSpan().start >= 0;
       assert n.getSpan().start < n.getSpan().end;
@@ -217,32 +225,25 @@ public class ConstituencyParse {
   }
 
   public void addConstituent(edu.jhu.hlt.tutils.Document.Constituent c) {
-    if (nodes == null)
-      nodes = new Node[c.getIndex() + 1];
-    else if (c.getIndex() >= nodes.length)
-      nodes = Arrays.copyOf(nodes, c.getIndex() + 1);
-    Node n = new Node(c);
-    //LOG.info("[addConstituent] " + c.getId() + " = " + n);
-    nodes[c.getIndex()] = n;
+    assert usingTutils;
+    Node old = nodes.put(c.getIndex(), new Node(c));
+    if (old != null) throw new RuntimeException();
   }
 
   public void addConstituent(edu.jhu.hlt.concrete.Constituent c) {
-    if (nodes == null)
-      nodes = new Node[c.getId() + 1];
-    else if (c.getId() >= nodes.length)
-      nodes = Arrays.copyOf(nodes, c.getId() + 1);
-    Node n = new Node(c);
-    //LOG.info("[addConstituent] " + c.getId() + " = " + n);
-    nodes[c.getId()] = n;
+    assert usingConcrete;
+    Node old = nodes.put(c.getId(), new Node(c));
+    if (old != null) throw new RuntimeException();
   }
 
   public edu.jhu.hlt.concrete.Parse getConcreteParse() {
+    assert usingConcrete;
     return createdFrom;
   }
 
   public void getSpans(Collection<Span> addTo) {
     buildPointers();
-    for (Node n : nodes)
+    for (Node n : nodes.values())
       addTo.add(n.span);
   }
 
@@ -273,7 +274,7 @@ public class ConstituencyParse {
     if (index != null)
       return;
     index = new HashMap<>();
-    for (Node n : nodes) {
+    for (Node n : nodes.values()) {
       List<Node> nodes = index.get(n.span);
       if (nodes == null) {
         nodes = new ArrayList<>();
@@ -309,20 +310,24 @@ public class ConstituencyParse {
   }
 
   public void buildPointers() {
+    assert usingTutils != usingConcrete;
     if (builtPointers)
       return;
 
     //LOG.info("building pointers");
     //TIMER.start();
 
-    if (nodes[0].base2 != null) {
+    if (usingTutils) {
       // Use tutils representation
-      Document d = nodes[0].base2.getDocument();
-      for (int i = 0; i < nodes.length; i++) {
+      Document d = nodes.values().iterator().next().base2.getDocument();
+      for (Node cur : nodes.values()) {
+//      for (int i = 0; i < nodes.length; i++) {
         // Parent
-        Node cur = nodes[i];
+//        Node cur = nodes[i];
         if (cur.base2.getParent() != Document.NONE) {
-          Node parent = nodes[cur.base2.getParent()];
+//          Node parent = nodes[cur.base2.getParent()];
+          Node parent = nodes.get(cur.base2.getParent());
+          assert parent != null;
           cur.parent = parent;
         }
 
@@ -330,14 +335,17 @@ public class ConstituencyParse {
         cur.children = new ArrayList<>();
         int child = cur.base2.getLeftChild();
         while (child >= 0) {
-          cur.children.add(nodes[child]);
+          Node c = nodes.get(child);
+          assert c != null;
+          cur.children.add(c);
           child = d.getRightSib(child);
         }
       }
     } else {
       // Use concrete representation
-      for (int i = 0; i < nodes.length; i++) {
-        Node cur = nodes[i];
+//      for (int i = 0; i < nodes.length; i++) {
+//        Node cur = nodes[i];
+      for (Node cur : nodes.values()) {
         if (cur == null) {
           LOG.warn("gap in the nodes?");
           assert false;
@@ -345,9 +353,10 @@ public class ConstituencyParse {
         }
         //LOG.info("[buildPointers] " + i + " = " + cur);
         if (cur.base.getHeadChildIndex() >= 0)
-          cur.headChild = nodes[cur.base.getHeadChildIndex()];
+          cur.headChild = nodes.get(cur.base.getHeadChildIndex());
         for (int childIdx : cur.base.getChildList()) {
-          Node child = nodes[childIdx];
+          Node child = nodes.get(childIdx);
+          assert child != null;
           assert child.parent == null || child.parent == cur;
           child.parent = cur;
           cur.children.add(child);
@@ -356,7 +365,7 @@ public class ConstituencyParse {
     }
 
     // Propagate spans (TokenRefSequence)
-    for (Node n : nodes)
+    for (Node n : nodes.values())
       if (n.isLeaf())
         percolateUp(n);
 
@@ -366,7 +375,7 @@ public class ConstituencyParse {
         return o1.getSpan().start - o2.getSpan().start;
       }
     };
-    for (Node n : nodes)
+    for (Node n : nodes.values())
       Collections.sort(n.children, order);
 
     builtPointers = true;
