@@ -1,5 +1,11 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
 
 public class Frame {
@@ -25,14 +31,48 @@ public class Frame {
     this.roles = roles;
   }
 
-  public Frame(PropbankFrame pf, int idx) {
+  /**
+   * @param modifierRoles is a list of all the possible modifier roles, e.g.
+   * "ARGM-LOC", "ARGM-TMP", etc. PropbankFrames do not include these.
+   */
+  public Frame(PropbankFrame pf, int idx, List<String> modifierRoles) {
     this.idx = idx;
     this.name = pf.id;
     this.lexicalUnits = null;
-    this.roleTypes = null;
-    this.roles = new String[pf.numRoles()];
-    for (int i = 0; i < roles.length; i++) {
-      this.roles[i] = pf.getRole(i).name;
+
+    Set<String> seenRoles = new HashSet<>();
+    List<String> allRoles = new ArrayList<>();
+    List<String> allRoleTypes = new ArrayList<>();
+
+//    this.roles = new String[pf.numRoles() + modifierRoles.size()];
+//    this.roleTypes = new String[roles.length];
+    int i = 0;
+    for (; i < pf.numRoles(); i++) {
+      String r = pf.getRole(i).getLabel();
+      allRoles.add(r);
+      allRoleTypes.add("core");
+      if (!seenRoles.add(r))
+        Log.warn("duplicate roles: " + pf);
+//      assert seenRoles.add(r) :
+//        "non-unique roles: " + pf + "\n"
+//        + "If this is \"blabber-v-1\" and there are two ARG1s, then this "
+//        + "is a mistake in the data (see http://verbs.colorado.edu/propbank/framesets-english-aliases/blabber.html)\n"
+//        + "Also \"crinkle-v-1\", \"ding-v-1\", \"disembowel-v-1\", \"misread-v-1\", \"oscillate-v-1\", \"pass-v-19\", \"powder-v-2\", \"predominate-v-1\", \"re-case-v-1\", \"reincarnate-v-1\" appear to be wrong too.";
+    }
+    for (String mr : modifierRoles) {
+      // Sometimes the modifier roles are included in the frame index,
+      // e.g. ARGM-LOC in add-v-3
+      if (seenRoles.add(mr)) {
+        allRoles.add(mr);
+        allRoleTypes.add("modifier");
+        i++;
+      }
+    }
+    this.roles = new String[allRoles.size()];
+    this.roleTypes = new String[allRoles.size()];
+    for (int j = 0; j < allRoles.size(); j++) {
+      this.roles[j] = allRoles.get(j);
+      this.roleTypes[j] = allRoleTypes.get(j);
     }
   }
 
