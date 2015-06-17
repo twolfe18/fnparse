@@ -47,10 +47,12 @@ public class ConstituencyParse {
     Node headChild;
     List<Node> children;
     private int depth = -1;
+    private String tag;
 
     public Node(edu.jhu.hlt.concrete.Constituent c) {
       base = c;
       base2 = null;
+      tag = base.getTag();
       span = null;
       parent = null;
       children = new ArrayList<>();
@@ -59,6 +61,7 @@ public class ConstituencyParse {
     public Node(edu.jhu.hlt.tutils.Document.Constituent c) {
       base = null;
       base2 = c;
+      tag = "LHS-" + base2.getLhs();
       span = null;
       parent = null;
       children = new ArrayList<>();
@@ -90,12 +93,14 @@ public class ConstituencyParse {
     }
 
     public void clearTag() {
-      base.setTag("X");
+      //base.setTag("X");
+      tag = "X";
       rule = null;
     }
 
     public String getTag() {
-      return base.getTag();
+      //return base.getTag();
+      return tag;
     }
 
     private transient String rule;
