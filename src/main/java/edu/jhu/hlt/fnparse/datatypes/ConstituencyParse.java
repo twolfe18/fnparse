@@ -194,7 +194,9 @@ public class ConstituencyParse {
     checkSpans(n);
   }
 
-  public ConstituencyParse(edu.jhu.hlt.tutils.Document.Constituent parse) {
+  private transient int firstTokenIndex = -1;
+  public ConstituencyParse(int firstTokenIndex, edu.jhu.hlt.tutils.Document.Constituent parse) {
+    this.firstTokenIndex = firstTokenIndex;
     this.nodes = new HashMap<>();
     this.usingTutils = true;
     helper(parse);
@@ -246,10 +248,11 @@ public class ConstituencyParse {
     return createdFrom;
   }
 
-  public void getSpans(Collection<Span> addTo) {
+  public <T extends Collection<? super Span>> T getSpans(T addTo) {
     buildPointers();
     for (Node n : nodes.values())
       addTo.add(n.span);
+    return addTo;
   }
 
   /**
@@ -298,7 +301,10 @@ public class ConstituencyParse {
       if (n.base2 != null) {
         assert n.base2.getFirstToken() >= 0;
         assert n.base2.getLastToken() >= 0;
-        n.span = Span.getSpan(n.base2.getFirstToken(), n.base2.getLastToken() + 1);
+        assert firstTokenIndex >= 0;
+        n.span = Span.getSpan(
+            n.base2.getFirstToken() - firstTokenIndex,
+            n.base2.getLastToken() + 1 - firstTokenIndex);
       } else {
         n.span = ConcreteStanfordWrapper.constituentToSpan(n.base);
       }

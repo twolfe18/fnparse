@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.IRAMDictionary;
@@ -46,10 +47,11 @@ public class Sentence implements HasId {
   private ConstituencyParse stanfordParse;
   private boolean hideSyntax = false;
 
-  public static Sentence convertFromTutils(String dataset, String id, edu.jhu.hlt.tutils.Document.Sentence s) {
-    return convertFromTutils(dataset, id, s.getDocument(), s.getStart(), s.getStart() + s.getWidth() - 1);
-  }
-  public static Sentence convertFromTutils(String dataset, String id, edu.jhu.hlt.tutils.Document doc, int firstToken, int lastToken) {
+  public static Sentence convertFromTutils(
+      String dataset, String id,
+      edu.jhu.hlt.tutils.Document doc,
+      int firstToken, int lastToken,
+      boolean addStanfordParse) {
     if (firstToken < 0)
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
     if (lastToken < 0 || lastToken < firstToken)
@@ -65,7 +67,22 @@ public class Sentence implements HasId {
       if (t.getLemma() >= 0)
         lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
-    return new Sentence(dataset, id, tokens, pos, lemmas);
+
+    Sentence s = new Sentence(dataset, id, tokens, pos, lemmas);
+
+    // Stanford parse
+    if (addStanfordParse) {
+      assert doc.cons_ptb_gold >= 0;
+      ConstituentItr p = doc.getConstituentItr(doc.cons_ptb_gold);
+      while (p.isValid() && !(p.getFirstToken() == firstToken && p.getLastToken() == lastToken))
+        p.gotoRightSib();
+      if (!p.isValid())
+        throw new RuntimeException("didn't find parse");
+      s.stanfordParse = new ConstituencyParse(firstToken, p);
+      s.stanfordParse.buildPointers();
+    }
+
+    return s;
   }
 
   public Sentence(
