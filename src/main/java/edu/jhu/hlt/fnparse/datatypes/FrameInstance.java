@@ -5,21 +5,19 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.prim.tuple.Pair;
 
 /**
- * This class should represent all details of the data
- * needed for inference and evaluation, but as little else as
- * possible so that we can add things (like priors over frames
- * in a document cluster) without this code noticing.
- * 
+ * This class should represent all details of the data needed for inference and
+ * evaluation, but as little else as possible so that we can add things (like
+ * priors over frames in a document cluster) without this code noticing.
+ *
  * @author travis
  */
 public class FrameInstance {
 
   protected Frame frame;
-  protected Span target;  // index of the target word
+  protected Span target;
   protected Sentence sentence;
 
   /**
@@ -62,7 +60,11 @@ public class FrameInstance {
     }
   }
 
-  /** Allows multiple spans per role */
+  /**
+   * Allows multiple spans per role.
+   *
+   * @param arguments should have {@link Span}s which are sentence relative.
+   */
   @SuppressWarnings("unchecked")
   public static FrameInstance buildPropbankFrameInstance(
       Frame frame, Span target, List<Pair<String, Span>> arguments, Sentence sent)
@@ -81,6 +83,10 @@ public class FrameInstance {
     List<String> roles = Arrays.asList(frame.getRoles());
     for (Pair<String, Span> x : arguments) {
       Span arg = x.get2();
+      if (arg.start >= sent.size() || arg.start < 0)
+        throw new IllegalArgumentException();
+      if (arg.end > sent.size() || arg.end < 1)
+        throw new IllegalArgumentException();
       String roleName = x.get1();
       boolean r = false, c = false;
       if (roleName.startsWith("R-")) {
@@ -92,7 +98,7 @@ public class FrameInstance {
       }
       int k = roles.indexOf(roleName);
       if (k < 0)
-        throw new MissingRoleException("unknown role: " + x + " not in " + roles, fi);
+        throw new MissingRoleException("unknown role: " + x + " not in " + roles + " frame=" + frame.getName(), fi);
       if (c) {
         fi.argumentContinuations[k].add(arg);
       } else if (r) {
@@ -106,8 +112,6 @@ public class FrameInstance {
       String r = roles.get(k);
       if (fi.arguments[k] == Span.nullSpan && fi.argumentContinuations[k].size() > 0)
         throw new DependentRoleException("continuation of nothing: " + r, fi);
-      if (fi.argumentContinuations[k].size() > 1)
-        throw new DependentRoleException("too many continuations: " + r, fi);
       if (fi.arguments[k] == Span.nullSpan && fi.argumentReferences[k].size() > 0)
         throw new DependentRoleException("reference of nothing: " + r, fi);
       if (fi.argumentReferences[k].size() > 1)

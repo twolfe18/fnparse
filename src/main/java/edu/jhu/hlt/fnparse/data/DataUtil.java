@@ -66,8 +66,9 @@ public class DataUtil {
       // Build the sentence that the parses lies in
       String dataset = null;
       String id = doc.getId() + "/" + (sentIndex++);
-      Sentence s = Sentence.convertFromTutils(
-          dataset, id, doc, sent.getFirstToken(), sent.getLastToken());
+      boolean addStanfordParse = true;
+      Sentence s = Sentence.convertFromTutils(dataset, id, doc,
+          sent.getFirstToken(), sent.getLastToken(), addStanfordParse);
       if (DEBUG) {
         System.out.println("working on sentence " + id);
         System.out.println(Describe.sentence(s));
@@ -96,7 +97,7 @@ public class DataUtil {
         Frame f = propbank.getFrame(alph.srl(pred.getLhs()));
         if (f == null) {
           //throw new RuntimeException("no frame for: " + alph.srl(pred.getLhs()));
-          Log.warn("missing frame in " + s.getId()
+          Log.warn("found error, missing frame in " + s.getId()
               + " paragraph " + paragraph + ": " + alph.srl(pred.getLhs()));
           continue;
         }

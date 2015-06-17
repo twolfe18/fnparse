@@ -65,27 +65,41 @@ public interface ItemProvider extends Iterable<FNParse> {
   public static class ParseWrapper implements ItemProvider {
     private FNParse[] parses;
     private List<Item>[] items;
-    @SuppressWarnings("unchecked")
+
     public ParseWrapper(List<FNParse> parses) {
+      this(parses, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    public ParseWrapper(List<FNParse> parses, boolean lazy) {
       int n = parses.size();
       this.parses = new FNParse[n];
-      this.items = new List[n];
-      for (int i = 0; i < n; i++) {
+      for (int i = 0; i < n; i++)
         this.parses[i] = parses.get(i);
-        this.items[i] = allItems(parses.get(i));
+      this.items = null;
+      if (!lazy) {
+        this.items = new List[n];
+        for (int i = 0; i < n; i++)
+          this.items[i] = allItems(parses.get(i));
       }
     }
+
     @Override
     public int size() {
       return parses.length;
     }
+
     @Override
     public FNParse label(int i) {
       return parses[i];
     }
+
     @Override
     public List<Item> items(int i) {
-      return items[i];
+      if (this.items == null)
+        return allItems(parses[i]);
+      else
+        return items[i];
     }
   }
 

@@ -46,12 +46,12 @@ public class PropbankDataEndToEndTest {
     Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
     File ontonotesDir = new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations");
     //File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/development");
-    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/");
-//    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/"
-//        + "conll-formatted-ontonotes-5.0/data/development/"
-//        + "data/english/annotations/bc/cnn/00/");
-    Ontonotes5 on5 = new Ontonotes5(skels, ontonotesDir);
-    //on5.debug = true;
+//    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/");
+    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/"
+        + "conll-formatted-ontonotes-5.0/data/train/"
+        + "data/english/annotations/bc/cnn/00/cnn_0001.gold_skel");
+    boolean debug = false;
+    Ontonotes5 on5 = new Ontonotes5(skels, ontonotesDir, debug);
     int docIndex = 0;
     Iterable<Communication> comms = on5.ingest(skelsDir);
     for (Communication c : comms) {

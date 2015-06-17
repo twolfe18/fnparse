@@ -37,6 +37,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.RandomBracketing;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.Log;
 
 public class DeterministicRolePruning
     implements Stage<FNTagging, FNParseSpanPruning> {
@@ -327,6 +328,10 @@ public class DeterministicRolePruning
       }
       //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
       //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
+      if (input instanceof FNParse)
+        Log.info("pruning recall: " + output.recall((FNParse) input));
+      else
+        Log.warn("check this");
       return output;
     }
   }
