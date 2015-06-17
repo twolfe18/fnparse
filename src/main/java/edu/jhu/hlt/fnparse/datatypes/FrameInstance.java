@@ -1,7 +1,12 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
+
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * This class should represent all details of the data
@@ -23,11 +28,92 @@ public class FrameInstance {
    */
   protected Span[] arguments;
 
+  // Only applies to Propbank
+  protected List<Span>[] argumentContinuations;
+  protected List<Span>[] argumentReferences;
+
   protected FrameInstance(Frame frame, Span target, Span[] arguments, Sentence sent) {
     this.frame = frame;
     this.target = target; // targetIdx is the index of trigger token in the sentence.
     this.arguments = arguments;
     this.sentence = sent;
+  }
+
+  public static class PropbankDataException extends Exception {
+    private static final long serialVersionUID = 1L;
+    public final FrameInstance attempted;
+    public PropbankDataException(String msg, FrameInstance fi) {
+      super(msg);
+      this.attempted = fi;
+    }
+  }
+
+  public static class MissingRoleException extends PropbankDataException {
+    private static final long serialVersionUID = 1L;
+    public MissingRoleException(String msg, FrameInstance fi) {
+      super(msg, fi);
+    }
+  }
+
+  public static class DependentRoleException extends PropbankDataException {
+    private static final long serialVersionUID = 1L;
+    public DependentRoleException(String msg, FrameInstance fi) {
+      super(msg, fi);
+    }
+  }
+
+  /** Allows multiple spans per role */
+  @SuppressWarnings("unchecked")
+  public static FrameInstance buildPropbankFrameInstance(
+      Frame frame, Span target, List<Pair<String, Span>> arguments, Sentence sent)
+          throws PropbankDataException {
+    if (sent == null || frame == null || target == null || arguments == null)
+      throw new IllegalArgumentException();
+    int K = frame.numRoles();
+    FrameInstance fi = new FrameInstance(frame, target, new Span[K], sent);
+    fi.argumentContinuations = new List[K];
+    fi.argumentReferences = new List[K];
+    for (int k = 0; k < K; k++) {
+      fi.arguments[k] = Span.nullSpan;
+      fi.argumentContinuations[k] = new ArrayList<>();
+      fi.argumentReferences[k] = new ArrayList<>();
+    }
+    List<String> roles = Arrays.asList(frame.getRoles());
+    for (Pair<String, Span> x : arguments) {
+      Span arg = x.get2();
+      String roleName = x.get1();
+      boolean r = false, c = false;
+      if (roleName.startsWith("R-")) {
+        r = true;
+        roleName = roleName.substring(2);
+      } else if (roleName.startsWith("C-")) {
+        c = true;
+        roleName = roleName.substring(2);
+      }
+      int k = roles.indexOf(roleName);
+      if (k < 0)
+        throw new MissingRoleException("unknown role: " + x + " not in " + roles, fi);
+      if (c) {
+        fi.argumentContinuations[k].add(arg);
+      } else if (r) {
+        fi.argumentReferences[k].add(arg);
+      } else {
+        fi.arguments[k] = arg;
+      }
+    }
+    // Sanity check
+    for (int k = 0; k < K; k++) {
+      String r = roles.get(k);
+      if (fi.arguments[k] == Span.nullSpan && fi.argumentContinuations[k].size() > 0)
+        throw new DependentRoleException("continuation of nothing: " + r, fi);
+      if (fi.argumentContinuations[k].size() > 1)
+        throw new DependentRoleException("too many continuations: " + r, fi);
+      if (fi.arguments[k] == Span.nullSpan && fi.argumentReferences[k].size() > 0)
+        throw new DependentRoleException("reference of nothing: " + r, fi);
+      if (fi.argumentReferences[k].size() > 1)
+        throw new DependentRoleException("too many references: " + r, fi);
+    }
+    return fi;
   }
 
   /**

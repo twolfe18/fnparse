@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex;
 import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
 
@@ -144,6 +145,7 @@ public class FrameIndex implements FrameIndexInterface {
   private Map<String, Frame> nameToFrameMap;
   private Map<Integer, String> indexToNameMap;
   private Frame[] byId;
+  private boolean checkFrameNotNull = true;
 
   public FrameIndex(int nFrames) {
     allFrames = new ArrayList<Frame>(nFrames);;
@@ -154,7 +156,8 @@ public class FrameIndex implements FrameIndexInterface {
 
   public static FrameIndex getPropbank() {
     if (propbank == null) {
-      File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-4.0/data/files/data/english/metadata/frames");
+      //File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-4.0/data/files/data/english/metadata/frames");
+      File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
       PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
       // Sort the frames by name to prevent any change in ids (unless a frame is
       // added or removed...)
@@ -178,6 +181,7 @@ public class FrameIndex implements FrameIndexInterface {
         assert old2 == null;
         numericId++;
       }
+      fi.checkFrameNotNull = false;
       propbank = fi;
     }
     return propbank;
@@ -230,7 +234,13 @@ public class FrameIndex implements FrameIndexInterface {
   }
 
   public Frame getFrame(String name) {
-    return nameToFrameMap.get(name);
+    Frame f = nameToFrameMap.get(name);
+    if (checkFrameNotNull && f == null) {
+      for (Map.Entry<String, Frame> x : nameToFrameMap.entrySet())
+        Log.info(x.getKey() + " -> " + x.getValue());
+      throw new RuntimeException("couldn't lookup frame: " + name);
+    }
+    return f;
   }
 
   public int getRoleIdx(Frame f, String roleName) {

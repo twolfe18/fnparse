@@ -25,17 +25,20 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance.PropbankDataException;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Document.Constituent;
+import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
-import edu.jhu.hlt.tutils.Document.ConstituentItr;
+import edu.jhu.prim.tuple.Pair;
 
 public class DataUtil {
   public static final Logger LOG = Logger.getLogger(DataUtil.class);
+  public static boolean DEBUG = false;
 
   /**
    * Converts a tutils.Document with a Propbank parse (as a constituency parse)
@@ -48,54 +51,86 @@ public class DataUtil {
     MultiAlphabet alph = doc.getAlphabet();
     FrameIndex propbank = FrameIndex.getPropbank();
 
-    int i = 0;
+    if (DEBUG)
+      System.out.println("\n[DataUtil.convert] doc: " + doc.getId());
+
+    int sentIndex = 0;
     ConstituentItr sent = doc.getConstituentItr(doc.cons_sentences);
     ConstituentItr prop = doc.getConstituentItr(doc.cons_propbank_gold);
     for (; sent.isValid(); sent.gotoRightSib()) {
+      if (DEBUG)
+        System.out.println("reading new sentence @ " + sent.getFirstToken());
+      int paragraph = sent.getLhs();
+      assert paragraph <= sentIndex;
 
       // Build the sentence that the parses lies in
       String dataset = null;
-      String id = "s" + (i++);
+      String id = doc.getId() + "/" + (sentIndex++);
       Sentence s = Sentence.convertFromTutils(
           dataset, id, doc, sent.getFirstToken(), sent.getLastToken());
-      Log.info("working on sentence " + id);
-      Log.info(Describe.sentence(s));
+      if (DEBUG) {
+        System.out.println("working on sentence " + id);
+        System.out.println(Describe.sentence(s));
+      }
 
       // Add every proposition which is in this sentence
       List<FrameInstance> fis = new ArrayList<>();
       for (; prop.isValid() && prop.getLastToken() <= sent.getLastToken(); prop.gotoRightSib()) {
-        assert prop.getFirstToken() >= sent.getFirstToken() : "prop crosses sentence";
+
+        // Empty Situation/proposition
+        if (prop.getFirstToken() == edu.jhu.hlt.tutils.Document.NONE)
+          continue;
+
         String lhs = alph.srl(prop.getLhs());
-        Log.info("  adding prop [" + prop.getFirstToken() + ", " + prop.getLastToken() + "] " + lhs);
+        if (DEBUG) {
+          System.out.println("  adding prop [" + prop.getFirstToken() + ", " + prop.getLastToken() + "] " + lhs);
+          System.out.println(" sent.first=" + sent.getFirstToken() + " sent.last=" + sent.getLastToken());
+        }
+        assert prop.getFirstToken() >= sent.getFirstToken() : "prop crosses sentence";
         assert "propbank".equals(lhs);
 
         // Lookup the frame
         Constituent pred = prop.getLeftChildC();
-        System.out.println("frame=" + alph.srl(pred.getLhs()));
+        if (DEBUG)
+          System.out.println("frame=" + alph.srl(pred.getLhs()));
         Frame f = propbank.getFrame(alph.srl(pred.getLhs()));
+        if (f == null) {
+          //throw new RuntimeException("no frame for: " + alph.srl(pred.getLhs()));
+          Log.warn("missing frame in " + s.getId()
+              + " paragraph " + paragraph + ": " + alph.srl(pred.getLhs()));
+          continue;
+        }
         int start = pred.getFirstToken() - sent.getFirstToken();
         int end = (pred.getLastToken() - sent.getFirstToken()) + 1;
         Span target = Span.getSpan(start, end);
 
-        System.out.println("rightSib=" + pred.getRightSib());
-        System.out.println("prop.rightSib=" + prop.getRightSib());
-        System.out.println("target=" + target);
+        if (DEBUG) {
+          System.out.println("rightSib=" + pred.getRightSib());
+          System.out.println("prop.rightSib=" + prop.getRightSib());
+          System.out.println("target=" + target);
+          System.out.println("sentIndex=" + sentIndex);
+          System.out.println("paragraph=" + paragraph);
+        }
 
         // Add the arguments
-        Span[] args = new Span[f.numRoles()];
-        Arrays.fill(args, Span.nullSpan);
+        List<Pair<String, Span>> args = new ArrayList<>();
         for (ConstituentItr argItr = doc.getConstituentItr(pred.getRightSib());
             argItr.isValid();
             argItr.gotoRightSib()) {
           String roleName = alph.srl(argItr.getLhs());
-          System.out.println("  argItr.index=" + argItr.getIndex() + " lhs=" + roleName);
-          int k = propbank.getRoleIdx(f, roleName);
+          if (DEBUG)
+            System.out.println("  argItr.index=" + argItr.getIndex() + " lhs=" + roleName);
           start = argItr.getFirstToken() - sent.getFirstToken();
           end = (argItr.getLastToken() - sent.getFirstToken()) + 1;
-          args[k] = Span.getSpan(start, end);
+          args.add(new Pair<>(roleName, Span.getSpan(start, end)));
         }
 
-        fis.add(FrameInstance.newFrameInstance(f, target, args, s));
+        try {
+          fis.add(FrameInstance.buildPropbankFrameInstance(f, target, args, s));
+        } catch (PropbankDataException e) {
+          Log.warn("found error in " + s.getId()
+              + " paragraph " + paragraph + ": " + e.getMessage());
+        }
       }
       l.add(new FNParse(s, fis));
     }
