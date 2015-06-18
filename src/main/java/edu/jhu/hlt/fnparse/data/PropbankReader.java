@@ -119,15 +119,13 @@ public class PropbankReader {
     Log.info("reading Communications, " + Describe.memoryUsage());
     List<FNParse> parses = new ArrayList<>();
     int docIndex = 0;
-    List<Communication> comms = (List<Communication>) on5.ingest(skelsDir);
     Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
-    while (comms.size() > 0) {
-      Communication c = comms.remove(0);
+    for (Communication c : on5.ingest(skelsDir)) {
       Document d = cio.communication2Document(c, docIndex++, alph);
       List<FNParse> cparses = DataUtil.convert(d);
       parses.addAll(cparses);
-      if (comms.size() % 500 == 0)
-        Log.info("comms.size=" + comms.size() + " " + Describe.memoryUsage());
+      if (docIndex % 500 == 0)
+        Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
     }
 
     boolean lazy = true;

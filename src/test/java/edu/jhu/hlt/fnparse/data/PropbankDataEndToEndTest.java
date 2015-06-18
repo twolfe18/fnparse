@@ -18,9 +18,6 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
  * Read in some propbank data, pass it through all the converters, and make sure
  * you get the correct data out the other end.
  *
- * @deprecated I need to use the conll-formatted-ontonotes5 instead of the
- * direct Ontonotes.
- *
  * @author travis
  */
 public class PropbankDataEndToEndTest {
@@ -46,10 +43,10 @@ public class PropbankDataEndToEndTest {
     Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
     File ontonotesDir = new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations");
     //File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/development");
-//    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/");
-    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/"
-        + "conll-formatted-ontonotes-5.0/data/train/"
-        + "data/english/annotations/bc/cnn/00/cnn_0001.gold_skel");
+    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data/");
+//    File skelsDir = new File("/home/travis/code/conll-formatted-ontonotes-5.0/"
+//        + "conll-formatted-ontonotes-5.0/data/train/"
+//        + "data/english/annotations/bc/cnn/00/cnn_0001.gold_skel");
     boolean debug = false;
     Ontonotes5 on5 = new Ontonotes5(skels, ontonotesDir, debug);
     int docIndex = 0;
