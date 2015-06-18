@@ -21,6 +21,8 @@ import edu.jhu.prim.tuple.Pair;
 /**
  * Reads Propbank data (Ontonotes 5) from Concrete form:
  *
+ * NOTE: Caching for this class is broken: cannot fit in memory.
+ *
  * @author travis
  */
 public class PropbankReader {
@@ -41,6 +43,7 @@ public class PropbankReader {
 
   private File on5;
   private File trainSkels;
+  private File devSkels;
   private File testSkels;
   private ConcreteIO cio;
   private MultiAlphabet alph;
@@ -48,7 +51,7 @@ public class PropbankReader {
   // Can't cache now: Span is not Serializable (a lot of code uses == instead of .equals())
   public boolean performCaching = false;
 
-  public PropbankReader(boolean useRealTest, boolean laptop) {
+  public PropbankReader(boolean laptop) {
     alph = new MultiAlphabet();
     cio = new ConcreteIO(null, null, null);
     cio.setConstituencyParseToolname("conll-2011 parse");
@@ -57,16 +60,21 @@ public class PropbankReader {
     cio.setNerToolName(null);
     int i = laptop ? LAPTOP : COE_GRID;
     on5 = ON5_RAW[i];
+    trainSkels = new File(ON5_CONLL_PARENT[i], "train");
+    devSkels = new File(ON5_CONLL_PARENT[i], "development");
+    testSkels = new File(ON5_CONLL_PARENT[i], "test");
+  }
 
-//    trainSkels = new File(ON5_CONLL_PARENT[i], "train");
-//    if (useRealTest)
-//      testSkels = new File(ON5_CONLL_PARENT[i], "test");
-//    else
-//      testSkels = new File(ON5_CONLL_PARENT[i], "development");
+  public ItemProvider getTrainData() {
+    return getPropbankItemWrapper(trainSkels);
+  }
 
-    // For debugging
-    trainSkels = new File(ON5_CONLL_PARENT[i], "development");
-    testSkels = new File(ON5_CONLL_PARENT[i], "development");
+  public ItemProvider getDevData() {
+    return getPropbankItemWrapper(devSkels);
+  }
+
+  public ItemProvider getTestData() {
+    return getPropbankItemWrapper(testSkels);
   }
 
   public Pair<ItemProvider, ItemProvider> getTrainTestData() {
@@ -113,7 +121,6 @@ public class PropbankReader {
     int docIndex = 0;
     List<Communication> comms = (List<Communication>) on5.ingest(skelsDir);
     Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
-    // Remove from list to free up memory (yes... you really need to do this, Communications are huge)
     while (comms.size() > 0) {
       Communication c = comms.remove(0);
       Document d = cio.communication2Document(c, docIndex++, alph);

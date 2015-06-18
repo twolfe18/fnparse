@@ -117,7 +117,7 @@ public class ConcreteStanfordWrapper {
     p.setConstituentList(cons);
     p.setUuid(aUUID);
     p.setMetadata(metadata);
-    return new ConstituencyParse(p);
+    return new ConstituencyParse(s.getId(), p);
   }
 
   public DependencyParse dummyDParse(Sentence s) {
@@ -204,7 +204,7 @@ public class ConcreteStanfordWrapper {
 //     }
 //   }
 
-   return new ConstituencyParse(tokenization.getParseList().get(0), s.size());
+   return new ConstituencyParse(s.getId(), tokenization.getParseList().get(0), s.size());
   }
 
   public Map<Span, String> parseSpans(Sentence s) {

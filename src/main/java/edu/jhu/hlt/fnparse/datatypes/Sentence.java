@@ -45,6 +45,7 @@ public class Sentence implements HasId {
   private DependencyParse collapsedDeps;
   private DependencyParse basicDeps;
   private ConstituencyParse stanfordParse;
+  private ConstituencyParse goldParse;
   private boolean hideSyntax = false;
 
   public static Sentence convertFromTutils(
@@ -70,7 +71,7 @@ public class Sentence implements HasId {
 
     Sentence s = new Sentence(dataset, id, tokens, pos, lemmas);
 
-    // Stanford parse
+    // Gold constituency parse
     if (addStanfordParse) {
       assert doc.cons_ptb_gold >= 0;
       ConstituentItr p = doc.getConstituentItr(doc.cons_ptb_gold);
@@ -78,8 +79,8 @@ public class Sentence implements HasId {
         p.gotoRightSib();
       if (!p.isValid())
         throw new RuntimeException("didn't find parse");
-      s.stanfordParse = new ConstituencyParse(firstToken, p);
-      s.stanfordParse.buildPointers();
+      s.goldParse = new ConstituencyParse(id, firstToken, p);
+      s.goldParse.buildPointers();
     }
 
     return s;
@@ -121,6 +122,8 @@ public class Sentence implements HasId {
       basicDeps.stripEdgeLabels();
     if (stanfordParse != null)
       stanfordParse.stripCategories();
+    if (goldParse != null)
+      goldParse.stripCategories();
   }
 
   public int size() { return tokens.length; }
@@ -348,5 +351,18 @@ public class Sentence implements HasId {
 
   public void setStanfordParse(ConstituencyParse p) {
     this.stanfordParse = p;
+  }
+
+  public ConstituencyParse getGoldParse() {
+    return getGoldParse(true);
+  }
+  public ConstituencyParse getGoldParse(boolean askPermission) {
+    if (askPermission && hideSyntax)
+      return null;
+    return this.goldParse;
+  }
+
+  public void setGoldParse(ConstituencyParse p) {
+    this.goldParse = p;
   }
 }

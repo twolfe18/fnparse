@@ -9,12 +9,19 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.propbank.ParseData;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.tutils.Timer;
 
+/**
+ * TODO This class needs to drop the assumption that the entire cache can fit
+ * in memory. See {@link ParseData} for a memory-free disk caching implementation.
+ *
+ * @author travis
+ */
 public class CachingConcreteStanfordWrapper extends ConcreteStanfordWrapper {
   private File bdParseCacheFile;
   private File cParseCacheFile;

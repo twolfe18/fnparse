@@ -116,7 +116,7 @@ public class ConcreteSentenceAdapter implements HasSentence {
       // get constituency parse
       for (Parse p : toks.getParseList()) {
         if (p.getMetadata().getTool().toLowerCase().contains("stanford")) {
-          sentCache.setStanfordParse(new ConstituencyParse(p));
+          sentCache.setStanfordParse(new ConstituencyParse(sentCache.getId(), p));
           break;
         }
       }
@@ -125,7 +125,7 @@ public class ConcreteSentenceAdapter implements HasSentence {
       // If not required, check if you can pull anything old parse out:
       if (sentCache.getStanfordParse(false) == null && toks.getParseListSize() > 0) {
         LOG.warn("taking the first constituency parse");
-        sentCache.setStanfordParse(new ConstituencyParse(toks.getParseList().get(0)));
+        sentCache.setStanfordParse(new ConstituencyParse(sentCache.getId(), toks.getParseList().get(0)));
       }
     }
     return sentCache;

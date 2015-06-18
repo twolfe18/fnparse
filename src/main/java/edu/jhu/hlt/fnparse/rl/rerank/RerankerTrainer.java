@@ -36,17 +36,13 @@ import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
-import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -118,7 +114,11 @@ public class RerankerTrainer {
     public boolean forceGlobalTrain = true;
 
     // How to implement bFunc for oracle
+    // TODO Move to Reranker
     public OracleMode oracleMode = OracleMode.MAX;
+
+    // How to prune possible argument spans
+    public DeterministicRolePruning.Mode argPruningMode = Mode.XUE_PALMER_HERMANN;
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
@@ -229,6 +229,7 @@ public class RerankerTrainer {
 
   // If true, use DeterministicRolePruning to cut down the set of (t,k,spans)
   // that are considered ahead of time. Requires that parsing be in effect.
+  // TODO Move to DeterministicRolePruning.Mode and Reranker.argPruningMode
   public boolean useSyntaxSpanPruning = true;
 
   // Model parameters
@@ -287,7 +288,7 @@ public class RerankerTrainer {
   public static Map<String, Double> eval(Reranker m, ItemProvider ip, File semaforEvalDir, String showStr, File diffArgsFile) {
     List<FNParse> y = ItemProvider.allLabels(ip);
     List<State> initialStates = new ArrayList<>();
-    for (FNParse p : y) initialStates.add(getInitialStateWithPruning(p, p));
+    for (FNParse p : y) initialStates.add(m.getInitialStateWithPruning(p, p));
     List<FNParse> yHat = m.predict(initialStates);
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
     if (showStr != null)
@@ -383,11 +384,15 @@ public class RerankerTrainer {
   }
 
   public Reranker instantiate() {
+    assert pretrainConf.argPruningMode == trainConf.argPruningMode;
+    assert pretrainConf.trainBeamSize == trainConf.trainBeamSize;
+    assert pretrainConf.testBeamSize == trainConf.testBeamSize;
     return new Reranker(
         //Params.Stateful.NONE,
         statefulParams,
         statelessParams,
         tauParams,
+        trainConf.argPruningMode,
         pretrainConf.trainBeamSize,
         pretrainConf.testBeamSize,
         rand);
@@ -519,7 +524,7 @@ public class RerankerTrainer {
           FNParse y = dev.label(i);
           List<Item> rerank = dev.items(i);
           State init = useSyntaxSpanPruning
-              ? getInitialStateWithPruning(y, y)
+              ? m.getInitialStateWithPruning(y, y)
               : State.initialState(y, rerank);
           Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
               ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
@@ -698,45 +703,6 @@ public class RerankerTrainer {
   }
 
   /**
-   * @param gold may be null. If not, add gold spans if they're not already
-   * included in the prune mask.
-   */
-  public static State getInitialStateWithPruning(FNTagging frames, FNParse gold) {
-    Sentence s = frames.getSentence();
-    if (s.getStanfordParse(false) == null)
-      throw new IllegalArgumentException();
-    double priorScore = 0;
-    List<Item> items = new ArrayList<>();
-    DeterministicRolePruning drp = new DeterministicRolePruning(Mode.XUE_PALMER_HERMANN, null);
-    FNParseSpanPruning mask = drp.setupInference(Arrays.asList(frames), null).decodeAll().get(0);
-    int T = mask.numFrameInstances();
-    for (int t = 0; t < T; t++) {
-      int K = mask.getFrame(t).numRoles();
-      for (Span arg : mask.getPossibleArgs(t))
-        for (int k = 0; k < K; k++)
-          items.add(new Item(t, k, arg, priorScore));
-      // Always include the target as a possibility
-      for (int k = 0; k < K; k++)
-        items.add(new Item(t, k, mask.getTarget(t), priorScore));
-      // Add gold args if gold is provided
-      if (gold != null) {
-        FrameInstance goldFI = gold.getFrameInstance(t);
-        assert mask.getFrame(t) == goldFI.getFrame();
-        assert mask.getTarget(t) == goldFI.getTarget();
-        for (int k = 0; k < K; k++) {
-          Span goldArg = goldFI.getArgument(k);
-          if (goldArg != Span.nullSpan)
-            items.add(new Item(t, k, goldArg, priorScore));
-        }
-      }
-    }
-    LOG.info("[getInitialStateWithPruning] cut size down from "
-        + mask.numPossibleArgsNaive() + " to "
-        + mask.numPossibleArgs());
-    return State.initialState(frames, items);
-  }
-
-  /**
    * Returns the average violation over this batch.
    */
   private double hammingTrainBatch(
@@ -762,7 +728,7 @@ public class RerankerTrainer {
         FNParse y = ip.label(idx);
         List<Item> rerank = ip.items(idx);
         State init = useSyntaxSpanPruning
-            ? getInitialStateWithPruning(y, y)
+            ? r.getInitialStateWithPruning(y, y)
             : State.initialState(y, rerank);
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
@@ -1010,7 +976,7 @@ public class RerankerTrainer {
     if (propbank) {
       LOG.info("[main] running on propbank data");
       final boolean laptop = config.getBoolean("laptop", false);
-      PropbankReader pbr = new PropbankReader(realTest, laptop);
+      PropbankReader pbr = new PropbankReader(laptop);
       Pair<ItemProvider, ItemProvider> data = pbr.getTrainTestData();
       train = data.get1();
       test = data.get2();

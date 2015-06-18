@@ -2,6 +2,9 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -13,8 +16,6 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 import org.apache.log4j.Logger;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.transport.TIOStreamTransport;
 
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Document;
@@ -25,10 +26,12 @@ import edu.jhu.hlt.tutils.Document.Constituent;
  * 
  * @author travis
  */
-public class ConstituencyParse {
+public class ConstituencyParse implements Serializable {
+  private static final long serialVersionUID = 2258695730724020087L;
   public static Logger LOG = Logger.getLogger(ConstituencyParse.class);
 
-  public static class NodePathPiece {
+  public static class NodePathPiece implements Serializable {
+    private static final long serialVersionUID = -7502757950662681044L;
     private Node node;
     private String edge;
     public NodePathPiece(Node n, String e) {
@@ -39,21 +42,23 @@ public class ConstituencyParse {
     public String getEdge() { return edge; }
   }
 
-  public static class Node {
-    edu.jhu.hlt.concrete.Constituent base;
-    edu.jhu.hlt.tutils.Document.Constituent base2;
-    Span span;
-    Node parent;
-    Node headChild;
-    List<Node> children;
+  public static class Node implements Serializable {
+    private static final long serialVersionUID = 4924793634793234405L;
+    private transient edu.jhu.hlt.concrete.Constituent base;
+    private transient edu.jhu.hlt.tutils.Document.Constituent base2;
+    private int start = -1;
+    private int end = -2;
     private int depth = -1;
     private String tag;
+    private String rule;
+    private Node parent;
+    private Node headChild;
+    private List<Node> children;
 
     public Node(edu.jhu.hlt.concrete.Constituent c) {
       base = c;
       base2 = null;
       tag = base.getTag();
-      span = null;
       parent = null;
       children = new ArrayList<>();
     }
@@ -62,14 +67,19 @@ public class ConstituencyParse {
       base = null;
       base2 = c;
       tag = "LHS-" + base2.getLhs();
-      span = null;
       parent = null;
       children = new ArrayList<>();
     }
 
+    /** release pointers to derived forms (Concrete or tutils representation) */
+    public void dropBase() {
+      base = null;
+      base2 = null;
+    }
+
     public String toString() {
       return String.format("<Node %s @%d-%d D=%d>",
-          getTag(), span.start, span.end, depth);
+          getTag(), start, end, depth);
     }
 
     public Node getParent() {
@@ -88,8 +98,17 @@ public class ConstituencyParse {
       return headChild;
     }
 
+    public boolean hasSpan() {
+      if (start < 0) {
+        assert start == -1 && end == -2;
+        return false;
+      }
+      assert start < end;
+      return true;
+    }
+
     public Span getSpan() {
-      return span;
+      return Span.getSpan(start, end);
     }
 
     public void clearTag() {
@@ -103,7 +122,6 @@ public class ConstituencyParse {
       return tag;
     }
 
-    private transient String rule;
     public String getRule() {
       if (rule == null) {
         if (children.size() == 0) {
@@ -159,33 +177,41 @@ public class ConstituencyParse {
   private boolean usingTutils = false;
   private boolean usingConcrete = false;
   private transient edu.jhu.hlt.concrete.Parse createdFrom;
+  private final String sentenceId;
 
   public static final Function<DataInputStream, ConstituencyParse> DESERIALIZATION_FUNC = dis -> {
-    edu.jhu.hlt.concrete.Parse parse = new edu.jhu.hlt.concrete.Parse();
+//    edu.jhu.hlt.concrete.Parse parse = new edu.jhu.hlt.concrete.Parse();
     try {
-      parse.read(new TBinaryProtocol(new TIOStreamTransport(dis)));
-      return new ConstituencyParse(parse);
+//      parse.read(new TBinaryProtocol(new TIOStreamTransport(dis)));
+//      return new ConstituencyParse(parse);
+      ObjectInputStream ois = new ObjectInputStream(dis);
+      return (ConstituencyParse) ois.readObject();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
   };
   public static final BiConsumer<ConstituencyParse, DataOutputStream> SERIALIZATION_FUNC = (cparse, dos) -> {
     try {
-      cparse.createdFrom.write(new TBinaryProtocol(new TIOStreamTransport(dos)));
+//      cparse.createdFrom.write(new TBinaryProtocol(new TIOStreamTransport(dos)));
+      ObjectOutputStream oos = new ObjectOutputStream(dos);
+      oos.writeObject(cparse);
+      oos.flush();
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
   };
 
-  public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse) {
+  public ConstituencyParse(String sentenceId, edu.jhu.hlt.concrete.Parse parse) {
     this.nodes = new HashMap<>();
     this.usingConcrete = true;
     this.createdFrom = parse;
+    this.sentenceId = sentenceId;
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
   }
 
-  public ConstituencyParse(edu.jhu.hlt.concrete.Parse parse, int n) {
+  public ConstituencyParse(String sentenceId, edu.jhu.hlt.concrete.Parse parse, int n) {
+    this.sentenceId = sentenceId;
     this.nodes = new HashMap<>();
     this.usingConcrete = true;
     this.createdFrom = parse;
@@ -195,7 +221,8 @@ public class ConstituencyParse {
   }
 
   private transient int firstTokenIndex = -1;
-  public ConstituencyParse(int firstTokenIndex, edu.jhu.hlt.tutils.Document.Constituent parse) {
+  public ConstituencyParse(String sentenceId, int firstTokenIndex, edu.jhu.hlt.tutils.Document.Constituent parse) {
+    this.sentenceId = sentenceId;
     this.firstTokenIndex = firstTokenIndex;
     this.nodes = new HashMap<>();
     this.usingTutils = true;
@@ -210,6 +237,10 @@ public class ConstituencyParse {
       helper(c);
       child = c.getRightSib();
     }
+  }
+
+  public String getSentenceId() {
+    return sentenceId;
   }
 
   /**
@@ -251,7 +282,7 @@ public class ConstituencyParse {
   public <T extends Collection<? super Span>> T getSpans(T addTo) {
     buildPointers();
     for (Node n : nodes.values())
-      addTo.add(n.span);
+      addTo.add(n.getSpan());
     return addTo;
   }
 
@@ -283,11 +314,11 @@ public class ConstituencyParse {
       return;
     index = new HashMap<>();
     for (Node n : nodes.values()) {
-      List<Node> nodes = index.get(n.span);
+      List<Node> nodes = index.get(n.getSpan());
       if (nodes == null) {
         nodes = new ArrayList<>();
         nodes.add(n);
-        index.put(n.span, nodes);
+        index.put(n.getSpan(), nodes);
       } else {
         nodes.add(n);
       }
@@ -302,20 +333,21 @@ public class ConstituencyParse {
         assert n.base2.getFirstToken() >= 0;
         assert n.base2.getLastToken() >= 0;
         assert firstTokenIndex >= 0;
-        n.span = Span.getSpan(
-            n.base2.getFirstToken() - firstTokenIndex,
-            n.base2.getLastToken() + 1 - firstTokenIndex);
+        n.start = n.base2.getFirstToken() - firstTokenIndex;
+        n.end = n.base2.getLastToken() + 1 - firstTokenIndex;
       } else {
-        n.span = ConcreteStanfordWrapper.constituentToSpan(n.base);
+        Span span = ConcreteStanfordWrapper.constituentToSpan(n.base);
+        n.start = span.start;
+        n.end = span.end;
       }
     }
-    if (n.parent.span == null) {
-      assert n.span != null;
-      n.parent.span = n.span;
+    assert n.hasSpan();
+    if (!n.parent.hasSpan()) {
+      n.parent.start = n.start;
+      n.parent.end = n.end;
     } else {
-      int s = Math.min(n.span.start, n.parent.span.start);
-      int e = Math.max(n.span.end, n.parent.span.end);
-      n.parent.span = Span.getSpan(s, e);
+      n.parent.start = Math.min(n.start, n.parent.start);
+      n.parent.end = Math.max(n.end, n.parent.end);
     }
     percolateUp(n.parent);
   }
@@ -332,11 +364,8 @@ public class ConstituencyParse {
       // Use tutils representation
       Document d = nodes.values().iterator().next().base2.getDocument();
       for (Node cur : nodes.values()) {
-//      for (int i = 0; i < nodes.length; i++) {
         // Parent
-//        Node cur = nodes[i];
         if (cur.base2.getParent() != Document.NONE) {
-//          Node parent = nodes[cur.base2.getParent()];
           Node parent = nodes.get(cur.base2.getParent());
           assert parent != null;
           cur.parent = parent;
@@ -354,8 +383,6 @@ public class ConstituencyParse {
       }
     } else {
       // Use concrete representation
-//      for (int i = 0; i < nodes.length; i++) {
-//        Node cur = nodes[i];
       for (Node cur : nodes.values()) {
         if (cur == null) {
           LOG.warn("gap in the nodes?");
@@ -391,5 +418,11 @@ public class ConstituencyParse {
 
     builtPointers = true;
     //TIMER.stop();
+  }
+
+  /** Free some memory */
+  public void dropBase() {
+    for (Node n : nodes.values())
+      n.dropBase();
   }
 }

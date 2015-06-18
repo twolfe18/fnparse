@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Random;
@@ -23,8 +24,13 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
@@ -88,17 +94,21 @@ public class Reranker implements Serializable {
   private int trainBeamWidth;
   private int testBeamWidth;
 
+  public DeterministicRolePruning.Mode argPruningMode;
+
   private transient MultiTimer timer;
 
   public Reranker(
       Params.Stateful thetaStateful,
       Params.Stateless thetaStateless,
       Params.PruneThreshold tauParams,
+      DeterministicRolePruning.Mode argPruningMode,
       int trainBeamWidth,
       int testBeamWidth,
       Random rand) {
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
+    this.argPruningMode = argPruningMode;
     this.trainBeamWidth = trainBeamWidth;
     this.testBeamWidth = testBeamWidth;
     this.rand = rand;
@@ -204,6 +214,48 @@ public class Reranker implements Serializable {
         + (System.currentTimeMillis() - start)/1000d + " seconds");
   }
 
+  /**
+   * @param gold may be null. If not, add gold spans if they're not already
+   * included in the prune mask.
+   */
+  public State getInitialStateWithPruning(FNTagging frames, FNParse gold) {
+    Sentence s = frames.getSentence();
+    if (s.getStanfordParse(false) == null)
+      throw new IllegalArgumentException();
+    double priorScore = 0;
+    List<Item> items = new ArrayList<>();
+    DeterministicRolePruning drp =
+        new DeterministicRolePruning(argPruningMode, null);
+    FNParseSpanPruning mask = drp.setupInference(
+        Arrays.asList(frames), null).decodeAll().get(0);
+    int T = mask.numFrameInstances();
+    for (int t = 0; t < T; t++) {
+      int K = mask.getFrame(t).numRoles();
+      for (Span arg : mask.getPossibleArgs(t))
+        for (int k = 0; k < K; k++)
+          items.add(new Item(t, k, arg, priorScore));
+      // Always include the target as a possibility
+      for (int k = 0; k < K; k++)
+        items.add(new Item(t, k, mask.getTarget(t), priorScore));
+      // Add gold args if gold is provided
+      if (gold != null) {
+        FrameInstance goldFI = gold.getFrameInstance(t);
+        assert mask.getFrame(t) == goldFI.getFrame();
+        assert mask.getTarget(t) == goldFI.getTarget();
+        for (int k = 0; k < K; k++) {
+          Span goldArg = goldFI.getArgument(k);
+          if (goldArg != Span.nullSpan)
+            items.add(new Item(t, k, goldArg, priorScore));
+        }
+      }
+    }
+    LOG.info("[getInitialStateWithPruning] cut size down from "
+        + mask.numPossibleArgsNaive() + " to "
+        + mask.numPossibleArgs());
+    return State.initialState(frames, items);
+  }
+
+
   public static ItemProvider getItemProvider() {
     return getItemProvider(100, true);
   }
@@ -282,9 +334,9 @@ public class Reranker implements Serializable {
     // pretrain => no Adjoint caching => no problem
     // train => Adjoint caching + you actually need adjoints => PROBLEM
     // predict => Adjoint caching + only need score rather than adjoints => no problem
-    //            (this assumes I fixe score to include a onlyForwards flag)
+    //            (this assumes I fix score to include a onlyForwards flag)
 
-    // Right now I can cache because I just realilzed that leftTimesRight can
+    // Right now I can cache because I just realized that leftTimesRight can
     // be sparse if right is sparse.
     // When I switch to full dense embeddings, I will have to revisit this.
 

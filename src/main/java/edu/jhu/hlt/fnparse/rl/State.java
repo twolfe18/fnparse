@@ -19,8 +19,8 @@ import edu.jhu.hlt.fnparse.rl.rerank.Item;
 
 /**
  * Represents a sentence, the frame-targets realized, and the constraints on the
- * frame-elements to be labeled. In this implementation, the frame-targets are
- * assumed given.
+ * frame-elements (roles) to be labeled. In this implementation, the
+ * frame-targets are assumed given.
  * 
  * @author travis
  */
