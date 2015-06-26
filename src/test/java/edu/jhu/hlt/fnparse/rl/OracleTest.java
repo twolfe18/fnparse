@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 
 import java.util.Collection;
 import java.util.Random;
@@ -11,6 +12,7 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.BFunc;
@@ -32,7 +34,9 @@ public class OracleTest {
     int beam = 1;
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     Reranker model = new Reranker(
-        Params.Stateful.NONE, Params.Stateless.NONE, tau, beam, beam, rand);
+        Params.Stateful.NONE, Params.Stateless.NONE, tau,
+        DeterministicRolePruning.Mode.STANFORD_CONSTITUENTS,
+        beam, beam, rand);
     for (FNParse y : getParses()) {
       if (y.numFrameInstances() == 0)
         continue;

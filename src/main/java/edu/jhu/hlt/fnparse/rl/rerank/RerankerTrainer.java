@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -33,6 +34,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
+import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -63,9 +65,13 @@ import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
+import edu.jhu.hlt.tutils.net.NetworkParameterAveraging.Client;
+import edu.jhu.hlt.tutils.net.NetworkSerializableParams;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -130,7 +136,7 @@ public class RerankerTrainer {
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
-    private int maxDev = 50;
+    private int maxDev = 150;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -237,6 +243,14 @@ public class RerankerTrainer {
   public Params.Stateless statelessParams = Stateless.NONE;
   public Params.PruneThreshold tauParams = Params.PruneThreshold.Const.ONE;
 
+  // For model averaging over the network
+  public String parameterServerHost = "localhost";
+  public NetworkParameterAveraging.Server parameterServer;
+  public NetworkParameterAveraging.Client parameterServerClient;
+  // FIRST ATTEMPT
+  public NetworkSerializableParams<Params.Stateless> statelessNetworkParams;
+
+
   public RerankerTrainer(Random rand, File workingDir) {
     if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
@@ -273,6 +287,8 @@ public class RerankerTrainer {
       this.statelessParams = p;
     else
       this.statelessParams = new Params.SumStateless(this.statelessParams, p);
+    this.statelessNetworkParams =
+        new NetworkSerializableParams<>(this.statelessParams);
     return p;
   }
 
@@ -686,6 +702,12 @@ public class RerankerTrainer {
           LOG.info("[hammingTrain] not restimating learning rate");
         }
 
+        // Average parameters over the network
+        if (parameterServerClient != null) {
+          assert statelessNetworkParams != null;
+          parameterServerClient.paramsChanged();
+        }
+
         iter++;
       }
       conf.calledEveryEpoch.accept(iter);
@@ -800,7 +822,7 @@ public class RerankerTrainer {
     }
   }
 
-  public static RerankerTrainer configure(ExperimentProperties config) {
+  public static RerankerTrainer configure(ExperimentProperties config) throws Exception {
     File workingDir = config.getOrMakeDir("workingDir");
     boolean useGlobalFeatures = config.getBoolean("useGlobalFeatures", true);
     boolean useEmbeddingParams = config.getBoolean("useEmbeddingParams", false); // else use TemplatedFeatureParams
@@ -841,6 +863,46 @@ public class RerankerTrainer {
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
     trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
+
+
+    // Setup parameter averaging over the network
+    boolean isParamServer = config.getBoolean("isParamServer", false);
+    int numClientsForParamAvg = config.getInt("numClientsForParamAvg", 0);
+    int secondsBetweenSaves = config.getInt("paramAvgSecBetweenSaves", 0);
+    if (isParamServer) {
+      // Server
+      boolean checkAlphabetEquality = true;
+      Params.NetworkAvg params = new Params.NetworkAvg(
+          trainer.statelessParams, checkAlphabetEquality);
+      trainer.parameterServer = new NetworkParameterAveraging.Server(params);
+      File checkpointDir = new File(workingDir, "paramAverages");
+      if (!checkpointDir.isDirectory()) checkpointDir.mkdir();
+      trainer.parameterServer.saveModels(checkpointDir, secondsBetweenSaves);
+      LOG.info("starting parameter server: " + trainer.parameterServer);
+      trainer.parameterServer.debug = true;
+      trainer.parameterServer.run();
+      LOG.info("server is done running for whatever reason, exiting");
+      System.exit(0);
+    } else if (numClientsForParamAvg > 0) {
+      // Client
+      String paramServerHost = config.getString("paramServerHost");
+      String hostName = InetAddress.getLocalHost().getHostName();
+      Log.info("numClientsForParamAvg=" + numClientsForParamAvg
+          + " paramServerHost=" + paramServerHost
+          + " hostName=" + hostName);
+      // This may get over-written...
+      LOG.info("setting up network parameter averaging client");
+      trainer.statelessNetworkParams =
+          new NetworkSerializableParams<Params.Stateless>(trainer.statelessParams);
+      trainer.parameterServerClient =
+          new Client(trainer.statelessNetworkParams, paramServerHost);
+        trainer.parameterServerClient.secondsBetweenContactingServer = secondsBetweenSaves;
+      if (config.getBoolean("parallelLearnDebug", false))
+        trainer.parameterServerClient.debug = true;
+    } else {
+      LOG.info("not setting up network parameter averaging");
+    }
+
 
     if (config.containsKey("trainTimeLimit")) {
       double mins = config.getDouble("trainTimeLimit");
@@ -966,22 +1028,49 @@ public class RerankerTrainer {
     Reranker.COST_FN = config.getDouble("costFN", 1);
     LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
-    int nTrain = config.getInt("nTrain", 100);
+    final int nTrain = config.getInt("nTrain", 100);
     RerankerTrainer trainer = configure(config);
+
+
+    final boolean parallelLearnDebug = config.getBoolean("parallelLearnDebug", false);
+
 
     // Get train and test data.
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
+    final boolean laptop = config.getBoolean("laptop", false);
+    if (realTest)
+      LOG.info("[main] running on real test set");
+    else
+      LOG.info("[main] running on dev set");
     ItemProvider train, test, trainAndTest = null;
     if (propbank) {
       LOG.info("[main] running on propbank data");
-      final boolean laptop = config.getBoolean("laptop", false);
-      PropbankReader pbr = new PropbankReader(laptop);
-      Pair<ItemProvider, ItemProvider> data = pbr.getTrainTestData();
-      train = data.get1();
-      test = data.get2();
+      ParsePropbankData propbankAutoParses = new ParsePropbankData.Redis(
+            config.getString("propbankParseRedisHost"),
+            config.getInt("propbankParseRedisPort"),
+            config.getInt("propbankParseRedisDb"));
+      PropbankReader pbr = new PropbankReader(laptop, propbankAutoParses);
+      if (parallelLearnDebug) {
+        pbr.debug = true;
+        // This ensures that ProbankReader only takes a very small slice of the data
+        //pbr.numDebugShards = 150;
+        pbr.numDebugShards = config.getInt("pbr.numDebugShards", 1);
+      }
+      if (realTest) {
+        LOG.info("reading real propbank data...");
+        Pair<ItemProvider, ItemProvider> data = pbr.getTrainTestData();
+        train = data.get1();
+        test = data.get2();
+      } else {
+        int nTest = config.getInt("nTest", 500);
+        LOG.info("reading dev propbank data... nTest=" + nTest);
+        Pair<ItemProvider, ItemProvider> data = pbr.getTrainDevData();
+        train = new ItemProvider.Slice(data.get1(), nTrain, trainer.rand);
+        test = new ItemProvider.Slice(data.get2(), nTest, trainer.rand);
+      }
     } else if (realTest) {
-      LOG.info("[main] running on real test set");
+      LOG.info("[main] running on framenet data");
       train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
           FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
           .stream()
@@ -990,6 +1079,7 @@ public class RerankerTrainer {
       test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
           FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
     } else {
+      LOG.info("[main] running on framenet data");
       trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
           FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
           .stream()
@@ -1012,17 +1102,34 @@ public class RerankerTrainer {
         test = trainTest.getTest();
       }
     }
+
+    // Only take a sub-set of the data based on sharding.
+    // This applies AFTER nTrain, so if you shard a lot you will have less data.
+    int numShards = config.getInt("numShards", 0);
+    if (numShards > 0) {
+      int shard = config.getInt("shard");
+      if (shard >= numShards || shard < 0)
+        throw new RuntimeException();
+      LOG.info("only taking shard " + shard + " of " + numShards);
+      train = ItemProvider.Slice.shard(train, shard, numShards);
+      test = ItemProvider.Slice.shard(test, shard, numShards);
+    }
+
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
     LOG.info("[main] " + Describe.memoryUsage());
 
     // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
     if (config.getBoolean("precomputeShape", true)) {
+      LOG.info("precomputing word shapes");
       computeShape(train);
       computeShape(test);
     }
 
     // Data does not come with Stanford parses straight off of disk, add them
-    if (!propbank && config.getBoolean("addStanfordParses", true)) {
+    if (config.getBoolean("addStanfordParses", true)) {
+      LOG.info("addStanfordParses: parsing the train+test data");
+      if (propbank)
+        LOG.warn("you probably don't want to parse propbank, see ParsePropbankData");
       PARSER = ConcreteStanfordWrapper.getSingleton(true);
       addParses(train);
       addParses(test);
@@ -1034,6 +1141,7 @@ public class RerankerTrainer {
     }
 
     if (config.getBoolean("noSyntax", false)) {
+      LOG.info("stripping syntax from train and test");
       stripSyntax(train);
       stripSyntax(test);
     }
@@ -1043,6 +1151,7 @@ public class RerankerTrainer {
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
+      LOG.info("loading model from " + modelFile.getPath());
 //      model = trainer.instantiate();
 //      model.deserializeParams(modelFile);
       ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
@@ -1056,7 +1165,9 @@ public class RerankerTrainer {
       model = trainer.train1(train);
 
       // Save the model
-      model.serializeParams(new File(workingDir, "model.bin_deprecated"));
+      File modelFile = new File(workingDir, "model.bin_deprecated");
+      LOG.info("saving model to " + modelFile.getPath());
+      model.serializeParams(modelFile);
     }
 
     // Release some memory

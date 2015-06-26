@@ -11,6 +11,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ConcreteIO;
 import edu.jhu.hlt.tutils.Document;
+import edu.jhu.hlt.tutils.Language;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 
@@ -33,7 +34,7 @@ public class PropbankDataEndToEndTest {
 
     Log.info("setting up");
     MultiAlphabet alph = new MultiAlphabet();
-    ConcreteIO cio = new ConcreteIO(null, null, null);
+    ConcreteIO cio = new ConcreteIO(null, null, null, Language.EN);
     cio.setConstituencyParseToolname("conll-2011 parse");
     cio.setPropbankToolname("conll-2011 SRL");
     cio.setPosToolName("conll-2011 POS");
@@ -52,7 +53,7 @@ public class PropbankDataEndToEndTest {
     int docIndex = 0;
     Iterable<Communication> comms = on5.ingest(skelsDir);
     for (Communication c : comms) {
-      Document d = cio.communication2Document(c, docIndex++, alph);
+      Document d = cio.communication2Document(c, docIndex++, alph).getDocument();
       List<FNParse> parses = DataUtil.convert(d);
       for (FNParse p : parses) {
         Log.info(Describe.fnParse(p));
@@ -63,7 +64,7 @@ public class PropbankDataEndToEndTest {
   public static void ontonotes4_oldWay() {
     Log.info("setting up");
     //ConcreteIO cio = ConcreteIO.makeInstance();
-    ConcreteIO cio = new ConcreteIO(null, null, null);
+    ConcreteIO cio = new ConcreteIO(null, null, null, Language.EN);
     cio.setConstituencyParseToolname("ontonotes4");
     cio.setPropbankToolname("ontonotes4");
     cio.setPosToolName("ontonotes4-pos");
@@ -79,7 +80,7 @@ public class PropbankDataEndToEndTest {
     Log.info("converting");
     int docIndex = 0;
     MultiAlphabet alph = new MultiAlphabet();
-    Document d = cio.communication2Document(c, docIndex++, alph);
+    Document d = cio.communication2Document(c, docIndex++, alph).getDocument();
 
     List<FNParse> parses = DataUtil.convert(d);
     Log.info("read " + parses.size() + " parses");

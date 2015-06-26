@@ -14,6 +14,7 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;
@@ -32,6 +33,9 @@ import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 public class LearningTest {
   public static final Logger LOG = Logger.getLogger(LearningTest.class);
   private final Random rand = new Random(9001);
+
+  DeterministicRolePruning.Mode argPruningMode =
+      DeterministicRolePruning.Mode.XUE_PALMER_HERMANN;
 
   @Before
   public void turnOffPruning() {
@@ -106,7 +110,7 @@ public class LearningTest {
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     CheatingParams thetaCheat = new CheatingParams(parses);
     thetaCheat.setWeightsByHand();
-    Params.Stateful theta = Params.Stateful.lift(thetaCheat);
+    Params.Stateful theta = new Params.Stateful.Lift(thetaCheat);
     for (double probRecurse : Arrays.asList(0d, 0.01d, 0.03d)) {
       for (FNParse y : parses) {
         LOG.info("[noTrainPrereq] testing " + y.getId() + " probRecurse=" + probRecurse);
@@ -150,7 +154,8 @@ public class LearningTest {
 
     int beamWidth = 10;
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
-    Reranker model = new Reranker(Stateful.NONE, theta, tau, beamWidth, beamWidth, rand);
+    Reranker model = new Reranker(
+        Stateful.NONE, theta, tau, argPruningMode, beamWidth, beamWidth, rand);
     Reranker.LOG_FORWARD_SEARCH = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
@@ -217,7 +222,7 @@ public class LearningTest {
       PriorScoreParams theta = new PriorScoreParams(ip, true);
       if (byHand) {
         theta.setParamsByHand();
-        model = new Reranker(Stateful.NONE, theta, tau, beamWidth, beamWidth, rand);
+        model = new Reranker(Stateful.NONE, theta, tau, argPruningMode, beamWidth, beamWidth, rand);
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
         trainer.statelessParams = theta;
@@ -229,7 +234,7 @@ public class LearningTest {
       // check how good the score can be.
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
-      model = new Reranker(Stateful.NONE, oracle, tau, beamWidth, beamWidth, rand);
+      model = new Reranker(Stateful.NONE, oracle, tau, argPruningMode, beamWidth, beamWidth, rand);
       Assert.assertTrue("I dumped support for using items for pruning", false);
     }
 

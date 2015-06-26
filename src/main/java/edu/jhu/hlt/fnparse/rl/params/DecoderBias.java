@@ -57,4 +57,16 @@ public class DecoderBias implements Params.PruneThreshold {
   public void deserialize(DataInputStream in) throws IOException {
     recallBias = in.readDouble();
   }
+
+  @Override
+  public void addWeights(Params other, boolean checkAlphabetEquality) {
+    throw new RuntimeException("not supported yet, figure out if you want to"
+        + " average this or maintain it");
+  }
+
+  @Override
+  public void scaleWeights(double scale) {
+    throw new RuntimeException("not supported yet, figure out if you want to"
+        + " average this or maintain it");
+  }
 }

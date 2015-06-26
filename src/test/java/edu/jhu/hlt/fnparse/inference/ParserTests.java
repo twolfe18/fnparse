@@ -13,8 +13,6 @@ import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import jdk.nashorn.internal.objects.Global;
-
 import org.junit.Before;
 import org.junit.Test;
 
@@ -29,6 +27,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
+import edu.jhu.hlt.fnparse.inference.TestingUtil;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 

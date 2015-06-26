@@ -103,4 +103,14 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
   public void deserialize(DataInputStream in) throws IOException {
     throw new RuntimeException("you should never do this");
   }
+
+  @Override
+  public void addWeights(Params other, boolean checkAlphabetEquality) {
+    throw new RuntimeException("don't do this");
+  }
+
+  @Override
+  public void scaleWeights(double scale) {
+    throw new RuntimeException("don't do this");
+  }
 }

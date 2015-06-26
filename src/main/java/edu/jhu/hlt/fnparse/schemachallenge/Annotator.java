@@ -22,7 +22,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
 import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
-import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
 import edu.jhu.hlt.fnparse.util.Describe;
 
 /**
@@ -110,7 +109,7 @@ public class Annotator {
     } else {
       List<edu.jhu.hlt.fnparse.rl.State> initialStates = new ArrayList<>();
       for (FNTagging p : frames)
-        initialStates.add(RerankerTrainer.getInitialStateWithPruning(p, null));
+        initialStates.add(argId.getInitialStateWithPruning(p, null));
       parses = argId.predict(initialStates);
     }
 

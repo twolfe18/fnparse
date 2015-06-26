@@ -218,4 +218,14 @@ public class PriorScoreParams implements Params.Stateless {
   public void deserialize(DataInputStream in) throws IOException {
     throw new RuntimeException("implement me!");
   }
+
+  @Override
+  public void addWeights(Params other, boolean checkAlphabetEquality) {
+    throw new RuntimeException("implement me!");
+  }
+
+  @Override
+  public void scaleWeights(double scale) {
+    throw new RuntimeException("implement me!");
+  }
 }

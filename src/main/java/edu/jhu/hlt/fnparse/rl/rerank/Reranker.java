@@ -29,7 +29,6 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
-import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -219,13 +218,10 @@ public class Reranker implements Serializable {
    * included in the prune mask.
    */
   public State getInitialStateWithPruning(FNTagging frames, FNParse gold) {
-    Sentence s = frames.getSentence();
-    if (s.getStanfordParse(false) == null)
-      throw new IllegalArgumentException();
     double priorScore = 0;
     List<Item> items = new ArrayList<>();
     DeterministicRolePruning drp =
-        new DeterministicRolePruning(argPruningMode, null);
+        new DeterministicRolePruning(argPruningMode, null, null);
     FNParseSpanPruning mask = drp.setupInference(
         Arrays.asList(frames), null).decodeAll().get(0);
     int T = mask.numFrameInstances();
@@ -932,7 +928,7 @@ public class Reranker implements Serializable {
       assert init.numFrameInstance() == 0;
       return Update.NONE;
     }
-    Params.Stateful model = Params.Stateful.lift(thetaStateless);
+    Params.Stateful model = new Params.Stateful.Lift(thetaStateless);
     BFunc deltaLoss = new BFunc.MostViolated(y);
 //    double negSubsampleRate = 0.9d;
 //    BFunc deltaLoss = new BFunc.MostViolatedWithSubsampling(y, negSubsampleRate, rand);

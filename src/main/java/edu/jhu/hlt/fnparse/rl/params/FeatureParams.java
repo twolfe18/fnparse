@@ -80,6 +80,28 @@ public abstract class FeatureParams implements Serializable {
         + "method or called the other one");
   }
 
+  /** Adds the weights from other to this */
+  public void addWeights(Params other, boolean checkAlphabetEquality) {
+    FeatureParams fp = (FeatureParams) other;
+    theta.add(fp.theta);
+    if (checkAlphabetEquality) {
+      if (featureIndices != null) {
+        int n1 = featureIndices.size();
+        int n2 = fp.featureIndices.size();
+        if (n1 != n2) throw new IllegalArgumentException();
+        for (int i = 0; i < n1; i++)
+          if (!featureIndices.lookupObject(i).equals(fp.featureIndices.lookupObject(i)))
+            throw new IllegalArgumentException();
+      } else if (numBuckets != fp.numBuckets) {
+        throw new IllegalArgumentException();
+      }
+    }
+  }
+
+  public void scaleWeights(double scale) {
+    theta.scale(scale);
+  }
+
   public void serialize(DataOutputStream out) throws IOException {
     out.writeBoolean(averageFeatures);
     theta.serialize(out);

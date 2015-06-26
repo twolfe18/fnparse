@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.function.Function;
 
 import org.apache.log4j.Logger;
 
@@ -77,13 +78,28 @@ public class DeterministicRolePruning
     RANDOM,
   }
 
+  public static boolean PEDANTIC = false;
+
   private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
   private final FgModel weights = new FgModel(0);
-  private ConcreteStanfordWrapper parser;
+  //private ConcreteStanfordWrapper parser;
+  private Function<Sentence, ConstituencyParse> cParser;
+  private Function<Sentence, DependencyParse> dParser;
 
-  public DeterministicRolePruning(Mode mode, ConcreteStanfordWrapper parser) {
+  //public DeterministicRolePruning(Mode mode, ConcreteStanfordWrapper parser) {
+  public DeterministicRolePruning(
+      Mode mode,
+      Function<Sentence, DependencyParse> dParser,
+      Function<Sentence, ConstituencyParse> cParser) {
+    if (PEDANTIC) {
+      if (Arrays.asList(Mode.DEPENDENCY_SPANS, Mode.XUE_PALMER_DEP, Mode.XUE_PALMER_DEP_HERMANN).contains(mode) && dParser == null)
+        Log.warn("no dParser provided, all sentences must have dParses!");
+      if (Arrays.asList(Mode.STANFORD_CONSTITUENTS, Mode.XUE_PALMER, Mode.XUE_PALMER_HERMANN).contains(mode) && cParser == null)
+        Log.warn("no cParser provided, all sentences must have cParses!");
+    }
     this.mode = mode;
-    this.parser = parser;
+    this.dParser = dParser;
+    this.cParser = cParser;
   }
 
   public Mode getMode() {
@@ -147,18 +163,14 @@ public class DeterministicRolePruning
       + mode + " mode");
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++)
-      data.add(new SD(input.get(i), mode, parser));
+      data.add(this.new SD(input.get(i)));
     return new StageDatumExampleList<>(data);
   }
 
-  static class SD implements StageDatum<FNTagging, FNParseSpanPruning> {
+  class SD implements StageDatum<FNTagging, FNParseSpanPruning> {
     private FNTagging input;
-    private Mode mode;
-    private ConcreteStanfordWrapper parser;
-    public SD(FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
+    public SD(FNTagging input) {
       this.input = input;
-      this.mode = mode;
-      this.parser = parser;
     }
     @Override
     public FNTagging getInput() {
@@ -180,28 +192,35 @@ public class DeterministicRolePruning
     }
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
-      return new Decodable(input, mode, parser);
+      //return new Decodable(input, mode, parser);
+      return DeterministicRolePruning.this.new Decodable(input);
     }
   }
 
-  public static class Decodable implements IDecodable<FNParseSpanPruning> {
-    private ConcreteStanfordWrapper parser;
-    private Mode mode;
+  public class Decodable implements IDecodable<FNParseSpanPruning> {
+    //private ConcreteStanfordWrapper parser;
     private FNTagging input;
     private FNParseSpanPruning output;
-    public Decodable(
-        FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
+
+    /** Doesn't do any caching around parser */
+    //public Decodable(FNTagging input, Mode mode, ConcreteStanfordWrapper parser) {
+    public Decodable(FNTagging input) {
       this.input = input;
-      this.mode = mode;
-      this.parser = parser;
     }
+
     public ConstituencyParse getConstituencyParse() {
       Sentence s = input.getSentence();
       ConstituencyParse p = s.getStanfordParse(false);
       if (p != null)
         return p;
-      return parser.getCParse(s);
+      if (cParser == null) {
+        throw new RuntimeException("Sentence did not contain a parse, "
+            + "and you didn't provide a parser. Sentence.id=" + s.getId());
+      }
+      //return parser.getCParse(s);
+      return cParser.apply(s);
     }
+
     @Override
     public FNParseSpanPruning decode() {
       if (output == null) {
@@ -291,12 +310,14 @@ public class DeterministicRolePruning
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
           if (sent.getBasicDeps() == null)
-            sent.setBasicDeps(parser.getBasicDParse(sent));
+            sent.setBasicDeps(dParser.apply(sent));
+            //sent.setBasicDeps(parser.getBasicDParse(sent));
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {
           if (sent.getBasicDeps() == null)
-            sent.setBasicDeps(parser.getBasicDParse(sent));
+            sent.setBasicDeps(dParser.apply(sent));
+            //sent.setBasicDeps(parser.getBasicDParse(sent));
 //          # basic deps
 //          107931   INFO  DeterministicRolePruning - DEPENDENCY_SPANS recall 0.5688228657389997
 //          108077   INFO  DeterministicRolePruning - XUE_PALMER_DEP recall 0.1855960887551711
@@ -363,9 +384,10 @@ public class DeterministicRolePruning
 
   // shows spans
   public static void main(String[] args) {
+    ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
+    Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
     DeterministicRolePruning prune =
-        new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN,
-            ConcreteStanfordWrapper.getSingleton(false));
+        new DeterministicRolePruning(Mode.XUE_PALMER_DEP_HERMANN, dParser, null);
     for (FNParse parse : DataUtil.iter2list(
         FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       FNParseSpanPruning mask = prune.setupInference(
@@ -387,15 +409,18 @@ public class DeterministicRolePruning
   public static void mainNew(String[] args) {
     List<FNParse> parses = DataUtil.iter2list(FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()).subList(0, 500);
     ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
+    Function<Sentence, DependencyParse> dParser = parser::getBasicDParse;
+    Function<Sentence, ConstituencyParse> cParser = parser::getCParse;
     for (FNParse p : parses) {
       Sentence s = p.getSentence();
       s.setStanfordParse(parser.getCParse(s));
     }
     for (DeterministicRolePruning.Mode mode : DeterministicRolePruning.Mode.values()) {
+      DeterministicRolePruning prune = new DeterministicRolePruning(mode, dParser, cParser);
       FPR fpr = new FPR(false);
       for (FNParse p : parses) {
-        DeterministicRolePruning.Decodable dec =
-            new DeterministicRolePruning.Decodable(p, mode, parser);
+        DeterministicRolePruning.Decodable dec = prune.new Decodable(p);
+            //new DeterministicRolePruning.Decodable(p, mode, dParser, cParser);
         FNParseSpanPruning mask = dec.decode();
         Map<FrameRoleInstance, Set<Span>> spans = mask.getMapRepresentation();
         for (FrameInstance fi : p.getFrameInstances()) {

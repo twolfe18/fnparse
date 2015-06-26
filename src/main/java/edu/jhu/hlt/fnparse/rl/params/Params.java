@@ -1,8 +1,14 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
 
 /**
  * Parameterizes a score function on (state,action) pairs
@@ -34,6 +41,13 @@ public interface Params extends Serializable {
 
   public void serialize(DataOutputStream out) throws IOException;
   public void deserialize(DataInputStream in) throws IOException;
+
+  // For parameter averaging.
+  // Params should only ever be instantiated at the same type as the
+  // implementing class. As in class X implements Params can expect the first
+  // argument to be of type X.
+  public void addWeights(Params other, boolean checkAlphabetEquality);
+  public void scaleWeights(double scale);
 
   // score is in an extending class
   // because its signature differs between Stateful and Stateless,
@@ -78,7 +92,17 @@ public interface Params extends Serializable {
       public void deserialize(DataInputStream in) throws IOException {
         intercept = in.readDouble();
       }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        Const c = (Const) other;
+        assert intercept == c.intercept;
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        // no-op
+      }
     }
+
     public static class Sum implements PruneThreshold {
       private static final long serialVersionUID = 1L;
       private final PruneThreshold left, right;
@@ -113,6 +137,17 @@ public interface Params extends Serializable {
       public void deserialize(DataInputStream in) throws IOException {
         left.deserialize(in);
         right.deserialize(in);
+      }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        Sum s = (Sum) other;
+        left.addWeights(s.left, checkAlphabetEquality);
+        right.addWeights(s.right, checkAlphabetEquality);
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        left.scaleWeights(scale);
+        right.scaleWeights(scale);
       }
     }
 
@@ -215,36 +250,56 @@ public interface Params extends Serializable {
       public void deserialize(DataInputStream in) throws IOException {
         LOG.info("[Stateful.NONE deserialize] no-op");
       }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        assert other.getClass().equals(this.getClass());
+        LOG.info("[Stateful.NONE addWeights] no-op");
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        LOG.info("[Stateful.NONE scaleWeights] no-op");
+      }
     };
 
-    public static Stateful lift(final Stateless theta) {
-      return new Stateful() {
-        private static final long serialVersionUID = 1L;
-        @Override
-        public String toString() {
-          return "(Lifted " + theta + ")";
-        }
-        @Override
-        public Adjoints score(State s, CommitIndex ai, Action a) {
-          return theta.score(s.getFrames(), a);
-        }
-        @Override
-        public void doneTraining() {
-          theta.doneTraining();
-        }
-        @Override
-        public void showWeights() {
-          theta.showWeights();
-        }
-        @Override
-        public void serialize(DataOutputStream out) throws IOException {
-          theta.serialize(out);
-        }
-        @Override
-        public void deserialize(DataInputStream in) throws IOException {
-          theta.deserialize(in);
-        }
-      };
+    public static class Lift implements Stateful {
+      private final Stateless stateless;
+      public Lift(Stateless theta) {
+        stateless = theta;
+      }
+      private static final long serialVersionUID = 1L;
+      @Override
+      public String toString() {
+        return "(Lifted " + stateless + ")";
+      }
+      @Override
+      public Adjoints score(State s, CommitIndex ai, Action a) {
+        return stateless.score(s.getFrames(), a);
+      }
+      @Override
+      public void doneTraining() {
+        stateless.doneTraining();
+      }
+      @Override
+      public void showWeights() {
+        stateless.showWeights();
+      }
+      @Override
+      public void serialize(DataOutputStream out) throws IOException {
+        stateless.serialize(out);
+      }
+      @Override
+      public void deserialize(DataInputStream in) throws IOException {
+        stateless.deserialize(in);
+      }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        Lift d = (Lift) other;
+        stateless.addWeights(d.stateless, checkAlphabetEquality);
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        stateless.scaleWeights(scale);
+      }
     }
   }
 
@@ -289,6 +344,15 @@ public interface Params extends Serializable {
       @Override
       public void deserialize(DataInputStream in) throws IOException {
         LOG.info("[Stateless.NONE deserialize] no-op");
+      }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        assert getClass().equals(other.getClass());
+        LOG.info("[Stateless.NONE addWeights] no-op");
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        LOG.info("[Stateless.NONE scaleWeights] no-op");
       }
     };
 
@@ -403,6 +467,15 @@ public interface Params extends Serializable {
         flush();
         wrapping.deserialize(in);
       }
+      @Override
+      public void addWeights(Params other, boolean checkAlphabetEquality) {
+        Caching c = (Caching) other;
+        wrapping.addWeights(c.wrapping, checkAlphabetEquality);
+      }
+      @Override
+      public void scaleWeights(double scale) {
+        wrapping.scaleWeights(scale);
+      }
     }
   }
 
@@ -475,6 +548,17 @@ public interface Params extends Serializable {
       stateful.deserialize(in);
       stateless.deserialize(in);
     }
+    @Override
+    public void addWeights(Params other, boolean checkAlphabetEquality) {
+      SumMixed sm = (SumMixed) other;
+      stateful.addWeights(sm.stateful, checkAlphabetEquality);
+      stateless.addWeights(sm.stateless, checkAlphabetEquality);
+    }
+    @Override
+    public void scaleWeights(double scale) {
+      stateful.scaleWeights(scale);
+      stateless.scaleWeights(scale);
+    }
   }
 
   /** Params is closed under addition */
@@ -512,6 +596,17 @@ public interface Params extends Serializable {
     public void deserialize(DataInputStream in) throws IOException {
       left.deserialize(in);
       right.deserialize(in);
+    }
+    @Override
+    public void addWeights(Params other, boolean checkAlphabetEquality) {
+      SumStateless ss = (SumStateless) other;
+      left.addWeights(ss.left, checkAlphabetEquality);
+      right.addWeights(ss.right, checkAlphabetEquality);
+    }
+    @Override
+    public void scaleWeights(double scale) {
+      left.scaleWeights(scale);
+      right.scaleWeights(scale);
     }
   }
 
@@ -551,6 +646,17 @@ public interface Params extends Serializable {
     public void deserialize(DataInputStream in) throws IOException {
       left.deserialize(in);
       right.deserialize(in);
+    }
+    @Override
+    public void addWeights(Params other, boolean checkAlphabetEquality) {
+      SumStateful ss = (SumStateful) other;
+      left.addWeights(ss.left, checkAlphabetEquality);
+      right.addWeights(ss.right, checkAlphabetEquality);
+    }
+    @Override
+    public void scaleWeights(double scale) {
+      left.scaleWeights(scale);
+      right.scaleWeights(scale);
     }
   }
 
@@ -592,6 +698,104 @@ public interface Params extends Serializable {
     @Override
     public void deserialize(DataInputStream in) throws IOException {
       variance = in.readDouble();
+    }
+    @Override
+    public void addWeights(Params other, boolean checkAlphabetEquality) {
+      // variance is not *weights*
+      // only purpose of having add/scale weights is for parameter averaging,
+      // which doesn't apply to variance.
+      RandScore rs = (RandScore) other;
+      assert variance == rs.variance;
+    }
+    @Override
+    public void scaleWeights(double scale) {
+      // variance is not *weights*
+      // only purpose of having add/scale weights is for parameter averaging,
+      // which doesn't apply to variance.
+    }
+  }
+
+  /**
+   * Assuming Params are serializable, this class lifts them up to support
+   * parameter averaging over the network. See {@link NetworkParameterAveraging.AvgParams}
+   */
+  public static class NetworkAvg implements NetworkParameterAveraging.AvgParams {
+    private Params sum;
+    private boolean checkAlph;
+    private int adds;
+
+    /**
+     * @param zero is an instantiated set of weights set to 0 (this class
+     * doesn't know how to create new Params).
+     * @param checkAlphabetEquality is a safety option but may cause slowness.
+     */
+    public NetworkAvg(Params zero, boolean checkAlphabetEquality) {
+      sum = zero;
+      adds = 0;
+      checkAlph = checkAlphabetEquality;
+    }
+
+    @Override
+    public void set(InputStream data) {
+      try {
+        ObjectInputStream ois = new ObjectInputStream(data);
+        Params d = (Params) ois.readObject();
+        sum = d;
+        adds = 1;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void get(OutputStream data) {
+      try {
+        ObjectOutputStream oos = new ObjectOutputStream(data);
+        oos.writeObject(sum);
+        oos.flush();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void add(InputStream other) {  // matches get
+      try {
+        ObjectInputStream ois = new ObjectInputStream(other);
+        Params d = (Params) ois.readObject();
+        sum.addWeights(d, checkAlph);
+        adds++;
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void getAverage(OutputStream data) {
+      try {
+        Params avg = cloneViaSerialization(sum);
+        avg.scaleWeights(1d / adds);
+        ObjectOutputStream oos = new ObjectOutputStream(data);
+        oos.writeObject(avg);
+        oos.flush();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T extends Serializable> T cloneViaSerialization(T input) {
+      try {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        ObjectOutputStream oos = new ObjectOutputStream(baos);
+        oos.writeObject(input);
+        byte[] bytes = baos.toByteArray();
+        ByteArrayInputStream bais = new ByteArrayInputStream(bytes);
+        ObjectInputStream ois = new ObjectInputStream(bais);
+        return ((T) ois.readObject());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 

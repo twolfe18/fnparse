@@ -108,7 +108,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
     if (mode == null) {
       rolePruning = new RoleSpanPruningStage(globals, "");
     } else {
-      rolePruning = new DeterministicRolePruning(pruningMode, null);
+      throw new RuntimeException("fixme");
+      //rolePruning = new DeterministicRolePruning(pruningMode, null);
     }
   }
 
@@ -185,7 +186,8 @@ public class LatentConstituencyPipelinedParser implements Parser {
   }
 
   public void useDeterministicPruning(DeterministicRolePruning.Mode mode) {
-    rolePruning = new DeterministicRolePruning(mode, null);
+    throw new RuntimeException("fixme");
+    //rolePruning = new DeterministicRolePruning(mode, null);
   }
 
   @Override
@@ -427,7 +429,11 @@ public class LatentConstituencyPipelinedParser implements Parser {
     Set<Span> h = new HashSet<>();  // hyp (latent)
     Set<Span> s = new HashSet<>();  // supervised (regular)
     List<FNParseSpanPruning> hypLatent = rolePruning.setupInference(parses, null).decodeAll();
-    DeterministicRolePruning drp = new DeterministicRolePruning(mode, null);
+    DeterministicRolePruning drp = null;
+    if (true) {
+      throw new RuntimeException("fixme");
+      //DeterministicRolePruning drp = new DeterministicRolePruning(mode, null);
+    }
     List<FNParseSpanPruning> hypSupervised = drp.setupInference(parses, null).decodeAll();
     for (int i = 0; i < parses.size(); i++) {
       FNParse p = parses.get(i);

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.propbank.ParseData;
+import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -18,7 +18,7 @@ import edu.jhu.hlt.tutils.Timer;
 
 /**
  * TODO This class needs to drop the assumption that the entire cache can fit
- * in memory. See {@link ParseData} for a memory-free disk caching implementation.
+ * in memory. See {@link ParsePropbankData} for a memory-free disk caching implementation.
  *
  * @author travis
  */
