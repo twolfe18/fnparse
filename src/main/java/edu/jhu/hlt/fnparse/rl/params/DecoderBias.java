@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
  * @author travis
  */
 public class DecoderBias implements Params.PruneThreshold {
+  private static final long serialVersionUID = -3263890096676606112L;
 
   private double recallBias = 0d;
 

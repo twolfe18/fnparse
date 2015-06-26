@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.data;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.ingest.conll.Conll2011;
@@ -56,7 +57,9 @@ public class PropbankReader {
   public boolean performCaching = false;
 
   public boolean debug = false;
-  public int numDebugShards = 25;
+
+  // If null, take everything
+  private Predicate<Sentence> keep = null;
 
   /**
    * @param laptop says where to look for data.
@@ -75,6 +78,10 @@ public class PropbankReader {
     devSkels = new File(ON5_CONLL_PARENT[i], "development");
     testSkels = new File(ON5_CONLL_PARENT[i], "test");
     this.autoParses = autoParses;
+  }
+
+  public void setKeep(Predicate<Sentence> keep) {
+    this.keep = keep;
   }
 
   public ItemProvider getTrainData() {
@@ -133,14 +140,7 @@ public class PropbankReader {
     Log.info("reading from onotnotes=" + on5.getPath());
     Log.info("reading from skels=" + skelsDir.getPath());
 
-    Conll2011 skels;
-    if (debug) {
-      skels = new Conll2011(f ->
-        f.getName().endsWith(".gold_skel")
-        && f.getPath().hashCode() % numDebugShards == 0);
-    } else {
-      skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
-    }
+    Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
     Ontonotes5 on5 = new Ontonotes5(skels, this.on5);
 
     Log.info("reading Communications, " + Describe.memoryUsage());
@@ -149,20 +149,18 @@ public class PropbankReader {
     Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
     for (Communication c : on5.ingest(skelsDir)) {
       Document d = cio.communication2Document(c, docIndex++, alph).getDocument();
-      List<FNParse> ps = DataUtil.convert(d);
-
-      // Add predicted parse information
-      if (autoParses != null) {
-        //Log.info("adding Sentence.goldCParse using the provided parser for " + d.getId());
-        Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
-        for (FNParse p : ps) {
-          Sentence s = p.getSentence();
-          //s.setGoldParse(autoParses.parse(s));
+      for (FNParse p : DataUtil.convert(d)) {
+        Sentence s = p.getSentence();
+        if (keep != null && !keep.test(s))
+          continue;
+        // Add predicted parse information
+        if (autoParses != null) {
+          if (debug)
+            Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
           s.setStanfordParse(autoParses.parse(s));
         }
+        parses.add(p);
       }
-
-      parses.addAll(ps);
       if (docIndex % 500 == 0)
         Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
     }

@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.rerank;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -27,7 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 
 import org.apache.log4j.Logger;
 
@@ -55,23 +56,22 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.util.AveragedWeights;
 import edu.jhu.hlt.fnparse.util.BatchProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ExperimentProperties;
 import edu.jhu.hlt.fnparse.util.FNDiff;
-import edu.jhu.hlt.fnparse.util.FileUtil;
 import edu.jhu.hlt.fnparse.util.LearningRateEstimator;
 import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
-import edu.jhu.hlt.tutils.net.NetworkParameterAveraging.Client;
-import edu.jhu.hlt.tutils.net.NetworkSerializableParams;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -238,17 +238,25 @@ public class RerankerTrainer {
   // TODO Move to DeterministicRolePruning.Mode and Reranker.argPruningMode
   public boolean useSyntaxSpanPruning = true;
 
+  public Predicate<Sentence> keep = s -> true;
+
   // Model parameters
   public Params.Stateful statefulParams = Stateful.NONE;
   public Params.Stateless statelessParams = Stateless.NONE;
   public Params.PruneThreshold tauParams = Params.PruneThreshold.Const.ONE;
 
   // For model averaging over the network
-  public String parameterServerHost = "localhost";
+  public String parameterServerHost = null;
   public NetworkParameterAveraging.Server parameterServer;
   public NetworkParameterAveraging.Client parameterServerClient;
-  // FIRST ATTEMPT
-  public NetworkSerializableParams<Params.Stateless> statelessNetworkParams;
+  /**
+   * This will be a Sum, which will have pointers to the stateless, stateful,
+   * and tau components. This sum will not be used to predict anything (as it
+   * is a mix of params for different purposes), but it can be used as a struct
+   * of all the parameter pieces, and can be used to deserialize everything.
+   */
+  //public NetworkSerializableParams<Params.Glue> networkParams;
+  public Params.NetworkAvg networkParams;   // wrapper around Params.Glue
 
 
   public RerankerTrainer(Random rand, File workingDir) {
@@ -287,8 +295,6 @@ public class RerankerTrainer {
       this.statelessParams = p;
     else
       this.statelessParams = new Params.SumStateless(this.statelessParams, p);
-    this.statelessNetworkParams =
-        new NetworkSerializableParams<>(this.statelessParams);
     return p;
   }
 
@@ -704,7 +710,7 @@ public class RerankerTrainer {
 
         // Average parameters over the network
         if (parameterServerClient != null) {
-          assert statelessNetworkParams != null;
+          assert networkParams != null;
           parameterServerClient.paramsChanged();
         }
 
@@ -864,45 +870,19 @@ public class RerankerTrainer {
 
     trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
 
-
-    // Setup parameter averaging over the network
-    boolean isParamServer = config.getBoolean("isParamServer", false);
-    int numClientsForParamAvg = config.getInt("numClientsForParamAvg", 0);
-    int secondsBetweenSaves = config.getInt("paramAvgSecBetweenSaves", 0);
-    if (isParamServer) {
-      // Server
-      boolean checkAlphabetEquality = true;
-      Params.NetworkAvg params = new Params.NetworkAvg(
-          trainer.statelessParams, checkAlphabetEquality);
-      trainer.parameterServer = new NetworkParameterAveraging.Server(params);
-      File checkpointDir = new File(workingDir, "paramAverages");
-      if (!checkpointDir.isDirectory()) checkpointDir.mkdir();
-      trainer.parameterServer.saveModels(checkpointDir, secondsBetweenSaves);
-      LOG.info("starting parameter server: " + trainer.parameterServer);
-      trainer.parameterServer.debug = true;
-      trainer.parameterServer.run();
-      LOG.info("server is done running for whatever reason, exiting");
-      System.exit(0);
-    } else if (numClientsForParamAvg > 0) {
-      // Client
-      String paramServerHost = config.getString("paramServerHost");
-      String hostName = InetAddress.getLocalHost().getHostName();
-      Log.info("numClientsForParamAvg=" + numClientsForParamAvg
-          + " paramServerHost=" + paramServerHost
-          + " hostName=" + hostName);
-      // This may get over-written...
-      LOG.info("setting up network parameter averaging client");
-      trainer.statelessNetworkParams =
-          new NetworkSerializableParams<Params.Stateless>(trainer.statelessParams);
-      trainer.parameterServerClient =
-          new Client(trainer.statelessNetworkParams, paramServerHost);
-        trainer.parameterServerClient.secondsBetweenContactingServer = secondsBetweenSaves;
-      if (config.getBoolean("parallelLearnDebug", false))
-        trainer.parameterServerClient.debug = true;
-    } else {
-      LOG.info("not setting up network parameter averaging");
+    // Filter examples based on shards
+    int numShards = config.getInt("numShards", 0);
+    if (numShards > 0) {
+      int shard = config.getInt("shard");
+      if (shard >= numShards || shard < 0)
+        throw new RuntimeException();
+      // Only keep examples which have a hashcode matching this shard
+      trainer.keep = s -> {
+        int h = s.getId().hashCode();
+        if (h < 0) h = -h;
+        return h % numShards == shard;
+      };
     }
-
 
     if (config.containsKey("trainTimeLimit")) {
       double mins = config.getDouble("trainTimeLimit");
@@ -1028,92 +1008,142 @@ public class RerankerTrainer {
     Reranker.COST_FN = config.getDouble("costFN", 1);
     LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
-    final int nTrain = config.getInt("nTrain", 100);
     RerankerTrainer trainer = configure(config);
 
-
-    final boolean parallelLearnDebug = config.getBoolean("parallelLearnDebug", false);
-
-
     // Get train and test data.
+    final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
     final boolean laptop = config.getBoolean("laptop", false);
-    if (realTest)
-      LOG.info("[main] running on real test set");
-    else
-      LOG.info("[main] running on dev set");
     ItemProvider train, test, trainAndTest = null;
-    if (propbank) {
-      LOG.info("[main] running on propbank data");
-      ParsePropbankData propbankAutoParses = new ParsePropbankData.Redis(
+    if (!isParamServer) {
+      if (realTest)
+        LOG.info("[main] running on real test set");
+      else
+        LOG.info("[main] running on dev set");
+      if (propbank) {
+        LOG.info("[main] running on propbank data");
+        ParsePropbankData propbankAutoParses = new ParsePropbankData.Redis(
             config.getString("propbankParseRedisHost"),
             config.getInt("propbankParseRedisPort"),
             config.getInt("propbankParseRedisDb"));
-      PropbankReader pbr = new PropbankReader(laptop, propbankAutoParses);
-      if (parallelLearnDebug) {
-        pbr.debug = true;
-        // This ensures that ProbankReader only takes a very small slice of the data
-        //pbr.numDebugShards = 150;
-        pbr.numDebugShards = config.getInt("pbr.numDebugShards", 1);
-      }
-      if (realTest) {
-        LOG.info("reading real propbank data...");
-        Pair<ItemProvider, ItemProvider> data = pbr.getTrainTestData();
+        PropbankReader pbr = new PropbankReader(laptop, propbankAutoParses);
+        pbr.setKeep(trainer.keep);
+        Pair<ItemProvider, ItemProvider> data;
+        if (realTest) {
+          LOG.info("reading real propbank data...");
+          data = pbr.getTrainTestData();
+        } else {
+          LOG.info("reading dev propbank data...");
+          data = pbr.getTrainDevData();
+        }
         train = data.get1();
         test = data.get2();
+      } else if (realTest) {
+        LOG.info("[main] running on framenet data");
+        train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+            FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+        test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+            FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
       } else {
-        int nTest = config.getInt("nTest", 500);
-        LOG.info("reading dev propbank data... nTest=" + nTest);
-        Pair<ItemProvider, ItemProvider> data = pbr.getTrainDevData();
-        train = new ItemProvider.Slice(data.get1(), nTrain, trainer.rand);
-        test = new ItemProvider.Slice(data.get2(), nTest, trainer.rand);
+        LOG.info("[main] running on framenet data");
+        trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+            FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+        if (testOnTrain) {
+          train = trainAndTest;
+          test = trainAndTest;
+          trainer.pretrainConf.tuneOnTrainingData = true;
+          trainer.pretrainConf.maxDev = 25;
+          trainer.trainConf.tuneOnTrainingData = true;
+          trainer.trainConf.maxDev = 25;
+        } else {
+          double propTest = 0.25;
+          int maxTest = 99999;
+          ItemProvider.TrainTestSplit trainTest =
+              new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, trainer.rand);
+          train = trainTest.getTrain();
+          test = trainTest.getTest();
+        }
       }
-    } else if (realTest) {
-      LOG.info("[main] running on framenet data");
-      train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-          FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-          .stream()
-          .limit(nTrain)
-          .collect(Collectors.toList()));
-      test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-          FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
+
+      // Only take a sub-set of the data based on sharding.
+      if (trainer.keep != null) {
+        LOG.info("filtering remaining examples by trainer.keep predicate");
+        LOG.info("before: train.size=" + train.size() + " test.size=" + test.size());
+        train = ItemProvider.Slice.shard(train, trainer.keep);
+        test = ItemProvider.Slice.shard(test, trainer.keep);
+        LOG.info("after: train.size=" + train.size() + " test.size=" + test.size());
+      }
+
+      // Limit according to nTrain
+      // TODO Move nTrain before shards by letting PropbankData know about nTrain
+      final int nTrain = config.getInt("nTrain", 500);
+      final int nTest = config.getInt("nTest", 999999);
+      train = new ItemProvider.Slice(train, nTrain, trainer.rand);
+      test = new ItemProvider.Slice(test, nTest, trainer.rand);
     } else {
-      LOG.info("[main] running on framenet data");
-      trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-          FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences())
-          .stream()
-          //.filter(p -> p.numFrameInstances() <= 5)
-          .limit(nTrain)
-          .collect(Collectors.toList()));
-      if (testOnTrain) {
-        train = trainAndTest;
-        test = trainAndTest;
-        trainer.pretrainConf.tuneOnTrainingData = true;
-        trainer.pretrainConf.maxDev = 25;
-        trainer.trainConf.tuneOnTrainingData = true;
-        trainer.trainConf.maxDev = 25;
-      } else {
-        double propTest = 0.25;
-        int maxTest = 9999;
-        ItemProvider.TrainTestSplit trainTest =
-            new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, trainer.rand);
-        train = trainTest.getTrain();
-        test = trainTest.getTest();
-      }
+      train = null;
+      test = null;
     }
 
-    // Only take a sub-set of the data based on sharding.
-    // This applies AFTER nTrain, so if you shard a lot you will have less data.
-    int numShards = config.getInt("numShards", 0);
-    if (numShards > 0) {
-      int shard = config.getInt("shard");
-      if (shard >= numShards || shard < 0)
-        throw new RuntimeException();
-      LOG.info("only taking shard " + shard + " of " + numShards);
-      train = ItemProvider.Slice.shard(train, shard, numShards);
-      test = ItemProvider.Slice.shard(test, shard, numShards);
+    // Setup parameter averaging over the network
+    int numClientsForParamAvg = config.getInt("numClientsForParamAvg", 0);
+    trainer.parameterServerHost = config.getString("paramServerHost", "none");
+    if (isParamServer || numClientsForParamAvg > 0) {
+
+      // Setup the network parameters (do this as late as possible)
+      boolean checkAlphabetEquality = true;
+      trainer.networkParams = new Params.NetworkAvg(new Params.Glue(
+              trainer.statefulParams,
+              trainer.statelessParams,
+              trainer.tauParams),
+              checkAlphabetEquality);
+      trainer.networkParams.debug = true;
+
+      int secondsBetweenSaves = config.getInt("paramAvgSecBetweenSaves", 5 * 60);
+      String hostName = InetAddress.getLocalHost().getHostName();
+      Log.info("numClientsForParamAvg=" + numClientsForParamAvg
+          + " paramServerHost=" + trainer.parameterServerHost
+          + " hostName=" + hostName
+          + " secondsBetweenSaves=" + secondsBetweenSaves);
+
+      // Only feature hashing is allowed: otherwise we're not guaranteed to have
+      // the same feature indices.
+      LOG.info("disabling growing in AveragedWeights, should be using feature "
+          + "hashing because of network parameter hashing, and shouldn't need to grow");
+      AveragedWeights.GROWING_ALLOWED = false;
+
+      if (isParamServer) {
+        // Server
+        trainer.parameterServer = new NetworkParameterAveraging.Server(trainer.networkParams);
+
+        File checkpointDir = new File(workingDir, "paramAverages");
+        if (!checkpointDir.isDirectory()) checkpointDir.mkdir();
+        trainer.parameterServer.saveModels(checkpointDir, secondsBetweenSaves);
+
+        LOG.info("starting parameter server: " + trainer.parameterServer);
+        trainer.parameterServer.debug = true;
+        trainer.parameterServer.run();
+        LOG.info("server is done running for whatever reason, exiting");
+        System.exit(0);
+      } else {
+        // Client
+        assert numClientsForParamAvg > 0;
+        trainer.parameterServerClient = new NetworkParameterAveraging.Client(
+            trainer.networkParams,
+            trainer.parameterServerHost);
+        trainer.parameterServerClient.secondsBetweenContactingServer =
+            secondsBetweenSaves;
+        if (config.getBoolean("parallelLearnDebug", false))
+          trainer.parameterServerClient.debug = true;
+      }
+    } else {
+      LOG.info("not setting up network parameter averaging");
+      trainer.parameterServerHost = null;
     }
+
+    // Log the train and test set
+    logTrainTestDatapoints(new File(workingDir, "train-test-split.txt"), train, test);
 
     LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
     LOG.info("[main] " + Describe.memoryUsage());
@@ -1267,6 +1297,19 @@ public class RerankerTrainer {
       // Don't need the stage prefixes that we had before.
       features = features.replaceAll("RoleSpan(Labeling|Pruning)Stage-(regular|latent|none)\\*", "");
       return features;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public static void logTrainTestDatapoints(File dest, ItemProvider train, ItemProvider test) {
+    try (BufferedWriter w = FileUtil.getWriter(dest)) {
+      int nTrain = train.size();
+      for (int i = 0; i < nTrain; i++)
+        w.write("train\t" + train.label(i).getSentence().getId() + "\n");
+      int nTest = test.size();
+      for (int i = 0; i < nTest; i++)
+        w.write("test\t" + test.label(i).getSentence().getId() + "\n");
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

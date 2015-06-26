@@ -10,12 +10,16 @@ import edu.jhu.hlt.fnparse.rl.Action;
  * @author travis
  */
 public class ActionTypeParams extends FeatureParams implements Params.Stateless {
+  private static final long serialVersionUID = 8390112911973762104L;
+  public static int BUCKETS = 1<<18;
+
   private boolean includeFrame;
   private boolean includeFrameRole;
   private boolean includeRole;
 
   public ActionTypeParams(double l2Penalty) {
-    super(l2Penalty); // use Alphabet
+    //super(l2Penalty); // use Alphabet
+    super(l2Penalty, BUCKETS);
     includeFrame = true;
     includeFrameRole = true;
     includeRole = true;

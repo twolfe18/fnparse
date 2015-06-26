@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
 
 /**
@@ -52,6 +53,68 @@ public interface Params extends Serializable {
   // score is in an extending class
   // because its signature differs between Stateful and Stateless,
   // its not listed here.
+
+  /**
+   * For serialization and network parameter averaging.
+   */
+  public static class Glue implements Params {
+    private static final long serialVersionUID = 5523323641331682349L;
+    private Params.Stateful stateful;
+    private Params.Stateless stateless;
+    private Params.PruneThreshold tau;
+    public Glue(
+        Params.Stateful stateful,
+        Params.Stateless stateless,
+        Params.PruneThreshold tau) {
+      if (stateful == null)
+        throw new IllegalArgumentException();
+      if (stateless == null)
+        throw new IllegalArgumentException();
+      if (tau == null)
+        throw new IllegalArgumentException();
+      this.stateful = stateful;
+      this.stateless = stateless;
+      this.tau = tau;
+    }
+    @Override
+    public void doneTraining() {
+      stateful.doneTraining();
+      stateless.doneTraining();
+      tau.doneTraining();
+    }
+    @Override
+    public void showWeights() {
+      stateful.showWeights();
+      stateless.showWeights();
+      tau.showWeights();
+    }
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      stateful.serialize(out);
+      stateless.serialize(out);
+      tau.serialize(out);
+    }
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      stateful.deserialize(in);
+      stateless.deserialize(in);
+      tau.deserialize(in);
+    }
+    @Override
+    public void addWeights(Params other, boolean checkAlphabetEquality) {
+      Log.info("other.class=" + other.getClass().getName());
+      Glue g = (Glue) other;
+      stateful.addWeights(g.stateful, checkAlphabetEquality);
+      stateless.addWeights(g.stateless, checkAlphabetEquality);
+      tau.addWeights(g.tau, checkAlphabetEquality);
+    }
+    @Override
+    public void scaleWeights(double scale) {
+      stateful.scaleWeights(scale);
+      stateless.scaleWeights(scale);
+      tau.scaleWeights(scale);
+    }
+  }
 
   /**
    * Parameters that specify tau in ActionType.PRUNE.
@@ -252,7 +315,9 @@ public interface Params extends Serializable {
       }
       @Override
       public void addWeights(Params other, boolean checkAlphabetEquality) {
-        assert other.getClass().equals(this.getClass());
+        assert other.getClass().equals(this.getClass())
+          : "this.class=" + this.getClass().getName()
+          + " other.class=" + other.getClass().getName();
         LOG.info("[Stateful.NONE addWeights] no-op");
       }
       @Override
@@ -723,6 +788,7 @@ public interface Params extends Serializable {
     private Params sum;
     private boolean checkAlph;
     private int adds;
+    public boolean debug = false;
 
     /**
      * @param zero is an instantiated set of weights set to 0 (this class
@@ -733,6 +799,8 @@ public interface Params extends Serializable {
       sum = zero;
       adds = 0;
       checkAlph = checkAlphabetEquality;
+      Log.info("zero.class=" + zero.getClass().getName()
+          + " checkAlphabetEquality=" + checkAlphabetEquality);
     }
 
     @Override
@@ -740,6 +808,7 @@ public interface Params extends Serializable {
       try {
         ObjectInputStream ois = new ObjectInputStream(data);
         Params d = (Params) ois.readObject();
+        Log.info("other.class=" + d.getClass().getName());
         sum = d;
         adds = 1;
       } catch (Exception e) {
@@ -750,6 +819,7 @@ public interface Params extends Serializable {
     @Override
     public void get(OutputStream data) {
       try {
+        Log.info("sum.class=" + sum.getClass().getName());
         ObjectOutputStream oos = new ObjectOutputStream(data);
         oos.writeObject(sum);
         oos.flush();
@@ -767,6 +837,7 @@ public interface Params extends Serializable {
       try {
         ObjectInputStream ois = new ObjectInputStream(other);
         Params d = (Params) ois.readObject();
+        Log.info("other.class=" + d.getClass().getName());
         sum.addWeights(d, checkAlph);
         adds++;
       } catch (Exception e) {
@@ -777,6 +848,7 @@ public interface Params extends Serializable {
     @Override
     public void getAverage(OutputStream data) {
       try {
+        Log.info("adds=" + adds);
         Params avg = cloneViaSerialization(sum);
         avg.scaleWeights(1d / adds);
         ObjectOutputStream oos = new ObjectOutputStream(data);

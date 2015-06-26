@@ -25,6 +25,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
  * @author travis
  */
 public class PriorScoreParams implements Params.Stateless {
+  private static final long serialVersionUID = -4304333193787905873L;
   public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
   public static boolean SHOW_PARAMS_AFTER_UPDATE = true;
 

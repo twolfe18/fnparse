@@ -33,6 +33,8 @@ public interface GlobalFeature extends Params.Stateful {
    * Utilizes information about the gold parse in the feature.
    */
   public static class Cheating extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = -8051406859060193741L;
+
     private CheatingParams cheat;
     /**
      * Uses cheat to determine when this feature should fire.
@@ -71,11 +73,12 @@ public interface GlobalFeature extends Params.Stateful {
    * TODO Remove from this class, this is not a global feature.
    */
   public static class CoversFrames extends FeatureParams implements Params.Stateless {
+    private static final long serialVersionUID = -718498998647362080L;
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<18;
     public CoversFrames(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-      //super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     //public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -121,12 +124,13 @@ public interface GlobalFeature extends Params.Stateful {
    * or STANFORD_CONSTITUENT pruning, which already prunes crossing spans.
    */
   public static class ArgLocSimple extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = 7050208226188930594L;
     public static boolean SHOW_FEATURES = false;
     public static boolean ALLOW_REL_ON_OTHER_TARGETS = false;
     public static final int BUCKETS = 1<<18;
     public ArgLocSimple(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-      //super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -182,11 +186,12 @@ public interface GlobalFeature extends Params.Stateful {
    * laid down already.
    */
   public static class ArgLoc extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = -5326507383352704039L;
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<18;
     public ArgLoc(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-      //super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -226,11 +231,12 @@ public interface GlobalFeature extends Params.Stateful {
    * given action, conjoins this info with frame, frameRole, and "1".
    */
   public static class NumArgs extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = -7112153700308779046L;
     public static boolean SHOW_FEATURES = false;
     public static final int BUCKETS = 1<<16;
     public NumArgs(double l2Penalty) {
-      super(l2Penalty);   // Use Alphabet
-      //super(l2Penalty, BUCKETS);  // Use Hashing
+      //super(l2Penalty);   // Use Alphabet
+      super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -254,13 +260,14 @@ public interface GlobalFeature extends Params.Stateful {
 
   public static class RoleCoocSimple
       extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = -4769642509935608094L;
     public static FrameRolePacking frPacking = new FrameRolePacking();
     public static final int BUCKETS = 1<<20;
     public static final int DA_BITS = 14;
     public static final int REL_BITS = 3;
     public RoleCoocSimple(double l2Penalty) {
-      super(l2Penalty); // Use Alphabet
-      //super(l2Penalty, BUCKETS); // use Hashing
+      //super(l2Penalty); // Use Alphabet
+      super(l2Penalty, BUCKETS); // use Hashing
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -300,6 +307,7 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = 6774106534395671758L;
     public static FrameRolePacking frPacking = new FrameRolePacking();
     public static final int BUCKETS = 1<<20;
     public static final int DA_BITS = 14;
@@ -388,6 +396,7 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class ArgOverlapFeature
       extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = 7287340432398828831L;
 
     // How many you want to bucket your collisions up to.
     // This is not the dimension of the feature vector because we have to
@@ -458,6 +467,7 @@ public interface GlobalFeature extends Params.Stateful {
    */
   public static class SpanBoundaryFeature
       extends FeatureParams implements Params.Stateful {
+    private static final long serialVersionUID = -4543292567865366484L;
 
     public static final int MSTART1 = 0;
     public static final int MSTART1_TMATCH = 1;

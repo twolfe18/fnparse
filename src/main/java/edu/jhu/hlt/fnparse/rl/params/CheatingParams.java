@@ -17,6 +17,8 @@ import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
+  private static final long serialVersionUID = 5980175705954633122L;
+
   public static final Logger LOG = Logger.getLogger(CheatingParams.class);
   public static boolean SHOW_ON_UPDATE = false;
 

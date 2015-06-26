@@ -26,6 +26,10 @@ public class AveragedWeights implements Serializable {
   private static final long serialVersionUID = 1L;
   public static final Logger LOG = Logger.getLogger(AveragedWeights.class);
 
+  // Useful for debugging (e.g. network parameter averaging is only compatible
+  // with feature hashing, which means this class should never grow).
+  public static boolean GROWING_ALLOWED = true;
+
   private double[] theta;
   private double[] thetaSum;
   private int c;    // how many iterates of theta have been added into thetaSum
@@ -73,7 +77,6 @@ public class AveragedWeights implements Serializable {
     c = in.readInt();
   }
 
-
   public AveragedWeights(AveragedWeights weights, boolean average) {
     c = weights.c;
     theta = Arrays.copyOf(weights.theta, weights.theta.length);
@@ -96,6 +99,8 @@ public class AveragedWeights implements Serializable {
     if (dimension <= theta.length)
       throw new IllegalArgumentException();
     LOG.info("[grow] dimension " + theta.length + " => " + dimension);
+    if (!GROWING_ALLOWED)
+      throw new RuntimeException("growing is not allowed! use feature hashing?");
     theta = Arrays.copyOf(theta, dimension);
     if (thetaSum != null)
       thetaSum = Arrays.copyOf(thetaSum, dimension);

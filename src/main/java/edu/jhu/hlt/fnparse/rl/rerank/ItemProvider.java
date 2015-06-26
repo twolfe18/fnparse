@@ -15,12 +15,14 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
+import java.util.function.Predicate;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
@@ -118,14 +120,28 @@ public interface ItemProvider extends Iterable<FNParse> {
       this(wrap, randomSubset(wrap.size(), numIndices, rand));
     }
 
-    /** Initializes a slice based on the FNParse id's hashcode */
+    public static Slice shard(ItemProvider wrap, Predicate<Sentence> keep) {
+      List<Integer> indices = new ArrayList<>();
+      int n = wrap.size();
+      for (int i = 0; i < n; i++) {
+        Sentence s = wrap.label(i).getSentence();
+        if (keep.test(s))
+          indices.add(i);
+      }
+      int[] idx = new int[indices.size()];
+      for (int i = 0; i < idx.length; i++)
+        idx[i] = indices.get(i);
+      return new Slice(wrap, idx);
+    }
+
+    /** Initializes a slice based on the Sentence id's hashcode */
     public static Slice shard(ItemProvider wrap, int shardIndex, int numShards) {
       if (shardIndex < 0 || shardIndex >= numShards)
         throw new IllegalArgumentException();
       List<Integer> keep = new ArrayList<>();
       int n = wrap.size();
       for (int i = 0; i < n; i++) {
-        String id = wrap.label(i).getId();
+        String id = wrap.label(i).getSentence().getId();
         int h = id.hashCode();
         if (h < 0) h = -h;
         if (h % numShards == shardIndex)

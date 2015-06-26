@@ -23,6 +23,7 @@ import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
  */
 public class TemplatedFeatureParams
     extends FeatureParams implements Params.Stateless, Params.PruneThreshold {
+  private static final long serialVersionUID = 9099546378852982514L;
 
   // if true, call featurizeDebug, which shows all the features that were just
   // computed on every call (very slow -- debug only).
