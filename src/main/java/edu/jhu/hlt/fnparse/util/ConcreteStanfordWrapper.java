@@ -14,6 +14,7 @@ import edu.jhu.hlt.concrete.AnnotationMetadata;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.Constituent;
 import edu.jhu.hlt.concrete.Dependency;
+import edu.jhu.hlt.concrete.Parse;
 import edu.jhu.hlt.concrete.Section;
 import edu.jhu.hlt.concrete.TaggedToken;
 import edu.jhu.hlt.concrete.TextSpan;
@@ -24,6 +25,8 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.concrete.TokenizationKind;
 import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.stanford.AnnotateTokenizedConcrete;
+import edu.jhu.hlt.concrete.stanford.PipelineLanguage;
+import edu.jhu.hlt.concrete.stanford.StanfordPostNERCommunication;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -88,7 +91,7 @@ public class ConcreteStanfordWrapper {
 
   private AnnotateTokenizedConcrete getAnno() {
     if (anno == null)
-      anno = new AnnotateTokenizedConcrete("en");
+      anno = new AnnotateTokenizedConcrete(PipelineLanguage.ENGLISH);
     return anno;
   }
 
@@ -132,7 +135,9 @@ public class ConcreteStanfordWrapper {
     parseTimer.start();
     Communication communication = sentenceToConcrete(s);
     try {
-      getAnno().annotateWithStanfordNlp(communication);
+      //getAnno().annotateWithStanfordNlp(communication);
+      StanfordPostNERCommunication spc = getAnno().annotate(communication);
+      communication = spc.getRoot();
       parseTimer.stop();
       return communication;
     } catch (Exception e) {
@@ -187,24 +192,23 @@ public class ConcreteStanfordWrapper {
    edu.jhu.hlt.concrete.Sentence sentence = section.getSentenceList().get(0);
    Tokenization tokenization = sentence.getTokenization();
 
-//   // Check for a bad parse
-//   int n = tokenization.getTokenList().getTokenListSize();
-//   for (Constituent c : tokenization.getParseList().get(0).getConstituentList()) {
-//     if (!c.isSetTokenSequence())
-//       continue;
-//     for (int t : c.getTokenSequence().getTokenIndexList()) {
-//       if (t >= n) {
-//         for (Constituent cc : tokenization.getParseList().get(0).getConstituentList())
-//           LOG.warn(cc);
-//         LOG.warn("there are " + n + " tokens in the tokenization");
-//         //throw new RuntimeException("concrete-stanford messed up");
-//         LOG.warn("concrete-stanford messed up");
-//         return dummyCParse(s);
-//       }
-//     }
-//   }
+   if (tokenization.getParseListSize() != 1)
+     throw new RuntimeException("parseListSize=" + tokenization.getParseListSize());
 
-   return new ConstituencyParse(s.getId(), tokenization.getParseList().get(0), s.size());
+   Parse p = tokenization.getParseList().get(0);
+
+   // Check for a bad parse
+   // Every span must lie within the sentence (sometimes sentence tokenization
+   // doesn't match the parse tokenization).
+   int n = tokenization.getTokenList().getTokenListSize();
+   for (Constituent c : p.getConstituentList()) {
+     if (c.getStart() < 0 || c.getStart() >= n
+         || c.getEnding() > n || c.getEnding() <= c.getStart()) {
+       throw new RuntimeException("stanford goofed");
+     }
+   }
+
+   return new ConstituencyParse(s.getId(), p, s.size());
   }
 
   public Map<Span, String> parseSpans(Sentence s) {
@@ -291,6 +295,7 @@ public class ConcreteStanfordWrapper {
         new edu.jhu.hlt.concrete.Sentence();
     sentence.setUuid(aUUID);
     sentence.setTokenization(tokenization);
+    sentence.setTextSpan(new TextSpan(0, docText.length()));
 
     Section section = new Section();
     section.setUuid(aUUID);

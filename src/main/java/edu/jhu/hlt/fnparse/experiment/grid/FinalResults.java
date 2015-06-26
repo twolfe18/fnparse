@@ -15,7 +15,6 @@ import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.model.globalfac.ConstituencyTreeFactor;
-import edu.jhu.hlt.concrete.stanford.InMemoryAnnoPipeline;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -389,7 +388,6 @@ public class FinalResults implements Runnable {
       return;
     }
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
-    Logger.getLogger(InMemoryAnnoPipeline.class).setLevel(Level.INFO);
     File workingDir = new File(args[0]);
     String parserMode = args[1];
     Random r = new Random(Integer.valueOf(args[2]));
