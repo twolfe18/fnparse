@@ -36,6 +36,8 @@ public abstract class FeatureParams implements Serializable {
     return log;
   }
 
+  public static int DEFAULT_DIMENSION = 1024;
+
   public boolean averageFeatures = false;  // only applies upon construction
 
   protected AveragedWeights theta;
@@ -49,7 +51,7 @@ public abstract class FeatureParams implements Serializable {
     this.featureIndices = new Alphabet<>();
     this.featureIndices.startGrowth(); // stops growing when doneTraining is called
     this.numBuckets = -1;
-    this.theta = new AveragedWeights(1024, averageFeatures);
+    this.theta = new AveragedWeights(DEFAULT_DIMENSION, averageFeatures);
     this.l2Penalty = l2Penalty;
   }
 
@@ -57,7 +59,7 @@ public abstract class FeatureParams implements Serializable {
   public FeatureParams(double l2Penalty, int numBuckets) {
     this.featureIndices = null;
     this.numBuckets = numBuckets;
-    this.theta = new AveragedWeights(1024, averageFeatures);
+    this.theta = new AveragedWeights(numBuckets, averageFeatures);
     this.l2Penalty = l2Penalty;
   }
 

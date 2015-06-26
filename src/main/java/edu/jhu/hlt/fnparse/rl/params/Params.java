@@ -758,6 +758,10 @@ public interface Params extends Serializable {
       }
     }
 
+    public Params get() {
+      return cloneViaSerialization(this.sum);
+    }
+
     @Override
     public void add(InputStream other) {  // matches get
       try {
@@ -781,6 +785,14 @@ public interface Params extends Serializable {
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
+    }
+
+    public Params getAverage() {
+      if (adds < 1)
+        throw new IllegalStateException();
+      Params avg = cloneViaSerialization(this.sum);
+      avg.scaleWeights(1d / adds);
+      return avg;
     }
 
     @SuppressWarnings("unchecked")
