@@ -101,6 +101,17 @@ public class AveragedWeights implements Serializable {
       thetaSum = Arrays.copyOf(thetaSum, dimension);
   }
 
+  public void add(AveragedWeights w) {
+    for (int i = 0; i < theta.length; i++)
+      theta[i] += w.theta[i];
+    assert (thetaSum == null) == (w.thetaSum == null);
+    if (thetaSum != null) {
+      for (int i = 0; i < thetaSum.length; i++)
+        thetaSum[i] += w.thetaSum[i];
+      c += w.c;
+    }
+  }
+
   public void add(double[] a) {
     if (a.length != theta.length)
       throw new IllegalArgumentException();
@@ -126,6 +137,15 @@ public class AveragedWeights implements Serializable {
     theta[index] += value;
     if (thetaSum != null)
       thetaSum[index] += c * value;
+  }
+
+  /** Scales both the value and the history/sum */
+  public void scale(double scale) {
+    for (int i = 0; i < theta.length; i++)
+      theta[i] *= scale;
+    if (thetaSum != null)
+      for (int i = 0; i < thetaSum.length; i++)
+        thetaSum[i] *= scale;
   }
 
   public void incrementCount() {
