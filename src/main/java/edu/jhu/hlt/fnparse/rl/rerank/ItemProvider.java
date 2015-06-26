@@ -107,22 +107,46 @@ public interface ItemProvider extends Iterable<FNParse> {
   public static class Slice implements ItemProvider {
     private int[] redirect;
     private ItemProvider wrapped;
+
     public Slice(ItemProvider wrap, int[] indices) {
       this.wrapped = wrap;
       this.redirect = indices;
     }
+
     /** Initializes a random slice of size numIndices */
     public Slice(ItemProvider wrap, int numIndices, Random rand) {
       this(wrap, randomSubset(wrap.size(), numIndices, rand));
     }
+
+    /** Initializes a slice based on the FNParse id's hashcode */
+    public static Slice shard(ItemProvider wrap, int shardIndex, int numShards) {
+      if (shardIndex < 0 || shardIndex >= numShards)
+        throw new IllegalArgumentException();
+      List<Integer> keep = new ArrayList<>();
+      int n = wrap.size();
+      for (int i = 0; i < n; i++) {
+        String id = wrap.label(i).getId();
+        int h = id.hashCode();
+        if (h < 0) h = -h;
+        if (h % numShards == shardIndex)
+          keep.add(i);
+      }
+      int[] indices = new int[keep.size()];
+      for (int i = 0; i < indices.length; i++)
+        indices[i] = keep.get(i);
+      return new Slice(wrap, indices);
+    }
+
     @Override
     public int size() {
       return redirect.length;
     }
+
     @Override
     public FNParse label(int i) {
       return wrapped.label(redirect[i]);
     }
+
     @Override
     public List<Item> items(int i) {
       return wrapped.items(redirect[i]);
@@ -130,9 +154,15 @@ public interface ItemProvider extends Iterable<FNParse> {
 
     /**
      * @return a length r array of indices randomly sampled from [0..n)
+     * If r>n, then return [n].
      */
     public static int[] randomSubset(int n, int r, Random rand) {
-      if (r > n) throw new IllegalArgumentException();
+      if (r > n) {
+        int[] indices = new int[n];
+        for (int i = 0; i < n; i++)
+          indices[i] = i;
+        return indices;
+      }
       List<Integer> idx = new ArrayList<>();
       for (int i = 0; i < n; i++) idx.add(i);
       Collections.shuffle(idx, rand);
