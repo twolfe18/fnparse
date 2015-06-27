@@ -51,6 +51,7 @@ import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
+import edu.jhu.hlt.fnparse.rl.params.Fixed;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
@@ -256,8 +257,10 @@ public class RerankerTrainer {
    * is a mix of params for different purposes), but it can be used as a struct
    * of all the parameter pieces, and can be used to deserialize everything.
    */
-  //public NetworkSerializableParams<Params.Glue> networkParams;
   public Params.NetworkAvg networkParams;   // wrapper around Params.Glue
+
+  // For feature selection
+  public TemplatedFeatureParams templatedStatelessParams;
 
 
   public RerankerTrainer(Random rand, File workingDir) {
@@ -921,9 +924,29 @@ public class RerankerTrainer {
       }
     }
 
+    // Check if there are some fixed TemplateFeatureParams to use
+//    String fixedParamsFs = "fixedTemplateParams";
+    String fixedParmasSer = "fixedTemplateParamsModel";   // uses Java serialization
+//    if (config.containsKey(fixedParamsFs)) {
+    if (config.containsKey(fixedParmasSer)) {
+//      String fixedFs = config.getString(fixedParamsFs);
+      File fixedSer = config.getExistingFile(fixedParmasSer);
+//      Log.info("adding fixed params: fixedFs=" + fixedFs + " fixedSer=" + fixedSer.getPath());
+      Log.info("adding fixed params: fixedSer=" + fixedSer.getPath());
+//      TemplatedFeatureParams tfp = new TemplatedFeatureParams(
+//          fixedParamsFs, fixedFs, l2Penalty, hashBuckets);
+//      try (FileInputStream is = new FileInputStream(fixedSer)) {
+//        tfp.deserialize(new DataInputStream(is));
+//      }
+      // Java serialization is a better idea so that we don't have to worry
+      // about construction matching details from the previous run.
+      TemplatedFeatureParams tfp = (TemplatedFeatureParams) FileUtil.deserialize(fixedSer);
+      trainer.addStatelessParams(new Fixed.Stateless(tfp));
+    }
+
+
     if (config.getBoolean("featCoversFrames", true))
       trainer.addStatelessParams(new GlobalFeature.CoversFrames(l2Penalty));
-
 
     // Setup tau/pruning parameters
     if (config.getBoolean("useDynamicTau", true)) {
@@ -1227,6 +1250,15 @@ public class RerankerTrainer {
     oos.writeObject(model);
     oos.close();
     LOG.info("[main] done serializing.");
+
+    // Serialize just the templated params
+    String templatedStatelessKey = "templatedStatelessSer";
+    if (config.containsKey(templatedStatelessKey)) {
+      File templatedStatelessFile = config.getFile(templatedStatelessKey);
+      LOG.info("[main] saving templated params to " + templatedStatelessFile.getPath());
+      assert trainer.templatedStatelessParams != null;
+      FileUtil.serialize(trainer.templatedStatelessParams, templatedStatelessFile);
+    }
 
     // Save the configuration
     OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));

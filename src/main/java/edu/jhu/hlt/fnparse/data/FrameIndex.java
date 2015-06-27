@@ -162,13 +162,15 @@ public class FrameIndex implements FrameIndexInterface {
 
   public static FrameIndex getPropbank(boolean grid) {
     File dir = grid
-      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
+      //? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
+      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0-fixed-frames/frames")
       : new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
     return getPropbank(dir);
   }
 
   public static FrameIndex getPropbank(File dir) {
     if (propbank == null) {
+      LOG.info("reading propbank frames");
       PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
       // Sort the frames by name to prevent any change in ids (unless a frame is
       // added or removed...)
@@ -200,7 +202,10 @@ public class FrameIndex implements FrameIndexInterface {
 
   public static FrameIndex getFrameNet() {
     if(frameNet == null) {
-      LOG.info("reading frames");
+
+      new Exception("shouldn't be reading FrameNet").printStackTrace();
+
+      LOG.info("reading framenet frames");
       frameNet = new FrameIndex(framesInFrameNet);
       int idx = 0;
       for(Frame f: new FrameNetIterator()){

@@ -21,14 +21,16 @@ import time
 import uuid
 import xml.etree.ElementTree as ET
 
+
+FAILED_SCORE = 0.0
+REUSE_TEMPLATED_STATELESS_PARAMS = True
+
+
 class CommonEqualityMixin(object):
   def __eq__(self, other):
     return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
   def __ne__(self, other):
     return not self.__eq__(other)
-
-# sorry, global
-FAILED_SCORE = 0.0
 
 
 class Feature(CommonEqualityMixin):
@@ -85,9 +87,11 @@ class Feature(CommonEqualityMixin):
 
 
 class FeatureSet(object):
-  def __init__(self, features=[], derived_from=None):
+  def __init__(self, features=[], labels=None, syntax_mode=None, derived_from=None):
     self.features = features
     self.derived_from = derived_from
+    self.__syntax_mode = syntax_mode
+    self.__labels = labels
 
   def __eq__(self, other):
     return isinstance(other, self.__class__) and self.features == other.features
@@ -151,7 +155,7 @@ class FeatureSet(object):
         c += 1
     return c
 
-  def propose_modification(self, template_info):
+  def propose_modification(self, template_info, propbank_mod=False):
     ''' Returns a new FeatureSet derived from this feature set '''
 
     # a few options for mutation:
@@ -160,12 +164,16 @@ class FeatureSet(object):
     # 3) mutate a Feature
 
     debug = True
-    rel_stages = set(template_info.stages()) & set(self.stages())
-    if len(rel_stages) == 0:
-      print 'self.stages', self.stages()
-      print 'template_info.stages', template_info.stages()
-      assert False
-    stage = random.choice(list(rel_stages))
+
+    if propbank_mod:
+      stage = 'NullStage'
+    else:
+      rel_stages = set(template_info.stages()) & set(self.stages())
+      if len(rel_stages) == 0:
+        print 'self.stages', self.stages()
+        print 'template_info.stages', template_info.stages()
+        assert False
+      stage = random.choice(list(rel_stages))
     relevant_feats = [f for f in self.features if f.stage == stage]
     card = 1
     #card = self.estimate_cardinality(template_info, stage)
@@ -196,7 +204,7 @@ class FeatureSet(object):
     r = random.random()
     if r < p_add_feature:
       # Make a new feature and add it to this set
-      f = self.new_feature(template_info)
+      f = self.new_feature(template_info, stage)
       if debug:
         print '[FeatureSet propose_modification] adding:', f
       return FeatureSet(self.features + [f], derived_from=self)
@@ -211,22 +219,21 @@ class FeatureSet(object):
       # Modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification(template_info)
+        f = self.features[i].propose_modification(template_info, propbank_mod)
         if debug:
           print '[FeatureSet propose_modification] mutating:', self.features[i]
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
-        return self.propose_modification(template_info)
+        return self.propose_modification(template_info, propbank_mod)
 
-  def new_feature(self, template_info):
+  def new_feature(self, template_info, stage):
     ''' Creates a feature that is not already in this feature set '''
     # prefer adding features with small number of templates
-    stage = random.choice(template_info.stages())
     syntax_mode = self.syntax_mode()
     label_template, basic_template = random.choice(template_info.labels_for(stage, syntax_mode))
     f = Feature(stage, syntax_mode, label_template, basic_template)
     if f in self.features or f.estimate_cardinality(template_info) == 0:
-      return self.new_feature(template_info)
+      return self.new_feature(template_info, stage)
     else:
       print '[new_feature] stage =', stage
       print '[new_feature] syntax_mode =', syntax_mode
@@ -235,6 +242,8 @@ class FeatureSet(object):
       return f
 
   def syntax_mode(self):
+    if self.__syntax_mode:
+      return self.__syntax_mode
     assert len(self.features) > 0
     return self.features[0].syntax_mode
 
@@ -304,8 +313,9 @@ class Mutator(object):
     raise NotImplementedError()
 
 class ConfigMutator(Mutator):
-  def __init__(self, template_info):
+  def __init__(self, template_info, ignore_stages=False):
     self.__template_info = template_info
+    self.ignore_stages = ignore_stages
 
   def mutate(self, config):
     ''' Config -> [Config] '''
@@ -355,7 +365,10 @@ class ConfigMutator(Mutator):
     # TODO this should not go here, it should go into a new Queue implementation
     # mutate just mutates, this new queue implementation will tell it what to mutate
 
-    next_fs = config.feature_set.propose_modification(self.__template_info)
+    if self.ignore_stages:
+      next_fs = config.feature_set.propose_modification(self.__template_info, propbank_mod=True)
+    else:
+      next_fs = config.feature_set.propose_modification(self.__template_info)
     cur_card = config.feature_set.estimate_cardinality(self.__template_info)
     next_card = next_fs.estimate_cardinality(self.__template_info)
     print '[mutate_config] cardinality: ', cur_card, ' => ', next_card
@@ -393,6 +406,20 @@ class ConfigMutator(Mutator):
       except:
         print '[mutate] WARNING: goofed for stage', stage
         pass
+
+
+    # Set the "fixed parameters" from the weights learned in the previous iteration
+    if REUSE_TEMPLATED_STATELESS_PARAMS:
+      for c in children:
+        if c.derived_from:
+          f = c.derived_from.params['templatedStatelessSer']
+          if not os.path.isfile(f):
+            print c.derived_from.params['workingDir']
+            print c.derived_from.params['templatedStatelessSer']
+            raise Exception('templated stateless params not saved!')
+          c.params['fixedTemplateParamsModel'] = f
+          #c.params['fixedTemplateParams'] = c.derived_from.feature_set.config_string()
+
 
     # TODO try increasing/decreasing the number of passes
     return children
@@ -754,9 +781,11 @@ class LocalJobTracker(object):
       cp = subprocess.check_output(['find', 'target/', '-iname', '*.jar']).strip()
       cp = ':'.join([x.strip() for x in cp.split('\n')])
       #cp = 'target/classes:' + cp
-      cmd = ['java', '-Xmx4G', '-ea', '-cp', cp]
-      cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
-      cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')
+      cmd = ['java', '-Xmx4G', '-ea', '-server', '-cp', cp]
+      #cmd += ['-XX:+UseG1GC', '-XX:G1ReservePercent=2', '-XX:ConcGCThreads=1', '-XX:ParallelGCThreads=1']
+      cmd += ['-XX:+UseSerialGC']
+      #cmd.append('edu.jhu.hlt.fnparse.experiment.grid.Runner')
+      cmd.append('edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer')
       cmd.append(name)
       for k, v in args.iteritems():
         cmd += [k, v]
@@ -803,6 +832,9 @@ class ConfigJobStarter:
       key = 'bpIters.' + s
       if key not in cmd:
         cmd[key] = '5'
+
+    if REUSE_TEMPLATED_STATELESS_PARAMS:
+      cmd['templatedStatelessSer'] = os.path.join(self.working_dir, 'templatedStateless.jser.gz')
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
@@ -958,7 +990,7 @@ class TemplateInfo(object):
     with open(filename, 'r') as f:
       for line in f:
         toks = line.strip().split('\t')
-        assert len(toks) == 6
+        assert len(toks) == 6, 'toks=' + str(toks)
         #template, stage, syntax_mode, card, time = toks
         stage, syntax_mode, label, template, card, time = toks
         k = (stage, syntax_mode, label, template)
@@ -1015,27 +1047,17 @@ class TemplateInfo(object):
     print '[labels_for]', k
     print '[labels_for] WARNING: ignoring restrict_stages_to!'
     return self.__nonzero[k]
-    #ret = []
-    #try:
-    #  r = self.__label_restrictions[k]
-    #  ret = list(set(r) & set(self.__nonzero[k]))
-    #  print '[labels_for] INTERSECT(', r, ',', self.__nonzero[k], ') =', ret
-    #except:
-    #  ret = self.__nonzero[k]
-    #  print '[labels_for] nonzero =', self.__nonzero[k]
-    #if len(ret) == 0:
-    #  print '__nonzero =', self.__nonzero.get(k)
-    #  print '__label_restirctions =', self.__label_restrictions.get(k)
-    #  raise Exception('no labels for ' + str(k))
-    #return ret
 
   def basic_templates(self):
     return self.__templates
 
-def generate_all_features(s1, s2, syntax_mode):
+def generate_all_features(stages, syntax_mode, \
+    labels=['frameRoleArg', 'roleArg', 'arg', 'framePrune', 'prune']):
   fs = []
 
   for fra in ['frameRoleArg', 'roleArg', 'arg', 'framePrune', 'prune']:
+    if fra not in labels:
+      continue
     fs.append((fra, ['1']))
     fs.append((fra, ['head1Word']))
     fs.append((fra, ['head1Pos2']))
@@ -1058,36 +1080,38 @@ def generate_all_features(s1, s2, syntax_mode):
     fs.append((fra, ['CfgFeat-CommonParent-Category']))
     fs.append((fra, ['CfgFeat-CommonParent-DeltaDepth']))
 
-  fs.append(('span1IsConstituent', ['1']))
-  fs.append(('span1IsConstituent', ['frameRoleArg']))
-  fs.append(('span1IsConstituent', ['roleArg']))
-  fs.append(('span1IsConstituent', ['frame']))
-  fs.append(('span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']))
-  fs.append(('span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']))
-  fs.append(('span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']))
-  cparts = ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2', 'span1Width/5', 'span1FirstWord', 'span1LastWord']
-  for p1 in cparts:
-    fs.append(('span1IsConstituent', [p1]))
-    for p2 in cparts:
-      if p2 <= p1:
-        continue
-      if 'Word' in p1 and 'Word' in p2:
-        continue;
-      fs.append(('span1IsConstituent', [p1, p2]))
-      for p3 in cparts:
-        if p3 <= p2:
+  if 'span1IsConstituent' in labels:
+    fs.append(('span1IsConstituent', ['1']))
+    fs.append(('span1IsConstituent', ['frameRoleArg']))
+    fs.append(('span1IsConstituent', ['roleArg']))
+    fs.append(('span1IsConstituent', ['frame']))
+    fs.append(('span1IsConstituent', ['frame', 'Dist(Direction,Head1,Head2)']))
+    fs.append(('span1IsConstituent', ['span1PosPat-COARSE_POS-1-1']))
+    fs.append(('span1IsConstituent', ['span1PosPat-WORD_SHAPE-1-1']))
+    cparts = ['span1LeftPos2', 'span1FirstPos2', 'span1LastPos2', 'span1RightPos2', 'span1Width/5', 'span1FirstWord', 'span1LastWord']
+    for p1 in cparts:
+      fs.append(('span1IsConstituent', [p1]))
+      for p2 in cparts:
+        if p2 <= p1:
           continue
-        if 'Word' in p3 and ('Word' in p1 or 'Word' in p2):
-          continue
-        fs.append(('span1IsConstituent', [p1, p2, p3]))
+        if 'Word' in p1 and 'Word' in p2:
+          continue;
+        fs.append(('span1IsConstituent', [p1, p2]))
+        for p3 in cparts:
+          if p3 <= p2:
+            continue
+          if 'Word' in p3 and ('Word' in p1 or 'Word' in p2):
+            continue
+          fs.append(('span1IsConstituent', [p1, p2, p3]))
 
   # NOTE: there are already unary dep link factors from pacaya not included here
-  fs.append(('head2GovHead1', ['1']))
-  fs.append(('head2GovHead1', ['frameRoleArg']))
-  fs.append(('head2GovHead1', ['frame', 'Dist(Direction,Head1,Head2)']))
-  fs.append(('head2GovHead1', ['frame', 'head1Pos']))
+  if 'head2GovHead1' in labels:
+    fs.append(('head2GovHead1', ['1']))
+    fs.append(('head2GovHead1', ['frameRoleArg']))
+    fs.append(('head2GovHead1', ['frame', 'Dist(Direction,Head1,Head2)']))
+    fs.append(('head2GovHead1', ['frame', 'head1Pos']))
 
-  for s in [s1, s2]:
+  for s in stages:
     for label, templates in fs:
       yield Feature(s, syntax_mode, label, templates)
 
@@ -1105,7 +1129,7 @@ def seeds(parser_mode, syntax_mode, settings, template_info):
   batch_size = {s1: 1, s2: 1}
   passes = {s1: p, s2: p}
   fs = []
-  for f in generate_all_features(s1, s2, syntax_mode):
+  for f in generate_all_features([s1, s2], syntax_mode):
     if f.estimate_cardinality(template_info) > 0:
       fs.append(f)
   print "[seeds] seed set for %s-%s has %d features covering the following labels: %s" \
@@ -1158,6 +1182,67 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
   ''' Returns a Config for a default/good configuration of the model specified by params '''
   template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
   return configs[0]
+
+def propbank_feature_selection(template_info_filename):
+  mq = MultiQueue()
+
+  # TODO Get this from from sys.argv
+  local = True
+
+  template_info = TemplateInfo(template_info_filename)
+
+  labels = ['frameRole', 'role']
+  fs = generate_all_features(['NoneStage'], ['NoneSyntaxMode'], labels=labels)
+  fs = FeatureSet(features=list(fs), labels=labels, syntax_mode='regular')
+
+  params = {
+    'nTrain': 8000,
+    #'workingDir': '/tmp/foo',    # this is set by tge
+    'propbankParseRedisPort': 6379,
+    'propbankParseRedisDb': 0,
+    'addStanfordParses': False,
+    'realTestSet': False,
+    'propbank': True,
+    'l2Penalty': 1e-8,
+    'globalL2Penalty': 1e-7,
+    'secsBetweenShowingWeights': 180,
+    'trainTimeLimit': 240,
+    'featCoversFrames': False,
+    'useGlobalFeatures': True,
+    'globalFeatArgLocSimple': True,
+    'globalFeatNumArgs': True,
+    'globalFeatRoleCoocSimple': True,
+    'globalFeatArgOverlap': True,
+    'globalFeatSpanBoundary': True,
+  }
+  if local:
+    params.update({
+      'propbankParseRedisHost': 'localhost',
+      'laptop': True,
+    })
+  else:
+    params.update({
+      'propbankParseRedisHost': '???',
+      'laptop': False,
+    })
+
+  # Convert value to strings
+  params = {a:str(b) for a,b in params.iteritems()}
+
+  regularizer = {}
+  batch_size = {}
+  passes = {}
+  conf = Config(fs, params, regularizer, batch_size, passes)
+
+  max_fs = 5000   # number of feature sets to try
+  mutator = ConfigMutator(template_info, ignore_stages=True)
+
+  q = MutatorQueue(mutator, greediness=1.0, max_pops=max_fs)
+  q.seed(conf)
+
+  mq.add_queue('propbank_fs', q)
+  return mq
+
 
 def forward_selection_queue(template_info_filename):
   ''' Returns a MultiQueue for forward (feature) selection on each model '''
