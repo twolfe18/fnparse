@@ -38,11 +38,11 @@ public class PropbankReader {
 
   public static File[] ON5_CONLL_PARENT = new File[] {
     new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
-    null,
+    new File("/home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
   };
   public static File[] ON5_RAW = new File[] {
     new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
-    null,
+    new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
   };
 
   private File on5;

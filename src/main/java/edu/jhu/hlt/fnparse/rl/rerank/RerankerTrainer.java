@@ -34,6 +34,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -1002,6 +1003,9 @@ public class RerankerTrainer {
     ExperimentProperties config = new ExperimentProperties();
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
 
+    final boolean laptop = config.getBoolean("laptop", false);
+    FrameIndex.getPropbank(!laptop);
+
     File workingDir = config.getOrMakeDir("workingDir");
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
 
@@ -1014,7 +1018,6 @@ public class RerankerTrainer {
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
-    final boolean laptop = config.getBoolean("laptop", false);
     ItemProvider train, test, trainAndTest = null;
     if (!isParamServer) {
       if (realTest)

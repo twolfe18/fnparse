@@ -155,9 +155,20 @@ public class FrameIndex implements FrameIndexInterface {
   }
 
   public static FrameIndex getPropbank() {
+    if (propbank == null)
+      throw new RuntimeException("use an explicit method to construct the right version");
+    return propbank;
+  }
+
+  public static FrameIndex getPropbank(boolean grid) {
+    File dir = grid
+      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
+      : new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
+    return getPropbank(dir);
+  }
+
+  public static FrameIndex getPropbank(File dir) {
     if (propbank == null) {
-      //File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-4.0/data/files/data/english/metadata/frames");
-      File dir = new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
       PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
       // Sort the frames by name to prevent any change in ids (unless a frame is
       // added or removed...)
