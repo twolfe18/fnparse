@@ -47,6 +47,8 @@ class Feature(CommonEqualityMixin):
     self.templates.sort()
 
   def __str__(self):
+    if self.stage == 'NullStage':
+      return '*'.join([self.label] + self.templates)
     st = self.stage + '-' + self.syntax_mode
     return "*".join([st, self.label] + self.templates)
 
@@ -92,6 +94,11 @@ class FeatureSet(object):
     self.derived_from = derived_from
     self.__syntax_mode = syntax_mode
     self.__labels = labels
+
+    if derived_from and syntax_mode is None and derived_from.__syntax_mode:
+      self.__syntax_mode = derived_from.__syntax_mode
+    if derived_from and labels is None and derived_from.__labels:
+      self.__labels = derived_from.__labels
 
   def __eq__(self, other):
     return isinstance(other, self.__class__) and self.features == other.features
@@ -726,9 +733,11 @@ class SgeJobTracker(object):
   def spawn(self, name, args):
     cmd = ['qsub', '-N', name]
     if self.logging_dir:
+      print 'spawning with logging dir:', self.logging_dir
       cmd += ['-o', self.logging_dir]
-    cmd += ['ForwardSelectionWorker.qsub', name]
-    cmd += ['FinalResults', '-1']
+    #cmd += ['ForwardSelectionWorker.qsub', name]
+    #cmd += ['FinalResults', '-1']
+    cmd += ['scripts/propbank-feature-selection.sh', name]
     for k, v in args.iteritems():
       cmd += [k, v]
     print '[sge spawn] cmd =', cmd
@@ -1183,12 +1192,9 @@ def default_config(parser_mode, syntax_mode, template_info_filename):
   template_info, configs = experiments(parser_mode, syntax_mode, template_info_filename)
   return configs[0]
 
-def propbank_feature_selection(template_info_filename):
+def propbank_feature_selection(template_info_filename, local):
+  assert isinstance(local, bool)
   mq = MultiQueue()
-
-  # TODO Get this from from sys.argv
-  local = True
-
   template_info = TemplateInfo(template_info_filename)
 
   labels = ['frameRole', 'role']
@@ -1204,16 +1210,10 @@ def propbank_feature_selection(template_info_filename):
     'realTestSet': False,
     'propbank': True,
     'l2Penalty': 1e-8,
-    'globalL2Penalty': 1e-7,
     'secsBetweenShowingWeights': 180,
     'trainTimeLimit': 240,
     'featCoversFrames': False,
-    'useGlobalFeatures': True,
-    'globalFeatArgLocSimple': True,
-    'globalFeatNumArgs': True,
-    'globalFeatRoleCoocSimple': True,
-    'globalFeatArgOverlap': True,
-    'globalFeatSpanBoundary': True,
+    'useGlobalFeatures': False,
   }
   if local:
     params.update({
@@ -1222,7 +1222,7 @@ def propbank_feature_selection(template_info_filename):
     })
   else:
     params.update({
-      'propbankParseRedisHost': '???',
+      'propbankParseRedisHost': 'r8n22',  # TODO take as arg!
       'laptop': False,
     })
 
@@ -1434,7 +1434,7 @@ def run_experiments(template_info_filename, queue_name, working_dir, where):
   if not q_func:
     raise Exception('unknown queue_name: ' + queue_name)
   print 'running', queue_name
-  mq = q_func(template_info_filename)
+  mq = q_func(template_info_filename, local)
   ## Work to be done
   #if job_name == 'fs-role':
   #  mq = forward_selection_queue(template_info_filename)
