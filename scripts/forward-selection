@@ -1240,7 +1240,7 @@ def propbank_feature_selection(template_info_filename, local):
   fs = FeatureSet(features=list(fs), labels=labels, syntax_mode='regular')
 
   params = {
-    'nTrain': 25000,
+    'nTrain': 15000,
     #'workingDir': '/tmp/foo',    # this is set by tge
     'propbankParseRedisPort': 6379,
     'propbankParseRedisDb': 0,
