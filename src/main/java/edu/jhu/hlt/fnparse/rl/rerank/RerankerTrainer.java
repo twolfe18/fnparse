@@ -259,6 +259,9 @@ public class RerankerTrainer {
    */
   public Params.NetworkAvg networkParams;   // wrapper around Params.Glue
 
+  // For debugging
+  public boolean bailOutOfTrainingASAP = false;
+
 
   public RerankerTrainer(Random rand, File workingDir) {
     if (!workingDir.isDirectory())
@@ -428,7 +431,10 @@ public class RerankerTrainer {
 
     Reranker m = instantiate();
 
-    if (performPretrain) {
+    if (bailOutOfTrainingASAP)
+      LOG.info("bailing out of training ASAP -- for debugging");
+
+    if (performPretrain && !bailOutOfTrainingASAP) {
       LOG.warn("[train1] you probably don't want pretrain/local train!");
       LOG.info("[train1] local train");
       train2(m, ip, pretrainConf);
@@ -438,7 +444,8 @@ public class RerankerTrainer {
 
     LOG.info("[train1] global train");
     m.setStatefulParams(statefulParams);
-    train2(m, ip, trainConf);
+    if (!bailOutOfTrainingASAP)
+      train2(m, ip, trainConf);
 
     LOG.info("[train1] done, times:\n" + timer);
     return m;
@@ -840,6 +847,8 @@ public class RerankerTrainer {
     RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
 
+    trainer.bailOutOfTrainingASAP = config.getBoolean("bailOutOfTrainingASAP", false);
+
     if (config.containsKey("beamSize")) {
       LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
       trainer.trainConf.trainBeamSize =
@@ -1030,7 +1039,13 @@ public class RerankerTrainer {
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
     ItemProvider train, test, trainAndTest = null;
-    if (!isParamServer) {
+    if (isParamServer) {
+      train = null;
+      test = null;
+    } else if (trainer.bailOutOfTrainingASAP) {
+      train = null;
+      test = null;
+    } else {
       if (realTest)
         LOG.info("[main] running on real test set");
       else
@@ -1095,9 +1110,6 @@ public class RerankerTrainer {
       final int nTest = config.getInt("nTest", 999999);
       train = new ItemProvider.Slice(train, nTrain, trainer.rand);
       test = new ItemProvider.Slice(test, nTest, trainer.rand);
-    } else {
-      train = null;
-      test = null;
     }
 
     // Setup parameter averaging over the network
