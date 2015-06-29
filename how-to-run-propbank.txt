@@ -1,0 +1,69 @@
+
+Jun 29, 2015
+
+There are two parts, running feature selection (a la scripts/forward-selection),
+and running the full-scale experiments (sweep everything other than feature set).
+
+This is not a shell script because it is not meant to be run fully-automatically;
+there are some manual steps in this process, see notes.
+
+
+
+##### FEATURE SELECTION ###############################################################################################
+
+### Start redis server (for propbank parses -- too big for memory locally, too slow for disk on the grid)
+qsub -q all.q ./scripts/propbank-train-redis.sh
+
+# You have to read this off of qstat
+REDIS_SERVER=r8n22
+
+
+### Start the redis server (for tge)
+# NOTE: This will save the DB snapshots to disk wherever you start it,
+# but those snapshots are not needed for tge (just master-slave communication)
+redis-server
+
+
+### Start forward-selection
+# NOTE: You have to manually set the redis server for propbank parses in forward-selection
+# (grep for propbankParseRedisHost)
+# TODO: Fix this!
+./scripts/forward-selection \
+  experiments/feature-cardinality-estimation/template.all.txt \
+  propbank_feature_selection \
+  experiments/forward-selection/propbank/jun28 \
+  grid
+
+
+### Collect best feature set
+# You have to do this manually
+
+
+##### FULL EXPERIMENTS  ###############################################################################################
+
+### Cleanup old logs
+rm logging/propbank/*server*
+rm logging/propbank/*client*
+
+
+### Start redis server
+qsub -q all.q ./scripts/propbank-train-redis.sh
+
+# You have to read this off of qstat
+REDIS_SERVER=r8n22
+
+
+### Start param server
+qsub -q all.q ./scripts/propbank-train-server.sh experiments/propbank/jun26/server/
+
+# Check where the server is running
+PARAM_SERVER=r6n33
+
+
+### Start the clients
+for i in `seq 10 | awk '{print $1-1}'`; do
+  qsub -q all.q ./scripts/propbank-train-client.sh experiments/propbank/jun26/client-$i/ ${REDIS_SERVER} ${PARAM_SERVER} $i
+done
+
+
+

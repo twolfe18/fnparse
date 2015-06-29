@@ -1260,7 +1260,7 @@ def propbank_feature_selection(template_info_filename, local):
     })
   else:
     params.update({
-      'propbankParseRedisHost': 'r8n22',  # TODO take as arg!
+      'propbankParseRedisHost': 'r6n09',  # TODO take as arg!
       'laptop': False,
     })
 
