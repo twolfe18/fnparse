@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -138,7 +139,7 @@ public class RerankerTrainer {
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
-    private int maxDev = 150;
+    private int maxDev = 250;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -935,7 +936,7 @@ public class RerankerTrainer {
     String fixedParmasSer = "fixedStatelessParamsJserFile";
     if (config.containsKey(fixedParmasSer)) {
       File fixedSer = config.getExistingFile(fixedParmasSer);
-      Log.info("adding fixed stateless params: " + fixedSer.getPath());
+      LOG.info("adding fixed stateless params: " + fixedSer.getPath());
       Params.Stateless fixed = (Params.Stateless) FileUtil.deserialize(fixedSer); 
       trainer.addStatelessParams(new Fixed.Stateless(fixed));
     }
@@ -1043,8 +1044,8 @@ public class RerankerTrainer {
       train = null;
       test = null;
     } else if (trainer.bailOutOfTrainingASAP) {
-      train = null;
-      test = null;
+      train = new ItemProvider.ParseWrapper(Collections.emptyList());
+      test = new ItemProvider.ParseWrapper(Collections.emptyList());
     } else {
       if (realTest)
         LOG.info("[main] running on real test set");
@@ -1220,10 +1221,10 @@ public class RerankerTrainer {
       LOG.info("[main] starting training, config:");
       model = trainer.train1(train);
 
-      // Save the model
-      File modelFile = new File(workingDir, "model.bin_deprecated");
-      LOG.info("saving model to " + modelFile.getPath());
-      model.serializeParams(modelFile);
+//      // Save the model (using DataOutputStream)
+//      File modelFile = new File(workingDir, "model.bin_deprecated");
+//      LOG.info("saving model to " + modelFile.getPath());
+//      model.serializeParams(modelFile);
     }
 
     // Release some memory

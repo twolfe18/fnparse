@@ -421,7 +421,7 @@ class ConfigMutator(Mutator):
     alpha = 15000
     beta = 1.5
     gamma = 0.25   # p(change regularizer irrespective of cardinality)
-    children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict)]
+    children = [Config(next_fs, config.params, config.regularizer_dict, config.batch_size_dict, config.passes_dict, derived_from=config)]
     stages = set(self.__template_info.stages()) & set(next_fs.stages())
     for stage in stages:
       cc = cur_card[stage]
@@ -454,13 +454,18 @@ class ConfigMutator(Mutator):
     # Carry over stateless params learned at the previous iteration
     if REUSE_STATELESS_PARAMS:
       for c in children:
-        if c.derived_from:
+        if c.derived_from and 'workingDir' in c.derived_from.params:
           wd = c.derived_from.params['workingDir']
           f = os.path.join(wd, 'statelessParams.jser.gz')
           if not os.path.isfile(f):
             print 'look for', f, 'in', wd
-            raise Exception('templated stateless params not saved!')
-          c.params['fixedStatelessParamsJserFile'] = f
+            #raise Exception('templated stateless params not saved!')
+            print 'WARNING: templated stateless params not saved!'
+          else:
+            c.params['fixedStatelessParamsJserFile'] = f
+            print 'setting fixedStatelessParamsJserFile =', f
+        else:
+          print 'cant set fixedStatelessParamsJserFile because no derived_from'
 
 
     # TODO try increasing/decreasing the number of passes
@@ -855,6 +860,7 @@ class ConfigJobStarter:
     cmd['resultReporter'] = "redis:%s,%s,%s\tfile:%s" % \
       (self.redis_config['host'], self.redis_config['channel'], self.redis_config['port'], rf)
     cmd['workingDir'] = wd
+    config.params['workingDir'] = wd
     cmd['features'] = config.feature_set.config_string()
     for stage, regularizer in config.regularizer_dict.iteritems():
       cmd['regularizer.' + stage] = str(math.exp(regularizer))
@@ -1234,7 +1240,7 @@ def propbank_feature_selection(template_info_filename, local):
   fs = FeatureSet(features=list(fs), labels=labels, syntax_mode='regular')
 
   params = {
-    'nTrain': 8000,
+    'nTrain': 25000,
     #'workingDir': '/tmp/foo',    # this is set by tge
     'propbankParseRedisPort': 6379,
     'propbankParseRedisDb': 0,
@@ -1259,7 +1265,7 @@ def propbank_feature_selection(template_info_filename, local):
     })
 
   # Debugging
-  params['bailOutOfTrainingASAP'] = True
+  #params['bailOutOfTrainingASAP'] = True
 
   # Convert value to strings
   params = {a:str(b) for a,b in params.iteritems()}
