@@ -23,7 +23,7 @@ import xml.etree.ElementTree as ET
 
 
 FAILED_SCORE = 0.0
-REUSE_TEMPLATED_STATELESS_PARAMS = True
+REUSE_STATELESS_PARAMS = True
 
 
 class CommonEqualityMixin(object):
@@ -89,11 +89,18 @@ class Feature(CommonEqualityMixin):
 
 
 class FeatureSet(object):
-  def __init__(self, features=[], labels=None, syntax_mode=None, derived_from=None):
+  def __init__(self, features=[], labels=None, syntax_mode=None, only_emit_diff=False, derived_from=None):
+    '''
+    If only_emit_diff=True, then calls to config_string() will only return the Features
+    which appear in this feature set and NOT in derived_from. For the purpose of storing
+    the full feature set for modifications, the features list will still contain Features
+    from derived_from.
+    '''
     self.features = features
     self.derived_from = derived_from
     self.__syntax_mode = syntax_mode
     self.__labels = labels
+    self.only_emit_diff = only_emit_diff
 
     if derived_from and syntax_mode is None and derived_from.__syntax_mode:
       self.__syntax_mode = derived_from.__syntax_mode
@@ -162,8 +169,14 @@ class FeatureSet(object):
         c += 1
     return c
 
-  def propose_modification(self, template_info, propbank_mod=False):
-    ''' Returns a new FeatureSet derived from this feature set '''
+  def propose_modification(self, template_info, ignore_stage=False, only_add=False):
+    '''
+    Returns a new FeatureSet derived from this feature set.
+
+    If ignore_stage=true, then this will produce Features with stage='NullStage',
+    which should have corresponding rows in the TemplateInfo file (which say what
+    templates/labels/syntax_modes can be used with 'NullStage').
+    '''
 
     # a few options for mutation:
     # 1) add a Feature
@@ -172,7 +185,7 @@ class FeatureSet(object):
 
     debug = True
 
-    if propbank_mod:
+    if ignore_stage:
       stage = 'NullStage'
     else:
       rel_stages = set(template_info.stages()) & set(self.stages())
@@ -209,7 +222,7 @@ class FeatureSet(object):
         'p_mutate_feature =', p_mutate_feature
 
     r = random.random()
-    if r < p_add_feature:
+    if r < p_add_feature or only_add:
       # Make a new feature and add it to this set
       f = self.new_feature(template_info, stage)
       if debug:
@@ -226,12 +239,12 @@ class FeatureSet(object):
       # Modify and replace a feature that is already in this feature set
       try:
         i = random.randrange(len(self.features))
-        f = self.features[i].propose_modification(template_info, propbank_mod)
+        f = self.features[i].propose_modification(template_info)
         if debug:
           print '[FeatureSet propose_modification] mutating:', self.features[i]
         return FeatureSet([f] + self.features[:i] + self.features[i+1:], derived_from=self)
       except:
-        return self.propose_modification(template_info, propbank_mod)
+        return self.propose_modification(template_info, ignore_stage)
 
   def new_feature(self, template_info, stage):
     ''' Creates a feature that is not already in this feature set '''
@@ -258,7 +271,17 @@ class FeatureSet(object):
     return "<FeatureSet %s>" % (', '.join([str(x) for x in self.features]))
 
   def config_string(self):
-    return "+".join([str(x) for x in self.features])
+    rel = self.features
+    if self.only_emit_diff and self.derived_from:
+      # Only keep features not in derived_from
+      old = set()
+      for f in self.derived_from.features:
+        old.add(str(f))
+      rel = []
+      for f in self.features:
+        if str(f) not in old:
+          rel.append(f)
+    return "+".join([str(x) for x in rel])
 
 
 class Config(CommonEqualityMixin):
@@ -320,9 +343,17 @@ class Mutator(object):
     raise NotImplementedError()
 
 class ConfigMutator(Mutator):
-  def __init__(self, template_info, ignore_stages=False):
+  def __init__(self, template_info, ignore_stages=False, emit_feature_diffs=False):
+    '''
+    If emit_feature_diffs=True, then this class will return mutated FeatureSets with
+    fs.only_emit_diff=True, which means that anyone who calls fs.config_string() will
+    only see the diffs between fs and fs.derived_from.
+    NOTE: I put this here instead of in ConfigJobStarter because it doesn't really
+    belong there.
+    '''
     self.__template_info = template_info
     self.ignore_stages = ignore_stages
+    self.emit_feature_diffs = emit_feature_diffs
 
   def mutate(self, config):
     ''' Config -> [Config] '''
@@ -373,9 +404,14 @@ class ConfigMutator(Mutator):
     # mutate just mutates, this new queue implementation will tell it what to mutate
 
     if self.ignore_stages:
-      next_fs = config.feature_set.propose_modification(self.__template_info, propbank_mod=True)
+      next_fs = config.feature_set.propose_modification(self.__template_info, ignore_stage=True)
     else:
       next_fs = config.feature_set.propose_modification(self.__template_info)
+
+    if self.emit_feature_diffs:
+      print '[mutate_config] only emitting FeatureSet diffs'
+      next_fs.only_emit_diff = True
+
     cur_card = config.feature_set.estimate_cardinality(self.__template_info)
     next_card = next_fs.estimate_cardinality(self.__template_info)
     print '[mutate_config] cardinality: ', cur_card, ' => ', next_card
@@ -415,17 +451,16 @@ class ConfigMutator(Mutator):
         pass
 
 
-    # Set the "fixed parameters" from the weights learned in the previous iteration
-    if REUSE_TEMPLATED_STATELESS_PARAMS:
+    # Carry over stateless params learned at the previous iteration
+    if REUSE_STATELESS_PARAMS:
       for c in children:
         if c.derived_from:
-          f = c.derived_from.params['templatedStatelessSer']
+          wd = c.derived_from.params['workingDir']
+          f = os.path.join(wd, 'statelessParams.jser.gz')
           if not os.path.isfile(f):
-            print c.derived_from.params['workingDir']
-            print c.derived_from.params['templatedStatelessSer']
+            print 'look for', f, 'in', wd
             raise Exception('templated stateless params not saved!')
-          c.params['fixedTemplateParamsModel'] = f
-          #c.params['fixedTemplateParams'] = c.derived_from.feature_set.config_string()
+          c.params['fixedStatelessParamsJserFile'] = f
 
 
     # TODO try increasing/decreasing the number of passes
@@ -841,9 +876,6 @@ class ConfigJobStarter:
       key = 'bpIters.' + s
       if key not in cmd:
         cmd[key] = '5'
-
-    if REUSE_TEMPLATED_STATELESS_PARAMS:
-      cmd['templatedStatelessSer'] = os.path.join(self.working_dir, 'templatedStateless.jser.gz')
 
     cmd.update(config.params)
     job_tracker.spawn(name, cmd)
