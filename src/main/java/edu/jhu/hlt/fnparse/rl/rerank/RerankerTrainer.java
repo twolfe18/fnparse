@@ -259,9 +259,6 @@ public class RerankerTrainer {
    */
   public Params.NetworkAvg networkParams;   // wrapper around Params.Glue
 
-  // For feature selection
-  public TemplatedFeatureParams templatedStatelessParams;
-
 
   public RerankerTrainer(Random rand, File workingDir) {
     if (!workingDir.isDirectory())
@@ -924,24 +921,14 @@ public class RerankerTrainer {
       }
     }
 
-    // Check if there are some fixed TemplateFeatureParams to use
-//    String fixedParamsFs = "fixedTemplateParams";
-    String fixedParmasSer = "fixedTemplateParamsModel";   // uses Java serialization
-//    if (config.containsKey(fixedParamsFs)) {
+
+    // There may be some fixed stateless params which should be added
+    String fixedParmasSer = "fixedStatelessParamsJserFile";
     if (config.containsKey(fixedParmasSer)) {
-//      String fixedFs = config.getString(fixedParamsFs);
       File fixedSer = config.getExistingFile(fixedParmasSer);
-//      Log.info("adding fixed params: fixedFs=" + fixedFs + " fixedSer=" + fixedSer.getPath());
-      Log.info("adding fixed params: fixedSer=" + fixedSer.getPath());
-//      TemplatedFeatureParams tfp = new TemplatedFeatureParams(
-//          fixedParamsFs, fixedFs, l2Penalty, hashBuckets);
-//      try (FileInputStream is = new FileInputStream(fixedSer)) {
-//        tfp.deserialize(new DataInputStream(is));
-//      }
-      // Java serialization is a better idea so that we don't have to worry
-      // about construction matching details from the previous run.
-      TemplatedFeatureParams tfp = (TemplatedFeatureParams) FileUtil.deserialize(fixedSer);
-      trainer.addStatelessParams(new Fixed.Stateless(tfp));
+      Log.info("adding fixed stateless params: " + fixedSer.getPath());
+      Params.Stateless fixed = (Params.Stateless) FileUtil.deserialize(fixedSer); 
+      trainer.addStatelessParams(new Fixed.Stateless(fixed));
     }
 
 
@@ -1021,6 +1008,7 @@ public class RerankerTrainer {
    * key-value pairs.
    */
   public static void main(String[] args) throws Exception {
+    System.out.println(Arrays.toString(args));
     assert args.length % 2 == 1;
     String jobName = args[0];
     ExperimentProperties config = new ExperimentProperties();
@@ -1251,14 +1239,12 @@ public class RerankerTrainer {
     oos.close();
     LOG.info("[main] done serializing.");
 
-    // Serialize just the templated params
-    String templatedStatelessKey = "templatedStatelessSer";
-    if (config.containsKey(templatedStatelessKey)) {
-      File templatedStatelessFile = config.getFile(templatedStatelessKey);
-      LOG.info("[main] saving templated params to " + templatedStatelessFile.getPath());
-      assert trainer.templatedStatelessParams != null;
-      FileUtil.serialize(trainer.templatedStatelessParams, templatedStatelessFile);
-    }
+    // Serialize just the stateless params.
+    // During feature selection, this can be absorbed into Fixed params and
+    // a single new feature can be tried out.
+    File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
+    LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
+    FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
 
     // Save the configuration
     OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
