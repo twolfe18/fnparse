@@ -20,8 +20,17 @@ public interface Adjoints {
 
   public Action getAction();  // TODO put in sub-class
 
+  /**
+   * Compute the circuit's value when run forwards.
+   */
   public double forwards();
 
+  /**
+   * Apply an update to the parameters given this partial derivative.
+   * NOTE: This method MAY NOT DEPEND ON the current value of the parameters!
+   * If we produce N Adjoints when a training example is observed, any
+   * permutation of those N adjoints should yield the same parameter values.
+   */
   public void backwards(double dScore_dForwards);
 
 

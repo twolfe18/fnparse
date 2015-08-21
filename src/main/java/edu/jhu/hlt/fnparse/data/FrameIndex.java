@@ -21,8 +21,8 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex;
-import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
+import edu.jhu.hlt.tutils.data.PropbankFrameIndex;
+import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
 
 /**
  * Reads frames from disk and provides access to them

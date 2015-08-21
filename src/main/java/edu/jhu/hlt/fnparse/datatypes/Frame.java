@@ -5,7 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-import edu.jhu.hlt.tutils.datasets.PropbankFrameIndex.PropbankFrame;
+import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
 
 public class Frame {
 

@@ -11,7 +11,7 @@ import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
-import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.item.IIndexWord;
