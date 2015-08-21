@@ -26,7 +26,7 @@ fi
 
 WORKING_DIR=$1
 
-java -Xmx3G -ea -server -cp ${CP} \
+java -XX:+UseSerialGC -Xmx3G -ea -server -cp ${CP} \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
   parameterServerJob \
   workingDir ${WORKING_DIR} \

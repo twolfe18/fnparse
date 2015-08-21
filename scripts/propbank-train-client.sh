@@ -35,7 +35,7 @@ i=$4
 
 echo "starting with CP=$CP"
 
-java -Xmx12G -ea -server -cp ${CP} \
+java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
   "workerJob$i" \
   workingDir ${WORKING_DIR} \
