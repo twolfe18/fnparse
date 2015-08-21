@@ -31,7 +31,7 @@ import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
 import edu.jhu.hlt.fnparse.util.RedisFileCache;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
-import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IWord;

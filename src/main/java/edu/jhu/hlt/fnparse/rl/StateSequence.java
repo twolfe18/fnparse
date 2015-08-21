@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.tutils.Log;
 
 public class StateSequence {
 
@@ -235,7 +236,10 @@ public class StateSequence {
         return 0d;
       StateSequence n = neighbor();
       score = action.forwards() +  (n == null ? 0d : n.getScore());
-      assert Double.isFinite(score) && !Double.isNaN(score);
+      if (!(Double.isFinite(score) && !Double.isNaN(score))) {
+        Log.warn("score=" + score + " action.forwards=" + action.forwards()
+            + " action=" + action + " sentence=" + getCur().getSentence().getId());
+      }
     }
     return score;
   }

@@ -1,7 +1,16 @@
 package edu.jhu.hlt.fnparse.inference.pruning;
 
-import java.io.*;
-import java.util.*;
+import java.io.File;
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.log4j.Logger;
 
@@ -14,7 +23,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
-import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;

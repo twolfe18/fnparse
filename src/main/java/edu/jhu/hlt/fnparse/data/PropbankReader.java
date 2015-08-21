@@ -14,12 +14,12 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider.ParseWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.ConcreteIO;
+import edu.jhu.hlt.tutils.ConcreteToDocument;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.Language;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -49,7 +49,7 @@ public class PropbankReader {
   private File trainSkels;
   private File devSkels;
   private File testSkels;
-  private ConcreteIO cio;
+  private ConcreteToDocument cio;
   private MultiAlphabet alph;
   private ParsePropbankData autoParses;
 
@@ -67,7 +67,7 @@ public class PropbankReader {
    */
   public PropbankReader(boolean laptop, ParsePropbankData autoParses) {
     alph = new MultiAlphabet();
-    cio = new ConcreteIO(null, null, null, Language.EN);
+    cio = new ConcreteToDocument(null, null, null, Language.EN);
     cio.setConstituencyParseToolname("conll-2011 parse");
     cio.setPropbankToolname("conll-2011 SRL");
     cio.setPosToolName("conll-2011 POS");
@@ -148,7 +148,7 @@ public class PropbankReader {
     int docIndex = 0;
     Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
     for (Communication c : on5.ingest(skelsDir)) {
-      Document d = cio.communication2Document(c, docIndex++, alph).getDocument();
+      Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
       for (FNParse p : DataUtil.convert(d)) {
         Sentence s = p.getSentence();
         if (keep != null && !keep.test(s))
