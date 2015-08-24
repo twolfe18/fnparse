@@ -10,6 +10,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
@@ -57,6 +58,7 @@ public class Sentence implements HasId {
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
     if (lastToken < 0 || lastToken < firstToken)
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
+    MultiAlphabet a = doc.getAlphabet();
     int width = (lastToken - firstToken) + 1;
     String[] tokens = new String[width];
     String[] pos = new String[width];
@@ -64,7 +66,7 @@ public class Sentence implements HasId {
     for (int i = 0; i < width; i++) {
       edu.jhu.hlt.tutils.Document.Token t = doc.getToken(firstToken + i);
       tokens[i] = t.getWordStr();
-      pos[i] = t.getPosStr();
+      pos[i] = a.pos(t.getPosG());
       if (t.getLemma() >= 0)
         lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
