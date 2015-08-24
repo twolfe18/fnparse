@@ -17,7 +17,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
-import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 
 /**
  * Identifies frames that are possible at a given location in a sentence.

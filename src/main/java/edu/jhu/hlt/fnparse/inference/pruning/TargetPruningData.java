@@ -14,7 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
-import edu.jhu.hlt.tutils.WordNetPosUtil;
+import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;

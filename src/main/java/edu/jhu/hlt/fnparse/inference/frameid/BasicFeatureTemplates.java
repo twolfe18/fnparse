@@ -55,7 +55,7 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
-import edu.jhu.hlt.tutils.BrownClusters;
+import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
