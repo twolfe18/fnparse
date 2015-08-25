@@ -9,6 +9,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import org.apache.log4j.Logger;
 
 import edu.jhu.autodiff.Tensor;
@@ -69,7 +70,7 @@ public class RoleHeadStage
   public static boolean SHOW_DEPENDENCY_RECALL = true;
 
   private int maxSentenceLengthForTraining = -1;
-  private boolean useArgPruner = true;
+  private boolean useArgPruner = ExperimentProperties.getInstance().getBoolean("roleHeadStage.useArgPruner", true);
   private IArgPruner argPruner;
   private ApproxF1MbrDecoder decoder;
 
@@ -235,6 +236,7 @@ public class RoleHeadStage
       List<RoleHeadVars> fr,
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
+    System.out.println("[RoleHeadStage initFactorsFor] starting! fr=" + fr);
     HeadFinder hf = SemaforicHeadFinder.getInstance();
     TemplateContext context = new TemplateContext();
     List<Factor> factors = new ArrayList<Factor>();
@@ -262,6 +264,7 @@ public class RoleHeadStage
         ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
         TemplatedFeatures feats = getFeatures();
         int n = vs.calcNumConfigs();
+        System.out.println("[RoleHeadStage initFactorsFor] rvar=" + rvar + " n=" + n);
         for (int i = 0; i < n; i++) {
           VarConfig vc = vs.getVarConfig(i);
           boolean role = argRealized && BinaryVarUtil.configToBool(vc.getState(rvar.roleVar));

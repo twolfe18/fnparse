@@ -37,6 +37,7 @@ import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.util.math.FastMath;
 
 /**
@@ -157,7 +158,7 @@ public class Runner {
       if (n < all.size()) {
         LOG.info("[run] limiting the train set from " + all.size()
             + " to " + n);
-        all = DataUtil.reservoirSample(all, n, r);
+        all = ReservoirSample.sample(all, n, r);
       }
     }
     return all;

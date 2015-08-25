@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
-import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
+import edu.jhu.hlt.tutils.InputStreamGobbler;
 
 /**
  * A wrapper around SEMAFOR's wrapper around SemEval'07 evaluation script.

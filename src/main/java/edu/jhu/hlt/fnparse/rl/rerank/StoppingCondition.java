@@ -10,8 +10,8 @@ import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.EMA;
-import edu.jhu.hlt.fnparse.util.InputStreamGobbler;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
+import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Timer;
 
 

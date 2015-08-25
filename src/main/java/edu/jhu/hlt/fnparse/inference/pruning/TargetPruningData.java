@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.experiment.SpanPruningExperiment;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.mit.jwi.IRAMDictionary;
 import edu.mit.jwi.RAMDictionary;
 import edu.mit.jwi.data.ILoadPolicy;
@@ -43,7 +44,8 @@ public class TargetPruningData implements Serializable {
   public synchronized IRAMDictionary getWordnetDict() {
     if (dict == null) {
       long start = System.currentTimeMillis();
-      File f = new File("toydata/wordnet/dict");
+      File f = ExperimentProperties.getInstance().getExistingDir("data.wordnet");
+      //File f = new File("toydata/wordnet/dict");
       dict = new RAMDictionary(f, ILoadPolicy.IMMEDIATE_LOAD);
       try { dict.open(); }
       catch(Exception e) {

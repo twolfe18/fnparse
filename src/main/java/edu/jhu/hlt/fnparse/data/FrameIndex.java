@@ -20,6 +20,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex;
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
@@ -154,23 +155,18 @@ public class FrameIndex implements FrameIndexInterface {
     byId = new Frame[nFrames + 1];
   }
 
+//  public static FrameIndex getPropbank(boolean grid) {
+//    File dir = grid
+//      //? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
+//      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0-fixed-frames/frames")
+//      : new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
+//    return getPropbank(dir);
+//  }
+
   public static FrameIndex getPropbank() {
-    if (propbank == null)
-      throw new RuntimeException("use an explicit method to construct the right version");
-    return propbank;
-  }
-
-  public static FrameIndex getPropbank(boolean grid) {
-    File dir = grid
-      //? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
-      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0-fixed-frames/frames")
-      : new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
-    return getPropbank(dir);
-  }
-
-  public static FrameIndex getPropbank(File dir) {
     if (propbank == null) {
       LOG.info("reading propbank frames");
+      File dir = ExperimentProperties.getInstance().getExistingDir("data.propbank.frames");
       PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
       // Sort the frames by name to prevent any change in ids (unless a frame is
       // added or removed...)

@@ -27,11 +27,14 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
+import edu.jhu.hlt.fnparse.util.Describe;
 import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
+import edu.jhu.hlt.fnparse.data.PropbankReader;
+import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;
@@ -55,7 +58,9 @@ import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.data.BrownClusters;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -1515,6 +1520,8 @@ public class BasicFeatureTemplates {
     return stageTemplates.get(name);
   }
 
+  public static boolean DEBUG = true;
+
   private static int estimateCard(
       String templateName,
       GlobalParameters gp,
@@ -1525,10 +1532,13 @@ public class BasicFeatureTemplates {
     int K = 50;
     gp.getFeatureNames().startGrowth();
     stage.scanFeatures(parses.subList(0, K));
-    if (gp.getFeatureNames().size() == 0)
+    if (gp.getFeatureNames().size() == 0) {
+//      System.out.println("[estimateCard] exitting early");
       return 0;
+    }
 
     // Else finish the job
+    System.out.println("[estimateCard] templateName=" + templateName);
     gp.getFeatureNames().startGrowth();
     stage.scanFeatures(parses.subList(K, parses.size()));
     return gp.getFeatureNames().size();
@@ -1542,12 +1552,22 @@ public class BasicFeatureTemplates {
       return true;
     if ("RoleSequenceStage".equals(stageName) && !"Role1".equals(labelName))
       return true;
+
+    String k = "onlyDoStage";
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.containsKey(k)) {
+      String stage = config.getString(k);
+      System.out.println("[incompatible] stage=" + stage + " stageName=" + stageName);
+      if (!stage.equals(stageName))
+        return true;
+    }
+
     return false;
   }
 
-  private static Set<String> alreadyComputedEntries(String filename) {
+  private static Set<String> alreadyComputedEntries(File f) {
     Set<String> s = new HashSet<>();
-    try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(new File(filename))))) {
+    try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)))) {
       while (r.ready()) {
         String line = r.readLine();
         String[] toks = line.split("\\t");
@@ -1561,41 +1581,72 @@ public class BasicFeatureTemplates {
       throw new RuntimeException(e);
     }
     LOG.info("read " + s.size() + " pre-computed template cardinalities from "
-        + filename);
+        + f.getPath());
     return s;
   }
 
   public static void main(String[] args) throws Exception {
-    if (args.length != 4 && args.length != 5) {
-      System.err.println("please provide:");
-      System.err.println("1) how many threads to use");
-      System.err.println("2) a file to dump to");
-      System.err.println("3) a partition of the data to take");
-      System.err.println("4) how many partitions for the data");
-      System.err.println("5) [optional] a file containing entries that have already been computed");
-      System.err.println("NOTE: if you don't want to use partitions, provide "
-          + "\"0 1\" as the last two required arguments");
-      return;
-    }
-    int parallel = Integer.parseInt(args[0]);
-    File f = new File(args[1]);
-    int part = Integer.parseInt(args[2]);
-    int numParts = Integer.parseInt(args[3]);
-    final Set<String> preComputed = args.length == 4
-        ? null : alreadyComputedEntries(args[4]);
+//    if (args.length != 4 && args.length != 5) {
+//      System.err.println("please provide:");
+//      System.err.println("1) how many threads to use");
+//      System.err.println("2) a file to dump to");
+//      System.err.println("3) a partition of the data to take");
+//      System.err.println("4) how many partitions for the data");
+//      System.err.println("5) [optional] a file containing entries that have already been computed");
+//      System.err.println("NOTE: if you don't want to use partitions, provide "
+//          + "\"0 1\" as the last two required arguments");
+//      return;
+//    }
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    Random rand = new Random(config.getInt("seed", 9001));
+    int parallel = config.getInt("parallel", 1);
+    File outputFile = config.getFile("output");
+    int part = config.getInt("part");
+    int numParts = config.getInt("numParts");
+
+    // Load cardinalities that were estimated on another run (useful for partial failures)
+    String precompFilenameKey = "precomputed";
+    final Set<String> preComputed =
+        config.containsKey(precompFilenameKey)
+        ? alreadyComputedEntries(config.getExistingFile(precompFilenameKey))
+        : null;
     if (preComputed == null)
       LOG.info("not using any pre-computed entries");
+
+    // TODO What is this for? debugging?
     final boolean fakeIt = false;
-    if (fakeIt) f.delete();
+    if (fakeIt)
+      outputFile.delete();
+
     LOG.info("estimating cardinality for " + basicTemplates.size()
-        + " templates and " + stages.size() + " stages");
+      + " templates and " + stages.size() + " stages");
     LOG.info("stages:");
     for (String k : stageTemplates.keySet())
       LOG.info(k);
 
-    final List<FNParse> parses = DataUtil.reservoirSample(DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()),
-        1000, new Random(9001));
+    // Get the data to compute features over
+    int numParses = config.getInt("numParses", 1000);
+    boolean usePropbank = config.getBoolean("usePropbank");
+    LOG.info("usePropbank=" + usePropbank);
+    final List<FNParse> parses;
+    if (usePropbank) {
+      ParsePropbankData.Redis justParses = new ParsePropbankData.Redis(config);
+//      justParses.logGets = true;
+//      justParses.logParses = true;
+      PropbankReader pbr = new PropbankReader(justParses);
+      parses = ReservoirSample.sample(pbr.getDevData().iterator(), numParses, rand);
+
+      // TODO remove, for debugging
+      for (int i = 0; i < Math.min(10, parses.size()); i++) {
+        System.out.println("[propbankStartup] parse[" + i + "] " + Describe.fnParse(parses.get(i)));
+      }
+
+    } else {
+      parses = ReservoirSample.sample(
+          FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
+          numParses, rand);
+    }
 
     // Load data ahead of time to ensure fair timing
     if (!fakeIt) {
@@ -1611,7 +1662,8 @@ public class BasicFeatureTemplates {
 
     LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
     for (Entry<String, Template> label : labelTemplates.entrySet()) {
-      for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
+//      for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
+      for (String syntaxModeName : Arrays.asList("regular")) {
         Consumer<Stage<?, ?>> syntaxModeSupp = syntaxModes.get(syntaxModeName);
         for (String tmplName : basicTemplates.keySet()) {
           for (Function<GlobalParameters, Function<String, Stage<?, ?>>> stageFut : stages) {
@@ -1642,8 +1694,7 @@ public class BasicFeatureTemplates {
                 int h = key.hashCode();
                 if (h < 0) h = ~h;  // Java mod of negatives is negative!
                 if (h % numParts != part) {
-                  LOG.info("not a part of this piece, h=" + (h % numParts)
-                      + " numParts=" + numParts + " part=" + part);
+//                  LOG.info("not a part of this piece, h=" + (h % numParts) + " numParts=" + numParts + " part=" + part);
                   return;
                 }
 
@@ -1657,7 +1708,7 @@ public class BasicFeatureTemplates {
                   card = estimateCard(fs, gp, stage, parses);
                 double time = (System.currentTimeMillis() - tmplStart) / 1000d;
                 String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
-                try (FileWriter fw = new FileWriter(f, true)) {
+                try (FileWriter fw = new FileWriter(outputFile, true)) {
                   fw.append(msg);
                 } catch (IOException e) {
                   System.out.flush();
@@ -1678,6 +1729,6 @@ public class BasicFeatureTemplates {
     }
     es.shutdown();
     es.awaitTermination(999, TimeUnit.DAYS);
-    LOG.info("done, results are in " + f.getPath());
+    LOG.info("done, results are in " + outputFile.getPath());
   }
 }

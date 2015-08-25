@@ -11,7 +11,11 @@ for i in `seq ${PARALLEL} | awk '{print $1 - 1}'`; do
   echo "starting job $i"
   OUTPUT="experiments/feature-cardinality-estimation/template-pieces-sge-${i}-of-${PARALLEL}.txt"
   qsub -N "feat-card-$i" ./scripts/feature-template-cardinality-estimation-sge-helper \
-    ${THREADS} ${OUTPUT} ${i} ${PARALLEL} ${PRE_COMPUTE}
+    ${THREADS} \
+    ${OUTPUT} \
+    ${i} \
+    ${PARALLEL} \
+    ${PRE_COMPUTE}
 done
 
 sleep 3

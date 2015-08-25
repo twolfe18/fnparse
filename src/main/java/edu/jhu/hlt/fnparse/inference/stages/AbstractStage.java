@@ -657,8 +657,7 @@ public abstract class AbstractStage<I, O extends FNTagging>
             + "(in minutes): " + maxTimeInMinutes);
         break;
       }
-      int featuresAdded = globals.getFeatureNames().size()
-          - alphSizeStart;
+      int featuresAdded = globals.getFeatureNames().size() - alphSizeStart;
       if (featuresAdded > maxFeaturesAdded) {
         log.info("[scanFeatures] Stopping because we added the max "
             + "allowed features: " + featuresAdded);

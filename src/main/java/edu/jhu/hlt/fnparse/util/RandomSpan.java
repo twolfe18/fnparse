@@ -2,8 +2,8 @@ package edu.jhu.hlt.fnparse.util;
 
 import java.util.Random;
 
-import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 public class RandomSpan {
 
@@ -35,7 +35,7 @@ public class RandomSpan {
   }
 
   public Span draw(Iterable<Span> possible) {
-    return DataUtil.reservoirSampleOne(possible, rand);
+    return ReservoirSample.sampleOne(possible, rand);
   }
 
   public static Span draw(int n, Random r) {

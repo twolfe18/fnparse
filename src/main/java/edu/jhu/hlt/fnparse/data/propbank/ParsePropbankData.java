@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
@@ -16,7 +17,7 @@ import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.cache.DiskCachedString2TFunc;
 
 /**
- * This class is responsible for parsing the propbank data to create
+ * This class is responsible for parsing the Propbank data to create
  * automatically derived trees.
  *
  * Stores just the parses on disk in random/hashed shards.
@@ -30,9 +31,18 @@ public class ParsePropbankData {
     private Map<String, ConstituencyParse> extra;
     private Timer pTimer; // parse
     private Timer eTimer; // extra
+    public boolean logGets = false;
+    public boolean logParses = false;
+
+    // using ExperimentProperties: same keys no matter where you use it (nice)
+    public Redis(ExperimentProperties config) {
+      this(config.getString("redis.host.propbankParses"),
+          config.getInt("redis.port.propbankParses"),
+          config.getInt("redis.db.propbankParses"));
+    }
 
     public Redis(String host, int port, int db) {
-      String prefix = null;
+      String prefix = "conl2011/";
       rmap = new RedisMap<>(prefix, host, port, db,
           SerializationUtils::t2bytes, SerializationUtils::bytes2t);
       extra = new HashMap<>();
@@ -42,11 +52,15 @@ public class ParsePropbankData {
 
     @Override
     public ConstituencyParse parse(Sentence s) {
+      if (logGets)
+        System.out.println("[ParsePropbankData.Redis] fetching parse for " + s.getId());
       pTimer.start();
       String key = s.getId();
       ConstituencyParse cp = rmap.get(key);
       pTimer.stop();
       if (cp == null) {
+        if (logParses)
+          System.out.println("[ParsePropbankData.Redis] no parse for " + s.getId() + ", parsing");
         eTimer.start();
         cp = extra.get(key);
         if (cp == null) {
@@ -58,6 +72,12 @@ public class ParsePropbankData {
       return cp;
     }
   }
+
+
+  /*
+   * NOTE: Everything below here is DEPRECATED. Disk is a terrible solution for this.
+   */
+
 
   private DiskCachedString2TFunc<ConstituencyParse> cParseF;
   protected ConcreteStanfordWrapper anno;
@@ -87,8 +107,8 @@ public class ParsePropbankData {
     return cp;
   }
 
-  public static void parse(boolean laptop, File cacheDir, int numShards) {
-    PropbankReader pbr = new PropbankReader(laptop, null);
+  public static void parse(File cacheDir, int numShards) {
+    PropbankReader pbr = new PropbankReader(null);
     ItemProvider ip;
 
 //    File cacheDir = new File("/tmp/parse-data/");

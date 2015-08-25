@@ -37,7 +37,6 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.prim.tuple.Pair;
 
 public class DataUtil {
-  public static final Logger LOG = Logger.getLogger(DataUtil.class);
   public static boolean DEBUG = false;
 
   /**
@@ -52,7 +51,7 @@ public class DataUtil {
     FrameIndex propbank = FrameIndex.getPropbank();
 
     if (DEBUG)
-      System.out.println("\n[DataUtil.convert] doc: " + doc.getId());
+      System.out.println("\n[DataUtil.convert] doc: " + doc.getId() + " cons_sentences=" + doc.cons_sentences + " cons_propbank_gold=" + doc.cons_propbank_gold + " cons_propbank_auto=" + doc.cons_propbank_auto);
 
     // TODO add gold parse?
 
@@ -79,6 +78,8 @@ public class DataUtil {
       // Add every proposition which is in this sentence
       List<FrameInstance> fis = new ArrayList<>();
       for (; prop.isValid() && prop.getLastToken() <= sent.getLastToken(); prop.gotoRightSib()) {
+        if (DEBUG)
+          System.out.println("reading new proposition " + prop.getIndex());
 
         // Empty Situation/proposition
         if (prop.getFirstToken() == edu.jhu.hlt.tutils.Document.NONE)
@@ -135,6 +136,8 @@ public class DataUtil {
               + " paragraph " + paragraph + ": " + e.getMessage());
         }
       }
+      if (DEBUG)
+        System.out.println("fis.size=" + fis.size());
       l.add(new FNParse(s, fis));
     }
 
@@ -201,7 +204,7 @@ public class DataUtil {
       int targetHead = hf.head(fi.getTarget(), s);
       //assert fiByTarget[targetHead] == null;
       if(fiByTarget[targetHead] != null) {
-        LOG.warn("[getFrameInstancesIndexByHeadword] frame instance in "
+        Log.warn("[getFrameInstancesIndexByHeadword] frame instance in "
             + fi.getSentence().getId()
             + " has more than one frame-trigger per headword @ "
             + targetHead);
@@ -342,42 +345,6 @@ public class DataUtil {
       l.add(population.get(j));
     }
     return l;
-  }
-
-  public static <T> T reservoirSampleOne(Iterable<T> all, Random rand) {
-    T res = null;
-    int seen = 0;
-    for (T t : all) {
-      seen++;
-      if (rand.nextInt(seen) == 0)
-        res = t;
-    }
-    if (seen == 0)
-      throw new RuntimeException("empty sequence given!");
-    return res;
-  }
-
-  /**
-   * If howMany turns out to be larger than the number of elements in all, then
-   * every element in all is returned.
-   */
-  public static <T> List<T> reservoirSample(
-      Iterable<T> all,
-      int howMany,
-      Random rand) {
-    List<T> reservoir = new ArrayList<T>(howMany);
-    int i = 0;
-    for (T t : all) {
-      if (i < howMany) {
-        reservoir.add(t);
-      } else {
-        int k = rand.nextInt(i+1);
-        if(k < howMany)
-          reservoir.set(k, t);
-      }
-      i++;
-    }
-    return reservoir;
   }
 
   public static String[] parseFrameIndexXML(File f, int numFrames) {

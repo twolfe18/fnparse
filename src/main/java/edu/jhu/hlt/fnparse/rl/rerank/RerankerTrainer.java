@@ -1024,8 +1024,8 @@ public class RerankerTrainer {
     ExperimentProperties config = new ExperimentProperties();
     config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
 
-    final boolean laptop = config.getBoolean("laptop", false);
-    FrameIndex.getPropbank(!laptop);
+    // Load FrameNet/Propbank
+    FrameIndex.getPropbank();
 
     File workingDir = config.getOrMakeDir("workingDir");
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
@@ -1057,7 +1057,7 @@ public class RerankerTrainer {
             config.getString("propbankParseRedisHost"),
             config.getInt("propbankParseRedisPort"),
             config.getInt("propbankParseRedisDb"));
-        PropbankReader pbr = new PropbankReader(laptop, propbankAutoParses);
+        PropbankReader pbr = new PropbankReader(propbankAutoParses);
         pbr.setKeep(trainer.keep);
         Pair<ItemProvider, ItemProvider> data;
         if (realTest) {

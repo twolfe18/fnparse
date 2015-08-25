@@ -23,7 +23,7 @@ import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.tuple.Pair;
 
 /**
- * Reads Propbank data (Ontonotes 5) from Concrete form:
+ * Reads Propbank data (Ontonotes 5) from Concrete form.
  *
  * NOTE: Caching for this class is broken: cannot fit in memory.
  *
@@ -36,14 +36,14 @@ public class PropbankReader {
   public static final int LAPTOP = 0;
   public static final int COE_GRID = 1;
 
-  public static File[] ON5_CONLL_PARENT = new File[] {
-    new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
-    new File("/home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
-  };
-  public static File[] ON5_RAW = new File[] {
-    new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
-    new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
-  };
+//  public static File[] ON5_CONLL_PARENT = new File[] {
+//    new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
+//    new File("/home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
+//  };
+//  public static File[] ON5_RAW = new File[] {
+//    new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
+//    new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
+//  };
 
   private File on5;
   private File trainSkels;
@@ -62,21 +62,38 @@ public class PropbankReader {
   private Predicate<Sentence> keep = null;
 
   /**
-   * @param laptop says where to look for data.
+   * Uses the java properties data.ontonotes5 and data.propbank.conll
+   */
+  public PropbankReader(ParsePropbankData autoParses) {
+    this(new File(System.getProperty("data.ontonotes5")),
+        new File(System.getProperty("data.propbank.conll")),
+        autoParses);
+  }
+
+  /**
+   * @param on5 is the directory containing all of the Ontonotes 5 raw data,
+   * e.g. /home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations
+   * @param conllParent is the directory containing the conll stand-off files,
+   * e.g. /home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data
    * @param autoParses may be null (won't add them as Stanford parse)
    */
-  public PropbankReader(boolean laptop, ParsePropbankData autoParses) {
+  public PropbankReader(File on5, File conllParent, ParsePropbankData autoParses) {
     alph = new MultiAlphabet();
     cio = new ConcreteToDocument(null, null, null, Language.EN);
-    cio.setConstituencyParseToolname("conll-2011 parse");
-    cio.setPropbankToolname("conll-2011 SRL");
-    cio.setPosToolName("conll-2011 POS");
-    cio.setNerToolName(null);
-    int i = laptop ? LAPTOP : COE_GRID;
-    on5 = ON5_RAW[i];
-    trainSkels = new File(ON5_CONLL_PARENT[i], "train");
-    devSkels = new File(ON5_CONLL_PARENT[i], "development");
-    testSkels = new File(ON5_CONLL_PARENT[i], "test");
+    cio.readPropbank();
+    cio.log_cons_id_conversion = false;
+//    cio.debug_propbank = true;
+
+    if (!on5.isDirectory())
+      throw new IllegalArgumentException("not a valid ON5 directory: " + on5.getPath());
+    this.on5 = on5;
+
+    if (!conllParent.isDirectory())
+      throw new IllegalArgumentException("not a valid conll directory: " + on5.getPath());
+    trainSkels = new File(conllParent, "train");
+    devSkels = new File(conllParent, "development");
+    testSkels = new File(conllParent, "test");
+
     this.autoParses = autoParses;
   }
 
@@ -136,9 +153,11 @@ public class PropbankReader {
   }
 
   private ItemProvider getPropbankItemWrapper(File skelsDir) {
-    Log.info("starting, " + Describe.memoryUsage());
-    Log.info("reading from onotnotes=" + on5.getPath());
-    Log.info("reading from skels=" + skelsDir.getPath());
+    if (debug) {
+      Log.info("starting, " + Describe.memoryUsage());
+      Log.info("reading from onotnotes=" + on5.getPath());
+      Log.info("reading from skels=" + skelsDir.getPath());
+    }
 
     Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
     Ontonotes5 on5 = new Ontonotes5(skels, this.on5);
@@ -146,10 +165,15 @@ public class PropbankReader {
     Log.info("reading Communications, " + Describe.memoryUsage());
     List<FNParse> parses = new ArrayList<>();
     int docIndex = 0;
-    Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
+    if (debug)
+      Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
     for (Communication c : on5.ingest(skelsDir)) {
+      if (debug)
+        System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
       Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
       for (FNParse p : DataUtil.convert(d)) {
+        if (debug)
+          System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
         Sentence s = p.getSentence();
         if (keep != null && !keep.test(s))
           continue;

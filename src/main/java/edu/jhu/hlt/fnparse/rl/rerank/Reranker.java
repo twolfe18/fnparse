@@ -44,6 +44,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**
  * See paper.
@@ -303,7 +304,7 @@ public class Reranker implements Serializable {
       throw new IllegalArgumentException("only works when there are frameInstances");
     int tkStop = rand.nextInt(TK);
     for (int i = 0; i < tkStop; i++) {
-      Action a = DataUtil.reservoirSampleOne(transF.nextStates(frontier), rand);
+      Action a = ReservoirSample.sampleOne(transF.nextStates(frontier), rand);
       Adjoints adj = new Adjoints.Explicit(0d, a, "randomDecodingState");
       State n = frontier.getCur().apply(a, true);
       frontier = new StateSequence(frontier, null, n, adj);

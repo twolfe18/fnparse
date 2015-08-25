@@ -34,6 +34,7 @@ import edu.jhu.hlt.fnparse.inference.stages.PipelinedFnParser;
 import edu.jhu.hlt.fnparse.util.Config;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**
  * Given a working directory made by Runner, this loads the parser and can be
@@ -287,7 +288,7 @@ public class FinalResults implements Runnable {
     final int k = 500;  // upper bound on how many parses to run this on
     List<FNParse> runOn = testData;
     if (runOn.size() > k)
-      runOn = DataUtil.reservoirSample(runOn, k, rand);
+      runOn = ReservoirSample.sample(runOn, k, rand);
 
     boolean useMaxRecallOrig = pruning.useCkyDecoder();
     for (boolean useMaxRecall : Arrays.asList(true, false)) {

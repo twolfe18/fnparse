@@ -43,6 +43,7 @@ import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.optimize.SGD;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.util.Alphabet;
 import edu.jhu.util.Threads;
 
@@ -657,12 +658,12 @@ public class LatentConstituencyPipelinedParser implements Parser {
     List<FNParse> tune = dsr.getSection(all, "tune", false);
     List<FNParse> test = dsr.getSection(all, "test", false);
     if(nTrainLimit < train.size()) {
-      train = DataUtil.reservoirSample(
+      train = ReservoirSample.sample(
           train, nTrainLimit, new Random(9001));
     }
     int nTestLimit = nTrainLimit;
     if (test.size() > nTestLimit) {
-      test = DataUtil.reservoirSample(test, nTestLimit, new Random(9002));
+      test = ReservoirSample.sample(test, nTestLimit, new Random(9002));
     }
     LOG.info("#train=" + train.size()
         + " #tune=" + tune.size()
@@ -696,7 +697,7 @@ public class LatentConstituencyPipelinedParser implements Parser {
     if (numTrainEval > 0) {
       List<FNParse> trainSubset = train;
       if (train.size() > numTrainEval) {
-        trainSubset = DataUtil.reservoirSample(
+        trainSubset = ReservoirSample.sample(
             train, numTrainEval, p.getGlobalParameters().getRandom());
       }
       sentences = DataUtil.stripAnnotations(trainSubset);

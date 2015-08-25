@@ -59,6 +59,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.RandomBracketing;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.parse.cky.ConstituencyTreeFactorParser;
 import edu.jhu.parse.cky.chart.Chart;
 import edu.jhu.parse.cky.data.BinaryTree;
@@ -1172,9 +1173,9 @@ public class RoleSpanPruningStage
     Logger.getLogger(ConstituencyTreeFactor.class).setLevel(Level.FATAL);
 
     Random r = new Random(9001);
-    List<FNParse> parses = DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-    parses = DataUtil.reservoirSample(parses, 250, r);
+    List<FNParse> parses = ReservoirSample.sample(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
+        250, r);
     List<FNParse> train = new ArrayList<>(), test = new ArrayList<>();
     for (FNParse p : parses)
       (r.nextBoolean() ? train : test).add(p);
