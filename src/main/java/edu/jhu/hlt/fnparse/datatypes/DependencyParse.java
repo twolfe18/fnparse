@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -16,7 +17,7 @@ import java.util.function.Function;
  * 
  * @author travis
  */
-public class DependencyParse {
+public class DependencyParse implements Serializable {
   public static final int ROOT = -1;
   public static final int PUNC = -2;
 

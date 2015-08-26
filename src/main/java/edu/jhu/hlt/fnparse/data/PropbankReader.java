@@ -51,7 +51,7 @@ public class PropbankReader {
   private File testSkels;
   private ConcreteToDocument cio;
   private MultiAlphabet alph;
-  private ParsePropbankData autoParses;
+  private ParsePropbankData.Redis autoParses;
 
   // Can't cache now: Span is not Serializable (a lot of code uses == instead of .equals())
   public boolean performCaching = false;
@@ -64,7 +64,7 @@ public class PropbankReader {
   /**
    * Uses the java properties data.ontonotes5 and data.propbank.conll
    */
-  public PropbankReader(ParsePropbankData autoParses) {
+  public PropbankReader(ParsePropbankData.Redis autoParses) {
     this(new File(System.getProperty("data.ontonotes5")),
         new File(System.getProperty("data.propbank.conll")),
         autoParses);
@@ -77,7 +77,7 @@ public class PropbankReader {
    * e.g. /home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data
    * @param autoParses may be null (won't add them as Stanford parse)
    */
-  public PropbankReader(File on5, File conllParent, ParsePropbankData autoParses) {
+  public PropbankReader(File on5, File conllParent, ParsePropbankData.Redis autoParses) {
     alph = new MultiAlphabet();
     cio = new ConcreteToDocument(null, null, null, Language.EN);
     cio.readPropbank();
@@ -181,7 +181,10 @@ public class PropbankReader {
         if (autoParses != null) {
           if (debug)
             Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
-          s.setStanfordParse(autoParses.parse(s));
+          if (s.getStanfordParse(false) == null)
+            s.setStanfordParse(autoParses.parse(s));
+          if (s.getBasicDeps(false) == null)
+            s.setBasicDeps(autoParses.getBasicDeps(s));
         }
         parses.add(p);
       }

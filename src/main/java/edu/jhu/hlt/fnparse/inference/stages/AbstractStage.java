@@ -472,10 +472,10 @@ public abstract class AbstractStage<I, O extends FNTagging>
   private void setupSyntax(Collection<? extends I> input) {
     if (useSyntaxFeatures) {
       log.info("[setupSyntax] useSyntaxFeatures=true checking if anything needs to be parsed");
-      ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
       for (I in : input) {
         Sentence s = getSentence(in);
         if (s.getStanfordParse(false) == null || s.getBasicDeps(false) == null) {
+          ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
           s.setStanfordParse(parser.getCParse(s));
           s.setBasicDeps(parser.getBasicDParse(s));
           assert s.getBasicDeps(false) != null;

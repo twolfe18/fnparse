@@ -16,7 +16,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 public class HeadFinderTests {
 	public static final Logger LOG = Logger.getLogger(HeadFinderTests.class);
 
-	// pull some wide spans from WideArguments.main and see if we can get them right by tweaking the head finder
+	// pull some wide spans from WideArguments.estimateCardinalityOfTemplates and see if we can get them right by tweaking the head finder
 
 	String t1 = "Lawton Davis , head of the South Central Health District";
 	String h1 = "Davis";	// previously "head"

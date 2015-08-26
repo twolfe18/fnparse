@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -36,6 +37,13 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.tutils.Timer;
 
+/**
+ * Calls concrete-stanford and wraps the results in fnparse data structures.
+ *
+ * Only support English now.
+ *
+ * @author travis
+ */
 public class ConcreteStanfordWrapper {
   public static final Logger LOG = Logger.getLogger(ConcreteStanfordWrapper.class);
 
@@ -47,6 +55,9 @@ public class ConcreteStanfordWrapper {
   public static final File cParseCacheFile = new File(cacheDir, "cParseCache-all.bin");
 
   public static synchronized ConcreteStanfordWrapper getSingleton(boolean caching) {
+    String k = "disallowConcreteStanford";
+    if (ExperimentProperties.getInstance().getBoolean(k, false))
+      throw new RuntimeException("on-the-fly parsing has been disallowed with " + k);
     if (caching) {
       if (cachingSingleton == null) {
         cachingSingleton = new CachingConcreteStanfordWrapper(bdParseCacheFile, cParseCacheFile, true);
@@ -299,7 +310,7 @@ public class ConcreteStanfordWrapper {
 
     Section section = new Section();
     section.setUuid(aUUID);
-    section.setKind("main");
+    section.setKind("estimateCardinalityOfTemplates");
     section.addToSentenceList(sentence);
 
     Communication communication = new Communication();

@@ -106,7 +106,7 @@ public class DataSplitter {
 
   public File getSplitFile(
       List<? extends HasId> all, String key, double propTest) {
-    File p = new File("src/main/resources");	// TODO fix this
+    File p = new File("src/estimateCardinalityOfTemplates/resources");	// TODO fix this
     return new File(p, key + "_" + all.size() + "_" + propTest + ".split");
   }
 

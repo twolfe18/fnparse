@@ -76,7 +76,7 @@ public class RoleHeadStage
 
   // If true, set the span fields in TemplateContext so that all the span
   // features fire. If you change this, re-compute feature cardinality with
-  // BasicFeatureTemplates.main.
+  // BasicFeatureTemplates.estimateCardinalityOfTemplates.
   private boolean allowSpanFeatures = true;
 
   // TODO If true, create a ternary factor that fires -infinity if there isn't
@@ -364,7 +364,7 @@ public class RoleHeadStage
       DependencyParse basic = sent.getBasicDeps(false);
       if (basic == null) {
         ConcreteStanfordWrapper stanford =
-            ConcreteStanfordWrapper.getSingleton(false);
+          ConcreteStanfordWrapper.getSingleton(false);
         basic = stanford.getBasicDParse(sent);
       }
       DependencyParse collapsed = sent.getCollapsedDeps(false);

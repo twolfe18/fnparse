@@ -6,8 +6,6 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -15,6 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * Issue: how to handle availability of information...
@@ -30,7 +29,6 @@ import edu.jhu.util.Alphabet;
  */
 public abstract class TemplatedFeatures implements Serializable {
   private static final long serialVersionUID = 1L;
-  public static final Logger LOG = Logger.getLogger(TemplatedFeatures.class);
 
   /**
    * Templates have no arguments, just represent a piece of information like
@@ -43,7 +41,7 @@ public abstract class TemplatedFeatures implements Serializable {
    * short circuiting, so this should be particularly efficient in the case
    * where the label Template doesn't fire (the label Template should be first).
    */
-  public static interface Template {
+  public interface Template {
     /**
      * This should incorporate the name of this template, be globally unique.
      * NOTE: If this method returns NULL, then the semantics are that any
@@ -148,7 +146,7 @@ public abstract class TemplatedFeatures implements Serializable {
   }
 
   /** Take an independent template and build it up from basic templates */
-  private static Template parseTemplateToken(String templateToken) 
+  private static Template parseTemplateToken(String templateToken)
       throws TemplateDescriptionParsingException {
     // Normalize
     String[] tokens = templateToken.split("\\*");
@@ -156,22 +154,25 @@ public abstract class TemplatedFeatures implements Serializable {
     for (int i = 0; i < n; i++)
       tokens[i] = tokens[i].trim();
 
+    // Holds the templates
+    BasicFeatureTemplates.Indexed bft = BasicFeatureTemplates.getInstance();
+
     // Lookup Templates
     Template[] templates = new Template[n];
     for (int i = 0; i < n; i++) {
       if (i == 0) {
-        templates[i] = BasicFeatureTemplates.getStageTemplate(tokens[i]);
+        templates[i] = bft.getStageTemplate(tokens[i]);
         if (templates[i] == null) {
           // you must have meant "<template>-<syntax_mode>"
           String[] tt = tokens[i].split("-");
           if (tt.length == 2
               && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
-            templates[i] = BasicFeatureTemplates.getStageTemplate(tt[0]);
+            templates[i] = bft.getStageTemplate(tt[0]);
           }
         }
       }
       if (templates[i] == null)
-        templates[i] = BasicFeatureTemplates.getBasicTemplate(tokens[i]);
+        templates[i] = bft.getBasicTemplate(tokens[i]);
     }
 
     // Verify all the templates
@@ -246,7 +247,7 @@ public abstract class TemplatedFeatures implements Serializable {
         int initAlphSize = featureAlphabet.size();
         idx = featureAlphabet.lookupIndex(featureName, true);
         if (idx > initAlphSize && idx % 1000000 == 0)
-          LOG.info("[featurize] alphabet just grew to " + idx);
+          Log.info("[featurize] alphabet just grew to " + idx);
       } else {
         idx = featureAlphabet.lookupIndex(featureName, false);
       }
@@ -287,19 +288,19 @@ public abstract class TemplatedFeatures implements Serializable {
   public static void showContext(TemplateContext ctx) {
     Sentence s = ctx.getSentence();
     Frame f = ctx.getFrame();
-    LOG.debug("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
-    LOG.debug("[context] sentence=" + s);
-    LOG.debug("[context] frame=" + (f == null ? "UNSET" : f.getName()));
-    LOG.debug("[context] role=" + ctx.getRoleStrDebug());
-    LOG.debug("[context] role2=" + ctx.getRole2StrDebug());
-    LOG.debug("[context] target=" + desc(ctx.getTarget(), ctx));
-    LOG.debug("[context] targetHead=" + desc(ctx.getTargetHead(), ctx));
-    LOG.debug("[context] arg = " + desc(ctx.getArg(), ctx));
-    LOG.debug("[context] argHead=" + desc(ctx.getArgHead(), ctx));
-    LOG.debug("[context] span1=" + desc(ctx.getSpan1(), ctx));
-    LOG.debug("[context] span2=" + desc(ctx.getSpan2(), ctx));
-    LOG.debug("[context] head1=" + desc(ctx.getHead1(), ctx));
-    LOG.debug("[context] head2=" + desc(ctx.getHead2(), ctx));
+    System.out.println("[context] stage=" + (ctx == null ? "UNSET" : ctx.getStage()));
+    System.out.println("[context] sentence=" + s);
+    System.out.println("[context] frame=" + (f == null ? "UNSET" : f.getName()));
+    System.out.println("[context] role=" + ctx.getRoleStrDebug());
+    System.out.println("[context] role2=" + ctx.getRole2StrDebug());
+    System.out.println("[context] target=" + desc(ctx.getTarget(), ctx));
+    System.out.println("[context] targetHead=" + desc(ctx.getTargetHead(), ctx));
+    System.out.println("[context] arg = " + desc(ctx.getArg(), ctx));
+    System.out.println("[context] argHead=" + desc(ctx.getArgHead(), ctx));
+    System.out.println("[context] span1=" + desc(ctx.getSpan1(), ctx));
+    System.out.println("[context] span2=" + desc(ctx.getSpan2(), ctx));
+    System.out.println("[context] head1=" + desc(ctx.getHead1(), ctx));
+    System.out.println("[context] head2=" + desc(ctx.getHead2(), ctx));
   }
 
   public static String desc(int i, TemplateContext ctx) {
@@ -319,12 +320,12 @@ public abstract class TemplatedFeatures implements Serializable {
       @Override
       public double call(int arg0, double arg1) {
         String featName = params.lookupObject(arg0);
-        LOG.debug(String.format("[features] %.1f\t%s", arg1, featName));
+        Log.info(String.format("[features] %.1f\t%s", arg1, featName));
         return arg1;
       }
     });
     if (fv.l0Norm() == 0)
-      LOG.debug("[features] ZERO VECTOR");
+      Log.info("[features] ZERO VECTOR");
   }
 
   /**
@@ -333,15 +334,15 @@ public abstract class TemplatedFeatures implements Serializable {
    */
   public void featurizeDebug(FeatureVector v, TemplateContext context, String message) {
     featurize(v, context);
-    LOG.debug("");
-    LOG.info(message);
+    Log.info("");
+    Log.info(message);
     showContext(context);
     if (this instanceof AlphabetBased) {
       showFeatures(v, ((AlphabetBased) this).featureAlphabet);
     } else {
-      LOG.warn("[featurizeDebug] can't show you features because you're not using AlphabetBased features: " + getClass().getName());
+      Log.warn("[featurizeDebug] can't show you features because you're not using AlphabetBased features: " + getClass().getName());
     }
-    LOG.debug("");
+    Log.info("");
   }
 
   public void featurize(FeatureVector v, TemplateContext context) {

@@ -27,11 +27,10 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
-import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.*;
+import edu.jhu.hlt.tutils.Log;
 import org.apache.commons.math3.util.FastMath;
-import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
@@ -55,9 +54,6 @@ import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.GlobalParameters;
-import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
-import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
@@ -68,10 +64,6 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 
 public class BasicFeatureTemplates {
-  public static final Logger LOG = Logger.getLogger(BasicFeatureTemplates.class);
-
-  public static BrownClusters bc256 = new BrownClusters(BrownClusters.bc256dirAuto());
-  public static BrownClusters bc1000 = new BrownClusters(BrownClusters.bc1000dirAuto());
 
   public static String spanPosRel(Span s1, Span s2) {
     return posRel(s1.start, s2.start)
@@ -156,17 +148,38 @@ public class BasicFeatureTemplates {
     return false;
   }
 
-  public static Template getBasicTemplate(String name) {
+
+  private static BasicFeatureTemplates.Indexed SINGLETON;
+  public static BasicFeatureTemplates.Indexed getInstance() {
+    if (SINGLETON == null) {
+      SINGLETON = new BasicFeatureTemplates.Indexed();
+    }
+    return SINGLETON;
+  }
+
+
+  protected BrownClusters bc256 = new BrownClusters(BrownClusters.bc256dirAuto());
+  protected BrownClusters bc1000 = new BrownClusters(BrownClusters.bc1000dirAuto());
+
+  protected Map<String, Function<SentencePosition, String>> tokenExtractors;
+  protected Map<String, Template> basicTemplates;
+  protected Map<String, Template> labelTemplates;
+
+  private BasicFeatureTemplates() {
+    init();
+  }
+
+  public Template getBasicTemplate(String name) {
     return basicTemplates.get(name);
   }
 
-  public static List<String> getBasicTemplateNames() {
+  public List<String> getBasicTemplateNames() {
     List<String> l = new ArrayList<>();
     l.addAll(basicTemplates.keySet());
     return l;
   }
 
-  private static void addTemplate(String name, Template t) {
+  private void addTemplate(String name, Template t) {
     if (basicTemplates == null)
       basicTemplates = new HashMap<>();
     if (name.contains("+"))
@@ -178,7 +191,7 @@ public class BasicFeatureTemplates {
       throw new RuntimeException("abiguous template name: " + name);
   }
 
-  private static void addLabel(String name, Template t) {
+  private void addLabel(String name, Template t) {
     if (labelTemplates == null)
       labelTemplates = new HashMap<>();
     if (name.contains("+"))
@@ -191,10 +204,7 @@ public class BasicFeatureTemplates {
     addTemplate(name, t);
   }
 
-  private static Map<String, Function<SentencePosition, String>> tokenExtractors;
-  private static Map<String, Template> basicTemplates;
-  private static Map<String, Template> labelTemplates;
-  static {
+  public void init() {
     /* TOKEN EXTRACTORS *******************************************************/
     tokenExtractors = new HashMap<>();
     tokenExtractors.put("Word", x -> {
@@ -1221,7 +1231,7 @@ public class BasicFeatureTemplates {
                 }
                 if (c1 >= context.getSentence().size()
                   || c2 >= context.getSentence().size()) {
-                  LOG.warn(String.format("c1=%d c2=%d sent.size=%d rev=%s ext=%s",
+                  Log.warn(String.format("c1=%d c2=%d sent.size=%d rev=%s ext=%s",
                     c1, c2, context.getSentence().size(), rev, ext.getKey()));
                   return null;
                 }
@@ -1454,281 +1464,302 @@ public class BasicFeatureTemplates {
     });
   }
 
-  //private static List<Function<ParserParams, Stage<?, ?>>> stages = new ArrayList<>();
-  private static List<Function<GlobalParameters, Function<String, Stage<?, ?>>>> stages = new ArrayList<>();
-  //private static Map<String, Supplier<ParserParams>> syntaxModes = new HashMap<>();
-  private static Map<String, Consumer<Stage<?, ?>>> syntaxModes = new HashMap<>();
-  private static Map<String, Template> stageTemplates = new HashMap<>();
-  static {
-    stages.add(gp -> (fs -> new FrameIdStage(gp, fs)));
-    stages.add(gp -> (fs -> new RoleHeadStage(gp, fs)));
-    stages.add(gp -> (fs -> new RoleHeadToSpanStage(gp, fs)));
-    stages.add(gp -> (fs -> new RoleSpanPruningStage(gp, fs)));
-    stages.add(gp -> (fs -> new RoleSpanLabelingStage(gp, fs)));
-    stages.add(gp -> (fs -> new RoleSequenceStage(gp, fs)));
 
-    syntaxModes.put("regular", stage -> {
-      Map<String, String> c = new HashMap<>();
-      c.put("useSyntaxFeatures", "true");
-      c.put("useLatentDependencies", "false");
-      c.put("useLatentConstituencies", "false");
-      stage.configure(c);
-    });
-    syntaxModes.put("latent", stage -> {
-      Map<String, String> c = new HashMap<>();
-      c.put("useSyntaxFeatures", "false");
-      c.put("useLatentDependencies", "true");
-      c.put("useLatentConstituencies", "true");
-      stage.configure(c);
-    });
-    syntaxModes.put("none", stage -> {
-      Map<String, String> c = new HashMap<>();
-      c.put("useSyntaxFeatures", "false");
-      c.put("useLatentDependencies", "false");
-      c.put("useLatentConstituencies", "false");
-      stage.configure(c);
-    });
+  /**
+   * Methods and data structures on top of the enclosing class with some functionality to estimate
+   * the cardinality of templates and products (features)
+   */
+  public static class Indexed extends BasicFeatureTemplates {
+    private List<Function<GlobalParameters, Function<String, Stage<?, ?>>>> stages;
+    private Map<String, Consumer<Stage<?, ?>>> syntaxModes;
+    private Map<String, Template> stageTemplates;
 
-    // Add a template that checks for the class, for every stage.
-    //for (Function<ParserParams, Stage<?, ?>> y : stages) {
-    for (Function<GlobalParameters, Function<String, Stage<?, ?>>> y : stages) {
-      Stage<?, ?> s = y.apply(new GlobalParameters()).apply("");
-      String name = s.getName();// + "-" + x.getKey();
-      LOG.info("registering stage: " + name);
-      @SuppressWarnings("rawtypes")
-      Class<? extends Stage> cls = s.getClass();
-      Object old = stageTemplates.put(name, new TemplateSS() {
-        private String cn = null;
-        @Override
-        String extractSS(TemplateContext context) {
-          if (context.getStage() == cls) {
-            if (cn == null) {
-              cn = cls.getName();
-              int dot = cn.lastIndexOf('.');
-              cn = cn.substring(dot + 1, cn.length());
-            }
-            return cn;
-          }
-          return null;
-        }
+    public Indexed() {
+      super();
+      stages = new ArrayList<>();
+      syntaxModes = new HashMap<>();
+      stageTemplates = new HashMap<>();
+
+      stages.add(gp -> (fs -> new FrameIdStage(gp, fs)));
+      stages.add(gp -> (fs -> new RoleHeadStage(gp, fs)));
+      stages.add(gp -> (fs -> new RoleHeadToSpanStage(gp, fs)));
+      stages.add(gp -> (fs -> new RoleSpanPruningStage(gp, fs)));
+      stages.add(gp -> (fs -> new RoleSpanLabelingStage(gp, fs)));
+      stages.add(gp -> (fs -> new RoleSequenceStage(gp, fs)));
+
+      syntaxModes.put("regular", stage -> {
+        Map<String, String> c = new HashMap<>();
+        c.put("useSyntaxFeatures", "true");
+        c.put("useLatentDependencies", "false");
+        c.put("useLatentConstituencies", "false");
+        stage.configure(c);
       });
-      assert old == null : "name conflict for " + name;
+      syntaxModes.put("latent", stage -> {
+        Map<String, String> c = new HashMap<>();
+        c.put("useSyntaxFeatures", "false");
+        c.put("useLatentDependencies", "true");
+        c.put("useLatentConstituencies", "true");
+        stage.configure(c);
+      });
+      syntaxModes.put("none", stage -> {
+        Map<String, String> c = new HashMap<>();
+        c.put("useSyntaxFeatures", "false");
+        c.put("useLatentDependencies", "false");
+        c.put("useLatentConstituencies", "false");
+        stage.configure(c);
+      });
+
+      // Add a template that checks for the class, for every stage.
+      //for (Function<ParserParams, Stage<?, ?>> y : stages) {
+      for (Function<GlobalParameters, Function<String, Stage<?, ?>>> y : stages) {
+        Stage<?, ?> s = y.apply(new GlobalParameters()).apply("");
+        String name = s.getName();// + "-" + x.getKey();
+        Log.info("registering stage: " + name);
+        @SuppressWarnings("rawtypes")
+        Class<? extends Stage> cls = s.getClass();
+        Object old = stageTemplates.put(name, new TemplateSS() {
+          private String cn = null;
+
+          @Override
+          String extractSS(TemplateContext context) {
+            if (context.getStage() == cls) {
+              if (cn == null) {
+                cn = cls.getName();
+                int dot = cn.lastIndexOf('.');
+                cn = cn.substring(dot + 1, cn.length());
+              }
+              return cn;
+            }
+            return null;
+          }
+        });
+        assert old == null : "name conflict for " + name;
+      }
     }
-  }
 
-  public static Template getStageTemplate(String name) {
-    return stageTemplates.get(name);
-  }
+    public Template getStageTemplate(String name) {
+      return stageTemplates.get(name);
+    }
 
-  public static boolean DEBUG = true;
-
-  private static int estimateCard(
+    private int estimateCard(
       String templateName,
       GlobalParameters gp,
       Stage<?, ?> stage,
       List<FNParse> parses) {
 
-    // Try with the first K examples, if its 0, then assume it will remain 0
-    int K = 50;
-    gp.getFeatureNames().startGrowth();
-    stage.scanFeatures(parses.subList(0, K));
-    if (gp.getFeatureNames().size() == 0) {
+      // Try with the first K examples, if its 0, then assume it will remain 0
+      int K = 50;
+      gp.getFeatureNames().startGrowth();
+      stage.scanFeatures(parses.subList(0, K));
+      if (gp.getFeatureNames().size() == 0) {
 //      System.out.println("[estimateCard] exitting early");
-      return 0;
+        return 0;
+      }
+
+      // Else finish the job
+      System.out.println("[estimateCard] templateName=" + templateName);
+      gp.getFeatureNames().startGrowth();
+      stage.scanFeatures(parses.subList(K, parses.size()));
+      return gp.getFeatureNames().size();
     }
 
-    // Else finish the job
-    System.out.println("[estimateCard] templateName=" + templateName);
-    gp.getFeatureNames().startGrowth();
-    stage.scanFeatures(parses.subList(K, parses.size()));
-    return gp.getFeatureNames().size();
-  }
-
-  private static boolean incompatible(String stageName, String syntaxMode, String labelName) {
-    // TODO add more rules for speed!
-    if ("FrameIdStage".equals(stageName) && !labelName.toLowerCase().contains("frame"))
-      return true;
-    if ("FrameIdStage".equals(stageName) && labelName.endsWith("Arg"))
-      return true;
-    if ("RoleSequenceStage".equals(stageName) && !"Role1".equals(labelName))
-      return true;
-
-    String k = "onlyDoStage";
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    if (config.containsKey(k)) {
-      String stage = config.getString(k);
-      System.out.println("[incompatible] stage=" + stage + " stageName=" + stageName);
-      if (!stage.equals(stageName))
+    private boolean incompatible(String stageName, String syntaxMode, String labelName) {
+      // TODO add more rules for speed!
+      if ("FrameIdStage".equals(stageName) && !labelName.toLowerCase().contains("frame"))
         return true;
+      if ("FrameIdStage".equals(stageName) && labelName.endsWith("Arg"))
+        return true;
+      if ("RoleSequenceStage".equals(stageName) && !"Role1".equals(labelName))
+        return true;
+
+      String k = "onlyDoStage";
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      if (config.containsKey(k)) {
+        String stage = config.getString(k);
+        System.out.println("[incompatible] stage=" + stage + " stageName=" + stageName);
+        if (!stage.equals(stageName))
+          return true;
+      }
+
+      return false;
     }
 
-    return false;
-  }
-
-  private static Set<String> alreadyComputedEntries(File f) {
-    Set<String> s = new HashSet<>();
-    try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)))) {
-      while (r.ready()) {
-        String line = r.readLine();
-        String[] toks = line.split("\\t");
-        assert toks.length == 6;
-        String key = String.format("%s\t%s\t%s\t%s",
+    private Set<String> alreadyComputedEntries(File f) {
+      Set<String> s = new HashSet<>();
+      try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)))) {
+        while (r.ready()) {
+          String line = r.readLine();
+          String[] toks = line.split("\\t");
+          assert toks.length == 6;
+          String key = String.format("%s\t%s\t%s\t%s",
             toks[0], toks[1], toks[2], toks[3]);
-        boolean added = s.add(key);
-        assert added;
+          boolean added = s.add(key);
+          assert added;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
       }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    LOG.info("read " + s.size() + " pre-computed template cardinalities from "
+      Log.info("read " + s.size() + " pre-computed template cardinalities from "
         + f.getPath());
-    return s;
-  }
+      return s;
+    }
 
-  public static void main(String[] args) throws Exception {
-//    if (args.length != 4 && args.length != 5) {
-//      System.err.println("please provide:");
-//      System.err.println("1) how many threads to use");
-//      System.err.println("2) a file to dump to");
-//      System.err.println("3) a partition of the data to take");
-//      System.err.println("4) how many partitions for the data");
-//      System.err.println("5) [optional] a file containing entries that have already been computed");
-//      System.err.println("NOTE: if you don't want to use partitions, provide "
-//          + "\"0 1\" as the last two required arguments");
-//      return;
-//    }
-    ExperimentProperties config = ExperimentProperties.init(args);
+    public void estimateCardinalityOfTemplates() throws Exception {
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      BasicFeatureTemplates.Indexed bft = BasicFeatureTemplates.getInstance();
+      Random rand = new Random(config.getInt("seed", 9001));
+      int parallel = config.getInt("parallel", 1);
+      File outputFile = config.getFile("output");
+      int part = config.getInt("part");
+      int numParts = config.getInt("numParts");
 
-    Random rand = new Random(config.getInt("seed", 9001));
-    int parallel = config.getInt("parallel", 1);
-    File outputFile = config.getFile("output");
-    int part = config.getInt("part");
-    int numParts = config.getInt("numParts");
-
-    // Load cardinalities that were estimated on another run (useful for partial failures)
-    String precompFilenameKey = "precomputed";
-    final Set<String> preComputed =
+      // Load cardinalities that were estimated on another run (useful for partial failures)
+      String precompFilenameKey = "precomputed";
+      final Set<String> preComputed =
         config.containsKey(precompFilenameKey)
-        ? alreadyComputedEntries(config.getExistingFile(precompFilenameKey))
-        : null;
-    if (preComputed == null)
-      LOG.info("not using any pre-computed entries");
+          ? alreadyComputedEntries(config.getExistingFile(precompFilenameKey))
+          : null;
+      if (preComputed == null)
+        Log.info("not using any pre-computed entries");
 
-    // TODO What is this for? debugging?
-    final boolean fakeIt = false;
-    if (fakeIt)
-      outputFile.delete();
+      // TODO What is this for? debugging?
+      final boolean fakeIt = false;
+      if (fakeIt)
+        outputFile.delete();
 
-    LOG.info("estimating cardinality for " + basicTemplates.size()
-      + " templates and " + stages.size() + " stages");
-    LOG.info("stages:");
-    for (String k : stageTemplates.keySet())
-      LOG.info(k);
+      Log.info("estimating cardinality for " + bft.basicTemplates.size()
+        + " templates and " + stages.size() + " stages");
+      Log.info("stages:");
+      for (String k : stageTemplates.keySet())
+        Log.info(k);
 
-    // Get the data to compute features over
-    int numParses = config.getInt("numParses", 1000);
-    boolean usePropbank = config.getBoolean("usePropbank");
-    LOG.info("usePropbank=" + usePropbank);
-    final List<FNParse> parses;
-    if (usePropbank) {
-      ParsePropbankData.Redis justParses = new ParsePropbankData.Redis(config);
-//      justParses.logGets = true;
-//      justParses.logParses = true;
-      PropbankReader pbr = new PropbankReader(justParses);
-      parses = ReservoirSample.sample(pbr.getDevData().iterator(), numParses, rand);
+      // Get the data to compute features over
+      int numParses = config.getInt("numParses", 1000);
+      boolean usePropbank = config.getBoolean("usePropbank");
+      Log.info("usePropbank=" + usePropbank);
+      final List<FNParse> parses;
+      if (usePropbank) {
+        ParsePropbankData.Redis justParses = new ParsePropbankData.Redis(config);
+        justParses.logParses = true;
+        PropbankReader pbr = new PropbankReader(justParses);
+        parses = ReservoirSample.sample(pbr.getDevData().iterator(), numParses, rand);
 
-      // TODO remove, for debugging
-      for (int i = 0; i < Math.min(10, parses.size()); i++) {
-        System.out.println("[propbankStartup] parse[" + i + "] " + Describe.fnParse(parses.get(i)));
-      }
+        /*
+        I only have CParses already computed.
+        I need DParses for a lot of my feature templates.
+        Parsing all of them requires a lot of machines.
+        - Can I delay the parsing?
+          This probably won't help, as I will need them eventually.
+        - How do I distribute this computation so that there is little/no contention?
+          PropbankReader?
+          Any other better place?
+          - OK, I have this setup, I should launch this on the grid.
+            git commit, push, mvn install, qsub.
+         */
 
-    } else {
-      parses = ReservoirSample.sample(
+        // TODO remove, for debugging
+        for (int i = 0; i < Math.min(10, parses.size()); i++) {
+          FNParse y = parses.get(i);
+          System.out.println("[propbankStartup] parse[" + i + "] " + Describe.fnParse(y));
+          System.out.println("  basicDParse: " + y.getSentence().getBasicDeps(false));
+          System.out.println("  stanfordParse: " + y.getSentence().getStanfordParse(false));
+        }
+
+      } else {
+        parses = ReservoirSample.sample(
           FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences(),
           numParses, rand);
-    }
+      }
 
-    // Load data ahead of time to ensure fair timing
-    if (!fakeIt) {
-      TargetPruningData.getInstance().getWordnetDict();
-      TargetPruningData.getInstance().getPrototypesByFrame();
-    }
+      // Load data ahead of time to ensure fair timing
+      if (!fakeIt) {
+        TargetPruningData.getInstance().getWordnetDict();
+        TargetPruningData.getInstance().getPrototypesByFrame();
+      }
 
-    // parallelize with FileWriter that uses append
-    ExecutorService es = parallel == 1
+      // parallelize with FileWriter that uses append
+      ExecutorService es = parallel == 1
         ? Executors.newSingleThreadScheduledExecutor()
-            : Executors.newFixedThreadPool(parallel);
-    LOG.info("actually starting work on " + parallel + " threads");
+        : Executors.newFixedThreadPool(parallel);
+      Log.info("actually starting work on " + parallel + " threads");
 
-    LOG.info(basicTemplates.size() + " basic templates and " + stages.size() + " templates");
-    for (Entry<String, Template> label : labelTemplates.entrySet()) {
+      Log.info(bft.basicTemplates.size() + " basic templates and " + stages.size() + " templates");
+      for (Entry<String, Template> label : bft.labelTemplates.entrySet()) {
 //      for (String syntaxModeName : Arrays.asList("regular", "latent", "none")) {
-      for (String syntaxModeName : Arrays.asList("regular")) {
-        Consumer<Stage<?, ?>> syntaxModeSupp = syntaxModes.get(syntaxModeName);
-        for (String tmplName : basicTemplates.keySet()) {
-          for (Function<GlobalParameters, Function<String, Stage<?, ?>>> stageFut : stages) {
-            Runnable r = new Runnable() {
-              @Override
-              public void run() {
-                long tmplStart = System.currentTimeMillis();
-                GlobalParameters gp = new GlobalParameters();
-                String labelName = label.getKey();
-                String fs = labelName + " * " + tmplName;
-                Stage<?, ?> stage = stageFut.apply(gp).apply(fs);
-                syntaxModeSupp.accept(stage);
+        for (String syntaxModeName : Arrays.asList("regular")) {
+          Consumer<Stage<?, ?>> syntaxModeSupp = syntaxModes.get(syntaxModeName);
+          for (String tmplName : bft.basicTemplates.keySet()) {
+            for (Function<GlobalParameters, Function<String, Stage<?, ?>>> stageFut : stages) {
+              Runnable r = new Runnable() {
+                @Override
+                public void run() {
+                  long tmplStart = System.currentTimeMillis();
+                  GlobalParameters gp = new GlobalParameters();
+                  String labelName = label.getKey();
+                  String fs = labelName + " * " + tmplName;
+                  Stage<?, ?> stage = stageFut.apply(gp).apply(fs);
+                  syntaxModeSupp.accept(stage);
 
-                String key = String.format("%s\t%s\t%s\t%s",
+                  String key = String.format("%s\t%s\t%s\t%s",
                     stage.getName(),
                     syntaxModeName,
                     labelName,
                     tmplName);
-                LOG.info("key=" + key);
+                  Log.info("key=" + key);
 
-                // Check if we've already computed this cardinality
-                if (preComputed != null && preComputed.contains(key)) {
-                  LOG.info("already computed");
-                  return;
-                }
+                  // Check if we've already computed this cardinality
+                  if (preComputed != null && preComputed.contains(key)) {
+                    Log.info("already computed");
+                    return;
+                  }
 
-                // Only care about your part of the data
-                int h = key.hashCode();
-                if (h < 0) h = ~h;  // Java mod of negatives is negative!
-                if (h % numParts != part) {
+                  // Only care about your part of the data
+                  int h = key.hashCode();
+                  if (h < 0) h = ~h;  // Java mod of negatives is negative!
+                  if (h % numParts != part) {
 //                  LOG.info("not a part of this piece, h=" + (h % numParts) + " numParts=" + numParts + " part=" + part);
-                  return;
-                }
+                    return;
+                  }
 
-                LOG.info("estimating cardinality for: " + key);
-                int card = -1;
-                if (incompatible(stage.getName(), syntaxModeName, labelName))
-                  card = 0;
-                else if (fakeIt)
-                  card = 2;
-                else
-                  card = estimateCard(fs, gp, stage, parses);
-                double time = (System.currentTimeMillis() - tmplStart) / 1000d;
-                String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
-                try (FileWriter fw = new FileWriter(outputFile, true)) {
-                  fw.append(msg);
-                } catch (IOException e) {
-                  System.out.flush();
-                  e.printStackTrace();
-                  System.err.println("failed to report: " + msg);
-                  System.err.flush();
-                  System.out.flush();
+                  Log.info("estimating cardinality for: " + key);
+                  int card = -1;
+                  if (incompatible(stage.getName(), syntaxModeName, labelName))
+                    card = 0;
+                  else if (fakeIt)
+                    card = 2;
+                  else
+                    card = estimateCard(fs, gp, stage, parses);
+                  double time = (System.currentTimeMillis() - tmplStart) / 1000d;
+                  String msg = String.format("%s\t%d\t%.2f\n", key, card, time);
+                  try (FileWriter fw = new FileWriter(outputFile, true)) {
+                    fw.append(msg);
+                  } catch (IOException e) {
+                    System.out.flush();
+                    e.printStackTrace();
+                    System.err.println("failed to report: " + msg);
+                    System.err.flush();
+                    System.out.flush();
+                  }
                 }
-              }
-            };
-            if (fakeIt || parallel == 1)
-              r.run();
-            else
-              es.execute(r);
+              };
+              if (fakeIt || parallel == 1)
+                r.run();
+              else
+                es.execute(r);
+            }
           }
         }
       }
+      es.shutdown();
+      es.awaitTermination(999, TimeUnit.DAYS);
+      Log.info("done, results are in " + outputFile.getPath());
     }
-    es.shutdown();
-    es.awaitTermination(999, TimeUnit.DAYS);
-    LOG.info("done, results are in " + outputFile.getPath());
   }
+
+  public static void main(String[] args) throws Exception {
+    ExperimentProperties.init(args);
+    Indexed ce = new BasicFeatureTemplates.Indexed();
+    ce.estimateCardinalityOfTemplates();
+  }
+
 }

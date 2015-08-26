@@ -1,11 +1,15 @@
 package edu.jhu.hlt.fnparse.data.propbank;
 
 import java.io.File;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -27,7 +31,8 @@ import edu.jhu.hlt.tutils.cache.DiskCachedString2TFunc;
 public class ParsePropbankData {
 
   public static class Redis extends ParsePropbankData {
-    private RedisMap<ConstituencyParse> rmap;
+    private RedisMap<ConstituencyParse> rmapCons;
+    private RedisMap<DependencyParse> rmapBasicDeps;
     private Map<String, ConstituencyParse> extra;
     private Timer pTimer; // parse
     private Timer eTimer; // extra
@@ -43,11 +48,30 @@ public class ParsePropbankData {
 
     public Redis(String host, int port, int db) {
       String prefix = "conl2011/";
-      rmap = new RedisMap<>(prefix, host, port, db,
+      rmapCons = new RedisMap<>(prefix, host, port, db,
           SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+      rmapBasicDeps = new RedisMap<>(prefix, host, port, db,
+        SerializationUtils::t2bytes, SerializationUtils::bytes2t);
       extra = new HashMap<>();
       pTimer = new Timer("redis-parse-timer-" + host, 500, false);
       eTimer = new Timer("stanford-parse-timer", 50, true);
+    }
+
+    static String getBasicDepsKey(Sentence s) {
+      return s.getId() + "/basicDeps";
+    }
+    static String getStanfordParseKey(Sentence s) {
+      return s.getId();
+    }
+
+    public DependencyParse getBasicDeps(Sentence s) {
+      assert s.getBasicDeps(false) == null;
+      String key = getBasicDepsKey(s);
+      DependencyParse dp = rmapBasicDeps.get(key);
+      if (dp == null) {
+        dp = getAnno().getBasicDParse(s);
+      }
+      return dp;
     }
 
     @Override
@@ -55,8 +79,8 @@ public class ParsePropbankData {
       if (logGets)
         System.out.println("[ParsePropbankData.Redis] fetching parse for " + s.getId());
       pTimer.start();
-      String key = s.getId();
-      ConstituencyParse cp = rmap.get(key);
+      String key = getStanfordParseKey(s);
+      ConstituencyParse cp = rmapCons.get(key);
       pTimer.stop();
       if (cp == null) {
         if (logParses)
@@ -178,6 +202,50 @@ public class ParsePropbankData {
     rmap.close();
   }
 
+  /**
+   * Reads the redis config from ExperimentProperties, see Redis constructor. Also requires the
+   * "shards" and "numShards" properties.
+   */
+  public static void putPropbankDParsesIntoRedis(ExperimentProperties config) {
+
+    int shard = config.getInt("shard");
+    int nShard = config.getInt("numShards");
+
+    // null so that it doesn't parse
+    PropbankReader pbr = new PropbankReader(null);
+
+    // This is where we will put the parses (redis front-end)
+    ParsePropbankData.Redis redisParses = new ParsePropbankData.Redis(config);
+
+    int interval = 10;
+    int parsed = 0;
+    int alreadyParsed = 0;
+    int total = 0;
+    for (ItemProvider ip : Arrays.asList(pbr.getDevData(), pbr.getTestData(), pbr.getTestData())) {
+      Iterator<FNParse> iter = ip.iterator();
+      while (iter.hasNext()) {
+        total++;
+        FNParse y = iter.next();
+        Sentence s = y.getSentence();
+        String key = Redis.getBasicDepsKey(s);
+        // Only take one shard
+        if (Math.floorMod(key.hashCode(), nShard) == shard) {
+          DependencyParse dp = redisParses.rmapBasicDeps.get(key);
+          if (dp == null) {
+            parsed++;
+            dp = redisParses.getBasicDeps(s);
+            redisParses.rmapBasicDeps.put(key, dp);
+          } else {
+            alreadyParsed++;
+          }
+
+          if (parsed % interval == 0)
+            System.out.println("parsed=" + parsed + " alreadyParsed=" + alreadyParsed + " total=" + total);
+        }
+      }
+    }
+  }
+
   public static void main(String[] args) {
 //    if (args.length != 3) {
 //      System.err.println("please provide:");
@@ -192,19 +260,22 @@ public class ParsePropbankData {
 
     //rehash(laptop);
 
-    if (args.length != 5) {
-      System.err.println("please provide:");
-      System.err.println("1) source directory");
-      System.err.println("2) source number of shards");
-      System.err.println("3) redis server host");
-      System.err.println("4) redis server port");
-      System.err.println("5) redis server db");
-    }
-    putIntoRedis(
-        new File(args[0]),
-        Integer.parseInt(args[1]),
-        args[2],
-        Integer.parseInt(args[3]),
-        Integer.parseInt(args[4]));
+    ExperimentProperties config = ExperimentProperties.init(args);
+    putPropbankDParsesIntoRedis(config);
+
+//    if (args.length != 5) {
+//      System.err.println("please provide:");
+//      System.err.println("1) source directory");
+//      System.err.println("2) source number of shards");
+//      System.err.println("3) redis server host");
+//      System.err.println("4) redis server port");
+//      System.err.println("5) redis server db");
+//    }
+//    putIntoRedis(
+//        new File(args[0]),
+//        Integer.parseInt(args[1]),
+//        args[2],
+//        Integer.parseInt(args[3]),
+//        Integer.parseInt(args[4]));
   }
 }
