@@ -1020,12 +1020,18 @@ public class RerankerTrainer {
   public static void main(String[] args) throws Exception {
     System.out.println(Arrays.toString(args));
     assert args.length % 2 == 1;
+
     String jobName = args[0];
-    ExperimentProperties config = new ExperimentProperties();
-    config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
+//    ExperimentProperties config = new ExperimentProperties();
+//    config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
+    ExperimentProperties config = ExperimentProperties.init(Arrays.copyOfRange(args, 1, args.length));
 
     // Load FrameNet/Propbank
-    FrameIndex.getPropbank();
+    final boolean propbank = config.getBoolean("propbank", false);
+    if (propbank)
+      FrameIndex.getPropbank();
+    else
+      FrameIndex.getFrameNet();
 
     File workingDir = config.getOrMakeDir("workingDir");
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
@@ -1038,7 +1044,6 @@ public class RerankerTrainer {
     // Get train and test data.
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
-    final boolean propbank = config.getBoolean("propbank", false);
     ItemProvider train, test, trainAndTest = null;
     if (isParamServer) {
       train = null;
@@ -1053,11 +1058,8 @@ public class RerankerTrainer {
         LOG.info("[estimateCardinalityOfTemplates] running on dev set");
       if (propbank) {
         LOG.info("[estimateCardinalityOfTemplates] running on propbank data");
-        ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(
-            config.getString("propbankParseRedisHost"),
-            config.getInt("propbankParseRedisPort"),
-            config.getInt("propbankParseRedisDb"));
-        PropbankReader pbr = new PropbankReader(propbankAutoParses);
+        ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
+        PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
         pbr.setKeep(trainer.keep);
         Pair<ItemProvider, ItemProvider> data;
         if (realTest) {

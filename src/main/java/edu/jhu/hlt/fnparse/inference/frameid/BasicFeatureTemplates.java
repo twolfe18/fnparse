@@ -1474,6 +1474,8 @@ public class BasicFeatureTemplates {
     private Map<String, Consumer<Stage<?, ?>>> syntaxModes;
     private Map<String, Template> stageTemplates;
 
+    public boolean debug = false;
+
     public Indexed() {
       super();
       stages = new ArrayList<>();
@@ -1576,7 +1578,8 @@ public class BasicFeatureTemplates {
       ExperimentProperties config = ExperimentProperties.getInstance();
       if (config.containsKey(k)) {
         String stage = config.getString(k);
-        System.out.println("[incompatible] stage=" + stage + " stageName=" + stageName);
+        if (debug)
+          System.out.println("[incompatible] stage=" + stage + " stageName=" + stageName);
         if (!stage.equals(stageName))
           return true;
       }
@@ -1612,6 +1615,7 @@ public class BasicFeatureTemplates {
       File outputFile = config.getFile("output");
       int part = config.getInt("part");
       int numParts = config.getInt("numParts");
+      RoleHeadStage.SHOW_FEATURES = config.getBoolean("roleHeadStage.showFeatures", false);
 
       // Load cardinalities that were estimated on another run (useful for partial failures)
       String precompFilenameKey = "precomputed";
@@ -1641,21 +1645,8 @@ public class BasicFeatureTemplates {
       if (usePropbank) {
         ParsePropbankData.Redis justParses = new ParsePropbankData.Redis(config);
         justParses.logParses = true;
-        PropbankReader pbr = new PropbankReader(justParses);
+        PropbankReader pbr = new PropbankReader(config, justParses);
         parses = ReservoirSample.sample(pbr.getDevData().iterator(), numParses, rand);
-
-        /*
-        I only have CParses already computed.
-        I need DParses for a lot of my feature templates.
-        Parsing all of them requires a lot of machines.
-        - Can I delay the parsing?
-          This probably won't help, as I will need them eventually.
-        - How do I distribute this computation so that there is little/no contention?
-          PropbankReader?
-          Any other better place?
-          - OK, I have this setup, I should launch this on the grid.
-            git commit, push, mvn install, qsub.
-         */
 
         // TODO remove, for debugging
         for (int i = 0; i < Math.min(10, parses.size()); i++) {
@@ -1709,7 +1700,7 @@ public class BasicFeatureTemplates {
 
                   // Check if we've already computed this cardinality
                   if (preComputed != null && preComputed.contains(key)) {
-                    Log.info("already computed");
+                    if (debug) Log.info("already computed");
                     return;
                   }
 
@@ -1721,7 +1712,7 @@ public class BasicFeatureTemplates {
                     return;
                   }
 
-                  Log.info("estimating cardinality for: " + key);
+                  if (debug) Log.info("estimating cardinality for: " + key);
                   int card = -1;
                   if (incompatible(stage.getName(), syntaxModeName, labelName))
                     card = 0;

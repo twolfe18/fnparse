@@ -46,9 +46,9 @@ java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
   numShards ${NUM_SHARD} \
   shard ${i} \
   paramAvgSecBetweenSaves ${SAVE_INTERVAL} \
-  propbankParseRedisHost ${REDIS_SERVER} \
-  propbankParseRedisPort 6379 \
-  propbankParseRedisDb 0 \
+  redis.host.propbankParses ${REDIS_SERVER} \
+  redis.port.propbankParses 6379 \
+  redis.db.propbankParses 0 \
   addStanfordParses false \
   realTestSet false \
   propbank true \
