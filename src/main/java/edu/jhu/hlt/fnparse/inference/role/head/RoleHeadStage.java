@@ -236,7 +236,8 @@ public class RoleHeadStage
       List<RoleHeadVars> fr,
       ProjDepTreeFactor l,
       ConstituencyTreeFactor c) {
-    System.out.println("[RoleHeadStage initFactorsFor] starting! fr=" + fr);
+    if (RoleHeadStage.SHOW_FEATURES)
+      System.out.println("[RoleHeadStage initFactorsFor] starting! fr=" + fr);
     HeadFinder hf = SemaforicHeadFinder.getInstance();
     TemplateContext context = new TemplateContext();
     List<Factor> factors = new ArrayList<Factor>();
@@ -264,7 +265,8 @@ public class RoleHeadStage
         ExplicitExpFamFactor phi = new ExplicitExpFamFactor(vs);
         TemplatedFeatures feats = getFeatures();
         int n = vs.calcNumConfigs();
-        System.out.println("[RoleHeadStage initFactorsFor] rvar=" + rvar + " n=" + n);
+        if (RoleHeadStage.SHOW_FEATURES)
+          System.out.println("[RoleHeadStage initFactorsFor] rvar=" + rvar + " n=" + n);
         for (int i = 0; i < n; i++) {
           VarConfig vc = vs.getVarConfig(i);
           boolean role = argRealized && BinaryVarUtil.configToBool(vc.getState(rvar.roleVar));

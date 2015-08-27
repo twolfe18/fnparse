@@ -37,7 +37,11 @@ public class ParsePropbankData {
     private Timer pTimer; // parse
     private Timer eTimer; // extra
     public boolean logGets = false;
-    public boolean logParses = false;
+    public boolean logParses = true;
+
+    // If you attempt to find a key and its not there, should you try to put the computed result
+    // back into the RedisMap?
+    public boolean insertComputedValues = true;
 
     // using ExperimentProperties: same keys no matter where you use it (nice)
     public Redis(ExperimentProperties config) {
@@ -67,29 +71,36 @@ public class ParsePropbankData {
     public DependencyParse getBasicDeps(Sentence s) {
       assert s.getBasicDeps(false) == null;
       String key = getBasicDepsKey(s);
+      if (logGets)
+        System.out.println("[ParsePropbankData.Redis] fetching dparse for " + key);
       DependencyParse dp = rmapBasicDeps.get(key);
       if (dp == null) {
+        if (logParses)
+          System.out.println("[ParsePropbankData.Redis] no dparse for " + key + ", parsing");
         dp = getAnno().getBasicDParse(s);
+        if (insertComputedValues)
+          rmapBasicDeps.put(key, dp);
       }
       return dp;
     }
 
     @Override
     public ConstituencyParse parse(Sentence s) {
-      if (logGets)
-        System.out.println("[ParsePropbankData.Redis] fetching parse for " + s.getId());
-      pTimer.start();
       String key = getStanfordParseKey(s);
+      if (logGets)
+        System.out.println("[ParsePropbankData.Redis] fetching cparse for " + key);
+      pTimer.start();
       ConstituencyParse cp = rmapCons.get(key);
       pTimer.stop();
       if (cp == null) {
         if (logParses)
-          System.out.println("[ParsePropbankData.Redis] no parse for " + s.getId() + ", parsing");
+          System.out.println("[ParsePropbankData.Redis] no cparse for " + key + ", parsing");
         eTimer.start();
         cp = extra.get(key);
         if (cp == null) {
           cp = getAnno().getCParse(s);
-          extra.put(key, cp);
+          if (insertComputedValues)
+            extra.put(key, cp);
         }
         eTimer.stop();
       }
@@ -132,7 +143,7 @@ public class ParsePropbankData {
   }
 
   public static void parse(File cacheDir, int numShards) {
-    PropbankReader pbr = new PropbankReader(null);
+    PropbankReader pbr = new PropbankReader(ExperimentProperties.getInstance(), null);
     ItemProvider ip;
 
 //    File cacheDir = new File("/tmp/parse-data/");
@@ -212,7 +223,7 @@ public class ParsePropbankData {
     int nShard = config.getInt("numShards");
 
     // null so that it doesn't parse
-    PropbankReader pbr = new PropbankReader(null);
+    PropbankReader pbr = new PropbankReader(config, null);
 
     // This is where we will put the parses (redis front-end)
     ParsePropbankData.Redis redisParses = new ParsePropbankData.Redis(config);

@@ -775,6 +775,7 @@ class SgeJobTracker(object):
     if self.logging_dir:
       print 'spawning with logging dir:', self.logging_dir
       cmd += ['-o', self.logging_dir]
+    # TODO add this as an option!
     #cmd += ['ForwardSelectionWorker.qsub', name]
     #cmd += ['FinalResults', '-1']
     cmd += ['scripts/propbank-feature-selection.sh', name]
@@ -1090,10 +1091,21 @@ class TemplateInfo(object):
 
   def labels_for(self, stage, syntax_mode):
     ''' Returns a list of (label_template, basic_template) which can be used with the given stage '''
-    k = (stage, syntax_mode)
-    print '[labels_for]', k
-    print '[labels_for] WARNING: ignoring restrict_stages_to!'
-    return self.__nonzero[k]
+    if stage == 'NullStage':
+      # Take all templates that at least match the syntax mode
+      nz = []
+      for (stage_i, syntax_i), list_nz in self.__nonzero.iteritems():
+        #print 'stage_i', stage_i, 'syntax_i', syntax_i, 'stage', stage
+        if syntax_i == syntax_mode:
+          nz += list_nz
+    else:
+      k = (stage, syntax_mode)
+      print '[labels_for]', k
+      print '[labels_for] WARNING: ignoring restrict_stages_to!'
+      nz = self.__nonzero[k]
+    if len(nz) == 0:
+      print 'WARNING: found no labels for:', (stage, syntax_mode)
+    return nz
 
   def basic_templates(self):
     return self.__templates
@@ -1235,6 +1247,7 @@ def propbank_feature_selection(template_info_filename, local):
   mq = MultiQueue()
   template_info = TemplateInfo(template_info_filename)
 
+  # I believe NoneStage is used so that we never mutate the stage when we mutate the features (travis,aug26)
   labels = ['frameRole', 'role']
   fs = generate_all_features(['NoneStage'], ['NoneSyntaxMode'], labels=labels)
   fs = FeatureSet(features=list(fs), labels=labels, syntax_mode='regular')
@@ -1252,15 +1265,24 @@ def propbank_feature_selection(template_info_filename, local):
     'trainTimeLimit': 240,
     'featCoversFrames': False,
     'useGlobalFeatures': False,
+    'data.wordnet': 'toydata/wordnet/dict',
+    'data.embeddings': 'data/embeddings',
+    'data.ontonotes5': 'data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations',
+    'data.propbank.conll': '../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data',
+    'data.propbank.frames': 'data/ontonotes-release-5.0-fixed-frames/frames',
+    'disallowConcreteStanford': 'false',    # apparently I haven't parsed everything yet...
+    'redis.port.propbankParses': '6379',
+    'redis.db.propbankParses': '0',
+    'roleHeadStage.useArgPruner': 'false',
   }
   if local:
     params.update({
-      'propbankParseRedisHost': 'localhost',
+      'redis.host.propbankParses': 'localhost',
       'laptop': True,
     })
   else:
     params.update({
-      'propbankParseRedisHost': 'r6n09',  # TODO take as arg!
+      'redis.host.propbankParses': 'r6n09',  # TODO take as arg!
       'laptop': False,
     })
 
@@ -1528,7 +1550,7 @@ if __name__ == '__main__':
   else:
     print 'please provide:'
     print '1) a path to a basic template cardinality file (e.g. experiments/feature-cardinality-estimation/template.real.txt)'
-    print '2) the name of a function that returns a queue, e.g. "forward_selection_queue" or "agiga_model_queue"'
+    print '2) the name of a function that returns a queue, e.g. "propbank_feature_selection", "forward_selection_queue", or "agiga_model_queue"'
     print '3) a working directory'
     print '4) where to run (i.e. \"grid\" or \"local\")'
     sys.exit(-1)

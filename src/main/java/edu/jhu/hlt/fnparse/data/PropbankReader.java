@@ -14,11 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider.ParseWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.ConcreteToDocument;
-import edu.jhu.hlt.tutils.Document;
-import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.MultiAlphabet;
+import edu.jhu.hlt.tutils.*;
 import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.tuple.Pair;
 
@@ -64,9 +60,9 @@ public class PropbankReader {
   /**
    * Uses the java properties data.ontonotes5 and data.propbank.conll
    */
-  public PropbankReader(ParsePropbankData.Redis autoParses) {
-    this(new File(System.getProperty("data.ontonotes5")),
-        new File(System.getProperty("data.propbank.conll")),
+  public PropbankReader(ExperimentProperties config, ParsePropbankData.Redis autoParses) {
+    this(config.getExistingDir("data.ontonotes5"),
+        config.getExistingDir("data.propbank.conll"),
         autoParses);
   }
 
