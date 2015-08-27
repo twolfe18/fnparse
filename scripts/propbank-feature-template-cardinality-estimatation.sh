@@ -1,4 +1,11 @@
 #!/bin/bash
+#$ -cwd                         # run from current working directory
+#$ -j y                         # join stderr to stdout
+#$ -V                           # job has the same environment variables as the submission shell
+#$ -l h_rt=72:00:00             # runtime limit
+#$ -l mem_free=12G              # expected amount of mem
+#$ -l num_proc=1               # how many processors to use
+#$ -o logs/propbank-template-cardinality-estimation                       # where to do logging
 
 # Expects to be run from the fnparse directory (parent of this file)
 
@@ -20,21 +27,24 @@
 #  | tee /tmp/debug.txt \
 #  || exit 2
 
+set -e
+
 echo "edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData"
-mvn compile exec:java \
+mvn exec:java \
+  -XX:+UseSerialGC \
   -Dexec.mainClass=edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData \
   -Ddata.wordnet=toydata/wordnet/dict \
   -Ddata.embeddings=data/embeddings \
   -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
-  -Dredis.host.propbankParses=localhost \
+  -Dredis.host.propbankParses=$1 \
   -Dredis.port.propbankParses=6379 \
   -Dredis.db.propbankParses=0 \
   -DroleHeadStage.useArgPruner=false \
   -DdisallowConcreteStanford=false \
-  -Dshard=0 \
-  -DnumShards=5 \
+  -Dshard=$2 \
+  -DnumShards=$3 \
   -DusePropbank=true \
   2>&1 \
   | tee /tmp/propbank-parse.log
