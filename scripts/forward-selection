@@ -39,6 +39,8 @@ class Feature(CommonEqualityMixin):
     if type(templates) is str:
       templates = [templates]
     assert type(label) is str
+    assert type(syntax_mode) is str
+    assert type(stage) is str
     assert type(templates) is list # of strinsgs
     self.stage = stage
     self.syntax_mode = syntax_mode
@@ -1045,10 +1047,14 @@ class TemplateInfo(object):
         card = int(card)
         time = float(time)
         if k in self.__info:
-          raise Exception('duplicate key: ' + str(k))
-        self.__info[k] = (card, time)
-        self.__templates.add(template)
-        self.__stages.add(stage)
+          #raise Exception('duplicate key: ' + str(k))
+          print 'WARNING: duplicate:', k, '\t(card, time) old:', self.__info[k], 'new:', (card, time)
+          if card > self.__info[k][0]:
+            self.__info[k] = (card, time)
+        else:
+          self.__info[k] = (card, time)
+          self.__templates.add(template)
+          self.__stages.add(stage)
         #print template, stage, card, time
     self.__templates = list(self.__templates)
     self.__stages = list(self.__stages)
@@ -1112,6 +1118,9 @@ class TemplateInfo(object):
 
 def generate_all_features(stages, syntax_mode, \
     labels=['frameRoleArg', 'roleArg', 'arg', 'framePrune', 'prune']):
+
+  assert type(stages) is list
+  assert type(syntax_mode) is str
   fs = []
 
   for fra in ['frameRoleArg', 'roleArg', 'arg', 'framePrune', 'prune']:
@@ -1248,15 +1257,16 @@ def propbank_feature_selection(template_info_filename, local):
   template_info = TemplateInfo(template_info_filename)
 
   # I believe NoneStage is used so that we never mutate the stage when we mutate the features (travis,aug26)
-  labels = ['frameRole', 'role']
-  fs = generate_all_features(['NoneStage'], ['NoneSyntaxMode'], labels=labels)
+  labels = ['frameRoleArg', 'roleArg']
+  fs = generate_all_features(['NoneStage'], 'NoneSyntaxMode', labels=labels)
+  for f in fs:
+    print f
+  #print 'fs:', ', '.join(str(x) for x in fs)
   fs = FeatureSet(features=list(fs), labels=labels, syntax_mode='regular')
 
   params = {
     'nTrain': 10000,
     #'workingDir': '/tmp/foo',    # this is set by tge
-    'propbankParseRedisPort': 6379,
-    'propbankParseRedisDb': 0,
     'addStanfordParses': False,
     'realTestSet': False,
     'propbank': True,
@@ -1273,7 +1283,6 @@ def propbank_feature_selection(template_info_filename, local):
     'disallowConcreteStanford': 'false',    # apparently I haven't parsed everything yet...
     'redis.port.propbankParses': '6379',
     'redis.db.propbankParses': '0',
-    'roleHeadStage.useArgPruner': 'false',
   }
   if local:
     params.update({
@@ -1282,7 +1291,7 @@ def propbank_feature_selection(template_info_filename, local):
     })
   else:
     params.update({
-      'redis.host.propbankParses': 'r6n09',  # TODO take as arg!
+      'redis.host.propbankParses': 'r5n39',  # TODO take as arg!
       'laptop': False,
     })
 
@@ -1304,6 +1313,12 @@ def propbank_feature_selection(template_info_filename, local):
   q.seed(conf)
 
   mq.add_queue('propbank_fs', q)
+
+  # Debugging
+  if local:
+    print fs
+    sys.exit(1)
+
   return mq
 
 
