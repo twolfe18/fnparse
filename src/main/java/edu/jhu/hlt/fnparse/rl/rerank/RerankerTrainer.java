@@ -962,7 +962,7 @@ public class RerankerTrainer {
             new TemplatedFeatureParams("tauH", fs, l2Penalty);
       }
     } else {
-      LOG.warn("[estimateCardinalityOfTemplates] you probably don't want to use constante params for tau!");
+      LOG.warn("[estimateCardinalityOfTemplates] you probably don't want to use constant params for tau!");
       trainer.tauParams = Params.PruneThreshold.Const.ZERO;
     }
 
