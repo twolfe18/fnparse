@@ -156,6 +156,7 @@ public class PropbankReader {
     }
 
     Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
+    skels.warnOnEmptyCoref = false;
     Ontonotes5 on5 = new Ontonotes5(skels, this.on5);
 
     Log.info("reading Communications, " + Describe.memoryUsage());
