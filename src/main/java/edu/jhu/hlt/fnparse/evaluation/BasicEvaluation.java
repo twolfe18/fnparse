@@ -100,6 +100,11 @@ public class BasicEvaluation {
         fpr.accum(inst.argOnlyTP(), inst.argOnlyFP(), inst.argOnlyFN());
       return fpr;
     }
+
+    public void updateEval(SentenceEval inst, FPR update) {
+      // TODO more efficient (no copy)
+      update.accum(evaluateAll(inst));
+    }
   }
 
   public static List<SentenceEval> zip(List<? extends FNTagging> gold, List<? extends FNTagging> hyp) {
@@ -142,6 +147,30 @@ public class BasicEvaluation {
       results.put(ef.getName(), v);
     }
     return results;
+  }
+
+  /**
+   * @param init if true will add empty FPRs to the given map, otherwise will
+   * only try to update the entries already in the given map.
+   */
+  public static void updateEvals(SentenceEval inst, Map<String, FPR> update, boolean init) {
+    int n = evaluationFunctions.length;
+    for(int i=0; i<n; i++) {
+      EvalFunc ef = evaluationFunctions[i];
+      if (!(ef instanceof StdEvalFunc))
+        continue;
+      StdEvalFunc sef = (StdEvalFunc) ef;
+      FPR updateI = update.get(sef.getName());
+      if (updateI == null) {
+        if (init) {
+          updateI = new FPR(false);
+          update.put(sef.getName(), updateI);
+        } else {
+          continue;
+        }
+      }
+      sef.updateEval(inst, updateI);
+    }
   }
 
   public static Map<String, Double> evaluateFrameId(

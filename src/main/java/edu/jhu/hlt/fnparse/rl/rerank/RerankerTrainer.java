@@ -45,6 +45,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
@@ -69,6 +70,7 @@ import edu.jhu.hlt.fnparse.util.LearningRateSchedule;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.ThresholdFinder;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
@@ -547,11 +549,15 @@ public class RerankerTrainer {
 
   private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
     return new DoubleSupplier() {
+      final boolean showAllLosses = ExperimentProperties.getInstance().getBoolean("showDevLossOther", false);
+      final int earlyShow = ExperimentProperties.getInstance().getInt("showDevLossOther.earlyInterval", 20);
       @Override
       public double getAsDouble() {
         LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
+        Map<String, FPR> other = new HashMap<>();
         double loss = 0d;
-        for (int i = 0; i < dev.size(); i++) {
+        int n = dev.size();
+        for (int i = 0; i < n; i++) {
           FNParse y = dev.label(i);
           List<Item> rerank = dev.items(i);
           State init = useSyntaxSpanPruning
@@ -562,9 +568,24 @@ public class RerankerTrainer {
               : m.getStatelessUpdate(init, y);
           loss += u.violation();
           assert Double.isFinite(loss) && !Double.isNaN(loss);
+
+          // Requires me to do prediction (slower) => optional
+          if (showAllLosses) {
+            FNParse yhat = m.predict(init);
+            BasicEvaluation.updateEvals(new SentenceEval(y, yhat), other, true);
+
+            // Print early!
+            if (earlyShow > 0 && i > 0 && n > earlyShow * 3 && i % earlyShow == 0)
+              for (Map.Entry<String, FPR> x : other.entrySet())
+                Log.info("[devLossFunc] after " + i + " updates " + x.getKey() + "=" + x.getValue());
+          }
         }
         loss /= dev.size();
         LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size() + " for conf=" + conf.name);
+        if (showAllLosses) {
+          for (Map.Entry<String, FPR> x : other.entrySet())
+            Log.info("[devLossFunc] " + x.getKey() + "=" + x.getValue());
+        }
         return loss;
       }
     };
