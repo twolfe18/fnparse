@@ -549,7 +549,7 @@ public class RerankerTrainer {
 
   private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
     return new DoubleSupplier() {
-      final boolean showAllLosses = ExperimentProperties.getInstance().getBoolean("showDevLossOther", false);
+      final boolean showAllLosses = ExperimentProperties.getInstance().getBoolean("showDevLossOther", true);
       final int earlyShow = ExperimentProperties.getInstance().getInt("showDevLossOther.earlyInterval", 20);
       @Override
       public double getAsDouble() {

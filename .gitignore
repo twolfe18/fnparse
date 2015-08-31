@@ -16,3 +16,6 @@ target/
 /fs-global-train*
 *-perf*.txt
 /bin/
+logging/
+/perf*
+/agiga2/
