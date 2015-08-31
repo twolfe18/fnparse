@@ -1266,13 +1266,14 @@ def propbank_feature_selection(template_info_filename, local):
 
   params = {
     'nTrain': 10000,
+    'shard': 0, 'numShards': 5,   # prevents reading ALL of the data in, make sure that nTrain < N / numShards
     #'workingDir': '/tmp/foo',    # this is set by tge
     'addStanfordParses': False,
     'realTestSet': False,
     'propbank': True,
     'l2Penalty': 1e-8,
     'secsBetweenShowingWeights': 180,
-    'trainTimeLimit': 240,
+    'trainTimeLimit': 60, #240,
     'featCoversFrames': False,
     'useGlobalFeatures': False,
     'data.wordnet': 'toydata/wordnet/dict',

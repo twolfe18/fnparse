@@ -14,24 +14,31 @@ echo "arguments: $@"
 
 set -euo pipefail
 
-CP=`find target/ -name '*.jar' | tr '\n' ':'`
-
-NUM_SHARD=10
+# Will save a model to disk every this many seconds
 SAVE_INTERVAL=600
 
-if [[ $# != 1 ]]; then
-  echo "please provide a working directory"
+if [[ $# != 2 ]]; then
+  echo "please provide:"
+  echo "1) a working directory"
+  echo "2) a jar file"
   exit -1
 fi
 
 WORKING_DIR=$1
+JAR=$2
+
+echo "copying jar to a safe place"
+cp $JAR $WORKING_DIR/fnparse.jar
+echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
+
+#CP=`find target/ -name '*.jar' | tr '\n' ':'`
+CP=$WORKING_DIR/fnparse.jar
 
 java -XX:+UseSerialGC -Xmx3G -ea -server -cp ${CP} \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
   parameterServerJob \
   workingDir ${WORKING_DIR} \
   parallelLearnDebug true \
-  numClientsForParamAvg ${NUM_SHARD} \
   paramServerHost localhost \
   isParamServer true \
   paramAvgSecBetweenSaves ${SAVE_INTERVAL} \
@@ -43,7 +50,6 @@ java -XX:+UseSerialGC -Xmx3G -ea -server -cp ${CP} \
   l2Penalty 1e-8 \
   globalL2Penalty 1e-7 \
   secsBetweenShowingWeights 180 \
-  trainTimeLimit 360 \
   featCoversFrames false \
   useGlobalFeatures True \
   globalFeatArgLocSimple True \

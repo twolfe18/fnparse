@@ -14,17 +14,18 @@ echo "arguments: $@"
 
 set -euo pipefail
 
-CP=`find target/ -name '*.jar' | tr '\n' ':'`
+# Will send an average to the param server every this many seconds
+SAVE_INTERVAL=300
 
-NUM_SHARD=10
-SAVE_INTERVAL=600
-
-if [[ $# != 4 ]]; then
+if [[ $# != 5 ]]; then
   echo "please provide"
   echo "1) a working directory"
   echo "2) redis server"
   echo "3) parameter server"
   echo "4) a job index between 0 and numShards-1"
+  echo "5) numShards"
+  echo "6) a jar file"
+  echo "7) a file containing the feature set"
   exit -1
 fi
 
@@ -32,7 +33,17 @@ WORKING_DIR=$1
 REDIS_SERVER=$2
 PARAM_SERVER=$3
 i=$4
+NUM_SHARD=$5
+JAR=$6
+FEATURES=$7
 
+echo "copying jar file to the working directory:"
+echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
+cp $JAR $WORKING_DIR/fnparse.jar
+cp $FEATURES $WORKING_DIR/features.txt
+
+#CP=`find target/ -name '*.jar' | tr '\n' ':'`
+CP=$WORKING_DIR/fnparse.jar
 echo "starting with CP=$CP"
 
 java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
