@@ -73,18 +73,9 @@ public class FeatureIGComputation {
     if (thin > 1)
       pbr.setKeep(s -> s.hashCode() % thin == 0);
 
-//    Iterable<FNParse> x1 = pbr.getTrainData();
+    Iterable<FNParse> x1 = pbr.getTrainData();
     Iterable<FNParse> x2 = pbr.getDevData();
-//    this.data = Iterables.concat(x1, x2);
-    this.data = x2;
-
-    // This doesn't have parses either...
-//    this.data = new Iterable<FNParse>() {
-//      @Override
-//      public Iterator<FNParse> iterator() {
-//        return FileFrameInstanceProvider.debugFIP.getParsedSentences();
-//      }
-//    };
+    this.data = Iterables.concat(x1, x2);
   }
 
   public void run() throws TemplateDescriptionParsingException {
