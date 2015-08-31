@@ -37,6 +37,7 @@ import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.RandomBracketing;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 
@@ -79,6 +80,7 @@ public class DeterministicRolePruning
   }
 
   public static boolean PEDANTIC = false;
+  public boolean showPruningRecall;
 
   private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
   private final FgModel weights = new FgModel(0);
@@ -100,6 +102,9 @@ public class DeterministicRolePruning
     this.mode = mode;
     this.dParser = dParser;
     this.cParser = cParser;
+
+    this.showPruningRecall = ExperimentProperties.getInstance()
+        .getBoolean("DeterministicRolePruning.showPruningRecall", true);
   }
 
   public Mode getMode() {
@@ -159,8 +164,10 @@ public class DeterministicRolePruning
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
-    LOG.info("[setupInference] for " + input.size() + " sentences in "
-      + mode + " mode");
+    if (showPruningRecall) {
+      LOG.info("[setupInference] for " + input.size() + " sentences in "
+          + mode + " mode");
+    }
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
     for (int i = 0; i < input.size(); i++)
       data.add(this.new SD(input.get(i)));
@@ -349,10 +356,12 @@ public class DeterministicRolePruning
       }
       //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
       //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));
-      if (input instanceof FNParse)
-        Log.info("pruning recall: " + output.recall((FNParse) input));
-      else
+      if (input instanceof FNParse) {
+        if (showPruningRecall)
+          Log.info("pruning recall: " + output.recall((FNParse) input));
+      } else {
         Log.warn("check this");
+      }
       return output;
     }
   }

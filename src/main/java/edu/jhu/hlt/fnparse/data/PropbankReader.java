@@ -52,6 +52,12 @@ public class PropbankReader {
   // Can't cache now: Span is not Serializable (a lot of code uses == instead of .equals())
   public boolean performCaching = false;
 
+  // Some features are defined in terms of collapsed or collapsedCC dependency
+  // parses. If only basic deps are available, then should we copy those over to
+  // the other fields so that those features fire?
+  // Will warn if you are over-writing existing depedendency parses.
+  public boolean duplicateBasicDeps = true;
+
   public boolean debug = false;
 
   // If null, take everything
@@ -182,6 +188,11 @@ public class PropbankReader {
             s.setStanfordParse(autoParses.parse(s));
           if (s.getBasicDeps(false) == null)
             s.setBasicDeps(autoParses.getBasicDeps(s));
+        }
+        if (duplicateBasicDeps) {
+          if (s.getCollapsedDeps(false) != null)
+            Log.warn("overwriting collapsed depdencies!");
+          s.setCollapsedDeps(s.getBasicDeps(false));
         }
         parses.add(p);
       }
