@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -178,7 +179,9 @@ public class FeatureIGComputation {
       if (t.getCount() % 10 == 0) {
         int n = featuresRel.size();
         Log.info("processed " + t.getCount() + " of " + n + ", estimated "
-            + t.minutesUntil(n) + " minutes remaining"); }
+            + t.minutesUntil(n) + " minutes remaining");
+        Log.info("memory usage: " + Describe.memoryUsage());
+      }
     }
   }
 
