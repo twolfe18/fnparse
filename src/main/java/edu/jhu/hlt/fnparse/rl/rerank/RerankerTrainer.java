@@ -927,8 +927,13 @@ public class RerankerTrainer {
     LOG.info("[estimateCardinalityOfTemplates] using l2Penalty=" + l2Penalty);
 
     // What features to use (if features are being used)
+    // OLD: Keep around for legacy support
     String fs = config.getBoolean("simpleFeatures", false)
         ? featureTemplates : featureTemplatesSearch;
+    String otherFs = config.getString("featureSetFile", "");
+    if (!otherFs.isEmpty())
+      fs = getFeatureSetFromFile(otherFs);
+    LOG.info("using featureSet=" + fs);
 
     // This is the path that will be executed when not debugging
     if (useEmbeddingParams) {
@@ -1065,7 +1070,7 @@ public class RerankerTrainer {
     // Get train and test data.
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
-    ItemProvider train, test, trainAndTest = null;
+    ItemProvider train, test;
     if (isParamServer) {
       train = null;
       test = null;
@@ -1100,7 +1105,7 @@ public class RerankerTrainer {
             FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
       } else {
         LOG.info("[estimateCardinalityOfTemplates] running on framenet data");
-        trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+        ItemProvider trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
             FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
         if (testOnTrain) {
           train = trainAndTest;
