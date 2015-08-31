@@ -8,6 +8,17 @@ This is not a shell script because it is not meant to be run fully-automatically
 there are some manual steps in this process, see notes.
 
 
+##### TEMPLATE CARDINALITY ESTIMATION #################################################################################
+
+experiments/feature-cardinality-estimation/template.all.txt is based on framenet.
+
+Use:
+propbank-feature-template-cardinality-estimatation.sh
+
+TODO do this later after you have the pipeline working.
+
+
+
 
 ##### FEATURE SELECTION ###############################################################################################
 
@@ -15,7 +26,7 @@ there are some manual steps in this process, see notes.
 qsub -q all.q ./scripts/propbank-train-redis.sh
 
 # You have to read this off of qstat
-REDIS_SERVER=r8n22
+REDIS_SERVER=r5n15
 
 
 ### Start the redis server (for tge)
@@ -26,12 +37,12 @@ redis-server
 
 ### Start forward-selection
 # NOTE: You have to manually set the redis server for propbank parses in forward-selection
-# (grep for propbankParseRedisHost)
+# (grep for redis.host.propbankParses)
 # TODO: Fix this!
 ./scripts/forward-selection \
   experiments/feature-cardinality-estimation/template.all.txt \
   propbank_feature_selection \
-  experiments/forward-selection/propbank/jun28 \
+  experiments/forward-selection/propbank/aug27a \
   grid
 
 
