@@ -42,6 +42,7 @@ import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Beam;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
@@ -98,6 +99,8 @@ public class Reranker implements Serializable {
 
   private transient MultiTimer timer;
 
+  public boolean logArgPruningStats;
+
   public Reranker(
       Params.Stateful thetaStateful,
       Params.Stateless thetaStateless,
@@ -113,6 +116,9 @@ public class Reranker implements Serializable {
     this.testBeamWidth = testBeamWidth;
     this.rand = rand;
     this.tauParams = tauParams;
+
+    logArgPruningStats = ExperimentProperties.getInstance()
+        .getBoolean("Reranker.logArgPruningStats", true);
   }
 
   public String toString() {
@@ -246,9 +252,11 @@ public class Reranker implements Serializable {
         }
       }
     }
-    LOG.info("[getInitialStateWithPruning] cut size down from "
-        + mask.numPossibleArgsNaive() + " to "
-        + mask.numPossibleArgs());
+    if (logArgPruningStats) {
+      LOG.info("[getInitialStateWithPruning] cut size down from "
+          + mask.numPossibleArgsNaive() + " to "
+          + mask.numPossibleArgs());
+    }
     return State.initialState(frames, items);
   }
 
