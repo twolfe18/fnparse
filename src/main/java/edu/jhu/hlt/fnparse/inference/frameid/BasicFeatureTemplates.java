@@ -179,6 +179,12 @@ public class BasicFeatureTemplates {
     return l;
   }
 
+  public List<String> getLabelTemplateNames() {
+    List<String> l = new ArrayList<>();
+    l.addAll(labelTemplates.keySet());
+    return l;
+  }
+
   private void addTemplate(String name, Template t) {
     if (basicTemplates == null)
       basicTemplates = new HashMap<>();
