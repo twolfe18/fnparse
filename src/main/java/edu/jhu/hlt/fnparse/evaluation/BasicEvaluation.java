@@ -163,7 +163,7 @@ public class BasicEvaluation {
       FPR updateI = update.get(sef.getName());
       if (updateI == null) {
         if (init) {
-          updateI = new FPR(false);
+          updateI = new FPR(updateI.isMacroMode());
           update.put(sef.getName(), updateI);
         } else {
           continue;
