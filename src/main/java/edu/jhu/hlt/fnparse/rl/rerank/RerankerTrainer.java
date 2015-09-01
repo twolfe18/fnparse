@@ -1097,13 +1097,6 @@ public class RerankerTrainer {
     // First determine the feature mode, and add implied flags
     setFeatureMode(config);
 
-    // Load FrameNet/Propbank
-    final boolean propbank = config.getBoolean("propbank", false);
-    if (propbank)
-      FrameIndex.getPropbank();
-    else
-      FrameIndex.getFrameNet();
-
     File workingDir = config.getOrMakeDir("workingDir");
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
 
@@ -1115,6 +1108,7 @@ public class RerankerTrainer {
     // Get train and test data.
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
+    final boolean propbank = config.getBoolean("propbank", false);
     ItemProvider train, test;
     if (isParamServer) {
       train = null;
@@ -1127,6 +1121,13 @@ public class RerankerTrainer {
         LOG.info("[estimateCardinalityOfTemplates] running on real test set");
       else
         LOG.info("[estimateCardinalityOfTemplates] running on dev set");
+
+      // Load FrameNet/Propbank
+      if (propbank)
+        FrameIndex.getPropbank();
+      else
+        FrameIndex.getFrameNet();
+
       if (propbank) {
         LOG.info("[estimateCardinalityOfTemplates] running on propbank data");
         ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
