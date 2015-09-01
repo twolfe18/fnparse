@@ -4,7 +4,6 @@
 #$ -l h_rt=72:00:00
 #$ -l mem_free=3G
 #$ -l num_proc=1
-#$ -o logging/propbank
 #$ -S /bin/bash
 
 echo "running on $HOSTNAME"
@@ -45,16 +44,7 @@ java -XX:+UseSerialGC -Xmx3G -ea -server -cp ${CP} \
   addStanfordParses false \
   realTestSet false \
   propbank true \
-  laptop false \
-  nTrain 8000 \
   l2Penalty 1e-8 \
   globalL2Penalty 1e-7 \
-  secsBetweenShowingWeights 180 \
-  featCoversFrames false \
-  useGlobalFeatures True \
-  globalFeatArgLocSimple True \
-  globalFeatNumArgs True \
-  globalFeatRoleCoocSimple True \
-  globalFeatArgOverlap True \
-  globalFeatSpanBoundary True
+  secsBetweenShowingWeights 180
 

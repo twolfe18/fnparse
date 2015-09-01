@@ -4,7 +4,6 @@
 #$ -l h_rt=72:00:00
 #$ -l mem_free=13G
 #$ -l num_proc=1
-#$ -o logging/propbank
 #$ -S /bin/bash
 
 echo "running on $HOSTNAME"
@@ -31,7 +30,7 @@ if [[ $# != 8 ]]; then
 fi
 
 WORKING_DIR=$1
-REDIS_SERVER=$2
+PARSE_SERVER=$2
 PARAM_SERVER=$3
 i=$4
 NUM_SHARD=$5
@@ -48,7 +47,14 @@ cp $FEATURES $WORKING_DIR/features.txt
 CP=$WORKING_DIR/fnparse.jar
 echo "starting with CP=$CP"
 
-java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
+java \
+  -Ddata.wordnet=toydata/wordnet/dict \
+  -Ddata.embeddings=data/embeddings \
+  -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
+  -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
+  -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
+  -DdisallowConcreteStanford=false \
+  -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
   "workerJob$i" \
   workingDir ${WORKING_DIR} \
@@ -59,7 +65,7 @@ java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
   numShards ${NUM_SHARD} \
   shard ${i} \
   paramAvgSecBetweenSaves ${SAVE_INTERVAL} \
-  redis.host.propbankParses ${REDIS_SERVER} \
+  redis.host.propbankParses ${PARSE_SERVER} \
   redis.port.propbankParses 6379 \
   redis.db.propbankParses 0 \
   addStanfordParses false \
