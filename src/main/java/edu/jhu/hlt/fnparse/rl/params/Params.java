@@ -76,6 +76,15 @@ public interface Params extends Serializable {
       this.stateless = stateless;
       this.tau = tau;
     }
+    public Params.Stateful getStateful() {
+      return stateful;
+    }
+    public Params.Stateless getStateless() {
+      return stateless;
+    }
+    public Params.PruneThreshold getTau() {
+      return tau;
+    }
     @Override
     public String toString() {
       return "(Glue stateful=" + stateful + " stateless=" + stateless + " tau=" + tau + ")";

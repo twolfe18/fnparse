@@ -124,8 +124,12 @@ public class Reranker implements Serializable {
   }
 
   public String toString() {
-    return "<Reranker beam=" + trainBeamWidth + "/" + testBeamWidth + " "
-        + thetaStateful + " " + thetaStateless + ">";
+    return "(Reranker beam=" + trainBeamWidth + "/" + testBeamWidth
+        + " stateful=" + thetaStateful
+        + " stateless=" + thetaStateless
+        + " tau=" + tauParams
+        + " argPruningMode=" + argPruningMode
+        + ")";
   }
 
   public Params.Stateless getStatelessParams() {
