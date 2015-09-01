@@ -34,8 +34,8 @@ public class ParsePropbankData {
     private RedisMap<ConstituencyParse> rmapCons;
     private RedisMap<DependencyParse> rmapBasicDeps;
     private Map<String, ConstituencyParse> extra;
-    private Timer pTimer; // parse
-    private Timer eTimer; // extra
+    private Timer pTimer, eTimer; // cparse
+    private Timer deTimer, dpTimer;
     public boolean logGets = false;
     public boolean logParses = true;
 
@@ -57,8 +57,10 @@ public class ParsePropbankData {
       rmapBasicDeps = new RedisMap<>(prefix, host, port, db,
         SerializationUtils::t2bytes, SerializationUtils::bytes2t);
       extra = new HashMap<>();
-      pTimer = new Timer("redis-parse-timer-" + host, 500, false);
-      eTimer = new Timer("stanford-parse-timer", 50, true);
+      pTimer = new Timer("redis-cparse-timer-" + host, 500, false);
+      eTimer = new Timer("stanford-cparse-timer", 50, true);
+      dpTimer = new Timer("redis-dparse-timer-" + host, 500, false);
+      deTimer = new Timer("stanford-dparse-timer", 50, true);
     }
 
     static String getBasicDepsKey(Sentence s) {
@@ -73,13 +75,17 @@ public class ParsePropbankData {
       String key = getBasicDepsKey(s);
       if (logGets)
         System.out.println("[ParsePropbankData.Redis] fetching dparse for " + key);
+      dpTimer.start();
       DependencyParse dp = rmapBasicDeps.get(key);
+      dpTimer.stop();
       if (dp == null) {
         if (logParses)
           System.out.println("[ParsePropbankData.Redis] no dparse for " + key + ", parsing");
+        deTimer.start();
         dp = getAnno().getBasicDParse(s);
         if (insertComputedValues)
           rmapBasicDeps.put(key, dp);
+        deTimer.stop();
       }
       return dp;
     }
