@@ -1193,6 +1193,7 @@ public class RerankerTrainer {
     if (isParamServer || numClientsForParamAvg > 0) {
 
       // Setup the network parameters (do this as late as possible)
+      int port = config.getInt("paramServerPort", 7777);
       boolean checkAlphabetEquality = true;
       trainer.networkParams = new Params.NetworkAvg(new Params.Glue(
               trainer.statefulParams,
@@ -1206,6 +1207,7 @@ public class RerankerTrainer {
       Log.info("numClientsForParamAvg=" + numClientsForParamAvg
           + " paramServerHost=" + trainer.parameterServerHost
           + " hostName=" + hostName
+          + " port=" + port
           + " secondsBetweenSaves=" + secondsBetweenSaves);
 
       // Only feature hashing is allowed: otherwise we're not guaranteed to have
@@ -1216,7 +1218,7 @@ public class RerankerTrainer {
 
       if (isParamServer) {
         // Server
-        trainer.parameterServer = new NetworkParameterAveraging.Server(trainer.networkParams);
+        trainer.parameterServer = new NetworkParameterAveraging.Server(trainer.networkParams, port);
 
         File checkpointDir = new File(workingDir, "paramAverages");
         if (!checkpointDir.isDirectory()) checkpointDir.mkdir();
@@ -1232,7 +1234,8 @@ public class RerankerTrainer {
         assert numClientsForParamAvg > 0;
         trainer.parameterServerClient = new NetworkParameterAveraging.Client(
             trainer.networkParams,
-            trainer.parameterServerHost);
+            trainer.parameterServerHost,
+            port);
         trainer.parameterServerClient.secondsBetweenContactingServer =
             secondsBetweenSaves;
         if (config.getBoolean("parallelLearnDebug", false))
