@@ -133,11 +133,11 @@ public class RerankerTrainer {
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
-    public double estimateLearningRateFreq = 7;       // Higher means estimate less frequently, time multiple of hammingTrain, <=0 means disabled
+    public double estimateLearningRateFreq = 8;       // Higher means estimate less frequently, time multiple of hammingTrain, <=0 means disabled
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
     public double estimateLearningRateSpread = 8;     // Higher means more spread out
     public int estimateLearningRateSteps = 10;        // How many batche steps to take when evaluating a lr
-    public int estimateLearningRateDevLimit = 40;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
+    public int estimateLearningRateDevLimit = 30;     // Size of dev set for evaluating improvement, also limited by the amount of dev data
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
@@ -438,19 +438,19 @@ public class RerankerTrainer {
       LOG.info("bailing out of training ASAP -- for debugging");
 
     if (performPretrain && !bailOutOfTrainingASAP) {
-      LOG.warn("[train1] you probably don't want pretrain/local train!");
-      LOG.info("[train1] local train");
+      LOG.warn("[main] you probably don't want pretrain/local train!");
+      LOG.info("[main] local train");
       train2(m, ip, pretrainConf);
     } else {
-      LOG.info("[train1] skipping pretrain");
+      LOG.info("[main] skipping pretrain");
     }
 
-    LOG.info("[train1] global train");
+    LOG.info("[main] global train");
     m.setStatefulParams(statefulParams);
     if (!bailOutOfTrainingASAP)
       train2(m, ip, trainConf);
 
-    LOG.info("[train1] done, times:\n" + timer);
+    LOG.info("[main] done, times:\n" + timer);
     return m;
   }
 
@@ -476,7 +476,8 @@ public class RerankerTrainer {
     if (dev.size() > conf.estimateLearningRateDevLimit) {
       LOG.info("[estimateLearningRate] chopping down dev down: "
           + dev.size() + " => " + conf.estimateLearningRateDevLimit);
-      devSmall = new ItemProvider.Slice(dev, conf.estimateLearningRateDevLimit, conf.rand);
+      Random r = new Random(9001);  // don't want this to vary: same split every time
+      devSmall = new ItemProvider.Slice(dev, conf.estimateLearningRateDevLimit, r);
     } else {
       devSmall = dev;
     }
@@ -598,26 +599,25 @@ public class RerankerTrainer {
     // Split the data
     final ItemProvider train, dev;
     if (conf.tuneOnTrainingData) {
-      LOG.info("[train2] tuneOnTrainingData=true");
+      LOG.info("[main] tuneOnTrainingData=true");
       train = ip;
       dev = new ItemProvider.Slice(ip, Math.min(ip.size(), conf.maxDev), rand);
     } else {
-      LOG.info("[train2] tuneOnTrainingData=false, splitting data");
+      LOG.info("[main] tuneOnTrainingData=false, splitting data");
       conf.autoPropDev(ip.size());
       ItemProvider.TrainTestSplit trainDev =
           new ItemProvider.TrainTestSplit(ip, conf.propDev, conf.maxDev, rand);
       train = trainDev.getTrain();
       dev = trainDev.getTest();
     }
-    LOG.info("[train2] nTrain=" + train.size() + " nDev=" + dev.size()
-        + " for conf=" + conf.name);
+    LOG.info("[main] nTrain=" + train.size() + " nDev=" + dev.size() + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
     StoppingCondition.DevSet dynamicStopping = null;
     if (conf.allowDynamicStopping) {
       if (dev.size() == 0)
         throw new RuntimeException("no dev data!");
-      LOG.info("[train2] adding dev set stopping on " + dev.size() + " examples");
+      LOG.info("[main] adding dev set stopping on " + dev.size() + " examples");
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.05d;   // Lower numbers mean stop earlier.
       double k = 7;           // Size of history
@@ -626,13 +626,13 @@ public class RerankerTrainer {
       dynamicStopping = conf.addStoppingCondition(
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
     } else {
-      LOG.info("[train2] allowDynamicStopping=false leaving stopping condition as is");
+      LOG.info("[main] allowDynamicStopping=false leaving stopping condition as is");
     }
 
     try {
       // Train the model
       hammingTrain(m, train, dev, conf);
-      LOG.info("[train2] done hammingTrain, params:");
+      LOG.info("[main] done hammingTrain, params:");
       m.showWeights();
 
       // Tune the model
@@ -646,9 +646,9 @@ public class RerankerTrainer {
     // StoppingCondition.DevSet writes to a file, this closes that.
     if (dynamicStopping != null)
       dynamicStopping.close();
-    LOG.info("[train2] done conf=" + conf.name);
-    LOG.info("[train2] times: " + timer);
-    LOG.info("[train2] totally done conf=" + conf.name);
+    LOG.info("[main] done conf=" + conf.name);
+    LOG.info("[main] times: " + timer);
+    LOG.info("[main] totally done conf=" + conf.name);
   }
 
   // Only relevant to hammingTrain
@@ -661,7 +661,7 @@ public class RerankerTrainer {
    */
   public void hammingTrain(Reranker r, ItemProvider train, ItemProvider dev, Config conf)
       throws InterruptedException, ExecutionException {
-    LOG.info("[hammingTrain] starting, conf=" + conf);
+    LOG.info("[main] starting, conf=" + conf);
     String timerStr = "hammingTrain." + conf.name;
     timer.start(timerStr);
 
@@ -689,18 +689,18 @@ public class RerankerTrainer {
         conf.tHammingTrain.stop();
 
         if (showViolation && iter % 10 == 0)
-          LOG.info("[hammingTrain] iter=" + iter + " trainViolation=" + violation);
+          LOG.info("[main] iter=" + iter + " trainViolation=" + violation);
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
         if (t.enoughTimePassed(secsBetweenShowingWeights)) {
-          LOG.info("[hammingTrain] " + Describe.memoryUsage());
+          LOG.info("[main] " + Describe.memoryUsage());
           r.showWeights();
           if (showTime) {
             Timer bt = timer.get(timerStr + ".batch", false);
             int totalUpdates = conf.stopping.estimatedNumberOfIterations();
             LOG.info(String.format(
-                "[hammingTrain] estimate: completed %d of %d updates, %.1f minutes remaining",
+                "[main] estimate: completed %d of %d updates, %.1f minutes remaining",
                 bt.getCount(), totalUpdates, bt.minutesUntil(totalUpdates)));
           }
         }
@@ -708,15 +708,15 @@ public class RerankerTrainer {
         // See if we should stop
         double tStopRatio = conf.tHammingTrain.totalTimeInSeconds()
             / conf.tStoppingCondition.totalTimeInSeconds();
-        LOG.info("[hammingTrain] train/stop=" + tStopRatio
+        LOG.info("[main] train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
-        if (tStopRatio > conf.stoppingConditionFrequency) {
-          LOG.info("[hammingTrain] evaluating the stopping condition");
+        if (tStopRatio > conf.stoppingConditionFrequency && iter > 0) {
+          LOG.info("[main] evaluating the stopping condition");
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
           conf.tStoppingCondition.stop();
           if (stop) {
-            LOG.info("[hammingTrain] stopping due to " + conf.stopping);
+            LOG.info("[main] stopping due to " + conf.stopping);
             break outer;
           }
         }
@@ -725,17 +725,17 @@ public class RerankerTrainer {
         if (conf.estimateLearningRateFreq > 0) {
           double tLrEstRatio = conf.tHammingTrain.totalTimeInSeconds()
               / conf.tLearningRateEstimation.totalTimeInSeconds();
-          LOG.info("[hammingTrain] train/lrEstimate=" + tLrEstRatio
+          LOG.info("[main] train/lrEstimate=" + tLrEstRatio
               + " threshold=" + conf.estimateLearningRateFreq);
-          if (tLrEstRatio > conf.estimateLearningRateFreq) {
-            LOG.info("[hammingTrain] restimating the learning rate");
+          if (tLrEstRatio > conf.estimateLearningRateFreq && iter > 0) {
+            LOG.info("[main] restimating the learning rate");
             conf.tLearningRateEstimation.start();
-            LOG.info("[hammingTrain] re-estimating the learning rate");
+            LOG.info("[main] re-estimating the learning rate");
             estimateLearningRate(r, train, dev, conf);
             conf.tLearningRateEstimation.stop();
           }
         } else {
-          LOG.info("[hammingTrain] not restimating learning rate");
+          LOG.info("[main] not restimating learning rate");
         }
 
         // Average parameters over the network
@@ -751,12 +751,12 @@ public class RerankerTrainer {
     if (es != null)
       es.shutdown();
 
-    LOG.info("[hammingTrain] telling Params that training is over");
+    LOG.info("[main] telling Params that training is over");
     r.getStatelessParams().doneTraining();
     r.getStatefulParams().doneTraining();
     r.getPruningParams().doneTraining();
 
-    LOG.info("[hammingTrain] times:\n" + timer);
+    LOG.info("[main] times:\n" + timer);
     timer.stop(timerStr);
   }
 
@@ -872,7 +872,7 @@ public class RerankerTrainer {
     trainer.bailOutOfTrainingASAP = config.getBoolean("bailOutOfTrainingASAP", false);
 
     if (config.containsKey("beamSize")) {
-      LOG.info("[estimateCardinalityOfTemplates] using one train and test beam size (possibly overriding individual settings)");
+      LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
       trainer.trainConf.trainBeamSize =
           trainer.trainConf.testBeamSize =
           config.getInt("beamSize");
@@ -918,13 +918,13 @@ public class RerankerTrainer {
 
     if (config.containsKey("trainTimeLimit")) {
       double mins = config.getDouble("trainTimeLimit");
-      LOG.info("[estimateCardinalityOfTemplates] limiting train to " + mins + " minutes");
+      LOG.info("[main] limiting train to " + mins + " minutes");
       trainer.trainConf.addStoppingCondition(new StoppingCondition.Time(mins));
     }
 
     final int hashBuckets = config.getInt("numHashBuckets", 2 * 1000 * 1000);
     final double l2Penalty = config.getDouble("l2Penalty", 1e-8);
-    LOG.info("[estimateCardinalityOfTemplates] using l2Penalty=" + l2Penalty);
+    LOG.info("[main] using l2Penalty=" + l2Penalty);
 
     // What features to use (if features are being used)
     // OLD: Keep around for legacy support
@@ -937,7 +937,7 @@ public class RerankerTrainer {
 
     // This is the path that will be executed when not debugging
     if (useEmbeddingParams) {
-      LOG.info("[estimateCardinalityOfTemplates] using embedding params");
+      LOG.info("[main] using embedding params");
       int embeddingSize = 2;
       EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
       ep.learnTheta(true);
@@ -945,13 +945,13 @@ public class RerankerTrainer {
         ep.debug(new TemplatedFeatureParams("embD", featureTemplates, hashBuckets), l2Penalty);
       trainer.statelessParams = ep;
     } else {
-      LOG.info("[estimateCardinalityOfTemplates] using features=" + fs);
+      LOG.info("[main] using features=" + fs);
       if (useFeatureHashing) {
-        LOG.info("[estimateCardinalityOfTemplates] using TemplatedFeatureParams with feature hashing");
+        LOG.info("[main] using TemplatedFeatureParams with feature hashing");
         trainer.statelessParams =
             new TemplatedFeatureParams("statelessA", fs, l2Penalty, hashBuckets);
       } else {
-        LOG.info("[estimateCardinalityOfTemplates] using TemplatedFeatureParams with an Alphabet");
+        LOG.info("[main] using TemplatedFeatureParams with an Alphabet");
         trainer.statelessParams =
             new TemplatedFeatureParams("statelessH", fs, l2Penalty);
       }
@@ -979,22 +979,22 @@ public class RerankerTrainer {
       //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
       // Older way: very rich features.
       if (useFeatureHashing) {
-        LOG.info("[estimateCardinalityOfTemplates] using TemplatedFeatureParams with feature hashing for tau");
+        LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
         trainer.tauParams =
             new TemplatedFeatureParams("tauA", fs, l2Penalty, hashBuckets);
       } else {
-        LOG.info("[estimateCardinalityOfTemplates] using TemplatedFeatureParams with an Alphabet for tau");
+        LOG.info("[main] using TemplatedFeatureParams with an Alphabet for tau");
         trainer.tauParams =
             new TemplatedFeatureParams("tauH", fs, l2Penalty);
       }
     } else {
-      LOG.warn("[estimateCardinalityOfTemplates] you probably don't want to use constant params for tau!");
+      LOG.warn("[main] you probably don't want to use constant params for tau!");
       trainer.tauParams = Params.PruneThreshold.Const.ZERO;
     }
 
     if (useGlobalFeatures) {
       double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
-      LOG.info("[estimateCardinalityOfTemplates] using global features with l2p=" + globalL2Penalty);
+      LOG.info("[main] using global features with l2p=" + globalL2Penalty);
 
       // helps
       if (config.getBoolean("globalFeatArgLoc", false))
@@ -1026,7 +1026,7 @@ public class RerankerTrainer {
     }
 
     if (config.getBoolean("lhMostViolated", false)) {
-      LOG.info("[estimateCardinalityOfTemplates] using L.H.'s notion of most violated, which forces left-right inference");
+      LOG.info("[main] using L.H.'s notion of most violated, which forces left-right inference");
       // Don't need to set these because oracle.bFunc should only return a finite
       // value for one action (these modes are all equivalent then).
 //      trainer.trainConf.oracleMode = OracleMode.MAX;
@@ -1042,9 +1042,9 @@ public class RerankerTrainer {
   public static void setFeatureMode(ExperimentProperties config) {
     String fm = config.getString("featureMode", "");
     if (fm.isEmpty()) {
-      LOG.info("no feature mode specified!");
+      LOG.info("[main] no feature mode specified!");
     } else {
-      LOG.info("featureMode=" + fm + "\tNOTE: This can overwrite other settings!");
+      LOG.info("[main] featureMode=" + fm + "\tNOTE: This can overwrite other settings!");
       // This info can also be found in scripts/tge_global_train.py
       switch (fm.toUpperCase()) {
       case "FULL":
@@ -1103,7 +1103,7 @@ public class RerankerTrainer {
     boolean testOnTrain = config.getBoolean("testOnTrain", false);
 
     Reranker.COST_FN = config.getDouble("costFN", 1);
-    LOG.info("[estimateCardinalityOfTemplates] costFN=" + Reranker.COST_FN + " costFP=1");
+    LOG.info("[main] costFN=" + Reranker.COST_FN + " costFP=1");
 
     RerankerTrainer trainer = configure(config);
 
@@ -1120,9 +1120,9 @@ public class RerankerTrainer {
       test = new ItemProvider.ParseWrapper(Collections.emptyList());
     } else {
       if (realTest)
-        LOG.info("[estimateCardinalityOfTemplates] running on real test set");
+        LOG.info("[main] running on real test set");
       else
-        LOG.info("[estimateCardinalityOfTemplates] running on dev set");
+        LOG.info("[main] running on dev set");
 
       // Load FrameNet/Propbank
       if (propbank)
@@ -1131,28 +1131,28 @@ public class RerankerTrainer {
         FrameIndex.getFrameNet();
 
       if (propbank) {
-        LOG.info("[estimateCardinalityOfTemplates] running on propbank data");
+        LOG.info("[main] running on propbank data");
         ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
         PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
         pbr.setKeep(trainer.keep);
         Pair<ItemProvider, ItemProvider> data;
         if (realTest) {
-          LOG.info("reading real propbank data...");
+          LOG.info("[main] reading real propbank data...");
           data = pbr.getTrainTestData();
         } else {
-          LOG.info("reading dev propbank data...");
+          LOG.info("[main] reading dev propbank data...");
           data = pbr.getTrainDevData();
         }
         train = data.get1();
         test = data.get2();
       } else if (realTest) {
-        LOG.info("[estimateCardinalityOfTemplates] running on framenet data");
+        LOG.info("[main] running on framenet data");
         train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
             FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
         test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
             FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
       } else {
-        LOG.info("[estimateCardinalityOfTemplates] running on framenet data");
+        LOG.info("[main] running on framenet data");
         ItemProvider trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
             FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
         if (testOnTrain) {
@@ -1174,16 +1174,16 @@ public class RerankerTrainer {
 
       // Only take a sub-set of the data based on sharding.
       if (trainer.keep != null) {
-        LOG.info("filtering remaining examples by trainer.keep predicate");
-        LOG.info("before: train.size=" + train.size() + " test.size=" + test.size());
+        LOG.info("[main] filtering remaining examples by trainer.keep predicate");
+        LOG.info("[main] before: train.size=" + train.size() + " test.size=" + test.size());
         train = ItemProvider.Slice.shard(train, trainer.keep);
         test = ItemProvider.Slice.shard(test, trainer.keep);
-        LOG.info("after: train.size=" + train.size() + " test.size=" + test.size());
+        LOG.info("[main] after: train.size=" + train.size() + " test.size=" + test.size());
       }
 
       // Limit according to nTrain
       // TODO Move nTrain before shards by letting PropbankData know about nTrain
-      final int nTrain = config.getInt("nTrain", 500);
+      final int nTrain = config.getInt("nTrain", 999999);
       final int nTest = config.getInt("nTest", 999999);
       train = new ItemProvider.Slice(train, nTrain, trainer.rand);
       test = new ItemProvider.Slice(test, nTest, trainer.rand);
@@ -1206,7 +1206,7 @@ public class RerankerTrainer {
 
       int secondsBetweenSaves = config.getInt("paramAvgSecBetweenSaves", 5 * 60);
       String hostName = InetAddress.getLocalHost().getHostName();
-      Log.info("numClientsForParamAvg=" + numClientsForParamAvg
+      Log.info("[main] numClientsForParamAvg=" + numClientsForParamAvg
           + " paramServerHost=" + trainer.parameterServerHost
           + " hostName=" + hostName
           + " port=" + port
@@ -1214,7 +1214,7 @@ public class RerankerTrainer {
 
       // Only feature hashing is allowed: otherwise we're not guaranteed to have
       // the same feature indices.
-      LOG.info("disabling growing in AveragedWeights, should be using feature "
+      LOG.info("[main] disabling growing in AveragedWeights, should be using feature "
           + "hashing because of network parameter hashing, and shouldn't need to grow");
       AveragedWeights.GROWING_ALLOWED = false;
 
@@ -1226,10 +1226,10 @@ public class RerankerTrainer {
         if (!checkpointDir.isDirectory()) checkpointDir.mkdir();
         trainer.parameterServer.saveModels(checkpointDir, secondsBetweenSaves);
 
-        LOG.info("starting parameter server: " + trainer.parameterServer);
+        LOG.info("[main] starting parameter server: " + trainer.parameterServer);
         trainer.parameterServer.debug = true;
         trainer.parameterServer.run();
-        LOG.info("server is done running for whatever reason, exiting");
+        LOG.info("[main] server is done running for whatever reason, exiting");
         System.exit(0);
       } else {
         // Client
@@ -1244,40 +1244,40 @@ public class RerankerTrainer {
           trainer.parameterServerClient.debug = true;
       }
     } else {
-      LOG.info("not setting up network parameter averaging");
+      LOG.info("[main] not setting up network parameter averaging");
       trainer.parameterServerHost = null;
     }
 
     // Log the train and test set
     logTrainTestDatapoints(new File(workingDir, "train-test-split.txt"), train, test);
 
-    LOG.info("[estimateCardinalityOfTemplates] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
-    LOG.info("[estimateCardinalityOfTemplates] " + Describe.memoryUsage());
+    LOG.info("[main] nTrain=" + train.size() + " nTest=" + test.size() + " testOnTrain=" + testOnTrain);
+    LOG.info("[main] " + Describe.memoryUsage());
 
     // Set the word shapes: features will try to do this otherwise, best to do ahead of time.
     if (config.getBoolean("precomputeShape", true)) {
-      LOG.info("precomputing word shapes");
+      LOG.info("[main] precomputing word shapes");
       computeShape(train);
       computeShape(test);
     }
 
     // Data does not come with Stanford parses straight off of disk, add them
     if (config.getBoolean("addStanfordParses", true)) {
-      LOG.info("addStanfordParses: parsing the train+test data");
+      LOG.info("[main] addStanfordParses: parsing the train+test data");
       if (propbank)
         LOG.warn("you probably don't want to parse propbank, see ParsePropbankData");
       PARSER = ConcreteStanfordWrapper.getSingleton(true);
       addParses(train);
       addParses(test);
-      LOG.info("[estimateCardinalityOfTemplates] addStanfordParses before GC: " + Describe.memoryUsage());
+      LOG.info("[main] addStanfordParses before GC: " + Describe.memoryUsage());
       PARSER = null;
       ConcreteStanfordWrapper.dumpSingletons();
       System.gc();
-      LOG.info("[estimateCardinalityOfTemplates] addStanfordParses after GC:  " + Describe.memoryUsage());
+      LOG.info("[main] addStanfordParses after GC:  " + Describe.memoryUsage());
     }
 
     if (config.getBoolean("noSyntax", false)) {
-      LOG.info("stripping syntax from train and test");
+      LOG.info("[main] stripping syntax from train and test");
       stripSyntax(train);
       stripSyntax(test);
     }
@@ -1287,7 +1287,7 @@ public class RerankerTrainer {
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
-      LOG.info("loading model from " + modelFile.getPath());
+      LOG.info("[main] loading model from " + modelFile.getPath());
 //      model = trainer.instantiate();
 //      model.deserializeParams(modelFile);
       ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
@@ -1296,8 +1296,8 @@ public class RerankerTrainer {
     } else {
       // Train
       config.store(System.out, null);   // show the config for posterity
-      LOG.info("[estimateCardinalityOfTemplates] " + Describe.memoryUsage());
-      LOG.info("[estimateCardinalityOfTemplates] starting training, config:");
+      LOG.info("[main] " + Describe.memoryUsage());
+      LOG.info("[main] starting training, config:");
       model = trainer.train1(train);
 
 //      // Save the model (using DataOutputStream)
@@ -1307,35 +1307,35 @@ public class RerankerTrainer {
     }
 
     // Release some memory
-    LOG.info("[estimateCardinalityOfTemplates] before GC: " + Describe.memoryUsage());
+    LOG.info("[main] before GC: " + Describe.memoryUsage());
     ConcreteStanfordWrapper.dumpSingletons();
     train = null;
     System.gc();
-    LOG.info("[estimateCardinalityOfTemplates] after GC:  " + Describe.memoryUsage());
+    LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
     // Evaluate
-    LOG.info("[estimateCardinalityOfTemplates] done training, evaluating");
+    LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File semDir = new File(workingDir, "semaforEval");
     if (!semDir.isDirectory()) semDir.mkdir();
-    Map<String, Double> perfResults = eval(model, test, semDir, "[estimateCardinalityOfTemplates]", diffArgsFile);
+    Map<String, Double> perfResults = eval(model, test, semDir, "[main]", diffArgsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
 
     // Serialize the model
     File jserFile = new File(workingDir, "model.jser");
-    LOG.info("[estimateCardinalityOfTemplates] serializing model to " + jserFile.getPath());
+    LOG.info("[main] serializing model to " + jserFile.getPath());
     ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
     oos.writeObject(model);
     oos.close();
-    LOG.info("[estimateCardinalityOfTemplates] done serializing.");
+    LOG.info("[main] done serializing.");
 
     // Serialize just the stateless params.
     // During feature selection, this can be absorbed into Fixed params and
     // a single new feature can be tried out.
     File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
-    LOG.info("[estimateCardinalityOfTemplates] saving stateless params to " + statelessParamsFile.getPath());
+    LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
     FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
 
     // Save the configuration
