@@ -238,6 +238,10 @@ public class FrameIndex implements FrameIndexInterface {
     return frameNet;
   }
 
+  public int getNumFrames() {
+    return allFrames.size();
+  }
+
   public Frame getFrame(int id) {
     Frame f = byId[id];
     if (f == null)

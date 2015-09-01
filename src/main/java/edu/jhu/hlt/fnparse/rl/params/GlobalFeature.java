@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -18,6 +19,7 @@ import edu.jhu.hlt.fnparse.rl.CommitIndex.IndexItem;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.util.FeatureUtils;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -261,13 +263,17 @@ public interface GlobalFeature extends Params.Stateful {
   public static class RoleCoocSimple
       extends FeatureParams implements Params.Stateful {
     private static final long serialVersionUID = -4769642509935608094L;
-    public static FrameRolePacking frPacking = new FrameRolePacking();
+    public static FrameRolePacking frPacking;
     public static final int BUCKETS = 1<<20;
     public static final int DA_BITS = 14;
     public static final int REL_BITS = 3;
     public RoleCoocSimple(double l2Penalty) {
       //super(l2Penalty); // Use Alphabet
       super(l2Penalty, BUCKETS); // use Hashing
+      if (ExperimentProperties.getInstance().getBoolean("propbank"))
+        frPacking = new FrameRolePacking(FrameIndex.getPropbank());
+      else
+        frPacking = new FrameRolePacking(FrameIndex.getFrameNet());
     }
     @Override
     public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
@@ -308,12 +314,16 @@ public interface GlobalFeature extends Params.Stateful {
   public static class RoleCooccurenceFeatureStateful
       extends FeatureParams implements Params.Stateful {
     private static final long serialVersionUID = 6774106534395671758L;
-    public static FrameRolePacking frPacking = new FrameRolePacking();
+    public static FrameRolePacking frPacking;
     public static final int BUCKETS = 1<<20;
     public static final int DA_BITS = 14;
     public static final int REL_BITS = 3;
     public RoleCooccurenceFeatureStateful(double l2Penalty) {
       super(l2Penalty, BUCKETS); // use Hashing
+      if (ExperimentProperties.getInstance().getBoolean("propbank"))
+        frPacking = new FrameRolePacking(FrameIndex.getPropbank());
+      else
+        frPacking = new FrameRolePacking(FrameIndex.getFrameNet());
     }
     @Override
     //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {

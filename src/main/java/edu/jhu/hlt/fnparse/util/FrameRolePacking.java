@@ -1,7 +1,12 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.util.Random;
+
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**
  * Used to get a dense non-negative integer representing (frame,role).
@@ -14,12 +19,12 @@ public class FrameRolePacking {
   private int[] roleOffsets;
   private int size;
 
-  public FrameRolePacking() {
+  public FrameRolePacking(FrameIndex fi) {
     this.specialValues = 1;
-    int n = FrameIndex.framesInFrameNet + 1;
+    int n = fi.getNumFrames();
     roleOffsets = new int[n];
     size = 0;
-    for (Frame f : FrameIndex.getFrameNet().allFrames()) {
+    for (Frame f : fi.allFrames()) {
       roleOffsets[f.getId()] = size;
       size += f.numRoles() + specialValues;
     }
@@ -36,5 +41,21 @@ public class FrameRolePacking {
 
   public int size() {
     return size;
+  }
+
+  public static void main(String[] args) {
+    ExperimentProperties.init(args);
+    Random rand = new Random(9001);
+    FrameIndex propbank = FrameIndex.getPropbank();
+    FrameRolePacking frp = new FrameRolePacking(propbank);
+    for (int i = 0; i < 10000; i++) {
+      Frame f = ReservoirSample.sampleOne(propbank.allFrames(), rand);
+      assert f.getId() < propbank.getNumFrames();
+      for (int j = 0; j < 100; j++) {
+        int k = rand.nextInt(f.numRoles());
+        int index = frp.index(f, k);
+        System.out.println(f.getId() + "\t" + k + "\t" + index);
+      }
+    }
   }
 }
