@@ -16,35 +16,39 @@ set -euo pipefail
 # Will send an average to the param server every this many seconds
 SAVE_INTERVAL=300
 
-if [[ $# != 8 ]]; then
+if [[ $# != 9 ]]; then
   echo "please provide"
   echo "1) a working directory"
   echo "2) redis server"
-  echo "3) parameter server"
-  echo "4) a job index between 0 and numShards-1"
-  echo "5) numShards"
-  echo "6) a jar file"
-  echo "7) a file containing the feature set"
-  echo "8) feature mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
+  echo "3) parameter server host"
+  echo "4) parameter server port"
+  echo "5) a job index between 0 and numShards-1"
+  echo "6) numShards"
+  #echo "7) a jar file"
+  echo "7) a classpath with all dependencies"
+  echo "8) a file containing the feature set"
+  echo "9) feature mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
   exit -1
 fi
 
 WORKING_DIR=$1
 PARSE_SERVER=$2
-PARAM_SERVER=$3
-i=$4
-NUM_SHARD=$5
-JAR=$6
-FEATURES=$7
-FEATURE_MODE=$8
+PARAM_SERVER_HOST=$3
+PARAM_SERVER_PORT=$4
+i=$5
+NUM_SHARD=$6
+#JAR=$7
+CP=$7
+FEATURES=$8
+FEATURE_MODE=$9
 
-echo "copying jar file to the working directory:"
-echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
-cp $JAR $WORKING_DIR/fnparse.jar
-cp $FEATURES $WORKING_DIR/features.txt
+#echo "copying jar file to the working directory:"
+#echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
+#cp $JAR $WORKING_DIR/fnparse.jar
+#cp $FEATURES $WORKING_DIR/features.txt
 
 #CP=`find target/ -name '*.jar' | tr '\n' ':'`
-CP=$WORKING_DIR/fnparse.jar
+#CP=$WORKING_DIR/fnparse.jar
 echo "starting with CP=$CP"
 
 java \
@@ -60,7 +64,8 @@ java \
   workingDir ${WORKING_DIR} \
   parallelLearnDebug true \
   numClientsForParamAvg ${NUM_SHARD} \
-  paramServerHost ${PARAM_SERVER} \
+  paramServerHost ${PARAM_SERVER_HOST} \
+  paramServerPort ${PARAM_SERVER_PORT} \
   isParamServer false \
   numShards ${NUM_SHARD} \
   shard ${i} \

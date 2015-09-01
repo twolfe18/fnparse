@@ -22,6 +22,13 @@ PARAM_SERVER_PORT=$6
 
 mkdir -p $WORKING_DIR/sge-logs
 
+echo "copying the jar to a safe place"
+JAR_STABLE=$WORKING_DIR/fnparse.jar
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
+
 # Make the feature set
 FEATURES=experiments/feature-information-gain/feature-sets/fs-${NUM_TEMPLATES}.txt
 #rm $FEATURES
@@ -60,8 +67,8 @@ echo "Starting param server..."
 mkdir -p $WORKING_DIR/server
 qsub -N "param-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
   ./scripts/propbank-train-server.sh \
-    $WORKING_DIR/server \
-    $JAR \
+    ${WORKING_DIR}/server \
+    ${JAR_STABLE} \
     ${PARAM_SERVER_PORT}
 
 PARAM_SERVER="nope"
@@ -82,9 +89,10 @@ for i in `seq $NUM_WORKERS | awk '{print $1-1}'`; do
       ${WD} \
       ${PARSE_SERVER} \
       ${PARAM_SERVER} \
+      ${PARAM_SERVER_PORT} \
       ${i} \
       ${NUM_WORKERS} \
-      ${JAR} \
+      ${JAR_STABLE} \
       ${FEATURES} \
       ${FEAT_MODE}
 done
