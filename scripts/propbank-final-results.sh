@@ -37,6 +37,8 @@ if [[ ! -f $FEATURES ]]; then
   echo "no feature set file: $FEATURES"
   exit -2
 fi
+FEATURES_STABLE=$WORKING_DIR/features.txt
+cp $FEATURES $FEATURES_STABLE
 
 
 # NOTE: This can fail because the port may already be in use.
@@ -93,7 +95,7 @@ for i in `seq $NUM_WORKERS | awk '{print $1-1}'`; do
       ${i} \
       ${NUM_WORKERS} \
       ${JAR_STABLE} \
-      ${FEATURES} \
+      ${FEATURES_STABLE} \
       ${FEAT_MODE}
 done
 
