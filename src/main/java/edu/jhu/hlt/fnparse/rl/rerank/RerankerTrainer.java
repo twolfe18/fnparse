@@ -1058,11 +1058,13 @@ public class RerankerTrainer {
         config.setProperty("globalFeatRoleCoocSimple", "False");
         break;
       case "ARG-LOCATION":
+      case "ARG-LOC":
         config.setProperty("globalFeatArgLocSimple", "True");
         config.setProperty("globalFeatNumArgs", "False");
         config.setProperty("globalFeatRoleCoocSimple", "False");
         break;
       case "NUM-ARGS":
+      case "NUM-ARG":
         config.setProperty("globalFeatArgLocSimple", "False");
         config.setProperty("globalFeatNumArgs", "True");
         config.setProperty("globalFeatRoleCoocSimple", "False");
