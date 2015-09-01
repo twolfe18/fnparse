@@ -1110,11 +1110,19 @@ public class RerankerTrainer {
 
     RerankerTrainer trainer = configure(config);
 
+    // If you are loading a model file => skip training data
+    final String modelFileKey = "loadModelFromFile";    // for serialization of Reranker
+    final String paramsFileKey = "loadParamsFromFile";  // for serialization of Params.NetworkAvg
+    boolean canSkipTrainData = false;
+    canSkipTrainData |= config.containsKey(modelFileKey);
+    canSkipTrainData |= config.containsKey(paramsFileKey);
+    LOG.info("[main] canSkipTrainData=" + canSkipTrainData);
+
     // Get train and test data.
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
-    ItemProvider train, test;
+    ItemProvider train = null, test;
     if (isParamServer) {
       train = null;
       test = null;
@@ -1138,20 +1146,31 @@ public class RerankerTrainer {
         ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
         PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
         pbr.setKeep(trainer.keep);
-        Pair<ItemProvider, ItemProvider> data;
         if (realTest) {
           LOG.info("[main] reading real propbank data...");
-          data = pbr.getTrainTestData();
+          if (canSkipTrainData) {
+            train = new ItemProvider.ParseWrapper(Collections.emptyList());
+          } else {
+            train = pbr.getTrainData();
+          }
+          test = pbr.getTestData();
         } else {
           LOG.info("[main] reading dev propbank data...");
-          data = pbr.getTrainDevData();
+          if (canSkipTrainData) {
+            train = new ItemProvider.ParseWrapper(Collections.emptyList());
+          } else {
+            train = pbr.getTrainData();
+          }
+          test = pbr.getDevData();
         }
-        train = data.get1();
-        test = data.get2();
       } else if (realTest) {
         LOG.info("[main] running on framenet data");
-        train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-            FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+        if (canSkipTrainData) {
+          train = new ItemProvider.ParseWrapper(Collections.emptyList());
+        } else {
+          train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+              FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+        }
         test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
             FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
       } else {
@@ -1288,8 +1307,6 @@ public class RerankerTrainer {
     }
 
     Reranker model = null;
-    String modelFileKey = "loadModelFromFile";    // for serialization of Reranker
-    String paramsFileKey = "loadParamsFromFile";  // for serialization of Params.NetworkAvg
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
