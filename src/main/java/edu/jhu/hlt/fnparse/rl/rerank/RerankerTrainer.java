@@ -678,9 +678,11 @@ public class RerankerTrainer {
     TimeMarker t = new TimeMarker();
     boolean showTime = false;
     boolean showViolation = true;
+    int epoch = 0;
     outer:
     for (int iter = 0; true; ) {
       int step = conf.batchSize == 0 ? train.size() : conf.batchSize;
+      LOG.info("[main] epoch=" + epoch + " iter=" + iter + " train.size=" + train.size() + " step=" + step);
       for (int i = 0; i < train.size(); i += step) {
 
         // Batch step
@@ -711,7 +713,7 @@ public class RerankerTrainer {
             / conf.tStoppingCondition.totalTimeInSeconds();
         LOG.info("[main] train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
-        if (tStopRatio > conf.stoppingConditionFrequency && iter > 0) {
+        if (tStopRatio > conf.stoppingConditionFrequency && epoch > 0) {
           LOG.info("[main] evaluating the stopping condition");
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
@@ -728,10 +730,9 @@ public class RerankerTrainer {
               / conf.tLearningRateEstimation.totalTimeInSeconds();
           LOG.info("[main] train/lrEstimate=" + tLrEstRatio
               + " threshold=" + conf.estimateLearningRateFreq);
-          if (tLrEstRatio > conf.estimateLearningRateFreq && iter > 0) {
+          if (tLrEstRatio > conf.estimateLearningRateFreq && epoch > 0) {
             LOG.info("[main] restimating the learning rate");
             conf.tLearningRateEstimation.start();
-            LOG.info("[main] re-estimating the learning rate");
             estimateLearningRate(r, train, dev, conf);
             conf.tLearningRateEstimation.stop();
           }
@@ -748,6 +749,7 @@ public class RerankerTrainer {
         iter++;
       }
       conf.calledEveryEpoch.accept(iter);
+      epoch++;
     }
     if (es != null)
       es.shutdown();
