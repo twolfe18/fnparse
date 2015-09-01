@@ -77,6 +77,10 @@ public interface Params extends Serializable {
       this.tau = tau;
     }
     @Override
+    public String toString() {
+      return "(Glue stateful=" + stateful + " stateless=" + stateless + " tau=" + tau + ")";
+    }
+    @Override
     public void doneTraining() {
       stateful.doneTraining();
       stateless.doneTraining();
@@ -317,7 +321,8 @@ public interface Params extends Serializable {
       public void addWeights(Params other, boolean checkAlphabetEquality) {
         assert other.getClass().equals(this.getClass())
           : "this.class=" + this.getClass().getName()
-          + " other.class=" + other.getClass().getName();
+          + " other.class=" + other.getClass().getName()
+          + "this=Stateful.NONE other=" + other.toString();
         LOG.info("[Stateful.NONE addWeights] no-op");
       }
       @Override
@@ -800,7 +805,13 @@ public interface Params extends Serializable {
       adds = 0;
       checkAlph = checkAlphabetEquality;
       Log.info("zero.class=" + zero.getClass().getName()
+          + " zero.toString=" + zero
           + " checkAlphabetEquality=" + checkAlphabetEquality);
+    }
+
+    @Override
+    public String toString() {
+      return "(NetworkAvg checkAlph=" + checkAlph + " adds=" + adds + " debug=" + debug + " sum=" + sum + ")";
     }
 
     @Override
@@ -808,7 +819,7 @@ public interface Params extends Serializable {
       try {
         ObjectInputStream ois = new ObjectInputStream(data);
         Params d = (Params) ois.readObject();
-        Log.info("other.class=" + d.getClass().getName());
+        Log.info("other.class=" + d.getClass().getName() + " sum=" + sum + " other=" + d);
         sum = d;
         adds = 1;
       } catch (Exception e) {
@@ -819,7 +830,7 @@ public interface Params extends Serializable {
     @Override
     public void get(OutputStream data) {
       try {
-        Log.info("sum.class=" + sum.getClass().getName());
+        Log.info("sum.class=" + sum.getClass().getName() + " sum=" + sum);
         ObjectOutputStream oos = new ObjectOutputStream(data);
         oos.writeObject(sum);
         oos.flush();

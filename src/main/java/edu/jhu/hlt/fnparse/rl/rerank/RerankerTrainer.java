@@ -1220,6 +1220,7 @@ public class RerankerTrainer {
 
       if (isParamServer) {
         // Server
+        LOG.info("[main] server: networkParams=" + trainer.networkParams);
         trainer.parameterServer = new NetworkParameterAveraging.Server(trainer.networkParams, port);
 
         File checkpointDir = new File(workingDir, "paramAverages");
@@ -1234,6 +1235,7 @@ public class RerankerTrainer {
       } else {
         // Client
         assert numClientsForParamAvg > 0;
+        LOG.info("[main] client: networkParams=" + trainer.networkParams);
         trainer.parameterServerClient = new NetworkParameterAveraging.Client(
             trainer.networkParams,
             trainer.parameterServerHost,
