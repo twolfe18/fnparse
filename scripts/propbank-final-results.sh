@@ -2,7 +2,7 @@
 
 set -e
 
-if [[ $# != 5 ]]; then
+if [[ $# != 6 ]]; then
   echo "please provide:"
   echo "1) how many templates to keep -- size of the feature set"
   echo "2) feature mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
@@ -24,8 +24,12 @@ mkdir -p $WORKING_DIR/sge-logs
 
 # Make the feature set
 FEATURES=experiments/feature-information-gain/feature-sets/fs-${NUM_TEMPLATES}.txt
-rm $FEATURES
-make $FEATURES
+#rm $FEATURES
+#make $FEATURES
+if [[ ! -f $FEATURES ]]; then
+  echo "no feature set file: $FEATURES"
+  exit -2
+fi
 
 
 # NOTE: This can fail because the port may already be in use.
@@ -43,8 +47,12 @@ qsub -N "parse-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
 # Check where the server is running.
 # Approximation: Take the last job that matches "param-server*"
 #sleep `seq 3 10 | shuf -n 1`
-sleep 5
-PARSE_SERVER=`qstat | grep 'parse-serv*' | tail -n 1 | cut -d'@' -f2 | cut -d'.' -f1`
+PARSE_SERVER="nope"
+while [[ `echo $PARSE_SERVER | grep -cP 'r\d+n\d+'` != 1 ]]; do
+  sleep 5
+  PARSE_SERVER=`qstat | grep 'parse-serv*' | tail -n 1 | cut -d'@' -f2 | cut -d'.' -f1`
+  echo "tried again, server=$PARSE_SERVER"
+done
 echo "Found parse server: $PARSE_SERVER"
 
 
@@ -56,8 +64,12 @@ qsub -N "param-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
     $JAR \
     ${PARAM_SERVER_PORT}
 
-sleep 5
-PARAM_SERVER=`qstat | grep 'param-serv*' | tail -n 1 | cut -d'@' -f2 | cut -d'.' -f1`
+PARAM_SERVER="nope"
+while [[ `echo $PARAM_SERVER | grep -cP 'r\d+n\d+'` != 1 ]]; do
+  sleep 5
+  PARAM_SERVER=`qstat | grep 'param-serv*' | tail -n 1 | cut -d'@' -f2 | cut -d'.' -f1`
+  echo "tried again, server=$PARAM_SERVER"
+done
 echo "Found param server: $PARAM_SERVER"
 
 
@@ -73,7 +85,8 @@ for i in `seq $NUM_WORKERS | awk '{print $1-1}'`; do
       ${i} \
       ${NUM_WORKERS} \
       ${JAR} \
-      ${FEATURES}
+      ${FEATURES} \
+      ${FEAT_MODE}
 done
 
 
