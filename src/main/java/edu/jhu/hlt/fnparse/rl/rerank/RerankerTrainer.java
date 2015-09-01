@@ -932,7 +932,7 @@ public class RerankerTrainer {
         ? featureTemplates : featureTemplatesSearch;
     String otherFs = config.getString("featureSetFile", "");
     if (!otherFs.isEmpty())
-      fs = getFeatureSetFromFile(otherFs);
+      fs = getFeatureSetFromFileNew(otherFs);
     LOG.info("using featureSet=" + fs);
 
     // This is the path that will be executed when not debugging
@@ -1396,6 +1396,20 @@ public class RerankerTrainer {
       */
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
+
+  private static String getFeatureSetFromFileNew(String path) {
+    File f = new File(path);
+    if (!f.isFile())
+      throw new RuntimeException("not a file: " + path);
+    StringBuilder sb = new StringBuilder();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      while (r.ready())
+        sb.append(" " + r.readLine());
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return sb.toString().trim();
+  }
 
   public static String getFeatureSetFromFile(String path) {
     ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
