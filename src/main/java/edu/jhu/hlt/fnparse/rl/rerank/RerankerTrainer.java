@@ -74,6 +74,7 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
@@ -1285,7 +1286,8 @@ public class RerankerTrainer {
     }
 
     Reranker model = null;
-    String modelFileKey = "loadModelFromFile";
+    String modelFileKey = "loadModelFromFile";    // for serialization of Reranker
+    String paramsFileKey = "loadParamsFromFile";  // for serialization of Params.NetworkAvg
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
@@ -1295,6 +1297,21 @@ public class RerankerTrainer {
       ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
       model = (Reranker) ois.readObject();
       ois.close();
+    } else if (config.containsKey(paramsFileKey)) {
+      File paramsFile = config.getExistingFile(paramsFileKey);
+      LOG.info("[main] loading params from " + paramsFile.getPath());
+      Object obj = FileUtil.deserialize(paramsFile);
+      LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
+      Params.Glue params = (Params.Glue) obj;
+      model = new Reranker(
+          params.getStateful(),
+          params.getStateless(),
+          params.getTau(),
+          trainer.trainConf.argPruningMode,
+          trainer.trainConf.trainBeamSize,
+          trainer.trainConf.testBeamSize,
+          trainer.rand);
+      LOG.info("just constructed model from saved params (skipping train): " + model);
     } else {
       // Train
       config.store(System.out, null);   // show the config for posterity
