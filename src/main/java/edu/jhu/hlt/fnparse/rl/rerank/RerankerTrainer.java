@@ -1319,9 +1319,23 @@ public class RerankerTrainer {
     } else if (config.containsKey(paramsFileKey)) {
       File paramsFile = config.getExistingFile(paramsFileKey);
       LOG.info("[main] loading params from " + paramsFile.getPath());
-      Object obj = FileUtil.deserialize(paramsFile);
-      LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
-      Params.Glue params = (Params.Glue) obj;
+
+      // TODO Switch NetworkParameterAveraging to use java serialization!
+//      Object obj = FileUtil.deserialize(paramsFile);
+//      LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
+//      Params.Glue params = (Params.Glue) obj;
+
+      // Using my own jenk serialization
+      Params.Glue params = new Params.Glue(
+          trainer.statefulParams,
+          trainer.statelessParams,
+          trainer.tauParams);
+      try (DataInputStream dis = new DataInputStream(new FileInputStream(paramsFile))) {
+        params.deserialize(dis);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+
       model = new Reranker(
           params.getStateful(),
           params.getStateless(),
