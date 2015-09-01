@@ -3,6 +3,6 @@
 # For debugging:
 #echo "args: $@" >/tmp/note
 
-#Rscript scripts/stopping-condition.R $@
-echo "stop"
+Rscript scripts/stopping-condition.R $@
+#echo "stop"
 
