@@ -104,7 +104,7 @@ public class DeterministicRolePruning
     this.cParser = cParser;
 
     this.showPruningRecall = ExperimentProperties.getInstance()
-        .getBoolean("DeterministicRolePruning.showPruningRecall", true);
+        .getBoolean("DeterministicRolePruning.showPruningRecall", false);
   }
 
   public Mode getMode() {

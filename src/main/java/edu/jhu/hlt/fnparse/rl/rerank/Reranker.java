@@ -100,6 +100,7 @@ public class Reranker implements Serializable {
   private transient MultiTimer timer;
 
   public boolean logArgPruningStats;
+  public boolean logPredict;
 
   public Reranker(
       Params.Stateful thetaStateful,
@@ -117,8 +118,9 @@ public class Reranker implements Serializable {
     this.rand = rand;
     this.tauParams = tauParams;
 
-    logArgPruningStats = ExperimentProperties.getInstance()
-        .getBoolean("Reranker.logArgPruningStats", true);
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    logArgPruningStats = config.getBoolean("Reranker.logArgPruningStats", false);
+    logPredict = config.getBoolean("Reranker.logPredict", false);
   }
 
   public String toString() {
@@ -322,7 +324,8 @@ public class Reranker implements Serializable {
 
   // Single predict
   public FNParse predict(State initialState) {
-    LOG.info("[predict] starting TK=" + initialState.numFrameRoleInstances());
+    if (logPredict)
+      LOG.info("[predict] starting TK=" + initialState.numFrameRoleInstances());
 
     // Caching Adjoints isn't as clear as I thought it would be
     // Assume: TK=300, #spans=1000, and Adjoints.size=10000*8b
@@ -355,7 +358,8 @@ public class Reranker implements Serializable {
     StateSequence ss = fs.getPath();
     FNParse yhat = ss.getCur().decode();
     assert yhat != null;    // split maxbeam.pop and beam.pop? path vs decode?
-    LOG.info("[predict] done");
+    if (logPredict)
+      LOG.info("[predict] done");
     return yhat;
   }
 
