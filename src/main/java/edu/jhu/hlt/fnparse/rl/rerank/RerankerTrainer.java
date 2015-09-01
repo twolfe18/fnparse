@@ -30,6 +30,7 @@ import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.zip.GZIPInputStream;
 
 import org.apache.log4j.Logger;
 
@@ -74,7 +75,6 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
@@ -1320,20 +1320,31 @@ public class RerankerTrainer {
       File paramsFile = config.getExistingFile(paramsFileKey);
       LOG.info("[main] loading params from " + paramsFile.getPath());
 
+      Params.Glue params = null;
+
       // TODO Switch NetworkParameterAveraging to use java serialization!
-//      Object obj = FileUtil.deserialize(paramsFile);
-//      LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
-//      Params.Glue params = (Params.Glue) obj;
+      try {
+        Object obj = FileUtil.deserialize(paramsFile);
+        LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
+        params = (Params.Glue) obj;
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
 
       // Using my own jenk serialization
-      Params.Glue params = new Params.Glue(
-          trainer.statefulParams,
-          trainer.statelessParams,
-          trainer.tauParams);
-      try (DataInputStream dis = new DataInputStream(new FileInputStream(paramsFile))) {
-        params.deserialize(dis);
-      } catch (Exception e) {
-        throw new RuntimeException(e);
+      if (params == null) {
+        params = new Params.Glue(
+            trainer.statefulParams,
+            trainer.statelessParams,
+            trainer.tauParams);
+        LOG.info("[main] trying other serialization, glue=" + params);
+        try {
+          DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(paramsFile)));
+          params.deserialize(dis);
+          dis.close();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
       }
 
       model = new Reranker(
