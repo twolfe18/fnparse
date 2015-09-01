@@ -9,6 +9,7 @@ if [[ $# != 5 ]]; then
   echo "3) a working directory for output"
   echo "4) a jar file with all dependencies"
   echo "5) how many workers to use"
+  echo "6) port for the param server to use -- should be globally unique"
   exit -1
 fi
 
@@ -17,6 +18,7 @@ FEAT_MODE=$2
 WORKING_DIR=$3
 JAR=$4
 NUM_WORKERS=$5
+PARAM_SERVER_PORT=$6
 
 mkdir -p $WORKING_DIR/sge-logs
 
@@ -26,6 +28,9 @@ rm $FEATURES
 make $FEATURES
 
 
+# NOTE: This can fail because the port may already be in use.
+# IF this happens for the parse server, this just means that things will be a little slower than they have to be.
+# IF this happens for the param server, we're screwed!
 echo "Starting redis server for parses..."
 qsub -N "parse-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
   ./scripts/propbank-train-redis-parse-server.sh
@@ -46,7 +51,10 @@ echo "Found parse server: $PARSE_SERVER"
 echo "Starting param server..."
 mkdir -p $WORKING_DIR/server
 qsub -N "param-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
-  ./scripts/propbank-train-server.sh $WORKING_DIR/server $JAR
+  ./scripts/propbank-train-server.sh \
+    $WORKING_DIR/server \
+    $JAR \
+    ${PARAM_SERVER_PORT}
 
 sleep 5
 PARAM_SERVER=`qstat | grep 'param-serv*' | tail -n 1 | cut -d'@' -f2 | cut -d'.' -f1`
