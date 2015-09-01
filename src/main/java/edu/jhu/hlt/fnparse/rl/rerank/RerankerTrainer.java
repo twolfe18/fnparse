@@ -1039,6 +1039,48 @@ public class RerankerTrainer {
     return trainer;
   }
 
+  public static void setFeatureMode(ExperimentProperties config) {
+    String fm = config.getString("featureMode", "");
+    if (fm.isEmpty()) {
+      LOG.info("no feature mode specified!");
+    } else {
+      LOG.info("featureMode=" + fm + "\tNOTE: This can overwrite other settings!");
+      // This info can also be found in scripts/tge_global_train.py
+      switch (fm.toUpperCase()) {
+      case "FULL":
+        config.setProperty("useGlobalFeatures", "True");
+        config.setProperty("globalFeatNumArgs", "True");
+        config.setProperty("globalFeatArgLoc", "False");
+        config.setProperty("globalFeatArgLocSimple", "True");
+        config.setProperty("globalFeatArgOverlap", "False");
+        config.setProperty("globalFeatSpanBoundary", "False");
+        config.setProperty("globalFeatRoleCooc", "True");
+        config.setProperty("globalFeatRoleCoocSimple", "False");
+        break;
+      case "ARG-LOCATION":
+        config.setProperty("globalFeatArgLocSimple", "True");
+        config.setProperty("globalFeatNumArgs", "False");
+        config.setProperty("globalFeatRoleCoocSimple", "False");
+        break;
+      case "NUM-ARGS":
+        config.setProperty("globalFeatArgLocSimple", "False");
+        config.setProperty("globalFeatNumArgs", "True");
+        config.setProperty("globalFeatRoleCoocSimple", "False");
+        break;
+      case "ROLE-COOC":
+        config.setProperty("globalFeatArgLocSimple", "False");
+        config.setProperty("globalFeatNumArgs", "False");
+        config.setProperty("globalFeatRoleCoocSimple", "True");
+        break;
+      case "LOCAL":
+        config.setProperty("useGlobalFeatures", "False");
+        break;
+      default:
+        throw new RuntimeException("unknown feature mode: " + fm);
+      }
+    }
+  }
+
   /**
    * First arg must be the job name (for tie-ins with tge) and the remaining are
    * key-value pairs.
@@ -1051,6 +1093,9 @@ public class RerankerTrainer {
 //    ExperimentProperties config = new ExperimentProperties();
 //    config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
     ExperimentProperties config = ExperimentProperties.init(Arrays.copyOfRange(args, 1, args.length));
+
+    // First determine the feature mode, and add implied flags
+    setFeatureMode(config);
 
     // Load FrameNet/Propbank
     final boolean propbank = config.getBoolean("propbank", false);

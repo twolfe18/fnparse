@@ -1,21 +1,23 @@
 
-Jun 29, 2015
+# Jun 29, 2015
 
-There are two parts, running feature selection (a la scripts/forward-selection),
-and running the full-scale experiments (sweep everything other than feature set).
+# There are two parts, running feature selection (a la scripts/forward-selection),
+# and running the full-scale experiments (sweep everything other than feature set).
+# Aug 31: This has CHANGED to selecting template n-grams by information gain, see FeatureIGComputation
 
-This is not a shell script because it is not meant to be run fully-automatically;
-there are some manual steps in this process, see notes.
+
+# This is not a shell script because it is not meant to be run fully-automatically;
+# there are some manual steps in this process, see notes.
 
 
 ##### TEMPLATE CARDINALITY ESTIMATION #################################################################################
 
-experiments/feature-cardinality-estimation/template.all.txt is based on framenet.
+# experiments/feature-cardinality-estimation/template.all.txt is based on framenet.
 
-Use:
-propbank-feature-template-cardinality-estimatation.sh
+# Use:
+# propbank-feature-template-cardinality-estimatation.sh
 
-TODO do this later after you have the pipeline working.
+# TODO do this later after you have the pipeline working.
 
 
 
@@ -52,28 +54,72 @@ redis-server
 
 ##### FULL EXPERIMENTS  ###############################################################################################
 
-### Cleanup old logs
-rm logging/propbank/*server*
-rm logging/propbank/*client*
+
+# I'm going to have to run the full experiments 4 times and take the max over dev.
+# Sort templates by IG and take the top K:
+#   small:    30 templates
+#   medium:  100 templates
+#   large:   300 templates
+#   xlarge: 1000 templates
 
 
-### Start redis server
-qsub -q all.q ./scripts/propbank-train-redis.sh
+
+# CRAP
+# I need another duplicate: with and without global features!
+# {LOCAL, ARG-LOCATION, NUM-ARGS, ROLE-COOC, FULL}
+# => Lets get this running for just FULL and then loop back to add the others
+
+
+
+NUM_TEMPLATES=30
+WORKING_DIR=experiments/final-results/propbank/aug31a/small
+mkdir -p $WORKING_DIR/sge-logs
+
+# Make the feature set
+FEATURES=experiments/feature-information-gain/feature-sets/fs-${NUM_TEMPLATES}.txt
+rm $FEATURES
+make $FEATURES
+
+
+# The workers all look at a different shard of the data
+NUM_WORKERS=15
+
+
+### Build a jar that everyone will use
+make jar
+JAR=`find target/ -iname '*.jar' | tail -n 1`
+
+
+### Start redis server for parses
+qsub -N "parse-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
+  ./scripts/propbank-train-redis-parse-server.sh
 
 # You have to read this off of qstat
-REDIS_SERVER=r8n22
+PARSE_SERVER=r8n30
 
 
 ### Start param server
-qsub -q all.q ./scripts/propbank-train-server.sh experiments/propbank/jun26/server/
+mkdir -p $WORKING_DIR/server
+qsub -N "param-server-$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
+  ./scripts/propbank-train-server.sh $WORKING_DIR/server $JAR
 
 # Check where the server is running
-PARAM_SERVER=r6n33
+PARAM_SERVER=r5n30
 
 
 ### Start the clients
-for i in `seq 10 | awk '{print $1-1}'`; do
-  qsub -q all.q ./scripts/propbank-train-client.sh experiments/propbank/jun26/client-$i/ ${REDIS_SERVER} ${PARAM_SERVER} $i
+for i in `seq $NUM_WORKERS | awk '{print $1-1}'`; do
+  WD=${WORKING_DIR}/client-${i}
+  mkdir -p $WD
+  qsub -N "client-$i-of-$NUM_WORKERS-nTmpl_$NUM_TEMPLATES" -q all.q -o $WORKING_DIR/sge-logs \
+    ./scripts/propbank-train-client.sh \
+      ${WD} \
+      ${PARSE_SERVER} \
+      ${PARAM_SERVER} \
+      ${i} \
+      ${NUM_WORKERS} \
+      ${JAR} \
+      ${FEATURES}
 done
 
 

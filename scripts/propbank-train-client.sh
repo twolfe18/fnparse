@@ -17,7 +17,7 @@ set -euo pipefail
 # Will send an average to the param server every this many seconds
 SAVE_INTERVAL=300
 
-if [[ $# != 5 ]]; then
+if [[ $# != 8 ]]; then
   echo "please provide"
   echo "1) a working directory"
   echo "2) redis server"
@@ -26,6 +26,7 @@ if [[ $# != 5 ]]; then
   echo "5) numShards"
   echo "6) a jar file"
   echo "7) a file containing the feature set"
+  echo "8) feature mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
   exit -1
 fi
 
@@ -36,6 +37,7 @@ i=$4
 NUM_SHARD=$5
 JAR=$6
 FEATURES=$7
+FEATURE_MODE=$8
 
 echo "copying jar file to the working directory:"
 echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
@@ -63,17 +65,11 @@ java -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
   addStanfordParses false \
   realTestSet false \
   propbank true \
-  laptop false \
-  nTrain 5000 \
   l2Penalty 1e-8 \
   globalL2Penalty 1e-7 \
   secsBetweenShowingWeights 180 \
   trainTimeLimit 360 \
-  featCoversFrames false \
-  useGlobalFeatures True \
-  globalFeatArgLocSimple True \
-  globalFeatNumArgs True \
-  globalFeatRoleCoocSimple True \
-  globalFeatArgOverlap True \
-  globalFeatSpanBoundary True
+  featureSetFile ${FEATURES} \
+  featureMode ${FEATURE_MODE} \
+  featCoversFrames false
 
