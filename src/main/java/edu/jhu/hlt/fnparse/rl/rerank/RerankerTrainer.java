@@ -1344,6 +1344,21 @@ public class RerankerTrainer {
           dis.close();
         } catch (Exception e) {
           e.printStackTrace();
+
+          // One last try
+          params = new Params.Glue(
+              trainer.statefulParams,
+              trainer.statelessParams,
+              trainer.tauParams);
+          Params.NetworkAvg np = new Params.NetworkAvg(params, true);
+          LOG.info("[main] last ditch");
+          try {
+            DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(paramsFile)));
+            np.set(dis);
+            dis.close();
+          } catch (Exception e2) {
+            e2.printStackTrace();
+          }
         }
       }
 
