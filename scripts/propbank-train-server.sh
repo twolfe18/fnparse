@@ -11,45 +11,48 @@ echo "java: `java -version 2>&1`"
 echo "java versions: `which -a java`"
 echo "arguments: $@"
 
-set -euo pipefail
-
 # Will save a model to disk every this many seconds
-SAVE_INTERVAL=600
+if [[ $SAVE_INTERVAL == "" ]]; then
+  SAVE_INTERVAL=600
+fi
 
 if [[ $# != 3 ]]; then
   echo "please provide:"
   echo "1) a working directory"
-  #echo "2) a jar file"
   echo "2) a classpath with all dependencies"
   echo "3) a port to listen on"
+  echo "NOTE: You can run with RUN_WITH_MAVEN=true (which ignores classpath) or just leave it off (for java+classpath)"
   exit -1
 fi
 
 WORKING_DIR=$1
-#JAR=$2
 CP=$2
 PORT=$3
 
-#echo "copying jar to a safe place"
-#cp $JAR $WORKING_DIR/fnparse.jar
-#echo "$JAR  =>  $WORKING_DIR/fnparse.jar"
+COMMAND="-DworkingDir=${WORKING_DIR} \
+  -DparallelLearnDebug=true \
+  -DparamServerHost=localhost \
+  -DparamServerPort=${PORT} \
+  -DisParamServer=true \
+  -DparamAvgSecBetweenSaves=${SAVE_INTERVAL} \
+  -DaddStanfordParses=false \
+  -DrealTestSet=false \
+  -Dpropbank=true \
+  -Dl2Penalty=1e-8 \
+  -DglobalL2Penalty=1e-7 \
+  -DsecsBetweenShowingWeights=180"
 
-#CP=`find target/ -name '*.jar' | tr '\n' ':'`
-#CP=$WORKING_DIR/fnparse.jar
-
-java -XX:+UseSerialGC -Xmx3G -ea -server -cp ${CP} \
-  edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
-  parameterServerJob \
-  workingDir ${WORKING_DIR} \
-  parallelLearnDebug true \
-  paramServerHost localhost \
-  paramServerPort ${PORT} \
-  isParamServer true \
-  paramAvgSecBetweenSaves ${SAVE_INTERVAL} \
-  addStanfordParses false \
-  realTestSet false \
-  propbank true \
-  l2Penalty 1e-8 \
-  globalL2Penalty 1e-7 \
-  secsBetweenShowingWeights 180
+if [[ $RUN_WITH_MAVEN == "true" ]]; then
+  echo "Running with maven, no classpath needed..."
+  COMMAND="mvn compile exec:java \
+    -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
+    -Dexec.args=parameterServerJob \
+    $COMMAND"
+  MAVEN_OPTS="-XX:+UseSerialGC -Xmx3G -ea -server" $COMMAND
+else
+  echo "Running with java, classpath: $CP"
+  COMMAND="java $COMMAND -XX:+UseSerialGC -Xmx5G -ea -server -cp ${CP} \
+    edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer parameterServerJob"
+  exec $COMMAND
+fi
 

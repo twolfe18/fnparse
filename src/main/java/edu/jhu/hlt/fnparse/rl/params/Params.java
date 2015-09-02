@@ -798,7 +798,9 @@ public interface Params extends Serializable {
    * Assuming Params are serializable, this class lifts them up to support
    * parameter averaging over the network. See {@link NetworkParameterAveraging.AvgParams}
    */
-  public static class NetworkAvg implements NetworkParameterAveraging.AvgParams {
+  public static class NetworkAvg implements NetworkParameterAveraging.AvgParams, Serializable {
+    private static final long serialVersionUID = -4791579161317201098L;
+
     private Params sum;
     private boolean checkAlph;
     private int adds;
@@ -885,6 +887,10 @@ public interface Params extends Serializable {
       Params avg = cloneViaSerialization(this.sum);
       avg.scaleWeights(1d / adds);
       return avg;
+    }
+
+    public int getNumAdds() {
+      return adds;
     }
 
     @SuppressWarnings("unchecked")
