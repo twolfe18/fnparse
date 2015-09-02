@@ -11,13 +11,14 @@
 
 set -e
 
-if [[ $# != 5 ]]; then
-  echo "please provide:"
-  echo "1) a feature set mode, e.g. \"FULL\""
+if [[ $# != 6 ]]; then
+  echo "Please provide:"
+  echo "1) a feature set mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
   echo "2) a feature set size, e.g. 30"
   echo "3) a working directory for output"
   echo "4) a parse (redis) server"
   echo "5) a jar file with all dependencies"
+  echo "6) where to run the job (i.e. \"grid\" for qsub or \"local\" the current machine)"
   exit -1
 fi
 
@@ -26,6 +27,12 @@ FS_SIZE=$2
 WD=$3
 PARSE_SERVER=$4
 JAR=$5
+MODE=$6
+
+if [[ $MODE != "grid" && $MODE != "local" ]]; then
+  echo "Illegal mode: $MODE"
+  exit -2
+fi
 
 ID=`echo "$FS_MODE-$FS_SIZE" | shasum | awk '{print substr($1, 0, 8)}'`
 
@@ -33,43 +40,47 @@ BASE=experiments/final-results/propbank/sep1b
 RESULTS_DIR=${BASE}/wd-${FS_MODE}-${FS_SIZE}
 
 if [[ ! -d $RESULTS_DIR ]]; then
-  echo "could not find results directory: $RESULTS_DIR"
+  echo "Could not find results directory: $RESULTS_DIR"
   exit 1
+else
+  echo "Using results from: $RESULTS_DIR"
 fi
 
 
 JAR_STABLE=$WD/fnparse.jar
-echo "copying jar to a safe place"
+echo "Copying jar to a safe place"
 echo "    $JAR"
-echo "==> $STABLE_JAR"
-cp $JAR $STABLE_JAR
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
 CP=$JAR_STABLE
 
 
 PARAMS_FILE=`find $RESULTS_DIR/server/paramAverages -type f | tail -n 1`
 
 if [[ ! -f $PARAMS_FILE ]]; then
-  echo "could not find params file: $PARAMS_FILE"
+  echo "Could not find params file: $PARAMS_FILE"
   exit 2
+else
+  echo "Using param file: $PARAMS_FILE"
 fi
 
 FEATURES=experiments/feature-information-gain/feature-sets/fs-$FS_SIZE.txt
 
 if [[ ! -f $FEATURES ]]; then
-  echo "could not find feature file: $FEATURES"
+  echo "Could not find feature file: $FEATURES"
   exit 3
+else
+  echo "Using feature file: $FEATURES"
 fi
 
 
 # If I provide a model training will not occur. So just do realTestSet=false then realTestSet=true.
 
 ### DEV ###
+echo "Launching dev set performance job..."
 DEV_WD=$WD/dev-perf
 mkdir -p $DEV_WD
-qsub -N "devPerf-$ID" -q all.q \
-  -cwd -j y -b y -V -l "num_proc=1,mem_free=13G,h_rt=72:00:00" \
-  -o $DEV_WD/sge-log.txt \
-  java \
+COMMAND="java \
     -Ddata.wordnet=toydata/wordnet/dict \
     -Ddata.embeddings=data/embeddings \
     -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
@@ -78,7 +89,7 @@ qsub -N "devPerf-$ID" -q all.q \
     -DdisallowConcreteStanford=false \
     -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
     edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
-    "devPerf-$ID" \
+    \"devPerf-$ID\" \
     workingDir ${DEV_WD} \
     redis.host.propbankParses ${PARSE_SERVER} \
     redis.port.propbankParses 6379 \
@@ -88,16 +99,24 @@ qsub -N "devPerf-$ID" -q all.q \
     propbank true \
     featureSetFile ${FEATURES} \
     featureMode ${FS_MODE} \
-    featCoversFrames false
+    featCoversFrames false \
+    loadParamsFromFile ${PARAMS_FILE}"
+if [[ $MODE == "grid" ]]; then
+  COMMAND="qsub -N \"devPerf-$ID\" -q all.q \
+    -cwd -j y -b y -V -l \"num_proc=1,mem_free=13G,h_rt=72:00:00\" \
+    -o $DEV_WD/sge-log.txt \
+    $COMMAND"
+else
+  COMMAND="$COMMAND 2>&1 | tee $DEV_WD/log.txt"
+fi
+eval $COMMAND || exit 1
 
 
 ### TEST ###
+echo "Launching test set performance job..."
 TEST_WD=$WD/test-perf
 mkdir -p $TEST_WD
-qsub -N "testPerf-$ID" -q all.q \
-  -cwd -j y -b y -V -l "num_proc=1,mem_free=13G,h_rt=72:00:00" \
-  -o $TEST_WD/sge-log.txt \
-  java \
+COMMAND="java \
     -Ddata.wordnet=toydata/wordnet/dict \
     -Ddata.embeddings=data/embeddings \
     -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
@@ -106,7 +125,7 @@ qsub -N "testPerf-$ID" -q all.q \
     -DdisallowConcreteStanford=false \
     -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
     edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
-    "testPerf-$ID" \
+    \"testPerf-$ID\" \
     workingDir ${TEST_WD} \
     redis.host.propbankParses ${PARSE_SERVER} \
     redis.port.propbankParses 6379 \
@@ -116,7 +135,17 @@ qsub -N "testPerf-$ID" -q all.q \
     propbank true \
     featureSetFile ${FEATURES} \
     featureMode ${FS_MODE} \
-    featCoversFrames false
+    featCoversFrames false \
+    loadParamsFromFile ${PARAMS_FILE}"
+if [[ $MODE == "grid" ]]; then
+  COMMAND="qsub -N \"testPerf-$ID\" -q all.q \
+    -cwd -j y -b y -V -l \"num_proc=1,mem_free=13G,h_rt=72:00:00\" \
+    -o $TEST_WD/sge-log.txt \
+    $COMMAND"
+else
+  COMMAND="$COMMAND 2>&1 | tee $TEST_WD/log.txt"
+fi
+eval $COMMAND || exit 2
 
 
 
