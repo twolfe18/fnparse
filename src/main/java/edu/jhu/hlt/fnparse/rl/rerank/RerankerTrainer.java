@@ -1317,59 +1317,28 @@ public class RerankerTrainer {
       model = (Reranker) ois.readObject();
       ois.close();
     } else if (config.containsKey(paramsFileKey)) {
+      // Load just the params (instead of the entire Reranker).
+      // This is useful for distributed training, which only uses the Params.
       File paramsFile = config.getExistingFile(paramsFileKey);
       LOG.info("[main] loading params from " + paramsFile.getPath());
-
-      Params.Glue params = null;
-
-      // TODO Switch NetworkParameterAveraging to use java serialization!
       try {
         Object obj = FileUtil.deserialize(paramsFile);
-        LOG.info("[main] params.class=" + obj.getClass() + " params=" + obj);
-        params = (Params.Glue) obj;
+        Log.info("[main] deser1 obj=" + obj);
+        Params.NetworkAvg p = (Params.NetworkAvg) obj;
+        Log.info("[main] deser1 p=" + p);
+        Params.Glue glue = (Params.Glue) p.getAverage();
+        Log.info("[main] deser1 glue=" + glue);
+        model = new Reranker(
+            glue.getStateful(),
+            glue.getStateless(),
+            glue.getTau(),
+            trainer.trainConf.argPruningMode,
+            trainer.trainConf.trainBeamSize,
+            trainer.trainConf.testBeamSize,
+            trainer.rand);
       } catch (Exception e) {
         e.printStackTrace();
       }
-
-      // Using my own jenk serialization
-      if (params == null) {
-        params = new Params.Glue(
-            trainer.statefulParams,
-            trainer.statelessParams,
-            trainer.tauParams);
-        LOG.info("[main] trying other serialization, glue=" + params);
-        try {
-          DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(paramsFile)));
-          params.deserialize(dis);
-          dis.close();
-        } catch (Exception e) {
-          e.printStackTrace();
-
-          // One last try
-          params = new Params.Glue(
-              trainer.statefulParams,
-              trainer.statelessParams,
-              trainer.tauParams);
-          Params.NetworkAvg np = new Params.NetworkAvg(params, true);
-          LOG.info("[main] last ditch");
-          try {
-            DataInputStream dis = new DataInputStream(new GZIPInputStream(new FileInputStream(paramsFile)));
-            np.set(dis);
-            dis.close();
-          } catch (Exception e2) {
-            e2.printStackTrace();
-          }
-        }
-      }
-
-      model = new Reranker(
-          params.getStateful(),
-          params.getStateless(),
-          params.getTau(),
-          trainer.trainConf.argPruningMode,
-          trainer.trainConf.trainBeamSize,
-          trainer.trainConf.testBeamSize,
-          trainer.rand);
       LOG.info("just constructed model from saved params (skipping train): " + model);
     } else {
       // Train
