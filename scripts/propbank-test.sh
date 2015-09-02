@@ -11,14 +11,15 @@
 
 set -e
 
-if [[ $# != 6 ]]; then
+if [[ $# != 7 ]]; then
   echo "Please provide:"
   echo "1) a feature set mode, i.e. \"LOCAL\", \"ARG-LOCATION\", \"NUM-ARGS\", \"ROLE-COOC\", \"FULL\""
   echo "2) a feature set size, e.g. 30"
   echo "3) a working directory for output"
   echo "4) a parse (redis) server"
   echo "5) a jar file with all dependencies"
-  echo "6) where to run the job (i.e. \"grid\" for qsub or \"local\" the current machine)"
+  echo "6) a base directory where training occurred, e.g. experiments/final-results/propbank/sep2a"
+  echo "7) where to run the job (i.e. \"grid\" for qsub or \"local\" the current machine)"
   exit -1
 fi
 
@@ -27,7 +28,8 @@ FS_SIZE=$2
 WD=$3
 PARSE_SERVER=$4
 JAR=$5
-MODE=$6
+BASE=$6
+MODE=$7
 
 if [[ $MODE != "grid" && $MODE != "local" ]]; then
   echo "Illegal mode: $MODE"
@@ -36,7 +38,6 @@ fi
 
 ID=`echo "$FS_MODE-$FS_SIZE" | shasum | awk '{print substr($1, 0, 8)}'`
 
-BASE=experiments/final-results/propbank/sep1b
 RESULTS_DIR=${BASE}/wd-${FS_MODE}-${FS_SIZE}
 
 if [[ ! -d $RESULTS_DIR ]]; then
@@ -104,7 +105,7 @@ COMMAND="java \
 if [[ $MODE == "grid" ]]; then
   COMMAND="qsub -N \"devPerf-$ID\" -q all.q \
     -cwd -j y -b y -V -l \"num_proc=1,mem_free=13G,h_rt=72:00:00\" \
-    -o $DEV_WD/sge-log.txt \
+    -o $DEV_WD \
     $COMMAND"
 else
   COMMAND="$COMMAND 2>&1 | tee $DEV_WD/log.txt"
@@ -140,7 +141,7 @@ COMMAND="java \
 if [[ $MODE == "grid" ]]; then
   COMMAND="qsub -N \"testPerf-$ID\" -q all.q \
     -cwd -j y -b y -V -l \"num_proc=1,mem_free=13G,h_rt=72:00:00\" \
-    -o $TEST_WD/sge-log.txt \
+    -o $TEST_WD \
     $COMMAND"
 else
   COMMAND="$COMMAND 2>&1 | tee $TEST_WD/log.txt"
