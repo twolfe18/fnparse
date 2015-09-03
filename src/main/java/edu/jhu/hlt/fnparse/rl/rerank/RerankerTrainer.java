@@ -682,7 +682,9 @@ public class RerankerTrainer {
     outer:
     for (int iter = 0; true; ) {
       int step = conf.batchSize == 0 ? train.size() : conf.batchSize;
-      LOG.info("[main] epoch=" + epoch + " iter=" + iter + " train.size=" + train.size() + " step=" + step);
+      LOG.info("[main] epoch=" + epoch + " iter=" + iter
+          + " train.size=" + train.size() + " step=" + step
+          + " lr=" + conf.learningRate);
       for (int i = 0; i < train.size(); i += step) {
 
         // Batch step
@@ -691,8 +693,10 @@ public class RerankerTrainer {
         double violation = hammingTrainBatch(r, batch, es, train, conf, iter, timerStr);
         conf.tHammingTrain.stop();
 
-        if (showViolation && iter % 10 == 0)
-          LOG.info("[main] iter=" + iter + " trainViolation=" + violation);
+        if (showViolation && iter % 10 == 0) {
+          LOG.info("[main] iter=" + iter + " trainViolation=" + violation
+              + " lrVal=" + conf.learningRate.learningRate());
+        }
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
@@ -1447,6 +1451,7 @@ public class RerankerTrainer {
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 
   private static String getFeatureSetFromFileNew(String path) {
+    LOG.info("[main] getFeatureSetFromFileNew path=" + path);
     File f = new File(path);
     if (!f.isFile())
       throw new RuntimeException("not a file: " + path);

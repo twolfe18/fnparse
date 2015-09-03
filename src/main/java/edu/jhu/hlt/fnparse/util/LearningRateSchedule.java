@@ -34,6 +34,10 @@ public interface LearningRateSchedule {
     public double learningRate() {
       return learningRate;
     }
+    @Override
+    public String toString() {
+      return String.format("(Constant %.3g)", learningRate);
+    }
   }
 
   public static class Normal implements LearningRateSchedule {
@@ -69,6 +73,12 @@ public interface LearningRateSchedule {
         RerankerTrainer.LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
       return lr;
     }
+    @Override
+    public String toString() {
+      return String.format(
+          "(Normal init=%.3g smooth=%.3g squish=%.3g iter=%d lr=%.3g)",
+          initial, smooth, squish, iter, learningRate());
+    }
   }
 
   public static class Exp implements LearningRateSchedule {
@@ -87,6 +97,10 @@ public interface LearningRateSchedule {
       if (iter % 100 == 0)
         RerankerTrainer.LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
       return lr;
+    }
+    @Override
+    public String toString() {
+      return String.format("(Exp decay=%.3g iter=%d lr=%.3g)", decayRate, iter, learningRate());
     }
   }
 }

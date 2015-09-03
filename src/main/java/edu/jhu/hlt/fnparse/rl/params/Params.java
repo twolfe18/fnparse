@@ -804,6 +804,7 @@ public interface Params extends Serializable {
     private Params sum;
     private boolean checkAlph;
     private int adds;
+    public int showParamsEveryKMessage = 3;
     public boolean debug = false;
 
     /**
@@ -818,6 +819,16 @@ public interface Params extends Serializable {
       Log.info("zero.class=" + zero.getClass().getName()
           + " zero.toString=" + zero
           + " checkAlphabetEquality=" + checkAlphabetEquality);
+    }
+
+    @Override
+    public void receiveMessage(String message) {
+      Log.info("[NetworkAvg receiveMessage] " + message);
+      if (adds % showParamsEveryKMessage == 0) {
+        Log.info("[NetworkAvg receiveMessage] adds=" + adds + " showing average:");
+        Params avg = getAverage();
+        avg.showWeights();
+      }
     }
 
     @Override
