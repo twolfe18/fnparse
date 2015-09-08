@@ -97,6 +97,7 @@ public interface Params extends Serializable {
     }
     @Override
     public void showWeights() {
+      Log.info("showing weights for Glue:");
       stateful.showWeights();
       stateless.showWeights();
       tau.showWeights();
@@ -796,7 +797,8 @@ public interface Params extends Serializable {
 
   /**
    * Assuming Params are serializable, this class lifts them up to support
-   * parameter averaging over the network. See {@link NetworkParameterAveraging.AvgParams}
+   * parameter averaging over the network.
+   * See {@link NetworkParameterAveraging.AvgParams}
    */
   public static class NetworkAvg implements NetworkParameterAveraging.AvgParams, Serializable {
     private static final long serialVersionUID = -4791579161317201098L;
@@ -824,9 +826,10 @@ public interface Params extends Serializable {
     @Override
     public void receiveMessage(String message) {
       Log.info("[NetworkAvg receiveMessage] " + message);
+      Log.info("[NetworkAvg receiveMessage] sum=" + sum);
       if (adds % showParamsEveryKMessage == 0) {
-        Log.info("[NetworkAvg receiveMessage] adds=" + adds + " showing average:");
         Params avg = getAverage();
+        Log.info("[NetworkAvg receiveMessage] adds=" + adds + " avg=" + avg);
         avg.showWeights();
       }
     }

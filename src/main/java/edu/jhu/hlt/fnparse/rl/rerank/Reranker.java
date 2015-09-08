@@ -1098,9 +1098,9 @@ public class Reranker implements Serializable {
       // This is the loss before we put it though a max(0,-)
       this.hinge = oracle.getScore() - (mostViolated.getScore() + loss);
       if (Double.isNaN(hinge) || Double.isInfinite(hinge)) {
-        Log.warn("oralce.score=" + oracle.getScore());
-        Log.warn("mostViolated.score=" + mostViolated.getScore());
-        Log.warn("loss=" + loss);
+        LOG.info("oralce.score=" + oracle.getScore());
+        LOG.info("mostViolated.score=" + mostViolated.getScore());
+        LOG.info("loss=" + loss);
         assert false;
       }
 

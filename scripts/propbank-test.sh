@@ -47,6 +47,10 @@ else
   echo "Using results from: $RESULTS_DIR"
 fi
 
+if [[ ! -f $WD ]]; then
+  echo "couldn't find working directory: $WD"
+  exit 5
+fi
 
 JAR_STABLE=$WD/fnparse.jar
 echo "Copying jar to a safe place"

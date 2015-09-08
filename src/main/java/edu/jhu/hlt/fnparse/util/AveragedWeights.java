@@ -47,6 +47,29 @@ public class AveragedWeights implements Serializable {
       thetaSum = null;
   }
 
+  @Override
+  public String toString() {
+    return toString(30);
+  }
+
+  public String toString(int k) {
+    StringBuilder sb = new StringBuilder();
+    sb.append("(AveragedWeights\n");
+    for (int i = 0; i < Math.min(k, theta.length); i++)
+      sb.append(String.format("\t%+1.2f", theta[i]));
+    if (k > theta.length)
+      sb.append("... and " + (theta.length - k) + " more");
+    if (thetaSum != null) {
+      sb.append('\n');
+      for (int i = 0; i < Math.min(k, thetaSum.length); i++)
+        sb.append(String.format("\t%+1.2f", thetaSum[i]));
+      if (k > thetaSum.length)
+        sb.append("... and " + (thetaSum.length - k) + " more");
+    }
+    sb.append(')');
+    return sb.toString();
+  }
+
   public void serialize(DataOutputStream out) throws IOException {
     out.writeInt(theta.length);
     for (double d : theta)

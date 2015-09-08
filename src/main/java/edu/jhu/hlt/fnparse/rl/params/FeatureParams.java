@@ -29,6 +29,8 @@ import edu.jhu.util.Alphabet;
  * @author travis
  */
 public abstract class FeatureParams implements Serializable {
+  private static final long serialVersionUID = 4206437082045635260L;
+
   private transient Logger log = Logger.getLogger(getClass());
   Logger getLog() {
     if (log == null)
@@ -45,6 +47,8 @@ public abstract class FeatureParams implements Serializable {
 
   protected Alphabet<String> featureIndices;
   protected int numBuckets;
+
+  public boolean showWeightsEvenWithoutAlphabet = true;
 
   /** For AlphabetBased implementation */
   public FeatureParams(double l2Penalty) {
@@ -257,8 +261,16 @@ public abstract class FeatureParams implements Serializable {
   public void showWeights() {
     Alphabet<String> featureIndices = getAlphabetForShowingWeights();
     if (featureIndices == null) {
-      getLog().info("[showFeatures] can't show features because we're using feature "
-          + "hashing with no custom getAlphabetForShowingWeights.");
+      String meta = "[showFeatures " + getClass() + "]";
+      getLog().info(meta + " can't show features "
+          + "because we're using feature hashing with no custom "
+          + "getAlphabetForShowingWeights.");
+      if (showWeightsEvenWithoutAlphabet) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(meta + " showing weights without an alphabet:\n");
+        sb.append(theta.toString(200));
+        getLog().info(sb.toString());
+      }
       return;
     }
     String msg = getClass().getName();
