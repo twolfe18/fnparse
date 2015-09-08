@@ -2,7 +2,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=13G
+#$ -l mem_free=16G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
@@ -13,7 +13,7 @@ echo "arguments: $@"
 
 # Will send an average to the param server every this many seconds
 if [[ $SAVE_INTERVAL == "" ]]; then
-  SAVE_INTERVAL=300
+  SAVE_INTERVAL=120
 fi
 
 if [[ $# != 9 ]]; then
@@ -80,7 +80,7 @@ if [[ $RUN_WITH_MAVEN == "true" ]]; then
   MAVEN_OPTS="-XX:+UseSerialGC -Xmx7G -ea -server" $COMMAND
 else
   echo "Running with java, classpath: $CP"
-  COMMAND="java $COMMAND -XX:+UseSerialGC -Xmx12G -ea -server -cp ${CP} \
+  COMMAND="java $COMMAND -XX:+UseSerialGC -Xmx15G -ea -server -cp ${CP} \
     edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \"workerJob$i\""
   exec $COMMAND
 fi
