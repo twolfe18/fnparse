@@ -55,7 +55,10 @@ public interface Params extends Serializable {
   // its not listed here.
 
   /**
-   * For serialization and network parameter averaging.
+   * For serialization and network parameter averaging. Glues together three
+   * {@link Params} into one {@link Params} (needed for {@link
+   * NetworkParameterAveraging}, while giving you access to them individually
+   * (needed for a variety of reasons).
    */
   public static class Glue implements Params {
     private static final long serialVersionUID = 5523323641331682349L;
@@ -855,7 +858,10 @@ public interface Params extends Serializable {
     @Override
     public void get(OutputStream data) {
       try {
-        Log.info("sum.class=" + sum.getClass().getName() + " sum=" + sum);
+        if (debug) {
+          Log.info("sum.class=" + sum.getClass().getName() + " sum=" + sum);
+          sum.showWeights();
+        }
         ObjectOutputStream oos = new ObjectOutputStream(data);
         oos.writeObject(sum);
         oos.flush();
@@ -873,9 +879,16 @@ public interface Params extends Serializable {
       try {
         ObjectInputStream ois = new ObjectInputStream(other);
         Params d = (Params) ois.readObject();
-        Log.info("other.class=" + d.getClass().getName());
+        if (debug) {
+          Log.info("other.class=" + d.getClass().getName());
+          d.showWeights();
+          sum.showWeights();
+        }
         sum.addWeights(d, checkAlph);
         adds++;
+        if (debug) {
+          sum.showWeights();
+        }
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -884,7 +897,8 @@ public interface Params extends Serializable {
     @Override
     public void getAverage(OutputStream data) {
       try {
-        Log.info("adds=" + adds);
+        if (debug)
+          Log.info("adds=" + adds);
         Params avg = cloneViaSerialization(sum);
         avg.scaleWeights(1d / adds);
         ObjectOutputStream oos = new ObjectOutputStream(data);
