@@ -100,9 +100,11 @@ public interface Params extends Serializable {
     }
     @Override
     public void showWeights() {
-      Log.info("showing weights for Glue:");
+      Log.info("Glue stateful:");
       stateful.showWeights();
+      Log.info("Glue stateless:");
       stateless.showWeights();
+      Log.info("Glue tau:");
       tau.showWeights();
     }
     @Override
@@ -802,6 +804,12 @@ public interface Params extends Serializable {
    * Assuming Params are serializable, this class lifts them up to support
    * parameter averaging over the network.
    * See {@link NetworkParameterAveraging.AvgParams}
+   *
+   * TODO The implementation of ZERO is busted here. For server instances, I
+   * have resorted to the hack of setting sum to a value deserialized over the
+   * network (thus the zero doesn't matter). If you do this on the client
+   * though, you will have the learning and the networking looking at two
+   * different Params and it won't work. Fix this!
    */
   public static class NetworkAvg implements NetworkParameterAveraging.AvgParams, Serializable {
     private static final long serialVersionUID = -4791579161317201098L;
@@ -811,6 +819,9 @@ public interface Params extends Serializable {
     private int adds;
     public int showParamsEveryKMessage = 3;
     public boolean debug = false;
+
+    // needs to be false for server and true for clients
+    public boolean setViaScaleAndAdd = true;
 
     /**
      * @param zero is an instantiated set of weights set to 0 (this class
@@ -828,12 +839,21 @@ public interface Params extends Serializable {
 
     @Override
     public void receiveMessage(String message) {
+      if (debug) {
+        System.out.println();
+        System.out.println();
+      }
       Log.info("[NetworkAvg receiveMessage] " + message);
-      Log.info("[NetworkAvg receiveMessage] sum=" + sum);
+      if (debug)
+        Log.info("[NetworkAvg receiveMessage] sum=" + sum);
       if (adds % showParamsEveryKMessage == 0) {
         Params avg = getAverage();
         Log.info("[NetworkAvg receiveMessage] adds=" + adds + " avg=" + avg);
         avg.showWeights();
+      }
+      if (debug) {
+        System.out.println();
+        System.out.println();
       }
     }
 
@@ -848,7 +868,16 @@ public interface Params extends Serializable {
         ObjectInputStream ois = new ObjectInputStream(data);
         Params d = (Params) ois.readObject();
         Log.info("other.class=" + d.getClass().getName() + " sum=" + sum + " other=" + d);
-        sum = d;
+
+        if (setViaScaleAndAdd) {
+          if (debug) Log.info("setting via scale and add");
+          sum.scaleWeights(0);
+          sum.addWeights(d, checkAlph);
+        } else {
+          if (debug) Log.info("setting via assignment");
+          sum = d;
+        }
+
         adds = 1;
       } catch (Exception e) {
         throw new RuntimeException(e);
@@ -915,6 +944,11 @@ public interface Params extends Serializable {
       Params avg = cloneViaSerialization(this.sum);
       avg.scaleWeights(1d / adds);
       return avg;
+    }
+
+    /** Return the internal representation: only use for debugging */
+    public Params getRawSum() {
+      return sum;
     }
 
     public int getNumAdds() {

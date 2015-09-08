@@ -13,7 +13,7 @@ echo "arguments: $@"
 
 # Will send an average to the param server every this many seconds
 if [[ $SAVE_INTERVAL == "" ]]; then
-  SAVE_INTERVAL=300
+  SAVE_INTERVAL=120
 fi
 
 if [[ $# != 9 ]]; then
