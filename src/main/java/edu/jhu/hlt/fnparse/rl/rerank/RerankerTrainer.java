@@ -30,7 +30,6 @@ import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.zip.GZIPInputStream;
 
 import org.apache.log4j.Logger;
 
@@ -57,6 +56,8 @@ import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.Fixed;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.params.Params.Glue;
+import edu.jhu.hlt.fnparse.rl.params.Params.NetworkAvg;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateful;
 import edu.jhu.hlt.fnparse.rl.params.Params.Stateless;
 import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
@@ -161,6 +162,9 @@ public class RerankerTrainer {
       recallBiasLo *= factor;
       recallBiasHi *= factor;
     }
+
+    // Prints out a bunch of stuff.
+    public boolean debugNetworkParamAveraging = false;
 
     // Timers for how long stuff has taken.
     public Timer tHammingTrain = new Timer("hammingTrain", 10, false);
@@ -747,6 +751,36 @@ public class RerankerTrainer {
         // Average parameters over the network
         if (parameterServerClient != null) {
           assert networkParams != null;
+          if (conf.debugNetworkParamAveraging) {
+            System.out.println();
+            System.out.println();
+            Log.info("statelessMatch=" + (statelessParams == r.getStatelessParams()));
+            Log.info("statefulMatch=" + (statefulParams == r.getStatefulParams()));
+            Log.info("tauMatch=" + (tauParams == r.getPruningParams()));
+            System.out.println();
+            Log.info("paramServerClient.getParams=" + parameterServerClient.getParams());
+            NetworkAvg na = (NetworkAvg) parameterServerClient.getParams();
+            Log.info("paramServerClient sum:");
+            na.get().showWeights();
+            if (na.getNumAdds() > 0) {
+              Log.info("paramServerClient avg:");
+              na.getAverage().showWeights();
+            }
+            System.out.println();
+            Glue g = (Glue) na.getRawSum();
+            Log.info("statelessMatchGlue=" + (statelessParams == g.getStateless()));
+            Log.info("statefulMatchGlue=" + (statefulParams == g.getStateful()));
+            Log.info("tauMatchGlue=" + (tauParams == g.getTau()));
+            System.out.println();
+            Log.info("model stateful params:");
+            r.getStatefulParams().showWeights();
+            Log.info("model stateless params:");
+            r.getStatelessParams().showWeights();
+            Log.info("model tau params:");
+            r.getPruningParams().showWeights();
+            System.out.println();
+            System.out.println();
+          }
           parameterServerClient.paramsChanged();
         }
 
@@ -1228,7 +1262,8 @@ public class RerankerTrainer {
               trainer.statelessParams,
               trainer.tauParams),
               checkAlphabetEquality);
-      trainer.networkParams.debug = true;
+      trainer.networkParams.debug = trainer.trainConf.debugNetworkParamAveraging
+          || trainer.pretrainConf.debugNetworkParamAveraging;
 
       int secondsBetweenSaves = config.getInt("paramAvgSecBetweenSaves", 5 * 60);
       String hostName = InetAddress.getLocalHost().getHostName();
@@ -1247,6 +1282,7 @@ public class RerankerTrainer {
       if (isParamServer) {
         // Server
         LOG.info("[main] server: networkParams=" + trainer.networkParams);
+        trainer.networkParams.setViaScaleAndAdd = false;
         trainer.parameterServer = new NetworkParameterAveraging.Server(trainer.networkParams, port);
 
         File checkpointDir = new File(workingDir, "paramAverages");
@@ -1262,6 +1298,7 @@ public class RerankerTrainer {
         // Client
         assert numClientsForParamAvg > 0;
         LOG.info("[main] client: networkParams=" + trainer.networkParams);
+        trainer.networkParams.setViaScaleAndAdd = true;
         trainer.parameterServerClient = new NetworkParameterAveraging.Client(
             trainer.networkParams,
             trainer.parameterServerHost,
