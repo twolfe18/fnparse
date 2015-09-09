@@ -67,6 +67,8 @@ COMMAND="-Ddata.wordnet=toydata/wordnet/dict \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=180 \
   -DtrainTimeLimit=360 \
+  -DestimateLearningRateFreq=0 \
+  -DlrType=constant \
   -DfeatureSetFile=${FEATURES} \
   -DfeatureMode=${FEATURE_MODE} \
   -DfeatCoversFrames=false"

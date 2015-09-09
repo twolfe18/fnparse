@@ -936,12 +936,34 @@ public class RerankerTrainer {
 
     trainer.trainConf.batchWithReplacement = config.getBoolean("batchWithReplacement", false);
 
+    // Over-ride the default learning rate (Normal)
+    String lrType = config.getString("lrType", "normal");
+    if ("normal".equalsIgnoreCase(lrType)) {
+      trainer.pretrainConf.learningRate = new LearningRateSchedule.Normal(1);
+      trainer.trainConf.learningRate = new LearningRateSchedule.Normal(1);
+    } else if ("constant".equalsIgnoreCase(lrType)) {
+      trainer.pretrainConf.learningRate = new LearningRateSchedule.Constant(1);
+      trainer.trainConf.learningRate = new LearningRateSchedule.Constant(1);
+    } else {
+      throw new RuntimeException("unknown learning rate type: " + lrType);
+    }
+
     // Set learning rate based on batch size
     int batchSizeThatShouldHaveLearningRateOf1 = config.getInt("lrBatchScale", 16 * 1024);
-    //trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
+    trainer.pretrainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
     trainer.trainConf.scaleLearningRateToBatchSize(batchSizeThatShouldHaveLearningRateOf1);
 
+    LOG.info("[main] lrType=" + lrType
+        + " lrBatchScale=" + batchSizeThatShouldHaveLearningRateOf1
+        + " trainLearningRate=" + trainer.trainConf.learningRate);
+
+    // How often to re-estimate the learning rate
     trainer.trainConf.estimateLearningRateFreq = config.getDouble("estimateLearningRateFreq", 7d);
+    trainer.pretrainConf.estimateLearningRateFreq = trainer.trainConf.estimateLearningRateFreq;
+    if (trainer.trainConf.estimateLearningRateFreq <= 0) {
+      LOG.info("[main] not re-estimating learning rate: "
+          + trainer.trainConf.learningRate);
+    }
 
     // Filter examples based on shards
     int numShards = config.getInt("numShards", 0);
