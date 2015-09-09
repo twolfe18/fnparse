@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Launches everything you need for one (FS_SIZE, FS_MODE) run:
+# a parse server, param server, and a bunch of clients.
+# Written for Propbank.
+
 set -e
 
 if [[ $# != 6 ]]; then
