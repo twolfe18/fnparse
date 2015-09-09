@@ -7,6 +7,9 @@
 #$ -o logging/propbank/feature-selection
 #$ -S /bin/bash
 
+# This script is called by forward-selection and is used to
+# carry out direct search over feature sets.
+
 CP=`find target/ -name '*.jar' | tr '\n' ':'`
 java -XX:+UseSerialGC -Xmx18G -ea -server -cp ${CP} \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer "$@"
