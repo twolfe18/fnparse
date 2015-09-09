@@ -74,6 +74,9 @@ public class Reranker implements Serializable {
   // must also be limited to (COMMIT|PRUNE).forceLeftRightInference=true.
   public static boolean LH_MOST_VIOLATED = false;
 
+  // I'm an idiot... how did this work?
+  public static boolean GRADIENT_BUGFIX = false;
+
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
     @Override
@@ -1137,14 +1140,11 @@ public class Reranker implements Serializable {
 
       int skipped;
       double v = violation();
-//
-//      int z = 0;
-//      for (StateSequence s = oracle; s != null; s = s.getPrev(), z++);
-//      for (StateSequence s = mostViolated; s != null; s = s.getPrev(), z++);
-      double z = 1;
 
       skipped = 0;
-      final double upOracle = learningRate * v / z;
+      final double upOracle = GRADIENT_BUGFIX
+          ? learningRate
+          : learningRate * v;
       for (StateSequence cur = oracle; cur != null; cur = cur.getPrev()) {
         Adjoints a = cur.getAdjoints();
         if (a != null) {
@@ -1158,7 +1158,9 @@ public class Reranker implements Serializable {
       assert skipped <= 1;
 
       skipped = 0;
-      final double upMV = learningRate * -v / z;
+      final double upMV = GRADIENT_BUGFIX
+          ? -learningRate
+          : -learningRate * v;
       for (StateSequence cur = mostViolated; cur != null; cur = cur.getPrev()) {
         Adjoints a = cur.getAdjoints();
         if (a != null) {
