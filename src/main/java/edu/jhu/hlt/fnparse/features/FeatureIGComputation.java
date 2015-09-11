@@ -82,6 +82,23 @@ public class FeatureIGComputation {
     this.data = Iterables.concat(x1, x2);
   }
 
+  public static void setContext(FNParse y, Action commit, TemplateContext ctx, HeadFinder hf) {
+    FrameInstance fi = y.getFrameInstance(commit.t);
+    Sentence sent = y.getSentence();
+    ctx.clear();
+    ctx.setSentence(sent);
+    ctx.setSpan1(commit.getSpan());
+    ctx.setSpan2(fi.getTarget());
+    ctx.setHead1(hf.head(ctx.getSpan1(), sent));
+    ctx.setHead2(hf.head(ctx.getSpan2(), sent));
+    ctx.setFrame(fi.getFrame());
+    ctx.setRole(commit.k);
+    ctx.setArg(ctx.getSpan1());
+    ctx.setArgHead(ctx.getHead1());
+    ctx.setTarget(ctx.getSpan2());
+    ctx.setTargetHead(ctx.getHead2());
+  }
+
   public void run() throws TemplateDescriptionParsingException {
 
     Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
@@ -113,7 +130,6 @@ public class FeatureIGComputation {
 
       // Loop over all data
       for (FNParse y : this.data) {
-        Sentence sent = y.getSentence();
         State st = r.getInitialStateWithPruning(y, y);
 
         // Look at the features extracted upon COMMITS (which correspond to y indexed by {frame,role,span})
@@ -122,18 +138,7 @@ public class FeatureIGComputation {
           String role = fi.getFrame().getRole(commit.k);
 
           // Setup the context for feature extraction
-          ctx.clear();
-          ctx.setSentence(sent);
-          ctx.setSpan1(commit.getSpan());
-          ctx.setSpan2(fi.getTarget());
-          ctx.setHead1(hf.head(ctx.getSpan1(), sent));
-          ctx.setHead2(hf.head(ctx.getSpan2(), sent));
-          ctx.setFrame(fi.getFrame());
-          ctx.setRole(commit.k);
-          ctx.setArg(ctx.getSpan1());
-          ctx.setArgHead(ctx.getHead1());
-          ctx.setTarget(ctx.getSpan2());
-          ctx.setTargetHead(ctx.getHead2());
+          setContext(y, commit, ctx, hf);
 
           // c(y), c(x), c(y,x)
           // y = role name
