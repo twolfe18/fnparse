@@ -1,7 +1,9 @@
-package edu.jhu.hlt.fnparse.features;
+package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.Writer;
@@ -23,6 +25,7 @@ import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
@@ -91,20 +94,28 @@ public class FeaturePrecomputation {
       return false;
     }
     public static String toLine(Target t) {
-      if (t.docId == NO_DOC_ID)
-        return t.sentId + "\t" + t.target;
       return t.docId + "\t" + t.sentId + "\t" + t.target;
+    }
+    public static void toDos(Target t, DataOutputStream dos) throws IOException {
+      dos.writeUTF(t.docId);
+      dos.writeUTF(t.sentId);
+      dos.writeInt(t.target);
     }
     public static Target fromLine(String line) {
       String[] ar = line.split("\t");
-      if (ar.length == 2)
-        return new Target(ar[0], Integer.parseInt(ar[1]));
       if (ar.length == 3)
         return new Target(ar[0], ar[1], Integer.parseInt(ar[2]));
       throw new RuntimeException(Arrays.toString(ar));
     }
+    public static Target fromDis(DataInputStream dis) throws IOException {
+      String docId = dis.readUTF();
+      String sentId = dis.readUTF();
+      int target = dis.readInt();
+      return new Target(docId, sentId, target);
+    }
   }
 
+  /** Feature extraction value */
   public static class Feature {
     public final String templateName;
     public final int template;
@@ -126,6 +137,7 @@ public class FeaturePrecomputation {
     };
   }
 
+  /** Holds a {@link Template} and often serves as an Alphabet */
   public static class Tmpl {
     public final Template template;
     public final String name;
@@ -332,7 +344,7 @@ public class FeaturePrecomputation {
   }
 
   /** Emits one line */
-  private static void emit(Writer w, Target t, Span s, int k, List<Feature> features) throws IOException {
+  public static void emit(Writer w, Target t, Span s, int k, List<Feature> features) throws IOException {
     w.write(Target.toLine(t));
     w.write("\t" + s.start + "," + s.end);
     w.write("\t" + k);
@@ -347,13 +359,13 @@ public class FeaturePrecomputation {
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
 
-//    Iterable<FNParse> data = Iterables.concat(
-//        pbr.getTrainData(),
-//        pbr.getDevData(),
-//        pbr.getTestData());
-    Iterable<FNParse> data = pbr.getDevData();
+    Iterable<FNParse> data = Iterables.concat(
+        pbr.getTrainData(),
+        pbr.getDevData(),
+        pbr.getTestData());
+//    Iterable<FNParse> data = pbr.getDevData();
 //    pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), 100) == 0);
-    config.put("limit", "10");
+//    config.put("limit", "10");
 
     run(data.iterator(), new File(wd, "features.txt.gz"), new File(wd, "template-feat-indices.txt.gz"));
   }
