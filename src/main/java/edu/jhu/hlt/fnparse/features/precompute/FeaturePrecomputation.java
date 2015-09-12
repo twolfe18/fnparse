@@ -259,18 +259,12 @@ public class FeaturePrecomputation {
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();
     int max = config.getInt("limit", 0);
-    int shard = config.getInt("shard");
-    int nShard = config.getInt("numShards");
 
     // Scan the data
     try (BufferedWriter w = FileUtil.getWriter(outputData)) {
       TimeMarker tm = new TimeMarker();
       while (data.hasNext() && (max <= 0 || tm.numMarks() < max)) {
         FNParse y = data.next();
-
-        // Only take data from this shard
-        if (Math.floorMod(y.getId().hashCode(), nShard) != shard)
-          continue;
 
         emitAll(w, y, templates, r);
         if (tm.enoughTimePassed(15)) {
@@ -359,13 +353,13 @@ public class FeaturePrecomputation {
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
 
-    Iterable<FNParse> data = Iterables.concat(
-        pbr.getTrainData(),
-        pbr.getDevData(),
-        pbr.getTestData());
-//    Iterable<FNParse> data = pbr.getDevData();
-//    pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), 100) == 0);
-//    config.put("limit", "10");
+    final int shard = config.getInt("shard");
+    final int nShard = config.getInt("numShards");
+    pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), nShard) == shard);
+
+    Iterable<FNParse> data = config.getBoolean("debug", false)
+        ? pbr.getDevData()
+        : Iterables.concat(pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
 
     run(data.iterator(), new File(wd, "features.txt.gz"), new File(wd, "template-feat-indices.txt.gz"));
   }
