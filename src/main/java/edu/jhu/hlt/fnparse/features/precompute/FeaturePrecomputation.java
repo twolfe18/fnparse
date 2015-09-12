@@ -157,14 +157,6 @@ public class FeaturePrecomputation {
     private double[][] weights;
   }
 
-  /** TODO This will read the text file produced by this class and compute information gain for each template */
-  public static class InformationGainComputation {
-    // See FeatureIGComputation for the data structures needed
-    public void updateCounts(Target t, Span s) {
-      throw new RuntimeException("implement me");
-    }
-  }
-
   public static class Templates extends ArrayList<Tmpl> {
     private static final long serialVersionUID = -5960052683453747671L;
     private HeadFinder hf;
