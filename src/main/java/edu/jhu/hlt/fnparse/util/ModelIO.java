@@ -1,12 +1,21 @@
 package edu.jhu.hlt.fnparse.util;
 
-import java.io.*;
-import java.util.zip.GZIPInputStream;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
 import edu.jhu.gm.model.FgModel;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
@@ -192,26 +201,19 @@ public class ModelIO {
     LOG.info("reading alphabet from " + f.getPath());
     if(!f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is not a file");
-    try {
-      Timer t = Timer.start("");
-      Alphabet<String> alph = new Alphabet<String>();
-      InputStream is = new FileInputStream(f);
-      if(f.getName().toLowerCase().endsWith(".gz"))
-        is = new GZIPInputStream(is);
-      BufferedReader r = new BufferedReader(new InputStreamReader(is));
-      while(r.ready()) {
-        String e = r.readLine();
-        alph.lookupIndex(e, true);
-      }
-      r.close();
-      alph.stopGrowth();
-      t.stop();
-      LOG.info(String.format("read %d entries from %s in %.1f seconds",
-          alph.size(), f.getPath(), t.totalTimeInSeconds()));
-      return alph;
+    Timer t = Timer.start("");
+    Alphabet<String> alph = new Alphabet<String>();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine())
+        alph.lookupIndex(line, true);
     } catch (Exception e1) {
       throw new RuntimeException(e1);
     }
+    alph.stopGrowth();
+    t.stop();
+    LOG.info(String.format("read %d entries from %s in %.1f seconds",
+        alph.size(), f.getPath(), t.totalTimeInSeconds()));
+    return alph;
   }
 
   public static void writeAlphabet(Alphabet<String> alph, File f) {

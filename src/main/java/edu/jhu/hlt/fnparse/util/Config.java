@@ -2,12 +2,13 @@ package edu.jhu.hlt.fnparse.util;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.log4j.Logger;
+
+import edu.jhu.hlt.tutils.FileUtil;
 
 public class Config {
   public static final Logger LOG = Logger.getLogger(Config.class);
@@ -23,11 +24,11 @@ public class Config {
     if (!f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is not a file");
     Map<String, String> configuration = new HashMap<>();
-    try (BufferedReader r = new BufferedReader(new FileReader(f))) {
+    try (BufferedReader r = FileUtil.getReader(f)) {
       String result = r.readLine(); // see ResultReporter
       LOG.info("[readConfig] result line: \"" + result + "\"");
-      while (r.ready()) {
-        String[] tok = r.readLine().split("\t", 2);
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] tok = line.split("\t", 2);
         if (VERBOSE)
           LOG.info("[readConfig] adding " + tok[0] + "=" + tok[1]);
         String old = configuration.put(tok[0], tok[1]);

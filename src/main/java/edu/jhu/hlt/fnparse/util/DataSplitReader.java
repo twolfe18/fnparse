@@ -2,13 +2,13 @@ package edu.jhu.hlt.fnparse.util;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import edu.jhu.hlt.tutils.FileUtil;
 
 /**
  * Reads a tab separated file which maps IDs (first column) to some set of
@@ -30,10 +30,8 @@ public class DataSplitReader {
       throw new IllegalArgumentException(f.getPath() + " is not a file");
     id2section = new HashMap<>();
     sectionCounts = new HashMap<>();
-    try {
-      BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)));
-      while (r.ready()) {
-        String line = r.readLine();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] ar = line.split(sep);
         if (ar.length != 2)
           throw new RuntimeException("line=" + line);
@@ -48,7 +46,6 @@ public class DataSplitReader {
         if (c == null) c = 0;
         sectionCounts.put(sec, c + 1);
       }
-      r.close();
     } catch (IOException e) {
       throw new RuntimeException(e);
     }

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.features;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +40,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
-import edu.stanford.nlp.ling.CoreAnnotations.DocIDAnnotation;
 
 /**
  * Compute features ahead of time. Only outputs basic templates, not products,
@@ -153,6 +153,83 @@ public class FeaturePrecomputation {
     }
   }
 
+  public static class Templates extends ArrayList<Tmpl> {
+    private static final long serialVersionUID = -5960052683453747671L;
+    private HeadFinder hf;
+    /** Reads all templates out of {@link BasicFeatureTemplates} */
+    public Templates() {
+      super();
+      this.hf = new SemaforicHeadFinder();
+      BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
+      for (String tn : templateIndex.getBasicTemplateNames()) {
+        Template t = templateIndex.getBasicTemplate(tn);
+        this.add(new Tmpl(t, tn, size()));
+      }
+    }
+    /** Parses templates and alphabets in same format written by {@link Templates#toFile(File)} */
+    public Templates(File file) {
+      // Parse file like:
+      // # templateIndex featureIndex templateName featureName
+      // 0       0       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=.<ROOT>
+      // 0       1       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=<ROOT>VBN
+      // ...
+      this.hf = new SemaforicHeadFinder();
+      Log.info("reading template alphabets from " + file.getPath());
+      BasicFeatureTemplates.Indexed templateMap = BasicFeatureTemplates.getInstance();
+      try (BufferedReader r = FileUtil.getReader(file)) {
+        String header = r.readLine();
+        assert header.charAt(0) == '#';
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] toks = line.split("\t");
+//          Log.info("toks: " + Arrays.toString(toks));
+          assert toks.length == 4;
+          int templateIndex = Integer.parseInt(toks[0]);
+          if (templateIndex == size()) {
+            String template = toks[2];
+//            Log.info("new template named: " + template);
+            Template t = templateMap.getBasicTemplate(template);
+            add(new Tmpl(t, template, templateIndex));
+          }
+          Tmpl t = get(templateIndex);
+          String feature = toks[3];
+          int featureIndexNew = t.alph.lookupIndex(feature, true);
+          int featureIndex = Integer.parseInt(toks[1]);
+          assert featureIndex == featureIndexNew : "old=" + featureIndex + " new=" + featureIndexNew;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    /** Copies just the template name and index but creates new/empty {@link Tmpl}s */
+    public Templates(Templates copyTemplateNames) {
+      super();
+      for (Tmpl t : copyTemplateNames)
+        add(new Tmpl(t.template, t.name, t.index));
+    }
+    public HeadFinder getHeadFinder() {
+      return hf;
+    }
+    public void toFile(File f) throws IOException {
+      // Save the alphabet
+      // template -> feature -> index
+      try (BufferedWriter w = FileUtil.getWriter(f)) {
+        w.write("# templateIndex featureIndex templateName featureName\n");
+        for (Tmpl t : this) {
+          int n = t.alph.size();
+          if (n == 0)
+            w.write(t.index + "\t0\t" + t.name + "\t<NO-FEATURES>\n");
+          for (int i = 0; i < n; i++) {
+            w.write(t.index
+                + "\t" + i
+                + "\t" + t.name
+                + "\t" + t.alph.lookupObject(i)
+                + "\n");
+          }
+        }
+      }
+    }
+  }
+
   /**
    * Compute all of the features and dump them to a file.
    */
@@ -162,14 +239,7 @@ public class FeaturePrecomputation {
       File outputAlphabet) {
 
     // Setup features
-    HeadFinder hf = new SemaforicHeadFinder();
-    BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
-    List<Tmpl> templates = new ArrayList<>();
-    for (String tn : templateIndex.getBasicTemplateNames()) {
-      Template t = templateIndex.getBasicTemplate(tn);
-      int tIdx = templates.size();
-      templates.add(new Tmpl(t, tn, tIdx));
-    }
+    Templates templates = new Templates();
 
     // This is how we prune spans
     Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
@@ -190,7 +260,7 @@ public class FeaturePrecomputation {
         if (Math.floorMod(y.getId().hashCode(), nShard) != shard)
           continue;
 
-        emitAll(w, y, templates, r, hf);
+        emitAll(w, y, templates, r);
         if (tm.enoughTimePassed(15)) {
           Log.info("processed " + tm.numMarks()
               + " sentences in " + tm.secondsSinceFirstMark() + " seconds");
@@ -203,18 +273,8 @@ public class FeaturePrecomputation {
 
     // Save the alphabet
     // template -> feature -> index
-    try (BufferedWriter w = FileUtil.getWriter(outputAlphabet)) {
-      w.write("# templateIndex featureIndex templateName featureName\n");
-      for (Tmpl t : templates) {
-        int n = t.alph.size();
-        for (int i = 0; i < n; i++) {
-          w.write(t.index
-              + "\t" + i
-              + "\t" + t.name
-              + "\t" + t.alph.lookupObject(i)
-              + "\n");
-        }
-      }
+    try {
+      templates.toFile(outputAlphabet);
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -223,9 +283,8 @@ public class FeaturePrecomputation {
   private static void emitAll(
       Writer w,
       FNParse y,
-      List<Tmpl> templates,
-      Reranker r,
-      HeadFinder hf) throws IOException {
+      Templates templates,
+      Reranker r) throws IOException {
 
     // Keep track of what (t,s) I have already emitted and not emit duplicates
     Set<IntTrip> emittedTS = new HashSet<>();
@@ -258,7 +317,7 @@ public class FeaturePrecomputation {
       // Extract features
       List<Feature> features = new ArrayList<>();
       for (Tmpl tmpl : templates) {
-        FeatureIGComputation.setContext(y, commit, ctx, hf);
+        FeatureIGComputation.setContext(y, commit, ctx, templates.getHeadFinder());
         Iterable<String> feats = tmpl.template.extract(ctx);
         if (feats != null) {
           for (String feat : feats) {
@@ -288,13 +347,13 @@ public class FeaturePrecomputation {
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
 
-    Iterable<FNParse> data = Iterables.concat(
-        pbr.getTrainData(),
-        pbr.getDevData(),
-        pbr.getTestData());
-//    Iterable<FNParse> data = pbr.getDevData();
+//    Iterable<FNParse> data = Iterables.concat(
+//        pbr.getTrainData(),
+//        pbr.getDevData(),
+//        pbr.getTestData());
+    Iterable<FNParse> data = pbr.getDevData();
 //    pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), 100) == 0);
-//    config.put("limit", "10");
+    config.put("limit", "10");
 
     run(data.iterator(), new File(wd, "features.txt.gz"), new File(wd, "template-feat-indices.txt.gz"));
   }

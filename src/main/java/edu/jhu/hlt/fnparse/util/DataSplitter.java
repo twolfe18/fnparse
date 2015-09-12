@@ -4,6 +4,8 @@ import java.io.*;
 import java.util.*;
 import java.util.regex.Pattern;
 
+import edu.jhu.hlt.tutils.FileUtil;
+
 // TODO
 // create a different version where you hand it a bunch of examples that have ids
 // you construct a split by calling something like
@@ -116,12 +118,8 @@ public class DataSplitter {
    */
   public Map<String, Boolean> readSplit(File f) {
     Map<String, Boolean> m = new HashMap<String, Boolean>();
-    try {
-      @SuppressWarnings("resource")
-      BufferedReader r = new BufferedReader(
-          new InputStreamReader(new FileInputStream(f)));
-      while(r.ready()) {
-        String line = r.readLine();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = delim.split(line.trim());
         if(toks.length != 2) {
           throw new IllegalStateException("line = " + line.trim());
@@ -132,7 +130,6 @@ public class DataSplitter {
           m.put(toks[0], false);
         else throw new IllegalStateException("line = " + line.trim());
       }
-      r.close();
     } catch(Exception e) {
       throw new RuntimeException(e);
     }

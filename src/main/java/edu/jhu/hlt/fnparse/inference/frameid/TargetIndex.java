@@ -2,8 +2,6 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,6 +15,7 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 
 /**
@@ -89,15 +88,14 @@ public class TargetIndex {
     public static Map<Frame, List<LuMatcher>> getLuMatchersFromLuIndex() {
       File f = new File("toydata/fn15-frameindexLU");
       if (!f.isFile()) throw new RuntimeException();
-      try {
-        Map<Frame, List<LuMatcher>> f2lum = new HashMap<>();
-        BufferedReader r = new BufferedReader(
-            new InputStreamReader(new FileInputStream(f)));
+      Map<Frame, List<LuMatcher>> f2lum = new HashMap<>();
+      try (BufferedReader r = FileUtil.getReader(f)) {
         // Discard first line
         String firstLine = r.readLine();
         assert "frameserialid\tframexmlid\tframename\tluname".equals(firstLine);
-        while (r.ready()) {
-          String[] toks = r.readLine().split("\t");
+
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] toks = line.split("\t");
           String frameName = toks[2];
           String lu = toks[3];
           // Strip off any quotations
@@ -137,7 +135,6 @@ public class TargetIndex {
           Frame frame = FrameIndex.getFrameNet().getFrame(frameName);
           addlum(f2lum, frame, lum);
         }
-        r.close();
 
         // Special cases that are common in training data
         addlum(f2lum,

@@ -2,9 +2,7 @@ package edu.jhu.hlt.fnparse.data;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,6 +19,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex;
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
@@ -213,12 +212,10 @@ public class FrameIndex implements FrameIndexInterface {
       }
 
       // Read in information about what the core roles are
-      try {
-        File coreFile = new File("toydata/core-roles.txt");
-        LOG.info("reading role core types from " + coreFile.getPath());
-        BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(coreFile)));
-        while (r.ready()) {
-          String line = r.readLine();
+      File coreFile = new File("toydata/core-roles.txt");
+      LOG.info("reading role core types from " + coreFile.getPath());
+      try (BufferedReader r = FileUtil.getReader(coreFile)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] toks = line.split("\\t");
           assert toks.length == 3;
           Frame f = frameNet.nameToFrameMap.get(toks[0]);
@@ -229,7 +226,6 @@ public class FrameIndex implements FrameIndexInterface {
             f.setRoleType(k, toks[2]);
           }
         }
-        r.close();
         LOG.info("done reading role core types");
       } catch (IOException e) {
         throw new RuntimeException(e);

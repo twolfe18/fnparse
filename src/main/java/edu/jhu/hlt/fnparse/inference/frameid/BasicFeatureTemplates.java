@@ -2,10 +2,8 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -27,8 +25,6 @@ import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
-import edu.jhu.hlt.fnparse.util.*;
-import edu.jhu.hlt.tutils.Log;
 import org.apache.commons.math3.util.FastMath;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -54,7 +50,13 @@ import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.GlobalParameters;
+import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
+import edu.jhu.hlt.fnparse.util.SentencePosition;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.mit.jwi.item.IPointer;
@@ -1595,9 +1597,8 @@ public class BasicFeatureTemplates {
 
     private Set<String> alreadyComputedEntries(File f) {
       Set<String> s = new HashSet<>();
-      try (BufferedReader r = new BufferedReader(new InputStreamReader(new FileInputStream(f)))) {
-        while (r.ready()) {
-          String line = r.readLine();
+      try (BufferedReader r = FileUtil.getReader(f)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] toks = line.split("\\t");
           assert toks.length == 6;
           String key = String.format("%s\t%s\t%s\t%s",

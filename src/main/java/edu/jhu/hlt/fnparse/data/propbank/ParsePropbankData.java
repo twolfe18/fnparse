@@ -31,6 +31,7 @@ import edu.jhu.hlt.tutils.cache.DiskCachedString2TFunc;
 public class ParsePropbankData {
 
   public static class Redis extends ParsePropbankData {
+    public static final String NONE = "none";
     private RedisMap<ConstituencyParse> rmapCons;
     private RedisMap<DependencyParse> rmapBasicDeps;
     private Map<String, ConstituencyParse> extra;
@@ -45,17 +46,21 @@ public class ParsePropbankData {
 
     // using ExperimentProperties: same keys no matter where you use it (nice)
     public Redis(ExperimentProperties config) {
-      this(config.getString("redis.host.propbankParses"),
-          config.getInt("redis.port.propbankParses"),
-          config.getInt("redis.db.propbankParses"));
+      this(config.getString("redis.host.propbankParses", NONE),
+          config.getInt("redis.port.propbankParses", -1),
+          config.getInt("redis.db.propbankParses", -1));
     }
 
     public Redis(String host, int port, int db) {
       String prefix = "conl2011/";
-      rmapCons = new RedisMap<>(prefix, host, port, db,
-          SerializationUtils::t2bytes, SerializationUtils::bytes2t);
-      rmapBasicDeps = new RedisMap<>(prefix, host, port, db,
-        SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+      if (host != NONE) {
+        rmapCons = new RedisMap<>(prefix, host, port, db,
+            SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+        rmapBasicDeps = new RedisMap<>(prefix, host, port, db,
+            SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+      } else {
+        Log.info("no redis host given, will fail if used");
+      }
       extra = new HashMap<>();
       pTimer = new Timer("redis-cparse-timer-" + host, 500, false);
       eTimer = new Timer("stanford-cparse-timer", 50, true);
@@ -75,15 +80,18 @@ public class ParsePropbankData {
       String key = getBasicDepsKey(s);
       if (logGets)
         System.out.println("[ParsePropbankData.Redis] fetching dparse for " + key);
-      dpTimer.start();
-      DependencyParse dp = rmapBasicDeps.get(key);
-      dpTimer.stop();
+      DependencyParse dp = null;
+      if (rmapBasicDeps != null) {
+        dpTimer.start();
+        dp = rmapBasicDeps.get(key);
+        dpTimer.stop();
+      }
       if (dp == null) {
         if (logParses)
           System.out.println("[ParsePropbankData.Redis] no dparse for " + key + ", parsing");
         deTimer.start();
         dp = getAnno().getBasicDParse(s);
-        if (insertComputedValues)
+        if (insertComputedValues && rmapBasicDeps != null)
           rmapBasicDeps.put(key, dp);
         deTimer.stop();
       }
@@ -95,9 +103,12 @@ public class ParsePropbankData {
       String key = getStanfordParseKey(s);
       if (logGets)
         System.out.println("[ParsePropbankData.Redis] fetching cparse for " + key);
-      pTimer.start();
-      ConstituencyParse cp = rmapCons.get(key);
-      pTimer.stop();
+      ConstituencyParse cp = null;
+      if (rmapCons != null) {
+        pTimer.start();
+        cp = rmapCons.get(key);
+        pTimer.stop();
+      }
       if (cp == null) {
         if (logParses)
           System.out.println("[ParsePropbankData.Redis] no cparse for " + key + ", parsing");
@@ -105,8 +116,11 @@ public class ParsePropbankData {
         cp = extra.get(key);
         if (cp == null) {
           cp = getAnno().getCParse(s);
-          if (insertComputedValues)
+          if (insertComputedValues) {
             extra.put(key, cp);
+            if (rmapCons != null)
+              rmapCons.put(key, cp);
+          }
         }
         eTimer.stop();
       }

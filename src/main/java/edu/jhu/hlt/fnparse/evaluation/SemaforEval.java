@@ -1,8 +1,6 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +18,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
+import edu.jhu.hlt.tutils.CLI;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 
 /**
@@ -181,29 +180,16 @@ public class SemaforEval {
     LOG.info("[tsvToXmlViaSemafor] " + tsv.getPath() + " => " + xml.getPath());
     if (!tsv.isFile())
       throw new IllegalArgumentException();
-    assert wcDashL(parseFile) == wcDashL(tokenFile);
+    assert CLI.wcDashL(parseFile) == CLI.wcDashL(tokenFile);
     execAndGetResults(new String[] {
         SEMAFOR_PREPARE_ANNO_SCRIPT.getPath(),
         "testFEPredictionsFile:" + tsv.getPath(),
         "startIndex:0",
-        "endIndex:" + wcDashL(tokenFile),
+        "endIndex:" + CLI.wcDashL(tokenFile),
         "testParseFile:" + parseFile,
         "testTokenizedFile:" + tokenFile,
         "outputFile:" + xml.getPath()
     });
-  }
-
-  private int wcDashL(File f) {
-    int lines = 0;
-    try (BufferedReader r = new BufferedReader(new FileReader(f))) {
-      while (r.ready()) {
-        lines++;
-        r.readLine();
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    return lines;
   }
 
   private static List<String> execAndGetResults(String[] command) {
