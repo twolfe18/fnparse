@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
@@ -16,6 +17,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.vector.IntIntDenseVector;
 
 /**
@@ -87,11 +89,18 @@ public class InformationGain implements Serializable {
   }
 
   public void updateCounts(File features) throws IOException {
+    TimeMarker tm = new TimeMarker();
     try (BufferedReader r = FileUtil.getReader(features)) {
-      for (String line = r.readLine(); line != null; line = r.readLine())
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
         updateCounts(line);
+        if (tm.enoughTimePassed(15)) {
+          Log.info("processed " + tm.numMarks()
+              + " lines in " + tm.secondsSinceFirstMark() + " seconds");
+        }
+      }
     }
   }
+
   public void updateCounts(String line) {
     String[] toks = line.split("\t");
     int k = Integer.parseInt(toks[4]);
@@ -130,6 +139,7 @@ public class InformationGain implements Serializable {
     System.out.println("\ttemplateAlph: alphabet file produced by FeaturePrecomputation for looking up template names [optional]");
     System.out.println("\ttopK: how many of the top templates to print [optional]");
     System.out.println("\toutputIG: where to serialize updated InformationGain");
+    System.out.println("\toutputFeats: text file for saving the templates/information gain");
 
     // stats + features -> stats
     // stats -> topK
@@ -156,19 +166,35 @@ public class InformationGain implements Serializable {
       tNames = new Templates(new File(tNamesFile));
     }
 
+    List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
+
     int topK = config.getInt("topK", 0);
-    if (topK > 0) {
+    if (topK > 0)
       Log.info("top " + topK + " templates:");
-      List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
-      int n = Math.min(topK, templates.size());
-      for (int i = 0; i < n; i++) {
-        TemplateIG t = templates.get(i);
-        if (tNames == null)
-          System.out.println(t.ig() + "\t" + t.getTemplate());
-        else
-          System.out.println(t.ig() + "\t" + t.getTemplate() + "\t" + tNames.get(t.getTemplate()).name);
+
+    String outf = config.getString("outputFeats", "none");
+    BufferedWriter w = null;
+    if (!outf.equals("none"))
+      w = FileUtil.getWriter(new File(outf));
+
+    // Loop over results
+    Exception last = null;
+    for (int i = 0; i < templates.size(); i++) {
+      TemplateIG t = templates.get(i);
+      String line;
+      if (tNames == null)
+        line = t.ig() + "\t" + t.getTemplate();
+      else
+        line = t.ig() + "\t" + t.getTemplate() + "\t" + tNames.get(t.getTemplate()).name;
+      if (i < topK)
+        System.out.println(line);
+      if (w != null) {
+        try { w.write(line); }
+        catch (Exception e) { last = e; };
       }
     }
+    if (last != null)
+      last.printStackTrace();
 
     String output = config.getString("outputIG", "none");
     if (!output.equals("none")) {
