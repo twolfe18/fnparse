@@ -180,7 +180,13 @@ public class FeaturePrecomputation {
       // ...
       this.hf = new SemaforicHeadFinder();
       Log.info("reading template alphabets from " + file.getPath());
-      BasicFeatureTemplates.Indexed templateMap = BasicFeatureTemplates.getInstance();
+      BasicFeatureTemplates.Indexed templateMap = null;
+      try {
+        templateMap = BasicFeatureTemplates.getInstance();
+      } catch (Exception e) {
+        Log.warn("can't load Templates due to:");
+        e.printStackTrace();
+      }
       try (BufferedReader r = FileUtil.getReader(file)) {
         String header = r.readLine();
         assert header.charAt(0) == '#';
@@ -192,7 +198,7 @@ public class FeaturePrecomputation {
           if (templateIndex == size()) {
             String template = toks[2];
 //            Log.info("new template named: " + template);
-            Template t = templateMap.getBasicTemplate(template);
+            Template t = templateMap == null ? null : templateMap.getBasicTemplate(template);
             add(new Tmpl(t, template, templateIndex));
           }
           Tmpl t = get(templateIndex);
