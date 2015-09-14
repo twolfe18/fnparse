@@ -112,8 +112,8 @@ public class AlphabetMerger {
         config.getExistingFile("alphIn1"),
         config.getExistingFile("featIn2"),
         config.getExistingFile("alphIn2"),
-        config.getExistingFile("featOut"),
-        config.getExistingFile("alphOut"));
+        config.getFile("featOut"),
+        config.getFile("alphOut"));
   }
 
   public static void test() throws IOException {
