@@ -36,6 +36,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
@@ -256,6 +257,7 @@ public class FeaturePrecomputation {
     Log.info("limit=" + max);
 
     // Scan the data
+    Counts<String> parseStats = new Counts<>();
     try (BufferedWriter w = FileUtil.getWriter(outputData)) {
       TimeMarker tm = new TimeMarker();
       while (data.hasNext() && (max <= 0 || tm.numMarks() < max)) {
@@ -267,10 +269,20 @@ public class FeaturePrecomputation {
               + " sentences in " + tm.secondsSinceFirstMark() + " seconds");
           w.flush();
         }
+
+        // Tally up some stats for debugging
+        if (y.getSentence().getBasicDeps(false) == null)
+          parseStats.increment("no-basic-deps");
+        if (y.getSentence().getCollapsedDeps(false) == null)
+          parseStats.increment("no-collapsed-deps");
+        if (y.getSentence().getStanfordParse(false) == null)
+          parseStats.increment("no-stanford-deps");
       }
     } catch (IOException e) {
       e.printStackTrace();
     }
+    Log.info("done computing features");
+    System.out.println(parseStats);
 
     // Save the alphabet
     // template -> feature -> index
