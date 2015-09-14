@@ -271,6 +271,7 @@ public class FeaturePrecomputation {
         }
 
         // Tally up some stats for debugging
+        parseStats.increment("num-parses");
         if (y.getSentence().getBasicDeps(false) == null)
           parseStats.increment("no-basic-deps");
         if (y.getSentence().getCollapsedDeps(false) == null)
@@ -282,7 +283,7 @@ public class FeaturePrecomputation {
       e.printStackTrace();
     }
     Log.info("done computing features");
-    System.out.println(parseStats);
+    System.out.println("parseStats=" + parseStats);
 
     // Save the alphabet
     // template -> feature -> index
