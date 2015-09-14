@@ -241,6 +241,8 @@ public class FeaturePrecomputation {
       Iterator<FNParse> data,
       File outputData,
       File outputAlphabet) {
+    Log.info("writing features to " + outputData.getPath());
+    Log.info("writing alphabet to " + outputAlphabet.getPath());
 
     // Setup features
     Templates templates = new Templates();
@@ -251,6 +253,7 @@ public class FeaturePrecomputation {
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();
     int max = config.getInt("limit", 0);
+    Log.info("limit=" + max);
 
     // Scan the data
     try (BufferedWriter w = FileUtil.getWriter(outputData)) {
