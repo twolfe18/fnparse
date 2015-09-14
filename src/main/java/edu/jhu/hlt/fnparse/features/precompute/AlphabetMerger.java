@@ -9,6 +9,7 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Templates;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Tmpl;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FindReplace;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
@@ -83,19 +84,23 @@ public class AlphabetMerger {
       File alph2, File inputFeatures2,
       File outputAlphabet, File outputFeatures) throws IOException {
 
+    Log.info(Describe.memoryUsage());
     AlphabetReplacer ar = new AlphabetReplacer(alph1, alph2);
 
     // Convert the first file
+    Log.info(Describe.memoryUsage());
     Log.info("converting " + inputFeatures1.getPath() + " => " + outputFeatures.getPath());
     new FindReplace(AlphabetMerger::findFeatureKeys, s -> ar.replace(s, true))
       .findReplace(inputFeatures1, outputFeatures, false);
 
     // Convert the second file (append to output)
+    Log.info(Describe.memoryUsage());
     Log.info("converting " + inputFeatures2.getPath() + " => " + outputFeatures.getPath());
     new FindReplace(AlphabetMerger::findFeatureKeys, s -> ar.replace(s, false))
       .findReplace(inputFeatures2, outputFeatures, true);
 
     // Save the alphabet
+    Log.info(Describe.memoryUsage());
     Log.info("saving merged alphabet to " + outputAlphabet.getPath());
     ar.merged.toFile(outputAlphabet);
 
