@@ -599,12 +599,12 @@ public class BasicFeatureTemplates {
           DependencyParse deps = s.getBasicDeps();
           if (deps == null)
             return null;
-          int min = 99;
+          int min = s.size() + 1;
           for (int i = t.start; i < t.end; i++) {
             int d = deps.getProjLeft(i);
             if (d < min) min = d;
           }
-          assert min != 99;
+          assert min <= s.size();
           int toksLeft = t.start - min;
           return discretizeWidth(name, coarse, 5, toksLeft);
         }

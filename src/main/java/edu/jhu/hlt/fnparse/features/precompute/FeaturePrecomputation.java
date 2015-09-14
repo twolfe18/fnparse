@@ -274,11 +274,14 @@ public class FeaturePrecomputation {
 
     // Save the alphabet
     // template -> feature -> index
+    Log.info("saving alphabet");
     try {
       templates.toFile(outputAlphabet);
     } catch (IOException e) {
       e.printStackTrace();
     }
+
+    Log.info("done");
   }
 
   private static void emitAll(
