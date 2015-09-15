@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.features.precompute.InformationGain.TemplateIG;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntFloatUnsortedVector;
 
@@ -105,6 +106,7 @@ public class InformationGainProducts implements LineByLine {
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
   public InformationGainProducts(List<int[]> features, File templateAlph) {
+    Log.info("templateAlph=" + templateAlph + " features.size=" + features.size());
     // Allocate counters for IG
     baseFeatures = features;
     products = new HashMap<>();
@@ -130,7 +132,8 @@ public class InformationGainProducts implements LineByLine {
 
   @Override
   public void observeLine(String line) {
-    IntFloatUnsortedVector fv = new IntFloatUnsortedVector();
+//    IntFloatUnsortedVector fv = new IntFloatUnsortedVector();
+    List<Long> fv = new ArrayList<>();
     BaseTemplates bv = new BaseTemplates(relevantTemplates, line);
     int k = bv.getRole();
     for (Entry<int[], TemplateIG> x : products.entrySet()) {
@@ -141,9 +144,13 @@ public class InformationGainProducts implements LineByLine {
       // Measure IG
       int y = k + 1;  // k=-1 means no role, shift everything up by one
       final TemplateIG t = x.getValue();
-      fv.forEach(ide -> {
-        t.update(y, ide.index());
-      });
+//      fv.forEach(ide -> {
+//        t.update(y, ide.index());
+//      });
+      for (long index : fv) {
+//        t.update(y, (int) (Math.floorMod(index, Integer.MAX_VALUE)));
+        t.update(y, (int) (Math.floorMod(index, 2 * 1024 * 1024)));
+      }
       fv.clear();
     }
   }
@@ -165,8 +172,9 @@ public class InformationGainProducts implements LineByLine {
   private void flatten(
       BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
-      int cardinality, int value,
-      IntFloatUnsortedVector buffer) {
+      long cardinality, long value,
+      List<Long> buffer) {
+//      IntFloatUnsortedVector buffer) {
     if (DEBUG) {
       System.out.println();
       System.out.println(data.toString());
@@ -178,7 +186,8 @@ public class InformationGainProducts implements LineByLine {
     }
 
     if (tIndex == templates.length) {
-      buffer.add(value, 1);
+//      buffer.add(value, 1);
+      buffer.add(value);
       return;
     }
 
@@ -211,7 +220,7 @@ public class InformationGainProducts implements LineByLine {
       endDataIndex++;
 
     // Recurse
-    int newCard = cardinality * curTemplateCard;
+    long newCard = cardinality * curTemplateCard;
     if (DEBUG) {
       System.out.println("cardinality=" + cardinality);
       System.out.println("curTemplateCard=" + curTemplateCard);
@@ -222,7 +231,7 @@ public class InformationGainProducts implements LineByLine {
       if (DEBUG)
         System.out.println("data.getValue(" + i + ")=" + data.getValue(i));
       assert data.getValue(i) < curTemplateCard;
-      int newValue = value * curTemplateCard + data.getValue(i);
+      long newValue = value * curTemplateCard + data.getValue(i);
       flatten(data, endDataIndex,
           templates, tIndex + 1,
           newCard, newValue,
@@ -284,6 +293,7 @@ public class InformationGainProducts implements LineByLine {
     // Read in the IG of the unigrams (templates)
     List<Pair<Integer, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
+    Log.info("reading template IGs from " + templateIGsFile.getPath());
     try (BufferedReader r = FileUtil.getReader(templateIGsFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
@@ -293,10 +303,17 @@ public class InformationGainProducts implements LineByLine {
       }
     }
 
-    // Produce a list of template n-grams
     int order = config.getInt("order", 3);
+    int thresh = (int) Math.pow(templateIGs.size() * 15000, 1d / order);
+    if (templateIGs.size() > thresh) {
+      Log.info("pruning from " + templateIGs.size() + " => " + thresh);
+      templateIGs = templateIGs.subList(0, thresh);
+    }
+
+    // Produce a list of template n-grams
     List<Pair<int[], Double>> prodIGs = new ArrayList<>();
     int n = templateIGs.size();
+    Log.info("producing templates up to order=" + order + " from " + n + " templates");
     for (int i = 0; i < n - 1; i++) {
       prodIGs.add(prod(templateIGs.get(i)));
       for (int j = i + 1; j < n; j++) {
@@ -316,6 +333,7 @@ public class InformationGainProducts implements LineByLine {
     }
 
     // Sort and project
+    Log.info("sorting template products by information gain...");
     Collections.sort(prodIGs, new Comparator<Pair<int[], Double>>() {
       @Override
       public int compare(Pair<int[], Double> o1, Pair<int[], Double> o2) {
@@ -353,17 +371,22 @@ public class InformationGainProducts implements LineByLine {
     int maxProducts = config.getInt("numProducts", 1000);
     if (maxProducts > 0 && products.size() > maxProducts)
       products = products.subList(0, maxProducts);
+    Log.info("computing IG for the top " + products.size() + " product features");
+    for (int i = 0; i < 10 && i < products.size(); i++)
+      Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
 
     // Load the features and compute the IG for the chosen products
     File features = config.getExistingFile("features");
     File templateAlph = config.getExistingFile("templateAlph");
     InformationGainProducts igp = new InformationGainProducts(products, templateAlph);
+    Log.info("reading features: " + features.getPath());
     igp.run(features);
 
     // Write out the results in format:
     //  line = IG <tab> featureInts <tab> featureStrings
     // where featureInts and featureStrings are delimited by "-"
     File output = config.getFile("output");
+    Log.info("writing output to " + output.getPath());
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
       Templates alphs = igp.getAlphabets();
@@ -377,7 +400,7 @@ public class InformationGainProducts implements LineByLine {
         }
         w.write("\t");
         for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) w.write("-");
+          if (i > 0) w.write("\t");
           w.write(alphs.get(pieces[i]).name);
         }
         w.newLine();

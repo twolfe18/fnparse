@@ -57,7 +57,6 @@ public class InformationGain implements Serializable, LineByLine {
       return updates;
     }
     public double ig() {
-      assert updates > 0;
       if (igCache == null) {
         double ig = 0;
         double N = updates;
