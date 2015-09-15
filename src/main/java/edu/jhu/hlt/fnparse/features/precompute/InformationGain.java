@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -17,7 +16,6 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.vector.IntIntDenseVector;
 
 /**
@@ -25,27 +23,27 @@ import edu.jhu.prim.vector.IntIntDenseVector;
  *
  * @author travis
  */
-public class InformationGain implements Serializable {
+public class InformationGain implements Serializable, LineByLine {
   private static final long serialVersionUID = -5727222496637587197L;
 
   public static class TemplateIG implements Serializable {
     private static final long serialVersionUID = 1287953772086645433L;
-    private int template;
+    private int index;
     private IntIntDenseVector cy, cx;
 //    private LongIntDenseVector cyx;        // |Y| ~= 20  |X| ~= 20 * 10,000
     private Counts<IntPair> cyx;
     private int updates;
     private Double igCache = null;
-    public TemplateIG(int template) {
-      this.template = template;
+    public TemplateIG(int index) {
+      this.index = index;
       this.cy = new IntIntDenseVector();
       this.cx = new IntIntDenseVector();
 //      this.cyx = new LongIntDenseVector();
       this.cyx = new Counts<>();
       this.updates = 0;
     }
-    public int getTemplate() {
-      return template;
+    public int getIndex() {
+      return index;
     }
     public void update(int y, int x) {
 //      cyx.add(pack(y, x), 1);
@@ -75,12 +73,21 @@ public class InformationGain implements Serializable {
       }
       return igCache;
     }
+    public static Comparator<TemplateIG> BY_IG_DECREASING = new Comparator<TemplateIG>() {
+      @Override
+      public int compare(TemplateIG o1, TemplateIG o2) {
+        double d = o2.ig() - o1.ig();
+        if (d > 0) return 1;
+        if (d < 0) return -1;
+        return 0;
+      }
+    };
   }
 
   // |XY| = 4M
   // |T| ~= 1000
   // |XYT| = 4B ints = 16B bytes
-  private TemplateIG[] templates;
+  protected TemplateIG[] templates;
 
   public InformationGain() {
     templates = new TemplateIG[2000];  // TODO resize code
@@ -88,20 +95,8 @@ public class InformationGain implements Serializable {
       templates[i] = new TemplateIG(i);
   }
 
-  public void updateCounts(File features) throws IOException {
-    TimeMarker tm = new TimeMarker();
-    try (BufferedReader r = FileUtil.getReader(features)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        updateCounts(line);
-        if (tm.enoughTimePassed(15)) {
-          Log.info("processed " + tm.numMarks()
-              + " lines in " + tm.secondsSinceFirstMark() + " seconds");
-        }
-      }
-    }
-  }
-
-  public void updateCounts(String line) {
+  @Override
+  public void observeLine(String line) {
     String[] toks = line.split("\t");
     int k = Integer.parseInt(toks[4]);
     for (int i = 5; i < toks.length; i++) {
@@ -119,15 +114,7 @@ public class InformationGain implements Serializable {
     for (TemplateIG t : templates)
       if (t.numUpdates() > 0)
         l.add(t);
-    Collections.sort(l, new Comparator<TemplateIG>() {
-      @Override
-      public int compare(TemplateIG o1, TemplateIG o2) {
-        double d = o2.ig() - o1.ig();
-        if (d > 0) return 1;
-        if (d < 0) return -1;
-        return 0;
-      }
-    });
+    Collections.sort(l, TemplateIG.BY_IG_DECREASING);
     return l;
   }
 
@@ -156,7 +143,7 @@ public class InformationGain implements Serializable {
     String features = config.getString("features", "none");
     if (!features.equals("none")) {
       Log.info("updating stats from " + features);
-      input.updateCounts(new File(features));
+      input.run(new File(features));
     }
 
     Templates tNames = null;
@@ -183,14 +170,18 @@ public class InformationGain implements Serializable {
       TemplateIG t = templates.get(i);
       String line;
       if (tNames == null)
-        line = t.ig() + "\t" + t.getTemplate();
+        line = t.ig() + "\t" + t.getIndex();
       else
-        line = t.ig() + "\t" + t.getTemplate() + "\t" + tNames.get(t.getTemplate()).name;
+        line = t.ig() + "\t" + t.getIndex() + "\t" + tNames.get(t.getIndex()).name;
       if (i < topK)
         System.out.println(line);
       if (w != null) {
-        try { w.write(line); }
-        catch (Exception e) { last = e; };
+        try {
+          w.write(line);
+          w.newLine();
+        } catch (Exception e) {
+          last = e;
+        };
       }
     }
     if (last != null)

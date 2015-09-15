@@ -17,7 +17,11 @@ import edu.jhu.hlt.tutils.Log;
 
 public class AlphabetMerger {
 
-  /** Knows how to find feature keys in the file outputted by {@link FeaturePrecomputation} */
+  /**
+   * Knows how to find feature keys in the file outputted by
+   * {@link FeaturePrecomputation}. Highlights strings like "10:44" using
+   * [start,end).
+   */
   public static Iterator<IntPair> findFeatureKeys(String input) {
     int offset = 0;
     for (int i = 0; i < 5; i++) {

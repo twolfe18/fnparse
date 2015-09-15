@@ -152,12 +152,6 @@ public class FeaturePrecomputation {
     }
   }
 
-  /** TODO This will just product cached (t,s) features with the role */
-  public static class Params {
-    private Map<Pair<Target, Span>, FeatureVector> tsFeatures;
-    private double[][] weights;
-  }
-
   public static class Templates extends ArrayList<Tmpl> {
     private static final long serialVersionUID = -5960052683453747671L;
     private HeadFinder hf;
@@ -362,6 +356,11 @@ public class FeaturePrecomputation {
     for (Feature f : features)
       w.write("\t" + f.template + ":" + f.feature);
     w.write('\n');
+  }
+
+  public static int getRole(String line) {
+    int field = 4;
+    return Integer.parseInt(line.split("\t", field + 2)[field]);
   }
 
   public static void main(String[] args) {
