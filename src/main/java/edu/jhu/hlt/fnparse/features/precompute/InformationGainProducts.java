@@ -22,7 +22,6 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.prim.vector.IntFloatUnsortedVector;
 
 /**
  * Computes information gain for products of templates.
@@ -39,13 +38,11 @@ public class InformationGainProducts implements LineByLine {
     private String line;  // debug
     private int size;
     private int role; // something that is in the line
-//    private IntIntUnsortedVector templateFeatures;
     private List<IntPair> templateFeatures;
     public BaseTemplates(BitSet templates, String line) {
       this.line = line;
       this.size = 0;
       this.role = FeaturePrecomputation.getRole(line);
-//      this.templateFeatures = new IntIntUnsortedVector();
       this.templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = AlphabetMerger.findFeatureKeys(line);
       while (tmplFeatLocs.hasNext()) {
@@ -62,17 +59,14 @@ public class InformationGainProducts implements LineByLine {
           int f = Integer.parseInt(fs) + 1;
           assert f > 0;
           size++;
-//          templateFeatures.add(t, f);
           templateFeatures.add(new IntPair(t, f));
         }
       }
     }
     public int getTemplate(int i) {
-//      return templateFeatures.getInternalIndices()[i];
       return templateFeatures.get(i).first;
     }
     public int getValue(int i) {
-//      return templateFeatures.getInternalValues()[i];
       return templateFeatures.get(i).second;
     }
     public int size() {
@@ -90,8 +84,6 @@ public class InformationGainProducts implements LineByLine {
         f.add(templateFeatures.get(i).second);
       }
       return "(BaseTemplates k=" + role
-//          + " templates=" + Arrays.toString(templateFeatures.getInternalIndices())
-//          + " feature=" + Arrays.toString(templateFeatures.getInternalValues())
           + " templates=" + t
           + " feature=" + f
           + " line=" + line
@@ -132,7 +124,6 @@ public class InformationGainProducts implements LineByLine {
 
   @Override
   public void observeLine(String line) {
-//    IntFloatUnsortedVector fv = new IntFloatUnsortedVector();
     List<Long> fv = new ArrayList<>();
     BaseTemplates bv = new BaseTemplates(relevantTemplates, line);
     int k = bv.getRole();
@@ -144,13 +135,8 @@ public class InformationGainProducts implements LineByLine {
       // Measure IG
       int y = k + 1;  // k=-1 means no role, shift everything up by one
       final TemplateIG t = x.getValue();
-//      fv.forEach(ide -> {
-//        t.update(y, ide.index());
-//      });
-      for (long index : fv) {
-//        t.update(y, (int) (Math.floorMod(index, Integer.MAX_VALUE)));
+      for (long index : fv)
         t.update(y, (int) (Math.floorMod(index, 2 * 1024 * 1024)));
-      }
       fv.clear();
     }
   }
@@ -174,7 +160,6 @@ public class InformationGainProducts implements LineByLine {
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
       long cardinality, long value,
       List<Long> buffer) {
-//      IntFloatUnsortedVector buffer) {
     if (DEBUG) {
       System.out.println();
       System.out.println(data.toString());
@@ -186,7 +171,6 @@ public class InformationGainProducts implements LineByLine {
     }
 
     if (tIndex == templates.length) {
-//      buffer.add(value, 1);
       buffer.add(value);
       return;
     }

@@ -152,6 +152,45 @@ public class FeaturePrecomputation {
     }
   }
 
+  public static class AlphabetLine {
+    public String line;
+    public String templateName;
+    public String featureName;
+    public int template;
+    public int feature;
+    public AlphabetLine(String line) {
+      set(line);
+    }
+    @Override
+    public String toString() {
+      return "(AlphabetLine " + line + ")";
+    }
+    public boolean isNull() {
+      return line == null;
+    }
+    public void set(String line) {
+      this.line = line;
+      if (line != null) {
+        String[] toks = line.split("\t");
+        assert toks.length == 4;
+        template = Integer.parseInt(toks[0]);
+        feature = Integer.parseInt(toks[1]);
+        templateName = toks[2];
+        featureName = toks[3];
+      }
+    }
+    public static Comparator<AlphabetLine> BY_TEMPLATE_STR_FEATURE_STR = new Comparator<AlphabetLine>() {
+      @Override
+      public int compare(AlphabetLine o1, AlphabetLine o2) {
+        int c1 = o1.templateName.compareTo(o2.templateName);
+        if (c1 != 0)
+          return c1;
+        int c2 = o1.featureName.compareTo(o2.featureName);
+        return c2;
+      }
+    };
+  }
+
   public static class Templates extends ArrayList<Tmpl> {
     private static final long serialVersionUID = -5960052683453747671L;
     private HeadFinder hf;
@@ -185,21 +224,14 @@ public class FeaturePrecomputation {
         String header = r.readLine();
         assert header.charAt(0) == '#';
         for (String line = r.readLine(); line != null; line = r.readLine()) {
-          String[] toks = line.split("\t");
-//          Log.info("toks: " + Arrays.toString(toks));
-          assert toks.length == 4;
-          int templateIndex = Integer.parseInt(toks[0]);
-          if (templateIndex == size()) {
-            String template = toks[2];
-//            Log.info("new template named: " + template);
-            Template t = templateMap == null ? null : templateMap.getBasicTemplate(template);
-            add(new Tmpl(t, template, templateIndex));
+          AlphabetLine al = new AlphabetLine(line);
+          if (al.template == size()) {
+            Template t = templateMap == null ? null : templateMap.getBasicTemplate(al.templateName);
+            add(new Tmpl(t, al.templateName, al.template));
           }
-          Tmpl t = get(templateIndex);
-          String feature = toks[3];
-          int featureIndexNew = t.alph.lookupIndex(feature, true);
-          int featureIndex = Integer.parseInt(toks[1]);
-          assert featureIndex == featureIndexNew : "old=" + featureIndex + " new=" + featureIndexNew;
+          Tmpl t = get(al.template);
+          int featureIndexNew = t.alph.lookupIndex(al.featureName, true);
+          assert al.feature == featureIndexNew : "old=" + al.feature + " new=" + featureIndexNew;
         }
       } catch (Exception e) {
         throw new RuntimeException(e);
