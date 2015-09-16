@@ -8,6 +8,9 @@
 
 # Given two bialphs, call edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger
 
+echo "starting at `date` on $HOSTNAME"
+echo "args: $@"
+
 set -e
 
 if [[ $# != 5 ]]; then
@@ -26,4 +29,7 @@ java -Xmx1G -ea -server -cp $5 \
   -DoutAlph1=$3 \
   -DoutAlph2=$4 \
   edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger
+
+echo "ret code: $?"
+echo "done at `date`"
 

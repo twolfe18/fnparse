@@ -1,5 +1,11 @@
 
-import glob, sys, os, math, subprocess, shutil
+# A python wrapper around SGE used to efficiently and paralleledly
+# merge alphabets into smaller and coherent bialphs.
+#
+# Author: Travis Wolfe <twolfe18@gmail.com>
+# Date: Sep. 16, 2015
+
+import glob, sys, os, math, subprocess, shutil, re
 
 class BiAlphMerger:
   '''
@@ -12,10 +18,20 @@ class BiAlphMerger:
     self.alph_glob = alph_glob
     self.working_dir = working_dir
     self.job_counter = 0
+
+    self.bialph_dir = os.path.join(working_dir, 'bialphs')
+    if not os.path.isdir(self.bialph_dir):
+      os.makedirs(self.bialph_dir)
+    print 'putting bialphs in', self.bialph_dir
+
+    self.sge_logs = os.path.join(working_dir, 'sge-logs')
+    if not os.path.isdir(self.sge_logs):
+      os.makedirs(self.sge_logs)
+
     if copy_jar:
       self.jar_file = os.path.join(working_dir, 'fnparse.jar')
       print 'copying jar file to safe place:'
-      print jar_file, ' => ', self.jar_file
+      print '\t', jar_file, ' => ', self.jar_file
       shutil.copyfile(jar_file, self.jar_file)
     else:
       print 'using jar file in place:', jar_file
@@ -23,27 +39,39 @@ class BiAlphMerger:
   
   def start(self):
     # Find all of the alphabets
-    alphs = glob.glob(alph_glob)
+    alphs = glob.glob(self.alph_glob)
     print 'merging', len(alphs), 'alphabets'
     
-    # Build the computation tree
+    # Build the computation tree Part 1:
+    # Leaves -- alph => bialph
+    interval = 15
     buf = []
     for a in alphs:
       buf.append(Merge(self, alphabet_file=a))
+      if len(buf) % interval == 0:
+        print 'submitted', len(buf), 'jobs for creating bialphs'
+
+    # Build the computation tree Part 2:
+    # Recursively merge -- (bialph, bialph) => bialph
+    nm = 0
     while len(buf) > 1:
       # Find the two smallest nodes and merge them.
       b1 = buf.pop()
       b2 = buf.pop()
       b3 = Merge(self, left_child=b1, right_child=b2)
       buf.insert(0, b3)
-    print 'launched', self.job_counter, 'jobs'
+      nm += 1
+      if nm % interval == 0:
+        print 'submitted', nm, 'jobs for merging bialphs'
+
+    print 'done launching jobs, created', self.job_counter, 'jobs'
 
     root = buf.pop()
     print 'the root node is:', root
     return root
 
   def output(self, depth, i):
-    return os.path.join(self.working_dir, "bialph_d%d_%d" % (depth, i))
+    return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt" % (depth, i))
 
   def make_merge_job(self, dep1, dep2, in1, in2, out1, out2):
     ''' returns a (name, jid) '''
@@ -51,10 +79,12 @@ class BiAlphMerger:
     self.job_counter += 1
     command = ['qsub']
     command += ['-N', name]
+    command += ['-o', self.sge_logs]
     command += ['-hold_jid', str(dep1)]
     command += ['-hold_jid', str(dep2)]
     command += ['scripts/precompute-features/bialph-merge.sh']
     command += [in1, in2, out1, out2, self.jar_file]
+    print 'make_merge_job:', command
     s = subprocess.check_output(command)
     # Your job 443510 ("foo-bar") has been submitted
     m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
@@ -65,14 +95,18 @@ class BiAlphMerger:
     else:
       raise Exception('couldn\'t parse qsub output: ' + s)
 
-  def make_bialph_jobs(self, alphabet_filename, bialph_filename):
+  def make_create_job(self, alphabet_filename, bialph_filename=None):
     ''' returns a (name, jid) '''
+    if not bialph_filename:
+      bialph_filename = os.path.join(self.bialph_dir, "bialph-%d.txt" % (self.job_counter))
     name = 'create-' + str(self.job_counter)
     self.job_counter += 1
     command = ['qsub']
     command += ['-N', name]
+    command += ['-o', self.sge_logs]
     command += ['scripts/precompute-features/bialph-create.sh']
     command += [alphabet_filename, bialph_filename]
+    print 'make_create_job:', command
     s = subprocess.check_output(command)
     # Your job 443510 ("foo-bar") has been submitted
     m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
@@ -82,7 +116,6 @@ class BiAlphMerger:
       return (name, jid)
     else:
       raise Exception('couldn\'t parse qsub output: ' + s)
-
 
 
 class Merge:
@@ -112,7 +145,7 @@ class Merge:
 
   def __init_leaf(self, alphabet_file):
     self.alphabet_file = alphabet_file
-    (name, jid) = self.sge.make_bialph_job(alphabet_file)
+    (name, jid) = self.sge.make_create_job(alphabet_file)
     self.items = [(name, 0, jid)]
 
   def __init_merge(self, left_child, right_child):
@@ -127,22 +160,22 @@ class Merge:
     nr = len(right_child.items)
     for i, (name1, depth1, jid1) in enumerate(left_child.items):
       (name2, depth2, jid2) = right_child.items[i % nr]
-      depth3 = math.max(depth1, depth2) + 1
+      depth3 = max(depth1, depth2) + 1
       in1 = self.sge.output(depth1, name1)
       in2 = self.sge.output(depth2, name2)
       out1 = self.sge.output(depth3, name1)
       out2 = self.sge.output(depth3, name2)
-      jid3 = self.sge.make_merge_job(jid1, jid2, in1, in2, out1, out2)
+      (name3, jid3) = self.sge.make_merge_job(jid1, jid2, in1, in2, out1, out2)
       self.items.append( (name3, depth3, jid3) )
 
 if __name__ == '__main__':
   p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
-  g = os.path.join(p, 'raw-shards/job-*-of-400')
+  g = os.path.join(p, 'raw-shards/job-?-of-400/template-feat-indices.txt.gz')
   o = os.path.join(p, 'merged-alphs')
   j = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
-  merger = BiAlphMerger(g, o)
+  merger = BiAlphMerger(g, o, j)
   root = merger.start()
   print 'results should be in...'
   for (name, depth, jid) in root.items:
-    print self.output(depth, name)
+    print merger.output(depth, name)
 
