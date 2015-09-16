@@ -21,6 +21,11 @@ import edu.jhu.prim.vector.IntIntDenseVector;
 /**
  * Uses output of {@link FeaturePrecomputation} to compute IG for feature selection.
  *
+ * NOTE: This version was created before bialph merging. This may be good enough
+ * for getting a rough top K list of templates, but if not, see
+ * {@link InformationGainProducts} for how to read many feature files that don't
+ * shard a common indexing scheme (you map with a bialph created by {@link AlphabetMerger}).
+ *
  * @author travis
  */
 public class InformationGain implements Serializable, LineByLine {

@@ -10,6 +10,7 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -19,7 +20,6 @@ import java.util.Set;
 
 import com.google.common.collect.Iterables;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -42,7 +42,6 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
-import edu.jhu.prim.tuple.Pair;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -194,16 +193,32 @@ public class FeaturePrecomputation {
   public static class Templates extends ArrayList<Tmpl> {
     private static final long serialVersionUID = -5960052683453747671L;
     private HeadFinder hf;
+    private Map<String, Integer> templateName2index;
     /** Reads all templates out of {@link BasicFeatureTemplates} */
     public Templates() {
       super();
       this.hf = new SemaforicHeadFinder();
+      this.templateName2index = new HashMap<>();
       BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
       for (String tn : templateIndex.getBasicTemplateNames()) {
         Template t = templateIndex.getBasicTemplate(tn);
         this.add(new Tmpl(t, tn, size()));
       }
     }
+
+    @Override
+    public boolean add(Tmpl t) {
+      assert t.name != null;
+      assert t.index == size();
+      Integer old = templateName2index.put(t.name, t.index);
+      assert old == null;
+      return super.add(t);
+    }
+
+    public Tmpl get(String templateName) {
+      return get(templateName2index.get(templateName));
+    }
+
     /** Parses templates and alphabets in same format written by {@link Templates#toFile(File)} */
     public Templates(File file) {
       // Parse file like:
@@ -237,15 +252,18 @@ public class FeaturePrecomputation {
         throw new RuntimeException(e);
       }
     }
+
     /** Copies just the template name and index but creates new/empty {@link Tmpl}s */
     public Templates(Templates copyTemplateNames) {
       super();
       for (Tmpl t : copyTemplateNames)
         add(new Tmpl(t.template, t.name, t.index));
     }
+
     public HeadFinder getHeadFinder() {
       return hf;
     }
+
     public void toFile(File f) throws IOException {
       // Save the alphabet
       // template -> feature -> index

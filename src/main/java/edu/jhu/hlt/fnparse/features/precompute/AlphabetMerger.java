@@ -5,7 +5,6 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
 
@@ -34,6 +33,8 @@ import edu.jhu.hlt.tutils.Log;
  * followed by a very simple merge step to produce the two int->int mappings.
  * This has the additional benefit of basically being out of memory (sort),
  * so you don't have to worry about ever loading the string->int map into memory.
+ *
+ * TODO Rename to BiAlphMerger
  *
  * @author travis
  */
@@ -70,6 +71,9 @@ public class AlphabetMerger {
    *
    * Only uses name, index, and alphabet from {@link Template}, meaning you
    * don't need instances of {@link Tmpl}.
+   *
+   * @deprecated Old way of doing things. Don't re-write feature files, just
+   * merge bialphs.
    */
   public static class AlphabetReplacer {
     // i1 -> string
@@ -147,7 +151,7 @@ public class AlphabetMerger {
       this.feature = feature;
     }
     /** Reads from newInt and sets template and feature */
-    public void set(BiAlphLine al) {
+    public void set(BiAlph.Line al) {
       this.template = al.newIntTemplate;
       this.feature = al.newIntFeature;
     }
@@ -162,51 +166,6 @@ public class AlphabetMerger {
     public String toString() {
       return "(TIdx t=" + template + " f=" + feature + ")";
     }
-  }
-
-  /** When oldInt* isn't populated, -1 is used. */
-  public static class BiAlphLine {
-    public String line;
-    public int newIntTemplate;
-    public int newIntFeature;
-    public String stringTemplate;
-    public String stringFeature;
-    public int oldIntTemplate;
-    public int oldIntFeature;
-    public BiAlphLine(String line) {
-      set(line);
-    }
-    @Override
-    public String toString() {
-      return "(BiAlphLine " + line + ")";
-    }
-    public boolean isNull() {
-      return line == null;
-    }
-    public void set(String line) {
-      this.line = line;
-      if (line != null) {
-        String[] toks = line.split("\t");
-        assert toks.length == 6;
-        int i = 0;
-        newIntTemplate = Integer.parseInt(toks[i++]);
-        newIntFeature = Integer.parseInt(toks[i++]);
-        stringTemplate = toks[i++];
-        stringFeature = toks[i++];
-        oldIntTemplate = Integer.parseInt(toks[i++]);
-        oldIntFeature = Integer.parseInt(toks[i++]);
-      }
-    }
-    public static Comparator<BiAlphLine> BY_TEMPLATE_STR_FEATURE_STR = new Comparator<BiAlphLine>() {
-      @Override
-      public int compare(BiAlphLine o1, BiAlphLine o2) {
-        int c1 = o1.stringTemplate.compareTo(o2.stringTemplate);
-        if (c1 != 0)
-          return c1;
-        int c2 = o1.stringFeature.compareTo(o2.stringFeature);
-        return c2;
-      }
-    };
   }
 
   /**
@@ -244,8 +203,8 @@ public class AlphabetMerger {
       }
       // Merge the remaining lines
       String prevTemplate = "";
-      BiAlphLine l1 = new BiAlphLine(r1.readLine());
-      BiAlphLine l2 = new BiAlphLine(r2.readLine());
+      BiAlph.Line l1 = new BiAlph.Line(r1.readLine());
+      BiAlph.Line l2 = new BiAlph.Line(r2.readLine());
       TIdx i = new TIdx(0, 0);                      // sets values for newInt
       while (!l1.isNull() && !l2.isNull()) {
         int c;
@@ -254,7 +213,7 @@ public class AlphabetMerger {
         } else if (l2.isNull()) {
           c = -1;
         } else {
-          c = BiAlphLine.BY_TEMPLATE_STR_FEATURE_STR.compare(l1, l2);
+          c = BiAlph.Line.BY_TEMPLATE_STR_FEATURE_STR.compare(l1, l2);
         }
         if (c == 0) {
           // both s1 and s2 get i, update both
@@ -293,7 +252,7 @@ public class AlphabetMerger {
   /**
    * @param o may be null if there is no corresponding oldInt* for this row
    */
-  private static void write(BufferedWriter w, TIdx i, BiAlphLine s, BiAlphLine o) throws IOException {
+  private static void write(BufferedWriter w, TIdx i, BiAlph.Line s, BiAlph.Line o) throws IOException {
     int oldIntTemplate = -1;
     int oldIntFeature = -1;
     if (o != null) {
