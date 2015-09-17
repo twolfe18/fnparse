@@ -46,8 +46,9 @@ class BiAlphMerger:
     # Leaves -- alph => bialph
     interval = 15
     buf = []
-    for a in alphs:
-      buf.append(Merge(self, alphabet_file=a))
+    for i, a in enumerate(alphs):
+      n = 'shard' + str(i)
+      buf.append(Merge(self, alphabet_file=a, name=n))
       if len(buf) % interval == 0:
         print 'submitted', len(buf), 'jobs for creating bialphs'
 
@@ -74,7 +75,7 @@ class BiAlphMerger:
     return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt" % (depth, i))
 
   def make_merge_job(self, dep1, dep2, in1, in2, out1, out2):
-    ''' returns a (name, jid) '''
+    ''' returns a jid '''
     name = 'merge-' + str(self.job_counter)
     self.job_counter += 1
     command = ['qsub']
@@ -91,14 +92,12 @@ class BiAlphMerger:
     if m:
       jid = int(m.group(1))
       name_maybe_trunc = m.group(2)
-      return (name, jid)
+      return jid
     else:
       raise Exception('couldn\'t parse qsub output: ' + s)
 
-  def make_create_job(self, alphabet_filename, bialph_filename=None):
-    ''' returns a (name, jid) '''
-    if not bialph_filename:
-      bialph_filename = os.path.join(self.bialph_dir, "bialph-%d.txt" % (self.job_counter))
+  def make_create_job(self, alphabet_filename, bialph_filename):
+    ''' returns a jid '''
     name = 'create-' + str(self.job_counter)
     self.job_counter += 1
     command = ['qsub']
@@ -113,7 +112,7 @@ class BiAlphMerger:
     if m:
       jid = int(m.group(1))
       name_maybe_trunc = m.group(2)
-      return (name, jid)
+      return jid
     else:
       raise Exception('couldn\'t parse qsub output: ' + s)
 
@@ -141,12 +140,14 @@ class Merge:
     if 'left_child' in kwargs:
       self.__init_merge(kwargs['left_child'], kwargs['right_child'])
     else:
-      self.__init_leaf(kwargs['alphabet_file'])
+      self.__init_leaf(kwargs['alphabet_file'], kwargs['name'])
 
-  def __init_leaf(self, alphabet_file):
+  def __init_leaf(self, alphabet_file, name):
     self.alphabet_file = alphabet_file
-    (name, jid) = self.sge.make_create_job(alphabet_file)
-    self.items = [(name, 0, jid)]
+    depth = 0
+    bialph_filename = self.sge.output(depth, name)
+    jid = self.sge.make_create_job(alphabet_file, bialph_filename)
+    self.items = [(name, depth, jid)]
 
   def __init_merge(self, left_child, right_child):
     # Gaurantee the left_child has at least as many items as right_child
@@ -165,8 +166,12 @@ class Merge:
       in2 = self.sge.output(depth2, name2)
       out1 = self.sge.output(depth3, name1)
       out2 = self.sge.output(depth3, name2)
-      (name3, jid3) = self.sge.make_merge_job(jid1, jid2, in1, in2, out1, out2)
-      self.items.append( (name3, depth3, jid3) )
+      jid3 = self.sge.make_merge_job(jid1, jid2, in1, in2, out1, out2)
+      self.items.append( (name1, depth3, jid3) )
+      if i < nr:
+        # If we've looped around, then we only need to keep the output of
+        # the left item, the right item has already been computed.
+        self.items.append( (name2, depth3, jid3) )
 
 if __name__ == '__main__':
   p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
