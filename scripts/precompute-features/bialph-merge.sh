@@ -30,6 +30,11 @@ java -Xmx1G -ea -server -cp $5 \
   -DoutAlph2=$4 \
   edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger
 
+# NOTE: You might think that you can remove the input files once you are done
+# here, but the input file may actually be used in more than once place when
+# there is a non-power-of-two number of items to merge.
+# DON'T remove the inputs!
+
 echo "ret code: $?"
 echo "done at `date`"
 
