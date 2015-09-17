@@ -87,19 +87,21 @@ public class BiAlph {
 
   private void ensureCapacity(Line l) {
     // old int
-    int oldT = oldInt2NewIntTemplates.length;
-    if (l.oldIntTemplate >= oldT) {
-      int newSize = (int) (l.oldIntTemplate * 1.6 + 1);
-      oldInt2NewIntTemplates = Arrays.copyOf(oldInt2NewIntTemplates, newSize);
-      oldInt2NewIntFeatures = Arrays.copyOf(oldInt2NewIntFeatures, newSize);
-      for (int i = oldT; i < oldInt2NewIntFeatures.length; i++)
-        oldInt2NewIntFeatures[i] = new int[0];
-    }
-    int oldF = oldInt2NewIntFeatures[l.oldIntTemplate].length;
-    if (l.oldIntFeature >= oldF) {
-      int newSize = (int) (l.oldIntFeature * 1.6 + 1);
-      oldInt2NewIntFeatures[l.oldIntTemplate] =
-          Arrays.copyOf(oldInt2NewIntFeatures[l.oldIntTemplate], newSize);
+    if (l.oldIntTemplate >= 0) {
+      int oldT = oldInt2NewIntTemplates.length;
+      if (l.oldIntTemplate >= oldT) {
+        int newSize = (int) (l.oldIntTemplate * 1.6 + 1);
+        oldInt2NewIntTemplates = Arrays.copyOf(oldInt2NewIntTemplates, newSize);
+        oldInt2NewIntFeatures = Arrays.copyOf(oldInt2NewIntFeatures, newSize);
+        for (int i = oldT; i < oldInt2NewIntFeatures.length; i++)
+          oldInt2NewIntFeatures[i] = new int[0];
+      }
+      int oldF = oldInt2NewIntFeatures[l.oldIntTemplate].length;
+      if (l.oldIntFeature >= oldF) {
+        int newSize = (int) (l.oldIntFeature * 1.6 + 1);
+        oldInt2NewIntFeatures[l.oldIntTemplate] =
+            Arrays.copyOf(oldInt2NewIntFeatures[l.oldIntTemplate], newSize);
+      }
     }
     // new int
     int newT = newInt2TemplateName.length;
@@ -117,15 +119,17 @@ public class BiAlph {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         l.set(line);
         assert (l.oldIntTemplate < 0) == (l.oldIntFeature < 0);
-        // TODO skip when l.oldIntTemplate < 0?
 
         ensureCapacity(l);
 
-        oldInt2NewIntTemplates[l.oldIntTemplate] = l.newIntTemplate;
-        oldInt2NewIntFeatures[l.oldIntTemplate][l.oldIntFeature] = l.newIntFeature;
+        if (l.oldIntTemplate >= 0) {
+          oldInt2NewIntTemplates[l.oldIntTemplate] = l.newIntTemplate;
+          oldInt2NewIntFeatures[l.oldIntTemplate][l.oldIntFeature] = l.newIntFeature;
+        }
 
         Integer old = templateName2NewInt.put(l.stringTemplate, l.newIntTemplate);
-        assert old == null || old == l.newIntFeature;
+        assert old == null || old.intValue() == l.newIntTemplate
+          : l.stringTemplate + " maps to both old=" + old + " and new=" + l.newIntTemplate;
         newInt2TemplateName[l.newIntTemplate] = l.stringTemplate;
         if (l.newIntFeature > newInt2MaxFeatureIndex[l.newIntTemplate])
           newInt2MaxFeatureIndex[l.newIntTemplate] = l.newIntFeature;
