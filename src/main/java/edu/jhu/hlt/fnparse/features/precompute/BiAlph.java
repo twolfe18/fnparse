@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Map;
 
@@ -11,7 +12,7 @@ import edu.jhu.hlt.tutils.FileUtil;
  * Implements the in-memory data structure mapping:
  *   (oldIntTemplate, oldIntFeature) => (newIntTemplate, newIntFeature)
  *
- * Reads the file format created by {@link AlphabetMerger}.
+ * Reads the file format created by {@link AlphabetMerger} (6 column tsv).
  *
  * @author travis
  */
@@ -65,17 +66,46 @@ public class BiAlph {
   // Not a full alphabet (over (template,features)), so should fit in memory easily
   private Map<String, Integer> templateName2NewInt;
   private String[] newInt2TemplateName;
-  private int[] maxFeatureIndex;      // indexed by new template index, stores max new feature index
-  private int[] templatePermutation;
-  private int[][] featurePermutation;
+  private int[] newInt2MaxFeatureIndex;
+  private int[] oldInt2NewIntTemplates;
+  private int[][] oldInt2NewIntFeatures;
   private File file;
 
   public BiAlph(File f) {
+    this.newInt2TemplateName = new String[0];
+    this.newInt2MaxFeatureIndex = new int[0];
+    this.oldInt2NewIntTemplates = new int[0];
+    this.oldInt2NewIntFeatures = new int[0][0];
     set(f);
   }
 
   public File getSource() {
     return file;
+  }
+
+  private void ensureCapacity(Line l) {
+    // old int
+    int oldT = oldInt2NewIntTemplates.length;
+    if (l.oldIntTemplate >= oldT) {
+      int newSize = (int) (oldT * 1.6 + 1);
+      oldInt2NewIntTemplates = Arrays.copyOf(oldInt2NewIntTemplates, newSize);
+      oldInt2NewIntFeatures = Arrays.copyOf(oldInt2NewIntFeatures, newSize);
+      for (int i = oldT; i < oldInt2NewIntFeatures.length; i++)
+        oldInt2NewIntFeatures[i] = new int[0];
+    }
+    int oldF = oldInt2NewIntFeatures[l.oldIntTemplate].length;
+    if (l.oldIntFeature >= oldF) {
+      int newSize = (int) (oldF * 1.6 + 1);
+      oldInt2NewIntFeatures[l.oldIntTemplate] =
+          Arrays.copyOf(oldInt2NewIntFeatures[l.oldIntTemplate], newSize);
+    }
+    // new int
+    int newT = newInt2TemplateName.length;
+    if (l.newIntTemplate >= newT) {
+      int newSize = (int) (l.newIntTemplate * 1.6 + 1);
+      newInt2TemplateName = Arrays.copyOf(newInt2TemplateName, newSize);
+      newInt2MaxFeatureIndex = Arrays.copyOf(newInt2MaxFeatureIndex, newSize);
+    }
   }
 
   public void set(File f) {
@@ -86,13 +116,17 @@ public class BiAlph {
         l.set(line);
         assert (l.oldIntTemplate < 0) == (l.oldIntFeature < 0);
         // TODO skip when l.oldIntTemplate < 0?
-        templatePermutation[l.oldIntTemplate] = l.newIntTemplate;
-        featurePermutation[l.oldIntTemplate][l.oldIntFeature] = l.newIntFeature;
+
+        ensureCapacity(l);
+
+        oldInt2NewIntTemplates[l.oldIntTemplate] = l.newIntTemplate;
+        oldInt2NewIntFeatures[l.oldIntTemplate][l.oldIntFeature] = l.newIntFeature;
+
         Integer old = templateName2NewInt.put(l.stringTemplate, l.newIntTemplate);
         assert old == null || old == l.newIntFeature;
         newInt2TemplateName[l.newIntTemplate] = l.stringTemplate;
-        if (l.newIntFeature > maxFeatureIndex[l.newIntTemplate])
-          maxFeatureIndex[l.newIntTemplate] = l.newIntFeature;
+        if (l.newIntFeature > newInt2MaxFeatureIndex[l.newIntTemplate])
+          newInt2MaxFeatureIndex[l.newIntTemplate] = l.newIntFeature;
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -100,7 +134,7 @@ public class BiAlph {
   }
 
   public int cardinalityOfNewTemplate(int newTemplateIndex) {
-    return maxFeatureIndex[newTemplateIndex] + 1;
+    return newInt2MaxFeatureIndex[newTemplateIndex] + 1;
   }
 
   public int mapTemplate(String templateName) {
@@ -112,10 +146,10 @@ public class BiAlph {
   }
 
   public int mapTemplate(int oldTemplateIndex) {
-    return templatePermutation[oldTemplateIndex];
+    return oldInt2NewIntTemplates[oldTemplateIndex];
   }
 
   public int mapFeature(int oldTemplateIndex, int oldFeatureIndex) {
-    return featurePermutation[oldTemplateIndex][oldFeatureIndex];
+    return oldInt2NewIntFeatures[oldTemplateIndex][oldFeatureIndex];
   }
 }
