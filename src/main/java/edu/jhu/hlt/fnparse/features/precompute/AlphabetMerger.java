@@ -256,8 +256,8 @@ public class AlphabetMerger {
     int oldIntTemplate = -1;
     int oldIntFeature = -1;
     if (o != null) {
-      oldIntTemplate = o.newIntTemplate;
-      oldIntFeature = o.newIntFeature;
+      oldIntTemplate = o.oldIntTemplate;
+      oldIntFeature = o.oldIntFeature;
     }
     w.write(i.template
         + "\t" + i.feature
