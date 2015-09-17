@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 
 import edu.jhu.hlt.tutils.FileUtil;
@@ -72,6 +73,7 @@ public class BiAlph {
   private File file;
 
   public BiAlph(File f) {
+    this.templateName2NewInt = new HashMap<>();
     this.newInt2TemplateName = new String[0];
     this.newInt2MaxFeatureIndex = new int[0];
     this.oldInt2NewIntTemplates = new int[0];
