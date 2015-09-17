@@ -29,13 +29,16 @@ OUTPUT=$2 #/tmp/merged-0/template-feat-indices.bialph.txt
 # NOTE that LC_ALL=C is needed because someone thought the default
 # local shouldn't consider "<S>" and "</S>" to be lexicographically different...
 
-#echo "LC_ALL=C sort -t '\t' -k 3,4 <(zcat $INPUT | tail -n+2) \
-#  | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
-#  >$OUTPUT"
-
-LC_ALL=C sort -t '	' -k 3,4 <(zcat $INPUT | tail -n+2) \
+TEMP=`mktemp`
+zcat $INPUT | tail -n+2 >$TEMP
+LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
   | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
   >$OUTPUT
+rm $TEMP
+
+#LC_ALL=C sort -t '	' -k 3,4 <(zcat $INPUT | tail -n+2) \
+#  | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
+#  >$OUTPUT
 
 echo "ret code: $?"
 echo "done at `date`"
