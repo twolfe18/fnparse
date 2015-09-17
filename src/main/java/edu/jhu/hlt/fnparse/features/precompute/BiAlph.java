@@ -87,7 +87,7 @@ public class BiAlph {
     // old int
     int oldT = oldInt2NewIntTemplates.length;
     if (l.oldIntTemplate >= oldT) {
-      int newSize = (int) (oldT * 1.6 + 1);
+      int newSize = (int) (l.oldIntTemplate * 1.6 + 1);
       oldInt2NewIntTemplates = Arrays.copyOf(oldInt2NewIntTemplates, newSize);
       oldInt2NewIntFeatures = Arrays.copyOf(oldInt2NewIntFeatures, newSize);
       for (int i = oldT; i < oldInt2NewIntFeatures.length; i++)
@@ -95,7 +95,7 @@ public class BiAlph {
     }
     int oldF = oldInt2NewIntFeatures[l.oldIntTemplate].length;
     if (l.oldIntFeature >= oldF) {
-      int newSize = (int) (oldF * 1.6 + 1);
+      int newSize = (int) (l.oldIntFeature * 1.6 + 1);
       oldInt2NewIntFeatures[l.oldIntTemplate] =
           Arrays.copyOf(oldInt2NewIntFeatures[l.oldIntTemplate], newSize);
     }
