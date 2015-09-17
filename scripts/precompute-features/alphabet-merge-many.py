@@ -7,6 +7,30 @@
 
 import glob, sys, os, math, subprocess, shutil, re
 
+class WorkingDir:
+  def __init__(self, path, jar, log_dir='sge-logs', jar_name='all-in-one.jar'):
+    self.path = path
+    if not os.path.isdir(path):
+      os.makedirs(path)
+    self.log_dir = os.path.join(path, log_dir)
+    if not os.path.isdir(self.log_dir):
+      os.makedirs(self.log_dir)
+    if not os.path.isfile(jar):
+      raise Exception('not a jar file: ' + jar)
+    self.jar_file = os.path.join(path, jar_name)
+    print 'copying jar to safe place:'
+    print '\t', jar, ' ==> ', self.jar_file
+    shutil.copyfile(jar, self.jar_file)
+
+  def mkdir(self, name):
+    p = os.path.join(self.path, name)
+    if not os.path.isdir(p):
+      os.makedirs(p)
+    return p
+
+  def __str__(self):
+    return self.path
+
 class BiAlphMerger:
   '''
   This class creates the jobs (qsub calls to edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger)
@@ -14,28 +38,18 @@ class BiAlphMerger:
   1) Holds state like working_dir, job id counter
   2) Provides some SGE specific functionality like parsing job ids upon launching a job
   '''
-  def __init__(self, alph_glob, working_dir, jar_file, copy_jar=True):
+  def __init__(self, alph_glob, working_dir, mock=False):
     self.alph_glob = alph_glob
     self.working_dir = working_dir
     self.job_counter = 0
 
-    self.bialph_dir = os.path.join(working_dir, 'bialphs')
+    # If mock=True, then don't actually qsub anything, just pretend as if you did
+    self.mock = mock
+
+    self.bialph_dir = os.path.join(working_dir.path, 'bialphs')
     if not os.path.isdir(self.bialph_dir):
       os.makedirs(self.bialph_dir)
     print 'putting bialphs in', self.bialph_dir
-
-    self.sge_logs = os.path.join(working_dir, 'sge-logs')
-    if not os.path.isdir(self.sge_logs):
-      os.makedirs(self.sge_logs)
-
-    if copy_jar:
-      self.jar_file = os.path.join(working_dir, 'fnparse.jar')
-      print 'copying jar file to safe place:'
-      print '\t', jar_file, ' => ', self.jar_file
-      shutil.copyfile(jar_file, self.jar_file)
-    else:
-      print 'using jar file in place:', jar_file
-      self.jar_file = jar_file
   
   def start(self):
     # Find all of the alphabets
@@ -46,9 +60,11 @@ class BiAlphMerger:
     # Leaves -- alph => bialph
     interval = 15
     buf = []
+    self.name2input = {}
     for i, a in enumerate(alphs):
       n = 'shard' + str(i)
       buf.append(Merge(self, alphabet_file=a, name=n))
+      self.name2input[n] = a
       if len(buf) % interval == 0:
         print 'submitted', len(buf), 'jobs for creating bialphs'
 
@@ -67,9 +83,7 @@ class BiAlphMerger:
 
     print 'done launching jobs, created', self.job_counter, 'jobs'
 
-    root = buf.pop()
-    print 'the root node is:', root
-    return root
+    return buf.pop()
 
   def output(self, depth, i):
     return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt" % (depth, i))
@@ -80,12 +94,14 @@ class BiAlphMerger:
     self.job_counter += 1
     command = ['qsub']
     command += ['-N', name]
-    command += ['-o', self.sge_logs]
+    command += ['-o', self.working_dir.log_dir]
     command += ['-hold_jid', str(dep1)]
     command += ['-hold_jid', str(dep2)]
     command += ['scripts/precompute-features/bialph-merge.sh']
-    command += [in1, in2, out1, out2, self.jar_file]
-    print 'make_merge_job:', command
+    command += [in1, in2, out1, out2, self.working_dir.jar_file]
+    print 'make_merge_job:', '\n\t'.join(command)
+    if self.mock:
+      return self.job_counter + 40000
     s = subprocess.check_output(command)
     # Your job 443510 ("foo-bar") has been submitted
     m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
@@ -102,10 +118,12 @@ class BiAlphMerger:
     self.job_counter += 1
     command = ['qsub']
     command += ['-N', name]
-    command += ['-o', self.sge_logs]
+    command += ['-o', self.working_dir.log_dir]
     command += ['scripts/precompute-features/bialph-create.sh']
     command += [alphabet_filename, bialph_filename]
-    print 'make_create_job:', command
+    print 'make_create_job:', '\n\t'.join(command)
+    if self.mock:
+      return self.job_counter + 40000
     s = subprocess.check_output(command)
     # Your job 443510 ("foo-bar") has been submitted
     m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
@@ -173,14 +191,73 @@ class Merge:
         # the left item, the right item has already been computed.
         self.items.append( (name2, depth3, jid3) )
 
+def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
+  command = ['qsub']
+  command += ['-N', 'make-final-alph']
+  command += ['-o', working_dir.log_dir]
+  command += ['-hold_jid', str(dep_jid)]
+  command += ['scripts/precompute-features/bialph-to-alph.sh']
+  command += [in_file, out_file]
+  print 'Projecting a bialph down to an alph:'
+  print '\n\t'.join(command)
+  if not mock:
+    subprocess.check_call(command)
+
+def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, mock=False):
+  command = ['qsub']
+  command += ['-hold_jid', str(dep_jid)]
+  command += ['-o', working_dir.log_dir]
+  command += ['scripts/precompute-features/bialph-projection.sh']
+  command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file]
+  print 'Projecting features through a bialph to build a coherent feature file:'
+  print '\n\t'.join(command)
+  if not mock:
+    subprocess.check_call(command)
+
 if __name__ == '__main__':
+  m = False # mock
   p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
-  g = os.path.join(p, 'raw-shards/job-?-of-400/template-feat-indices.txt.gz')
-  o = os.path.join(p, 'merged-alphs')
-  j = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
-  merger = BiAlphMerger(g, o, j)
+  alph_glob = os.path.join(p, 'raw-shards/job-?-of-400/template-feat-indices.txt.gz')
+  merge_bialph_dir = os.path.join(p, 'merged-bialphs')
+  jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
+
+  # Create and merge all of the bialphs
+  merge_wd = WorkingDir(merge_bialph_dir, jar)
+  merger = BiAlphMerger(alph_glob, merge_wd, mock=m)
   root = merger.start()
+
+  # Choose any bialph to build the alph with (they all have the same first 4 columns)
+  bialph = None
+  bialph_dep_jid = None
   print 'results should be in...'
   for (name, depth, jid) in root.items:
-    print merger.output(depth, name)
+    bialph = merger.output(depth, name)
+    bialph_dep_jid = jid
+    break
+
+  # Project a bialph to a single compressed alphabet for later
+  proj_wd = WorkingDir(os.path.join(p, 'coherent-shards'), jar)
+  alph = os.path.join(proj_wd.path, 'alphabet.txt.gz')
+  bialph2alph(bialph, alph, bialph_dep_jid, proj_wd, mock=m)
+
+  # Project the feature sets into this new universal alphabet
+  feat_dir = proj_wd.mkdir('features')
+  for (name, depth, jid) in root.items:
+    bialph = merger.output(depth, name)
+    alph = merger.name2input[name]
+    dn = os.path.dirname(alph)
+    features = os.path.join(dn, 'features.txt.gz')
+    output_features = os.path.join(feat_dir, name + '.txt.gz')
+    make_bialph_projection_job(features, bialph, output_features, jid, proj_wd, mock=m)
+
+  print
+  print 'Once all of the jobs are done, you probably want to cleanup (delete) the intermediate data in:'
+  print merge_wd
+  print
+  print 'The final output is in:'
+  print proj_wd
+  print
+
+
+
 
