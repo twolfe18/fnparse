@@ -45,7 +45,7 @@ public class AlphabetMerger {
    * {@link FeaturePrecomputation}. Highlights strings like "10:44" using
    * [start,end).
    */
-  public static Iterator<IntPair> findFeatureKeys(String input) {
+  public static Iterator<IntPair> findTemplateFeatureMentions(String input) {
     int offset = 0;
     for (int i = 0; i < 5; i++) {
       int tab = input.indexOf('\t', offset);
@@ -63,6 +63,26 @@ public class AlphabetMerger {
       offset = tab + 1;
     }
     return pairs.iterator();
+  }
+
+  /** Given line = "foo 1:2 bar baz", highlighted = (4,7), gives (1,2) */
+  public static IntPair parseTemplateFeature(String line, IntPair highlighted) {
+    int colon = line.indexOf(':', highlighted.first);
+    String templateString = line.substring(highlighted.first, colon);
+    String featureString = line.substring(colon + 1, highlighted.second);
+    int template = Integer.parseInt(templateString);
+    int feature = Integer.parseInt(featureString);
+    return new IntPair(template, feature);
+  }
+
+  /** Accepts strings like "22:42" */
+  public static IntPair parseTemplateFeature(String templateFeature) {
+    int colon = templateFeature.indexOf(':');
+    String templateString = templateFeature.substring(0, colon);
+    String featureString = templateFeature.substring(colon + 1);
+    int template = Integer.parseInt(templateString);
+    int feature = Integer.parseInt(featureString);
+    return new IntPair(template, feature);
   }
 
   /**
@@ -126,13 +146,13 @@ public class AlphabetMerger {
     // Convert the first file
     Log.info(Describe.memoryUsage());
     Log.info("converting " + inputFeatures1.getPath() + " => " + outputFeatures.getPath());
-    new FindReplace(AlphabetMerger::findFeatureKeys, s -> ar.replace(s, true))
+    new FindReplace(AlphabetMerger::findTemplateFeatureMentions, s -> ar.replace(s, true))
       .findReplace(inputFeatures1, outputFeatures, false);
 
     // Convert the second file (append to output)
     Log.info(Describe.memoryUsage());
     Log.info("converting " + inputFeatures2.getPath() + " => " + outputFeatures.getPath());
-    new FindReplace(AlphabetMerger::findFeatureKeys, s -> ar.replace(s, false))
+    new FindReplace(AlphabetMerger::findTemplateFeatureMentions, s -> ar.replace(s, false))
       .findReplace(inputFeatures2, outputFeatures, true);
 
     // Save the alphabet
@@ -310,19 +330,19 @@ public class AlphabetMerger {
         new File("/tmp/merged/features.txt.gz"));
 
     // int features -> string features for wd1
-    new FindReplace(AlphabetMerger::findFeatureKeys,
+    new FindReplace(AlphabetMerger::findTemplateFeatureMentions,
         new DeIntifier(new File("/tmp/wd1/template-feat-indices.txt.gz"))::replace)
           .findReplace(new File("/tmp/wd1/features.txt.gz"),
               new File("/tmp/wd1/features-strings.txt.gz"));
 
     // int features -> string features for wd2
-    new FindReplace(AlphabetMerger::findFeatureKeys,
+    new FindReplace(AlphabetMerger::findTemplateFeatureMentions,
         new DeIntifier(new File("/tmp/wd2/template-feat-indices.txt.gz"))::replace)
           .findReplace(new File("/tmp/wd2/features.txt.gz"),
               new File("/tmp/wd2/features-strings.txt.gz"));
 
     // int features -> string features for merged
-    new FindReplace(AlphabetMerger::findFeatureKeys,
+    new FindReplace(AlphabetMerger::findTemplateFeatureMentions,
         new DeIntifier(new File("/tmp/merged/template-feat-indices.txt.gz"))::replace)
           .findReplace(new File("/tmp/merged/features.txt.gz"),
               new File("/tmp/merged/features-strings.txt.gz"));
