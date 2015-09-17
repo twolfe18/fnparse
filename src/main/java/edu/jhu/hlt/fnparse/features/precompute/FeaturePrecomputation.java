@@ -221,6 +221,9 @@ public class FeaturePrecomputation {
 
     /** Parses templates and alphabets in same format written by {@link Templates#toFile(File)} */
     public Templates(File file) {
+      this(file, true);
+    }
+    public Templates(File file, boolean header) {
       // Parse file like:
       // # templateIndex featureIndex templateName featureName
       // 0       0       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=.<ROOT>
@@ -236,8 +239,10 @@ public class FeaturePrecomputation {
         e.printStackTrace();
       }
       try (BufferedReader r = FileUtil.getReader(file)) {
-        String header = r.readLine();
-        assert header.charAt(0) == '#';
+        if (header) {
+          String h = r.readLine();
+          assert h.charAt(0) == '#';
+        }
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           AlphabetLine al = new AlphabetLine(line);
           if (al.template == size()) {
