@@ -7,6 +7,20 @@
 
 import glob, sys, os, math, subprocess, shutil, re
 
+
+def qsub_and_parse_jid(command):
+  s = subprocess.check_output(command)
+  # Your job 443510 ("foo-bar") has been submitted
+  m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
+  if m:
+    jid = int(m.group(1))
+    name_maybe_trunc = m.group(2)
+    print '  launched job', jid
+    return jid
+  else:
+    raise Exception('couldn\'t parse qsub output: ' + s)
+
+
 class WorkingDir:
   def __init__(self, path, jar, log_dir='sge-logs', jar_name='all-in-one.jar'):
     self.path = path
@@ -30,6 +44,7 @@ class WorkingDir:
 
   def __str__(self):
     return self.path
+
 
 class BiAlphMerger:
   '''
@@ -95,22 +110,14 @@ class BiAlphMerger:
     command = ['qsub']
     command += ['-N', name]
     command += ['-o', self.working_dir.log_dir]
-    command += ['-hold_jid', str(dep1)]
-    command += ['-hold_jid', str(dep2)]
+    command += ['-hold_jid', "%d,%d" % (dep1, dep2)]
     command += ['scripts/precompute-features/bialph-merge.sh']
     command += [in1, in2, out1, out2, self.working_dir.jar_file]
     print 'make_merge_job:', '\n\t'.join(command)
     if self.mock:
       return self.job_counter + 40000
-    s = subprocess.check_output(command)
-    # Your job 443510 ("foo-bar") has been submitted
-    m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
-    if m:
-      jid = int(m.group(1))
-      name_maybe_trunc = m.group(2)
-      return jid
-    else:
-      raise Exception('couldn\'t parse qsub output: ' + s)
+    jid = qsub_and_parse_jid(command)
+    return jid
 
   def make_create_job(self, alphabet_filename, bialph_filename):
     ''' returns a jid '''
@@ -124,15 +131,8 @@ class BiAlphMerger:
     print 'make_create_job:', '\n\t'.join(command)
     if self.mock:
       return self.job_counter + 40000
-    s = subprocess.check_output(command)
-    # Your job 443510 ("foo-bar") has been submitted
-    m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
-    if m:
-      jid = int(m.group(1))
-      name_maybe_trunc = m.group(2)
-      return jid
-    else:
-      raise Exception('couldn\'t parse qsub output: ' + s)
+    jid = qsub_and_parse_jid(command)
+    return jid
 
 
 class Merge:
@@ -201,7 +201,8 @@ def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
   print 'Projecting a bialph down to an alph:'
   print '\n\t'.join(command)
   if not mock:
-    subprocess.check_call(command)
+    jid = qsub_and_parse_jid(command)
+    return jid
 
 def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, mock=False):
   command = ['qsub']
@@ -212,12 +213,13 @@ def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, d
   print 'Projecting features through a bialph to build a coherent feature file:'
   print '\n\t'.join(command)
   if not mock:
-    subprocess.check_call(command)
+    jid = qsub_and_parse_jid(command)
+    return jid
 
 if __name__ == '__main__':
   m = False # mock
   p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
-  alph_glob = os.path.join(p, 'raw-shards/job-?-of-400/template-feat-indices.txt.gz')
+  alph_glob = os.path.join(p, 'raw-shards/job-*-of-400/template-feat-indices.txt.gz')
   merge_bialph_dir = os.path.join(p, 'merged-bialphs')
   jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
 
