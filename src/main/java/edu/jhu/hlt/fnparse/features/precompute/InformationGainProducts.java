@@ -4,6 +4,13 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -25,19 +32,15 @@ import edu.jhu.prim.tuple.Pair;
 /**
  * Computes information gain for products of templates.
  *
- * Uses template alphabets from super class.
+ * Takes a template IG estimate produced by {@link InformationGain}, sorts the
+ * products of templates by the product of IG of the templates, then computes
+ * the IG for the product of templates.
  *
- * TODO Now that we have many bialphs with each feature file remaining in its
- * own set of indices, I need to change the interface from "given a feature file"
- * to "given a (feature file, bialph)". This means
- * 1) not inheriting from LineByLine and
- * 2) add a permutation on (template,feature) which you apply while reading a
- * feature file (the statistics should be kept in the codomain of each of the
- * bialphs).
+ * See the main method for the options to run this thing.
  *
  * @author travis
  */
-public class InformationGainProducts {  //implements LineByLine {
+public class InformationGainProducts {
   public static boolean DEBUG = false;
 
   /** Extracts just the features needed (given a subset of templates of interet) */
@@ -104,7 +107,6 @@ public class InformationGainProducts {  //implements LineByLine {
   private BitSet relevantTemplates;   // Union of values in keys of products
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
-//  public InformationGainProducts(List<int[]> features, File templateAlph) {
   public InformationGainProducts(List<String[]> features) {
     baseFeatureNames = features;
   }
@@ -151,15 +153,20 @@ public class InformationGainProducts {  //implements LineByLine {
     }
   }
 
-  public BiAlph run(File features, File bialphFile) throws IOException {
-    Log.info("features=" + features.getPath() + " bialph=" + bialphFile.getPath());
+/*
+  public BiAlph run(File features, File mapping, boolean mappingIsBialph) throws IOException {
+    Log.info("features=" + features.getPath()
+      + " mapping=" + mapping.getPath()
+      + " mappingIsBialph=" + mappingIsBialph);
 
     // Load the bialph
-    BiAlph bialph = new BiAlph(bialphFile);
+    BiAlph bialph = new BiAlph(mapping, mappingIsBialph);
 
     // Possibly initialize some DS if you this is the first time
     if (!isInitialized())
       init(bialph);
+*/
+  public void update(File features) throws IOException {
 
     // Scan the features
     try (BufferedReader r = FileUtil.getReader(features)) {
@@ -168,7 +175,7 @@ public class InformationGainProducts {  //implements LineByLine {
     }
 
     // You can use this later for mapping int template -> string template
-    return bialph;
+//    return bialph;
   }
 
 //  @Override
@@ -283,34 +290,8 @@ public class InformationGainProducts {  //implements LineByLine {
     return baseFeatures.get(i);
   }
 
-//  public static void test() throws IOException {
-//    List<int[]> products = Arrays.asList(
-//        new int[] {1, 2, 3},
-//        new int[] {4, 5},
-//        new int[] {6});
-//    File templateAlph = new File("/tmp/first/merged-0/template-feat-indices.txt.gz");
-//    InformationGainProducts igp = new InformationGainProducts(products, templateAlph);
-//    igp.run(new File("/tmp/first/merged-0/features.txt.gz"));
-//    int k = 10;
-//    List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-//    Templates alphs = igp.getAlphabets();
-//    for (int i = 0; i < Math.min(k, byIG.size()); i++) {
-//      TemplateIG t = byIG.get(i);
-//      int[] pieces = igp.getTemplatesForFeature(t.getIndex());
-//      String[] spieces = new String[pieces.length];
-//      for (int j = 0; j < pieces.length; j++)
-//        spieces[j] = alphs.get(pieces[j]).name;
-//      System.out.println(t.ig()
-//        + "\t" + t.getIndex()
-//        + "\t" + Arrays.asList(pieces)
-//        + "\t" + Arrays.asList(spieces));
-//    }
-//  }
-
   @SafeVarargs
-//  public static Pair<int[], Double> prod(Pair<Integer, Double>... templateIGs) {
   public static Pair<String[], Double> prod(Pair<String, Double>... templateIGs) {
-//    int[] prod = new int[templateIGs.length];
     String[] prod = new String[templateIGs.length];
     double igProd = 1;
     for (int i = 0; i < templateIGs.length; i++) {
@@ -320,10 +301,8 @@ public class InformationGainProducts {  //implements LineByLine {
     return new Pair<>(prod, igProd);
   }
 
-//  public static List<int[]> getProductsSorted(ExperimentProperties config) throws IOException {
   public static List<String[]> getProductsSorted(ExperimentProperties config) throws IOException {
     // Read in the IG of the unigrams (templates)
-//    List<Pair<Integer, Double>> templateIGs = new ArrayList<>();
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
     Log.info("reading template IGs from " + templateIGsFile.getPath());
@@ -331,9 +310,8 @@ public class InformationGainProducts {  //implements LineByLine {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
         double ig = Double.parseDouble(toks[0]);
-        int template = Integer.parseInt(toks[1]);
+//        int template = Integer.parseInt(toks[1]);
         String templateString = toks[2];
-//        templateIGs.add(new Pair<>(template, ig));
         templateIGs.add(new Pair<>(templateString, ig));
       }
     }
@@ -346,7 +324,6 @@ public class InformationGainProducts {  //implements LineByLine {
     }
 
     // Produce a list of template n-grams
-//    List<Pair<int[], Double>> prodIGs = new ArrayList<>();
     List<Pair<String[], Double>> prodIGs = new ArrayList<>();
     int n = templateIGs.size();
     Log.info("producing templates up to order=" + order + " from " + n + " templates");
@@ -370,35 +347,26 @@ public class InformationGainProducts {  //implements LineByLine {
 
     // Sort and project
     Log.info("sorting template products by information gain...");
-//    Collections.sort(prodIGs, new Comparator<Pair<int[], Double>>() {
     Collections.sort(prodIGs, new Comparator<Pair<String[], Double>>() {
       @Override
-//      public int compare(Pair<int[], Double> o1, Pair<int[], Double> o2) {
       public int compare(Pair<String[], Double> o1, Pair<String[], Double> o2) {
         if (o1.get2() < o2.get2()) return 1;
         if (o1.get2() > o2.get2()) return -1;
         return 0;
       }
     });
-//    List<int[]> prods = new ArrayList<>();
     List<String[]> prods = new ArrayList<>();
-//    for (Pair<int[], Double> p : prodIGs)
     for (Pair<String[], Double> p : prodIGs)
       prods.add(p.get1());
     return prods;
   }
 
-//  public static List<int[]> filterByShard(List<int[]> all, ExperimentProperties config) {
   public static List<String[]> filterByShard(List<String[]> all, ExperimentProperties config) {
     int shard = config.getInt("shard", 0);
     int numShards = config.getInt("numShards", 1);
-//    List<int[]> keep = new ArrayList<>();
     List<String[]> keep = new ArrayList<>();
-//    for (int[] feat : all) {
     for (String[] feat : all) {
       int h = 0;
-//      for (int i : feat)
-//        h = i + 31 * h;
       for (String i : feat)
         h = i.hashCode() + 31 * h;
       if (Math.floorMod(h, numShards) == shard)
@@ -409,12 +377,10 @@ public class InformationGainProducts {  //implements LineByLine {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    //test();
 
     // Find the top K unigrams
-//    List<int[]> products = filterByShard(getProductsSorted(config), config);
     List<String[]> products = filterByShard(getProductsSorted(config), config);
-    int maxProducts = config.getInt("numProducts", 1000);
+    int maxProducts = config.getInt("numProducts", 100);
     if (maxProducts > 0 && products.size() > maxProducts)
       products = products.subList(0, maxProducts);
     Log.info("computing IG for the top " + products.size() + " product features");
@@ -422,11 +388,35 @@ public class InformationGainProducts {  //implements LineByLine {
       Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
 
     // Load the features and compute the IG for the chosen products
-    File features = config.getExistingFile("features");
+    File featuresParent = config.getExistingDir("featuresParent");
+    String featuresGlob = config.getString("featuresGlob");
     File templateAlph = config.getExistingFile("templateAlph");
+    boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
+
     InformationGainProducts igp = new InformationGainProducts(products);  //, templateAlph);
-    Log.info("reading features: " + features.getPath());
-    BiAlph bialph = igp.run(features, templateAlph);
+
+    // Read in the bialph (for things like template cardinality)
+    Log.info("reading templateAlph=" + templateAlph.getPath()
+      + " templateAlphIsBialph=" + templateAlphIsBialph);
+    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph);
+    igp.init(bialph);
+
+    // Scan each of the input files
+    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+      @Override
+      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+        if (pm.matches(path)) {
+          Log.info("reading features: " + path.toFile().getPath());
+          igp.update(path.toFile());
+        }
+        return FileVisitResult.CONTINUE;
+      }
+      @Override
+      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+    });
 
     // Write out the results in format:
     //  line = IG <tab> featureInts <tab> featureStrings
@@ -435,7 +425,6 @@ public class InformationGainProducts {  //implements LineByLine {
     Log.info("writing output to " + output.getPath());
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-//      Templates alphs = igp.getAlphabets();
       for (TemplateIG t : byIG) {
         w.write(String.valueOf(t.ig()));
         w.write("\t");
@@ -447,7 +436,6 @@ public class InformationGainProducts {  //implements LineByLine {
         w.write("\t");
         for (int i = 0; i < pieces.length; i++) {
           if (i > 0) w.write("\t");
-//          w.write(alphs.get(pieces[i]).name);
           w.write(bialph.lookupTemplate(pieces[i]));
         }
         w.newLine();
