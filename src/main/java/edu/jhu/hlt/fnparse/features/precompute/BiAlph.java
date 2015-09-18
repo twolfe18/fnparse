@@ -28,8 +28,8 @@ public class BiAlph {
     public String stringFeature;
     public int oldIntTemplate;
     public int oldIntFeature;
-    public Line(String line) {
-      set(line);
+    public Line(String line, boolean bialphLine) {
+      set(line, bialphLine);
     }
     @Override
     public String toString() {
@@ -38,18 +38,23 @@ public class BiAlph {
     public boolean isNull() {
       return line == null;
     }
-    public void set(String line) {
+    public void set(String line, boolean bialphLine) {
       this.line = line;
       if (line != null) {
         String[] toks = line.split("\t");
-        assert toks.length == 6;
         int i = 0;
         newIntTemplate = Integer.parseInt(toks[i++]);
         newIntFeature = Integer.parseInt(toks[i++]);
         stringTemplate = toks[i++];
         stringFeature = toks[i++];
-        oldIntTemplate = Integer.parseInt(toks[i++]);
-        oldIntFeature = Integer.parseInt(toks[i++]);
+        if (bialphLine) {
+          oldIntTemplate = Integer.parseInt(toks[i++]);
+          oldIntFeature = Integer.parseInt(toks[i++]);
+        } else {
+          oldIntTemplate = -1;
+          oldIntFeature = -1;
+        }
+        assert i == toks.length;
       }
     }
     public static Comparator<Line> BY_TEMPLATE_STR_FEATURE_STR = new Comparator<Line>() {
@@ -72,13 +77,13 @@ public class BiAlph {
   private int[][] oldInt2NewIntFeatures;
   private File file;
 
-  public BiAlph(File f) {
+  public BiAlph(File f, boolean fIsBialph) {
     this.templateName2NewInt = new HashMap<>();
     this.newInt2TemplateName = new String[0];
     this.newInt2MaxFeatureIndex = new int[0];
     this.oldInt2NewIntTemplates = new int[0];
     this.oldInt2NewIntFeatures = new int[0][0];
-    set(f);
+    set(f, fIsBialph);
   }
 
   public File getSource() {
@@ -112,12 +117,16 @@ public class BiAlph {
     }
   }
 
-  public void set(File f) {
+  /**
+   * @param fIsBiAlph if true f is interpretted as a bialph (6 col tsv),
+   * otherwise f is interpretted as an alph (4 col tsv).
+   */
+  public void set(File f, boolean fIsBiAlph) {
     this.file = f;
     try (BufferedReader r = FileUtil.getReader(f)) {
-      Line l = new Line(null);
+      Line l = new Line(null, fIsBiAlph);
       for (String line = r.readLine(); line != null; line = r.readLine()) {
-        l.set(line);
+        l.set(line, fIsBiAlph);
         assert (l.oldIntTemplate < 0) == (l.oldIntFeature < 0);
 
         ensureCapacity(l);

@@ -138,8 +138,8 @@ public class BiAlphMerger {
       }
       // Merge the remaining lines
       String prevTemplate = "";
-      BiAlph.Line l1 = new BiAlph.Line(r1.readLine());
-      BiAlph.Line l2 = new BiAlph.Line(r2.readLine());
+      BiAlph.Line l1 = new BiAlph.Line(r1.readLine(), true);
+      BiAlph.Line l2 = new BiAlph.Line(r2.readLine(), true);
       TIdx i = new TIdx(-1, 0);                      // sets values for newInt
       while (!l1.isNull() && !l2.isNull()) {
         int c;
@@ -158,8 +158,8 @@ public class BiAlphMerger {
           }
           write(w1, i, l1, l1);
           write(w2, i, l2, l2);
-          l1.set(r1.readLine());
-          l2.set(r2.readLine());
+          l1.set(r1.readLine(), true);
+          l2.set(r2.readLine(), true);
         } else if (c < 0) {
           // s1 gets i, update s1
           if (!prevTemplate.equals(l1.stringTemplate)) {
@@ -168,7 +168,7 @@ public class BiAlphMerger {
           }
           write(w1, i, l1, l1);
           write(w2, i, l1, null);
-          l1.set(r1.readLine());
+          l1.set(r1.readLine(), true);
         } else {
           // s2 gets i, update s2
           if (!prevTemplate.equals(l2.stringTemplate)) {
@@ -177,7 +177,7 @@ public class BiAlphMerger {
           }
           write(w1, i, l2, null);
           write(w2, i, l2, l2);
-          l2.set(r2.readLine());
+          l2.set(r2.readLine(), true);
         }
         i.incrementFeature();
       }

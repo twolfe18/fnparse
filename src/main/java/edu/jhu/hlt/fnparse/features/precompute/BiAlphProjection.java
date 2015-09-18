@@ -19,7 +19,7 @@ public class BiAlphProjection {
   static class BiAlphIntMapper {
     private BiAlph bialph;
     public BiAlphIntMapper(File bialphFile) {
-      bialph = new BiAlph(bialphFile);
+      bialph = new BiAlph(bialphFile, true);
     }
     /** Takes a substring like "22:42" */
     public String replace(String input) {
