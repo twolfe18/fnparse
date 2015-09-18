@@ -229,6 +229,7 @@ public class FeaturePrecomputation {
       // 0       0       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=.<ROOT>
       // 0       1       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=<ROOT>VBN
       // ...
+      this.templateName2index = new HashMap<>();
       this.hf = new SemaforicHeadFinder();
       Log.info("reading template alphabets from " + file.getPath());
       BasicFeatureTemplates.Indexed templateMap = null;
@@ -261,6 +262,7 @@ public class FeaturePrecomputation {
     /** Copies just the template name and index but creates new/empty {@link Tmpl}s */
     public Templates(Templates copyTemplateNames) {
       super();
+      this.templateName2index = new HashMap<>();
       for (Tmpl t : copyTemplateNames)
         add(new Tmpl(t.template, t.name, t.index));
     }
