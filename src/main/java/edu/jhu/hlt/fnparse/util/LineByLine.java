@@ -1,10 +1,9 @@
-package edu.jhu.hlt.fnparse.features.precompute;
+package edu.jhu.hlt.fnparse.util;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 
-import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;

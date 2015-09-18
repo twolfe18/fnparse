@@ -10,7 +10,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map.Entry;
 
-import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Templates;
+import edu.jhu.hlt.fnparse.util.LineByLine;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -24,7 +24,7 @@ import edu.jhu.prim.vector.IntIntDenseVector;
  * NOTE: This version was created before bialph merging. This may be good enough
  * for getting a rough top K list of templates, but if not, see
  * {@link InformationGainProducts} for how to read many feature files that don't
- * shard a common indexing scheme (you map with a bialph created by {@link AlphabetMerger}).
+ * shard a common indexing scheme (you map with a bialph created by {@link BiAlphMerger}).
  *
  * @author travis
  */
@@ -35,15 +35,13 @@ public class InformationGain implements Serializable, LineByLine {
     private static final long serialVersionUID = 1287953772086645433L;
     private int index;
     private IntIntDenseVector cy, cx;
-//    private LongIntDenseVector cyx;        // |Y| ~= 20  |X| ~= 20 * 10,000
-    private Counts<IntPair> cyx;
+    private Counts<IntPair> cyx;    // |Y| ~= 20  |X| ~= 20 * 10,000
     private int updates;
     private Double igCache = null;
     public TemplateIG(int index) {
       this.index = index;
       this.cy = new IntIntDenseVector();
       this.cx = new IntIntDenseVector();
-//      this.cyx = new LongIntDenseVector();
       this.cyx = new Counts<>();
       this.updates = 0;
     }
@@ -51,7 +49,6 @@ public class InformationGain implements Serializable, LineByLine {
       return index;
     }
     public void update(int y, int x) {
-//      cyx.add(pack(y, x), 1);
       cyx.increment(new IntPair(y, x));
       cy.add(y, 1);
       cx.add(x, 1);
@@ -94,7 +91,7 @@ public class InformationGain implements Serializable, LineByLine {
   protected TemplateIG[] templates;
 
   public InformationGain() {
-    templates = new TemplateIG[2000];  // TODO resize code
+    templates = new TemplateIG[3000];  // TODO resize code
     for (int i = 0; i < templates.length; i++)
       templates[i] = new TemplateIG(i);
   }
@@ -125,7 +122,7 @@ public class InformationGain implements Serializable, LineByLine {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     System.out.println("usage:");
-    System.out.println("\tinputIG: serialized InformationIG file to read from [optional]");
+    System.out.println("\tinputIG: serialized InformationGain file to read from [optional]");
     System.out.println("\tfeatures: int feature file produced by FeaturePrecomputation [optional]");
     System.out.println("\ttemplateAlph: alphabet file produced by FeaturePrecomputation for looking up template names [optional]");
     System.out.println("\ttopK: how many of the top templates to print [optional]");
@@ -150,11 +147,11 @@ public class InformationGain implements Serializable, LineByLine {
       input.run(new File(features));
     }
 
-    Templates tNames = null;
+    Alphabet tNames = null;
     String tNamesFile = config.getString("templateAlph", "none");
     if (!tNamesFile.equals("none")) {
       Log.info("loading template names from " + tNamesFile);
-      tNames = new Templates(new File(tNamesFile));
+      tNames = new Alphabet(new File(tNamesFile));
     }
 
     List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();

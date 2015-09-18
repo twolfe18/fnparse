@@ -51,7 +51,7 @@ public class InformationGainProducts {  //implements LineByLine {
       this.size = 0;
       this.role = FeaturePrecomputation.getRole(line);
       this.templateFeatures = new ArrayList<>();
-      Iterator<IntPair> tmplFeatLocs = AlphabetMerger.findTemplateFeatureMentions(line);
+      Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
       while (tmplFeatLocs.hasNext()) {
         IntPair se = tmplFeatLocs.next();
         int colon = line.indexOf(':', se.first);

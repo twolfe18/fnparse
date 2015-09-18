@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.FileUtil;
  * Implements the in-memory data structure mapping:
  *   (oldIntTemplate, oldIntFeature) => (newIntTemplate, newIntFeature)
  *
- * Reads the file format created by {@link AlphabetMerger} (6 column tsv).
+ * Reads the file format created by {@link BiAlphMerger} (6 column tsv).
  *
  * @author travis
  */

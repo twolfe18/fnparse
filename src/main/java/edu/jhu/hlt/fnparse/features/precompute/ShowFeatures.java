@@ -3,8 +3,7 @@ package edu.jhu.hlt.fnparse.features.precompute;
 import java.io.File;
 import java.io.IOException;
 
-import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Templates;
-import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Tmpl;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
 import edu.jhu.hlt.fnparse.util.FindReplace;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
@@ -19,7 +18,7 @@ import edu.jhu.hlt.tutils.IntPair;
 public class ShowFeatures {
 
   // int -> string
-  private Templates alph;
+  private Alphabet alph;
 
   // If true, only print the feature instead of "template:feature".
   // This is useful when you wrote you feature strings like "templateName=value"
@@ -27,13 +26,13 @@ public class ShowFeatures {
   public String sep = ":";
 
   public ShowFeatures(File alphFile, boolean header) {
-    this.alph = new Templates(alphFile, header);
+    this.alph = new Alphabet(alphFile, header);
   }
 
   /** Accepts strings like "22:42" and maps them to "fooTemplate:barFeature" */
   public String intTemplateFeatureToStrings(String input) {
-    IntPair tf = AlphabetMerger.parseTemplateFeature(input);
-    Tmpl t = alph.get(tf.first);
+    IntPair tf = BiAlphMerger.parseTemplateFeature(input);
+    TemplateAlphabet t = alph.get(tf.first);
     String f = t.alph.lookupObject(tf.second);
     if (onlyFeature)
       return f;
@@ -47,7 +46,7 @@ public class ShowFeatures {
         config.getExistingFile("alph"),
         config.getBoolean("header", false));
     FindReplace fr = new FindReplace(
-        AlphabetMerger::findTemplateFeatureMentions,
+        BiAlphMerger::findTemplateFeatureMentions,
         sf::intTemplateFeatureToStrings);
     fr.findReplace(
         config.getExistingFile("inputFeatures"),

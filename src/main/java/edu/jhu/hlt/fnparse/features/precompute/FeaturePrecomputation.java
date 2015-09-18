@@ -1,6 +1,5 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -10,11 +9,9 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -26,11 +23,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
-import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
-import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
-import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -42,20 +36,25 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
-import edu.jhu.util.Alphabet;
 
 /**
  * Compute features ahead of time. Only outputs basic templates, not products,
  * which can be computed on the fly from the basic/kernel features.
- * 
- * Output (columns):
+ *
+ * Produces two types of files:
+ *  "features" which is the data below
+ *  "alphabet" which is an int<->string bijection.
+ *
+ * (Note: this doesn't produce "bialphs", but they can be trivially created from
+ *  alphabets, see {@link BiAlphMerger}).
+ *
+ * Columns of "feature" files:
  *  i = dataset id + sentence id
  *  t = (i,j) of target
  *  s = (i,j) of argument                     # forall span that is kept by DeterministicRolePruning
  *  k = index of role or -1 if y_{t,k,s} = 0  # assumes 0 or 1 roles per span w.r.t. a predicate
- *  f = feature*                              # where feat is an int, alphabet should be serialized in a sister file
- *
- * feature = template:feature:value
+ *  f = feat*
+ * where feat = template:feature:value
  *
  * @author travis
  */
@@ -138,16 +137,16 @@ public class FeaturePrecomputation {
   }
 
   /** Holds a {@link Template} and often serves as an Alphabet */
-  public static class Tmpl {
+  public static class TemplateAlphabet {
     public final Template template;
     public final String name;
     public final int index;
-    public final Alphabet<String> alph;
-    public Tmpl(Template template, String name, int index) {
+    public final edu.jhu.util.Alphabet<String> alph;
+    public TemplateAlphabet(Template template, String name, int index) {
       this.template = template;
       this.name = name;
       this.index = index;
-      this.alph = new Alphabet<>();
+      this.alph = new edu.jhu.util.Alphabet<>();
     }
   }
 
@@ -190,108 +189,6 @@ public class FeaturePrecomputation {
     };
   }
 
-  public static class Templates extends ArrayList<Tmpl> {
-    private static final long serialVersionUID = -5960052683453747671L;
-    private HeadFinder hf;
-    private Map<String, Integer> templateName2index;
-    /** Reads all templates out of {@link BasicFeatureTemplates} */
-    public Templates() {
-      super();
-      this.hf = new SemaforicHeadFinder();
-      this.templateName2index = new HashMap<>();
-      BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
-      for (String tn : templateIndex.getBasicTemplateNames()) {
-        Template t = templateIndex.getBasicTemplate(tn);
-        this.add(new Tmpl(t, tn, size()));
-      }
-    }
-
-    @Override
-    public boolean add(Tmpl t) {
-      assert t.name != null;
-      assert t.index == size();
-      Integer old = templateName2index.put(t.name, t.index);
-      assert old == null;
-      return super.add(t);
-    }
-
-    public Tmpl get(String templateName) {
-      return get(templateName2index.get(templateName));
-    }
-
-    /** Parses templates and alphabets in same format written by {@link Templates#toFile(File)} */
-    public Templates(File file) {
-      this(file, true);
-    }
-    public Templates(File file, boolean header) {
-      // Parse file like:
-      // # templateIndex featureIndex templateName featureName
-      // 0       0       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=.<ROOT>
-      // 0       1       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=<ROOT>VBN
-      // ...
-      this.templateName2index = new HashMap<>();
-      this.hf = new SemaforicHeadFinder();
-      Log.info("reading template alphabets from " + file.getPath());
-      BasicFeatureTemplates.Indexed templateMap = null;
-      try {
-        templateMap = BasicFeatureTemplates.getInstance();
-      } catch (Exception e) {
-        Log.warn("can't load Templates due to:");
-        e.printStackTrace();
-      }
-      try (BufferedReader r = FileUtil.getReader(file)) {
-        if (header) {
-          String h = r.readLine();
-          assert h.charAt(0) == '#';
-        }
-        for (String line = r.readLine(); line != null; line = r.readLine()) {
-          AlphabetLine al = new AlphabetLine(line);
-          if (al.template == size()) {
-            Template t = templateMap == null ? null : templateMap.getBasicTemplate(al.templateName);
-            add(new Tmpl(t, al.templateName, al.template));
-          }
-          Tmpl t = get(al.template);
-          int featureIndexNew = t.alph.lookupIndex(al.featureName, true);
-          assert al.feature == featureIndexNew : "old=" + al.feature + " new=" + featureIndexNew;
-        }
-      } catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-    }
-
-    /** Copies just the template name and index but creates new/empty {@link Tmpl}s */
-    public Templates(Templates copyTemplateNames) {
-      super();
-      this.templateName2index = new HashMap<>();
-      for (Tmpl t : copyTemplateNames)
-        add(new Tmpl(t.template, t.name, t.index));
-    }
-
-    public HeadFinder getHeadFinder() {
-      return hf;
-    }
-
-    public void toFile(File f) throws IOException {
-      // Save the alphabet
-      // template -> feature -> index
-      try (BufferedWriter w = FileUtil.getWriter(f)) {
-        w.write("# templateIndex featureIndex templateName featureName\n");
-        for (Tmpl t : this) {
-          int n = t.alph.size();
-          if (n == 0)
-            w.write(t.index + "\t0\t" + t.name + "\t<NO-FEATURES>\n");
-          for (int i = 0; i < n; i++) {
-            w.write(t.index
-                + "\t" + i
-                + "\t" + t.name
-                + "\t" + t.alph.lookupObject(i)
-                + "\n");
-          }
-        }
-      }
-    }
-  }
-
   /**
    * Compute all of the features and dump them to a file.
    */
@@ -303,7 +200,7 @@ public class FeaturePrecomputation {
     Log.info("writing alphabet to " + outputAlphabet.getPath());
 
     // Setup features
-    Templates templates = new Templates();
+    Alphabet templates = new Alphabet();
 
     // This is how we prune spans
     Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
@@ -357,7 +254,7 @@ public class FeaturePrecomputation {
   private static void emitAll(
       Writer w,
       FNParse y,
-      Templates templates,
+      edu.jhu.hlt.fnparse.features.precompute.Alphabet templates,
       Reranker r) throws IOException {
 
     // Keep track of what (t,s) I have already emitted and not emit duplicates
@@ -390,7 +287,7 @@ public class FeaturePrecomputation {
 
       // Extract features
       List<Feature> features = new ArrayList<>();
-      for (Tmpl tmpl : templates) {
+      for (TemplateAlphabet tmpl : templates) {
         FeatureIGComputation.setContext(y, commit, ctx, templates.getHeadFinder());
         Iterable<String> feats = tmpl.template.extract(ctx);
         if (feats != null) {

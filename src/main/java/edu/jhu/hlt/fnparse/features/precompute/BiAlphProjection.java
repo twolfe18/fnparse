@@ -8,8 +8,8 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 
 /**
- * Read in some features and a bialph and spit out some features (new domain)
- * and an alph.
+ * Read in some int features and a bialph and spit out some int features (in a
+ * new domain).
  *
  * @author travis
  */
@@ -23,7 +23,7 @@ public class BiAlphProjection {
     }
     /** Takes a substring like "22:42" */
     public String replace(String input) {
-      IntPair tf = AlphabetMerger.parseTemplateFeature(input);
+      IntPair tf = BiAlphMerger.parseTemplateFeature(input);
       int newTemplate = bialph.mapTemplate(tf.first);
       int newFeature = bialph.mapFeature(tf.first, tf.second);
       return newTemplate + ":" + newFeature;
@@ -32,7 +32,7 @@ public class BiAlphProjection {
 
   public static void project(File inputFeatures, File bialphFile, File outputFeatures) throws IOException {
     FindReplace fr = new FindReplace(
-        AlphabetMerger::findTemplateFeatureMentions,
+        BiAlphMerger::findTemplateFeatureMentions,
         new BiAlphIntMapper(bialphFile)::replace);
     fr.findReplace(inputFeatures, outputFeatures);
   }
