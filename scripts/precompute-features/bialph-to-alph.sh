@@ -21,9 +21,21 @@ if [[ $# != 2 ]]; then
 fi
 
 if [[ `echo $2 | grep -cP 'gz$'` == 1 ]]; then
-  awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 | gzip -c >$2
+  if [[ `echo $1 | grep -cP 'gz$'` == 1 ]]; then
+    echo "using gzip to read and write"
+    zcat $1 | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' | gzip -c >$2
+  else
+    echo "using txt to read and gzip to write"
+    awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 | gzip -c >$2
+  fi
 else
-  awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 >$2
+  if [[ `echo $1 | grep -cP 'gz$'` == 1 ]]; then
+    echo "using gzip to read and txt to write"
+    zcat $f | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' >$2
+  else
+    echo "using txt to read and gzip write"
+    awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 >$2
+  fi
 fi
 
 echo "ret code: $?"

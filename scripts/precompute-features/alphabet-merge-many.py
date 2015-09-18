@@ -5,7 +5,7 @@
 # Author: Travis Wolfe <twolfe18@gmail.com>
 # Date: Sep. 16, 2015
 
-import glob, sys, os, math, subprocess, shutil, re
+import glob, itertools, sys, os, math, subprocess, shutil, re, collections
 
 
 def qsub_and_parse_jid(command):
@@ -66,7 +66,7 @@ class BiAlphMerger:
       os.makedirs(self.bialph_dir)
     print 'putting bialphs in', self.bialph_dir
   
-  def start(self):
+  def start(self, cleanup=True):
     # Find all of the alphabets
     alphs = glob.glob(self.alph_glob)
     print 'merging', len(alphs), 'alphabets'
@@ -86,6 +86,7 @@ class BiAlphMerger:
     # Build the computation tree Part 2:
     # Recursively merge -- (bialph, bialph) => bialph
     nm = 0
+    merge_jobs = []
     while len(buf) > 1:
       # Find the two smallest nodes and merge them.
       b1 = buf.pop()
@@ -95,13 +96,34 @@ class BiAlphMerger:
       nm += 1
       if nm % interval == 0:
         print 'submitted', nm, 'jobs for merging bialphs'
+      merge_jobs.append(b3)
+
+    # Intermediate results are turning out to be sort of huge, so remove
+    # bialphs by depth as soon as they are not needed. This code computes the
+    # set of jobs that depend on a given intermediate file, and then creates a
+    # job to delete that file when all of the dependent jobs are done.
+    if cleanup:
+      f2deps = collections.defaultdict(list)
+      for j in merge_jobs:
+        for f, deps in j.f2deps.iteritems():
+          f2deps[f] += deps
+      for f, deps in f2deps.iteritems():
+        n = os.path.basename(f)
+        command = ['qsub']
+        command += ['-N', 'cleanup-' + n]
+        command += ['-o', self.working_dir.log_dir]
+        command += ['-b', 'y']
+        command += ['-hold_jid', ','.join(map(str, deps))]
+        command += ['rm', f]
+        print 'Creating job to remove', n, 'after it is done being used by', deps
+        print '\n\t'.join(command)
+        jid = qsub_and_parse_jid(command)
 
     print 'done launching jobs, created', self.job_counter, 'jobs'
-
     return buf.pop()
 
   def output(self, depth, i):
-    return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt" % (depth, i))
+    return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt.gz" % (depth, i))
 
   def make_merge_job(self, dep1, dep2, in1, in2, out1, out2):
     ''' returns a jid '''
@@ -176,6 +198,10 @@ class Merge:
     self.left_child = left_child
     self.right_child = right_child
     self.items = []
+
+    # Map from file (bialph) to list of jids which depend on the key
+    self.f2deps = collections.defaultdict(list)
+
     nr = len(right_child.items)
     for i, (name1, depth1, jid1) in enumerate(left_child.items):
       (name2, depth2, jid2) = right_child.items[i % nr]
@@ -191,6 +217,20 @@ class Merge:
         # the left item, the right item has already been computed.
         self.items.append( (name2, depth3, jid3) )
 
+      # Update file<-job dependencies
+      self.f2deps[in1].append(jid3)
+      self.f2deps[in2].append(jid3)
+
+  def input_files(self):
+    ''' generator of the input files to be merged by this node '''
+    for (name, depth, jid) in self.items:
+      yield self.sge.output(depth, name)
+
+  def jobs(self):
+    ''' generator of the job ids created by this node '''
+    for (name, depth, jid) in self.items:
+      yield jid
+
 def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
   command = ['qsub']
   command += ['-N', 'make-final-alph']
@@ -203,13 +243,16 @@ def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
   if not mock:
     jid = qsub_and_parse_jid(command)
     return jid
+  else:
+    return -1
 
-def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, mock=False):
+def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, cleanup_input=True, mock=False):
+  r = 'Y' if cleanup_input else 'N'
   command = ['qsub']
   command += ['-hold_jid', str(dep_jid)]
   command += ['-o', working_dir.log_dir]
   command += ['scripts/precompute-features/bialph-projection.sh']
-  command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file]
+  command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file, r]
   print 'Projecting features through a bialph to build a coherent feature file:'
   print '\n\t'.join(command)
   if not mock:
@@ -226,34 +269,33 @@ if __name__ == '__main__':
   # Create and merge all of the bialphs
   merge_wd = WorkingDir(merge_bialph_dir, jar)
   merger = BiAlphMerger(alph_glob, merge_wd, mock=m)
-  root = merger.start()
-
-  # Choose any bialph to build the alph with (they all have the same first 4 columns)
-  bialph = None
-  bialph_dep_jid = None
-  print 'results should be in...'
-  for (name, depth, jid) in root.items:
-    bialph = merger.output(depth, name)
-    bialph_dep_jid = jid
-    break
-
-  # Project a bialph to a single compressed alphabet for later
-  proj_wd = WorkingDir(os.path.join(p, 'coherent-shards'), jar)
-  alph = os.path.join(proj_wd.path, 'alphabet.txt.gz')
-  bialph2alph(bialph, alph, bialph_dep_jid, proj_wd, mock=m)
+  root = merger.start(cleanup=True)
 
   # Project the feature sets into this new universal alphabet
+  proj_wd = WorkingDir(os.path.join(p, 'coherent-shards'), jar)
   feat_dir = proj_wd.mkdir('features')
-  for (name, depth, jid) in root.items:
+  for i, (name, depth, jid) in enumerate(root.items):
+    # Job dependency for this bialph -> alph job.
+    dep = jid
+
+    # Project a bialph to a single compressed alphabet for later
+    if i == 0:
+      # Choose a bialph to build the final alph with (they all have the same first 4 columns)
+      bialph = merger.output(depth, name)
+      alph = os.path.join(proj_wd.path, 'alphabet.txt.gz')
+      proj_alph_jid = bialph2alph(bialph, alph, jid, proj_wd, mock=m)
+      # This job depends on jid, so we can set the current job to wait for this
+      dep = proj_alph_jid
+
     bialph = merger.output(depth, name)
     alph = merger.name2input[name]
     dn = os.path.dirname(alph)
     features = os.path.join(dn, 'features.txt.gz')
     output_features = os.path.join(feat_dir, name + '.txt.gz')
-    make_bialph_projection_job(features, bialph, output_features, jid, proj_wd, mock=m)
+    make_bialph_projection_job(features, bialph, output_features, dep, proj_wd, mock=m)
 
   print
-  print 'Once all of the jobs are done, you probably want to cleanup (delete) the intermediate data in:'
+  print 'Once all of the jobs are done, you probably want to remove directory housing the intermediate data:'
   print merge_wd
   print
   print 'The final output is in:'

@@ -15,12 +15,13 @@ echo "args: $@"
 
 set -e
 
-if [[ $# != 4 ]]; then
+if [[ $# != 5 ]]; then
   echo "please provide:"
   echo "1) input features"
   echo "2) input bialph"
   echo "3) output features"
   echo "4) a jar file"
+  echo "5) whether to remove the input bialph (Y|N)"
   exit 1
 fi
 
@@ -31,5 +32,11 @@ java -Xmx3G -ea -server -cp $4 \
   edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection
 
 echo "ret code: $?"
+
+if [[ $5 == "Y" ]]; then
+  echo "removing $2"
+  rm $2
+fi
+
 echo "done at `date`"
 

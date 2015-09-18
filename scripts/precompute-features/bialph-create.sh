@@ -30,16 +30,28 @@ OUTPUT=$2 #/tmp/merged-0/template-feat-indices.bialph.txt
 # local shouldn't consider "<S>" and "</S>" to be lexicographically different...
 
 TEMP=`mktemp`
-zcat $INPUT | tail -n+2 >$TEMP
-LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
-  | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
-  >$OUTPUT
-rm $TEMP
+if [[ `echo $INPUT | grep -cP 'gz$'` == 1 ]]; then
+  zcat $INPUT | tail -n+2 >$TEMP
+else
+  tail -n+2 <$INPUT >$TEMP
+fi
 
-#LC_ALL=C sort -t '	' -k 3,4 <(zcat $INPUT | tail -n+2) \
-#  | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
-#  >$OUTPUT
+if [[ `echo $OUTPUT | grep -cP 'gz$'` == 1 ]]; then
+  echo "using gzip"
+  LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
+    | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
+    | gzip -c \
+    >$OUTPUT
+else
+  echo "using raw txt"
+  LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
+    | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
+    >$OUTPUT
+fi
 
 echo "ret code: $?"
+
+rm $TEMP
+
 echo "done at `date`"
 
