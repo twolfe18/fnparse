@@ -55,72 +55,37 @@ done
 
 ############################################################################################
 ### MERGE MANY SHARDS INTO A COHERENT ALPHABET
-PARENT=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/merged-shards
-mkdir $PARENT/first
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards/ -type d -iname 'job*') \
-  $PARENT/first \
-  first \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/second
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/first -type d -iname 'merged-*') \
-  $PARENT/second \
-  second \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/third
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/second -type d -iname 'merged-*') \
-  $PARENT/third \
-  third \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/forth
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/third -type d -iname 'merged-*') \
-  $PARENT/forth \
-  forth \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/fifth
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/forth -type d -iname 'merged-*') \
-  $PARENT/fifth \
-  fifth \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/sixth
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/fifth -type d -iname 'merged-*') \
-  $PARENT/sixth \
-  sixth \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-
-mkdir $PARENT/seventh
-./scripts/precompute-features/merge-many-shards.sh \
-  <(find $PARENT/sixth -type d -iname 'merged-*') \
-  $PARENT/seventh \
-  seventh \
-  target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-job-launch-log.txt
 
 
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
+
+# 1) For each template
 WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/
 mkdir -p $WD/ig
-for VERSION in first second third forth fifth sixth; do
-  TOP_TEMPLATES=$WD/ig/job-$VERSION/template-ig-name.txt
-  mkdir -p $WD/ig/sge-logs
-  qsub -N IG-$VERSION -o $WD/ig/sge-logs \
-    ./scripts/precompute-features/compute-ig.sh \
-      $WD/merged-shards/$VERSION/merged-0 \
-      $WD/ig/template-ig-name.${VERSION}.txt \
-      target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-done
+./scripts/precompute-features/compute-ig.sh \
+  $WD/ig
+# TODO
+# - specify feats and bialph instead of a working directory
+# - specify an output specifically
+TEMPLATE_IG_FILE=/foo/bar
 
 
+# 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
+# NOTE: The more shards the more products we compute on
+TEMPLATE_PROD_IG_FILE=/baz/quux
+NUM_SHARDS=200
+FEATS_PER_SHARD=500
+java -Xmx6G -cp $CP \
+  -Dshard=0 \
+  -DnumShards=$NUM_SHARDS \
+  -DnumProducts=$FEATS_PER_SHARD \
+  -Dfeatures=features-file-poo \
+  -DtemplateAlph=$WD/coherent-shards/alphabet.txt.gz \
+  -DtemplateIsBialph=false \
+  -Doutput=$TEMPLATE_PROD_IG_FILE \
+  edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
 
 
 # vim: set syntax=sh

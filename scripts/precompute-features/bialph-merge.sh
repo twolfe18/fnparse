@@ -28,7 +28,7 @@ java -Xmx1G -ea -server -cp $5 \
   -DinAlph2=$2 \
   -DoutAlph1=$3 \
   -DoutAlph2=$4 \
-  edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger
+  edu.jhu.hlt.fnparse.features.precompute.BiAlphMerger
 
 # NOTE: You might think that you can remove the input files once you are done
 # here, but the input file may actually be used in more than once place when
