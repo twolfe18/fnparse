@@ -225,7 +225,7 @@ public class AlphabetMerger {
       String prevTemplate = "";
       BiAlph.Line l1 = new BiAlph.Line(r1.readLine());
       BiAlph.Line l2 = new BiAlph.Line(r2.readLine());
-      TIdx i = new TIdx(0, 0);                      // sets values for newInt
+      TIdx i = new TIdx(-1, 0);                      // sets values for newInt
       while (!l1.isNull() && !l2.isNull()) {
         int c;
         if (l1.isNull()) {
