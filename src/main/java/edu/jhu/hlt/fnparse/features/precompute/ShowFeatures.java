@@ -26,8 +26,8 @@ public class ShowFeatures {
   public boolean onlyFeature = true;
   public String sep = ":";
 
-  public ShowFeatures(File alphFile) {
-    this.alph = new Templates(alphFile);
+  public ShowFeatures(File alphFile, boolean header) {
+    this.alph = new Templates(alphFile, header);
   }
 
   /** Accepts strings like "22:42" and maps them to "fooTemplate:barFeature" */
@@ -44,7 +44,8 @@ public class ShowFeatures {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     ShowFeatures sf = new ShowFeatures(
-        config.getExistingFile("alph"));
+        config.getExistingFile("alph"),
+        config.getBoolean("header", false));
     FindReplace fr = new FindReplace(
         AlphabetMerger::findTemplateFeatureMentions,
         sf::intTemplateFeatureToStrings);
