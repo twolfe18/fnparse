@@ -7,12 +7,9 @@
 #$ -S /bin/bash
 
 # Compute all of the (target,span) features for all data, to be later producted with role/frame-roles at runtime.
+# Produces a features file and an alphabet file.
 # Wrapper around FeaturePrecomputation.java
 # Designed for Propbank data.
-
-# AHH... that is the problem with sharding: you need to share an alphabet!
-# Damnit, this is a problem for which there needs to be a parallel implementation: design a partial solution and then merge.
-# Ok, I can write that code later.
 
 set -e
 

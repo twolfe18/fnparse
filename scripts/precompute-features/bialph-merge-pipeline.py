@@ -48,7 +48,7 @@ class WorkingDir:
 
 class BiAlphMerger:
   '''
-  This class creates the jobs (qsub calls to edu.jhu.hlt.fnparse.features.precompute.AlphabetMerger)
+  This class creates the jobs (qsub calls to edu.jhu.hlt.fnparse.features.precompute.BiAlphMerger)
   needed to merge a whole bunch of alphabets.
   1) Holds state like working_dir, job id counter
   2) Provides some SGE specific functionality like parsing job ids upon launching a job
@@ -148,7 +148,7 @@ class BiAlphMerger:
     command = ['qsub']
     command += ['-N', name]
     command += ['-o', self.working_dir.log_dir]
-    command += ['scripts/precompute-features/bialph-create.sh']
+    command += ['scripts/precompute-features/alph-to-bialph.sh']
     command += [alphabet_filename, bialph_filename]
     print 'make_create_job:', '\n\t'.join(command)
     if self.mock:
@@ -251,7 +251,7 @@ def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, d
   command = ['qsub']
   command += ['-hold_jid', str(dep_jid)]
   command += ['-o', working_dir.log_dir]
-  command += ['scripts/precompute-features/bialph-projection.sh']
+  command += ['scripts/precompute-features/bialph-proj-features.sh']
   command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file, r]
   print 'Projecting features through a bialph to build a coherent feature file:'
   print '\n\t'.join(command)
@@ -260,6 +260,7 @@ def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, d
     return jid
 
 if __name__ == '__main__':
+  # TODO Generalize these inputs to be suitable for a library.
   m = False # mock
   p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
   alph_glob = os.path.join(p, 'raw-shards/job-*-of-400/template-feat-indices.txt.gz')
