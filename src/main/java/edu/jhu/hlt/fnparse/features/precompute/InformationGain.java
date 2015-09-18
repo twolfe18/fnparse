@@ -4,6 +4,13 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.io.Serializable;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -132,7 +139,7 @@ public class InformationGain implements Serializable, LineByLine {
     // stats + features -> stats
     // stats -> topK
     String inputStats = config.getString("inputIG", "none");
-    InformationGain input = null;
+    final InformationGain input;
     if (inputStats.equals("none")) {
       Log.info("starting with empty stats");
       input = new InformationGain();
@@ -145,6 +152,26 @@ public class InformationGain implements Serializable, LineByLine {
     if (!features.equals("none")) {
       Log.info("updating stats from " + features);
       input.run(new File(features));
+    }
+
+    String featuresGlob = config.getString("featuresGlob", "");
+    if (!featuresGlob.isEmpty()) {
+      File featuresParent = config.getExistingDir("featuresParent");
+      PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+      Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+          if (pm.matches(path)) {
+            Log.info("reading features: " + path.toFile().getPath());
+            input.run(path.toFile());
+          }
+          return FileVisitResult.CONTINUE;
+        }
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+      });
     }
 
     Alphabet tNames = null;

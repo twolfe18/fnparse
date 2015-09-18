@@ -46,12 +46,12 @@ public class InformationGainProducts {
   /** Extracts just the features needed (given a subset of templates of interet) */
   public static class BaseTemplates {
     private String line;  // debug
-    private int size;
+//    private int size;
     private int role; // something that is in the line
     private List<IntPair> templateFeatures;
     public BaseTemplates(BitSet templates, String line) {
       this.line = line;
-      this.size = 0;
+//      this.size = 0;
       this.role = FeaturePrecomputation.getRole(line);
       this.templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
@@ -68,7 +68,7 @@ public class InformationGainProducts {
           // +1 is because IntIntUnsortedVector doesn't support 0 values
           int f = Integer.parseInt(fs) + 1;
           assert f > 0;
-          size++;
+//          size++;
           templateFeatures.add(new IntPair(t, f));
         }
       }
@@ -80,7 +80,8 @@ public class InformationGainProducts {
       return templateFeatures.get(i).second;
     }
     public int size() {
-      return size;
+//      return size;
+      return templateFeatures.size();
     }
     public int getRole() {
       return role;
@@ -186,7 +187,7 @@ public class InformationGainProducts {
     for (Entry<int[], TemplateIG> x : products.entrySet()) {
       // Get the products
       int[] templates = x.getKey();
-      flatten(bv, 0, templates, 0, 1, 1, fv);
+      flatten(bv, 0, templates, 0, 1, 1, template2cardinality, fv);
 
       // Measure IG
       int y = k + 1;  // k=-1 means no role, shift everything up by one
@@ -211,10 +212,11 @@ public class InformationGainProducts {
    * One invariant of this method: it always processes a single template at each
    * call (or fails or completes).
    */
-  private void flatten(
+  public static void flatten(
       BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
       long cardinality, long value,
+      int[] template2cardinality,
       List<Long> buffer) {
     if (DEBUG) {
       System.out.println();
@@ -236,7 +238,7 @@ public class InformationGainProducts {
     int curTemplateCard = template2cardinality[curTemplate];
     int startDataIndex = dIndex;
     boolean found = false;
-    while (startDataIndex < data.size && !found) {
+    while (startDataIndex < data.size() && !found) {
       int t = data.getTemplate(startDataIndex);
       if (t == curTemplate) {
         found = true;
@@ -256,7 +258,7 @@ public class InformationGainProducts {
 
     // Find the last data index that matches the current template
     int endDataIndex = startDataIndex + 1;
-    while (endDataIndex < data.size && data.getTemplate(endDataIndex) == curTemplate)
+    while (endDataIndex < data.size() && data.getTemplate(endDataIndex) == curTemplate)
       endDataIndex++;
 
     // Recurse
@@ -275,6 +277,7 @@ public class InformationGainProducts {
       flatten(data, endDataIndex,
           templates, tIndex + 1,
           newCard, newValue,
+          template2cardinality,
           buffer);
     }
   }
