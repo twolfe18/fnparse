@@ -304,7 +304,9 @@ public class InformationGainProducts {
     return new Pair<>(prod, igProd);
   }
 
-  public static List<String[]> getProductsSorted(ExperimentProperties config) throws IOException {
+  public static List<String[]> getProductsSorted(
+      ExperimentProperties config,
+      BiAlph bialph) throws IOException {
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
@@ -313,8 +315,9 @@ public class InformationGainProducts {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
         double ig = Double.parseDouble(toks[0]);
-//        int template = Integer.parseInt(toks[1]);
-        String templateString = toks[2];
+        int template = Integer.parseInt(toks[1]);
+        String templateString = bialph.lookupTemplate(template);
+//        String templateString = toks[2];
         templateIGs.add(new Pair<>(templateString, ig));
       }
     }
@@ -381,8 +384,19 @@ public class InformationGainProducts {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
 
+    // Load the features and compute the IG for the chosen products
+    File featuresParent = config.getExistingDir("featuresParent");
+    String featuresGlob = config.getString("featuresGlob");
+    File templateAlph = config.getExistingFile("templateAlph");
+    boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
+
+    // Read in the bialph (for things like template cardinality)
+    Log.info("reading templateAlph=" + templateAlph.getPath()
+      + " templateAlphIsBialph=" + templateAlphIsBialph);
+    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph);
+
     // Find the top K unigrams
-    List<String[]> products = filterByShard(getProductsSorted(config), config);
+    List<String[]> products = filterByShard(getProductsSorted(config, bialph), config);
     int maxProducts = config.getInt("numProducts", 100);
     if (maxProducts > 0 && products.size() > maxProducts)
       products = products.subList(0, maxProducts);
@@ -390,18 +404,7 @@ public class InformationGainProducts {
     for (int i = 0; i < 10 && i < products.size(); i++)
       Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
 
-    // Load the features and compute the IG for the chosen products
-    File featuresParent = config.getExistingDir("featuresParent");
-    String featuresGlob = config.getString("featuresGlob");
-    File templateAlph = config.getExistingFile("templateAlph");
-    boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
-
     InformationGainProducts igp = new InformationGainProducts(products);  //, templateAlph);
-
-    // Read in the bialph (for things like template cardinality)
-    Log.info("reading templateAlph=" + templateAlph.getPath()
-      + " templateAlphIsBialph=" + templateAlphIsBialph);
-    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph);
     igp.init(bialph);
 
     // Scan each of the input files
