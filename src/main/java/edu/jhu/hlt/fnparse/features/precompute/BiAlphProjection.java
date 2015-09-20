@@ -11,6 +11,11 @@ import edu.jhu.hlt.tutils.IntPair;
  * Read in some int features and a bialph and spit out some int features (in a
  * new domain).
  *
+ * NOTE: This does not change the order over templates, so for example, if the
+ * line of the feature file are sorted by template before the projection they
+ * will not be after the projection unless the projection is the identity or
+ * you get lucky.
+ *
  * @author travis
  */
 public class BiAlphProjection {

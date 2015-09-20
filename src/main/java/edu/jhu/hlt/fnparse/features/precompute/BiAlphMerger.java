@@ -78,6 +78,10 @@ public class BiAlphMerger {
     return new IntPair(template, feature);
   }
 
+  public static String generateTemplateFeature(IntPair templateFeature) {
+    return templateFeature.first + ":" + templateFeature.second;
+  }
+
   public static class TIdx {
     public int template;
     public int feature;
