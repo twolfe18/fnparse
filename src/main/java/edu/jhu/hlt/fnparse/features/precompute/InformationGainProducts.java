@@ -370,6 +370,8 @@ public class InformationGainProducts {
   public static List<String[]> filterByShard(List<String[]> all, ExperimentProperties config) {
     int shard = config.getInt("shard", 0);
     int numShards = config.getInt("numShards", 1);
+    assert shard >= 0 && shard < numShards;
+    Log.info("starting filtering products by shard=" + shard + " numShards=" + numShards);
     List<String[]> keep = new ArrayList<>();
     for (String[] feat : all) {
       int h = 0;
@@ -378,6 +380,7 @@ public class InformationGainProducts {
       if (Math.floorMod(h, numShards) == shard)
         keep.add(feat);
     }
+    Log.info("all.size=" + all.size() + " kept.size" + keep.size());
     return keep;
   }
 
@@ -398,8 +401,11 @@ public class InformationGainProducts {
     // Find the top K unigrams
     List<String[]> products = filterByShard(getProductsSorted(config, bialph), config);
     int maxProducts = config.getInt("numProducts", 100);
-    if (maxProducts > 0 && products.size() > maxProducts)
+    if (maxProducts > 0 && products.size() > maxProducts) {
+      Log.info("taking the top " + maxProducts + " products from the "
+          + products.size() + " products that fell in this shard");
       products = products.subList(0, maxProducts);
+    }
     Log.info("computing IG for the top " + products.size() + " product features");
     for (int i = 0; i < 10 && i < products.size(); i++)
       Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
