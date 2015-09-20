@@ -17,6 +17,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map.Entry;
 
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -162,7 +163,7 @@ public class InformationGain implements Serializable, LineByLine {
         @Override
         public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
           if (pm.matches(path)) {
-            Log.info("reading features: " + path.toFile().getPath());
+            Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
             input.run(path.toFile());
           }
           return FileVisitResult.CONTINUE;

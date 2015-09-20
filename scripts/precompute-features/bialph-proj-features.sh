@@ -7,8 +7,11 @@
 #$ -S /bin/bash
 
 # Given some features and a bialph, write a new copy of feature file where we
-# use the oldInt -> newInt mapping to re-write the given feautres.
-# Wrapper around edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection.
+# use the oldInt -> newInt mapping to re-write the given feautres.  Then,
+# ensure that the (template,feature) entries are in ascending order in every
+# line.
+# Wrapper around edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection and
+# edu.jhu.hlt.fnparse.features.precompute.FeatureFileSorter.
 
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
@@ -25,16 +28,29 @@ if [[ $# != 5 ]]; then
   exit 1
 fi
 
+TEMP=`mktemp`
+
+echo "projecting the int features into a new domain..."
 java -Xmx3G -ea -server -cp $4 \
   -DinputFeatures=$1 \
   -DinputBialph=$2 \
-  -DoutputFeatures=$3 \
+  -DoutputFeatures=$TEMP \
   edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection
 
 echo "ret code: $?"
 
+echo "sorting the int features on each line into ascending order..."
+java -Xmx1G -ea -server -cp $4 \
+  -DinputFeatures=$TEMP \
+  -DoutputFeatures=$3 \
+  edu.jhu.hlt.fnparse.features.precompute.FeatureFileSorter
+
+echo "ret code: $?"
+
+rm $TEMP
+
 if [[ $5 == "Y" ]]; then
-  echo "removing $2"
+  echo "removing input file: $2"
   rm $2
 fi
 

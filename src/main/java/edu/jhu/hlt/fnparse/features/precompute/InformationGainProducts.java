@@ -23,10 +23,12 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import edu.jhu.hlt.fnparse.features.precompute.InformationGain.TemplateIG;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -42,16 +44,16 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class InformationGainProducts {
   public static boolean DEBUG = false;
+  public static boolean FLATTEN_DEBUG = false;
 
   /** Extracts just the features needed (given a subset of templates of interet) */
   public static class BaseTemplates {
-    private String line;  // debug
-//    private int size;
-    private int role; // something that is in the line
-    private List<IntPair> templateFeatures;
+    private String line;                      // debug, be careful with memory usage
+    private int role;                         // in line, useful for y, cyx, etc.
+    private List<IntPair> templateFeatures;   // No guarantee on order!
+
     public BaseTemplates(BitSet templates, String line) {
       this.line = line;
-//      this.size = 0;
       this.role = FeaturePrecomputation.getRole(line);
       this.templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
@@ -68,7 +70,6 @@ public class InformationGainProducts {
           // +1 is because IntIntUnsortedVector doesn't support 0 values
           int f = Integer.parseInt(fs) + 1;
           assert f > 0;
-//          size++;
           templateFeatures.add(new IntPair(t, f));
         }
       }
@@ -80,7 +81,6 @@ public class InformationGainProducts {
       return templateFeatures.get(i).second;
     }
     public int size() {
-//      return size;
       return templateFeatures.size();
     }
     public int getRole() {
@@ -88,28 +88,45 @@ public class InformationGainProducts {
     }
     @Override
     public String toString() {
-      List<Integer> t = new ArrayList<>();
-      List<Integer> f = new ArrayList<>();
+      StringBuilder tf = new StringBuilder();
+//      List<Integer> t = new ArrayList<>();
+//      List<Integer> f = new ArrayList<>();
       for (int i = 0; i < templateFeatures.size(); i++) {
-        t.add(templateFeatures.get(i).first);
-        f.add(templateFeatures.get(i).second);
+//        t.add(templateFeatures.get(i).first);
+//        f.add(templateFeatures.get(i).second);
+        if (i > 0)
+          tf.append(" ");
+        tf.append(templateFeatures.get(i).first
+            + ":" + templateFeatures.get(i).second);
       }
       return "(BaseTemplates k=" + role
-          + " templates=" + t
-          + " feature=" + f
-          + " line=" + line
+//          + " templates=" + StringUtils.trunc(t, 80)
+//          + " feature=" + StringUtils.trunc(f, 80)
+          + " features=" + StringUtils.trunc(tf, 80)
+          + " line=" + StringUtils.trunc(line, 80)
           + ")";
     }
   }
 
-  private Map<int[], TemplateIG> products;
-  private List<int[]> baseFeatures;           // populated after first observed (features,bialph)
+  private Map<int[], TemplateIG> products;    // keys (int[]s) are sorted
+  private List<int[]> baseFeatures;           // items (int[]s) are sorted, populated after first observed (features,bialph)
   private List<String[]> baseFeatureNames;    // all you know at construction time
   private BitSet relevantTemplates;   // Union of values in keys of products
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
-  public InformationGainProducts(List<String[]> features) {
-    baseFeatureNames = features;
+  // If this is >0, then the hashing tick is used and every template is allocated
+  // a vector of this size to represent cx and cyx.
+  private int hashingTrickDim;
+
+  /**
+   * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
+   * to use for representing features.
+   */
+  public InformationGainProducts(List<String[]> features, int hashingTrickDim) {
+    this.baseFeatureNames = features;
+    this.hashingTrickDim = hashingTrickDim;
+    if (this.hashingTrickDim <= 0)
+      throw new RuntimeException("not implemented");
   }
 
   public boolean isInitialized() {
@@ -134,6 +151,7 @@ public class InformationGainProducts {
       int[] intTemplates = new int[strTemplates.length];
       for (int i = 0; i < intTemplates.length; i++)
         intTemplates[i] = bialph.mapTemplate(strTemplates[i]);
+      Arrays.sort(intTemplates);
       baseFeatures.add(intTemplates);
       products.put(intTemplates, new TemplateIG(featIdx));
       featIdx++;
@@ -193,7 +211,7 @@ public class InformationGainProducts {
       int y = k + 1;  // k=-1 means no role, shift everything up by one
       final TemplateIG t = x.getValue();
       for (long index : fv)
-        t.update(y, (int) (Math.floorMod(index, 2 * 1024 * 1024)));
+        t.update(y, (int) (Math.floorMod(index, this.hashingTrickDim)));
       fv.clear();
     }
   }
@@ -218,7 +236,7 @@ public class InformationGainProducts {
       long cardinality, long value,
       int[] template2cardinality,
       List<Long> buffer) {
-    if (DEBUG) {
+    if (FLATTEN_DEBUG) {
       System.out.println();
       System.out.println(data.toString());
       System.out.println("dIndex=" + dIndex);
@@ -226,6 +244,13 @@ public class InformationGainProducts {
       System.out.println("tIndex=" + tIndex);
       System.out.println("cardinality=" + cardinality);
       System.out.println("value=" + value);
+
+      // Verify templates are sorted
+      for (int i = 0; i < templates.length - 1; i++)
+        assert templates[i] < templates[i + 1];
+      // Verify data is sorted
+      for (int i = 0; i < data.size() - 1; i++)
+        assert data.getTemplate(i) <= data.getTemplate(i + 1);
     }
 
     if (tIndex == templates.length) {
@@ -251,7 +276,7 @@ public class InformationGainProducts {
 
     if (!found) {
       // One of the templates in our product didn't fire => feature doesn't fire
-      if (DEBUG)
+      if (FLATTEN_DEBUG)
         System.out.println("not found!");
       return;
     }
@@ -263,14 +288,14 @@ public class InformationGainProducts {
 
     // Recurse
     long newCard = cardinality * curTemplateCard;
-    if (DEBUG) {
+    if (FLATTEN_DEBUG) {
       System.out.println("cardinality=" + cardinality);
       System.out.println("curTemplateCard=" + curTemplateCard);
       System.out.println("newCard=" + newCard);
     }
     assert newCard > 0;
     for (int i = startDataIndex; i < endDataIndex; i++) {
-      if (DEBUG)
+      if (FLATTEN_DEBUG)
         System.out.println("data.getValue(" + i + ")=" + data.getValue(i));
       assert data.getValue(i) < curTemplateCard;
       long newValue = value * curTemplateCard + data.getValue(i);
@@ -380,12 +405,14 @@ public class InformationGainProducts {
       if (Math.floorMod(h, numShards) == shard)
         keep.add(feat);
     }
-    Log.info("all.size=" + all.size() + " kept.size" + keep.size());
+    Log.info("all.size=" + all.size() + " keep.size=" + keep.size());
     return keep;
   }
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+
+    FLATTEN_DEBUG = config.getBoolean("FLATTEN_DEBUG", false);
 
     // Load the features and compute the IG for the chosen products
     File featuresParent = config.getExistingDir("featuresParent");
@@ -400,7 +427,7 @@ public class InformationGainProducts {
 
     // Find the top K unigrams
     List<String[]> products = filterByShard(getProductsSorted(config, bialph), config);
-    int maxProducts = config.getInt("numProducts", 100);
+    int maxProducts = config.getInt("numProducts", 500);
     if (maxProducts > 0 && products.size() > maxProducts) {
       Log.info("taking the top " + maxProducts + " products from the "
           + products.size() + " products that fell in this shard");
@@ -410,7 +437,8 @@ public class InformationGainProducts {
     for (int i = 0; i < 10 && i < products.size(); i++)
       Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
 
-    InformationGainProducts igp = new InformationGainProducts(products);  //, templateAlph);
+    int hashingTrickDim = config.getInt("hashingTrickDim", 2 * 1024 * 1024);
+    InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim);
     igp.init(bialph);
 
     // Scan each of the input files
@@ -419,7 +447,7 @@ public class InformationGainProducts {
       @Override
       public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
         if (pm.matches(path)) {
-          Log.info("reading features: " + path.toFile().getPath());
+          Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
           igp.update(path.toFile());
         }
         return FileVisitResult.CONTINUE;
@@ -433,24 +461,30 @@ public class InformationGainProducts {
     // Write out the results in format:
     //  line = IG <tab> featureInts <tab> featureStrings
     // where featureInts and featureStrings are delimited by "-"
+    int topK = config.getInt("topK", 10);
     File output = config.getFile("output");
     Log.info("writing output to " + output.getPath());
     try (BufferedWriter w = FileUtil.getWriter(output)) {
       List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-      for (TemplateIG t : byIG) {
-        w.write(String.valueOf(t.ig()));
-        w.write("\t");
+      for (int j = 0; j < byIG.size(); j++) {
+        TemplateIG t = byIG.get(j);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.valueOf(t.ig()));
+        sb.append('\t');
         int[] pieces = igp.getTemplatesForFeature(t.getIndex());
         for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) w.write("-");
-          w.write(String.valueOf(pieces[i]));
+          if (i > 0) sb.append('*');
+          sb.append(String.valueOf(pieces[i]));
         }
-        w.write("\t");
+        sb.append('\t');
         for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) w.write("\t");
-          w.write(bialph.lookupTemplate(pieces[i]));
+          if (i > 0) sb.append('*');
+          sb.append(bialph.lookupTemplate(pieces[i]));
         }
+        w.write(sb.toString());
         w.newLine();
+        if (j < topK)
+          System.out.println(sb.toString());
       }
     }
   }
