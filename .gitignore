@@ -19,3 +19,13 @@ target/
 logging/
 /perf*
 /agiga2/
+/data/
+*.rdb
+/notes/
+/realdata/
+semafor
+/logs/
+/saved-models/
+.classpath
+.project
+.settings
