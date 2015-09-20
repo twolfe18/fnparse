@@ -113,6 +113,7 @@ class BiAlphMerger:
         command += ['-N', 'cleanup-' + n]
         command += ['-o', self.working_dir.log_dir]
         command += ['-b', 'y']
+        command += ['-j', 'y']
         command += ['-hold_jid', ','.join(map(str, deps))]
         command += ['rm', f]
         print 'Creating job to remove', n, 'after it is done being used by', deps
@@ -232,6 +233,8 @@ class Merge:
       yield jid
 
 def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
+  # TODO Add a command to compute feature cardinalties:
+  # awk -F"\t" '{print $3}' <$INPUT | uniq -c >$OUTPUT
   command = ['qsub']
   command += ['-N', 'make-final-alph']
   command += ['-o', working_dir.log_dir]
