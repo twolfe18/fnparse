@@ -50,12 +50,16 @@ public class InformationGainProducts {
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
     private int role;                         // in line, useful for y, cyx, etc.
-    private List<IntPair> templateFeatures;   // No guarantee on order!
+//    private List<IntPair> templateFeatures;   // No guarantee on order!
+    private int[] tf;
+
+    // TODO implement templateFeatures as a single array?
 
     public BaseTemplates(BitSet templates, String line) {
       this.line = line;
       this.role = FeaturePrecomputation.getRole(line);
-      this.templateFeatures = new ArrayList<>();
+//      this.templateFeatures = new ArrayList<>();
+      List<IntPair> templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
       while (tmplFeatLocs.hasNext()) {
         IntPair se = tmplFeatLocs.next();
@@ -73,15 +77,29 @@ public class InformationGainProducts {
           templateFeatures.add(new IntPair(t, f));
         }
       }
+      int n = templateFeatures.size();
+      this.tf = new int[2 * n];
+      for (int i = 0; i < n; i++) {
+        IntPair tfi = templateFeatures.get(i);
+        tf[2 * i + 0] = tfi.first;
+        tf[2 * i + 1] = tfi.second;
+      }
+    }
+    /** Frees memory! */
+    public void purgeLine() {
+      line = null;
     }
     public int getTemplate(int i) {
-      return templateFeatures.get(i).first;
+//      return templateFeatures.get(i).first;
+      return tf[2 * i + 0];
     }
     public int getValue(int i) {
-      return templateFeatures.get(i).second;
+//      return templateFeatures.get(i).second;
+      return tf[2 * i + 1];
     }
     public int size() {
-      return templateFeatures.size();
+//      return templateFeatures.size();
+      return tf.length;
     }
     public int getRole() {
       return role;
@@ -89,19 +107,12 @@ public class InformationGainProducts {
     @Override
     public String toString() {
       StringBuilder tf = new StringBuilder();
-//      List<Integer> t = new ArrayList<>();
-//      List<Integer> f = new ArrayList<>();
-      for (int i = 0; i < templateFeatures.size(); i++) {
-//        t.add(templateFeatures.get(i).first);
-//        f.add(templateFeatures.get(i).second);
+      for (int i = 0; i < size(); i++) {
         if (i > 0)
           tf.append(" ");
-        tf.append(templateFeatures.get(i).first
-            + ":" + templateFeatures.get(i).second);
+        tf.append(getTemplate(i) + ":" + getValue(i));
       }
       return "(BaseTemplates k=" + role
-//          + " templates=" + StringUtils.trunc(t, 80)
-//          + " feature=" + StringUtils.trunc(f, 80)
           + " features=" + StringUtils.trunc(tf, 80)
           + " line=" + StringUtils.trunc(line, 80)
           + ")";
