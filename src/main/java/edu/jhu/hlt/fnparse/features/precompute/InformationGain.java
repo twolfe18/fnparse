@@ -215,6 +215,8 @@ public class InformationGain implements Serializable, LineByLine {
     }
     if (last != null)
       last.printStackTrace();
+    if (w != null)
+      w.close();
 
     String output = config.getString("outputIG", "none");
     if (!output.equals("none")) {
