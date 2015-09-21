@@ -135,7 +135,7 @@ public class InformationGain implements Serializable, LineByLine {
     System.out.println("\ttemplateAlph: alphabet file produced by FeaturePrecomputation for looking up template names [optional]");
     System.out.println("\ttopK: how many of the top templates to print [optional]");
     System.out.println("\toutputIG: where to serialize updated InformationGain");
-    System.out.println("\toutputFeats: text file for saving the templates/information gain");
+    System.out.println("\toutputFeatures: text file for saving the templates/information gain");
 
     // stats + features -> stats
     // stats -> topK
@@ -188,7 +188,7 @@ public class InformationGain implements Serializable, LineByLine {
     if (topK > 0)
       Log.info("top " + topK + " templates:");
 
-    String outf = config.getString("outputFeats", "none");
+    String outf = config.getString("outputFeatures", "none");
     BufferedWriter w = null;
     if (!outf.equals("none"))
       w = FileUtil.getWriter(new File(outf));
