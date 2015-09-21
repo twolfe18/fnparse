@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
@@ -267,24 +268,25 @@ public class CachedFeatureParams implements Params.Stateless {
   }
 
   public static void main(String[] args) throws IOException {
-    // TODO do some type of testing here
-    File parent = new File("data/debugging/coherent-shards/");
-    BiAlph bialph = new BiAlph(new File(parent, "alphabet.txt.gz"), false);
-    int numRoles = 20;
-    List<int[]> features = new ArrayList<>();
-    features.add(new int[] {1,2,3});
-    features.add(new int[] {3, 5});
-    features.add(new int[] {4});
+    ExperimentProperties config = ExperimentProperties.init(args);
+    Log.info("going to try to load all of the data to see if it fits in memory");
+    File parent = config.getExistingDir("featuresParent");
+    String glob = config.getString("featuresGlob", "glob:**/*");
+    BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), false);
+    int numRoles = config.getInt("numRoles", 20);
     Random rand = new Random();
-    int numTemplates = 993;
-    for (int i = 0; i < 50; i++) {
+    int numTemplates = config.getInt("numTemplates", 993);
+    int numFeats = config.getInt("numFeats", 50);
+    List<int[]> features = new ArrayList<>();
+    for (int i = 0; i < numFeats; i++) {
       int a = rand.nextInt(numTemplates);
       int b = rand.nextInt(numTemplates);
       features.add(new int[] {a, b});
     }
-    int dimension = 256 * 1024;
+    int dimension = config.getInt("dimension", 256 * 1024);
     CachedFeatureParams params = new CachedFeatureParams(bialph, numRoles, features, dimension);
-    for (File f : FileUtil.find(new File(parent, "features/"), "glob:**/*"))
+    for (File f : FileUtil.find(parent, glob))
       params.read(f);
+    Log.info("done");
   }
 }
