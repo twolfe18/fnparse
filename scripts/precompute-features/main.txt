@@ -63,22 +63,69 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-
 
 # 1) For each template
 WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
-mkdir -p $WD/ig
-#./scripts/precompute-features/compute-ig.sh \
-#  $WD/ig
-CP=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-TEMPLATE_IG_FILE=$WD/ig/debugging-ig.txt
-java -Xmx19G -cp $CP \
-  -DfeaturesParent=$WD/coherent-shards/features/ \
-  -DfeaturesGlob="glob:**/*" \
-  -DtopK=1000 \
-  -DoutputFeatures=$TEMPLATE_IG_FILE \
-  edu.jhu.hlt.fnparse.features.precompute.InformationGain
+mkdir -p $WD/ig/templates
+mkdir -p $WD/ig/templates/sge-logs
+
+JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+JAR_STABLE=$WD/ig/templates/fnparse.jar
+echo "copying the jar to a safe place..."
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
+#TEMPLATE_IG_FILE=$WD/ig/template-ig.txt
+#java -Xmx19G -cp $JAR \
+#  -DfeaturesParent=$WD/coherent-shards/features/ \
+#  -DfeaturesGlob="glob:**/*" \
+#  -DtopK=1000 \
+#  -DoutputFeatures=$TEMPLATE_IG_FILE \
+#  edu.jhu.hlt.fnparse.features.precompute.InformationGain
+
+# Do a 1/10 estimate of 1/10 of the data and average the answers (should take 1/10th the time but be approximate)
+N=10
+mkdir -p $WD/ig/templates/split-$N-filter10
+for i in `seq $N | awk '{print $1-1}'`; do
+  qsub -N split$N-$i-filter10-ig-template \
+    -o $WD/ig/templates/sge-logs \
+    scripts/precompute-features/compute-ig.sh \
+      $WD/coherent-shards/features \
+      "glob:**/*1${i}.txt.gz" \
+      $WD/ig/templates/split-$N-filter10/shard-${i}.txt \
+      $JAR_STABLE
+done
+
+# Do a 1/10 estimate and average the answers (should take 1/10th the time but be approximate)
+N=10
+mkdir -p $WD/ig/templates/split-$N
+for i in `seq $N | awk '{print $1-1}'`; do
+  qsub -N split$N-$i-ig-template \
+    -o $WD/ig/templates/sge-logs \
+    scripts/precompute-features/compute-ig.sh \
+      $WD/coherent-shards/features \
+      "glob:**/*${i}.txt.gz" \
+      $WD/ig/templates/split-$N/shard-${i}.txt \
+      $JAR_STABLE
+done
+
+# Do a full/proper estimate
+qsub -N full-ig-template \
+  -o $WD/ig/templates/sge-logs \
+  scripts/precompute-features/compute-ig.sh \
+    $WD/coherent-shards/features \
+    "glob:**/*" \
+    $WD/ig/templates/split-$N/shard-${i}.txt \
+    $JAR_STABLE
+
+
+### After those jobs finish, average things
+python scripts/precompute-features/average-ig.py \
+  $WD/ig/templates/split-$N/shard-* \
+  >$WD/ig/templates/split-$N/average.txt
 
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
-# TODO This needs to be wrapped in a script and given a working directory for many outputs
+TEMPLATE_IG_FILE=$WD/ig/templates/split-$N/average.txt
 PROD_IG_WD=$WD/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
