@@ -62,30 +62,42 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-
 ### COMPUTE INFORMATION GAIN
 
 # 1) For each template
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 mkdir -p $WD/ig
-./scripts/precompute-features/compute-ig.sh \
-  $WD/ig
-# TODO
-# - specify feats and bialph instead of a working directory
-# - specify an output specifically
-TEMPLATE_IG_FILE=/foo/bar
+#./scripts/precompute-features/compute-ig.sh \
+#  $WD/ig
+CP=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+TEMPLATE_IG_FILE=$WD/ig/debugging-ig.txt
+java -Xmx19G -cp $CP \
+  -DfeaturesParent=$WD/coherent-shards/features/ \
+  -DfeaturesGlob="glob:**/*" \
+  -DtopK=1000 \
+  -DoutputFeatures=$TEMPLATE_IG_FILE \
+  edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
-TEMPLATE_PROD_IG_FILE=/baz/quux
+# TODO This needs to be wrapped in a script and given a working directory for many outputs
+PROD_IG_WD=$WD/ig/products
+mkdir -p $PROD_IG_WD/ig-files
+mkdir -p $PROD_IG_WD/sge-logs
+cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
 NUM_SHARDS=200
 FEATS_PER_SHARD=500
-java -Xmx6G -cp $CP \
-  -Dshard=0 \
-  -DnumShards=$NUM_SHARDS \
-  -DnumProducts=$FEATS_PER_SHARD \
-  -Dfeatures=features-file-poo \
-  -DtemplateAlph=$WD/coherent-shards/alphabet.txt.gz \
-  -DtemplateIsBialph=false \
-  -Doutput=$TEMPLATE_PROD_IG_FILE \
-  edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
+for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
+  qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
+    ./scripts/precompute-features/compute-ig-products.sh \
+      $i \
+      $NUM_SHARDS \
+      $FEATS_PER_SHARD \
+      $TEMPLATE_IG_FILE \
+      $WD/coherent-shards/features \
+      "glob:**/*" \
+      $WD/coherent-shards/alphabet.txt.gz \
+      $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
+      $PROD_IG_WD/fnparse.jar
+done
 
 
 # vim: set syntax=sh

@@ -8,6 +8,9 @@
 
 set -e
 
+echo "starting at `date` on $HOSTNAME"
+echo "args: $@"
+
 if [[ $# != 3 ]]; then
   echo "please provide:"
   echo "1) a working directory"
@@ -28,4 +31,7 @@ java -Xmx3G -ea -server -cp $JAR \
   -DtopK=30 \
   -DoutputFeats=$OUTPUT \
   edu.jhu.hlt.fnparse.features.precompute.InformationGain
+
+echo "ret code: $?"
+echo "done at `date`"
 
