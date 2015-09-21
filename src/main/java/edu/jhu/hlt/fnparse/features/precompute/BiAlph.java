@@ -7,7 +7,10 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 
 /**
  * Implements the in-memory data structure mapping:
@@ -90,6 +93,13 @@ public class BiAlph {
     return file;
   }
 
+  public int[] makeTemplate2Cardinality() {
+    int[] card = Arrays.copyOf(newInt2MaxFeatureIndex, newInt2MaxFeatureIndex.length);
+    for (int i = 0; i < card.length; i++)
+      card[i]++;
+    return card;
+  }
+
   private void ensureCapacity(Line l) {
     // old int
     if (l.oldIntTemplate >= 0) {
@@ -122,6 +132,8 @@ public class BiAlph {
    * otherwise f is interpretted as an alph (4 col tsv).
    */
   public void set(File f, boolean fIsBiAlph) {
+    Log.info("loading bialph from " + f.getPath() + " fIsBiAlph=" + fIsBiAlph);
+    TimeMarker tm = new TimeMarker();
     this.file = f;
     try (BufferedReader r = FileUtil.getReader(f)) {
       Line l = new Line(null, fIsBiAlph);
@@ -142,10 +154,17 @@ public class BiAlph {
         newInt2TemplateName[l.newIntTemplate] = l.stringTemplate;
         if (l.newIntFeature > newInt2MaxFeatureIndex[l.newIntTemplate])
           newInt2MaxFeatureIndex[l.newIntTemplate] = l.newIntFeature;
+
+        if (tm.enoughTimePassed(15)) {
+          Log.info("processed " + tm.numMarks()
+            + " lines in " + tm.secondsSinceFirstMark() + " seconds, "
+            + Describe.memoryUsage());
+        }
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
+    Log.info("done");
   }
 
   public int cardinalityOfNewTemplate(int newTemplateIndex) {

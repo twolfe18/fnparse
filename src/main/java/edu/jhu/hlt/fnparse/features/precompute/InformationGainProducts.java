@@ -50,12 +50,23 @@ public class InformationGainProducts {
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
     private int role;                         // in line, useful for y, cyx, etc.
-    private List<IntPair> templateFeatures;   // No guarantee on order!
+//    private List<IntPair> templateFeatures;   // No guarantee on order!
+//    private int[] tf;
+    private int[] templates;
+    private int[] features;
 
-    public BaseTemplates(BitSet templates, String line) {
+    public BaseTemplates(int[] templates, int[] features) {
+      assert templates.length == features.length;
+      this.role = -2;
+      this.templates = templates;
+      this.features = features;
+    }
+
+    public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
       this.line = line;
       this.role = FeaturePrecomputation.getRole(line);
-      this.templateFeatures = new ArrayList<>();
+//      this.templateFeatures = new ArrayList<>();
+      List<IntPair> templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
       while (tmplFeatLocs.hasNext()) {
         IntPair se = tmplFeatLocs.next();
@@ -68,20 +79,51 @@ public class InformationGainProducts {
             System.out.println("keeping: " + line.substring(se.first, se.second));
           String fs = line.substring(colon + 1, se.second);
           // +1 is because IntIntUnsortedVector doesn't support 0 values
-          int f = Integer.parseInt(fs) + 1;
-          assert f > 0;
+          int f = Integer.parseInt(fs); // + 1;
+//          assert f > 0;
+          assert f >= 0;
           templateFeatures.add(new IntPair(t, f));
         }
       }
+      int n = templateFeatures.size();
+      if (storeTemplates)
+        this.templates = new int[n];
+      this.features = new int[n];
+//      this.tf = new int[2 * n];
+      for (int i = 0; i < n; i++) {
+        IntPair tfi = templateFeatures.get(i);
+//        tf[2 * i + 0] = tfi.first;
+//        tf[2 * i + 1] = tfi.second;
+        if (storeTemplates)
+          this.templates[i] = tfi.first;
+        this.features[i] = tfi.second;
+      }
     }
+    /** Frees memory! */
+    public void purgeLine() {
+      line = null;
+    }
+    public int[] setTemplates(int[] templates) {
+      int[] old = this.templates;
+      this.templates = templates;
+      return old;
+    }
+    public int[] getTemplates() { return templates; }
+    public int[] getFeatures() { return features; }
     public int getTemplate(int i) {
-      return templateFeatures.get(i).first;
+//      return templateFeatures.get(i).first;
+//      return tf[2 * i + 0];
+      return templates[i];
     }
     public int getValue(int i) {
-      return templateFeatures.get(i).second;
+//      return templateFeatures.get(i).second;
+//      return tf[2 * i + 1];
+      return features[i];
     }
     public int size() {
-      return templateFeatures.size();
+//      return templateFeatures.size();
+//      return tf.length;
+      return features.length;
     }
     public int getRole() {
       return role;
@@ -89,19 +131,12 @@ public class InformationGainProducts {
     @Override
     public String toString() {
       StringBuilder tf = new StringBuilder();
-//      List<Integer> t = new ArrayList<>();
-//      List<Integer> f = new ArrayList<>();
-      for (int i = 0; i < templateFeatures.size(); i++) {
-//        t.add(templateFeatures.get(i).first);
-//        f.add(templateFeatures.get(i).second);
+      for (int i = 0; i < size(); i++) {
         if (i > 0)
           tf.append(" ");
-        tf.append(templateFeatures.get(i).first
-            + ":" + templateFeatures.get(i).second);
+        tf.append(getTemplate(i) + ":" + getValue(i));
       }
       return "(BaseTemplates k=" + role
-//          + " templates=" + StringUtils.trunc(t, 80)
-//          + " feature=" + StringUtils.trunc(f, 80)
           + " features=" + StringUtils.trunc(tf, 80)
           + " line=" + StringUtils.trunc(line, 80)
           + ")";
@@ -200,7 +235,7 @@ public class InformationGainProducts {
 //  @Override
   public void observeLine(String line) {
     List<Long> fv = new ArrayList<>();
-    BaseTemplates bv = new BaseTemplates(relevantTemplates, line);
+    BaseTemplates bv = new BaseTemplates(relevantTemplates, line, true);
     int k = bv.getRole();
     for (Entry<int[], TemplateIG> x : products.entrySet()) {
       // Get the products
