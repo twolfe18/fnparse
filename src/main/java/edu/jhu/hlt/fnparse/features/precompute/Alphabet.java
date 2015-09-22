@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
@@ -69,6 +70,7 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
     // 0       0       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=.<ROOT>
     // 0       1       head1head2PathNgram-POS-DIRECTION-len4  head1head2PathNgram-POS-DIRECTION-len4=<ROOT>VBN
     // ...
+    // TODO After the iterate method below is tested, refactor this code to use it.
     this.templateName2index = new HashMap<>();
     this.hf = new SemaforicHeadFinder();
     Log.info("reading template alphabets from " + file.getPath());
@@ -94,6 +96,60 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
         int featureIndexNew = t.alph.lookupIndex(al.featureName, true);
         assert al.feature == featureIndexNew : "old=" + al.feature + " new=" + featureIndexNew;
       }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  /**
+   * @deprecated Just use AlphabetLine -- this aggregation by template is
+   * probably not what you want.
+   *
+   * Iterates over every template (i.e. a group of alphabet lines) in a file.
+   * Use this when you don't want ot load an entire alphabet into memory but
+   * still want someone else to parse the alphabet file format for you.
+   *
+   * Assumes the file is sorted by template index (first column).
+   */
+  public static void iterateOverAlphabet(File file, boolean header, Consumer<TemplateAlphabet> callForEveryTemplate) {
+    Log.info("reading template alphabets from " + file.getPath());
+
+    // Get the string -> template map
+    BasicFeatureTemplates.Indexed templateMap = null;
+    try {
+      templateMap = BasicFeatureTemplates.getInstance();
+    } catch (Exception e) {
+      Log.warn("can't load Templates due to:");
+      e.printStackTrace();
+    }
+
+    // Iterate over the file
+    TemplateAlphabet cur = null;
+    int curIdx = -1;
+    try (BufferedReader r = FileUtil.getReader(file)) {
+      if (header) {
+        String h = r.readLine();
+        assert h.charAt(0) == '#';
+      }
+//      String prevFeatureName = null;
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        AlphabetLine al = new AlphabetLine(line);
+        assert al.template >= 0;
+        if (al.template != curIdx) {
+          if (cur != null)
+            callForEveryTemplate.accept(cur);
+          curIdx = al.template;
+          Template t = templateMap == null ? null : templateMap.getBasicTemplate(al.templateName);
+          cur = new TemplateAlphabet(t, al.templateName, al.template);
+//          prevFeatureName = null;
+        }
+        int featureIndexNew = cur.alph.lookupIndex(al.featureName, true);
+//        assert !al.featureName.equals(prevFeatureName) : "prev=" + prevFeatureName + " cur=" + al.featureName;
+//        assert prevFeatureName == null || featureIndexNew != cur.alph.lookupIndex(prevFeatureName);
+        assert al.feature == featureIndexNew : "old=" + al.feature + " new=" + featureIndexNew + " name=" + al.featureName + " template=" + cur.name + " " + cur.index + " alph.size=" + cur.alph.size();
+//        prevFeatureName = al.featureName;
+      }
+      callForEveryTemplate.accept(cur);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }

@@ -8,24 +8,40 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
+import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
+import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.RedisMap;
+import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -38,6 +54,7 @@ import edu.jhu.prim.vector.IntDoubleVector;
  * (e.g. "5-9"), and this class will load only the necessary data.
  *
  * TODO Use serialization to store the sub-set chosen after filtering?
+ * (memoize init calls)
  *
  * @author travis
  */
@@ -47,13 +64,17 @@ public class CachedFeatureParams implements Params.Stateless {
   private int[][] featureSet;   // each int[] is a feature, each of those values is a template
   private BitSet templateSet;
   private int[] templateSetSorted;
-//  private BiAlph bialph;  // used for cardinality and names
+  private BiAlph bialph;  // used for cardinality and names
   private int[] template2cardinality;
 
   // If true, the features for prune actions are indicators on the frame,
   // the role, and the frame-role. Otherwise, you need to implement features
   // on Span.NULL_SPAN and save them in the feature files.
   public boolean simplePruneFeatures = true;
+
+  public IntArrayList debugFeatures;
+  public List<CacheKey> debugKeys;
+  public boolean keepBoth, keepKeys, keepValues;
 
   public static final class CacheKey {
     private String sentId;  // assuming docId is not needed
@@ -108,9 +129,11 @@ public class CachedFeatureParams implements Params.Stateless {
 
   public CachedFeatureParams(BiAlph bialph, int numRoles, List<int[]> features, int dimension) {
     this.dimension = dimension;
-//    this.bialph = bialph;
+    this.bialph = bialph;
     this.template2cardinality = bialph.makeTemplate2Cardinality();
     this.cache = new HashMap<>();
+    this.debugFeatures = new IntArrayList();
+    this.debugKeys = new ArrayList<>();
 
     this.featureSet = new int[features.size()][];
     for (int i = 0; i < featureSet.length; i++)
@@ -132,13 +155,23 @@ public class CachedFeatureParams implements Params.Stateless {
         + " numRoles=" + numRoles
         + " numTemplates=" + templateSet.cardinality()
         + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
+
+    // For debugging (look at memory usage with various configurations).
+    // For regular operation, make sure these are their defaults.
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    keepBoth = config.getBoolean("cachedFeatureParams.keepBoth", true);
+    keepKeys = config.getBoolean("cachedFeatureParams.keepKeys", false);
+    keepValues = config.getBoolean("cachedFeatureParams.keepValues", false);
   }
 
   public void read(File featureFile) throws IOException {
     Log.info("reading features from " + featureFile.getPath());
+    OrderStatistics<Integer> nnz = new OrderStatistics<>();
     TimeMarker tm = new TimeMarker();
+    int numLines = 0;
     try (BufferedReader r = FileUtil.getReader(featureFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
+        numLines++;
         String[] toks = line.split("\t");
 
         Target t = new Target(toks[0], toks[1], Integer.parseInt(toks[2]));
@@ -148,13 +181,25 @@ public class CachedFeatureParams implements Params.Stateless {
 
         BaseTemplates data = new BaseTemplates(templateSet, line, false);
         data.purgeLine();
+        nnz.add(data.getFeatures().length);
 
 //        cache.get(t).put(span, data);
 //        Pair<Target, Span> key = new Pair<>(t, span);
         CacheKey key = new CacheKey(t, span);
+        if (keepBoth) {
 //        BaseTemplates old = cache.put(key, data);
         int[] old = cache.put(key, data.getFeatures());
         assert old == null : key + " maps to two values, one if which is in " + featureFile.getPath();
+        }
+
+        if (keepKeys) {
+          debugKeys.add(key);
+        }
+
+        if (keepValues) {
+          for (int f : data.getFeatures())
+            debugFeatures.add(f);
+        }
 
         if (tm.enoughTimePassed(15)) {
           Log.info("processed " + tm.numMarks()
@@ -163,6 +208,13 @@ public class CachedFeatureParams implements Params.Stateless {
         }
       }
     }
+    Log.info("numLines=" + numLines);
+    Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean());
+    Log.info("nnz/template=" + (nnz.getMean() / templateSetSorted.length));
+    Log.info("templateSetSorted.length=" + templateSetSorted.length);
+    Log.info("templateSet.cardinality=" + templateSet.cardinality());
+    Log.info("debugFeatures.size=" + debugFeatures.size());
+    Log.info("debugKeys.size=" + debugKeys.size());
     Log.info("done");
   }
 
@@ -192,12 +244,11 @@ public class CachedFeatureParams implements Params.Stateless {
     return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
   }
 
+
   /**
    * @param a must be a COMMIT action.
    */
   private Adjoints scoreCommit(FNTagging f, Action a) {
-
-    // Get this from this.templates.
 
     // Get the templates needed for all the features.
     Target t = new Target(f.getSentence().getId(), a.t);
@@ -269,6 +320,141 @@ public class CachedFeatureParams implements Params.Stateless {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+    // start redis in data/debugging/redis-for-feature-names
+    RedisMap<String> tf2name = getFeatureNameRedisMap(config);
+    CachedFeatureParams cfp = loadFeaturesIntoMemory(config);
+    cfp.testIntStringEquality(config, tf2name);
+  }
+
+  /**
+   * How to test:
+   * 1) setup a redis server hosting (intTemplate,intFeature) -> (stringTemplate,stringFeature)
+   * 2) every time a feature is computed, foreach template
+   *    a) stringTemplate = redisGet(intTemplate)
+   *    b) Template = BasicFeatureTemplates.getBasicTemplate(templateString)
+   *    c) stringFeature' = Template.extract(state, action)
+   *    d) stringFeature = redisGet(intTemplate, intFeature)
+   * 3) sort the stringFeature and stringFeature' and make sure they are equal
+   */
+  public void testIntStringEquality(ExperimentProperties config, RedisMap<String> tf2name) {
+    boolean verbose = config.getBoolean("showFeatureMatches", true);
+    TemplateContext ctx = new TemplateContext();
+    HeadFinder hf = new SemaforicHeadFinder();
+    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
+    BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
+    Iterator<FNParse> itr = DumpSentenceIds.getData(config);
+    while (itr.hasNext()) {
+      FNParse y = itr.next();
+      State st = r.getInitialStateWithPruning(y, y);
+      for (Action a : ActionType.COMMIT.next(st)) {
+        // For each template int featureSetFlat, lookup the string (template,feature) via:
+        // 1) re-extract using the Template
+        // 2) lookup via redis (which reflects the contents of the files -- round trip)
+
+        // Check 1: extracted template-values match stored template-values
+        Target t = new Target(y.getSentence().getId(), a.t);
+        Span s = a.getSpan();
+        int[] feats = cache.get(new CacheKey(t, s));
+        if (feats == null) {
+          throw new RuntimeException("couldn't come up with features for "
+              + y.getId() + " action=" + a);
+        }
+        BaseTemplates data = new BaseTemplates(templateSetSorted, feats);
+        for (int i = 0; i < data.size(); i++) {
+          // What we have from disk.
+          int templateIndex = data.getTemplate(i);
+          int feature = data.getValue(i);
+          String templateName = bialph.lookupTemplate(templateIndex);
+          String featureName = tf2name.get(makeKey(templateIndex, feature));
+
+          // What we would have gotten had we extracted on the fly.
+          Template template = ti.getBasicTemplate(templateName);
+          FeatureIGComputation.setContext(y, a, ctx, hf);
+          Iterable<String> featureStringValues = template.extract(ctx);
+
+          // Check that featureName is at least in featureStringValues.
+          int matches = 0;
+          for (String fsv : featureStringValues)
+            if (fsv.equals(featureName))
+              matches++;
+          if (matches == 0)
+            throw new RuntimeException("feautreName=" + featureName + " featureStringValues=" + featureStringValues);
+          if (verbose)
+            System.out.println("found match for " + featureName);
+
+          // Check 2: flattened product (template-values) make sense.
+          // flatten : (int -> int[]) -> int
+          // but it uses hashing.
+          // TODO flatten should be tested separtely!
+        }
+      }
+    }
+  }
+
+  public static String makeKey(int template, int feature) {
+    return "t" + template + "f" + feature;
+  }
+
+  /**
+   * Adds (template,feature) int -> string mapping:
+   *  template-feature: "t1f9" -> "CfgFeat-AllChildrenBag-Category=Category:!!?"
+   * Scans an alphabet file, so it takes very little memory (<100M) but a good
+   * bit of time (~10 mins).
+   *
+   * Returns a map with keys make by makeKey and values which are the feature
+   * string values producted by {@link Template}s.
+   */
+  public static RedisMap<String> getFeatureNameRedisMap(ExperimentProperties config) throws IOException {
+//    RedisMap<String> t2name = new RedisMap<>(config, SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+    RedisMap<String> tf2feat = new RedisMap<>(config, SerializationUtils::t2bytes, SerializationUtils::bytes2t);
+
+    String k = "redisInsert";
+    if (!config.getBoolean(k, false)) {
+      Log.info("skpping the actual redis insert because flag not used: " + k);
+      return tf2feat;
+    }
+
+//    Consumer<TemplateAlphabet> f = ta -> {
+//      Log.info("reading index=" + ta.index + " name=" + ta.name
+//          + " size=" + ta.alph.size() + " " + Describe.memoryUsage());
+//      t2name.put("t" + ta.index, ta.name);
+//      int n = ta.alph.size();
+//      for (int i = 0; i < n; i++)
+//        tf2feat.put("t" + ta.index + "f" + i, ta.alph.lookupObject(i));
+//    };
+//    Alphabet.iterateOverAlphabet(
+//        config.getExistingFile("alphabet"),
+//        config.getBoolean("alphabet.header", false),
+//        f);
+
+    TimeMarker tm = new TimeMarker();
+//    BitSet templates = new BitSet();    // set of templates we've put into redis
+    File alphFile = config.getExistingFile("alphabet");
+    boolean header = config.getBoolean("alphabet.header", false);
+    try (BufferedReader r = FileUtil.getReader(alphFile)) {
+      if (header) {
+        String line = r.readLine();
+        assert line.startsWith("#");
+      }
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        AlphabetLine al = new AlphabetLine(line);
+//        if (!templates.get(al.template)) {
+//          templates.set(al.template);
+//          t2name.put("t" + al.template, al.templateName);
+//        }
+        tf2feat.put(makeKey(al.template, al.feature), al.featureName);
+
+        if (tm.enoughTimePassed(15)) {
+          Log.info("processed " + tm.numMarks()
+            + " lines in " + tm.secondsSinceFirstMark() + " seconds, "
+            + Describe.memoryUsage());
+        }
+      }
+    }
+    return tf2feat;
+  }
+
+  public static CachedFeatureParams loadFeaturesIntoMemory(ExperimentProperties config) throws IOException {
     Log.info("going to try to load all of the data to see if it fits in memory");
     File parent = config.getExistingDir("featuresParent");
     String glob = config.getString("featuresGlob", "glob:**/*");
@@ -288,5 +474,6 @@ public class CachedFeatureParams implements Params.Stateless {
     for (File f : FileUtil.find(parent, glob))
       params.read(f);
     Log.info("done");
+    return params;
   }
 }

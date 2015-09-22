@@ -174,6 +174,12 @@ public class BasicFeatureTemplates {
   public Template getBasicTemplate(String name) {
     return basicTemplates.get(name);
   }
+  public Template[] getBasicTemplates(String[] names) {
+    Template[] t = new Template[names.length];
+    for (int i = 0; i < t.length; i++)
+      t[i] = getBasicTemplate(names[i]);
+    return t;
+  }
 
   public List<String> getBasicTemplateNames() {
     List<String> l = new ArrayList<>();

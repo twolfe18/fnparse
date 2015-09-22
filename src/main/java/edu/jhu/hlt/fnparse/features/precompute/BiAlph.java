@@ -178,6 +178,12 @@ public class BiAlph {
   public String lookupTemplate(int newTemplateIndex) {
     return newInt2TemplateName[newTemplateIndex];
   }
+  public String[] lookupTemplates(int[] newTemplateIndices) {
+    String[] s = new String[newTemplateIndices.length];
+    for (int i = 0; i < s.length; i++)
+      s[i] = lookupTemplate(newTemplateIndices[i]);
+    return s;
+  }
 
   public int mapTemplate(int oldTemplateIndex) {
     return oldInt2NewIntTemplates[oldTemplateIndex];
