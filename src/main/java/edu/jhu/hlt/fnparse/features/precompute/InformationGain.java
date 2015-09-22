@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -14,8 +15,10 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
@@ -97,16 +100,32 @@ public class InformationGain implements Serializable, LineByLine {
   // |T| ~= 1000
   // |XYT| = 4B ints = 16B bytes
   protected TemplateIG[] templates;
+  protected Set<String> ignoreSentenceIds;
 
   public InformationGain() {
-    templates = new TemplateIG[3000];  // TODO resize code
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    templates = new TemplateIG[config.getInt("numTemplates", 3000)];  // TODO resize code
     for (int i = 0; i < templates.length; i++)
       templates[i] = new TemplateIG(i);
+
+    File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
+    Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
+    ignoreSentenceIds = new HashSet<>();
+    try (BufferedReader r = FileUtil.getReader(ignoreSentenceIdsFile)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        ignoreSentenceIds.add(line);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
   public void observeLine(String line) {
     String[] toks = line.split("\t");
+    String sentenceId = toks[1];
+    if (ignoreSentenceIds.contains(sentenceId))
+      return;
     int k = Integer.parseInt(toks[4]);
     for (int i = 5; i < toks.length; i++) {
       String f = toks[i];
@@ -136,6 +155,7 @@ public class InformationGain implements Serializable, LineByLine {
     System.out.println("\ttopK: how many of the top templates to print [optional]");
     System.out.println("\toutputIG: where to serialize updated InformationGain");
     System.out.println("\toutputFeatures: text file for saving the templates/information gain");
+    System.out.println("\tignoreSentenceIds: text file containing one sentence id per line to ignore");
 
     // stats + features -> stats
     // stats -> topK

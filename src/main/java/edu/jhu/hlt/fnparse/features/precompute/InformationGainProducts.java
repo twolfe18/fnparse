@@ -17,10 +17,12 @@ import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.precompute.InformationGain.TemplateIG;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -149,6 +151,8 @@ public class InformationGainProducts {
   private BitSet relevantTemplates;   // Union of values in keys of products
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
+  private Set<String> ignoreSentenceIds;
+
   // If this is >0, then the hashing tick is used and every template is allocated
   // a vector of this size to represent cx and cyx.
   private int hashingTrickDim;
@@ -162,6 +166,18 @@ public class InformationGainProducts {
     this.hashingTrickDim = hashingTrickDim;
     if (this.hashingTrickDim <= 0)
       throw new RuntimeException("not implemented");
+
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
+    Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
+    ignoreSentenceIds = new HashSet<>();
+    try (BufferedReader r = FileUtil.getReader(ignoreSentenceIdsFile)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        ignoreSentenceIds.add(line);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public boolean isInitialized() {
@@ -199,7 +215,8 @@ public class InformationGainProducts {
         relevantTemplates.set(i);
 
     // Setup template cardinalities
-    template2cardinality = new int[3000];   // TODO resizing code
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    template2cardinality = new int[config.getInt("numTemplates", 3000)];   // TODO resizing code
     Arrays.fill(template2cardinality, -1);
     for (int t = relevantTemplates.nextSetBit(0); t >= 0; t = relevantTemplates.nextSetBit(t + 1)) {
       // Lookup cardinality for template[relevantTemplates[i]] (comes from a file)
@@ -234,6 +251,10 @@ public class InformationGainProducts {
 
 //  @Override
   public void observeLine(String line) {
+    String[] toks = line.split("\t", 3);
+    String sentenceId = toks[1];
+    if (ignoreSentenceIds.contains(sentenceId))
+      return;
     List<Long> fv = new ArrayList<>();
     BaseTemplates bv = new BaseTemplates(relevantTemplates, line, true);
     int k = bv.getRole();

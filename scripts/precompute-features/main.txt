@@ -61,6 +61,9 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
 
+# TODO Need to utilize the ignoreSentenceIds option in InformationGain and
+# InformationGainProducts to ignore the test set while computing IG.
+
 # 1) For each template
 WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 mkdir -p $WD/ig/templates
