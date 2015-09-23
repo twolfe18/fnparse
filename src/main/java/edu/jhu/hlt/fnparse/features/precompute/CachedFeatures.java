@@ -5,7 +5,9 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -13,6 +15,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
+import edu.jhu.hlt.fnparse.data.PropbankReader;
+import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -31,7 +35,6 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -58,8 +61,7 @@ import edu.jhu.prim.vector.IntDoubleVector;
  *
  * @author travis
  */
-public class CachedFeatureParams implements Params.Stateless {
-  private static final long serialVersionUID = 2993313358342467909L;
+public class CachedFeatures {
 
   private int[][] featureSet;   // each int[] is a feature, each of those values is a template
   private BitSet templateSet;
@@ -73,9 +75,288 @@ public class CachedFeatureParams implements Params.Stateless {
   public boolean simplePruneFeatures = true;
 
   public IntArrayList debugFeatures;
-  public List<CacheKey> debugKeys;
+//  public List<CacheKey> debugKeys;
+  public List<FNParse> debugKeys;
   public boolean keepBoth, keepKeys, keepValues;
 
+  // New way of storing things!
+  public static final class Item {
+    public final FNParse parse;
+    private int[][][][] features;   // [t][arg.start][arg.end] = int[] features
+    public Item(FNParse parse) {
+      if (parse == null)
+        throw new IllegalArgumentException();
+      this.parse = parse;
+      int T = parse.numFrameInstances();
+      this.features = new int[T][0][0][];
+    }
+    public void setFeatures(int t, Span arg, int[] features) {
+      if (arg.start < 0 || arg.end < 0)
+        throw new IllegalArgumentException("span=" + arg);
+      if (arg.start >= this.features[t].length) {
+        int newSize = (int) Math.max(arg.start + 1, 1.6 * this.features[t].length + 1);
+        this.features[t] = Arrays.copyOf(this.features[t], newSize);
+      }
+      if (arg.end >= this.features[t][arg.start].length) {
+        int newSize = (int) Math.max(arg.end + 1, 1.6 * this.features[t][arg.start].length + 1);
+        this.features[t][arg.start] = Arrays.copyOf(this.features[t][arg.start], newSize);
+      }
+      assert null == this.features[t][arg.start][arg.end] : "duplicates?";
+      this.features[t][arg.start][arg.end] = features;
+    }
+    public int[] getFeatures(int t, Span arg) {
+      int[] feats = this.features[t][arg.start][arg.end];
+      assert feats != null;
+      return feats;
+    }
+  }
+
+  private ArrayList<Item> loadedItems;
+  private Item lastServedByItemProvider;
+
+  /**
+   * A runnable/thread whose only job is to read parses from disk and put them
+   * into loadedItems.
+   */
+  public class Inserter implements Runnable {
+    private Map<String, FNParse> sentId2parse;
+    private ArrayDeque<File> readFrom;
+    public boolean readForever;
+    /**
+     * @param sentId2parse is needed because this module has an ItemProvider
+     * implementation, which needs to know about FNParses.
+     */
+    public Inserter(Iterable<File> files, boolean readForever, Map<String, FNParse> sentId2parse) {
+      this.readForever = readForever;
+      this.sentId2parse = sentId2parse;
+      this.readFrom = new ArrayDeque<>();
+      for (File f : files)
+        this.readFrom.offerLast(f);
+    }
+    @Override
+    public void run() {
+      File f = readFrom.pollFirst();
+      try {
+        // This adds to loadedItems
+        CachedFeatures.this.read(f, sentId2parse);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      if (readForever) {
+        readFrom.offerLast(f);
+      }
+    }
+  }
+  public static Map<String, FNParse> getPropbankSentId2Parse(ExperimentProperties config) {
+    // This can be null since the only reason we need the parses is for
+    // computing features, which we've already done.
+    ParsePropbankData.Redis propbankAutoParses = null;
+    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+    Map<String, FNParse> map = new HashMap<>();
+    for (FNParse y : pbr.getTrainData()) {
+      FNParse old = map.put(y.getSentence().getId(), y);
+      assert old == null;
+    }
+    for (FNParse y : pbr.getDevData()) {
+      FNParse old = map.put(y.getSentence().getId(), y);
+      assert old == null;
+    }
+    for (FNParse y : pbr.getTestData()) {
+      FNParse old = map.put(y.getSentence().getId(), y);
+      assert old == null;
+    }
+    return map;
+  }
+
+  /**
+   * Reads from loadedItems. Not proper in this sense: size() and 
+   */
+  public class ItemProvider implements edu.jhu.hlt.fnparse.rl.rerank.ItemProvider {
+    private int intendentSize;
+    public ItemProvider(int intendedSize) {
+      this.intendentSize = intendedSize;
+    }
+    @Override
+    public Iterator<FNParse> iterator() {
+      throw new RuntimeException("implement me");
+    }
+    @Override
+    public int size() {
+      return intendentSize;
+    }
+    @Override
+    public FNParse label(int i) {
+      assert i >= 0 && i < intendentSize;
+      int n;
+      while (true) {
+        n = CachedFeatures.this.loadedItems.size();
+        if (n < 1) {
+          try { Thread.sleep(1 * 1000); }
+          catch (Exception e) { throw new RuntimeException(e); }
+        } else {
+          break;
+        }
+      }
+      lastServedByItemProvider = loadedItems.get(i % n);
+      return lastServedByItemProvider.parse;
+    }
+    @Override
+    public List<edu.jhu.hlt.fnparse.rl.rerank.Item> items(int i) {
+      throw new RuntimeException("not allowed to call this because it is not "
+          + "synchronized with label(i). I though I didn't use this anymore "
+          + "anyway, don't I just use DeterministicRoleePruning?");
+    }
+  }
+
+  /**
+   * Actually provides the params!
+   *
+   * Throws a RuntimeException if you ask for features for some FNParse other
+   * than the one last served up by this module's ItemProvider.
+   */
+  public class Params implements edu.jhu.hlt.fnparse.rl.params.Params.Stateless {
+    private static final long serialVersionUID = -5359275348868455837L;
+
+    // k -> feature -> weight
+    private int dimension = 1 * 1024 * 1024;    // hashing trick
+    private double[][] weightsCommit;
+    private double[] weightPrune;
+
+    private double l2Penalty = 1e-8;
+
+    public Params(int dimension, int numRoles) {
+      this.dimension = dimension;
+      this.weightsCommit = new double[numRoles][dimension];
+      this.weightPrune = new double[dimension];
+      long weightBytes = (numRoles + 1) * dimension * 8;
+      Log.info("dimension=" + dimension
+          + " numRoles=" + numRoles
+          + " numTemplates=" + templateSet.cardinality()
+          + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
+    }
+
+    /**
+     * Ignores the feature set, just returns all of the templates we have in memory.
+     */
+    public int[] getDebugRawTemplates(FNTagging f, Action a) {
+      if (!lastItemMatches(f) || a.getActionType() != ActionType.COMMIT)
+        throw new RuntimeException();
+      return lastServedByItemProvider.getFeatures(a.t, a.getSpan());
+    }
+
+    @Override
+    public Adjoints score(FNTagging f, Action a) {
+      if (a.getActionType() == ActionType.COMMIT)
+        return scoreCommit(f, a);
+      assert a.getActionType() == ActionType.PRUNE;
+      if (!simplePruneFeatures)
+        throw new RuntimeException("implement me");
+      return scorePrune(f, a);
+    }
+
+    /**
+     * @param a must be a PRUNE action.
+     */
+    private Adjoints scorePrune(FNTagging f, Action a) {
+      Frame frame = f.getFrameInstance(a.t).getFrame();
+      int f1 = frame.getId() * 3 + 0;
+      int f2 = ((frame.getId() << 12) ^ a.k) * 3 + 1;
+      int f3 = a.k * 3 + 2;
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector(3);
+      fv.add(Math.floorMod(f1, dimension), 1);
+      fv.add(Math.floorMod(f2, dimension), 1);
+      fv.add(Math.floorMod(f3, dimension), 1);
+      IntDoubleVector theta = new IntDoubleDenseVector(weightPrune);
+      return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
+    }
+
+    private boolean lastItemMatches(FNTagging f) {
+      if (lastServedByItemProvider == null
+          || !f.getSentence().getId().equals(
+              lastServedByItemProvider.parse.getSentence().getId())) {
+        return false;
+      }
+      return true;
+    }
+
+    /**
+     * @param a must be a COMMIT action.
+     */
+    private Adjoints scoreCommit(FNTagging f, Action a) {
+
+      if (!lastItemMatches(f))
+        throw new RuntimeException("who gave out this FNParse?");
+
+      // Get the templates needed for all the features.
+//      Target t = new Target(f.getSentence().getId(), a.t);
+//      Span s = a.getSpan();
+//      int[] feats = cache.get(new CacheKey(t, s));
+      int[] feats = lastServedByItemProvider.getFeatures(a.t, a.getSpan());
+      if (feats == null) {
+        throw new RuntimeException("couldn't come up with features for "
+            + f.getId() + " action=" + a);
+      }
+      BaseTemplates data = new BaseTemplates(templateSetSorted, feats);
+
+      // I should be able to use the same code as in InformationGainProducts.
+      IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
+      List<Long> buf = new ArrayList<>(4);
+      for (int i = 0; i < featureSet.length; i++) {
+        int[] feat = featureSet[i];
+        // Note that these features don't need to be producted with k due to the
+        // fact that we have separate weights for those.
+        InformationGainProducts.flatten(data, 0, feat, 0, 1, 1, template2cardinality, buf);
+
+        // If I get a long here, I can zip them all together by multiplying by
+        // featureSet.length and then adding in an offset.
+        for (long l : buf) {
+          long ll = l * featureSet.length + i;
+          int h = ((int) ll) ^ ((int) (ll >>> 32));
+          h = Math.floorMod(h, dimension);
+          features.add(h, 1);
+        }
+        buf.clear();
+      }
+
+      IntDoubleVector theta = new IntDoubleDenseVector(weightsCommit[a.k]);
+      return new Adjoints.Vector(this, a, theta, features, l2Penalty);
+    }
+
+    @Override
+    public void doneTraining() {
+      Log.info("no op");
+    }
+
+    @Override
+    public void showWeights() {
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public void serialize(DataOutputStream out) throws IOException {
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public void deserialize(DataInputStream in) throws IOException {
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public void scaleWeights(double scale) {
+      throw new RuntimeException("implement me");
+    }
+
+    @Override
+    public void addWeights(edu.jhu.hlt.fnparse.rl.params.Params other,
+        boolean checkAlphabetEquality) {
+      throw new RuntimeException("implement me");
+    }
+  }
+
+  /**
+   * @deprecated This should be removed when loadedItems starts being used.
+   */
   public static final class CacheKey {
     private String sentId;  // assuming docId is not needed
     private int t;
@@ -109,29 +390,15 @@ public class CachedFeatureParams implements Params.Stateless {
   }
 
   // t -> s -> features
-  // There is no k here, it is computed on the fly.
-//  private Map<Target, Map<Span, BaseTemplates>> cache;
-//  private Map<Pair<Target, Span>, BaseTemplates> cache;
-//  private Map<CacheKey, BaseTemplates> cache;
-  private Map<CacheKey, int[]> cache;
-  /*
-   * TODO This cache should really be
-   *    (docId, sentId) -> (t,span) -> features
-   * Then we could cache get calls on the first map for locality.
-   */
+//  /** @deprecated */
+//  private Map<CacheKey, int[]> cache;
 
-  // k -> feature -> weight
-  private int dimension = 1 * 1024 * 1024;    // hashing trick
-  private double[][] weightsCommit;
-  private double[] weightPrune;
-
-  private double l2Penalty = 1e-8;
-
-  public CachedFeatureParams(BiAlph bialph, int numRoles, List<int[]> features, int dimension) {
-    this.dimension = dimension;
+  public CachedFeatures(BiAlph bialph, List<int[]> features) {
     this.bialph = bialph;
     this.template2cardinality = bialph.makeTemplate2Cardinality();
-    this.cache = new HashMap<>();
+//    this.cache = new HashMap<>();
+    this.loadedItems = new ArrayList<>();
+    this.lastServedByItemProvider = null;
     this.debugFeatures = new IntArrayList();
     this.debugKeys = new ArrayList<>();
 
@@ -148,14 +415,6 @@ public class CachedFeatureParams implements Params.Stateless {
     for (int i = 0, t = templateSet.nextSetBit(0); t >= 0; t = templateSet.nextSetBit(t + 1), i++)
       templateSetSorted[i] = t;
 
-    this.weightsCommit = new double[numRoles][dimension];
-    this.weightPrune = new double[dimension];
-    long weightBytes = (numRoles + 1) * dimension * 8;
-    Log.info("dimension=" + dimension
-        + " numRoles=" + numRoles
-        + " numTemplates=" + templateSet.cardinality()
-        + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
-
     // For debugging (look at memory usage with various configurations).
     // For regular operation, make sure these are their defaults.
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -164,11 +423,22 @@ public class CachedFeatureParams implements Params.Stateless {
     keepValues = config.getBoolean("cachedFeatureParams.keepValues", false);
   }
 
-  public void read(File featureFile) throws IOException {
+  // TODO make it clear that you should use new Thread(new Inserter(...)) instead of this
+  // TODO make this insert into loadedItems
+  private void read(File featureFile, Map<String, FNParse> sentId2parse) throws IOException {
     Log.info("reading features from " + featureFile.getPath());
     OrderStatistics<Integer> nnz = new OrderStatistics<>();
     TimeMarker tm = new TimeMarker();
     int numLines = 0;
+
+    // TODO lines should form contiguous blocks of FNParses.
+    // 1) Check this and 2) populate loadedItems
+
+    // How do I get the FNParse for the Item that I'm building?
+    // Could take sentId -> FNParse map ahead of time?
+    // DONE: Take it in inserter which then passes it into this method
+
+    Item cur = null;
     try (BufferedReader r = FileUtil.getReader(featureFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         numLines++;
@@ -183,17 +453,28 @@ public class CachedFeatureParams implements Params.Stateless {
         data.purgeLine();
         nnz.add(data.getFeatures().length);
 
+        if (cur == null) {
+          FNParse parse = sentId2parse.get(t.sentId);
+          cur = new Item(parse);
+        } else if (!t.sentId.equals(cur.parse.getSentence().getId())) {
+          loadedItems.add(cur);
+          FNParse parse = sentId2parse.get(t.sentId);
+          cur = new Item(parse);
+        }
+
 //        cache.get(t).put(span, data);
 //        Pair<Target, Span> key = new Pair<>(t, span);
-        CacheKey key = new CacheKey(t, span);
+//        CacheKey key = new CacheKey(t, span);
         if (keepBoth) {
 //        BaseTemplates old = cache.put(key, data);
-        int[] old = cache.put(key, data.getFeatures());
-        assert old == null : key + " maps to two values, one if which is in " + featureFile.getPath();
+//        int[] old = cache.put(key, data.getFeatures());
+//        assert old == null : key + " maps to two values, one if which is in " + featureFile.getPath();
+          cur.setFeatures(t.target, span, data.getFeatures());
         }
 
         if (keepKeys) {
-          debugKeys.add(key);
+//          debugKeys.add(key);
+          debugKeys.add(sentId2parse.get(t.sentId));
         }
 
         if (keepValues) {
@@ -218,111 +499,25 @@ public class CachedFeatureParams implements Params.Stateless {
     Log.info("done");
   }
 
-  @Override
-  public Adjoints score(FNTagging f, Action a) {
-    if (a.getActionType() == ActionType.COMMIT)
-      return scoreCommit(f, a);
-    assert a.getActionType() == ActionType.PRUNE;
-    if (!simplePruneFeatures)
-      throw new RuntimeException("implement me");
-    return scorePrune(f, a);
-  }
-
-  /**
-   * @param a must be a PRUNE action.
-   */
-  private Adjoints scorePrune(FNTagging f, Action a) {
-    Frame frame = f.getFrameInstance(a.t).getFrame();
-    int f1 = frame.getId() * 3 + 0;
-    int f2 = ((frame.getId() << 12) ^ a.k) * 3 + 1;
-    int f3 = a.k * 3 + 2;
-    IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector(3);
-    fv.add(Math.floorMod(f1, dimension), 1);
-    fv.add(Math.floorMod(f2, dimension), 1);
-    fv.add(Math.floorMod(f3, dimension), 1);
-    IntDoubleVector theta = new IntDoubleDenseVector(weightPrune);
-    return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
-  }
-
-
-  /**
-   * @param a must be a COMMIT action.
-   */
-  private Adjoints scoreCommit(FNTagging f, Action a) {
-
-    // Get the templates needed for all the features.
-    Target t = new Target(f.getSentence().getId(), a.t);
-//    Map<Span, BaseTemplates> cacheT = cache.get(t);
-    Span s = a.getSpan();
-//    BaseTemplates data = cacheT.get(s);
-//    BaseTemplates data = cache.get(new Pair<>(t, s));
-//    BaseTemplates data = cache.get(new CacheKey(t, s));
-    int[] feats = cache.get(new CacheKey(t, s));
-    if (feats == null) {
-      throw new RuntimeException("couldn't come up with features for "
-          + f.getId() + " action=" + a);
-    }
-    BaseTemplates data = new BaseTemplates(templateSetSorted, feats);
-
-    // I should be able to use the same code as in InformationGainProducts.
-    IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
-    List<Long> buf = new ArrayList<>(4);
-    for (int i = 0; i < featureSet.length; i++) {
-      int[] feat = featureSet[i];
-      // Note that these features don't need to be producted with k due to the
-      // fact that we have separate weights for those.
-      InformationGainProducts.flatten(data, 0, feat, 0, 1, 1, template2cardinality, buf);
-
-      // If I get a long here, I can zip them all together by multiplying by
-      // featureSet.length and then adding in an offset.
-      for (long l : buf) {
-        long ll = l * featureSet.length + i;
-        int h = ((int) ll) ^ ((int) (ll >>> 32));
-        h = Math.floorMod(h, dimension);
-        features.add(h, 1);
-      }
-      buf.clear();
-    }
-
-    IntDoubleVector theta = new IntDoubleDenseVector(weightsCommit[a.k]);
-    return new Adjoints.Vector(this, a, theta, features, l2Penalty);
-  }
-
-  @Override
-  public void doneTraining() {
-    Log.info("no op");
-  }
-
-  @Override
-  public void showWeights() {
-    throw new RuntimeException("implement me");
-  }
-
-  @Override
-  public void serialize(DataOutputStream out) throws IOException {
-    throw new RuntimeException("implement me");
-  }
-
-  @Override
-  public void deserialize(DataInputStream in) throws IOException {
-    throw new RuntimeException("implement me");
-  }
-
-  @Override
-  public void addWeights(Params other, boolean checkAlphabetEquality) {
-    throw new RuntimeException("implement me");
-  }
-
-  @Override
-  public void scaleWeights(double scale) {
-    throw new RuntimeException("implement me");
-  }
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+
     // start redis in data/debugging/redis-for-feature-names
     RedisMap<String> tf2name = getFeatureNameRedisMap(config);
-    CachedFeatureParams cfp = loadFeaturesIntoMemory(config);
+
+    BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), false);
+    Random rand = new Random();
+    int numTemplates = config.getInt("numTemplates", 993);
+    int numFeats = config.getInt("numFeats", 50);
+    List<int[]> features = new ArrayList<>();
+    for (int i = 0; i < numFeats; i++) {
+      int a = rand.nextInt(numTemplates);
+      int b = rand.nextInt(numTemplates);
+      features.add(new int[] {a, b});
+    }
+    CachedFeatures cfp = new CachedFeatures(bialph, features);
+
     cfp.testIntStringEquality(config, tf2name);
   }
 
@@ -338,13 +533,26 @@ public class CachedFeatureParams implements Params.Stateless {
    */
   public void testIntStringEquality(ExperimentProperties config, RedisMap<String> tf2name) {
     boolean verbose = config.getBoolean("showFeatureMatches", true);
+
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
     Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
-    Iterator<FNParse> itr = DumpSentenceIds.getData(config);
-    while (itr.hasNext()) {
-      FNParse y = itr.next();
+
+    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
+
+    List<File> featureFiles = FileUtil.find(new File("data/debugging/coherent-shards/features"), "glob:**/*");
+    Inserter ins = this.new Inserter(featureFiles, false, sentId2parse);
+    Thread insThread = new Thread(ins);
+    insThread.start();
+
+    int dimension = 256 * 1024;
+    int numRoles = 20;
+    Params params = this.new Params(dimension, numRoles);
+
+    ItemProvider ip = this.new ItemProvider(sentId2parse.size());
+    for (int index = 0; index < ip.size(); index++) {
+      FNParse y = ip.label(index);
       State st = r.getInitialStateWithPruning(y, y);
       for (Action a : ActionType.COMMIT.next(st)) {
         // For each template int featureSetFlat, lookup the string (template,feature) via:
@@ -352,9 +560,7 @@ public class CachedFeatureParams implements Params.Stateless {
         // 2) lookup via redis (which reflects the contents of the files -- round trip)
 
         // Check 1: extracted template-values match stored template-values
-        Target t = new Target(y.getSentence().getId(), a.t);
-        Span s = a.getSpan();
-        int[] feats = cache.get(new CacheKey(t, s));
+        int[] feats = params.getDebugRawTemplates(y, a);
         if (feats == null) {
           throw new RuntimeException("couldn't come up with features for "
               + y.getId() + " action=" + a);
@@ -454,10 +660,12 @@ public class CachedFeatureParams implements Params.Stateless {
     return tf2feat;
   }
 
-  public static CachedFeatureParams loadFeaturesIntoMemory(ExperimentProperties config) throws IOException {
+  /*
+   * @deprecated see new Thread(new {@link Inserter})
+  public static CachedFeatures loadFeaturesIntoMemory(ExperimentProperties config) throws IOException {
     Log.info("going to try to load all of the data to see if it fits in memory");
     File parent = config.getExistingDir("featuresParent");
-    String glob = config.getString("featuresGlob", "glob:**/*");
+    String glob = config.getString("featuresGlob", "glob:**\/*");
     BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), false);
     int numRoles = config.getInt("numRoles", 20);
     Random rand = new Random();
@@ -470,10 +678,12 @@ public class CachedFeatureParams implements Params.Stateless {
       features.add(new int[] {a, b});
     }
     int dimension = config.getInt("dimension", 256 * 1024);
-    CachedFeatureParams params = new CachedFeatureParams(bialph, numRoles, features, dimension);
+//    CachedFeatures params = new CachedFeatures(bialph, numRoles, features, dimension);
+    CachedFeatures params = new CachedFeatures(bialph, features);
     for (File f : FileUtil.find(parent, glob))
       params.read(f);
     Log.info("done");
     return params;
   }
+   */
 }
