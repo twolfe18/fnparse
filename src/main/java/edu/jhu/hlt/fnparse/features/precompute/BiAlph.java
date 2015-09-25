@@ -117,13 +117,21 @@ public class BiAlph {
     return card;
   }
 
+  public int[] copyOfWithPadding(int[] array, int newSize, int paddingValue) {
+    int oldSize = array.length;
+    int[] newArray = Arrays.copyOf(array, newSize);
+    for (int i = oldSize; i < newSize; i++)
+      newArray[i] = paddingValue;
+    return newArray;
+  }
+
   private void ensureCapacity(Line l) {
     // old int
     if (l.oldIntTemplate >= 0) {
       int oldT = oldInt2NewIntTemplates.length;
       if (l.oldIntTemplate >= oldT) {
         int newSize = (int) (l.oldIntTemplate * 1.6 + 1);
-        oldInt2NewIntTemplates = Arrays.copyOf(oldInt2NewIntTemplates, newSize);
+        oldInt2NewIntTemplates = copyOfWithPadding(oldInt2NewIntTemplates, newSize, -1);
         oldInt2NewIntFeatures = Arrays.copyOf(oldInt2NewIntFeatures, newSize);
         for (int i = oldT; i < oldInt2NewIntFeatures.length; i++)
           oldInt2NewIntFeatures[i] = new int[0];
@@ -132,7 +140,7 @@ public class BiAlph {
       if (l.oldIntFeature >= oldF) {
         int newSize = (int) (l.oldIntFeature * 1.6 + 1);
         oldInt2NewIntFeatures[l.oldIntTemplate] =
-            Arrays.copyOf(oldInt2NewIntFeatures[l.oldIntTemplate], newSize);
+            copyOfWithPadding(oldInt2NewIntFeatures[l.oldIntTemplate], newSize, -1);
       }
     }
     // new int
@@ -140,7 +148,7 @@ public class BiAlph {
     if (l.newIntTemplate >= newT) {
       int newSize = (int) (l.newIntTemplate * 1.6 + 1);
       newInt2TemplateName = Arrays.copyOf(newInt2TemplateName, newSize);
-      newInt2MaxFeatureIndex = Arrays.copyOf(newInt2MaxFeatureIndex, newSize);
+      newInt2MaxFeatureIndex = copyOfWithPadding(newInt2MaxFeatureIndex, newSize, -1);
     }
   }
 
@@ -205,10 +213,16 @@ public class BiAlph {
   }
 
   public int mapTemplate(int oldTemplateIndex) {
+    if (oldTemplateIndex >= oldInt2NewIntTemplates.length)
+      return -1;
     return oldInt2NewIntTemplates[oldTemplateIndex];
   }
 
   public int mapFeature(int oldTemplateIndex, int oldFeatureIndex) {
+    if (oldTemplateIndex >= oldInt2NewIntFeatures.length)
+      return -1;
+    if (oldFeatureIndex >= oldInt2NewIntFeatures[oldTemplateIndex].length)
+      return -1;
     return oldInt2NewIntFeatures[oldTemplateIndex][oldFeatureIndex];
   }
 }

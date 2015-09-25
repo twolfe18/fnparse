@@ -1,11 +1,15 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 
-import edu.jhu.hlt.fnparse.util.FindReplace;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * Read in some int features and a bialph and spit out some int features (in a
@@ -16,6 +20,10 @@ import edu.jhu.hlt.tutils.IntPair;
  * will not be after the projection unless the projection is the identity or
  * you get lucky.
  *
+ * NOTE: If the bialph does not contain all the needed entries (e.g. there are
+ * ints in a feature file which have no corresponding row that match an old int),
+ * then drop that feature.
+ *
  * @author travis
  */
 public class BiAlphProjection {
@@ -23,30 +31,51 @@ public class BiAlphProjection {
   /** Maps oldInt -> newInt using a {@link BiAlph} */
   static class BiAlphIntMapper {
     private BiAlph bialph;
-    public BiAlphIntMapper(File bialphFile) {
-      bialph = new BiAlph(bialphFile, true);
+    public BiAlphIntMapper(File bialphFile, LineMode lineMode) {
+      bialph = new BiAlph(bialphFile, lineMode);
     }
-    /** Takes a substring like "22:42" */
-    public String replace(String input) {
-      IntPair tf = BiAlphMerger.parseTemplateFeature(input);
-      int newTemplate = bialph.mapTemplate(tf.first);
-      int newFeature = bialph.mapFeature(tf.first, tf.second);
-      return newTemplate + ":" + newFeature;
-    }
-  }
 
-  public static void project(File inputFeatures, File bialphFile, File outputFeatures) throws IOException {
-    FindReplace fr = new FindReplace(
-        BiAlphMerger::findTemplateFeatureMentions,
-        new BiAlphIntMapper(bialphFile)::replace);
-    fr.findReplace(inputFeatures, outputFeatures);
+    /** Doesn't append a newline to output */
+    public void replace(String inputLine, StringBuilder outputLine) {
+      String[] toks = inputLine.split("\t");
+      for (int i = 0; i < 5; i++) {
+        if (i > 0) outputLine.append('\t');
+        outputLine.append(toks[i]);
+      }
+      for (int i = 5; i < toks.length; i++) {
+        IntPair tf = BiAlphMerger.parseTemplateFeature(toks[i]);
+        int newTemplate = bialph.mapTemplate(tf.first);
+        if (newTemplate < 0)
+          continue;
+        int newFeature = bialph.mapFeature(tf.first, tf.second);
+        if (newFeature < 0)
+          continue;
+        outputLine.append("\t" + newTemplate + ":" + newFeature);
+      }
+    }
+
+    public void replace(File inputFile, File outputFile, boolean append) throws IOException {
+      Log.info(inputFile.getPath() + "  ==>  " + outputFile.getPath() + "  append=" + append);
+      try (BufferedReader r = FileUtil.getReader(inputFile);
+          BufferedWriter w = FileUtil.getWriter(outputFile, append)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          StringBuilder sb = new StringBuilder();
+          replace(line, sb);
+          w.write(sb.toString());
+          w.newLine();
+        }
+      }
+    }
   }
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    project(
-        config.getExistingFile("inputFeatures"),
+    BiAlphIntMapper m = new BiAlphIntMapper(
         config.getExistingFile("inputBialph"),
-        config.getFile("outputFeatures"));
+        LineMode.valueOf(config.getString("lineMode")));
+    m.replace(
+        config.getExistingFile("inputFeatures"),
+        config.getFile("outputFeatures"),
+        config.getBoolean("append", false));
   }
 }
