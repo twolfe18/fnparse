@@ -22,8 +22,15 @@ import edu.jhu.hlt.tutils.TimeMarker;
  */
 public class BiAlph {
 
+  enum LineMode {
+    BIALPH,       // 6 col tsv
+    ALPH,         // 4 col tsv, no old int (template,feature)
+    ALPH_AS_TRIVIAL_BIALPH,   // same as ALPH, but sets old=new (template,feature)
+  }
+
   /** When oldInt* isn't populated, -1 is used. */
   public static class Line {
+
     public String line;
     public int newIntTemplate;
     public int newIntFeature;
@@ -31,8 +38,9 @@ public class BiAlph {
     public String stringFeature;
     public int oldIntTemplate;
     public int oldIntFeature;
-    public Line(String line, boolean bialphLine) {
-      set(line, bialphLine);
+
+    public Line(String line, LineMode lineMode) {
+      set(line, lineMode);
     }
     @Override
     public String toString() {
@@ -41,7 +49,7 @@ public class BiAlph {
     public boolean isNull() {
       return line == null;
     }
-    public void set(String line, boolean bialphLine) {
+    public void set(String line, LineMode mode) {
       this.line = line;
       if (line != null) {
         String[] toks = line.split("\t");
@@ -50,12 +58,21 @@ public class BiAlph {
         newIntFeature = Integer.parseInt(toks[i++]);
         stringTemplate = toks[i++];
         stringFeature = toks[i++];
-        if (bialphLine) {
+        switch (mode) {
+        case BIALPH:
           oldIntTemplate = Integer.parseInt(toks[i++]);
           oldIntFeature = Integer.parseInt(toks[i++]);
-        } else {
+          break;
+        case ALPH:
           oldIntTemplate = -1;
           oldIntFeature = -1;
+          break;
+        case ALPH_AS_TRIVIAL_BIALPH:
+          oldIntTemplate = newIntTemplate;
+          oldIntFeature = newIntFeature;
+          break;
+        default:
+          throw new RuntimeException("unknow mode: " + mode);
         }
         assert i == toks.length;
       }
@@ -80,13 +97,13 @@ public class BiAlph {
   private int[][] oldInt2NewIntFeatures;
   private File file;
 
-  public BiAlph(File f, boolean fIsBialph) {
+  public BiAlph(File f, LineMode lineMode) {
     this.templateName2NewInt = new HashMap<>();
     this.newInt2TemplateName = new String[0];
     this.newInt2MaxFeatureIndex = new int[0];
     this.oldInt2NewIntTemplates = new int[0];
     this.oldInt2NewIntFeatures = new int[0][0];
-    set(f, fIsBialph);
+    set(f, lineMode);
   }
 
   public File getSource() {
@@ -131,14 +148,16 @@ public class BiAlph {
    * @param fIsBiAlph if true f is interpretted as a bialph (6 col tsv),
    * otherwise f is interpretted as an alph (4 col tsv).
    */
-  public void set(File f, boolean fIsBiAlph) {
-    Log.info("loading bialph from " + f.getPath() + " fIsBiAlph=" + fIsBiAlph);
+  public void set(File f, LineMode lineMode) {
+    Log.info("loading bialph from " + f.getPath() + " lineMode=" + lineMode);
     TimeMarker tm = new TimeMarker();
     this.file = f;
+    int processed = 0;
     try (BufferedReader r = FileUtil.getReader(f)) {
-      Line l = new Line(null, fIsBiAlph);
+      Line l = new Line(null, lineMode);
       for (String line = r.readLine(); line != null; line = r.readLine()) {
-        l.set(line, fIsBiAlph);
+        processed++;
+        l.set(line, lineMode);
         assert (l.oldIntTemplate < 0) == (l.oldIntFeature < 0);
 
         ensureCapacity(l);
@@ -164,7 +183,7 @@ public class BiAlph {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    Log.info("done");
+    Log.info("done, processed " + processed + " lines");
   }
 
   public int cardinalityOfNewTemplate(int newTemplateIndex) {
