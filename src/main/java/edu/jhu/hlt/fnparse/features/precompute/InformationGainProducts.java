@@ -31,6 +31,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.prim.tuple.Pair;
 
@@ -158,6 +159,8 @@ public class InformationGainProducts {
   // a vector of this size to represent cx and cyx.
   private int hashingTrickDim;
 
+  private BiAlph lastBialph;
+
   /**
    * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
    * to use for representing features.
@@ -195,6 +198,8 @@ public class InformationGainProducts {
     assert relevantTemplates == null;
     assert template2cardinality == null;
 
+    lastBialph = bialph;
+
     // Map everything over
     products = new HashMap<>();
     baseFeatures = new ArrayList<>();
@@ -225,32 +230,18 @@ public class InformationGainProducts {
     }
   }
 
-/*
-  public BiAlph run(File features, File mapping, boolean mappingIsBialph) throws IOException {
-    Log.info("features=" + features.getPath()
-      + " mapping=" + mapping.getPath()
-      + " mappingIsBialph=" + mappingIsBialph);
-
-    // Load the bialph
-    BiAlph bialph = new BiAlph(mapping, mappingIsBialph);
-
-    // Possibly initialize some DS if you this is the first time
-    if (!isInitialized())
-      init(bialph);
-*/
+  private int numUpdates = 0;
   public void update(File features) throws IOException {
-
-    // Scan the features
     try (BufferedReader r = FileUtil.getReader(features)) {
       for (String line = r.readLine(); line != null; line = r.readLine())
         observeLine(line);
+      numUpdates++;
     }
-
-    // You can use this later for mapping int template -> string template
-//    return bialph;
+  }
+  public int getNumUpdates() {
+    return numUpdates;
   }
 
-//  @Override
   public void observeLine(String line) {
     String[] toks = line.split("\t", 3);
     String sentenceId = toks[1];
@@ -375,20 +366,54 @@ public class InformationGainProducts {
     return baseFeatures.get(i);
   }
 
+  /**
+   * Write out the results in format:
+   *   line = IG <tab> order <tab> featureInts
+   * where featureInts is delimited by "*"
+   */
+  public void writeOutProducts(File output) {
+    Log.info("writing output to " + output.getPath());
+    try (BufferedWriter w = FileUtil.getWriter(output)) {
+      List<TemplateIG> byIG = getTemplatesSortedByIGDecreasing();
+      for (int j = 0; j < byIG.size(); j++) {
+        TemplateIG t = byIG.get(j);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.valueOf(t.ig()));
+        int[] pieces = getTemplatesForFeature(t.getIndex());
+        sb.append("\t" + pieces.length + "\t");
+        for (int i = 0; i < pieces.length; i++) {
+          if (i > 0) sb.append('*');
+          sb.append(String.valueOf(pieces[i]));
+        }
+        sb.append('\t');
+        for (int i = 0; i < pieces.length; i++) {
+          if (i > 0) sb.append('*');
+          sb.append(lastBialph.lookupTemplate(pieces[i]));
+        }
+        w.write(sb.toString());
+        w.newLine();
+      }
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+
   @SafeVarargs
   public static Pair<String[], Double> prod(Pair<String, Double>... templateIGs) {
     String[] prod = new String[templateIGs.length];
     double igProd = 1;
     for (int i = 0; i < templateIGs.length; i++) {
       prod[i] = templateIGs[i].get1();
-      igProd *= templateIGs[i].get2();
+      igProd *= (1 + templateIGs[i].get2());
     }
     return new Pair<>(prod, igProd);
   }
 
+  /** Only return products of the given order */
   public static List<String[]> getProductsSorted(
       ExperimentProperties config,
-      BiAlph bialph) throws IOException {
+      BiAlph bialph,
+      int order) throws IOException {
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
@@ -404,8 +429,7 @@ public class InformationGainProducts {
       }
     }
 
-    int order = config.getInt("order", 3);
-    int thresh = (int) Math.pow(templateIGs.size() * 15000, 1d / order);
+    int thresh = (int) Math.pow(templateIGs.size() * 25000, 1d / order);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
       templateIGs = templateIGs.subList(0, thresh);
@@ -416,11 +440,12 @@ public class InformationGainProducts {
     int n = templateIGs.size();
     Log.info("producing templates up to order=" + order + " from " + n + " templates");
     for (int i = 0; i < n - 1; i++) {
-      prodIGs.add(prod(templateIGs.get(i)));
+      if (order == 1)
+        prodIGs.add(prod(templateIGs.get(i)));
       for (int j = i + 1; j < n; j++) {
-        if (order >= 2)
+        if (order == 2)
           prodIGs.add(prod(templateIGs.get(i), templateIGs.get(j)));
-        if (order >= 3) {
+        if (order == 3) {
           for (int k = j + 1; k < n; k++) {
             prodIGs.add(prod(
                 templateIGs.get(i),
@@ -465,6 +490,47 @@ public class InformationGainProducts {
     Log.info("all.size=" + all.size() + " keep.size=" + keep.size());
     return keep;
   }
+  public static int stringArrayHash(String[] ar) {
+    int h = 0;
+    for (String i : ar)
+      h = i.hashCode() + 31 * h;
+    return h;
+  }
+
+  public static <T> List<T> take(List<T> all, int n) {
+    if (all.size() <= n)
+      return all;
+    return all.subList(0, n);
+  }
+  @SafeVarargs
+  public static <T> List<T> concat(List<T>... lists) {
+    List<T> all = new ArrayList<>();
+    for (List<T> l : lists)
+      all.addAll(l);
+    return all;
+  }
+
+  /**
+   * How to split the template budget between various product orders.
+   * Try gain=1.5
+   */
+  public static double weight(int order, double gain) {
+    if (gain < 1 || order < 1)
+      throw new IllegalArgumentException();
+    Log.info("order=" + order + " gain=" + gain + " result=" + Math.pow(gain, order));
+    return Math.pow(gain, order);
+  }
+  public static int count(int order, double gain, int maxOrder, int n) {
+    if (order > n || n < 1)
+      throw new IllegalArgumentException();
+    double z = 0;
+    for (int ord = 1; ord <= maxOrder; ord++)
+      z += weight(ord, gain);
+    double p = weight(order, gain) / z;
+    Log.info("order=" + order + " gain=" + gain + " p=" + p
+        + " maxOrder=" +maxOrder + " n=" + n + " final=" + ((int) (p * n + 0.5)));
+    return (int) (p * n + 0.5);
+  }
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -477,24 +543,42 @@ public class InformationGainProducts {
     File templateAlph = config.getExistingFile("templateAlph");
     boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
 
+    final File output = config.getFile("output");
+    Log.info("output=" + output.getPath());
+
+    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 4);
+    Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
+
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
       + " templateAlphIsBialph=" + templateAlphIsBialph);
     BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
 
     // Find the top K unigrams
-    List<String[]> products = filterByShard(getProductsSorted(config, bialph), config);
+    IntPair shard = ShardUtils.getShard(config);
+    List<String[]> prod1 = ShardUtils.shard(getProductsSorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod2 = ShardUtils.shard(getProductsSorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod3 = ShardUtils.shard(getProductsSorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
+    double gain = config.getDouble("gain", 1.5);
     int maxProducts = config.getInt("numProducts", 500);
-    if (maxProducts > 0 && products.size() > maxProducts) {
-      Log.info("taking the top " + maxProducts + " products from the "
-          + products.size() + " products that fell in this shard");
-      products = products.subList(0, maxProducts);
-    }
-    Log.info("computing IG for the top " + products.size() + " product features");
-    for (int i = 0; i < 10 && i < products.size(); i++)
-      Log.info("product[" + i + "]=" + Arrays.toString(products.get(i)));
+    assert maxProducts > 0;
+    int n1 = count(1, gain, 3, maxProducts);
+    int n2 = count(2, gain, 3, maxProducts);
+    int n3 = count(3, gain, 3, maxProducts);
+    List<String[]> products = concat(
+        take(prod1, n1),
+        take(prod2, n2),
+        take(prod3, n3));
+    Log.info("computing IG for the top " + products.size() + " product features,"
+        + " gain=" + gain + " n1=" + n1 + " n2=" + n2 + " n3=" + n3);
+    for (int i = 0; i < 10 && i < prod1.size(); i++)
+      Log.info("product[1," + i + "]=" + Arrays.toString(prod1.get(i)));
+    for (int i = 0; i < 10 && i < prod2.size(); i++)
+      Log.info("product[2," + i + "]=" + Arrays.toString(prod2.get(i)));
+    for (int i = 0; i < 10 && i < prod3.size(); i++)
+      Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
 
-    int hashingTrickDim = config.getInt("hashingTrickDim", 2 * 1024 * 1024);
+    int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
     InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim);
     igp.init(bialph);
 
@@ -506,6 +590,9 @@ public class InformationGainProducts {
         if (pm.matches(path)) {
           Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
           igp.update(path.toFile());
+
+          if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
+            igp.writeOutProducts(output);
         }
         return FileVisitResult.CONTINUE;
       }
@@ -515,34 +602,29 @@ public class InformationGainProducts {
       }
     });
 
-    // Write out the results in format:
-    //  line = IG <tab> featureInts <tab> featureStrings
-    // where featureInts and featureStrings are delimited by "-"
+    // Write out final results
+    igp.writeOutProducts(output);
+
+    // Show top products in log/command line
     int topK = config.getInt("topK", 10);
-    File output = config.getFile("output");
-    Log.info("writing output to " + output.getPath());
-    try (BufferedWriter w = FileUtil.getWriter(output)) {
-      List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-      for (int j = 0; j < byIG.size(); j++) {
-        TemplateIG t = byIG.get(j);
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.valueOf(t.ig()));
-        sb.append('\t');
-        int[] pieces = igp.getTemplatesForFeature(t.getIndex());
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(String.valueOf(pieces[i]));
-        }
-        sb.append('\t');
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(bialph.lookupTemplate(pieces[i]));
-        }
-        w.write(sb.toString());
-        w.newLine();
-        if (j < topK)
-          System.out.println(sb.toString());
+    List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
+    for (int j = 0; j < byIG.size(); j++) {
+      TemplateIG t = byIG.get(j);
+      StringBuilder sb = new StringBuilder();
+      sb.append(String.valueOf(t.ig()));
+      int[] pieces = igp.getTemplatesForFeature(t.getIndex());
+      sb.append("\t" + pieces.length + "\t");
+      for (int i = 0; i < pieces.length; i++) {
+        if (i > 0) sb.append('*');
+        sb.append(String.valueOf(pieces[i]));
       }
+      sb.append('\t');
+      for (int i = 0; i < pieces.length; i++) {
+        if (i > 0) sb.append('*');
+        sb.append(bialph.lookupTemplate(pieces[i]));
+      }
+      if (j < topK)
+        System.out.println(sb.toString());
     }
   }
 }

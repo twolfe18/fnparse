@@ -44,6 +44,8 @@ public class InformationGain implements Serializable, LineByLine {
 
   public static class TemplateIG implements Serializable {
     private static final long serialVersionUID = 1287953772086645433L;
+    public static double ADD_LAMBDA_SMOOTHING = 0.01;
+    public static boolean FULL_BAYESIAN_H = false;
     private int index;
     private IntIntDenseVector cy, cx;
     private Counts<IntPair> cyx;    // |Y| ~= 20  |X| ~= 20 * 10,000
@@ -72,18 +74,63 @@ public class InformationGain implements Serializable, LineByLine {
     public double ig() {
       if (igCache == null) {
         double ig = 0;
-        double N = updates;
-        for (Entry<IntPair, Integer> c : cyx.entrySet()) {
-          double countYX = c.getValue();
-          double countY = cy.get(c.getKey().first);
-          double countX = cx.get(c.getKey().second);
-          double py = countYX / N;
-          double pmi = Math.log(countYX * N) - Math.log(countY * countX);
-          ig += py * pmi;
+        if (FULL_BAYESIAN_H) {
+          /*
+           * Unfortuneatly, I think this is too slow to be practical.
+           * Proving once again: you never go full Bayesian.
+           */
+          int Tx = cx.getNumImplicitEntries();
+          int Ty = cy.getNumImplicitEntries();
+          int Tyx = Ty * Tx;
+          for (int x = 0; x < Tx; x++) {
+            double cx = this.cx.get(x) + ADD_LAMBDA_SMOOTHING;
+            double nx = updates + Tx * ADD_LAMBDA_SMOOTHING;
+            for (int y = 0; y < Ty; y++) {
+              double cyx = this.cyx.getCount(new IntPair(y, x)) + ADD_LAMBDA_SMOOTHING;
+              double cy = this.cy.get(y) + ADD_LAMBDA_SMOOTHING;
+              double nyx = updates + Tyx * ADD_LAMBDA_SMOOTHING;
+              double ny = updates + Ty * ADD_LAMBDA_SMOOTHING;
+              // pmi = log(p(xy)) - [log(p(x)) + log(p(y))]
+//              double pmi =
+//                  (log(cyx) - log(nyx))
+//                  - (log(cy) - log(ny))
+//                  - (log(cx) - log(nx));
+//              double pmi = log( (cyx/nyx) / ((cy*cx)/(ny*nx)) );
+//              double pmi = log( (cyx/nyx) ) - log( ((cy*cx)/(ny*nx)) );
+//              double pmi = log( (cyx * nx * ny) / (nyx * cy * cx) );
+              double pmi = log( (cyx * nx * ny) ) - log( (nyx * cy * cx) );
+              double pyx = cyx / nyx;
+              ig += pyx * pmi;
+            }
+          }
+        } else {
+          double N = updates;
+          /*
+           * NOTE: IG = KL(p(XY), p(X)*p(Y)) = E_{p(XY)} PMI(X,Y)
+           * NOTE: I have not gone full Bayesian!
+           * If I had, I would have to use IG = KL(posterior(XY), margin(posterior(X))*margin(posterior(Y)))
+           * If I did this, I would have to loop over all XY.
+           * As it is, I'm using a frequentist estimate of PMI, meaning that c(YX)=0 => pmi=0
+           * If I went full Bayesian, c(yx)=0 + prior => posterior(c(yx)) > 0
+           */
+          //        int Nt = cyx.numNonZero();    // this is less than the number of types!
+          int Nt = cy.getNumImplicitEntries() * cx.getNumImplicitEntries();
+          for (Entry<IntPair, Integer> c : cyx.entrySet()) {
+            double countYX = c.getValue();
+            double countY = cy.get(c.getKey().first);
+            double countX = cx.get(c.getKey().second);
+            double pyx = (countYX + ADD_LAMBDA_SMOOTHING) / (N + Nt * ADD_LAMBDA_SMOOTHING);
+            double pmi = Math.log(countYX * N) - Math.log(countY * countX);
+            ig += pyx * pmi;
+          }
         }
         igCache = ig;
       }
       return igCache;
+    }
+    public static final double LOG2 = Math.log(2);
+    public static double log(double x) {
+      return Math.log(x) / LOG2;
     }
     public static Comparator<TemplateIG> BY_IG_DECREASING = new Comparator<TemplateIG>() {
       @Override
