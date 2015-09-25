@@ -536,6 +536,8 @@ public class InformationGainProducts {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     FLATTEN_DEBUG = config.getBoolean("FLATTEN_DEBUG", false);
+    TemplateIG.ADD_LAMBDA_SMOOTHING =
+        config.getDouble("ig.addLambda", TemplateIG.ADD_LAMBDA_SMOOTHING);
 
     // Load the features and compute the IG for the chosen products
     File featuresParent = config.getExistingDir("featuresParent");

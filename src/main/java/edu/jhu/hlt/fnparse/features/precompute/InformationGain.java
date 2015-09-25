@@ -44,7 +44,7 @@ public class InformationGain implements Serializable, LineByLine {
 
   public static class TemplateIG implements Serializable {
     private static final long serialVersionUID = 1287953772086645433L;
-    public static double ADD_LAMBDA_SMOOTHING = 0.01;
+    public static double ADD_LAMBDA_SMOOTHING = 0.1;
     public static boolean FULL_BAYESIAN_H = false;
     private int index;
     private IntIntDenseVector cy, cx;
@@ -203,6 +203,9 @@ public class InformationGain implements Serializable, LineByLine {
     System.out.println("\toutputIG: where to serialize updated InformationGain");
     System.out.println("\toutputFeatures: text file for saving the templates/information gain");
     System.out.println("\tignoreSentenceIds: text file containing one sentence id per line to ignore");
+
+    TemplateIG.ADD_LAMBDA_SMOOTHING =
+        config.getDouble("ig.addLambda", TemplateIG.ADD_LAMBDA_SMOOTHING);
 
     // stats + features -> stats
     // stats -> topK
