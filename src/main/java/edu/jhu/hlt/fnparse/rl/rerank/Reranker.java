@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
@@ -104,6 +105,8 @@ public class Reranker implements Serializable {
 
   public boolean logArgPruningStats;
   public boolean logPredict;
+
+  public CachedFeatures cachedFeatures;
 
   public Reranker(
       Params.Stateful thetaStateful,
@@ -238,6 +241,7 @@ public class Reranker implements Serializable {
     List<Item> items = new ArrayList<>();
     DeterministicRolePruning drp =
         new DeterministicRolePruning(argPruningMode, null, null);
+    drp.cachedFeatures = cachedFeatures;
     FNParseSpanPruning mask = drp.setupInference(
         Arrays.asList(frames), null).decodeAll().get(0);
     int T = mask.numFrameInstances();

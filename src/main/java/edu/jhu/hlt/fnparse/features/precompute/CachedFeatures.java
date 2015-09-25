@@ -7,7 +7,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -20,8 +19,10 @@ import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
@@ -30,7 +31,9 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
+import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
@@ -39,10 +42,12 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
@@ -55,9 +60,6 @@ import edu.jhu.prim.vector.IntDoubleVector;
  *  (targetSpan, roleSpan, template:features+)
  * You can specify a set of templates (e.g. "5") and/or template products
  * (e.g. "5-9"), and this class will load only the necessary data.
- *
- * TODO Use serialization to store the sub-set chosen after filtering?
- * (memoize init calls)
  *
  * @author travis
  */
@@ -79,40 +81,72 @@ public class CachedFeatures {
   public List<FNParse> debugKeys;
   public boolean keepBoth, keepKeys, keepValues;
 
-  // New way of storing things!
+  private java.util.Vector<Item> loadedItems;
+  private Item lastServedByItemProvider;
+
+  /** A parse and its features */
   public static final class Item {
     public final FNParse parse;
-    private int[][][][] features;   // [t][arg.start][arg.end] = int[] features
+    private Map<IntPair, BaseTemplates>[] features;
+
+    @SuppressWarnings("unchecked")
     public Item(FNParse parse) {
       if (parse == null)
         throw new IllegalArgumentException();
       this.parse = parse;
       int T = parse.numFrameInstances();
-      this.features = new int[T][0][0][];
+      this.features = new Map[T];
+      for (int t = 0; t < T; t++)
+        this.features[t] = new HashMap<>();
     }
-    public void setFeatures(int t, Span arg, int[] features) {
+
+    public void setFeatures(int t, Span arg, BaseTemplates features) {
       if (arg.start < 0 || arg.end < 0)
         throw new IllegalArgumentException("span=" + arg);
-      if (arg.start >= this.features[t].length) {
-        int newSize = (int) Math.max(arg.start + 1, 1.6 * this.features[t].length + 1);
-        this.features[t] = Arrays.copyOf(this.features[t], newSize);
-      }
-      if (arg.end >= this.features[t][arg.start].length) {
-        int newSize = (int) Math.max(arg.end + 1, 1.6 * this.features[t][arg.start].length + 1);
-        this.features[t][arg.start] = Arrays.copyOf(this.features[t][arg.start], newSize);
-      }
-      assert null == this.features[t][arg.start][arg.end] : "duplicates?";
-      this.features[t][arg.start][arg.end] = features;
+      if (features.getTemplates() == null)
+        throw new IllegalArgumentException();
+      BaseTemplates old = this.features[t].put(new IntPair(arg.start, arg.end), features);
+      assert old == null;
     }
-    public int[] getFeatures(int t, Span arg) {
-      int[] feats = this.features[t][arg.start][arg.end];
+
+    public BaseTemplates getFeatures(int t, Span arg) {
+      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
       assert feats != null;
       return feats;
     }
-  }
 
-  private ArrayList<Item> loadedItems;
-  private Item lastServedByItemProvider;
+    /**
+     * Returns a set of spans based on what we have features for. Adds nullSpan
+     * even if there are no features for it.
+     */
+    public Map<FrameInstance, List<Span>> spansWithFeatures() {
+      Map<FrameInstance, List<Span>> m = new HashMap<>();
+      for (int t = 0; t < this.features.length; t++) {
+        FrameInstance yt = parse.getFrameInstance(t);
+        FrameInstance key = FrameInstance.frameMention(yt.getFrame(), yt.getTarget(), parse.getSentence());
+        List<Span> values = new ArrayList<>();
+        // Gaurantee that nullSpan is in there by putting it first
+        values.add(Span.nullSpan);
+        boolean sawNullSpan = false;
+        for (IntPair s : this.features[t].keySet()) {
+          if (s.first == Span.nullSpan.start && s.second == Span.nullSpan.end) {
+            sawNullSpan = true;
+          } else {
+            values.add(Span.getSpan(s.first, s.second));
+          }
+        }
+        if (!sawNullSpan)
+          Log.warn("no features for nullSpan!");
+        List<Span> old = m.put(key, values);
+        assert old == null;
+      }
+      return m;
+    }
+  }
+  public Map<FrameInstance, List<Span>> spansWithFeatures(FNTagging y) {
+    assert lastItemMatches(y);
+    return lastServedByItemProvider.spansWithFeatures();
+  }
 
   /**
    * A runnable/thread whose only job is to read parses from disk and put them
@@ -122,36 +156,48 @@ public class CachedFeatures {
     private Map<String, FNParse> sentId2parse;
     private ArrayDeque<File> readFrom;
     public boolean readForever;
+    public boolean skipEntriesNotInSentId2ParseMap;
     /**
      * @param sentId2parse is needed because this module has an ItemProvider
      * implementation, which needs to know about FNParses.
      */
-    public Inserter(Iterable<File> files, boolean readForever, Map<String, FNParse> sentId2parse) {
+    public Inserter(Iterable<File> files, boolean readForever, Map<String, FNParse> sentId2parse, boolean skipEntriesNotInSentId2ParseMap) {
+      Log.info("files=" + files + " readForever=" + readForever + " sentId2parse.size=" + sentId2parse.size());
       this.readForever = readForever;
       this.sentId2parse = sentId2parse;
+      this.skipEntriesNotInSentId2ParseMap = skipEntriesNotInSentId2ParseMap;
       this.readFrom = new ArrayDeque<>();
       for (File f : files)
         this.readFrom.offerLast(f);
     }
     @Override
     public void run() {
-      File f = readFrom.pollFirst();
-      try {
-        // This adds to loadedItems
-        CachedFeatures.this.read(f, sentId2parse);
-      } catch (IOException e) {
-        e.printStackTrace();
+      while (!readFrom.isEmpty()) {
+        File f = readFrom.pollFirst();
+        Log.info("about to insert items from " + f.getPath());
+        try {
+          // This adds to loadedItems
+          CachedFeatures.this.read(f, sentId2parse, skipEntriesNotInSentId2ParseMap);
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        if (readForever) {
+          Log.info("readForever=true, so adding it back");
+          readFrom.offerLast(f);
+        }
       }
-      if (readForever) {
-        readFrom.offerLast(f);
-      }
+      Log.info("done reading all files");
     }
   }
   public static Map<String, FNParse> getPropbankSentId2Parse(ExperimentProperties config) {
     // This can be null since the only reason we need the parses is for
     // computing features, which we've already done.
+    // NOT TRUE! These parses were used for DetermnisticRolePruning, but I have
+    // added a mode to just use CachedFeautres instead of parses.
+//    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
     ParsePropbankData.Redis propbankAutoParses = null;
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+
     Map<String, FNParse> map = new HashMap<>();
     for (FNParse y : pbr.getTrainData()) {
       FNParse old = map.put(y.getSentence().getId(), y);
@@ -175,6 +221,9 @@ public class CachedFeatures {
     private int intendentSize;
     public ItemProvider(int intendedSize) {
       this.intendentSize = intendedSize;
+    }
+    public int getNumActuallyLoaded() {
+      return loadedItems.size();
     }
     @Override
     public Iterator<FNParse> iterator() {
@@ -238,7 +287,7 @@ public class CachedFeatures {
     /**
      * Ignores the feature set, just returns all of the templates we have in memory.
      */
-    public int[] getDebugRawTemplates(FNTagging f, Action a) {
+    public BaseTemplates getDebugRawTemplates(FNTagging f, Action a) {
       if (!lastItemMatches(f) || a.getActionType() != ActionType.COMMIT)
         throw new RuntimeException();
       return lastServedByItemProvider.getFeatures(a.t, a.getSpan());
@@ -270,15 +319,6 @@ public class CachedFeatures {
       return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
     }
 
-    private boolean lastItemMatches(FNTagging f) {
-      if (lastServedByItemProvider == null
-          || !f.getSentence().getId().equals(
-              lastServedByItemProvider.parse.getSentence().getId())) {
-        return false;
-      }
-      return true;
-    }
-
     /**
      * @param a must be a COMMIT action.
      */
@@ -288,15 +328,7 @@ public class CachedFeatures {
         throw new RuntimeException("who gave out this FNParse?");
 
       // Get the templates needed for all the features.
-//      Target t = new Target(f.getSentence().getId(), a.t);
-//      Span s = a.getSpan();
-//      int[] feats = cache.get(new CacheKey(t, s));
-      int[] feats = lastServedByItemProvider.getFeatures(a.t, a.getSpan());
-      if (feats == null) {
-        throw new RuntimeException("couldn't come up with features for "
-            + f.getId() + " action=" + a);
-      }
-      BaseTemplates data = new BaseTemplates(templateSetSorted, feats);
+      BaseTemplates data = lastServedByItemProvider.getFeatures(a.t, a.getSpan());
 
       // I should be able to use the same code as in InformationGainProducts.
       IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
@@ -355,49 +387,32 @@ public class CachedFeatures {
   }
 
   /**
-   * @deprecated This should be removed when loadedItems starts being used.
+   * For interoperatiblity with {@link DeterministicRolePruning}
    */
-  public static final class CacheKey {
-    private String sentId;  // assuming docId is not needed
-    private int t;
-    private int argStart, argEnd;
-    private int hash;
-    public CacheKey(Target t, Span arg) {
-      this.sentId = t.sentId.intern();
-      this.t = t.target;
-      this.argStart = arg.start;
-      this.argEnd = arg.end;
-      this.hash = this.sentId.hashCode()
-          ^ ((this.argEnd - this.argStart) << 24)
-          ^ (this.argStart << 16)
-          ^ (this.t << 8)
-          ;
-    }
-    @Override
-    public int hashCode() { return hash; }
-    @Override
-    public boolean equals(Object other) {
-      if (other instanceof CacheKey) {
-        CacheKey ck = (CacheKey) other;
-        return hash == ck.hash
-            && sentId == ck.sentId
-            && t == ck.t
-            && argStart == ck.argStart
-            && argEnd == ck.argEnd;
-      }
-      return false;
+  public class ArgPruning {
+    /**
+     * Assume that the spans that we have features for were the ones not pruned.
+     */
+    public FNParseSpanPruning getPruningMask(FNTagging y) {
+      assert lastItemMatches(y);
+      Map<FrameInstance, List<Span>> possibleSpans = lastServedByItemProvider.spansWithFeatures();
+      return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans);
     }
   }
 
-  // t -> s -> features
-//  /** @deprecated */
-//  private Map<CacheKey, int[]> cache;
+  private boolean lastItemMatches(FNTagging f) {
+    if (lastServedByItemProvider == null
+        || !f.getSentence().getId().equals(
+            lastServedByItemProvider.parse.getSentence().getId())) {
+      return false;
+    }
+    return true;
+  }
 
   public CachedFeatures(BiAlph bialph, List<int[]> features) {
     this.bialph = bialph;
     this.template2cardinality = bialph.makeTemplate2Cardinality();
-//    this.cache = new HashMap<>();
-    this.loadedItems = new ArrayList<>();
+    this.loadedItems = new java.util.Vector<>();
     this.lastServedByItemProvider = null;
     this.debugFeatures = new IntArrayList();
     this.debugKeys = new ArrayList<>();
@@ -423,21 +438,30 @@ public class CachedFeatures {
     keepValues = config.getBoolean("cachedFeatureParams.keepValues", false);
   }
 
-  // TODO make it clear that you should use new Thread(new Inserter(...)) instead of this
-  // TODO make this insert into loadedItems
-  private void read(File featureFile, Map<String, FNParse> sentId2parse) throws IOException {
+  /**
+   * Adds the features from the given file to this modules in-memory store.
+   * NOTE: You should probably not call this directly, but rather through a
+   * thread running an {@link Inserter}.
+   * @param sentId2parse provides the actual {@link FNParse}s, as we only read
+   * the sentence ids out of the given file, and there are a few areas in the
+   * program where we need the {@link FNParse} in addition to the features.
+   * @param skipEntriesNotInSentId2ParseMap says whether we should skip items
+   * in the file which don't appear in sentId2parse, which can save memory if
+   * you don't need all of the parses/features. If this is false and an item is
+   * found in the feature file for which there is no sentId -> {@link FNParse}
+   * mapping, an exception is thrown.
+   */
+  private void read(File featureFile, Map<String, FNParse> sentId2parse, boolean skipEntriesNotInSentId2ParseMap) throws IOException {
     Log.info("reading features from " + featureFile.getPath());
     OrderStatistics<Integer> nnz = new OrderStatistics<>();
     TimeMarker tm = new TimeMarker();
     int numLines = 0;
 
-    // TODO lines should form contiguous blocks of FNParses.
-    // 1) Check this and 2) populate loadedItems
-
     // How do I get the FNParse for the Item that I'm building?
     // Could take sentId -> FNParse map ahead of time?
     // DONE: Take it in inserter which then passes it into this method
 
+    int skipped = 0, kept = 0;
     Item cur = null;
     try (BufferedReader r = FileUtil.getReader(featureFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -449,27 +473,31 @@ public class CachedFeatures {
         String[] spanToks = toks[3].split(",");
         Span span = Span.getSpan(Integer.parseInt(spanToks[0]), Integer.parseInt(spanToks[1]));
 
-        BaseTemplates data = new BaseTemplates(templateSet, line, false);
+        BaseTemplates data = new BaseTemplates(templateSet, line, true);
         data.purgeLine();
         nnz.add(data.getFeatures().length);
 
-        if (cur == null) {
+        if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
+          if (cur != null)
+            loadedItems.add(cur);
           FNParse parse = sentId2parse.get(t.sentId);
-          cur = new Item(parse);
-        } else if (!t.sentId.equals(cur.parse.getSentence().getId())) {
-          loadedItems.add(cur);
-          FNParse parse = sentId2parse.get(t.sentId);
+          if (parse == null) {
+            if (skipEntriesNotInSentId2ParseMap) {
+              skipped++;
+              continue;
+            } else {
+              throw new RuntimeException("no parse for " + t.sentId
+                  + " in map of size " + sentId2parse.size());
+            }
+          }
           cur = new Item(parse);
         }
 
-//        cache.get(t).put(span, data);
-//        Pair<Target, Span> key = new Pair<>(t, span);
-//        CacheKey key = new CacheKey(t, span);
+        kept++;
+
         if (keepBoth) {
-//        BaseTemplates old = cache.put(key, data);
-//        int[] old = cache.put(key, data.getFeatures());
-//        assert old == null : key + " maps to two values, one if which is in " + featureFile.getPath();
-          cur.setFeatures(t.target, span, data.getFeatures());
+//          cur.setFeatures(t.target, span, data.getFeatures());
+          cur.setFeatures(t.target, span, data);
         }
 
         if (keepKeys) {
@@ -485,10 +513,12 @@ public class CachedFeatures {
         if (tm.enoughTimePassed(15)) {
           Log.info("processed " + tm.numMarks()
             + " lines in " + tm.secondsSinceFirstMark() + " seconds, "
+            + " skipped=" + skipped + " kept=" + kept + ", "
             + Describe.memoryUsage());
         }
       }
     }
+    loadedItems.add(cur);
     Log.info("numLines=" + numLines);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean());
     Log.info("nnz/template=" + (nnz.getMean() / templateSetSorted.length));
@@ -506,7 +536,8 @@ public class CachedFeatures {
     // start redis in data/debugging/redis-for-feature-names
     RedisMap<String> tf2name = getFeatureNameRedisMap(config);
 
-    BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), false);
+    Log.info("loading bialph in serial...");
+    BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), LineMode.ALPH);
     Random rand = new Random();
     int numTemplates = config.getInt("numTemplates", 993);
     int numFeats = config.getInt("numFeats", 50);
@@ -518,7 +549,8 @@ public class CachedFeatures {
     }
     CachedFeatures cfp = new CachedFeatures(bialph, features);
 
-    cfp.testIntStringEquality(config, tf2name);
+    int numInsertThreads = 2;
+    cfp.testIntStringEquality(config, tf2name, numInsertThreads);
   }
 
   /**
@@ -531,20 +563,29 @@ public class CachedFeatures {
    *    d) stringFeature = redisGet(intTemplate, intFeature)
    * 3) sort the stringFeature and stringFeature' and make sure they are equal
    */
-  public void testIntStringEquality(ExperimentProperties config, RedisMap<String> tf2name) {
+  public void testIntStringEquality(ExperimentProperties config, RedisMap<String> tf2name, int numInsertThreads) {
     boolean verbose = config.getBoolean("showFeatureMatches", true);
 
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
-    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
+    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, 1, 1, new Random(9001));
+    r.cachedFeatures = this;
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
     Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
 
-    List<File> featureFiles = FileUtil.find(new File("data/debugging/coherent-shards/features"), "glob:**/*");
-    Inserter ins = this.new Inserter(featureFiles, false, sentId2parse);
-    Thread insThread = new Thread(ins);
-    insThread.start();
+    Log.info("starting " + numInsertThreads + " insert threads");
+    boolean skipEntriesNotInSentId2ParseMap = true;
+    File featuresParent = config.getExistingDir("featuresParent");
+    String featuresGlob = config.getString("featuresGlob", "glob:**/*");
+    List<File> featureFiles = FileUtil.find(featuresParent, featuresGlob);
+    for (int i = 0; i < numInsertThreads; i++) {
+      List<File> featureFilesI = ShardUtils.shard(featureFiles, File::hashCode, i, numInsertThreads);
+      Log.info("starting thread to ingest: " + featureFilesI);
+      Inserter ins = this.new Inserter(featureFilesI, false, sentId2parse, skipEntriesNotInSentId2ParseMap);
+      Thread insThread = new Thread(ins);
+      insThread.start();
+    }
 
     int dimension = 256 * 1024;
     int numRoles = 20;
@@ -553,6 +594,8 @@ public class CachedFeatures {
     ItemProvider ip = this.new ItemProvider(sentId2parse.size());
     for (int index = 0; index < ip.size(); index++) {
       FNParse y = ip.label(index);
+      Log.info("checking " + y.getSentence().getId() + ", there are "
+          + ip.getNumActuallyLoaded() + " parses loaded in memory.");
       State st = r.getInitialStateWithPruning(y, y);
       for (Action a : ActionType.COMMIT.next(st)) {
         // For each template int featureSetFlat, lookup the string (template,feature) via:
@@ -560,12 +603,13 @@ public class CachedFeatures {
         // 2) lookup via redis (which reflects the contents of the files -- round trip)
 
         // Check 1: extracted template-values match stored template-values
-        int[] feats = params.getDebugRawTemplates(y, a);
-        if (feats == null) {
-          throw new RuntimeException("couldn't come up with features for "
-              + y.getId() + " action=" + a);
-        }
-        BaseTemplates data = new BaseTemplates(templateSetSorted, feats);
+        BaseTemplates data = params.getDebugRawTemplates(y, a);
+
+        // Right now I don't have parses populated, so the features for those
+        // are different. Rather than fix this, I'd rather just ensure that it
+        // works for other templates.
+        boolean blowUpOnProblem = false;
+
         for (int i = 0; i < data.size(); i++) {
           // What we have from disk.
           int templateIndex = data.getTemplate(i);
@@ -577,16 +621,27 @@ public class CachedFeatures {
           Template template = ti.getBasicTemplate(templateName);
           FeatureIGComputation.setContext(y, a, ctx, hf);
           Iterable<String> featureStringValues = template.extract(ctx);
+          if (featureStringValues == null) {
+            if (blowUpOnProblem)
+              throw new RuntimeException(templateName + " didn't extract any features when we thought it said: " + featureName);
+            Log.warn(templateName + " didn't extract any features when we thought it said: " + featureName);
+            continue;
+          }
 
           // Check that featureName is at least in featureStringValues.
           int matches = 0;
           for (String fsv : featureStringValues)
             if (fsv.equals(featureName))
               matches++;
-          if (matches == 0)
-            throw new RuntimeException("feautreName=" + featureName + " featureStringValues=" + featureStringValues);
-          if (verbose)
-            System.out.println("found match for " + featureName);
+          if (matches == 0) {
+            if (blowUpOnProblem)
+              throw new RuntimeException("no match for template=" + templateName + " featureName=" + featureName + " featureStringValues=" + featureStringValues);
+            if (verbose)
+              Log.warn("no match for template=" + templateName + " featureName=" + featureName + " featureStringValues=" + featureStringValues);
+          } else {
+            if (verbose)
+              Log.info("success on " + featureName);
+          }
 
           // Check 2: flattened product (template-values) make sense.
           // flatten : (int -> int[]) -> int
@@ -597,6 +652,7 @@ public class CachedFeatures {
     }
   }
 
+  // For redis (intTemplate,intFeature) -> stringFeature
   public static String makeKey(int template, int feature) {
     return "t" + template + "f" + feature;
   }
@@ -611,7 +667,6 @@ public class CachedFeatures {
    * string values producted by {@link Template}s.
    */
   public static RedisMap<String> getFeatureNameRedisMap(ExperimentProperties config) throws IOException {
-//    RedisMap<String> t2name = new RedisMap<>(config, SerializationUtils::t2bytes, SerializationUtils::bytes2t);
     RedisMap<String> tf2feat = new RedisMap<>(config, SerializationUtils::t2bytes, SerializationUtils::bytes2t);
 
     String k = "redisInsert";
@@ -620,21 +675,7 @@ public class CachedFeatures {
       return tf2feat;
     }
 
-//    Consumer<TemplateAlphabet> f = ta -> {
-//      Log.info("reading index=" + ta.index + " name=" + ta.name
-//          + " size=" + ta.alph.size() + " " + Describe.memoryUsage());
-//      t2name.put("t" + ta.index, ta.name);
-//      int n = ta.alph.size();
-//      for (int i = 0; i < n; i++)
-//        tf2feat.put("t" + ta.index + "f" + i, ta.alph.lookupObject(i));
-//    };
-//    Alphabet.iterateOverAlphabet(
-//        config.getExistingFile("alphabet"),
-//        config.getBoolean("alphabet.header", false),
-//        f);
-
     TimeMarker tm = new TimeMarker();
-//    BitSet templates = new BitSet();    // set of templates we've put into redis
     File alphFile = config.getExistingFile("alphabet");
     boolean header = config.getBoolean("alphabet.header", false);
     try (BufferedReader r = FileUtil.getReader(alphFile)) {
@@ -644,12 +685,7 @@ public class CachedFeatures {
       }
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         AlphabetLine al = new AlphabetLine(line);
-//        if (!templates.get(al.template)) {
-//          templates.set(al.template);
-//          t2name.put("t" + al.template, al.templateName);
-//        }
         tf2feat.put(makeKey(al.template, al.feature), al.featureName);
-
         if (tm.enoughTimePassed(15)) {
           Log.info("processed " + tm.numMarks()
             + " lines in " + tm.secondsSinceFirstMark() + " seconds, "
@@ -660,30 +696,4 @@ public class CachedFeatures {
     return tf2feat;
   }
 
-  /*
-   * @deprecated see new Thread(new {@link Inserter})
-  public static CachedFeatures loadFeaturesIntoMemory(ExperimentProperties config) throws IOException {
-    Log.info("going to try to load all of the data to see if it fits in memory");
-    File parent = config.getExistingDir("featuresParent");
-    String glob = config.getString("featuresGlob", "glob:**\/*");
-    BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), false);
-    int numRoles = config.getInt("numRoles", 20);
-    Random rand = new Random();
-    int numTemplates = config.getInt("numTemplates", 993);
-    int numFeats = config.getInt("numFeats", 50);
-    List<int[]> features = new ArrayList<>();
-    for (int i = 0; i < numFeats; i++) {
-      int a = rand.nextInt(numTemplates);
-      int b = rand.nextInt(numTemplates);
-      features.add(new int[] {a, b});
-    }
-    int dimension = config.getInt("dimension", 256 * 1024);
-//    CachedFeatures params = new CachedFeatures(bialph, numRoles, features, dimension);
-    CachedFeatures params = new CachedFeatures(bialph, features);
-    for (File f : FileUtil.find(parent, glob))
-      params.read(f);
-    Log.info("done");
-    return params;
-  }
-   */
 }

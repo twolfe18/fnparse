@@ -30,6 +30,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -77,6 +78,10 @@ public class DeterministicRolePruning
 
     // Bottom up random merges (baseline)
     RANDOM,
+
+    // Take the spans which have features computed for them. When the features
+    // where computed, they used some other pruning heuristic above.
+    CACHED_FEATURES,
   }
 
   public static boolean PEDANTIC = false;
@@ -87,6 +92,9 @@ public class DeterministicRolePruning
   //private ConcreteStanfordWrapper parser;
   private Function<Sentence, ConstituencyParse> cParser;
   private Function<Sentence, DependencyParse> dParser;
+
+  // May be null if mode != CACHED_FEATURES
+  public CachedFeatures cachedFeatures;
 
   //public DeterministicRolePruning(Mode mode, ConcreteStanfordWrapper parser) {
   public DeterministicRolePruning(
@@ -233,7 +241,10 @@ public class DeterministicRolePruning
       if (output == null) {
         Sentence sent = input.getSentence();
         Map<FrameInstance, List<Span>> possibleSpans = new HashMap<>();
-        if (mode == Mode.RANDOM) {
+        if (mode == Mode.CACHED_FEATURES) {
+          assert cachedFeatures != null : "need to provide an instance of CachedFeatures";
+          possibleSpans = cachedFeatures.spansWithFeatures(input);
+        } else if (mode == Mode.RANDOM) {
           Set<Span> cons = new HashSet<>();
           RandomBracketing brack = new RandomBracketing(new Random(9001));
           brack.bracket(input.getSentence().size(), cons);

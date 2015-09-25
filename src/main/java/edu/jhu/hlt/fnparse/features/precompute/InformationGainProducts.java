@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGain.TemplateIG;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -479,7 +480,7 @@ public class InformationGainProducts {
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
       + " templateAlphIsBialph=" + templateAlphIsBialph);
-    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph);
+    BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
 
     // Find the top K unigrams
     List<String[]> products = filterByShard(getProductsSorted(config, bialph), config);

@@ -1205,7 +1205,8 @@ public class RerankerTrainer {
 
       if (propbank) {
         LOG.info("[main] running on propbank data");
-        ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
+        boolean noParses = config.getBoolean("rerankerTrainer.noParsesForPropbank", false);
+        ParsePropbankData.Redis propbankAutoParses = noParses ? null : new ParsePropbankData.Redis(config);
         PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
         pbr.setKeep(trainer.keep);
         if (realTest) {
