@@ -11,9 +11,21 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 
+/**
+ * Convenience class for doing find/search and replace in a file. You provide
+ * the find function and the replace function. Only allows replacement functions
+ * which are total functions (i.e. you cannot do any filtering).
+ *
+ * @author travis
+ */
 public class FindReplace {
 
   private Function<String, Iterator<IntPair>> find;
+
+  /**
+   * Must not return null -- no convenient way to define behavior if
+   * null/filtering is allowed
+   */
   private Function<String, String> replace;
 
   /**
@@ -34,8 +46,11 @@ public class FindReplace {
     while (pos.hasNext()) {
       IntPair p = pos.next();
       assert prev <= p.first && p.first < p.second;
+      String replacement = replace.apply(input.substring(p.first, p.second));
+      if (replacement == null)
+        throw new RuntimeException("replace() should not return null or else weird behavior results");
       output.append(input.substring(prev, p.first));
-      output.append(replace.apply(input.substring(p.first, p.second)));
+      output.append(replacement);
       prev = p.second;
     }
     output.append(input.substring(prev));
