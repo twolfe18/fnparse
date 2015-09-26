@@ -44,7 +44,7 @@ public class InformationGain implements Serializable, LineByLine {
 
   public static class TemplateIG implements Serializable {
     private static final long serialVersionUID = 1287953772086645433L;
-    public static double ADD_LAMBDA_SMOOTHING = 0.1;
+    public static double ADD_LAMBDA_SMOOTHING = 0.5;
     public static boolean FULL_BAYESIAN_H = false;
     private int index;
     private IntIntDenseVector cy, cx;
