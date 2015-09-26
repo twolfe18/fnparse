@@ -2,7 +2,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=20G
+#$ -l mem_free=23G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
@@ -15,7 +15,7 @@ set -e
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
 
-if [[ $# != 9 ]]; then
+if [[ $# != 10 ]]; then
   echo "please provide:"
   echo "1) shard"
   echo "2) number of shards"
@@ -24,8 +24,9 @@ if [[ $# != 9 ]]; then
   echo "5) feature parent directory, e.g \$WD/coherent-shards/features"
   echo "6) feature files glob, e.g. \"glob:**/*\""
   echo "7) alphabet -- can be configured to take bialphs (TODO)"
-  echo "8) an output file to dump template product (i.e. feature) IGs to"
-  echo "9) a JAR file"
+  echo "8) a file containing sentence ids to ignore"
+  echo "9) an output file to dump template product (i.e. feature) IGs to"
+  echo "10) a JAR file"
   echo "where:"
   echo "a) shards sub-select over products (not data)"
   echo "b) feature file should be coherent -- share a single alphabet (provided)"
@@ -46,12 +47,15 @@ FEATS_PARENT=$5
 FEATS_GLOB=$6
 ALPH=$7         # Can configure if this needs to be a bialph, but should be an alph as is
 
+# list of sentence ids (i.e. of the test set)
+IGNORE_SENT_IDS=$8
+
 # Output
-TEMPLATE_PROD_IG_OUTPUT=$8
+TEMPLATE_PROD_IG_OUTPUT=$9
 
-JAR=$9
+JAR=${10}
 
-java -Xmx20G -cp $JAR \
+java -Xmx22G -cp $JAR \
   -Dshard=$SHARD \
   -DnumShards=$NUM_SHARDS \
   -DnumProducts=$FEATS_PER_SHARD \
@@ -61,6 +65,8 @@ java -Xmx20G -cp $JAR \
   -DtemplateIsBialph=false \
   -DtemplateIGs=$TEMPLATE_IG_FILE \
   -Doutput=$TEMPLATE_PROD_IG_OUTPUT \
+  -DignoreSentenceIds=$IGNORE_SENT_IDS \
+  -DhashingTrickDim=`echo "256 * 1024" | bc` \
   edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
 
 echo "ret code: $?"

@@ -60,12 +60,20 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-
 
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 
-# TODO Need to utilize the ignoreSentenceIds option in InformationGain and
-# InformationGainProducts to ignore the test set while computing IG.
+# 0) Find the sentence ids of the test set and don't use these for computing information gain
+TEST_SET_SENT_IDS="$WD/test-set-sentence-ids.txt"
+mvn exec:java \
+  -Dexec.mainClass=edu.jhu.hlt.fnparse.features.precompute.DumpSentenceIds \
+  -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
+  -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
+  -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
+  -Ddata=propbank \
+  -Dpart=test \
+  -Doutput=$TEST_SET_SENT_IDS
 
 # 1) For each template
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 mkdir -p $WD/ig/templates
 mkdir -p $WD/ig/templates/sge-logs
 
@@ -133,8 +141,8 @@ PROD_IG_WD=$WD/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
 cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
-NUM_SHARDS=200
-FEATS_PER_SHARD=500
+NUM_SHARDS=300
+FEATS_PER_SHARD=300
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
@@ -145,9 +153,17 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $WD/coherent-shards/features \
       "glob:**/*" \
       $WD/coherent-shards/alphabet.txt.gz \
+      $TEST_SET_SENT_IDS \
       $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
       $PROD_IG_WD/fnparse.jar
 done
+
+
+
+############################################################################################
+### RUN THE ACTUAL EXPERIMENTS
+
+
 
 
 # vim: set syntax=sh
