@@ -247,6 +247,7 @@ public class CachedFeatures {
     private int eventualSize;
     private boolean train;
     public ItemProvider(int eventualSize, boolean train) {
+      Log.info("eventualSize=" + eventualSize + " train=" + train);
       this.eventualSize = eventualSize;
       this.train = train;
     }
@@ -569,7 +570,7 @@ public class CachedFeatures {
     Log.info("templateSet.cardinality=" + templateSet.cardinality());
     Log.info("debugFeatures.size=" + debugFeatures.size());
     Log.info("debugKeys.size=" + debugKeys.size());
-    Log.info("done");
+    Log.info("done, train.size=" + loadedTrainItems.size() + " test.size=" + loadedTestItems.size());
   }
 
 

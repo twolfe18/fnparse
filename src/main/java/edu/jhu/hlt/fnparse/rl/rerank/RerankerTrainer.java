@@ -713,7 +713,8 @@ public class RerankerTrainer {
         conf.tHammingTrain.stop();
 
         if (showViolation && iter % 10 == 0) {
-          LOG.info("[main] iter=" + iter + " trainViolation=" + violation
+          LOG.info("[main] i=" + i + " iter=" + iter
+              + " trainViolation=" + violation
               + " lrVal=" + conf.learningRate.learningRate());
         }
 
