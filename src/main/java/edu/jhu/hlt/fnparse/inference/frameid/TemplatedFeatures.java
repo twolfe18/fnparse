@@ -137,10 +137,17 @@ public abstract class TemplatedFeatures implements Serializable {
   }
 
   /** Take a full template string and break it into independent templates */
-  private static List<String> tokenizeTemplates(String templateString)
+  public static List<String> tokenizeTemplates(String templateString)
       throws TemplateDescriptionParsingException {
     List<String> toks = new ArrayList<>();
     for (String s : templateString.split("\\+"))
+      toks.add(s.trim());
+    return toks;
+  }
+
+  public static List<String> tokenizeProducts(String productOfTemplatesString) {
+    List<String> toks = new ArrayList<>();
+    for (String s : productOfTemplatesString.split("\\*"))
       toks.add(s.trim());
     return toks;
   }
@@ -149,22 +156,20 @@ public abstract class TemplatedFeatures implements Serializable {
   private static Template parseTemplateToken(String templateToken)
       throws TemplateDescriptionParsingException {
     // Normalize
-    String[] tokens = templateToken.split("\\*");
-    int n = tokens.length;
-    for (int i = 0; i < n; i++)
-      tokens[i] = tokens[i].trim();
+    List<String> tokens = tokenizeProducts(templateToken);
 
     // Holds the templates
     BasicFeatureTemplates.Indexed bft = BasicFeatureTemplates.getInstance();
 
     // Lookup Templates
+    int n = tokens.size();
     Template[] templates = new Template[n];
     for (int i = 0; i < n; i++) {
       if (i == 0) {
-        templates[i] = bft.getStageTemplate(tokens[i]);
+        templates[i] = bft.getStageTemplate(tokens.get(i));
         if (templates[i] == null) {
           // you must have meant "<template>-<syntax_mode>"
-          String[] tt = tokens[i].split("-");
+          String[] tt = tokens.get(i).split("-");
           if (tt.length == 2
               && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
             templates[i] = bft.getStageTemplate(tt[0]);
@@ -172,14 +177,14 @@ public abstract class TemplatedFeatures implements Serializable {
         }
       }
       if (templates[i] == null)
-        templates[i] = bft.getBasicTemplate(tokens[i]);
+        templates[i] = bft.getBasicTemplate(tokens.get(i));
     }
 
     // Verify all the templates
     for (int i = 0; i < n; i++) {
       if (templates[i] == null) {
         throw new IllegalArgumentException(
-            "couldn't parse [" + i + "]: " + tokens[i]);
+            "couldn't parse [" + i + "]: " + tokens.get(i));
       }
     }
 

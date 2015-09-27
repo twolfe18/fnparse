@@ -47,6 +47,11 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -76,6 +81,7 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
@@ -266,6 +272,15 @@ public class RerankerTrainer {
    * of all the parameter pieces, and can be used to deserialize everything.
    */
   public Params.NetworkAvg networkParams;   // wrapper around Params.Glue
+
+  /**
+   * {@link CachedFeatures} forms a module which is used in more than one place
+   * (e.g. as an {@link ItemProvider} and as for {@link DeterministicRolePruning}.
+   * As such, it needs to be used in multiple parts of the setup and is difficult
+   * to pass from function to function. If this field is non-null, then every usage
+   * of this module should be assumed to in use.
+   */
+  public CachedFeatures cachedFeatures;
 
   // For debugging
   public boolean bailOutOfTrainingASAP = false;
@@ -998,8 +1013,60 @@ public class RerankerTrainer {
       fs = getFeatureSetFromFileNew(otherFs);
     LOG.info("using featureSet=" + fs);
 
-    // This is the path that will be executed when not debugging
-    if (useEmbeddingParams) {
+    // Enable the CachedFeatures module
+    if (config.getBoolean("useCachedFeatures", false)) {
+      Log.info("[main] using cached features!");
+
+      // stringTemplate <-> intTemplate and other stuff like template cardinality
+      BiAlph bialph = new BiAlph(
+          config.getExistingFile("cachedFeatures.bialph"),
+          LineMode.valueOf(config.getString("cachedFeatures.bialph.lineMode")));
+
+      // Convert string feature set to ints for CachedFeatures (using BiAlph)
+      List<int[]> features = new ArrayList<>();
+      for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
+        List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
+        int n = strTemplates.size();
+        int[] intTemplates = new int[n];
+        for (int i = 0; i < n; i++) {
+          int t = bialph.mapTemplate(strTemplates.get(i));
+          assert t >= 0;
+          intTemplates[i] = t;
+        }
+        features.add(intTemplates);
+      }
+
+      // Instantiate the module (holder of the data)
+      trainer.cachedFeatures = new CachedFeatures(bialph, features);
+
+      // Load the sentId -> FNParse mapping (cached features only gives you sentId and features)
+      trainer.cachedFeatures.sentIdsAndFNParses = new PropbankFNParses(config);
+      Log.info("[main] train.size=" + trainer.cachedFeatures.sentIdsAndFNParses.trainSize()
+          + " test.size=" + trainer.cachedFeatures.sentIdsAndFNParses.testSize());
+
+      // Start loading the data in the background
+      int numDataLoadThreads = config.getInt("cachedFeatures.numDataLoadThreads", 1);
+      Log.info("[main] loading data in the background with "
+          + numDataLoadThreads + " extra threads");
+      List<File> featureFiles = FileUtil.find(
+          config.getExistingDir("cachedFeatures.featuresParent"),
+          config.getString("cachedFeatures.featuresGlob", "glob:**/*"));
+      assert numDataLoadThreads > 0;
+      boolean readForever = false;  // only useful with reservoir sampling, not doing that
+      boolean skipEntriesNotInSentId2ParseMap = false;
+      for (int i = 0; i < numDataLoadThreads; i++) {
+        List<File> rel = ShardUtils.shard(featureFiles, f -> f.getPath().hashCode(), i, numDataLoadThreads);
+        Thread t = new Thread(trainer.cachedFeatures.new Inserter(rel, readForever, skipEntriesNotInSentId2ParseMap));
+        t.start();
+      }
+
+      // Setup the params
+      int dimension = config.getInt("hashingTrickDim", 1 * 1024 * 1024);
+      int numRoles = config.getInt("numRoles", 20);
+      trainer.statelessParams = trainer.cachedFeatures.new Params(dimension, numRoles);
+
+    } else if (useEmbeddingParams) {
+      // This is the path that will be executed when not debugging
       LOG.info("[main] using embedding params");
       int embeddingSize = 2;
       EmbeddingParams ep = new EmbeddingParams(embeddingSize, l2Penalty, trainer.rand);
@@ -1203,57 +1270,64 @@ public class RerankerTrainer {
       else
         FrameIndex.getFrameNet();
 
-      if (propbank) {
-        LOG.info("[main] running on propbank data");
-        boolean noParses = config.getBoolean("rerankerTrainer.noParsesForPropbank", false);
-        ParsePropbankData.Redis propbankAutoParses = noParses ? null : new ParsePropbankData.Redis(config);
-        PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
-        pbr.setKeep(trainer.keep);
-        if (realTest) {
-          LOG.info("[main] reading real propbank data...");
-          if (canSkipTrainData) {
-            train = new ItemProvider.ParseWrapper(Collections.emptyList());
-          } else {
-            train = pbr.getTrainData();
-          }
-          test = pbr.getTestData();
-        } else {
-          LOG.info("[main] reading dev propbank data...");
-          if (canSkipTrainData) {
-            train = new ItemProvider.ParseWrapper(Collections.emptyList());
-          } else {
-            train = pbr.getTrainData();
-          }
-          test = pbr.getDevData();
-        }
-      } else if (realTest) {
-        LOG.info("[main] running on framenet data");
-        if (canSkipTrainData) {
-          train = new ItemProvider.ParseWrapper(Collections.emptyList());
-        } else {
-          train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-              FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
-        }
-        test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-            FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
+      if (trainer.cachedFeatures != null) {
+        Log.info("[main] using CachedFeatures to serve up FNParses");
+        PropbankFNParses p = trainer.cachedFeatures.sentIdsAndFNParses;
+        train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), true);
+        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false);
       } else {
-        LOG.info("[main] running on framenet data");
-        ItemProvider trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
-            FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
-        if (testOnTrain) {
-          train = trainAndTest;
-          test = trainAndTest;
-          trainer.pretrainConf.tuneOnTrainingData = true;
-          trainer.pretrainConf.maxDev = 25;
-          trainer.trainConf.tuneOnTrainingData = true;
-          trainer.trainConf.maxDev = 25;
+        if (propbank) {
+          LOG.info("[main] running on propbank data");
+          boolean noParses = config.getBoolean("rerankerTrainer.noParsesForPropbank", false);
+          ParsePropbankData.Redis propbankAutoParses = noParses ? null : new ParsePropbankData.Redis(config);
+          PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+          pbr.setKeep(trainer.keep);
+          if (realTest) {
+            LOG.info("[main] reading real propbank data...");
+            if (canSkipTrainData) {
+              train = new ItemProvider.ParseWrapper(Collections.emptyList());
+            } else {
+              train = pbr.getTrainData();
+            }
+            test = pbr.getTestData();
+          } else {
+            LOG.info("[main] reading dev propbank data...");
+            if (canSkipTrainData) {
+              train = new ItemProvider.ParseWrapper(Collections.emptyList());
+            } else {
+              train = pbr.getTrainData();
+            }
+            test = pbr.getDevData();
+          }
+        } else if (realTest) {
+          LOG.info("[main] running on framenet data");
+          if (canSkipTrainData) {
+            train = new ItemProvider.ParseWrapper(Collections.emptyList());
+          } else {
+            train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+                FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+          }
+          test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+              FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
         } else {
-          double propTest = 0.25;
-          int maxTest = 99999;
-          ItemProvider.TrainTestSplit trainTest =
-              new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, trainer.rand);
-          train = trainTest.getTrain();
-          test = trainTest.getTest();
+          LOG.info("[main] running on framenet data");
+          ItemProvider trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+              FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+          if (testOnTrain) {
+            train = trainAndTest;
+            test = trainAndTest;
+            trainer.pretrainConf.tuneOnTrainingData = true;
+            trainer.pretrainConf.maxDev = 25;
+            trainer.trainConf.tuneOnTrainingData = true;
+            trainer.trainConf.maxDev = 25;
+          } else {
+            double propTest = 0.25;
+            int maxTest = 99999;
+            ItemProvider.TrainTestSplit trainTest =
+                new ItemProvider.TrainTestSplit(trainAndTest, propTest, maxTest, trainer.rand);
+            train = trainTest.getTrain();
+            test = trainTest.getTest();
+          }
         }
       }
 

@@ -9,10 +9,12 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
@@ -77,12 +79,16 @@ public class CachedFeatures {
   public boolean simplePruneFeatures = true;
 
   public IntArrayList debugFeatures;
-//  public List<CacheKey> debugKeys;
   public List<FNParse> debugKeys;
   public boolean keepBoth, keepKeys, keepValues;
 
-  private java.util.Vector<Item> loadedItems;
+  private java.util.Vector<Item> loadedTrainItems;
+  private java.util.Vector<Item> loadedTestItems;
   private Item lastServedByItemProvider;
+
+  // This is used by the ItemProvider part of this module. Nice to have as a
+  // field here so that there is less book-keeping in RerankerTrainer.
+  public PropbankFNParses sentIdsAndFNParses;
 
   /** A parse and its features */
   public static final class Item {
@@ -150,21 +156,17 @@ public class CachedFeatures {
 
   /**
    * A runnable/thread whose only job is to read parses from disk and put them
-   * into loadedItems.
+   * into CachedFeature's data structures in memory.
    */
   public class Inserter implements Runnable {
-    private Map<String, FNParse> sentId2parse;
     private ArrayDeque<File> readFrom;
     public boolean readForever;
     public boolean skipEntriesNotInSentId2ParseMap;
-    /**
-     * @param sentId2parse is needed because this module has an ItemProvider
-     * implementation, which needs to know about FNParses.
-     */
-    public Inserter(Iterable<File> files, boolean readForever, Map<String, FNParse> sentId2parse, boolean skipEntriesNotInSentId2ParseMap) {
-      Log.info("files=" + files + " readForever=" + readForever + " sentId2parse.size=" + sentId2parse.size());
+    public Inserter(Iterable<File> files, boolean readForever, boolean skipEntriesNotInSentId2ParseMap) {
+      Log.info("files=" + files + " readForever=" + readForever
+          + " sentId2parse.size=" + sentIdsAndFNParses.sentId2parse.size()
+          + " testSetSentIds.size=" + sentIdsAndFNParses.testSetSentIds.size());
       this.readForever = readForever;
-      this.sentId2parse = sentId2parse;
       this.skipEntriesNotInSentId2ParseMap = skipEntriesNotInSentId2ParseMap;
       this.readFrom = new ArrayDeque<>();
       for (File f : files)
@@ -176,8 +178,11 @@ public class CachedFeatures {
         File f = readFrom.pollFirst();
         Log.info("about to insert items from " + f.getPath());
         try {
-          // This adds to loadedItems
-          CachedFeatures.this.read(f, sentId2parse, skipEntriesNotInSentId2ParseMap);
+          // This adds to loaded(Train|Test)Items
+          CachedFeatures.this.read(f,
+              sentIdsAndFNParses.testSetSentIds,
+              sentIdsAndFNParses.sentId2parse,
+              skipEntriesNotInSentId2ParseMap);
         } catch (IOException e) {
           e.printStackTrace();
         }
@@ -189,41 +194,64 @@ public class CachedFeatures {
       Log.info("done reading all files");
     }
   }
-  public static Map<String, FNParse> getPropbankSentId2Parse(ExperimentProperties config) {
-    // This can be null since the only reason we need the parses is for
-    // computing features, which we've already done.
-    // NOT TRUE! These parses were used for DetermnisticRolePruning, but I have
-    // added a mode to just use CachedFeautres instead of parses.
-//    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
-    ParsePropbankData.Redis propbankAutoParses = null;
-    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
 
-    Map<String, FNParse> map = new HashMap<>();
-    for (FNParse y : pbr.getTrainData()) {
-      FNParse old = map.put(y.getSentence().getId(), y);
-      assert old == null;
+  public static class PropbankFNParses {
+    public Map<String, FNParse> sentId2parse;
+    public Set<String> testSetSentIds;
+    public PropbankFNParses(ExperimentProperties config) {
+      Log.info("loading sentId->FNparse mapping...");
+      // This can be null since the only reason we need the parses is for
+      // computing features, which we've already done.
+      // NOT TRUE! These parses were used for DetermnisticRolePruning, but I have
+      // added a mode to just use CachedFeautres instead of parses.
+      // => This has been mitigated by adding some cooperation between DetermnisticRolePruning
+      //    and CachedFeatures.
+      //    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
+      ParsePropbankData.Redis propbankAutoParses = null;
+      PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+
+      sentId2parse = new HashMap<>();
+      for (FNParse y : pbr.getTrainData()) {
+        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+        assert old == null;
+      }
+      for (FNParse y : pbr.getDevData()) {
+        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+        assert old == null;
+      }
+      testSetSentIds = new HashSet<>();
+      for (FNParse y : pbr.getTestData()) {
+        boolean added = testSetSentIds.add(y.getSentence().getId());
+        assert added;
+        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+        assert old == null;
+      }
+      Log.info("done");
     }
-    for (FNParse y : pbr.getDevData()) {
-      FNParse old = map.put(y.getSentence().getId(), y);
-      assert old == null;
+    public int trainSize() {
+      return sentId2parse.size() - testSetSentIds.size();
     }
-    for (FNParse y : pbr.getTestData()) {
-      FNParse old = map.put(y.getSentence().getId(), y);
-      assert old == null;
+    public int testSize() {
+      return testSetSentIds.size();
     }
-    return map;
   }
 
   /**
-   * Reads from loadedItems. Not proper in this sense: size() and 
+   * Reads from either loadedTrainItems or loadedTestItems. Not proper in this
+   * sense: repeated calls to label(i) may not return the same value, even if i
+   * doesn't change. Does not support calls to items(i) because 1) this would
+   * introduce further synchronization problems with label(i) and 2) it is not
+   * needed, use {@link DeterministicRolePruning}.
    */
   public class ItemProvider implements edu.jhu.hlt.fnparse.rl.rerank.ItemProvider {
-    private int intendentSize;
-    public ItemProvider(int intendedSize) {
-      this.intendentSize = intendedSize;
+    private int eventualSize;
+    private boolean train;
+    public ItemProvider(int eventualSize, boolean train) {
+      this.eventualSize = eventualSize;
+      this.train = train;
     }
     public int getNumActuallyLoaded() {
-      return loadedItems.size();
+      return train ? loadedTrainItems.size() : loadedTestItems.size();
     }
     @Override
     public Iterator<FNParse> iterator() {
@@ -231,22 +259,24 @@ public class CachedFeatures {
     }
     @Override
     public int size() {
-      return intendentSize;
+      return eventualSize;
     }
     @Override
     public FNParse label(int i) {
-      assert i >= 0 && i < intendentSize;
+      assert i >= 0 && i < eventualSize;
+      java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
       int n;
       while (true) {
-        n = CachedFeatures.this.loadedItems.size();
+        n = li.size();
         if (n < 1) {
+          Log.info("sleeping because there are no labels to give out yet");
           try { Thread.sleep(1 * 1000); }
           catch (Exception e) { throw new RuntimeException(e); }
         } else {
           break;
         }
       }
-      lastServedByItemProvider = loadedItems.get(i % n);
+      lastServedByItemProvider = li.get(i % n);
       return lastServedByItemProvider.parse;
     }
     @Override
@@ -412,7 +442,8 @@ public class CachedFeatures {
   public CachedFeatures(BiAlph bialph, List<int[]> features) {
     this.bialph = bialph;
     this.template2cardinality = bialph.makeTemplate2Cardinality();
-    this.loadedItems = new java.util.Vector<>();
+    this.loadedTrainItems = new java.util.Vector<>();
+    this.loadedTestItems = new java.util.Vector<>();
     this.lastServedByItemProvider = null;
     this.debugFeatures = new IntArrayList();
     this.debugKeys = new ArrayList<>();
@@ -442,6 +473,8 @@ public class CachedFeatures {
    * Adds the features from the given file to this modules in-memory store.
    * NOTE: You should probably not call this directly, but rather through a
    * thread running an {@link Inserter}.
+   * @param testSentIds is the set of ids that should go in the test set. The
+   * complement of this set is interpretted as the set of training sentence ids.
    * @param sentId2parse provides the actual {@link FNParse}s, as we only read
    * the sentence ids out of the given file, and there are a few areas in the
    * program where we need the {@link FNParse} in addition to the features.
@@ -451,7 +484,10 @@ public class CachedFeatures {
    * found in the feature file for which there is no sentId -> {@link FNParse}
    * mapping, an exception is thrown.
    */
-  private void read(File featureFile, Map<String, FNParse> sentId2parse, boolean skipEntriesNotInSentId2ParseMap) throws IOException {
+  private void read(File featureFile,
+      Set<String> testSentIds,
+      Map<String, FNParse> sentId2parse,
+      boolean skipEntriesNotInSentId2ParseMap) throws IOException {
     Log.info("reading features from " + featureFile.getPath());
     OrderStatistics<Integer> nnz = new OrderStatistics<>();
     TimeMarker tm = new TimeMarker();
@@ -478,8 +514,12 @@ public class CachedFeatures {
         nnz.add(data.getFeatures().length);
 
         if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
-          if (cur != null)
-            loadedItems.add(cur);
+          if (cur != null) {
+            if (testSentIds.contains(cur.parse.getSentence().getId()))
+              loadedTestItems.add(cur);
+            else
+              loadedTrainItems.add(cur);
+          }
           FNParse parse = sentId2parse.get(t.sentId);
           if (parse == null) {
             if (skipEntriesNotInSentId2ParseMap) {
@@ -518,7 +558,10 @@ public class CachedFeatures {
         }
       }
     }
-    loadedItems.add(cur);
+    if (testSentIds.contains(cur.parse.getSentence().getId()))
+      loadedTestItems.add(cur);
+    else
+      loadedTrainItems.add(cur);
     Log.info("numLines=" + numLines);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean());
     Log.info("nnz/template=" + (nnz.getMean() / templateSetSorted.length));
@@ -572,7 +615,8 @@ public class CachedFeatures {
     r.cachedFeatures = this;
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
-    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
+//    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
+    sentIdsAndFNParses = new PropbankFNParses(config);
 
     Log.info("starting " + numInsertThreads + " insert threads");
     boolean skipEntriesNotInSentId2ParseMap = true;
@@ -582,7 +626,7 @@ public class CachedFeatures {
     for (int i = 0; i < numInsertThreads; i++) {
       List<File> featureFilesI = ShardUtils.shard(featureFiles, File::hashCode, i, numInsertThreads);
       Log.info("starting thread to ingest: " + featureFilesI);
-      Inserter ins = this.new Inserter(featureFilesI, false, sentId2parse, skipEntriesNotInSentId2ParseMap);
+      Inserter ins = this.new Inserter(featureFilesI, false, skipEntriesNotInSentId2ParseMap);
       Thread insThread = new Thread(ins);
       insThread.start();
     }
@@ -591,7 +635,7 @@ public class CachedFeatures {
     int numRoles = 20;
     Params params = this.new Params(dimension, numRoles);
 
-    ItemProvider ip = this.new ItemProvider(sentId2parse.size());
+    ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), true);
     for (int index = 0; index < ip.size(); index++) {
       FNParse y = ip.label(index);
       Log.info("checking " + y.getSentence().getId() + ", there are "
