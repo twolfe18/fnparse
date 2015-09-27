@@ -176,7 +176,7 @@ public class CachedFeatures {
     public void run() {
       while (!readFrom.isEmpty()) {
         File f = readFrom.pollFirst();
-        Log.info("about to insert items from " + f.getPath());
+        Log.info("about to insert items from " + f.getPath() + " numLeft=" + readFrom.size());
         try {
           // This adds to loaded(Train|Test)Items
           CachedFeatures.this.read(f,
@@ -563,14 +563,16 @@ public class CachedFeatures {
       loadedTestItems.add(cur);
     else
       loadedTrainItems.add(cur);
-    Log.info("numLines=" + numLines);
-    Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean());
-    Log.info("nnz/template=" + (nnz.getMean() / templateSetSorted.length));
+    Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean()
+        + " nnz/template=" + (nnz.getMean() / templateSetSorted.length));
     Log.info("templateSetSorted.length=" + templateSetSorted.length);
     Log.info("templateSet.cardinality=" + templateSet.cardinality());
-    Log.info("debugFeatures.size=" + debugFeatures.size());
-    Log.info("debugKeys.size=" + debugKeys.size());
-    Log.info("done, train.size=" + loadedTrainItems.size() + " test.size=" + loadedTestItems.size());
+    if (keepValues)
+      Log.info("debugFeatures.size=" + debugFeatures.size());
+    if (keepKeys)
+      Log.info("debugKeys.size=" + debugKeys.size());
+    Log.info("done reading " + numLines + " lines, train.size="
+        + loadedTrainItems.size() + " test.size=" + loadedTestItems.size());
   }
 
 
