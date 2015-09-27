@@ -49,6 +49,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
@@ -1039,8 +1040,9 @@ public class RerankerTrainer {
       trainer.cachedFeatures = new CachedFeatures(bialph, features);
 
       // Load the sentId -> FNParse mapping (cached features only gives you sentId and features)
-      Map<String, FNParse> sentId2parse =
-          CachedFeatures.getPropbankSentId2Parse(config);
+      trainer.cachedFeatures.sentIdsAndFNParses = new PropbankFNParses(config);
+      Log.info("[main] train.size=" + trainer.cachedFeatures.sentIdsAndFNParses.trainSize()
+          + " test.size=" + trainer.cachedFeatures.sentIdsAndFNParses.testSize());
 
       // Start loading the data in the background
       int numDataLoadThreads = config.getInt("cachedFeatures.numDataLoadThreads", 1);
@@ -1054,7 +1056,7 @@ public class RerankerTrainer {
       boolean skipEntriesNotInSentId2ParseMap = false;
       for (int i = 0; i < numDataLoadThreads; i++) {
         List<File> rel = ShardUtils.shard(featureFiles, f -> f.getPath().hashCode(), i, numDataLoadThreads);
-        Thread t = new Thread(trainer.cachedFeatures.new Inserter(rel, readForever, sentId2parse, skipEntriesNotInSentId2ParseMap));
+        Thread t = new Thread(trainer.cachedFeatures.new Inserter(rel, readForever, skipEntriesNotInSentId2ParseMap));
         t.start();
       }
 
@@ -1269,15 +1271,10 @@ public class RerankerTrainer {
         FrameIndex.getFrameNet();
 
       if (trainer.cachedFeatures != null) {
-        // If we are using cached features, then we don't need to worry about
-        // which data set we're pulling from, just load the data from a file.
-        
-//        train = trainer.cachedFeatures.new ItemProvider(intendedSize)
-        throw new RuntimeException("implement me");
-        
-        // Do string-feature-set-in-file => int-feature-set-in-list mapping
-        // First figure out where features are loaded from disk.
-        
+        Log.info("[main] using CachedFeatures to serve up FNParses");
+        PropbankFNParses p = trainer.cachedFeatures.sentIdsAndFNParses;
+        train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), true);
+        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false);
       } else {
         if (propbank) {
           LOG.info("[main] running on propbank data");
