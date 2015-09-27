@@ -114,6 +114,7 @@ public class Reranker implements Serializable {
       Params.Stateless thetaStateless,
       Params.PruneThreshold tauParams,
       DeterministicRolePruning.Mode argPruningMode,
+      CachedFeatures cachedFeatures,
       int trainBeamWidth,
       int testBeamWidth,
       Random rand) {
@@ -123,6 +124,7 @@ public class Reranker implements Serializable {
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
     this.argPruningMode = argPruningMode;
+    this.cachedFeatures = cachedFeatures;
     this.trainBeamWidth = trainBeamWidth;
     this.testBeamWidth = testBeamWidth;
     this.rand = rand;

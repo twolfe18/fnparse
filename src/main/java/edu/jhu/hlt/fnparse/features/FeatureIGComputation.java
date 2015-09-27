@@ -101,7 +101,7 @@ public class FeatureIGComputation {
 
   public void run() throws TemplateDescriptionParsingException {
 
-    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, 1, 1, new Random(9001));
+    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
     Counts<String> cyx = new Counts<>();
     Counts<String> cy = new Counts<>();
     Counts<String> cx = new Counts<>();

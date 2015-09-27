@@ -614,8 +614,7 @@ public class CachedFeatures {
 
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
-    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, 1, 1, new Random(9001));
-    r.cachedFeatures = this;
+    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, new Random(9001));
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
 //    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);

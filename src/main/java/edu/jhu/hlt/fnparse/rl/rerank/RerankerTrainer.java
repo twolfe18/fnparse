@@ -437,11 +437,11 @@ public class RerankerTrainer {
     assert pretrainConf.trainBeamSize == trainConf.trainBeamSize;
     assert pretrainConf.testBeamSize == trainConf.testBeamSize;
     return new Reranker(
-        //Params.Stateful.NONE,
         statefulParams,
         statelessParams,
         tauParams,
         trainConf.argPruningMode,
+        cachedFeatures,
         pretrainConf.trainBeamSize,
         pretrainConf.testBeamSize,
         rand);
@@ -1477,6 +1477,7 @@ public class RerankerTrainer {
             glue.getStateless(),
             glue.getTau(),
             trainer.trainConf.argPruningMode,
+            trainer.cachedFeatures,
             trainer.trainConf.trainBeamSize,
             trainer.trainConf.testBeamSize,
             trainer.rand);
