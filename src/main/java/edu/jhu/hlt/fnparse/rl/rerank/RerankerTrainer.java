@@ -841,10 +841,9 @@ public class RerankerTrainer {
         LOG.info("[hammingTrainBatch] running serial");
       for (int idx : batch) {
         FNParse y = ip.label(idx);
-        List<Item> rerank = ip.items(idx);
         State init = useSyntaxSpanPruning
             ? r.getInitialStateWithPruning(y, y)
-            : State.initialState(y, rerank);
+            : State.initialState(y, ip.items(idx));
         if (verbose)
           LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
