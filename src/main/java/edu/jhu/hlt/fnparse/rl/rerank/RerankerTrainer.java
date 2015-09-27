@@ -1065,6 +1065,10 @@ public class RerankerTrainer {
       int numRoles = config.getInt("numRoles", 20);
       trainer.statelessParams = trainer.cachedFeatures.new Params(dimension, numRoles);
 
+      // Make sure that DeterministicRolePruning knows about CachedFeatures
+      trainer.pretrainConf.argPruningMode = Mode.CACHED_FEATURES;
+      trainer.trainConf.argPruningMode = Mode.CACHED_FEATURES;
+
     } else if (useEmbeddingParams) {
       // This is the path that will be executed when not debugging
       LOG.info("[main] using embedding params");
