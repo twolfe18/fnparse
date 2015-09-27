@@ -565,8 +565,8 @@ public class CachedFeatures {
       loadedTrainItems.add(cur);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean()
         + " nnz/template=" + (nnz.getMean() / templateSetSorted.length));
-    Log.info("templateSetSorted.length=" + templateSetSorted.length);
-    Log.info("templateSet.cardinality=" + templateSet.cardinality());
+    Log.info("templateSetSorted.length=" + templateSetSorted.length
+        + " templateSet.cardinality=" + templateSet.cardinality());
     if (keepValues)
       Log.info("debugFeatures.size=" + debugFeatures.size());
     if (keepKeys)

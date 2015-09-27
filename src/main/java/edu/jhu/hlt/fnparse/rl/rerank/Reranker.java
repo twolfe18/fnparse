@@ -44,6 +44,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
@@ -116,6 +117,9 @@ public class Reranker implements Serializable {
       int trainBeamWidth,
       int testBeamWidth,
       Random rand) {
+    Log.info("argPruningMode=" + argPruningMode
+        + " trainBeam=" + trainBeamWidth
+        + " testBeam=" + testBeamWidth);
     this.thetaStateful = thetaStateful;
     this.thetaStateless = thetaStateless;
     this.argPruningMode = argPruningMode;
