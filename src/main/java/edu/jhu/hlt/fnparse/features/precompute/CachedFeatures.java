@@ -392,7 +392,7 @@ public class CachedFeatures {
 
     @Override
     public void showWeights() {
-      throw new RuntimeException("implement me");
+      Log.info("TODO: implement me!");
     }
 
     @Override
@@ -407,13 +407,32 @@ public class CachedFeatures {
 
     @Override
     public void scaleWeights(double scale) {
-      throw new RuntimeException("implement me");
+      for (int i = 0; i < weightsCommit.length; i++)
+        for (int j = 0; j < weightsCommit[i].length; j++)
+          weightsCommit[i][j] *= scale;
+      for (int i = 0; i < weightPrune.length; i++)
+        weightPrune[i] *= scale;
     }
 
     @Override
-    public void addWeights(edu.jhu.hlt.fnparse.rl.params.Params other,
+    public void addWeights(
+        edu.jhu.hlt.fnparse.rl.params.Params other,
         boolean checkAlphabetEquality) {
-      throw new RuntimeException("implement me");
+      if (other instanceof CachedFeatures.Params) {
+        CachedFeatures.Params x = (CachedFeatures.Params) other;
+        assert weightsCommit.length == x.weightsCommit.length;
+        for (int i = 0; i < weightsCommit.length; i++) {
+          assert weightsCommit[i].length == x.weightsCommit[i].length;
+          for (int j = 0; j < weightsCommit[i].length; j++) {
+            weightsCommit[i][j] *= x.weightsCommit[i][j];
+          }
+        }
+        assert weightPrune.length == x.weightPrune.length;
+        for (int i = 0; i < weightPrune.length; i++)
+          weightPrune[i] *= x.weightPrune[i];
+      } else {
+        throw new RuntimeException("other=" + other.getClass().getName());
+      }
     }
   }
 
