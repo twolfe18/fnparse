@@ -1519,8 +1519,11 @@ public class RerankerTrainer {
       throw new RuntimeException("not a file: " + path);
     StringBuilder sb = new StringBuilder();
     try (BufferedReader r = FileUtil.getReader(f)) {
-      for (String line = r.readLine(); line != null; line = r.readLine())
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        if (line.charAt(0) == '#')
+          continue;
         sb.append(" " + line);
+      }
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
