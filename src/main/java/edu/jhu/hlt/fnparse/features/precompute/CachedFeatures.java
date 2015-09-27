@@ -190,10 +190,13 @@ public class CachedFeatures {
     }
   }
   public static Map<String, FNParse> getPropbankSentId2Parse(ExperimentProperties config) {
+    Log.info("loading sentId->FNparse mapping...");
     // This can be null since the only reason we need the parses is for
     // computing features, which we've already done.
     // NOT TRUE! These parses were used for DetermnisticRolePruning, but I have
     // added a mode to just use CachedFeautres instead of parses.
+    // => This has been mitigated by adding some cooperation between DetermnisticRolePruning
+    //    and CachedFeatures.
 //    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
     ParsePropbankData.Redis propbankAutoParses = null;
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
@@ -211,6 +214,7 @@ public class CachedFeatures {
       FNParse old = map.put(y.getSentence().getId(), y);
       assert old == null;
     }
+    Log.info("done");
     return map;
   }
 

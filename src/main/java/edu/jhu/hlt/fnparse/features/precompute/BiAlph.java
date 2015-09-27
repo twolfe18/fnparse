@@ -22,7 +22,7 @@ import edu.jhu.hlt.tutils.TimeMarker;
  */
 public class BiAlph {
 
-  enum LineMode {
+  public enum LineMode {
     BIALPH,       // 6 col tsv
     ALPH,         // 4 col tsv, no old int (template,feature)
     ALPH_AS_TRIVIAL_BIALPH,   // same as ALPH, but sets old=new (template,feature)
