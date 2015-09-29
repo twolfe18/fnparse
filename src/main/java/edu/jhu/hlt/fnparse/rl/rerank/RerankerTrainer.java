@@ -790,7 +790,7 @@ public class RerankerTrainer {
         // See if we should stop
         double tStopRatio = conf.tHammingTrain.totalTimeInSeconds()
             / conf.tStoppingCondition.totalTimeInSeconds();
-        LOG.info("[main] train/stop=" + tStopRatio
+        LOG.info("train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
         if (tStopRatio > conf.stoppingConditionFrequency
             && (epoch > 0 || t.secondsSinceFirstMark() > conf.stoppingTimeMinutes * 60)) {
@@ -808,7 +808,7 @@ public class RerankerTrainer {
         if (conf.estimateLearningRateFreq > 0) {
           double tLrEstRatio = conf.tHammingTrain.totalTimeInSeconds()
               / conf.tLearningRateEstimation.totalTimeInSeconds();
-          LOG.info("[main] train/lrEstimate=" + tLrEstRatio
+          LOG.info("train/lrEstimate=" + tLrEstRatio
               + " threshold=" + conf.estimateLearningRateFreq);
           if (tLrEstRatio > conf.estimateLearningRateFreq &&
               (epoch > 0 || t.secondsSinceFirstMark() > minSecOfTrainingBeforeLrEst)) {
@@ -818,7 +818,7 @@ public class RerankerTrainer {
             conf.tLearningRateEstimation.stop();
           }
         } else {
-          LOG.info("[main] not restimating learning rate");
+          LOG.info("not restimating learning rate");
         }
 
         // Average parameters over the network
