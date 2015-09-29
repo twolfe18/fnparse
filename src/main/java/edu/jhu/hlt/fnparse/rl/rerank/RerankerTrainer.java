@@ -29,6 +29,7 @@ import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import edu.jhu.hlt.fnparse.datatypes.*;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -36,10 +37,6 @@ import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
-import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
-import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
@@ -340,11 +337,21 @@ public class RerankerTrainer {
   }
 
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
-  public static Map<String, Double> eval(Reranker m, ItemProvider ip, File semaforEvalDir, String showStr, File diffArgsFile) {
+  public static Map<String, Double> eval(
+      Reranker m,
+      ItemProvider ip,
+      File semaforEvalDir,
+      String showStr,
+      File diffArgsFile,
+      File predictionsFile) {
+
+    // Make predictions
     List<FNParse> y = ItemProvider.allLabels(ip);
     List<State> initialStates = new ArrayList<>();
     for (FNParse p : y) initialStates.add(m.getInitialStateWithPruning(p, p));
     List<FNParse> yHat = m.predict(initialStates);
+
+    // Call standard evaluation functions
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
     if (showStr != null)
       BasicEvaluation.showResults(showStr, results);
@@ -355,6 +362,8 @@ public class RerankerTrainer {
         e.printStackTrace();
       }
     }
+
+    // Use semafor's evaluation script
     if (semaforEvalDir != null) {
       LOG.info("[eval] calling semafor eval in " + semaforEvalDir.getPath());
       if (!semaforEvalDir.isDirectory())
@@ -362,7 +371,39 @@ public class RerankerTrainer {
       SemaforEval semEval = new SemaforEval(semaforEvalDir);
       semEval.evaluate(y, yHat, new File(semaforEvalDir, "results.txt"));
     }
+
+    // Write out predictions into a text file
+    if (predictionsFile != null) {
+      writePredictions(yHat, predictionsFile);
+    } else {
+      LOG.info("[main] not writing out predictions because of null arg");
+    }
+
     return results;
+  }
+
+  public static void writePredictions(List<FNParse> predictions, File f) {
+    LOG.info("[main] writing " + predictions.size() + " predictions to " + f.getPath());
+    try (BufferedWriter w = FileUtil.getWriter(f)) {
+      for (FNParse p : predictions) {
+        String id = p.getSentence().getId();
+        int T = p.numFrameInstances();
+        for (int t = 0; t < T; t++) {
+          FrameInstance fi = p.getFrameInstance(t);
+          String fn = fi.getFrame().getName();
+          Span ts = fi.getTarget();
+          int K = fi.getFrame().numRoles();
+          for (int k = 0; k < K; k++) {
+            Span as = fi.getArgument(k);
+            String rn = fi.getFrame().getRole(k);
+            w.write(String.format("%s\t%d\t%s\t%d,%d\t%d\t%s\t%d,%d\n",
+              id, t, fn, ts.start, ts.end, k, rn, as.start, as.end));
+          }
+        }
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   public static void writeErrors(List<FNParse> gold, List<FNParse> hyp, File f) throws IOException {
@@ -381,8 +422,9 @@ public class RerankerTrainer {
   public static double eval(Reranker m, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
     File diffArgsFile = null;
+    File predictionsFile = null;
     File semEvalDir = null;
-    Map<String, Double> results = eval(m, ip, semEvalDir, showStr, diffArgsFile);
+    Map<String, Double> results = eval(m, ip, semEvalDir, showStr, diffArgsFile, predictionsFile);
     return results.get(objective.getName());
   }
 
@@ -404,11 +446,12 @@ public class RerankerTrainer {
         LOG.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
         bias.setRecallBias(threshold);
         File diffArgsFile = null;
+        File predictionsFile = null;
         File semEvalDir = null;
-        Map<String, Double> results = eval(model, dev, semEvalDir,
-            SHOW_FULL_EVAL_IN_TUNE
-              ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null,
-                  diffArgsFile);
+        String msg = SHOW_FULL_EVAL_IN_TUNE
+              ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
+        Map<String, Double> results = eval(
+          model, dev, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -1554,9 +1597,10 @@ public class RerankerTrainer {
     // Evaluate
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
+    File predictionsFile = new File(workingDir, "predictions.test-set.txt");
     File semDir = new File(workingDir, "semaforEval");
     if (!semDir.isDirectory()) semDir.mkdir();
-    Map<String, Double> perfResults = eval(model, test, semDir, "[main]", diffArgsFile);
+    Map<String, Double> perfResults = eval(model, test, semDir, "[main]", diffArgsFile, predictionsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
