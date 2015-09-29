@@ -85,7 +85,7 @@ public class CachedFeatures {
 
   private java.util.Vector<Item> loadedTrainItems;
   private java.util.Vector<Item> loadedTestItems;
-  private Item lastServedByItemProvider;
+  private Map<String, Item> loadedSentId2Item;
 
   // This is used by the ItemProvider part of this module. Nice to have as a
   // field here so that there is less book-keeping in RerankerTrainer.
@@ -151,8 +151,8 @@ public class CachedFeatures {
     }
   }
   public Map<FrameInstance, List<Span>> spansWithFeatures(FNTagging y) {
-    assert lastItemMatches(y);
-    return lastServedByItemProvider.spansWithFeatures();
+    Item cur = loadedSentId2Item.get(y.getSentence().getId());
+    return cur.spansWithFeatures();
   }
 
   /**
@@ -278,8 +278,7 @@ public class CachedFeatures {
           break;
         }
       }
-      lastServedByItemProvider = li.get(i % n);
-      return lastServedByItemProvider.parse;
+      return li.get(i % n).parse;
     }
     @Override
     public List<edu.jhu.hlt.fnparse.rl.rerank.Item> items(int i) {
@@ -328,9 +327,10 @@ public class CachedFeatures {
      * Ignores the feature set, just returns all of the templates we have in memory.
      */
     public BaseTemplates getDebugRawTemplates(FNTagging f, Action a) {
-      if (!lastItemMatches(f) || a.getActionType() != ActionType.COMMIT)
+      if (a.getActionType() != ActionType.COMMIT)
         throw new RuntimeException();
-      return lastServedByItemProvider.getFeatures(a.t, a.getSpan());
+      Item cur = loadedSentId2Item.get(f.getSentence().getId());
+      return cur.getFeatures(a.t, a.getSpan());
     }
 
     @Override
@@ -370,11 +370,9 @@ public class CachedFeatures {
      */
     private Adjoints scoreCommit(FNTagging f, Action a) {
 
-      if (!lastItemMatches(f))
-        throw new RuntimeException("who gave out this FNParse?");
-
       // Get the templates needed for all the features.
-      BaseTemplates data = lastServedByItemProvider.getFeatures(a.t, a.getSpan());
+      Item cur = loadedSentId2Item.get(f.getSentence().getId());
+      BaseTemplates data = cur.getFeatures(a.t, a.getSpan());
 
       // I should be able to use the same code as in InformationGainProducts.
       IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
@@ -459,19 +457,10 @@ public class CachedFeatures {
      * Assume that the spans that we have features for were the ones not pruned.
      */
     public FNParseSpanPruning getPruningMask(FNTagging y) {
-      assert lastItemMatches(y);
-      Map<FrameInstance, List<Span>> possibleSpans = lastServedByItemProvider.spansWithFeatures();
+      Item cur = loadedSentId2Item.get(y.getSentence().getId());
+      Map<FrameInstance, List<Span>> possibleSpans = cur.spansWithFeatures();
       return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans);
     }
-  }
-
-  private boolean lastItemMatches(FNTagging f) {
-    if (lastServedByItemProvider == null
-        || !f.getSentence().getId().equals(
-            lastServedByItemProvider.parse.getSentence().getId())) {
-      return false;
-    }
-    return true;
   }
 
   public CachedFeatures(BiAlph bialph, List<int[]> features) {
@@ -479,7 +468,7 @@ public class CachedFeatures {
     this.template2cardinality = bialph.makeTemplate2Cardinality();
     this.loadedTrainItems = new java.util.Vector<>();
     this.loadedTestItems = new java.util.Vector<>();
-    this.lastServedByItemProvider = null;
+    this.loadedSentId2Item = new HashMap<>();
     this.debugFeatures = new IntArrayList();
     this.debugKeys = new ArrayList<>();
 
@@ -549,12 +538,8 @@ public class CachedFeatures {
         nnz.add(data.getFeatures().length);
 
         if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
-          if (cur != null) {
-            if (testSentIds.contains(cur.parse.getSentence().getId()))
-              loadedTestItems.add(cur);
-            else
-              loadedTrainItems.add(cur);
-          }
+          if (cur != null)
+            addItem(cur, testSentIds);
           FNParse parse = sentId2parse.get(t.sentId);
           if (parse == null) {
             if (skipEntriesNotInSentId2ParseMap) {
@@ -570,15 +555,11 @@ public class CachedFeatures {
 
         kept++;
 
-        if (keepBoth) {
-//          cur.setFeatures(t.target, span, data.getFeatures());
+        if (keepBoth)
           cur.setFeatures(t.target, span, data);
-        }
 
-        if (keepKeys) {
-//          debugKeys.add(key);
+        if (keepKeys)
           debugKeys.add(sentId2parse.get(t.sentId));
-        }
 
         if (keepValues) {
           for (int f : data.getFeatures())
@@ -593,10 +574,7 @@ public class CachedFeatures {
         }
       }
     }
-    if (testSentIds.contains(cur.parse.getSentence().getId()))
-      loadedTestItems.add(cur);
-    else
-      loadedTrainItems.add(cur);
+    addItem(cur, testSentIds);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean()
         + " nnz/template=" + (nnz.getMean() / templateSetSorted.length));
     Log.info("templateSetSorted.length=" + templateSetSorted.length
@@ -607,6 +585,15 @@ public class CachedFeatures {
       Log.info("debugKeys.size=" + debugKeys.size());
     Log.info("done reading " + numLines + " lines, train.size="
         + loadedTrainItems.size() + " test.size=" + loadedTestItems.size());
+  }
+
+  private void addItem(Item cur, Set<String> testSentIds) {
+    if (testSentIds.contains(cur.parse.getSentence().getId()))
+      loadedTestItems.add(cur);
+    else
+      loadedTrainItems.add(cur);
+    Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
+    assert old == null;
   }
 
 

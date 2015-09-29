@@ -54,8 +54,6 @@ public class InformationGainProducts {
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
     private int role;                         // in line, useful for y, cyx, etc.
-//    private List<IntPair> templateFeatures;   // No guarantee on order!
-//    private int[] tf;
     private int[] templates;
     private int[] features;
 
@@ -69,7 +67,6 @@ public class InformationGainProducts {
     public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
       this.line = line;
       this.role = FeaturePrecomputation.getRole(line);
-//      this.templateFeatures = new ArrayList<>();
       List<IntPair> templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
       while (tmplFeatLocs.hasNext()) {
@@ -82,9 +79,7 @@ public class InformationGainProducts {
           if (DEBUG)
             System.out.println("keeping: " + line.substring(se.first, se.second));
           String fs = line.substring(colon + 1, se.second);
-          // +1 is because IntIntUnsortedVector doesn't support 0 values
-          int f = Integer.parseInt(fs); // + 1;
-//          assert f > 0;
+          int f = Integer.parseInt(fs);
           assert f >= 0;
           templateFeatures.add(new IntPair(t, f));
         }
@@ -93,11 +88,8 @@ public class InformationGainProducts {
       if (storeTemplates)
         this.templates = new int[n];
       this.features = new int[n];
-//      this.tf = new int[2 * n];
       for (int i = 0; i < n; i++) {
         IntPair tfi = templateFeatures.get(i);
-//        tf[2 * i + 0] = tfi.first;
-//        tf[2 * i + 1] = tfi.second;
         if (storeTemplates)
           this.templates[i] = tfi.first;
         this.features[i] = tfi.second;
@@ -115,18 +107,12 @@ public class InformationGainProducts {
     public int[] getTemplates() { return templates; }
     public int[] getFeatures() { return features; }
     public int getTemplate(int i) {
-//      return templateFeatures.get(i).first;
-//      return tf[2 * i + 0];
       return templates[i];
     }
     public int getValue(int i) {
-//      return templateFeatures.get(i).second;
-//      return tf[2 * i + 1];
       return features[i];
     }
     public int size() {
-//      return templateFeatures.size();
-//      return tf.length;
       return features.length;
     }
     public int getRole() {

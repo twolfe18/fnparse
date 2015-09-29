@@ -23,9 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
@@ -689,9 +687,8 @@ public class RerankerTrainer {
 
     ExecutorService es = null;
     if (conf.threads > 1) {
-      String msg = "i'm pretty sure multi-threaded features do not work";
-      LOG.warn(msg);
-      assert false : msg;
+      assert r.cachedFeatures != null : "regular features are not thread safe";
+      LOG.info("Using multi-threading threads=" + conf.threads);
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
@@ -703,7 +700,8 @@ public class RerankerTrainer {
       int step = conf.batchSize == 0 ? train.size() : conf.batchSize;
       LOG.info("[main] epoch=" + epoch + " iter=" + iter
           + " train.size=" + train.size() + " step=" + step
-          + " lr=" + conf.learningRate);
+          + " lr=" + conf.learningRate
+          + " threads=" + conf.threads);
       for (int i = 0; i < train.size(); i += step) {
 
         // Batch step
@@ -715,7 +713,8 @@ public class RerankerTrainer {
         if (showViolation && iter % 10 == 0) {
           LOG.info("[main] i=" + i + " iter=" + iter
               + " trainViolation=" + violation
-              + " lrVal=" + conf.learningRate.learningRate());
+              + " lrVal=" + conf.learningRate.learningRate()
+              + " threads=" + conf.threads);
         }
 
         // Print some data every once in a while.
@@ -840,19 +839,32 @@ public class RerankerTrainer {
       if (verbose)
         LOG.info("[hammingTrainBatch] running serial");
       for (int idx : batch) {
+        if (verbose)
+          LOG.info("[hammingTrainBatch] submitting " + idx);
         FNParse y = ip.label(idx);
         State init = useSyntaxSpanPruning
             ? r.getInitialStateWithPruning(y, y)
             : State.initialState(y, ip.items(idx));
-        if (verbose)
-          LOG.info("[hammingTrainBatch] submitting " + idx);
         Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
           ? r.getFullUpdate(init, y, conf.oracleMode, rand, to, tmv)
           : r.getStatelessUpdate(init, y);
         finishedUpdates.add(u);
       }
     } else {
-      throw new IllegalStateException("currently threading not supported");
+      List<Future> futures = new ArrayList<>(batch.size());
+      for (int idx : batch) {
+        futures.add(es.submit( () -> {
+          FNParse y = ip.label(idx);
+          State init = useSyntaxSpanPruning
+            ? r.getInitialStateWithPruning(y, y)
+            : State.initialState(y, ip.items(idx));
+          return r.hasStatefulFeatures() || conf.forceGlobalTrain
+            ? r.getFullUpdate(init, y, conf.oracleMode, rand, to, tmv)
+            : r.getStatelessUpdate(init, y);
+        } ));
+      }
+      for (Future<Update> f : futures)
+        finishedUpdates.add(f.get());
     }
     if (verbose)
       LOG.info("[hammingTrainBatch] applying updates");
