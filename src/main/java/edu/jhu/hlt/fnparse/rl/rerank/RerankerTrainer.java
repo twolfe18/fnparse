@@ -617,40 +617,90 @@ public class RerankerTrainer {
     FileUtil.rm_rf(paramDir);
   }
 
+  private static class DSResult {
+    public final double loss;
+    public final FNParse y;
+    public final FNParse yhat;
+    public DSResult(double loss, FNParse y, FNParse yhat) {
+      this.loss = loss;
+      this.y = y;
+      this.yhat = yhat;
+    }
+  }
+
   private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
     return new DoubleSupplier() {
-      final boolean showAllLosses = ExperimentProperties.getInstance().getBoolean("showDevLossOther", true);
+      final boolean showAllLosses = ExperimentProperties.getInstance()
+        .getBoolean("showDevLossOther", false);
       final int earlyShow = ExperimentProperties.getInstance().getInt("showDevLossOther.earlyInterval", 20);
       @Override
       public double getAsDouble() {
         LOG.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
-        Map<String, FPR> other = new HashMap<>();
-        double loss = 0d;
+
+        ExecutorService es = conf.threads > 1
+          ? Executors.newWorkStealingPool(conf.threads)
+          : Executors.newSingleThreadExecutor();
+
+        List<Future<DSResult>> futures = new ArrayList<>();
         int n = dev.size();
         for (int i = 0; i < n; i++) {
-          FNParse y = dev.label(i);
-          State init = useSyntaxSpanPruning
+          final int ii = i;
+          futures.add(es.submit(() -> {
+            FNParse y = dev.label(ii);
+            State init = useSyntaxSpanPruning
               ? m.getInitialStateWithPruning(y, y)
-              : State.initialState(y, dev.items(i));
-          Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
+              : State.initialState(y, dev.items(ii));
+            Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
               ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : m.getStatelessUpdate(init, y);
-          loss += u.violation();
-          assert Double.isFinite(loss) && !Double.isNaN(loss);
+            double loss = u.violation();
+            assert Double.isFinite(loss) && !Double.isNaN(loss);
 
-          // Requires me to do prediction (slower) => optional
-          if (showAllLosses) {
-            FNParse yhat = m.predict(init);
-            BasicEvaluation.updateEvals(new SentenceEval(y, yhat), other, true);
+            // Requires me to do prediction (slower) => optional
+            if (showAllLosses) {
+              FNParse yhat = m.predict(init);
+              return new DSResult(loss, y, yhat);
+            } else {
+              return new DSResult(loss, y, null);
+            }
+          }));
+        }
 
+        int i = 0;
+        double loss = 0d;
+        Map<String, FPR> other = new HashMap<>();
+        for (Future<DSResult> f : futures) {
+          try {
+            DSResult p = f.get();
+            loss += p.loss;
+            if (showAllLosses)
+              BasicEvaluation.updateEvals(new SentenceEval(p.y, p.yhat), other, true);
             // Print early!
-            if (earlyShow > 0 && i > 0 && n > earlyShow * 3 && i % earlyShow == 0)
-              for (Map.Entry<String, FPR> x : other.entrySet())
-                Log.info("[devLossFunc] after " + i + " updates " + x.getKey() + "=" + x.getValue());
+            if (earlyShow > 0 && i > 0 && n > earlyShow * 3 && i % earlyShow == 0) {
+              Log.info("[devLossFunc] after " + i + " updates, avgLoss=" + (loss/i));
+              if (showAllLosses) {
+                for (Map.Entry<String, FPR> x : other.entrySet())
+                  Log.info("[devLossFunc] after " + i + " updates " + x.getKey() + "=" + x.getValue());
+              }
+            }
+            i++;
+          } catch (Exception e) {
+            e.printStackTrace();
           }
         }
-        loss /= dev.size();
-        LOG.info("[devLossFunc] loss=" + loss + " nDev=" + dev.size() + " for conf=" + conf.name);
+
+        try {
+          LOG.info("shutting down ES");
+          es.shutdown();
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+
+        assert i > 0;
+        if (i < n)
+          LOG.warn("only got " + i + " of " + n + " dev set items!");
+        loss /= i;
+        LOG.info("[devLossFunc] loss=" + loss + " n=" + i + " nDev=" + n + " for conf=" + conf.name);
         if (showAllLosses) {
           for (Map.Entry<String, FPR> x : other.entrySet())
             Log.info("[devLossFunc] " + x.getKey() + "=" + x.getValue());
