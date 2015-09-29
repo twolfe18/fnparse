@@ -770,13 +770,13 @@ public class RerankerTrainer {
               + " trainViolation=" + violation
               + " trainViolationAvg=" + violationRunningAvg
               + " lrVal=" + conf.learningRate.learningRate()
-              + " threads=" + conf.threads);
+              + " threads=" + conf.threads
+              + " " + Describe.memoryUsage());
         }
 
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
         if (t.enoughTimePassed(secsBetweenShowingWeights)) {
-          LOG.info("[main] " + Describe.memoryUsage());
           r.showWeights();
           if (showTime) {
             Timer bt = timer.get(timerStr + ".batch", false);
