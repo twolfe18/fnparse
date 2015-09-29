@@ -10,6 +10,7 @@ import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 
 /**
  * Lifts TemplatedFeatures into Stateless.Params. Does so by only looking at the
@@ -27,7 +28,10 @@ public class TemplatedFeatureParams
 
   // if true, call featurizeDebug, which shows all the features that were just
   // computed on every call (very slow -- debug only).
-  private boolean showFeatures = false;
+  private boolean showFeatures = ExperimentProperties.getInstance().getBoolean("templatedFeatureParams.showFeatures", false);
+
+  // Supposed to help with debugging of CachedFeatures
+  private boolean throwExceptionOnComputingFeatures = ExperimentProperties.getInstance().getBoolean("templatedFeatureParams.throwExceptionOnComputingFeatures", false);
 
   private String name;
   private TemplatedFeatures features;
@@ -66,6 +70,10 @@ public class TemplatedFeatureParams
    */
   @Override
   public FeatureVector getFeatures(FNTagging f, Action a) {
+    if (throwExceptionOnComputingFeatures) {
+      throw new RuntimeException("someone shouldn't be calling this because " +
+        "templatedFeatures.throwExceptionOnComputingFeatures was specified!");
+    }
     // Capture the context for the TemplatedFeatures
     FrameInstance fi = f.getFrameInstance(a.t);
     TemplateContext context = new TemplateContext();
