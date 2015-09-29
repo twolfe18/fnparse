@@ -253,7 +253,9 @@ public class CachedFeatures {
       this.train = train;
     }
     public int getNumActuallyLoaded() {
-      return train ? loadedTrainItems.size() : loadedTestItems.size();
+      synchronized (loadedSentId2Item) {
+        return train ? loadedTrainItems.size() : loadedTestItems.size();
+      }
     }
     @Override
     public Iterator<FNParse> iterator() {
@@ -266,19 +268,24 @@ public class CachedFeatures {
     @Override
     public FNParse label(int i) {
       assert i >= 0 && i < eventualSize;
-      java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
-      int n;
-      while (true) {
-        n = li.size();
-        if (n < 1) {
-          Log.info("sleeping because there are no labels to give out yet");
-          try { Thread.sleep(1 * 1000); }
-          catch (Exception e) { throw new RuntimeException(e); }
-        } else {
-          break;
+      synchronized (loadedSentId2Item) {
+        java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
+        int n;
+        while (true) {
+          n = li.size();
+          if (n < 1) {
+            Log.info("sleeping because there are no labels to give out yet");
+            try {
+              Thread.sleep(1 * 1000);
+            } catch (Exception e) {
+              throw new RuntimeException(e);
+            }
+          } else {
+            break;
+          }
         }
+        return li.get(i % n).parse;
       }
-      return li.get(i % n).parse;
     }
     @Override
     public List<edu.jhu.hlt.fnparse.rl.rerank.Item> items(int i) {
@@ -588,12 +595,14 @@ public class CachedFeatures {
   }
 
   private void addItem(Item cur, Set<String> testSentIds) {
-    if (testSentIds.contains(cur.parse.getSentence().getId()))
-      loadedTestItems.add(cur);
-    else
-      loadedTrainItems.add(cur);
-    Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
-    assert old == null;
+    synchronized (loadedSentId2Item) {
+      Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
+      assert old == null;
+      if (testSentIds.contains(cur.parse.getSentence().getId()))
+        loadedTestItems.add(cur);
+      else
+        loadedTrainItems.add(cur);
+    }
   }
 
 
