@@ -267,10 +267,7 @@ public class CachedFeatures {
     @Override
     public FNParse label(int i) {
       assert i >= 0 && i < eventualSize;
-      java.util.Vector<Item> li;
-      synchronized (loadedSentId2Item) {
-        li = train ? loadedTrainItems : loadedTestItems;
-      }
+      java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
       int n;
       while (true) {
         n = li.size();
@@ -595,6 +592,7 @@ public class CachedFeatures {
   }
 
   private void addItem(Item cur, Set<String> testSentIds) {
+    // I think this might still be wrong...
     synchronized (loadedSentId2Item) {
       Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
       assert old == null;
