@@ -937,6 +937,11 @@ public class RerankerTrainer {
     RerankerTrainer trainer = new RerankerTrainer(rand, workingDir);
     trainer.reporters = ResultReporter.getReporters(config);
 
+    trainer.trainConf.threads =
+      trainer.pretrainConf.threads =
+        config.getInt("threads", 1);
+    LOG.info("[main] using " + trainer.trainConf.threads + " threads");
+
     trainer.bailOutOfTrainingASAP = config.getBoolean("bailOutOfTrainingASAP", false);
 
     if (config.containsKey("beamSize")) {
@@ -958,6 +963,17 @@ public class RerankerTrainer {
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 1);
+
+    if (trainer.trainConf.threads > trainer.trainConf.batchSize) {
+      LOG.info("[main] trimming train threads to match batch size: "
+        + trainer.trainConf.threads + " => " + trainer.trainConf.batchSize);
+      trainer.trainConf.threads = trainer.trainConf.batchSize;
+    }
+    if (trainer.pretrainConf.threads > trainer.pretrainConf.batchSize) {
+      LOG.info("[main] trimming pretrain threads to match batch size: "
+        + trainer.pretrainConf.threads + " => " + trainer.pretrainConf.batchSize);
+      trainer.pretrainConf.threads = trainer.pretrainConf.batchSize;
+    }
 
     trainer.performPretrain = config.getBoolean("performPretrain", false);
 
