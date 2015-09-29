@@ -118,7 +118,8 @@ public class RerankerTrainer {
     public boolean batchWithReplacement = false;
 
     // Stopping condition
-    public StoppingCondition stopping = new StoppingCondition.Time(8 * 60);
+    public double stoppingTimeMinutes = 8 * 60;  // maintain this as the tightest time constraint
+    public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
 
     // If true (and dev settings permit), train2 will automatically add a
@@ -218,6 +219,13 @@ public class RerankerTrainer {
     public <T extends StoppingCondition> T addStoppingCondition(T s) {
       if (!allowDynamicStopping && !(s instanceof StoppingCondition.Time))
         throw new RuntimeException("can't add " + s);
+      if (s instanceof StoppingCondition.Time) {
+        double t = ((StoppingCondition.Time) s).getMaxMinutes();
+        if (t < stoppingTimeMinutes) {
+          LOG.info("[main] stoppingTimeMin just got tighter: " + stoppingTimeMinutes + " => " + t);
+          stoppingTimeMinutes = t;
+        }
+      }
       stopping = new StoppingCondition.Conjunction(stopping, s);
       return s;
     }
@@ -692,6 +700,7 @@ public class RerankerTrainer {
       es = Executors.newWorkStealingPool(conf.threads);
     }
     TimeMarker t = new TimeMarker();
+    double minSecOfTrainingBeforeLrEst = 30 * 60;   // otherwise wait for at least an epoch
     boolean showTime = false;
     boolean showViolation = true;
     int epoch = 0;
@@ -736,7 +745,8 @@ public class RerankerTrainer {
             / conf.tStoppingCondition.totalTimeInSeconds();
         LOG.info("[main] train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
-        if (tStopRatio > conf.stoppingConditionFrequency && epoch > 0) {
+        if (tStopRatio > conf.stoppingConditionFrequency
+            && (epoch > 0 || t.secondsSinceFirstMark() > conf.stoppingTimeMinutes * 60)) {
           LOG.info("[main] evaluating the stopping condition");
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
@@ -753,7 +763,8 @@ public class RerankerTrainer {
               / conf.tLearningRateEstimation.totalTimeInSeconds();
           LOG.info("[main] train/lrEstimate=" + tLrEstRatio
               + " threshold=" + conf.estimateLearningRateFreq);
-          if (tLrEstRatio > conf.estimateLearningRateFreq && epoch > 0) {
+          if (tLrEstRatio > conf.estimateLearningRateFreq &&
+              (epoch > 0 || t.secondsSinceFirstMark() > minSecOfTrainingBeforeLrEst)) {
             LOG.info("[main] restimating the learning rate");
             conf.tLearningRateEstimation.start();
             estimateLearningRate(r, train, dev, conf);

@@ -91,6 +91,9 @@ public interface StoppingCondition {
       }
       return iterEstimate;
     }
+    public double getMaxMinutes() {
+      return maxMinutes;
+    }
   }
 
   /** A fixed number of iterations */
