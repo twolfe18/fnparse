@@ -5,6 +5,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -253,9 +254,7 @@ public class CachedFeatures {
       this.train = train;
     }
     public int getNumActuallyLoaded() {
-      synchronized (loadedSentId2Item) {
-        return train ? loadedTrainItems.size() : loadedTestItems.size();
-      }
+      return train ? loadedTrainItems.size() : loadedTestItems.size();
     }
     @Override
     public Iterator<FNParse> iterator() {
@@ -268,24 +267,25 @@ public class CachedFeatures {
     @Override
     public FNParse label(int i) {
       assert i >= 0 && i < eventualSize;
+      java.util.Vector<Item> li;
       synchronized (loadedSentId2Item) {
-        java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
-        int n;
-        while (true) {
-          n = li.size();
-          if (n < 1) {
-            Log.info("sleeping because there are no labels to give out yet");
-            try {
-              Thread.sleep(1 * 1000);
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-          } else {
-            break;
-          }
-        }
-        return li.get(i % n).parse;
+        li = train ? loadedTrainItems : loadedTestItems;
       }
+      int n;
+      while (true) {
+        n = li.size();
+        if (n < 1) {
+          Log.info("sleeping because there are no labels to give out yet");
+          try {
+            Thread.sleep(1 * 1000);
+          } catch (Exception e) {
+            throw new RuntimeException(e);
+          }
+        } else {
+          break;
+        }
+      }
+      return li.get(i % n).parse;
     }
     @Override
     public List<edu.jhu.hlt.fnparse.rl.rerank.Item> items(int i) {
@@ -475,7 +475,7 @@ public class CachedFeatures {
     this.template2cardinality = bialph.makeTemplate2Cardinality();
     this.loadedTrainItems = new java.util.Vector<>();
     this.loadedTestItems = new java.util.Vector<>();
-    this.loadedSentId2Item = new HashMap<>();
+    this.loadedSentId2Item = new ConcurrentHashMap<>();
     this.debugFeatures = new IntArrayList();
     this.debugKeys = new ArrayList<>();
 
