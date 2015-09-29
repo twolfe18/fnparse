@@ -1690,8 +1690,14 @@ public class RerankerTrainer {
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File predictionsFile = new File(workingDir, "predictions.test-set.txt");
-    File semDir = new File(workingDir, "semaforEval");
-    if (!semDir.isDirectory()) semDir.mkdir();
+    File semDir = null;
+    if (!propbank) {
+      LOG.info("[main] performing Semafor eval beceause we are working on FN");
+      semDir = new File(workingDir, "semaforEval");
+      if (!semDir.isDirectory()) semDir.mkdir();
+    } else {
+      LOG.info("[main] skipping Semafor eval because we are working on propbank");
+    }
     Map<String, Double> perfResults = eval(model, trainer.trainConf, test, semDir, "[main]", diffArgsFile, predictionsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));

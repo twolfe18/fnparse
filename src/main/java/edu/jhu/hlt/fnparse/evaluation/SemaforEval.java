@@ -66,7 +66,7 @@ public class SemaforEval {
         w.write("\n");
       }
     } catch (Exception e) {
-      throw new RuntimeException();
+      throw new RuntimeException(e);
     }
   }
 
