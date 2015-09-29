@@ -1718,21 +1718,31 @@ public class RerankerTrainer {
       oos.close();
       LOG.info("[main] done serializing.");
     } catch (Exception e) {
-      LOG.warn("[main] problem serializing!");
+      LOG.warn("[main] problem serializing model!");
       e.printStackTrace();
     }
 
     // Serialize just the stateless params.
     // During feature selection, this can be absorbed into Fixed params and
     // a single new feature can be tried out.
-    File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
-    LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
-    FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
+    try {
+      File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
+      LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
+      FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing stateless params!");
+      e.printStackTrace();
+    }
 
     // Save the configuration
-    OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
-    config.storeToXML(os, "ran on " + new Date());
-    os.close();
+    try {
+      OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
+      config.storeToXML(os, "ran on " + new Date());
+      os.close();
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing configuration to XML");
+      e.printStackTrace();
+    }
 
     // Report results back to tge
     double mainResult = perfResults.get(BasicEvaluation.argOnlyMicroF1.getName());
