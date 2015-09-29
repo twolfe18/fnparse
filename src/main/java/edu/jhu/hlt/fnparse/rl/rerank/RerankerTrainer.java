@@ -1712,10 +1712,15 @@ public class RerankerTrainer {
     // Serialize the model
     File jserFile = new File(workingDir, "model.jser");
     LOG.info("[main] serializing model to " + jserFile.getPath());
-    ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
-    oos.writeObject(model);
-    oos.close();
-    LOG.info("[main] done serializing.");
+    try {
+      ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
+      oos.writeObject(model);
+      oos.close();
+      LOG.info("[main] done serializing.");
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing!");
+      e.printStackTrace();
+    }
 
     // Serialize just the stateless params.
     // During feature selection, this can be absorbed into Fixed params and
