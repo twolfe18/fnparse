@@ -38,6 +38,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
@@ -294,8 +295,16 @@ public class CachedFeatures {
    * Throws a RuntimeException if you ask for features for some FNParse other
    * than the one last served up by this module's ItemProvider.
    */
-  public class Params implements edu.jhu.hlt.fnparse.rl.params.Params.Stateless {
+  public class Params implements edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
+      edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold {
     private static final long serialVersionUID = -5359275348868455837L;
+
+    /*
+     * TODO Store pruning features.
+     * You can just look them up by (frame.index, role) in an array.
+     * TODO Compute better pruning features.
+     * This conflicts with the caching scheme above.
+     */
 
     // k -> feature -> weight
     private int dimension = 1 * 1024 * 1024;    // hashing trick
@@ -322,6 +331,12 @@ public class CachedFeatures {
       if (!lastItemMatches(f) || a.getActionType() != ActionType.COMMIT)
         throw new RuntimeException();
       return lastServedByItemProvider.getFeatures(a.t, a.getSpan());
+    }
+
+    @Override
+    public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+      // TODO This ignores providence info?
+      return scorePrune(frames, pruneAction);
     }
 
     @Override

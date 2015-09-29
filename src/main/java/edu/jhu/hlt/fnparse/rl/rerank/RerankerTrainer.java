@@ -1112,7 +1112,10 @@ public class RerankerTrainer {
       //      double tauLearningRate = config.getDouble("taulLearningRate", Math.sqrt(trainer.trainConf.batchSize) / 10d);
       //      trainer.tauParams = new Params.PruneThreshold.Impl(tauL2Penalty, tauLearningRate);
       // Older way: very rich features.
-      if (useFeatureHashing) {
+      if (trainer.cachedFeatures != null) {
+        LOG.info("[main] using CachedFeatures for tau");
+        trainer.tauParams = (CachedFeatures.Params) trainer.statelessParams;
+      } else if (useFeatureHashing) {
         LOG.info("[main] using TemplatedFeatureParams with feature hashing for tau");
         trainer.tauParams =
             new TemplatedFeatureParams("tauA", fs, l2Penalty, hashBuckets);
