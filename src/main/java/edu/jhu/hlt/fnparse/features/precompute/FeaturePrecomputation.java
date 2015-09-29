@@ -20,8 +20,11 @@ import com.google.common.collect.Iterables;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
@@ -324,12 +327,14 @@ public class FeaturePrecomputation {
     ExperimentProperties config = ExperimentProperties.init(args);
     File wd = config.getExistingDir("workingDir", new File("/tmp"));
 
+    // Poorly named: provides parses via redis for both propbank/framenet
+    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
+
     Iterable<FNParse> data;
     String dataset = config.getString("dataset");
     IntPair shard = ShardUtils.getShard(config);
     if ("propbank".equalsIgnoreCase(dataset)) {
       Log.info("reading propbank");
-      ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
       data = config.getBoolean("debug", false)
@@ -340,6 +345,26 @@ public class FeaturePrecomputation {
       Iterable<FNParse> train = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
       Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
       data = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
+
+      // Just load it into memory and parse
+      boolean parse = config.getBoolean("parseFN", true);
+      List<FNParse> get = new ArrayList<>();
+      for (FNParse y : data) {
+        if (parse) {
+          Sentence s = y.getSentence();
+          if (s.getStanfordParse(false) == null) {
+            ConstituencyParse cp = propbankAutoParses.parse(s);
+            s.setStanfordParse(cp);
+          }
+          if (s.getBasicDeps(false) == null) {
+            DependencyParse dp = propbankAutoParses.getBasicDeps(s);
+            s.setBasicDeps(dp);
+          }
+        }
+        get.add(y);
+      }
+      data = get;
+
     } else {
       throw new RuntimeException("unknown dataset: " + dataset);
     }

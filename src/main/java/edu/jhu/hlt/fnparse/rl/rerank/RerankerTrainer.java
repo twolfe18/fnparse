@@ -1041,7 +1041,7 @@ public class RerankerTrainer {
         + (System.currentTimeMillis() - t)/1000d + " seconds");
   }
 
-  public static void addParses(ItemProvider ip) {
+  public static void addParses(Iterable<FNParse> ip) {
     long t = System.currentTimeMillis();
     LOG.info("[addParses] running Stanford parser on all training/test data...");
     for (FNParse y : ip) {
