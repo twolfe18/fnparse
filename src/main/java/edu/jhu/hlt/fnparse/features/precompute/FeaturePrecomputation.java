@@ -271,20 +271,30 @@ public class FeaturePrecomputation {
     TemplateContext ctx = new TemplateContext();
 
     // Loop over all COMMIT actions, and thus (t,k,s)
+    Set<Span> seen = new HashSet<>();
     for (Action commit : ActionType.COMMIT.next(st)) {
       Span s = commit.getSpan();
       if (!emittedTS.add(new IntTrip(commit.t, s.start, s.end)))
         continue;
 
+      if (!seen.add(s)) {
+        Log.warn(s + " appeared twice, e.g. " + commit);
+        continue;
+      }
+
       // Find if this (t,s) corresponds to a role
       int k = -1;
-      FrameInstance fi = y.getFrameInstance(commit.t);
-      int K = fi.getFrame().numRoles();
-      for (int ki = 0; ki < K; ki++) {
-        Span arg = fi.getArgument(ki);
-        if (arg == s) {
-          assert k < 0;
-          k = ki;
+      if (s != Span.nullSpan) {
+        FrameInstance fi = y.getFrameInstance(commit.t);
+        int K = fi.getFrame().numRoles();
+        for (int ki = 0; ki < K; ki++) {
+          Span arg = fi.getArgument(ki);
+          if (arg == s) {
+            assert k < 0 : s + " is assigned to both k="
+                + k + ":" + fi.getFrame().getRole(k)
+                + " and k=" + ki + ":" + fi.getFrame().getRole(ki);
+            k = ki;
+          }
         }
       }
 
