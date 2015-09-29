@@ -1085,6 +1085,13 @@ public class RerankerTrainer {
         config.getInt("threads", 1);
     LOG.info("[main] using " + trainer.trainConf.threads + " threads");
 
+    // This will evaluate the loss function on the entire dev set every once in a while
+    // (you're still guaranteed to make progress on training), but this may take too much
+    // time to be acceptable even if it occurs only once.
+    trainer.trainConf.allowDynamicStopping =
+      trainer.pretrainConf.allowDynamicStopping =
+        config.getBoolean("allowDynamicStopping", true);
+
     trainer.bailOutOfTrainingASAP = config.getBoolean("bailOutOfTrainingASAP", false);
 
     if (config.containsKey("beamSize")) {
