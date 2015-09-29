@@ -339,6 +339,7 @@ public class RerankerTrainer {
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
   public static Map<String, Double> eval(
       Reranker m,
+      Config conf,
       ItemProvider ip,
       File semaforEvalDir,
       String showStr,
@@ -346,10 +347,44 @@ public class RerankerTrainer {
       File predictionsFile) {
 
     // Make predictions
-    List<FNParse> y = ItemProvider.allLabels(ip);
-    List<State> initialStates = new ArrayList<>();
-    for (FNParse p : y) initialStates.add(m.getInitialStateWithPruning(p, p));
-    List<FNParse> yHat = m.predict(initialStates);
+    ExecutorService es = conf.threads > 1
+      ? Executors.newWorkStealingPool(conf.threads)
+      : Executors.newSingleThreadExecutor();
+    List<Future<Pair<FNParse, FNParse>>> futures = new ArrayList<>();
+    int n = ip.size();
+    LOG.info("[main] using " + conf.threads + " threads to evaluate " + n + " parses");
+    for (int i = 0; i < n; i++) {
+      final int ii = i;
+      futures.add(es.submit(() -> {
+        FNParse y = ip.label(ii);
+        State init = m.getInitialStateWithPruning(y, y);
+        FNParse yhat = m.predict(init);
+        return new Pair<>(y, yhat);
+      }));
+    }
+    List<FNParse> y = new ArrayList<>();
+    List<FNParse> yHat = new ArrayList<>();
+    for (Future<Pair<FNParse, FNParse>> f : futures) {
+      try {
+        Pair<FNParse, FNParse> yyhat = f.get();
+        y.add(yyhat.get1());
+        yHat.add(yyhat.get2());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    try {
+      LOG.info("shutting down ES for test predictions");
+      es.shutdown();
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
+
+    // Make predictions
+//    List<FNParse> y = ItemProvider.allLabels(ip);
+//    List<State> initialStates = new ArrayList<>();
+//    for (FNParse p : y) initialStates.add(m.getInitialStateWithPruning(p, p));
+//    List<FNParse> yHat = m.predict(initialStates);
 
     // Call standard evaluation functions
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
@@ -419,12 +454,12 @@ public class RerankerTrainer {
     fw.close();
   }
 
-  public static double eval(Reranker m, ItemProvider ip, StdEvalFunc objective) {
+  public static double eval(Reranker m, Config conf, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
     File diffArgsFile = null;
     File predictionsFile = null;
     File semEvalDir = null;
-    Map<String, Double> results = eval(m, ip, semEvalDir, showStr, diffArgsFile, predictionsFile);
+    Map<String, Double> results = eval(m, conf, ip, semEvalDir, showStr, diffArgsFile, predictionsFile);
     return results.get(objective.getName());
   }
 
@@ -451,7 +486,7 @@ public class RerankerTrainer {
         String msg = SHOW_FULL_EVAL_IN_TUNE
               ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
         Map<String, Double> results = eval(
-          model, dev, semEvalDir, msg, diffArgsFile, predictionsFile);
+          model, conf, dev, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         LOG.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -1650,7 +1685,7 @@ public class RerankerTrainer {
     File predictionsFile = new File(workingDir, "predictions.test-set.txt");
     File semDir = new File(workingDir, "semaforEval");
     if (!semDir.isDirectory()) semDir.mkdir();
-    Map<String, Double> perfResults = eval(model, test, semDir, "[main]", diffArgsFile, predictionsFile);
+    Map<String, Double> perfResults = eval(model, trainer.trainConf, test, semDir, "[main]", diffArgsFile, predictionsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
     results.putAll(ResultReporter.mapToString(config));
