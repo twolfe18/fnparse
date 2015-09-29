@@ -1261,7 +1261,7 @@ public class RerankerTrainer {
 //    config.putAll(Arrays.copyOfRange(args, 1, args.length), false);
     ExperimentProperties config = ExperimentProperties.init(Arrays.copyOfRange(args, 1, args.length));
 
-    Reranker.GRADIENT_BUGFIX = config.getBoolean("gradientBugfix", false);
+    Reranker.GRADIENT_BUGFIX = config.getBoolean("gradientBugfix", true);
 
     // First determine the feature mode, and add implied flags
     setFeatureMode(config);

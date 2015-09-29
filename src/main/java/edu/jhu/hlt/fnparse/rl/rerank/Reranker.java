@@ -77,7 +77,7 @@ public class Reranker implements Serializable {
   public static boolean LH_MOST_VIOLATED = false;
 
   // I'm an idiot... how did this work?
-  public static boolean GRADIENT_BUGFIX = false;
+  public static boolean GRADIENT_BUGFIX = true;
 
   // Higher score is better, this puts highest scores at the end of the list
   public static final Comparator<Item> byScore = new Comparator<Item>() {
