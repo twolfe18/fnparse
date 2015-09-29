@@ -1,7 +1,10 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.util.Iterator;
 import java.util.function.Supplier;
 
+import edu.jhu.prim.map.IntDoubleEntry;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Span;
@@ -171,15 +174,29 @@ public interface Adjoints {
             weights.apply(VECTOR_VALUE_CHECK);
         }
       }
-      features.apply(new FnIntDoubleToDouble() {
-        @Override
-        public double call(int i, double f_i) {
+      if (features instanceof IntDoubleUnsortedVector) {
+        // Matt... how is it possible that there is no way to expose this functionality
+        // (iterate without sorting entries) without reflection...
+        Iterator<IntDoubleEntry> itr = ((IntDoubleUnsortedVector) features).iterator();
+        while (itr.hasNext()) {
+          IntDoubleEntry i = itr.next();
+          int idx = i.index();
+          double f_i = i.get();
           double u = dScore_dForwards * f_i;
           assert Double.isFinite(u) && !Double.isNaN(u);
-          weights.add(i, u);
-          return f_i;
+          weights.add(idx, u);
         }
-      });
+      } else {
+        features.apply(new FnIntDoubleToDouble() {
+          @Override
+          public double call(int idx, double f_i) {
+            double u = dScore_dForwards * f_i;
+            assert Double.isFinite(u) && !Double.isNaN(u);
+            weights.add(idx, u);
+            return f_i;
+          }
+        });
+      }
       if (PARANOID) {
         features.apply(VECTOR_VALUE_CHECK);
         weights.apply(VECTOR_VALUE_CHECK);
