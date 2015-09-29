@@ -586,10 +586,9 @@ public class RerankerTrainer {
         int n = dev.size();
         for (int i = 0; i < n; i++) {
           FNParse y = dev.label(i);
-          List<Item> rerank = dev.items(i);
           State init = useSyntaxSpanPruning
               ? m.getInitialStateWithPruning(y, y)
-              : State.initialState(y, rerank);
+              : State.initialState(y, dev.items(i));
           Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
               ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : m.getStatelessUpdate(init, y);
