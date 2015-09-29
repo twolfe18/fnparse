@@ -703,6 +703,8 @@ public class RerankerTrainer {
     double minSecOfTrainingBeforeLrEst = 30 * 60;   // otherwise wait for at least an epoch
     boolean showTime = false;
     boolean showViolation = true;
+    double violationRunningAvg = 1.0;
+    double violationRunningAvgLambda = 0.9;
     int epoch = 0;
     outer:
     for (int iter = 0; true; ) {
@@ -718,10 +720,13 @@ public class RerankerTrainer {
         List<Integer> batch = batchProvider.getBatch(conf.batchSize, conf.batchWithReplacement);
         double violation = hammingTrainBatch(r, batch, es, train, conf, iter, timerStr);
         conf.tHammingTrain.stop();
+        violationRunningAvg =violationRunningAvgLambda * violationRunningAvg
+            + (1 - violationRunningAvgLambda) * violation;
 
         if (showViolation && iter % 10 == 0) {
           LOG.info("[main] i=" + i + " iter=" + iter
               + " trainViolation=" + violation
+              + " trainViolationAvg=" + violationRunningAvg
               + " lrVal=" + conf.learningRate.learningRate()
               + " threads=" + conf.threads);
         }
