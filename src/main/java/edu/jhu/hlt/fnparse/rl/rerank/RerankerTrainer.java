@@ -362,6 +362,7 @@ public class RerankerTrainer {
         return new Pair<>(y, yhat);
       }));
     }
+    TimeMarker tm = new TimeMarker();
     List<FNParse> y = new ArrayList<>();
     List<FNParse> yHat = new ArrayList<>();
     for (Future<Pair<FNParse, FNParse>> f : futures) {
@@ -369,6 +370,11 @@ public class RerankerTrainer {
         Pair<FNParse, FNParse> yyhat = f.get();
         y.add(yyhat.get1());
         yHat.add(yyhat.get2());
+
+        if (tm.enoughTimePassed(15)) {
+          LOG.info("[main] parsed " + y.size()
+            + " in " + tm.secondsSinceFirstMark() + " seconds");
+        }
       } catch (Exception e) {
         throw new RuntimeException(e);
       }

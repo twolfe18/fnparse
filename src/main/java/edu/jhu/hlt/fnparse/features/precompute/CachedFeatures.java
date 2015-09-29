@@ -128,6 +128,7 @@ public class CachedFeatures {
      * even if there are no features for it.
      */
     public Map<FrameInstance, List<Span>> spansWithFeatures() {
+      boolean pedantic = !ExperimentProperties.getInstance().getBoolean("ignoreNoNullSpanFeatures", false);
       Map<FrameInstance, List<Span>> m = new HashMap<>();
       for (int t = 0; t < this.features.length; t++) {
         FrameInstance yt = parse.getFrameInstance(t);
@@ -143,7 +144,7 @@ public class CachedFeatures {
             values.add(Span.getSpan(s.first, s.second));
           }
         }
-        if (!sawNullSpan)
+        if (!sawNullSpan && pedantic)
           Log.warn("no features for nullSpan!");
         List<Span> old = m.put(key, values);
         assert old == null;
