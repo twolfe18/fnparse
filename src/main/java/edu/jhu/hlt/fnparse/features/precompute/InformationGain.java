@@ -37,6 +37,8 @@ import edu.jhu.prim.vector.IntIntDenseVector;
  * {@link InformationGainProducts} for how to read many feature files that don't
  * shard a common indexing scheme (you map with a bialph created by {@link BiAlphMerger}).
  *
+ * TODO Rethink how y is chosen, see note in {@link InformationGainProducts}.
+ *
  * @author travis
  */
 public class InformationGain implements Serializable, LineByLine {

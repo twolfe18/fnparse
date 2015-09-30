@@ -44,6 +44,12 @@ import edu.jhu.prim.tuple.Pair;
  *
  * See the main method for the options to run this thing.
  *
+ * TODO Rethink what y is when we call update() on counts. I believe it should
+ * depend on the dataset:
+ *   FrameNet: y1 = roleName (note that k in FI is frame-relative), y2 = (frame,role)
+ *   Propbank: same thing actually
+ * How does this compare with the fact of y = the COMMIT action was good/no?
+ *
  * @author travis
  */
 public class InformationGainProducts {
