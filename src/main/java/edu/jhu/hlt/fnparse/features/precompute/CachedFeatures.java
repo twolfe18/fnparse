@@ -5,7 +5,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -16,7 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -210,24 +211,43 @@ public class CachedFeatures {
       // => This has been mitigated by adding some cooperation between DetermnisticRolePruning
       //    and CachedFeatures.
       //    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
-      ParsePropbankData.Redis propbankAutoParses = null;
-      PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
-
       sentId2parse = new HashMap<>();
-      for (FNParse y : pbr.getTrainData()) {
-        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
-        assert old == null;
-      }
-      for (FNParse y : pbr.getDevData()) {
-        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
-        assert old == null;
-      }
-      testSetSentIds = new HashSet<>();
-      for (FNParse y : pbr.getTestData()) {
-        boolean added = testSetSentIds.add(y.getSentence().getId());
-        assert added;
-        FNParse old = sentId2parse.put(y.getSentence().getId(), y);
-        assert old == null;
+      if (config.getBoolean("propbank")) {
+        Log.info("loading PB data");
+        ParsePropbankData.Redis propbankAutoParses = null;
+        PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+        for (FNParse y : pbr.getTrainData()) {
+          FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+          assert old == null;
+        }
+        for (FNParse y : pbr.getDevData()) {
+          FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+          assert old == null;
+        }
+        testSetSentIds = new HashSet<>();
+        for (FNParse y : pbr.getTestData()) {
+          boolean added = testSetSentIds.add(y.getSentence().getId());
+          assert added;
+          FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+          assert old == null;
+        }
+      } else {
+        Log.info("loading FN data");
+        Iterator<FNParse> itr;
+        itr = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+        while (itr.hasNext()) {
+          FNParse y = itr.next();
+          FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+          assert old == null;
+        }
+        itr = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+        while (itr.hasNext()) {
+          FNParse y = itr.next();
+          boolean added = testSetSentIds.add(y.getSentence().getId());
+          assert added;
+          FNParse old = sentId2parse.put(y.getSentence().getId(), y);
+          assert old == null;
+        }
       }
       Log.info("done");
     }
