@@ -62,6 +62,10 @@ import edu.jhu.hlt.tutils.TimeMarker;
  *  f = feat*
  * where feat = template:feature:value
  *
+ * NOTE: It turns out that some spans may have multiple roles assigned to them
+ * in FramNet. For this data, the k column will actually be a comma-separated
+ * list of roles (or -1).
+ *
  * @author travis
  */
 public class FeaturePrecomputation {
@@ -271,32 +275,33 @@ public class FeaturePrecomputation {
     TemplateContext ctx = new TemplateContext();
 
     // Loop over all COMMIT actions, and thus (t,k,s)
-    Set<Span> seen = new HashSet<>();
     for (Action commit : ActionType.COMMIT.next(st)) {
       Span s = commit.getSpan();
       if (!emittedTS.add(new IntTrip(commit.t, s.start, s.end)))
         continue;
 
-      if (!seen.add(s)) {
-        Log.warn(s + " appeared twice, e.g. " + commit);
-        continue;
-      }
-
       // Find if this (t,s) corresponds to a role
-      int k = -1;
+//      int k = -1;
+      StringBuilder k = null;
       if (s != Span.nullSpan) {
         FrameInstance fi = y.getFrameInstance(commit.t);
         int K = fi.getFrame().numRoles();
         for (int ki = 0; ki < K; ki++) {
           Span arg = fi.getArgument(ki);
           if (arg == s) {
-            assert k < 0 : s + " is assigned to both k="
-                + k + ":" + fi.getFrame().getRole(k)
-                + " and k=" + ki + ":" + fi.getFrame().getRole(ki);
-            k = ki;
+//            assert k < 0 : s + " is assigned to both k="
+//                + k + ":" + fi.getFrame().getRole(k)
+//                + " and k=" + ki + ":" + fi.getFrame().getRole(ki);
+//            k = ki;
+            if (k == null)
+              k = new StringBuilder(String.valueOf(ki));
+            else
+              k.append("," + ki);
           }
         }
       }
+      if (k == null)
+        k = new StringBuilder("-1");
 
       String docId = "na";  // Not currently needed
       Target t = new Target(docId, y.getId(), commit.t);
@@ -314,12 +319,12 @@ public class FeaturePrecomputation {
         }
       }
 
-      emit(w, t, s, k, features);
+      emit(w, t, s, k.toString(), features);
     }
   }
 
   /** Emits one line */
-  public static void emit(Writer w, Target t, Span s, int k, List<Feature> features) throws IOException {
+  public static void emit(Writer w, Target t, Span s, String k, List<Feature> features) throws IOException {
     w.write(Target.toLine(t));
     w.write("\t" + s.start + "," + s.end);
     w.write("\t" + k);
