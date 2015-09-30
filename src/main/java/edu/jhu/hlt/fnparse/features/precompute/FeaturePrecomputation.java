@@ -364,7 +364,7 @@ public class FeaturePrecomputation {
     } else if ("framenet".equalsIgnoreCase(dataset)) {
       Log.info("reading framenet");
       Iterable<FNParse> train = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
-      Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+      Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
       data = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
 
       // Just load it into memory and parse
