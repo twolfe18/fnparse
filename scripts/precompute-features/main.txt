@@ -181,42 +181,69 @@ done
 WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 IS_PROPBANK="false"
 
-# Final results (aka dimension)
-BEAM_SIZE=1
-ORACLE_MODE="RAND_MIN"
-DIM="#"
-./scripts/precompute-features/train-all.sh \
-  $WD/sweep-dim \
-  $IS_PROPBANK \
-  $BEAM_SIZE \
-  $ORACLE_MODE \
-  $DIM \
-  "D"
-
-# Noise type
+# Oracle mode
 BEAM_SIZE=1
 ORACLE_MODE="#"
 DIM="160"
+FORCE_LEFT_RIGHT="false"
+PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-oracle \
   $IS_PROPBANK \
-  $BEAM_SIZE \
-  $ORACLE_MODE \
   $DIM \
+  $ORACLE_MODE \
+  $BEAM_SIZE \
+  $FORCE_LEFT_RIGHT \
+  $PERCEPTRON \
   "N"
+
+# Dimension / feature set
+BEAM_SIZE=1
+ORACLE_MODE="RAND_MIN"
+DIM="#"
+FORCE_LEFT_RIGHT="false"
+PERCEPTRON="false"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-dim \
+  $IS_PROPBANK \
+  $DIM \
+  $ORACLE_MODE \
+  $BEAM_SIZE \
+  $FORCE_LEFT_RIGHT \
+  $PERCEPTRON \
+  "D"
+
+# Force left right
+# and perceptron
+BEAM_SIZE="1"
+ORACLE_MODE="RAND_MIN"
+DIM="160"
+FORCE_LEFT_RIGHT="#"
+PERCEPTRON="#"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-beam \
+  $IS_PROPBANK \
+  $DIM \
+  $ORACLE_MODE \
+  $BEAM_SIZE \
+  $FORCE_LEFT_RIGHT \
+  $PERCEPTRON \
+  "L"
 
 # Beam size
 BEAM_SIZE="#"
 ORACLE_MODE="RAND_MIN"
 DIM="160"
+FORCE_LEFT_RIGHT="false"
+PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-beam \
   $IS_PROPBANK \
-  $BEAM_SIZE \
-  $ORACLE_MODE \
   $DIM \
+  $ORACLE_MODE \
+  $BEAM_SIZE \
+  $FORCE_LEFT_RIGHT \
+  $PERCEPTRON \
   "B"
-
-
 
 # vim: set syntax=sh

@@ -1000,7 +1000,7 @@ public class RerankerTrainer {
         finishedUpdates.add(u);
       }
     } else {
-      List<Future> futures = new ArrayList<>(batch.size());
+      List<Future<Update>> futures = new ArrayList<>(batch.size());
       for (int idx : batch) {
         futures.add(es.submit( () -> {
           FNParse y = ip.label(idx);
@@ -1348,16 +1348,17 @@ public class RerankerTrainer {
         trainer.addGlobalParams(new GlobalFeature.SpanBoundaryFeature(globalL2Penalty));
     }
 
-    if (config.getBoolean("lhMostViolated", false)) {
-      LOG.info("[main] using L.H.'s notion of most violated, which forces left-right inference");
-      // Don't need to set these because oracle.bFunc should only return a finite
-      // value for one action (these modes are all equivalent then).
-//      trainer.trainConf.oracleMode = OracleMode.MAX;
-//      trainer.pretrainConf.oracleMode = OracleMode.MAX;
+    final boolean forceLeftRightInference = config.getBoolean("forceLeftRightInference", false);
+    LOG.info("[main] forceLeftRightInference=" + forceLeftRightInference);
+    if (forceLeftRightInference) {
       ActionType.COMMIT.forceLeftRightInference();
       ActionType.PRUNE.forceLeftRightInference();
-      Reranker.LH_MOST_VIOLATED = true;
     }
+
+    final boolean perceptron = config.getBoolean("perceptron", false);
+    LOG.info("[main] perceptron=" + perceptron);
+    if (perceptron)
+      Reranker.PERCEPTRON = true;
 
     return trainer;
   }

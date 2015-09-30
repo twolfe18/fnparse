@@ -72,9 +72,8 @@ public class Reranker implements Serializable {
   public static double COST_FN = 1d;
 
   // If true, in the mostVoilated search, you should *not* use loss augmented
-  // inference, but rather just decode. In this case, oracle and most violated
-  // must also be limited to (COMMIT|PRUNE).forceLeftRightInference=true.
-  public static boolean LH_MOST_VIOLATED = false;
+  // inference, but rather just decode.
+  public static boolean PERCEPTRON = false;
 
   // I'm an idiot... how did this work?
   public static boolean GRADIENT_BUGFIX = true;
@@ -939,7 +938,7 @@ public class Reranker implements Serializable {
     cachingModelParams = getFullParams(true); // release old cache, not worth it
     boolean mvSolveMax = true;
     boolean mvDecode = false;
-    BFunc mvBFunc = LH_MOST_VIOLATED ? BFunc.NONE : new BFunc.MostViolated(y);
+    BFunc mvBFunc = PERCEPTRON ? BFunc.NONE : new BFunc.MostViolated(y);
     ForwardSearch mvSearch =
         fullSearch(init, mvBFunc, mvSolveMax, mvDecode, trainBeamWidth, cachingModelParams);
     if (LOG_FORWARD_SEARCH)
