@@ -1159,6 +1159,7 @@ public class RerankerTrainer {
     }
 
     // Filter examples based on shards
+    // NOTE: This doesn't work with CachedFeatures!
     int numShards = config.getInt("numShards", 0);
     if (numShards > 0) {
       int shard = config.getInt("shard");
