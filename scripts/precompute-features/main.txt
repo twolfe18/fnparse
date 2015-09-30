@@ -178,6 +178,45 @@ done
 # 1) see Makefile in scripts/having-a-laugh (build feature sets based on product IG + dedup)
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+IS_PROPBANK="false"
+
+# Final results (aka dimension)
+BEAM_SIZE=1
+ORACLE_MODE="RAND_MIN"
+DIM="#"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-dim \
+  $IS_PROPBANK \
+  $BEAM_SIZE \
+  $ORACLE_MODE \
+  $DIM \
+  "D"
+
+# Noise type
+BEAM_SIZE=1
+ORACLE_MODE="#"
+DIM="160"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-oracle \
+  $IS_PROPBANK \
+  $BEAM_SIZE \
+  $ORACLE_MODE \
+  $DIM \
+  "N"
+
+# Beam size
+BEAM_SIZE="#"
+ORACLE_MODE="RAND_MIN"
+DIM="160"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-beam \
+  $IS_PROPBANK \
+  $BEAM_SIZE \
+  $ORACLE_MODE \
+  $DIM \
+  "B"
+
 
 
 # vim: set syntax=sh

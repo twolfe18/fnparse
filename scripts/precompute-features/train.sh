@@ -39,13 +39,24 @@ MEM=$7
 #LOG=/state/partition1/rt.log
 LOG=$WD/log.txt
 
+ORACLE_MODE="RAND_MIN"
+
+if [[ $PROPBANK == "true" ]]; then
+  NR=30
+elif [[ $PROPBANK == "false" ]]; then
+  NR=60
+else
+  echo "need boolean: $PROPBANK"
+  exit 2
+fi
 
 #mvn compile exec:java -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
 java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DworkingDir=$WD \
   -DuseCachedFeatures=true \
   -DallowDynamicStopping=false \
-  -DcachedFeatures.numRoles=30 \
+  -DoracleMode=$ORACLE_MODE \
+  -DcachedFeatures.numRoles=$NR \
   -DcachedFeatures.bialph=$DD/coherent-shards/alphabet.txt.gz \
   -DcachedFeatures.bialph.lineMode=ALPH \
   -DcachedFeatures.featuresParent=$DD/coherent-shards/features \
