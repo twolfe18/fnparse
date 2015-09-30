@@ -55,12 +55,13 @@ public interface StoppingCondition {
 
   public static class Time implements StoppingCondition {
     public static int INTERVAL = 1;
-    private long start = -1;
+    private long start;
     private int iterEstimate = -1;
     private int iter;
     private double maxMinutes;
     public Time(double maxMinutes) {
       this.maxMinutes = maxMinutes;
+      this.start = System.currentTimeMillis();
     }
     @Override
     public String toString() {
@@ -68,8 +69,6 @@ public interface StoppingCondition {
     }
     @Override
     public boolean stop(int iter, double violation) {
-      if (start < 0)
-        start = System.currentTimeMillis();
       this.iter = iter;
       if (iter % INTERVAL != 0)
         return false;
