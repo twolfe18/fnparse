@@ -13,13 +13,14 @@
 
 set -e
 
-if [[ $# != 5 ]]; then
+if [[ $# != 6 ]]; then
   echo "please provide:"
   echo "1) a working directory for output"
   echo "2) a jar file in a stable location"
   echo "3) what shard to work on"
   echo "4) how many shards"
   echo "5) a redis parse server"
+  echo "6) a dataset, e.g. \"propbank\" or \"framenet\""
   exit 1
 fi
 
@@ -28,6 +29,7 @@ JAR=$2
 SHARD=$3
 NUM_SHARDS=$4
 PARSE_REDIS_SERVER=$5
+DATASET=$6
 
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
 
@@ -40,6 +42,7 @@ java -Xmx14G -ea -server -cp $JAR \
   -DworkingDir=$WORKING_DIR \
   -Dshard=$SHARD \
   -DnumShards=$NUM_SHARDS \
+  -Ddataset=$DATASET \
   -Ddata.wordnet=$FNPARSE_DATA/wordnet/dict \
   -Ddata.embeddings=$FNPARSE_DATA/embeddings \
   -Ddata.ontonotes5=/export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \

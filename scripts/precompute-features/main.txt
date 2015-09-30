@@ -18,11 +18,13 @@
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
 
+DATASET=framenet
 #WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-NUM_SHARDS=400
-PARSE_REDIS_SERVERS=(r8n07 r8n08 r8n11 r8n12)
+NUM_SHARDS=100
+PARSE_REDIS_SERVERS=(r8n08 r8n09 r8n13 r8n16)
 
 mkdir -p $WORKING_DIR/sge-logs
 
@@ -47,7 +49,8 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $JAR_STABLE \
       $i \
       $NUM_SHARDS \
-      $PS"
+      $PS \
+      $DATASET"
    echo $COMMAND >>$WORKING_DIR/commands.txt
    eval $COMMAND
 done
@@ -55,12 +58,17 @@ done
 
 ############################################################################################
 ### MERGE MANY SHARDS INTO A COHERENT ALPHABET
-python -u scripts/precompute-features/bialph-merge-pipeline.py | tee /tmp/merge-job-launch-log.txt
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+python -u scripts/precompute-features/bialph-merge-pipeline.py \
+  $WORKING_DIR \
+  $NUM_SHARDS \
+  | tee /tmp/merge-job-launch-log.txt
 
 
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
+#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 
 # 0) Find the sentence ids of the test set and don't use these for computing information gain
 TEST_SET_SENT_IDS="$WD/test-set-sentence-ids.txt"
@@ -69,7 +77,7 @@ mvn exec:java \
   -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
-  -Ddata=propbank \
+  -Ddata=$DATASET \
   -Dpart=test \
   -Doutput=$TEST_SET_SENT_IDS
 
@@ -102,7 +110,8 @@ for i in `seq $N | awk '{print $1-1}'`; do
       $WD/coherent-shards/features \
       "glob:**/*1${i}.txt.gz" \
       $WD/ig/templates/split-$N-filter10/shard-${i}.txt \
-      $JAR_STABLE
+      $JAR_STABLE \
+      $TEST_SET_SENT_IDS
 done
 
 # Do a 1/10 estimate and average the answers (should take 1/10th the time but be approximate)
@@ -115,7 +124,8 @@ for i in `seq $N | awk '{print $1-1}'`; do
       $WD/coherent-shards/features \
       "glob:**/*${i}.txt.gz" \
       $WD/ig/templates/split-$N/shard-${i}.txt \
-      $JAR_STABLE
+      $JAR_STABLE \
+      $TEST_SET_SENT_IDS
 done
 
 # Do a full/proper estimate
@@ -124,8 +134,9 @@ qsub -N full-ig-template \
   scripts/precompute-features/compute-ig.sh \
     $WD/coherent-shards/features \
     "glob:**/*" \
-    $WD/ig/templates/split-$N/shard-${i}.txt \
-    $JAR_STABLE
+    $WD/ig/templates/full-ig.txt \
+    $JAR_STABLE \
+    $TEST_SET_SENT_IDS
 
 
 ### After those jobs finish, average things
@@ -136,7 +147,8 @@ python scripts/precompute-features/average-ig.py \
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
-TEMPLATE_IG_FILE=$WD/ig/templates/split-$N/average.txt
+#TEMPLATE_IG_FILE=$WD/ig/templates/split-$N/average.txt
+TEMPLATE_IG_FILE=$WD/ig/templates/full-ig.txt
 PROD_IG_WD=$WD/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
@@ -163,6 +175,8 @@ done
 ############################################################################################
 ### RUN THE ACTUAL EXPERIMENTS
 
+# 1) see Makefile in scripts/having-a-laugh (build feature sets based on product IG + dedup)
+# 2) launch experiments with scripts/precompute-features/train-all.sh
 
 
 
