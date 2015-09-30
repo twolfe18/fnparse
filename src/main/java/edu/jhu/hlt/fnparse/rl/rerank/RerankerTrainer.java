@@ -1246,7 +1246,8 @@ public class RerankerTrainer {
 
       // Setup the params
       int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
-      int numRoles = config.getInt("cachedFeatures.numRoles", 30);
+      int numRoles = config.getInt("cachedFeatures.numRoles",
+          trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
       trainer.statelessParams = trainer.cachedFeatures.new Params(dimension, numRoles);
 
       // Make sure that DeterministicRolePruning knows about CachedFeatures

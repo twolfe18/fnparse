@@ -202,6 +202,7 @@ public class CachedFeatures {
   public static class PropbankFNParses {
     public Map<String, FNParse> sentId2parse;
     public Set<String> testSetSentIds;
+    private int maxRole;
     public PropbankFNParses(ExperimentProperties config) {
       Log.info("loading sentId->FNparse mapping...");
       // This can be null since the only reason we need the parses is for
@@ -249,7 +250,19 @@ public class CachedFeatures {
           assert old == null;
         }
       }
+      maxRole = 0;
+      for (FNParse y : sentId2parse.values()) {
+        int T = y.numFrameInstances();
+        for (int t = 0; t < T; t++) {
+          int K = y.getFrameInstance(t).getFrame().numRoles();
+          if (K > maxRole)
+            maxRole = K;
+        }
+      }
       Log.info("done");
+    }
+    public int getMaxRole() {
+      return maxRole;
     }
     public int trainSize() {
       return sentId2parse.size() - testSetSentIds.size();
