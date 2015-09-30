@@ -267,7 +267,6 @@ public class Sentence implements HasId {
   public void setShape(int i, String shape) {
     if (shapes == null)
       shapes = new String[this.size()];
-    assert shapes[i] == null : "you would be over-writing a previous shape!";
     shapes[i] = shape;
   }
 

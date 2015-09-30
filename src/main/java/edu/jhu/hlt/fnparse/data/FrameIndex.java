@@ -198,8 +198,6 @@ public class FrameIndex implements FrameIndexInterface {
   public static FrameIndex getFrameNet() {
     if(frameNet == null) {
 
-      new Exception("shouldn't be reading FrameNet").printStackTrace();
-
       LOG.info("reading framenet frames");
       frameNet = new FrameIndex(framesInFrameNet);
       int idx = 0;

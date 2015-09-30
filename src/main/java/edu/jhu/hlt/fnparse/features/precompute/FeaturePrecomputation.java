@@ -17,10 +17,14 @@ import java.util.Set;
 
 import com.google.common.collect.Iterables;
 
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
@@ -33,8 +37,10 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 
 /**
@@ -55,6 +61,10 @@ import edu.jhu.hlt.tutils.TimeMarker;
  *  k = index of role or -1 if y_{t,k,s} = 0  # assumes 0 or 1 roles per span w.r.t. a predicate
  *  f = feat*
  * where feat = template:feature:value
+ *
+ * NOTE: It turns out that some spans may have multiple roles assigned to them
+ * in FramNet. For this data, the k column will actually be a comma-separated
+ * list of roles (or -1).
  *
  * @author travis
  */
@@ -271,16 +281,27 @@ public class FeaturePrecomputation {
         continue;
 
       // Find if this (t,s) corresponds to a role
-      int k = -1;
-      FrameInstance fi = y.getFrameInstance(commit.t);
-      int K = fi.getFrame().numRoles();
-      for (int ki = 0; ki < K; ki++) {
-        Span arg = fi.getArgument(ki);
-        if (arg == s) {
-          assert k < 0;
-          k = ki;
+//      int k = -1;
+      StringBuilder k = null;
+      if (s != Span.nullSpan) {
+        FrameInstance fi = y.getFrameInstance(commit.t);
+        int K = fi.getFrame().numRoles();
+        for (int ki = 0; ki < K; ki++) {
+          Span arg = fi.getArgument(ki);
+          if (arg == s) {
+//            assert k < 0 : s + " is assigned to both k="
+//                + k + ":" + fi.getFrame().getRole(k)
+//                + " and k=" + ki + ":" + fi.getFrame().getRole(ki);
+//            k = ki;
+            if (k == null)
+              k = new StringBuilder(String.valueOf(ki));
+            else
+              k.append("," + ki);
+          }
         }
       }
+      if (k == null)
+        k = new StringBuilder("-1");
 
       String docId = "na";  // Not currently needed
       Target t = new Target(docId, y.getId(), commit.t);
@@ -298,12 +319,12 @@ public class FeaturePrecomputation {
         }
       }
 
-      emit(w, t, s, k, features);
+      emit(w, t, s, k.toString(), features);
     }
   }
 
   /** Emits one line */
-  public static void emit(Writer w, Target t, Span s, int k, List<Feature> features) throws IOException {
+  public static void emit(Writer w, Target t, Span s, String k, List<Feature> features) throws IOException {
     w.write(Target.toLine(t));
     w.write("\t" + s.start + "," + s.end);
     w.write("\t" + k);
@@ -312,24 +333,62 @@ public class FeaturePrecomputation {
     w.write('\n');
   }
 
-  public static int getRole(String line) {
+  public static int[] getRoles(String line) {
     int field = 4;
-    return Integer.parseInt(line.split("\t", field + 2)[field]);
+    String[] toks = line.split("\t", field + 2);
+    String[] rolesS = toks[field].split(",");
+    int[] rolesI = new int[rolesS.length];
+    for (int i = 0; i < rolesS.length; i++)
+      rolesI[i] = Integer.parseInt(rolesS[i]);
+    return rolesI;
+//    return Integer.parseInt(line.split("\t", field + 2)[field]);
   }
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     File wd = config.getExistingDir("workingDir", new File("/tmp"));
+
+    // Poorly named: provides parses via redis for both propbank/framenet
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
-    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
 
-    final int shard = config.getInt("shard");
-    final int nShard = config.getInt("numShards");
-    pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), nShard) == shard);
+    Iterable<FNParse> data;
+    String dataset = config.getString("dataset");
+    IntPair shard = ShardUtils.getShard(config);
+    if ("propbank".equalsIgnoreCase(dataset)) {
+      Log.info("reading propbank");
+      PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+      pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
+      data = config.getBoolean("debug", false)
+          ? pbr.getDevData()
+              : Iterables.concat(pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
+    } else if ("framenet".equalsIgnoreCase(dataset)) {
+      Log.info("reading framenet");
+      Iterable<FNParse> train = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+      Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+      data = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
 
-    Iterable<FNParse> data = config.getBoolean("debug", false)
-        ? pbr.getDevData()
-        : Iterables.concat(pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
+      // Just load it into memory and parse
+      boolean parse = config.getBoolean("parseFN", true);
+      List<FNParse> get = new ArrayList<>();
+      for (FNParse y : data) {
+        if (parse) {
+          Sentence s = y.getSentence();
+          if (s.getStanfordParse(false) == null) {
+            ConstituencyParse cp = propbankAutoParses.parse(s);
+            s.setStanfordParse(cp);
+          }
+          if (s.getBasicDeps(false) == null) {
+            DependencyParse dp = propbankAutoParses.getBasicDeps(s);
+            s.setBasicDeps(dp);
+          }
+        }
+        get.add(y);
+      }
+      data = get;
+
+    } else {
+      throw new RuntimeException("unknown dataset: " + dataset);
+    }
 
     run(data.iterator(), new File(wd, "features.txt.gz"), new File(wd, "template-feat-indices.txt.gz"));
   }

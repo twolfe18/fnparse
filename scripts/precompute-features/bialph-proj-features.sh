@@ -34,6 +34,7 @@ echo "projecting the int features into a new domain..."
 java -Xmx3G -ea -server -cp $4 \
   -DinputFeatures=$1 \
   -DinputBialph=$2 \
+  -DlineMode="BIALPH" \
   -DoutputFeatures=$TEMP \
   edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection
 

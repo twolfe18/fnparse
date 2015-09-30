@@ -44,6 +44,12 @@ import edu.jhu.prim.tuple.Pair;
  *
  * See the main method for the options to run this thing.
  *
+ * TODO Rethink what y is when we call update() on counts. I believe it should
+ * depend on the dataset:
+ *   FrameNet: y1 = roleName (note that k in FI is frame-relative), y2 = (frame,role)
+ *   Propbank: same thing actually
+ * How does this compare with the fact of y = the COMMIT action was good/no?
+ *
  * @author travis
  */
 public class InformationGainProducts {
@@ -53,20 +59,23 @@ public class InformationGainProducts {
   /** Extracts just the features needed (given a subset of templates of interet) */
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
-    private int role;                         // in line, useful for y, cyx, etc.
+//    private int role;                         // in line, useful for y, cyx, etc.
+    private int[] roles;
     private int[] templates;
     private int[] features;
 
     public BaseTemplates(int[] templates, int[] features) {
       assert templates.length == features.length;
-      this.role = -2;
+//      this.role = -2;
+      this.roles = new int[] {-2};
       this.templates = templates;
       this.features = features;
     }
 
     public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
       this.line = line;
-      this.role = FeaturePrecomputation.getRole(line);
+//      this.role = FeaturePrecomputation.getRole(line);
+      this.roles = FeaturePrecomputation.getRoles(line);
       List<IntPair> templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
       while (tmplFeatLocs.hasNext()) {
@@ -115,8 +124,8 @@ public class InformationGainProducts {
     public int size() {
       return features.length;
     }
-    public int getRole() {
-      return role;
+    public int[] getRoles() {
+      return roles;
     }
     @Override
     public String toString() {
@@ -126,7 +135,7 @@ public class InformationGainProducts {
           tf.append(" ");
         tf.append(getTemplate(i) + ":" + getValue(i));
       }
-      return "(BaseTemplates k=" + role
+      return "(BaseTemplates k=" + (roles.length == 1 ? roles[0] : Arrays.toString(roles))
           + " features=" + StringUtils.trunc(tf, 80)
           + " line=" + StringUtils.trunc(line, 80)
           + ")";
@@ -235,18 +244,19 @@ public class InformationGainProducts {
       return;
     List<Long> fv = new ArrayList<>();
     BaseTemplates bv = new BaseTemplates(relevantTemplates, line, true);
-    int k = bv.getRole();
-    for (Entry<int[], TemplateIG> x : products.entrySet()) {
-      // Get the products
-      int[] templates = x.getKey();
-      flatten(bv, 0, templates, 0, 1, 1, template2cardinality, fv);
+    for (int k : bv.getRoles()) {
+      for (Entry<int[], TemplateIG> x : products.entrySet()) {
+        // Get the products
+        int[] templates = x.getKey();
+        flatten(bv, 0, templates, 0, 1, 1, template2cardinality, fv);
 
-      // Measure IG
-      int y = k + 1;  // k=-1 means no role, shift everything up by one
-      final TemplateIG t = x.getValue();
-      for (long index : fv)
-        t.update(y, (int) (Math.floorMod(index, this.hashingTrickDim)));
-      fv.clear();
+        // Measure IG
+        int y = k + 1;  // k=-1 means no role, shift everything up by one
+        final TemplateIG t = x.getValue();
+        for (long index : fv)
+          t.update(y, (int) (Math.floorMod(index, this.hashingTrickDim)));
+        fv.clear();
+      }
     }
   }
 

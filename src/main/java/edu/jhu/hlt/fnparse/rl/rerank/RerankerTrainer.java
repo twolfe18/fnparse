@@ -362,6 +362,7 @@ public class RerankerTrainer {
         return new Pair<>(y, yhat);
       }));
     }
+    TimeMarker tm = new TimeMarker();
     List<FNParse> y = new ArrayList<>();
     List<FNParse> yHat = new ArrayList<>();
     for (Future<Pair<FNParse, FNParse>> f : futures) {
@@ -369,6 +370,11 @@ public class RerankerTrainer {
         Pair<FNParse, FNParse> yyhat = f.get();
         y.add(yyhat.get1());
         yHat.add(yyhat.get2());
+
+        if (tm.enoughTimePassed(15)) {
+          LOG.info("[main] parsed " + y.size()
+            + " in " + tm.secondsSinceFirstMark() + " seconds");
+        }
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
@@ -1035,7 +1041,7 @@ public class RerankerTrainer {
         + (System.currentTimeMillis() - t)/1000d + " seconds");
   }
 
-  public static void addParses(ItemProvider ip) {
+  public static void addParses(Iterable<FNParse> ip) {
     long t = System.currentTimeMillis();
     LOG.info("[addParses] running Stanford parser on all training/test data...");
     for (FNParse y : ip) {
@@ -1241,7 +1247,8 @@ public class RerankerTrainer {
 
       // Setup the params
       int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
-      int numRoles = config.getInt("cachedFeatures.numRoles", 30);
+      int numRoles = config.getInt("cachedFeatures.numRoles",
+          trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
       trainer.statelessParams = trainer.cachedFeatures.new Params(dimension, numRoles);
 
       // Make sure that DeterministicRolePruning knows about CachedFeatures
@@ -1691,8 +1698,14 @@ public class RerankerTrainer {
     LOG.info("[main] done training, evaluating");
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File predictionsFile = new File(workingDir, "predictions.test-set.txt");
-    File semDir = new File(workingDir, "semaforEval");
-    if (!semDir.isDirectory()) semDir.mkdir();
+    File semDir = null;
+    if (!propbank) {
+      LOG.info("[main] performing Semafor eval beceause we are working on FN");
+      semDir = new File(workingDir, "semaforEval");
+      if (!semDir.isDirectory()) semDir.mkdir();
+    } else {
+      LOG.info("[main] skipping Semafor eval because we are working on propbank");
+    }
     Map<String, Double> perfResults = eval(model, trainer.trainConf, test, semDir, "[main]", diffArgsFile, predictionsFile);
     Map<String, String> results = new HashMap<>();
     results.putAll(ResultReporter.mapToString(perfResults));
@@ -1701,22 +1714,37 @@ public class RerankerTrainer {
     // Serialize the model
     File jserFile = new File(workingDir, "model.jser");
     LOG.info("[main] serializing model to " + jserFile.getPath());
-    ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
-    oos.writeObject(model);
-    oos.close();
-    LOG.info("[main] done serializing.");
+    try {
+      ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(jserFile));
+      oos.writeObject(model);
+      oos.close();
+      LOG.info("[main] done serializing.");
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing model!");
+      e.printStackTrace();
+    }
 
     // Serialize just the stateless params.
     // During feature selection, this can be absorbed into Fixed params and
     // a single new feature can be tried out.
-    File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
-    LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
-    FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
+    try {
+      File statelessParamsFile = new File(workingDir, "statelessParams.jser.gz");
+      LOG.info("[main] saving stateless params to " + statelessParamsFile.getPath());
+      FileUtil.serialize(trainer.statelessParams, statelessParamsFile);
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing stateless params!");
+      e.printStackTrace();
+    }
 
     // Save the configuration
-    OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
-    config.storeToXML(os, "ran on " + new Date());
-    os.close();
+    try {
+      OutputStream os = new FileOutputStream(new File(workingDir, "config.xml"));
+      config.storeToXML(os, "ran on " + new Date());
+      os.close();
+    } catch (Exception e) {
+      LOG.warn("[main] problem serializing configuration to XML");
+      e.printStackTrace();
+    }
 
     // Report results back to tge
     double mainResult = perfResults.get(BasicEvaluation.argOnlyMicroF1.getName());

@@ -68,6 +68,7 @@ class BiAlphMerger:
   
   def start(self, cleanup=True):
     # Find all of the alphabets
+    print 'alph_glob:', self.alph_glob
     alphs = glob.glob(self.alph_glob)
     print 'merging', len(alphs), 'alphabets'
     
@@ -265,10 +266,21 @@ def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, d
 if __name__ == '__main__':
   # TODO Generalize these inputs to be suitable for a library.
   m = False # mock
-  p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
-  alph_glob = os.path.join(p, 'raw-shards/job-*-of-400/template-feat-indices.txt.gz')
+  if len(sys.argv) != 3:
+    print 'please provide:'
+    print '1) a working dir, e.g. /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
+    print '2) how many shards are in the WD/raw-shards directory, e.g. 400 when job dirs are named job-*-of-400'
+    sys.exit(1)
+  #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
+  #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a'
+  p = sys.argv[1]
+  shards = str(int(sys.argv[2]))
+  alph_glob = os.path.join(p, 'raw-shards/job-*-of-' + shards + '/template-feat-indices.txt.gz')
   merge_bialph_dir = os.path.join(p, 'merged-bialphs')
   jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
+
+  print 'alph_glob:', alph_glob
+  print 'merge_bialph_dir:', merge_bialph_dir
 
   # Create and merge all of the bialphs
   merge_wd = WorkingDir(merge_bialph_dir, jar)
@@ -305,7 +317,5 @@ if __name__ == '__main__':
   print 'The final output is in:'
   print proj_wd
   print
-
-
 
 

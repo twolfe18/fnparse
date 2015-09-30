@@ -40,8 +40,8 @@ public class ParsePropbankData {
     public boolean logGets = false;
     public boolean logParses = true;
 
-    // If you attempt to find a key and its not there, should you try to put the computed result
-    // back into the RedisMap?
+    // If you attempt to find a key and its not there, should you try to put the
+    // computed result back into the RedisMap?
     public boolean insertComputedValues = true;
 
     // using ExperimentProperties: same keys no matter where you use it (nice)
