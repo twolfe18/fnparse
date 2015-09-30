@@ -115,7 +115,7 @@ public class RerankerTrainer {
     public boolean batchWithReplacement = false;
 
     // Stopping condition
-    public double stoppingTimeMinutes = 8 * 60;  // maintain this as the tightest time constraint
+    public double stoppingTimeMinutes = 55 * 60;  // maintain this as the tightest time constraint
     public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
 
@@ -145,7 +145,7 @@ public class RerankerTrainer {
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
-    private int maxDev = 250;
+    private int maxDev = 750;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -1, recallBiasHi = 1;
     public int tuneSteps = 5;
@@ -1110,7 +1110,7 @@ public class RerankerTrainer {
       trainer.trainConf.testBeamSize = config.getInt("testBeamSize", 1);
     }
 
-    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
+    trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 5 * 60);
 
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 

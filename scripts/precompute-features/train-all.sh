@@ -69,7 +69,7 @@ for ORACLE_MODE in MIN MAX RAND_MIN RAND_MAX; do
 if [[ $SET_ORACLE_MODE != "#" && $SET_ORACLE_MODE != $ORACLE_MODE ]]; then
   continue
 fi
-for DIM in 10 20 40 80 160 320 640; do
+for DIM in 10 20 40 80 160 320 640 1280; do
 if [[ $SET_DIM != "#" && $SET_DIM != $DIM ]]; then
   continue
 fi

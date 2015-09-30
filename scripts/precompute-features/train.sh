@@ -3,7 +3,7 @@
 #$ -V
 #$ -l h_rt=72:00:00
 #$ -l mem_free=31G
-#$ -l num_proc=5
+#$ -l num_proc=4
 #$ -S /bin/bash
 
 set -eu
@@ -75,9 +75,9 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DcachedFeatures.bialph.lineMode=ALPH \
   -DcachedFeatures.featuresParent=$DD/coherent-shards/features \
   -DcachedFeatures.featuresGlob="glob:**/*" \
-  -DcachedFeatures.numDataLoadThreads=2 \
-  -DpretrainBatchSize=8 \
-  -DtrainBatchSize=8 \
+  -DcachedFeatures.numDataLoadThreads=1 \
+  -DpretrainBatchSize=16 \
+  -DtrainBatchSize=16 \
   -Dthreads=4 \
   -DtemplatedFeatureParams.throwExceptionOnComputingFeatures=true \
   -DgradientBugfix=true \
@@ -91,13 +91,14 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DnumShards=1 \
   -Dshard=0 \
   -DaddStanfordParses=false \
-  -DrealTestSet=false \
+  -DrealTestSet=true \
+  -DlrBatchScale=2048 \
+  -DlrType=constant \
   -Dl2Penalty=1e-8 \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=600 \
+  -DtrainTimeLimit=`echo "52 * 60" | bc` \
   -DestimateLearningRateFreq=0 \
-  -DlrType=constant \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
   dummyJobName \

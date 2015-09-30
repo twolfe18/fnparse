@@ -178,13 +178,19 @@ done
 # 1) see Makefile in scripts/having-a-laugh (build feature sets based on product IG + dedup)
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
-IS_PROPBANK="false"
+#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+#IS_PROPBANK="false"
+WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/propbank
+IS_PROPBANK="true"
+
+DEFAULT_DIM=640
+DEFAULT_ORACLE="RAND_MIN"
+DEFAULT_BEAM=1
 
 # Oracle mode
-BEAM_SIZE=1
+BEAM_SIZE=$DEFAULT_BEAM
 ORACLE_MODE="#"
-DIM="160"
+DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
@@ -198,8 +204,8 @@ PERCEPTRON="false"
   "N"
 
 # Dimension / feature set
-BEAM_SIZE=1
-ORACLE_MODE="RAND_MIN"
+BEAM_SIZE=$DEFAULT_BEAM
+ORACLE_MODE=$DEFAULT_ORACLE
 DIM="#"
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
@@ -215,9 +221,9 @@ PERCEPTRON="false"
 
 # Force left right
 # and perceptron
-BEAM_SIZE="1"
-ORACLE_MODE="RAND_MIN"
-DIM="160"
+BEAM_SIZE=$DEFAULT_BEAM
+ORACLE_MODE=$DEFAULT_ORACLE
+DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="#"
 PERCEPTRON="#"
 ./scripts/precompute-features/train-all.sh \
@@ -232,8 +238,8 @@ PERCEPTRON="#"
 
 # Beam size
 BEAM_SIZE="#"
-ORACLE_MODE="RAND_MIN"
-DIM="160"
+ORACLE_MODE=$DEFAULT_ORACLE
+DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
