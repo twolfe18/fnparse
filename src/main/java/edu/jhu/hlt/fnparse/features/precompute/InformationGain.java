@@ -173,14 +173,17 @@ public class InformationGain implements Serializable, LineByLine {
     String sentenceId = toks[1];
     if (ignoreSentenceIds.contains(sentenceId))
       return;
-    int k = Integer.parseInt(toks[4]);
-    for (int i = 5; i < toks.length; i++) {
-      String f = toks[i];
-      int c = f.indexOf(':');
-      int template = Integer.parseInt(f.substring(0, c));
-      int feature = Integer.parseInt(f.substring(c + 1));
-      // +1 maps k=-1 (no role) to 0, and shifts everything else up
-      templates[template].update(k + 1, feature);
+//    int k = Integer.parseInt(toks[4]);
+    for (String ks : toks[4].split(",")) {
+      int k = Integer.parseInt(ks);
+      for (int i = 5; i < toks.length; i++) {
+        String f = toks[i];
+        int c = f.indexOf(':');
+        int template = Integer.parseInt(f.substring(0, c));
+        int feature = Integer.parseInt(f.substring(c + 1));
+        // +1 maps k=-1 (no role) to 0, and shifts everything else up
+        templates[template].update(k + 1, feature);
+      }
     }
   }
 

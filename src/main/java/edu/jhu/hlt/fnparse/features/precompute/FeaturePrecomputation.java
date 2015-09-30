@@ -333,9 +333,15 @@ public class FeaturePrecomputation {
     w.write('\n');
   }
 
-  public static int getRole(String line) {
+  public static int[] getRoles(String line) {
     int field = 4;
-    return Integer.parseInt(line.split("\t", field + 2)[field]);
+    String[] toks = line.split("\t", field + 2);
+    String[] rolesS = toks[field].split(",");
+    int[] rolesI = new int[rolesS.length];
+    for (int i = 0; i < rolesS.length; i++)
+      rolesI[i] = Integer.parseInt(rolesS[i]);
+    return rolesI;
+//    return Integer.parseInt(line.split("\t", field + 2)[field]);
   }
 
   public static void main(String[] args) {
