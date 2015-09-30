@@ -212,6 +212,7 @@ public class CachedFeatures {
       //    and CachedFeatures.
       //    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
       sentId2parse = new HashMap<>();
+      testSetSentIds = new HashSet<>();
       if (config.getBoolean("propbank")) {
         Log.info("loading PB data");
         ParsePropbankData.Redis propbankAutoParses = null;
@@ -224,7 +225,6 @@ public class CachedFeatures {
           FNParse old = sentId2parse.put(y.getSentence().getId(), y);
           assert old == null;
         }
-        testSetSentIds = new HashSet<>();
         for (FNParse y : pbr.getTestData()) {
           boolean added = testSetSentIds.add(y.getSentence().getId());
           assert added;
@@ -616,11 +616,16 @@ public class CachedFeatures {
     // I think this might still be wrong...
     synchronized (loadedSentId2Item) {
       Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
-      assert old == null;
-      if (testSentIds.contains(cur.parse.getSentence().getId()))
-        loadedTestItems.add(cur);
-      else
-        loadedTrainItems.add(cur);
+      if (old != null) {
+        Log.warn("duplicate item: key=" + cur.parse.getSentence().getId()
+            + " old=" + old.parse.getId() + " new=" + cur.parse.getId()
+            + ", skipping");
+      } else {
+        if (testSentIds.contains(cur.parse.getSentence().getId()))
+          loadedTestItems.add(cur);
+        else
+          loadedTrainItems.add(cur);
+      }
     }
   }
 

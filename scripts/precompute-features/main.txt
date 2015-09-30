@@ -24,7 +24,7 @@ DATASET=framenet
 WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 NUM_SHARDS=100
-PARSE_REDIS_SERVERS=(r8n08 r8n09 r8n13 r8n16)
+PARSE_REDIS_SERVERS=(r5n23 r5n32 r6n03 r6n08)
 
 mkdir -p $WORKING_DIR/sge-logs
 

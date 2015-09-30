@@ -25,25 +25,27 @@ cp $JAR $JAR_STABLE
 if [[ $PROPBANK == "true" ]]; then
   MEM_OFFSET=20
   DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
-else if [[ $PROPBANK == "false" ]]; then
+  PREFIX="pb"
+elif [[ $PROPBANK == "false" ]]; then
   MEM_OFFSET=10
   DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+  PREFIX="fn"
 else
   echo "must provide a boolean for propbank: $PROPBANK"
   exit 2
 fi
-
+echo "using data in $DD"
 
 for DIM in 10 20 40 80 160 320 640; do
   MEM=`echo "0.11 * $DIM + $MEM_OFFSET" | bc | perl -pe 's/(\d+)\.\d+/\1/'`
   MEM_SGE=`echo "$MEM + 2" | bc`
   for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
     FF=scripts/having-a-laugh/propbank-${DIM}.fs
-    WDJ=$WD/wd-${MODE}-${DIM}
+    WDJ=$WD/${PREFIX}-${MODE}-${DIM}
     mkdir -p $WDJ
     qsub \
       -l "mem_free=${MEM_SGE}G" \
-      -N "fr-${MODE}-${DIM}" \
+      -N "${PREFIX}-${MODE}-${DIM}" \
       -o $WD/sge-logs \
       scripts/precompute-features/train.sh \
         $DD \
