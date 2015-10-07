@@ -203,6 +203,8 @@ public class BiAlph {
   }
 
   public String lookupTemplate(int newTemplateIndex) {
+    if (newTemplateIndex >= newInt2TemplateName.length)
+      return null;
     return newInt2TemplateName[newTemplateIndex];
   }
   public String[] lookupTemplates(int[] newTemplateIndices) {
