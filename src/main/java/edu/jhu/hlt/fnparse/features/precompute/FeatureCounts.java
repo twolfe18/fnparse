@@ -29,6 +29,7 @@ public class FeatureCounts implements LineByLine {
   /** Reads count files produced by {@link FeatureCounts#main} */
   public static class FromFile {
     private Counts<Integer>[] t2f2count;
+    @SuppressWarnings("unchecked")
     public FromFile(File previousOutputOfThisClassesMain) throws IOException {
       TimeMarker tm = new TimeMarker();
       Log.info("loading counts from " + previousOutputOfThisClassesMain.getPath());

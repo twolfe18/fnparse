@@ -167,6 +167,7 @@ public class InformationGain implements Serializable, LineByLine {
     public double alpha_x = 1;
 
 //    private SmoothedMutualInformation<Integer, ProductIndex> smi;
+    private BubEntropyEstimatorAdapter bubEst;
 
     public TemplateIG(int index) {
       this(index, "template-" + index);
@@ -180,6 +181,12 @@ public class InformationGain implements Serializable, LineByLine {
       this.cyx = new Counts<>();
       this.updates = 0;
 //      this.smi = new SmoothedMutualInformation<>();
+    }
+
+    public void useBubEntropyEstimation(BubEntropyEstimatorAdapter bubEst) {
+      assert this.bubEst == null;
+      assert bubEst != null;
+      this.bubEst = bubEst;
     }
 
     public int getIndex() {
@@ -263,6 +270,21 @@ public class InformationGain implements Serializable, LineByLine {
 //          igCache.miEmpirical = new MIFixed(0);
 //          return igCache;
 //        }
+        if (this.bubEst != null) {
+          int Dy = cy.getNumImplicitEntries();
+          int Dx = cx.getNumImplicitEntries();
+          long Dyx = Dy * Dx;
+          Log.info("calling BUB estimator for H[y,x]");
+          double hyx = bubEst.entropy(cyx, Dyx);
+          Log.info("calling BUB estimator for H[x]");
+          double hx = bubEst.entropy(cx);
+          Log.info("calling BUB estimator for H[y]");
+          double hy = bubEst.entropy(cy);
+          this.igCache.miSmoothed =
+              this.igCache.miEmpirical =
+              new MIFixed(hx + hy - hyx);
+          return igCache;
+        }
 
         final double C_yx = updates, C_y = updates, C_x = updates;
         //          int D_y = cy.getNumImplicitEntries();
@@ -369,19 +391,23 @@ public class InformationGain implements Serializable, LineByLine {
   protected TemplateIG[] templates;
   protected Set<String> ignoreSentenceIds;
   protected int numRoles;
+  protected BubEntropyEstimatorAdapter bubEst;
 
-  public InformationGain() {
-    this(-1);
+  public InformationGain(BubEntropyEstimatorAdapter bubEst) {
+    this(-1, bubEst);
   }
 
   /** You need to provide numRoles to get the proper OOV counting */
-  public InformationGain(int numRoles) {
+  public InformationGain(int numRoles, BubEntropyEstimatorAdapter bubEst) {
     ExperimentProperties config = ExperimentProperties.getInstance();
     templates = new TemplateIG[config.getInt("numTemplates", 3000)];  // TODO resize code
-    for (int i = 0; i < templates.length; i++)
+    for (int i = 0; i < templates.length; i++) {
       templates[i] = new TemplateIG(i);
+      templates[i].useBubEntropyEstimation(bubEst);
+    }
 
     this.numRoles = numRoles;
+    this.bubEst = bubEst;
 
     File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
     Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
@@ -434,17 +460,11 @@ public class InformationGain implements Serializable, LineByLine {
     System.out.println("\toutputFeatures: text file for saving the templates/information gain");
     System.out.println("\tignoreSentenceIds: text file containing one sentence id per line to ignore");
 
-    // stats + features -> stats
-    // stats -> topK
-    String inputStats = config.getString("inputIG", "none");
-    final InformationGain input;
-    if (inputStats.equals("none")) {
-      Log.info("starting with empty stats");
-      input = new InformationGain();
-    } else {
-      Log.info("reading stats from " + inputStats);
-      input = (InformationGain) FileUtil.deserialize(new File(inputStats));
-    }
+    final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+    Log.info("using BUB code in " + bubFuncParentDir.getPath());
+    BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
+
+    final InformationGain input = new InformationGain(bubEst);
 
     String features = config.getString("features", "none");
     if (!features.equals("none")) {
@@ -535,6 +555,10 @@ public class InformationGain implements Serializable, LineByLine {
         e.printStackTrace();
       }
     }
+
+    // Cleanup
+    Log.info("closing matlab/bub connection");
+    bubEst.close();
 
     Log.info("done");
   }

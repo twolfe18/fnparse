@@ -61,14 +61,12 @@ public class InformationGainProducts {
   /** Extracts just the features needed (given a subset of templates of interet) */
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
-//    private int role;                         // in line, useful for y, cyx, etc.
     private int[] roles;
     private int[] templates;
     private int[] features;
 
     public BaseTemplates(int[] templates, int[] features) {
       assert templates.length == features.length;
-//      this.role = -2;
       this.roles = new int[] {-2};
       this.templates = templates;
       this.features = features;
@@ -82,7 +80,6 @@ public class InformationGainProducts {
      */
     public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
       this.line = line;
-//      this.role = FeaturePrecomputation.getRole(line);
       this.roles = FeaturePrecomputation.getRoles(line);
       List<IntPair> templateFeatures = new ArrayList<>();
       Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
@@ -174,16 +171,19 @@ public class InformationGainProducts {
 
   private BiAlph lastBialph;
 
+  // Actually computes the entropy/MI
+  private BubEntropyEstimatorAdapter bubEst;
+
   /**
    * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
    * to use for representing features.
    */
-  public InformationGainProducts(List<String[]> features, int hashingTrickDim) {
+  public InformationGainProducts(List<String[]> features, int hashingTrickDim, BubEntropyEstimatorAdapter bubEstimator) {
     this.baseFeatureNames = features;
     this.hashingTrickDim = hashingTrickDim;
     if (this.hashingTrickDim <= 0)
       throw new RuntimeException("not implemented");
-
+    this.bubEst = bubEstimator;
     ExperimentProperties config = ExperimentProperties.getInstance();
     File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
     Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
@@ -224,7 +224,9 @@ public class InformationGainProducts {
       }
       Arrays.sort(intTemplates);
       baseFeatures.add(intTemplates);
-      products.put(intTemplates, new TemplateIG(featIdx, StringUtils.join("*", strTemplates)));
+      TemplateIG tig = new TemplateIG(featIdx, StringUtils.join("*", strTemplates));
+      tig.useBubEntropyEstimation(bubEst);
+      products.put(intTemplates, tig);
       featIdx++;
     }
 
@@ -277,14 +279,10 @@ public class InformationGainProducts {
 
       // Get the products
       List<ProductIndex> prods = new ArrayList<>();
-//      flatten(bv, 0, templates, 0, 1, 1, ProductIndex.NIL, template2cardinality, null/*fv*/, prods);
       flatten(bv, 0, templates, 0, ProductIndex.NIL, template2cardinality, prods);
 
       // Measure IG
       final TemplateIG t = entry.getValue();
-      // TODO check this
-//      ProductIndex[] x = prods.toArray(new ProductIndex[prods.size()]);
-//      t.update(y, x);
       for (ProductIndex pi : prods)
         t.update(y, new ProductIndex[] {pi});
     }
@@ -307,19 +305,15 @@ public class InformationGainProducts {
   public static void flatten(
       BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
-//      long cardinality, long value,
       ProductIndex cardValue,
       int[] template2cardinality,
-//      List<Long> buffer,
-      List<ProductIndex> buffer2) {
+      List<ProductIndex> buffer) {
     if (FLATTEN_DEBUG) {
       System.out.println();
       System.out.println(data.toString());
       System.out.println("dIndex=" + dIndex);
       System.out.println("templates=" + Arrays.toString(templates));
       System.out.println("tIndex=" + tIndex);
-//      System.out.println("cardinality=" + cardinality);
-//      System.out.println("value=" + value);
 
       // Verify templates are sorted
       for (int i = 0; i < templates.length - 1; i++)
@@ -330,9 +324,7 @@ public class InformationGainProducts {
     }
 
     if (tIndex == templates.length) {
-//      if (buffer != null)
-//        buffer.add(value);
-      buffer2.add(cardValue);
+      buffer.add(cardValue);
       return;
     }
 
@@ -365,16 +357,10 @@ public class InformationGainProducts {
       endDataIndex++;
 
     // Recurse
-//    long newCard = cardinality * curTemplateCard;
-    if (FLATTEN_DEBUG) {
-//      System.out.println("cardinality=" + cardinality);
+    if (FLATTEN_DEBUG)
       System.out.println("curTemplateCard=" + curTemplateCard);
-//      System.out.println("newCard=" + newCard);
-    }
-//    assert newCard > 0;
     for (int i = startDataIndex; i < endDataIndex; i++) {
       assert data.getValue(i) < curTemplateCard;
-//      long newValue = value * curTemplateCard + data.getValue(i);
       int card = template2cardinality[data.getTemplate(i)];
       ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
       if (FLATTEN_DEBUG) {
@@ -383,11 +369,9 @@ public class InformationGainProducts {
       }
       flatten(data, endDataIndex,
           templates, tIndex + 1,
-//          newCard, newValue,
           newValue2,
           template2cardinality,
-//          buffer,
-          buffer2);
+          buffer);
     }
   }
 
@@ -619,6 +603,10 @@ public class InformationGainProducts {
     final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 4);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
+    final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+    Log.info("using BUB code in " + bubFuncParentDir.getPath());
+    BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
+
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
       + " templateAlphIsBialph=" + templateAlphIsBialph);
@@ -654,7 +642,7 @@ public class InformationGainProducts {
 
     int numRoles = config.getInt("numRoles", 30);
     int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
-    InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim);
+    InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
     igp.init(bialph, numRoles);
 
     // Scan each of the input files
@@ -701,6 +689,10 @@ public class InformationGainProducts {
       if (j < topK)
         System.out.println(sb.toString());
     }
+
+    // Cleanup
+    Log.info("closing matlab/bub connection");
+    bubEst.close();
   }
 }
 

@@ -1,9 +1,15 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map.Entry;
 
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.prim.vector.IntIntDenseVector;
 import matlabcontrol.MatlabProxy;
 import matlabcontrol.MatlabProxyFactory;
 import matlabcontrol.MatlabProxyFactoryOptions;
@@ -20,9 +26,11 @@ import matlabcontrol.MatlabProxyFactoryOptions;
 public class BubEntropyEstimatorAdapter {
 
   private MatlabProxy proxy;
-  private File bubFuncParentDir;  // has to be parent bc matlab can't have files on the path...
+  public int kMax = 20;   // they claim 11-15 is good enough, may lower if too slow
 
   public BubEntropyEstimatorAdapter(File bubFuncParentDir) {
+    if (!bubFuncParentDir.isDirectory() || !new File(bubFuncParentDir, "BUBfunc.m").isFile())
+      throw new IllegalArgumentException("provided file is not a directory or does not contain BUBfunc.m: " + bubFuncParentDir.getPath());
     MatlabProxyFactoryOptions.Builder builder = new MatlabProxyFactoryOptions.Builder();
     MatlabProxyFactory factory = new MatlabProxyFactory(builder.build());
     try {
@@ -31,23 +39,37 @@ public class BubEntropyEstimatorAdapter {
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    this.bubFuncParentDir = bubFuncParentDir;
   }
 
-  public BubEntropyEstimatorAdapter(MatlabProxy proxy, File bubFuncParentDir) {
+  /** Make sure you've executed a command to add the BUB code to the path, see other constructor */
+  public BubEntropyEstimatorAdapter(MatlabProxy proxy) {
     this.proxy = proxy;
-    this.bubFuncParentDir = bubFuncParentDir;
-    try {
-      proxy.eval("addpath('" + bubFuncParentDir.getPath() + "')");
-      proxy.eval("addpath('/home/hltcoe/twolfe/temp')");
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
-  /** Returns the path to the matlab code implementing entropy calculation */
-  public File getBubCode() {
-    return bubFuncParentDir;
+  public <T> double entropy(Counts<T> counts, long dimension) {
+    List<Integer> cnt = new ArrayList<>();
+    for (Entry<T, Integer> x : counts.entrySet())
+      cnt.add(x.getValue());
+    Collections.sort(cnt);
+    Collections.reverse(cnt);
+    long[] c = new long[cnt.size()];
+    for (int i = 0; i < c.length; i++)
+      c[i] = cnt.get(i);
+    return entropy(c, dimension);
+  }
+
+  public double entropy(IntIntDenseVector counts) {
+    long dimension = counts.getNumImplicitEntries();
+    List<Integer> c = new ArrayList<>();
+    for (int i = 0; i < dimension; i++)
+      if (counts.get(i) > 0)
+        c.add(counts.get(i));
+    Collections.sort(c);
+    Collections.reverse(c);
+    long[] cnt = new long[c.size()];
+    for (int i = 0; i < cnt.length; i++)
+      cnt[i] = c.get(i);
+    return entropy(cnt, dimension);
   }
 
   /**
@@ -63,7 +85,7 @@ public class BubEntropyEstimatorAdapter {
       proxy.setVariable("N", N);
       proxy.setVariable("n", counts);
       proxy.setVariable("m", dimension);
-      proxy.setVariable("k_max", 30);
+      proxy.setVariable("k_max", kMax);
       proxy.setVariable("display_flag", 0);
       proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag)");
       proxy.eval("BUB_est=sum(a(n+1))");
