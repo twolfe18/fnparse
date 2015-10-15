@@ -38,11 +38,11 @@ cp $JAR $JAR_STABLE
 
 if [[ $PROPBANK == "true" ]]; then
   MEM_OFFSET=20
-  MEM_SLOP="0.11"
+  MEM_SLOPE="0.11"
   DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 elif [[ $PROPBANK == "false" ]]; then
   MEM_OFFSET=5
-  MEM_SLOP="0.04"
+  MEM_SLOPE="0.04"
   DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 else
   echo "must provide a boolean for propbank: $PROPBANK"
