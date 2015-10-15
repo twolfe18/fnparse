@@ -20,25 +20,26 @@ import matlabcontrol.MatlabProxyFactoryOptions;
 public class BubEntropyEstimatorAdapter {
 
   private MatlabProxy proxy;
-  private File bubFuncPath;
+  private File bubFuncParentDir;  // has to be parent bc matlab can't have files on the path...
 
-  public BubEntropyEstimatorAdapter(File bubFuncPath) {
+  public BubEntropyEstimatorAdapter(File bubFuncParentDir) {
     MatlabProxyFactoryOptions.Builder builder = new MatlabProxyFactoryOptions.Builder();
     MatlabProxyFactory factory = new MatlabProxyFactory(builder.build());
     try {
       proxy = factory.getProxy();
-      proxy.eval("addpath('" + bubFuncPath.getPath() + "')");
+      proxy.eval("addpath('" + bubFuncParentDir.getPath() + "')");
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
-    this.bubFuncPath = bubFuncPath;
+    this.bubFuncParentDir = bubFuncParentDir;
   }
 
-  public BubEntropyEstimatorAdapter(MatlabProxy proxy, File bubFuncPath) {
+  public BubEntropyEstimatorAdapter(MatlabProxy proxy, File bubFuncParentDir) {
     this.proxy = proxy;
-    this.bubFuncPath = bubFuncPath;
+    this.bubFuncParentDir = bubFuncParentDir;
     try {
-      proxy.eval("addpath('" + bubFuncPath.getPath() + "')");
+      proxy.eval("addpath('" + bubFuncParentDir.getPath() + "')");
+      proxy.eval("addpath('/home/hltcoe/twolfe/temp')");
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -46,7 +47,7 @@ public class BubEntropyEstimatorAdapter {
 
   /** Returns the path to the matlab code implementing entropy calculation */
   public File getBubCode() {
-    return bubFuncPath;
+    return bubFuncParentDir;
   }
 
   /**
@@ -62,10 +63,12 @@ public class BubEntropyEstimatorAdapter {
       proxy.setVariable("N", N);
       proxy.setVariable("n", counts);
       proxy.setVariable("m", dimension);
+      proxy.setVariable("k_max", 30);
+      proxy.setVariable("display_flag", 0);
       proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag)");
       proxy.eval("BUB_est=sum(a(n+1))");
       Object I = proxy.getVariable("BUB_est");
-      return (double) I;
+      return ((double[]) I)[0];
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -77,8 +80,8 @@ public class BubEntropyEstimatorAdapter {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    File bubCode = config.getExistingFile("bubCode");
-    BubEntropyEstimatorAdapter bub = new BubEntropyEstimatorAdapter(bubCode);
+    File bubParent = config.getExistingDir("bubFuncParentDir");
+    BubEntropyEstimatorAdapter bub = new BubEntropyEstimatorAdapter(bubParent);
     long[] counts = new long[] {1, 2, 3, 4};
     long dim = 4;
     double I = bub.entropy(counts, dim);
