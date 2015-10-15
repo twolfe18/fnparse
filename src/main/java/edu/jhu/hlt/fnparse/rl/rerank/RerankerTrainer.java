@@ -538,7 +538,7 @@ public class RerankerTrainer {
   }
 
   /** Trains and tunes a full model */
-  public Reranker train1(ItemProvider ip) {
+  public Reranker train1(ItemProvider train, ItemProvider dev) {
     if (statefulParams == Stateful.NONE && statelessParams == Stateless.NONE)
       throw new IllegalStateException("you need to set the params");
 
@@ -550,7 +550,7 @@ public class RerankerTrainer {
     if (performPretrain && !bailOutOfTrainingASAP) {
       LOG.warn("[main] you probably don't want pretrain/local train!");
       LOG.info("[main] local train");
-      train2(m, ip, pretrainConf);
+      train2(m, train, dev, pretrainConf);
     } else {
       LOG.info("[main] skipping pretrain");
     }
@@ -558,7 +558,7 @@ public class RerankerTrainer {
     LOG.info("[main] global train");
     m.setStatefulParams(statefulParams);
     if (!bailOutOfTrainingASAP)
-      train2(m, ip, trainConf);
+      train2(m, train, dev, trainConf);
 
     LOG.info("[main] done, times:\n" + timer);
     return m;
@@ -754,7 +754,8 @@ public class RerankerTrainer {
   /**
    * Adds a stopping condition based on the dev set performance.
    */
-  public void train2(Reranker m, ItemProvider ip, Config conf) {
+  public void train2(Reranker m, ItemProvider train, ItemProvider dev, Config conf) {
+    /*
     // Split the data
     final ItemProvider train, dev;
     if (conf.tuneOnTrainingData) {
@@ -769,6 +770,7 @@ public class RerankerTrainer {
       train = trainDev.getTrain();
       dev = trainDev.getTest();
     }
+    */
     LOG.info("[main] nTrain=" + train.size() + " nDev=" + dev.size() + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
@@ -1102,12 +1104,18 @@ public class RerankerTrainer {
 
     if (config.containsKey("beamSize")) {
       LOG.info("[main] using one train and test beam size (possibly overriding individual settings)");
-      trainer.trainConf.trainBeamSize =
+      trainer.pretrainConf.trainBeamSize =
+          trainer.pretrainConf.testBeamSize =
+          trainer.trainConf.trainBeamSize =
           trainer.trainConf.testBeamSize =
           config.getInt("beamSize");
     } else {
-      trainer.trainConf.trainBeamSize = config.getInt("trainBeamSize", 1);
-      trainer.trainConf.testBeamSize = config.getInt("testBeamSize", 1);
+      trainer.trainConf.trainBeamSize =
+          trainer.pretrainConf.trainBeamSize =
+          config.getInt("trainBeamSize", 1);
+      trainer.trainConf.testBeamSize =
+          trainer.pretrainConf.testBeamSize =
+          config.getInt("testBeamSize", 1);
     }
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 3 * 60);
@@ -1227,6 +1235,7 @@ public class RerankerTrainer {
       // Load the sentId -> FNParse mapping (cached features only gives you sentId and features)
       trainer.cachedFeatures.sentIdsAndFNParses = new PropbankFNParses(config);
       Log.info("[main] train.size=" + trainer.cachedFeatures.sentIdsAndFNParses.trainSize()
+          + " dev.size=" + trainer.cachedFeatures.sentIdsAndFNParses.devSize()
           + " test.size=" + trainer.cachedFeatures.sentIdsAndFNParses.testSize());
 
       // Start loading the data in the background
@@ -1445,12 +1454,14 @@ public class RerankerTrainer {
     final boolean isParamServer = config.getBoolean("isParamServer", false);
     final boolean realTest = config.getBoolean("realTestSet", false);
     final boolean propbank = config.getBoolean("propbank", false);
-    ItemProvider train = null, test;
+    ItemProvider train = null, dev = null, test;
     if (isParamServer) {
       train = null;
+      dev = null;
       test = null;
     } else if (trainer.bailOutOfTrainingASAP) {
       train = new ItemProvider.ParseWrapper(Collections.emptyList());
+      dev = new ItemProvider.ParseWrapper(Collections.emptyList());
       test = new ItemProvider.ParseWrapper(Collections.emptyList());
     } else {
       if (realTest)
@@ -1467,8 +1478,9 @@ public class RerankerTrainer {
       if (trainer.cachedFeatures != null) {
         Log.info("[main] using CachedFeatures to serve up FNParses");
         PropbankFNParses p = trainer.cachedFeatures.sentIdsAndFNParses;
-        train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), true);
-        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false);
+        train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), false, false);
+        dev = trainer.cachedFeatures.new ItemProvider(p.trainSize(), true, false);
+        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false, true);
       } else {
         if (propbank) {
           LOG.info("[main] running on propbank data");
@@ -1480,16 +1492,20 @@ public class RerankerTrainer {
             LOG.info("[main] reading real propbank data...");
             if (canSkipTrainData) {
               train = new ItemProvider.ParseWrapper(Collections.emptyList());
+              dev = new ItemProvider.ParseWrapper(Collections.emptyList());
             } else {
               train = pbr.getTrainData();
+              dev = pbr.getDevData();
             }
             test = pbr.getTestData();
           } else {
             LOG.info("[main] reading dev propbank data...");
             if (canSkipTrainData) {
               train = new ItemProvider.ParseWrapper(Collections.emptyList());
+              dev = new ItemProvider.ParseWrapper(Collections.emptyList());
             } else {
               train = pbr.getTrainData();
+              dev = pbr.getDevData();
             }
             test = pbr.getDevData();
           }
@@ -1497,9 +1513,16 @@ public class RerankerTrainer {
           LOG.info("[main] running on framenet data");
           if (canSkipTrainData) {
             train = new ItemProvider.ParseWrapper(Collections.emptyList());
+            dev = new ItemProvider.ParseWrapper(Collections.emptyList());
           } else {
-            train = new ItemProvider.ParseWrapper(DataUtil.iter2list(
+            ItemProvider trainAndDev = new ItemProvider.ParseWrapper(DataUtil.iter2list(
                 FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
+            double propDev = 0.2;
+            int maxDev = 1000;
+            ItemProvider.TrainTestSplit foo =
+                new ItemProvider.TrainTestSplit(trainAndDev, propDev, maxDev, trainer.rand);
+            train = foo.getTrain();
+            dev = foo.getTest();
           }
           test = new ItemProvider.ParseWrapper(DataUtil.iter2list(
               FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences()));
@@ -1508,7 +1531,12 @@ public class RerankerTrainer {
           ItemProvider trainAndTest = new ItemProvider.ParseWrapper(DataUtil.iter2list(
               FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
           if (testOnTrain) {
-            train = trainAndTest;
+            double propDev = 0.2;
+            int maxDev = 1000;
+            ItemProvider.TrainTestSplit foo =
+                new ItemProvider.TrainTestSplit(trainAndTest, propDev, maxDev, trainer.rand);
+            train = foo.getTrain();
+            dev = foo.getTest();
             test = trainAndTest;
             trainer.pretrainConf.tuneOnTrainingData = true;
             trainer.pretrainConf.maxDev = 25;
@@ -1524,6 +1552,8 @@ public class RerankerTrainer {
           }
         }
       }
+      if (train != null)
+        assert dev != null;
 
       // Only take a sub-set of the data based on sharding.
       if (trainer.keep != null) {
@@ -1680,7 +1710,9 @@ public class RerankerTrainer {
       config.store(System.out, null);   // show the config for posterity
       LOG.info("[main] " + Describe.memoryUsage());
       LOG.info("[main] starting training, config:");
-      model = trainer.train1(train);
+      assert train != null;
+      assert dev != null;
+      model = trainer.train1(train, dev);
 
 //      // Save the model (using DataOutputStream)
 //      File modelFile = new File(workingDir, "model.bin_deprecated");

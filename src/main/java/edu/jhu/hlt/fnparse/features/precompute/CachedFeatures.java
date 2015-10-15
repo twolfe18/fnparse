@@ -86,6 +86,7 @@ public class CachedFeatures {
   public boolean keepBoth, keepKeys, keepValues;
 
   private java.util.Vector<Item> loadedTrainItems;
+  private java.util.Vector<Item> loadedDevItems;
   private java.util.Vector<Item> loadedTestItems;
   private Map<String, Item> loadedSentId2Item;
 
@@ -184,6 +185,7 @@ public class CachedFeatures {
         try {
           // This adds to loaded(Train|Test)Items
           CachedFeatures.this.read(f,
+              sentIdsAndFNParses.devSetSentIds,
               sentIdsAndFNParses.testSetSentIds,
               sentIdsAndFNParses.sentId2parse,
               skipEntriesNotInSentId2ParseMap);
@@ -202,6 +204,7 @@ public class CachedFeatures {
   public static class PropbankFNParses {
     public Map<String, FNParse> sentId2parse;
     public Set<String> testSetSentIds;
+    public Set<String> devSetSentIds;
     private int maxRole;
     public PropbankFNParses(ExperimentProperties config) {
       Log.info("loading sentId->FNparse mapping...");
@@ -214,6 +217,7 @@ public class CachedFeatures {
       //    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
       sentId2parse = new HashMap<>();
       testSetSentIds = new HashSet<>();
+      devSetSentIds = new HashSet<>();
       if (config.getBoolean("propbank")) {
         Log.info("loading PB data");
         ParsePropbankData.Redis propbankAutoParses = null;
@@ -223,6 +227,8 @@ public class CachedFeatures {
           assert old == null;
         }
         for (FNParse y : pbr.getDevData()) {
+          boolean added = devSetSentIds.add(y.getSentence().getId());
+          assert added;
           FNParse old = sentId2parse.put(y.getSentence().getId(), y);
           assert old == null;
         }
@@ -238,6 +244,10 @@ public class CachedFeatures {
         itr = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
         while (itr.hasNext()) {
           FNParse y = itr.next();
+          if (Math.floorMod(y.getSentence().getId().hashCode(), 10) == 0) {
+            boolean added = devSetSentIds.add(y.getSentence().getId());
+            assert added;
+          }
           FNParse old = sentId2parse.put(y.getSentence().getId(), y);
           assert old == null;
         }
@@ -265,7 +275,10 @@ public class CachedFeatures {
       return maxRole;
     }
     public int trainSize() {
-      return sentId2parse.size() - testSetSentIds.size();
+      return sentId2parse.size() - (devSetSentIds.size() + testSetSentIds.size());
+    }
+    public int devSize() {
+      return devSetSentIds.size();
     }
     public int testSize() {
       return testSetSentIds.size();
@@ -281,14 +294,20 @@ public class CachedFeatures {
    */
   public class ItemProvider implements edu.jhu.hlt.fnparse.rl.rerank.ItemProvider {
     private int eventualSize;
-    private boolean train;
-    public ItemProvider(int eventualSize, boolean train) {
-      Log.info("eventualSize=" + eventualSize + " train=" + train);
+    private boolean test, dev;  // if both are false, then train
+    public ItemProvider(int eventualSize, boolean dev, boolean test) {
+      Log.info("eventualSize=" + eventualSize + " dev=" + dev + " test=" + test);
       this.eventualSize = eventualSize;
-      this.train = train;
+      this.dev = dev;
+      this.test = test;
     }
     public int getNumActuallyLoaded() {
-      return train ? loadedTrainItems.size() : loadedTestItems.size();
+      if (test)
+        return loadedTestItems.size();
+      else if (dev)
+        return loadedDevItems.size();
+      else
+        return loadedTrainItems.size();
     }
     @Override
     public Iterator<FNParse> iterator() {
@@ -301,7 +320,13 @@ public class CachedFeatures {
     @Override
     public FNParse label(int i) {
       assert i >= 0 && i < eventualSize;
-      java.util.Vector<Item> li = train ? loadedTrainItems : loadedTestItems;
+      java.util.Vector<Item> li;
+      if (test)
+        li = loadedTestItems;
+      else if (dev)
+        li = loadedDevItems;
+      else
+        li = loadedTrainItems;
       int n;
       while (true) {
         n = li.size();
@@ -414,19 +439,17 @@ public class CachedFeatures {
 
       // I should be able to use the same code as in InformationGainProducts.
       IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
-      List<Long> buf = new ArrayList<>(4);
+      List<ProductIndex> buf = new ArrayList<>();
       for (int i = 0; i < featureSet.length; i++) {
         int[] feat = featureSet[i];
         // Note that these features don't need to be producted with k due to the
         // fact that we have separate weights for those.
-        InformationGainProducts.flatten(data, 0, feat, 0, 1, 1, template2cardinality, buf);
+        InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
 
         // If I get a long here, I can zip them all together by multiplying by
         // featureSet.length and then adding in an offset.
-        for (long l : buf) {
-          long ll = l * featureSet.length + i;
-          int h = ((int) ll) ^ ((int) (ll >>> 32));
-          h = Math.floorMod(h, dimension);
+        for (ProductIndex pi : buf) {
+          int h = pi.getHashedProdFeatureModulo(dimension);
           features.add(h, 1);
         }
         buf.clear();
@@ -505,6 +528,7 @@ public class CachedFeatures {
     this.bialph = bialph;
     this.template2cardinality = bialph.makeTemplate2Cardinality();
     this.loadedTrainItems = new java.util.Vector<>();
+    this.loadedDevItems = new java.util.Vector<>();
     this.loadedTestItems = new java.util.Vector<>();
     this.loadedSentId2Item = new ConcurrentHashMap<>();
     this.debugFeatures = new IntArrayList();
@@ -547,6 +571,7 @@ public class CachedFeatures {
    * mapping, an exception is thrown.
    */
   private void read(File featureFile,
+      Set<String> devSentIds,
       Set<String> testSentIds,
       Map<String, FNParse> sentId2parse,
       boolean skipEntriesNotInSentId2ParseMap) throws IOException {
@@ -577,7 +602,7 @@ public class CachedFeatures {
 
         if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
           if (cur != null)
-            addItem(cur, testSentIds);
+            addItem(cur, devSentIds, testSentIds);
           FNParse parse = sentId2parse.get(t.sentId);
           if (parse == null) {
             if (skipEntriesNotInSentId2ParseMap) {
@@ -612,7 +637,7 @@ public class CachedFeatures {
         }
       }
     }
-    addItem(cur, testSentIds);
+    addItem(cur, devSentIds, testSentIds);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean()
         + " nnz/template=" + (nnz.getMean() / templateSetSorted.length));
     Log.info("templateSetSorted.length=" + templateSetSorted.length
@@ -621,11 +646,13 @@ public class CachedFeatures {
       Log.info("debugFeatures.size=" + debugFeatures.size());
     if (keepKeys)
       Log.info("debugKeys.size=" + debugKeys.size());
-    Log.info("done reading " + numLines + " lines, train.size="
-        + loadedTrainItems.size() + " test.size=" + loadedTestItems.size());
+    Log.info("done reading " + numLines + " lines,"
+        + " train.size=" + loadedTrainItems.size()
+        + " dev.size=" + loadedDevItems.size()
+        + " test.size=" + loadedTestItems.size());
   }
 
-  private void addItem(Item cur, Set<String> testSentIds) {
+  private void addItem(Item cur, Set<String> devSentIds, Set<String> testSentIds) {
     // I think this might still be wrong...
     synchronized (loadedSentId2Item) {
       Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
@@ -634,8 +661,11 @@ public class CachedFeatures {
             + " old=" + old.parse.getId() + " new=" + cur.parse.getId()
             + ", skipping");
       } else {
-        if (testSentIds.contains(cur.parse.getSentence().getId()))
+        String id = cur.parse.getSentence().getId();
+        if (testSentIds.contains(id))
           loadedTestItems.add(cur);
+        else if (devSentIds.contains(id))
+          loadedDevItems.add(cur);
         else
           loadedTrainItems.add(cur);
       }
@@ -704,7 +734,7 @@ public class CachedFeatures {
     int numRoles = 20;
     Params params = this.new Params(dimension, numRoles);
 
-    ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), true);
+    ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), false, false);
     for (int index = 0; index < ip.size(); index++) {
       FNParse y = ip.label(index);
       Log.info("checking " + y.getSentence().getId() + ", there are "
