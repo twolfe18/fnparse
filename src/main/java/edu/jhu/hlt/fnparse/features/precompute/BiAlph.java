@@ -106,6 +106,18 @@ public class BiAlph {
     set(f, lineMode);
   }
 
+  public int getUpperBoundOnNumTemplates() {
+    return newInt2MaxFeatureIndex.length;
+//    int max = 0;
+//    for (int i = 0; i < newInt2MaxFeatureIndex.length; i++)
+//      if (newInt2MaxFeatureIndex[i] > 0)
+//        max = i;
+//    return max + 1;
+  }
+  public int getUpperBoundOnNumFeatures(int template) {
+    return newInt2MaxFeatureIndex[template] + 1;
+  }
+
   public File getSource() {
     return file;
   }
@@ -203,6 +215,8 @@ public class BiAlph {
   }
 
   public String lookupTemplate(int newTemplateIndex) {
+    if (newTemplateIndex >= newInt2TemplateName.length)
+      return null;
     return newInt2TemplateName[newTemplateIndex];
   }
   public String[] lookupTemplates(int[] newTemplateIndices) {

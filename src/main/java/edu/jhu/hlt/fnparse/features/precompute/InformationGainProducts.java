@@ -56,6 +56,8 @@ public class InformationGainProducts {
   public static boolean DEBUG = false;
   public static boolean FLATTEN_DEBUG = false;
 
+  public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
+
   /** Extracts just the features needed (given a subset of templates of interet) */
   public static class BaseTemplates {
     private String line;                      // debug, be careful with memory usage
@@ -72,6 +74,12 @@ public class InformationGainProducts {
       this.features = features;
     }
 
+    /**
+     * @param templates the relevent set templates that should be read in a
+     * stored, or null if all templates should be taken in.
+     * @param line
+     * @param storeTemplates
+     */
     public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
       this.line = line;
 //      this.role = FeaturePrecomputation.getRole(line);
@@ -84,7 +92,7 @@ public class InformationGainProducts {
         String ts = line.substring(se.first, colon);
         int t = Integer.parseInt(ts);
         assert t >= 0;
-        if (templates.get(t)) {
+        if (templates == null || templates.get(t)) {
           if (DEBUG)
             System.out.println("keeping: " + line.substring(se.first, se.second));
           String fs = line.substring(colon + 1, se.second);
@@ -148,6 +156,16 @@ public class InformationGainProducts {
   private BitSet relevantTemplates;   // Union of values in keys of products
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
+  /** How to accumulate many template IGs into a single score for a feature */
+  public static FeatureScoring FEATURE_SCORE_HEURISTIC = FeatureScoring.ARITHMETIC_MEAN;
+  public static enum FeatureScoring {
+    // Arithmetic is less greedy than harmonic, so if you're exploring a lot of
+    // features, arithmetic may lead to finding better features by searching
+    // over a more diverse/larger set.
+    ARITHMETIC_MEAN,    // score(feature) = 1/N sum_{template \in feature} ig(template)
+    HARMONIC_MEAN,
+  }
+
   private Set<String> ignoreSentenceIds;
 
   // If this is >0, then the hashing tick is used and every template is allocated
@@ -187,7 +205,7 @@ public class InformationGainProducts {
    * Converts strings given at construction into ints for efficient processing
    * (only needs to be called once).
    */
-  public void init(BiAlph bialph) {
+  public void init(BiAlph bialph, int numRoles) {
     assert baseFeatures == null;
     assert products == null;
     assert relevantTemplates == null;
@@ -201,11 +219,12 @@ public class InformationGainProducts {
     int featIdx = 0;
     for (String[] strTemplates : baseFeatureNames) {
       int[] intTemplates = new int[strTemplates.length];
-      for (int i = 0; i < intTemplates.length; i++)
+      for (int i = 0; i < intTemplates.length; i++) {
         intTemplates[i] = bialph.mapTemplate(strTemplates[i]);
+      }
       Arrays.sort(intTemplates);
       baseFeatures.add(intTemplates);
-      products.put(intTemplates, new TemplateIG(featIdx));
+      products.put(intTemplates, new TemplateIG(featIdx, StringUtils.join("*", strTemplates)));
       featIdx++;
     }
 
@@ -240,23 +259,34 @@ public class InformationGainProducts {
   public void observeLine(String line) {
     String[] toks = line.split("\t", 3);
     String sentenceId = toks[1];
-    if (ignoreSentenceIds.contains(sentenceId))
-      return;
-    List<Long> fv = new ArrayList<>();
     BaseTemplates bv = new BaseTemplates(relevantTemplates, line, true);
-    for (int k : bv.getRoles()) {
-      for (Entry<int[], TemplateIG> x : products.entrySet()) {
-        // Get the products
-        int[] templates = x.getKey();
-        flatten(bv, 0, templates, 0, 1, 1, template2cardinality, fv);
 
-        // Measure IG
-        int y = k + 1;  // k=-1 means no role, shift everything up by one
-        final TemplateIG t = x.getValue();
-        for (long index : fv)
-          t.update(y, (int) (Math.floorMod(index, this.hashingTrickDim)));
-        fv.clear();
-      }
+    // y = BaseTemplates.getRoles()
+    // x = feature vector produced by flatten()
+    int[] y;
+    if (ignoreSentenceIds.contains(sentenceId)) {
+      y = null;
+    } else {
+      y = bv.getRoles();
+      for (int i = 0; i < y.length; i++)
+        y[i]++;   // k=-1 means no role, shift everything up by one
+    }
+
+    for (Entry<int[], TemplateIG> entry : products.entrySet()) {
+      int[] templates = entry.getKey();
+
+      // Get the products
+      List<ProductIndex> prods = new ArrayList<>();
+//      flatten(bv, 0, templates, 0, 1, 1, ProductIndex.NIL, template2cardinality, null/*fv*/, prods);
+      flatten(bv, 0, templates, 0, ProductIndex.NIL, template2cardinality, prods);
+
+      // Measure IG
+      final TemplateIG t = entry.getValue();
+      // TODO check this
+//      ProductIndex[] x = prods.toArray(new ProductIndex[prods.size()]);
+//      t.update(y, x);
+      for (ProductIndex pi : prods)
+        t.update(y, new ProductIndex[] {pi});
     }
   }
 
@@ -277,17 +307,19 @@ public class InformationGainProducts {
   public static void flatten(
       BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
-      long cardinality, long value,
+//      long cardinality, long value,
+      ProductIndex cardValue,
       int[] template2cardinality,
-      List<Long> buffer) {
+//      List<Long> buffer,
+      List<ProductIndex> buffer2) {
     if (FLATTEN_DEBUG) {
       System.out.println();
       System.out.println(data.toString());
       System.out.println("dIndex=" + dIndex);
       System.out.println("templates=" + Arrays.toString(templates));
       System.out.println("tIndex=" + tIndex);
-      System.out.println("cardinality=" + cardinality);
-      System.out.println("value=" + value);
+//      System.out.println("cardinality=" + cardinality);
+//      System.out.println("value=" + value);
 
       // Verify templates are sorted
       for (int i = 0; i < templates.length - 1; i++)
@@ -298,7 +330,9 @@ public class InformationGainProducts {
     }
 
     if (tIndex == templates.length) {
-      buffer.add(value);
+//      if (buffer != null)
+//        buffer.add(value);
+      buffer2.add(cardValue);
       return;
     }
 
@@ -331,23 +365,29 @@ public class InformationGainProducts {
       endDataIndex++;
 
     // Recurse
-    long newCard = cardinality * curTemplateCard;
+//    long newCard = cardinality * curTemplateCard;
     if (FLATTEN_DEBUG) {
-      System.out.println("cardinality=" + cardinality);
+//      System.out.println("cardinality=" + cardinality);
       System.out.println("curTemplateCard=" + curTemplateCard);
-      System.out.println("newCard=" + newCard);
+//      System.out.println("newCard=" + newCard);
     }
-    assert newCard > 0;
+//    assert newCard > 0;
     for (int i = startDataIndex; i < endDataIndex; i++) {
-      if (FLATTEN_DEBUG)
-        System.out.println("data.getValue(" + i + ")=" + data.getValue(i));
       assert data.getValue(i) < curTemplateCard;
-      long newValue = value * curTemplateCard + data.getValue(i);
+//      long newValue = value * curTemplateCard + data.getValue(i);
+      int card = template2cardinality[data.getTemplate(i)];
+      ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
+      if (FLATTEN_DEBUG) {
+        System.out.println("data.getValue(" + i + ")=" + data.getValue(i)
+          + " card=" + card + " newValue2=" + newValue2);
+      }
       flatten(data, endDataIndex,
           templates, tIndex + 1,
-          newCard, newValue,
+//          newCard, newValue,
+          newValue2,
           template2cardinality,
-          buffer);
+//          buffer,
+          buffer2);
     }
   }
 
@@ -369,8 +409,12 @@ public class InformationGainProducts {
    */
   public void writeOutProducts(File output) {
     Log.info("writing output to " + output.getPath());
+    List<TemplateIG> byIG = getTemplatesSortedByIGDecreasing();
     try (BufferedWriter w = FileUtil.getWriter(output)) {
-      List<TemplateIG> byIG = getTemplatesSortedByIGDecreasing();
+      if (byIG.size() == 0) {
+        w.write("<no templates>\n");
+        Log.warn("no templates!");
+      }
       for (int j = 0; j < byIG.size(); j++) {
         TemplateIG t = byIG.get(j);
         StringBuilder sb = new StringBuilder();
@@ -389,6 +433,7 @@ public class InformationGainProducts {
         w.write(sb.toString());
         w.newLine();
       }
+      w.flush();
     } catch (IOException e) {
       e.printStackTrace();
     }
@@ -400,16 +445,37 @@ public class InformationGainProducts {
     double igProd = 1;
     for (int i = 0; i < templateIGs.length; i++) {
       prod[i] = templateIGs[i].get1();
-      igProd *= (1 + templateIGs[i].get2());
+      assert prod[i] != null;
+      switch (FEATURE_SCORE_HEURISTIC) {
+      case ARITHMETIC_MEAN:
+        igProd += templateIGs[i].get2();
+        break;
+      case HARMONIC_MEAN:
+        igProd *= (1 + templateIGs[i].get2());
+        break;
+      default:
+        throw new RuntimeException("implement me: " + FEATURE_SCORE_HEURISTIC);
+      }
+    }
+    switch (FEATURE_SCORE_HEURISTIC) {
+    case ARITHMETIC_MEAN:
+      igProd /= templateIGs.length;
+      break;
+    case HARMONIC_MEAN:
+      igProd = Math.pow(igProd, 1 / templateIGs.length);
+      break;
+    default:
+      throw new RuntimeException("implement me: " + FEATURE_SCORE_HEURISTIC);
     }
     return new Pair<>(prod, igProd);
   }
 
   /** Only return products of the given order */
-  public static List<String[]> getProductsSorted(
+  public static List<String[]> getProductsHeuristicallySorted(
       ExperimentProperties config,
       BiAlph bialph,
       int order) throws IOException {
+
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
     File templateIGsFile = config.getExistingFile("templateIGs");
@@ -421,7 +487,15 @@ public class InformationGainProducts {
         int template = Integer.parseInt(toks[1]);
         String templateString = bialph.lookupTemplate(template);
 //        String templateString = toks[2];
-        templateIGs.add(new Pair<>(templateString, ig));
+        if (templateString == null) {
+          Log.warn("skipping template " + template + " because it is not in"
+              + " the provided BiAlph: " + bialph.getSource().getPath());
+        } else {
+          if (DEBUG_TEMPLATE != null && !DEBUG_TEMPLATE.equals(templateString))
+            Log.info("skipping " + templateString + " because DEBUG_TEMPLATE is set");
+          else
+            templateIGs.add(new Pair<>(templateString, ig));
+        }
       }
     }
 
@@ -455,7 +529,7 @@ public class InformationGainProducts {
     }
 
     // Sort and project
-    Log.info("sorting template products by information gain...");
+    Log.info("sorting " + prodIGs.size() + " template products by information gain...");
     Collections.sort(prodIGs, new Comparator<Pair<String[], Double>>() {
       @Override
       public int compare(Pair<String[], Double> o1, Pair<String[], Double> o2) {
@@ -513,7 +587,7 @@ public class InformationGainProducts {
   public static double weight(int order, double gain) {
     if (gain < 1 || order < 1)
       throw new IllegalArgumentException();
-    Log.info("order=" + order + " gain=" + gain + " result=" + Math.pow(gain, order));
+//    Log.info("order=" + order + " gain=" + gain + " result=" + Math.pow(gain, order));
     return Math.pow(gain, order);
   }
   public static int count(int order, double gain, int maxOrder, int n) {
@@ -532,8 +606,6 @@ public class InformationGainProducts {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     FLATTEN_DEBUG = config.getBoolean("FLATTEN_DEBUG", false);
-    TemplateIG.ADD_LAMBDA_SMOOTHING =
-        config.getDouble("ig.addLambda", TemplateIG.ADD_LAMBDA_SMOOTHING);
 
     // Load the features and compute the IG for the chosen products
     File featuresParent = config.getExistingDir("featuresParent");
@@ -552,11 +624,15 @@ public class InformationGainProducts {
       + " templateAlphIsBialph=" + templateAlphIsBialph);
     BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
 
-    // Find the top K unigrams
+    // Find the top K unigrams.
+    // Splitting the features by order and then assigning resources according to
+    // "gain" (high gain searches more higher order features, gain=1 searches
+    // over the same number of features from all orders) is a hedge against the
+    // feature scoring heuristic being bad.
     IntPair shard = ShardUtils.getShard(config);
-    List<String[]> prod1 = ShardUtils.shard(getProductsSorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod2 = ShardUtils.shard(getProductsSorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod3 = ShardUtils.shard(getProductsSorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
     double gain = config.getDouble("gain", 1.5);
     int maxProducts = config.getInt("numProducts", 500);
     assert maxProducts > 0;
@@ -576,9 +652,10 @@ public class InformationGainProducts {
     for (int i = 0; i < 10 && i < prod3.size(); i++)
       Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
 
+    int numRoles = config.getInt("numRoles", 30);
     int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
     InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim);
-    igp.init(bialph);
+    igp.init(bialph, numRoles);
 
     // Scan each of the input files
     PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
