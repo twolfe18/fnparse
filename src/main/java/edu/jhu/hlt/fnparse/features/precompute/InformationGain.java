@@ -24,7 +24,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
-import edu.jhu.hlt.ml.regularization.dirmult.SmoothedMutualInformation;
+//import edu.jhu.hlt.ml.regularization.dirmult.SmoothedMutualInformation;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -166,7 +166,7 @@ public class InformationGain implements Serializable, LineByLine {
     public double alpha_y = 1;
     public double alpha_x = 1;
 
-    private SmoothedMutualInformation<Integer, ProductIndex> smi;
+//    private SmoothedMutualInformation<Integer, ProductIndex> smi;
 
     public TemplateIG(int index) {
       this(index, "template-" + index);
@@ -179,7 +179,7 @@ public class InformationGain implements Serializable, LineByLine {
       this.cx = new IntIntDenseVector();
       this.cyx = new Counts<>();
       this.updates = 0;
-      this.smi = new SmoothedMutualInformation<>();
+//      this.smi = new SmoothedMutualInformation<>();
     }
 
     public int getIndex() {
@@ -202,10 +202,10 @@ public class InformationGain implements Serializable, LineByLine {
      * and calls smi.addUnobserved instead of smi.add.
      */
     public void update(int[] y, ProductIndex[] x) {
-      if (smi != null) {
-        if (y != null)
-          smi.add(conv(y), x);
-      }
+//      if (smi != null) {
+//        if (y != null)
+//          smi.add(conv(y), x);
+//      }
       if (y != null) {
         for (int yy : y) {
           for (ProductIndex xpi : x) {
@@ -256,13 +256,13 @@ public class InformationGain implements Serializable, LineByLine {
         MI emp = igCache.miEmpirical;
         MI smo = igCache.miSmoothed;
 
-        if (smi != null) {
-          smi.smoothManual3(alpha_yx_p, alpha_y_p, alpha_x_p, alpha_y, alpha_x);
-          double mi = smi.computeMutualInformation();
-          igCache.miSmoothed = new MIFixed(mi);
-          igCache.miEmpirical = new MIFixed(0);
-          return igCache;
-        }
+//        if (smi != null) {
+//          smi.smoothManual3(alpha_yx_p, alpha_y_p, alpha_x_p, alpha_y, alpha_x);
+//          double mi = smi.computeMutualInformation();
+//          igCache.miSmoothed = new MIFixed(mi);
+//          igCache.miEmpirical = new MIFixed(0);
+//          return igCache;
+//        }
 
         final double C_yx = updates, C_y = updates, C_x = updates;
         //          int D_y = cy.getNumImplicitEntries();

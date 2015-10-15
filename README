@@ -1,63 +1,7 @@
 
+# Get matlabcontrol
+# Download and build from
+https://github.com/diffplug/matlabcontrol
+# Install with
+mvn install:install-file -Dfile=lib/matlabcontrol-4.3.0-SNAPSHOT.jar -DgroupId=com.diffplug.matsim -DartifactId=matlabcontrol -Dversion=4.3.0 -Dpackaging=jar
 
-
-To compile a bunch of stuff (in particular pacaya) you will need
-a script that sets up a SSH tunnel to the Maven repositories on the CLSP network:
-  ssh -f -N -L 8081:checker:8081 -2 login.clsp.jhu.edu
-
-
-
-
-1. We use Java7
-2. Framenet database contains the following files 
-   (the xsl files are just stylesheets)
-   (The schema folder contains all schemas)
-   (The meat is in the directories)
-   | Directory | Index xml      | XSD                             |                                                                                                                                                                   |
-   | frame     | yes            | frame.xsd, frameIndex.xsd       |                                                                                                                                                                   |
-   | lu        | yes            | lexUnit.xsd, luIndex.xsd        |                                                                                                                                                                   |
-   | fulltext  | yes            | fullText.xsd, fulltextIndex.xsd |                                                                                                                                                                   |
-   |           | frRelation.xml | frameRelations.xsd              |                                                                                                                                                                   |
-   |           | semTypes.xml   | semTypes.xsd                    |                                                                                                                                                                   |
-   |           |                | header.xsd                      | Header information included in full-text and lexunit annotation   to provide document and corpus information relevant to all sentences contained in the document. |
-   |           |                | sentence.xsd                    | FN Sentence annotation schema, used in full text and lexunit xml outputs                                                                                          |
-   Corresponding to xsd definitions there are xml files.
-   | XML Files                          | Description                                                                                                                                                                                                                     |
-   | frRelation.xml                     | This describes all the frameRelations. There are 18 types. Every Type has relations inside this e.g. Change_of_consistency, Event are related by relation of type inheritance. and even the FE-FE mapping is defined in the XML |
-   | frameIndex.xml                     | 1019 frames just their names and an ID.                                                                                                                                                                                         |
-   | fulltextIndex.xml                  | The list of filenames and corpus names                                                                                                                                                                                          |
-   | luIndex.xml                        | This contains the LU and its related frame. The LU is always the trigger                                                                                                                                                        |
-   | semTypes.xml                       | Semantic type annotations                                                                                                                                                                                                       |
-   | frame/<framename>.xml              |                                                                                                                                                                                                                                 |
-   | lu/lu<luID>.xml                    | This contains the valences(relaizations), the lexeme, the header(corpus frame)                                                                                                                                                  |
-   | fulltext/<corpusname__description> |                                                                                                                                                                                                                                 |
-      
-      The annoset 1950929 is 
-      luID.xml
-       <FERealization total="19"> #this means that the number of times the "Benefit" Frame Element was actually relaized in corpus with paricular pattern for the Frame Element.
-            <FE name="Benefit"/>
-            <pattern total="5">
-                <valenceUnit GF="" PT="DNI" FE="Benefit"/>
-                <annoSet ID="1950929"/> ...
-            </pattern>
-
-   Frame names start with capital letter (note that frames are referred to by names and lu by ids)
-   Full text ANC__110CYL067
-3. The usage of this requires System.getProperty("toydataPath"). toydatapath is the path to the toydata folder.
-4. The toydata/nw/wsj/00/wsj_0001.prd file was created from the folder /export/corpora/LDC/LDC99T42/treebank_3/parsed/prd/wsj/00/wsj_0001.prd . The semlink.1.2.2c file actually says their extension to be .parse we handle this in code
-5. There is a discrepancy in semlink data. basically the triggerIndex is broken (it says 14 when it should be 12)
-   the problem is in line 8 of semlink which corresponds to line 13 of probank
-   they can be accessed as 
-   $head -n 8 data/semlink/1.2.2c.okay | tail -n  1
-   nw/wsj/00/wsj_0003.parse 2 14 gold make-v 26.1-1 Manufacturing make.01 null ----- 3:2*12:1*13:1-ARG0=Agent;Manufacturer 14:0-rel 15:1-ARG1=Product;Product 3:2*12:1-LINK-SLC 
-   and $head -n 7 data/semlink/1.2.2c.okay | tail -n  1
-   nw/wsj/00/wsj_0003.parse 1 31 gold say-v 37.7-1 IN say.01 null ----- 0:3*33:1-ARG1=Topic 30:1-ARG0=Agent 31:0-rel 
-    wsj/00/wsj_0003.mrg      2 12 
-    nw/wsj/00/wsj_0003.parse 2 14 
-   I could use propbank's trigger index instead though as the default. the following commands can easily help me find out the correspondence between the two files. 
-   cat data/propbank/propbank_1/data/prop.txt > propbank_data
-   cat data/semlink/1.2.2c.okay | cut -c 4- > semlink_data
-   while read line ; do arr=($line) && echo ${arr[0]} ${arr[1]} ${arr[2]}  ; done < semlink_data > semlink_3col
-   while read line ; do arr=($line) && echo ${arr[0]} ${arr[1]} ${arr[2]}  ; done < propbank_data > propbank_3col
-   sed "s#.parse #_#" semlink_3col > semlink_3
-   sed "s#.mrg #_#" propbank_3col > propbank_3
