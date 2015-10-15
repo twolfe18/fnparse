@@ -277,7 +277,8 @@ public class InformationGainProducts {
 
       // Get the products
       List<ProductIndex> prods = new ArrayList<>();
-      flatten(bv, 0, templates, 0, 1, 1, ProductIndex.NIL, template2cardinality, null/*fv*/, prods);
+//      flatten(bv, 0, templates, 0, 1, 1, ProductIndex.NIL, template2cardinality, null/*fv*/, prods);
+      flatten(bv, 0, templates, 0, ProductIndex.NIL, template2cardinality, prods);
 
       // Measure IG
       final TemplateIG t = entry.getValue();
@@ -306,10 +307,10 @@ public class InformationGainProducts {
   public static void flatten(
       BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
-      long cardinality, long value,
+//      long cardinality, long value,
       ProductIndex cardValue,
       int[] template2cardinality,
-      List<Long> buffer,
+//      List<Long> buffer,
       List<ProductIndex> buffer2) {
     if (FLATTEN_DEBUG) {
       System.out.println();
@@ -317,8 +318,8 @@ public class InformationGainProducts {
       System.out.println("dIndex=" + dIndex);
       System.out.println("templates=" + Arrays.toString(templates));
       System.out.println("tIndex=" + tIndex);
-      System.out.println("cardinality=" + cardinality);
-      System.out.println("value=" + value);
+//      System.out.println("cardinality=" + cardinality);
+//      System.out.println("value=" + value);
 
       // Verify templates are sorted
       for (int i = 0; i < templates.length - 1; i++)
@@ -329,8 +330,8 @@ public class InformationGainProducts {
     }
 
     if (tIndex == templates.length) {
-      if (buffer != null)
-        buffer.add(value);
+//      if (buffer != null)
+//        buffer.add(value);
       buffer2.add(cardValue);
       return;
     }
@@ -364,16 +365,16 @@ public class InformationGainProducts {
       endDataIndex++;
 
     // Recurse
-    long newCard = cardinality * curTemplateCard;
+//    long newCard = cardinality * curTemplateCard;
     if (FLATTEN_DEBUG) {
-      System.out.println("cardinality=" + cardinality);
+//      System.out.println("cardinality=" + cardinality);
       System.out.println("curTemplateCard=" + curTemplateCard);
-      System.out.println("newCard=" + newCard);
+//      System.out.println("newCard=" + newCard);
     }
-    assert newCard > 0;
+//    assert newCard > 0;
     for (int i = startDataIndex; i < endDataIndex; i++) {
       assert data.getValue(i) < curTemplateCard;
-      long newValue = value * curTemplateCard + data.getValue(i);
+//      long newValue = value * curTemplateCard + data.getValue(i);
       int card = template2cardinality[data.getTemplate(i)];
       ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
       if (FLATTEN_DEBUG) {
@@ -382,10 +383,10 @@ public class InformationGainProducts {
       }
       flatten(data, endDataIndex,
           templates, tIndex + 1,
-          newCard, newValue,
+//          newCard, newValue,
           newValue2,
           template2cardinality,
-          buffer,
+//          buffer,
           buffer2);
     }
   }
@@ -605,15 +606,6 @@ public class InformationGainProducts {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     FLATTEN_DEBUG = config.getBoolean("FLATTEN_DEBUG", false);
-    TemplateIG.ADD_LAMBDA_SMOOTHING =
-        config.getDouble("ig.addLambda", TemplateIG.ADD_LAMBDA_SMOOTHING);
-
-    TemplateIG.NEW_SMOOTHING =
-        config.getBoolean("NEW_SMOOTHING", true);
-    TemplateIG.NEW_SMOOTHING_ONLY_APPROX =
-        config.getBoolean("NEW_SMOOTHING_ONLY_APPROX", false);
-    TemplateIG.NMI =
-        config.getBoolean("NMI", false);
 
     // Load the features and compute the IG for the chosen products
     File featuresParent = config.getExistingDir("featuresParent");

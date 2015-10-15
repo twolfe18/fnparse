@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
+import edu.jhu.hlt.ml.regularization.dirmult.SmoothedMutualInformation;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -81,6 +82,19 @@ public class InformationGain implements Serializable, LineByLine {
     }
   }
 
+  public static class MIFixed extends MI {
+    private static final long serialVersionUID = 6352049409141433353L;
+    public double mi_set;
+    public MIFixed(double mi_set) {
+      super();
+      this.mi_set = mi_set;
+    }
+    @Override
+    public double mi() {
+      return mi_set;
+    }
+  }
+
   /** Values derived from counts in {@link TemplateIG} */
   public static class MISummary implements Serializable {
     private static final long serialVersionUID = 3888066629569424209L;
@@ -93,8 +107,8 @@ public class InformationGain implements Serializable, LineByLine {
     public MI miEmpirical = new MI();
     public MI miSmoothed = new MI();
 //    public double h_yx;   // TODO add this
-    public double h_y_p, h_y;
-    public double h_x_p, h_x;
+    public double h_y_p, h_y, h_y_emp;
+    public double h_x_p, h_x, h_x_emp;
 
     // Providence
     public double alpha_yx_p;
@@ -115,8 +129,10 @@ public class InformationGain implements Serializable, LineByLine {
           + " miSmoothed=" + miSmoothed
           + " h_y_p=" + h_y_p
           + " h_y=" + h_y
+          + " h_y_emp=" + h_y_emp
           + " h_x_p=" + h_x_p
           + " h_x=" + h_x
+          + " h_x_emp=" + h_x_emp
           + " alpha_yx_p=" + alpha_yx_p
           + " alpha_y_p=" + alpha_y_p
           + " alpha_x_p=" + alpha_x_p
@@ -142,11 +158,15 @@ public class InformationGain implements Serializable, LineByLine {
     private int updates;
     private MISummary igCache = null;
 
-    public double alpha_yx_p = 2500;   // should be ~= (alpha_y_p * alpha_x_p)
-    public double alpha_y_p = 50;
-    public double alpha_x_p = 50;
-    public double alpha_y = 5;
-    public double alpha_x = 5;
+    // alpha_yx_p works differently from alpha_[yx](_p)?
+    // The former is add alpha/D and the latter is add alpha
+    public double alpha_yx_p = 5000;   // should be ~= (alpha_y_p * alpha_x_p)
+    public double alpha_y_p = 5;
+    public double alpha_x_p = 5;
+    public double alpha_y = 1;
+    public double alpha_x = 1;
+
+    private SmoothedMutualInformation<Integer, ProductIndex> smi;
 
     public TemplateIG(int index) {
       this(index, "template-" + index);
@@ -159,6 +179,7 @@ public class InformationGain implements Serializable, LineByLine {
       this.cx = new IntIntDenseVector();
       this.cyx = new Counts<>();
       this.updates = 0;
+      this.smi = new SmoothedMutualInformation<>();
     }
 
     public int getIndex() {
@@ -169,11 +190,22 @@ public class InformationGain implements Serializable, LineByLine {
       return name;
     }
 
+    public static Integer[] conv(int[] a) {
+      Integer[] aa = new Integer[a.length];
+      for (int i = 0; i < aa.length; i++)
+        aa[i] = a[i];
+      return aa;
+    }
+
     /**
      * if NEW_SMOOTHING and y==null, then set y to [[1], [2], ..., [numRoles]]
      * and calls smi.addUnobserved instead of smi.add.
      */
     public void update(int[] y, ProductIndex[] x) {
+      if (smi != null) {
+        if (y != null)
+          smi.add(conv(y), x);
+      }
       if (y != null) {
         for (int yy : y) {
           for (ProductIndex xpi : x) {
@@ -209,6 +241,7 @@ public class InformationGain implements Serializable, LineByLine {
 
     public MISummary ig() {
       if (igCache == null) {
+
         igCache = new MISummary();
         igCache.alpha_yx_p = alpha_yx_p;
         igCache.alpha_y_p = alpha_y_p;
@@ -222,6 +255,14 @@ public class InformationGain implements Serializable, LineByLine {
         igCache.templateName = name;
         MI emp = igCache.miEmpirical;
         MI smo = igCache.miSmoothed;
+
+        if (smi != null) {
+          smi.smoothManual3(alpha_yx_p, alpha_y_p, alpha_x_p, alpha_y, alpha_x);
+          double mi = smi.computeMutualInformation();
+          igCache.miSmoothed = new MIFixed(mi);
+          igCache.miEmpirical = new MIFixed(0);
+          return igCache;
+        }
 
         final double C_yx = updates, C_y = updates, C_x = updates;
         //          int D_y = cy.getNumImplicitEntries();
@@ -243,6 +284,10 @@ public class InformationGain implements Serializable, LineByLine {
         // c(y,x)=0
         for (int i = 0; i < D_y; i++) {
           double c_y = cy.get(i);
+          if (c_y > 0) {
+            double p_y_emp = c_y / C_y;
+            igCache.h_y_emp += p_y_emp * -Math.log(p_y_emp);
+          }
           double p_y = (c_y + alpha_y) / Z_y;
           igCache.h_y += p_y * -Math.log(p_y);
           double p_y_p = (c_y + alpha_y_p) / Z_y_p;
@@ -250,6 +295,10 @@ public class InformationGain implements Serializable, LineByLine {
         }
         for (int i = 0; i < D_x; i++) {
           double c_x = cx.get(i);
+          if (c_x > 0) {
+            double p_x_emp = c_x / C_x;
+            igCache.h_x_emp += p_x_emp * -Math.log(p_x_emp);
+          }
           double p_x = (c_x + alpha_x) / Z_x;
           igCache.h_x += p_x * -Math.log(p_x);
           double p_x_p = (c_x + alpha_x_p) / Z_x_p;
@@ -348,9 +397,8 @@ public class InformationGain implements Serializable, LineByLine {
 
   @Override
   public void observeLine(String line) {
-    String[] toks = line.split("\t");
     FeatureFile.Line l = new FeatureFile.Line(line, true);
-    String sentenceId = toks[1];
+    String sentenceId = l.getSentenceId();
     if (ignoreSentenceIds.contains(sentenceId)) {
       if (numRoles < 1)
         return;
@@ -359,10 +407,7 @@ public class InformationGain implements Serializable, LineByLine {
     } else {
       // y = vector of roles (probably just one, but FN may have >1)
       // x_t = vector of extracted values for template t
-      String[] kss = toks[4].split(",");
-      int[] ksi = new int[kss.length];
-      for (int i = 0; i < kss.length; i++)
-        ksi[i] = Integer.parseInt(kss[i]) + 1;  // +1 b/c -1 means no role
+      int[] ksi = l.getRoles(true);
 
       for (TemplateExtraction te : l.groupByTemplate())
         templates[te.template].update(ksi, te.featureToProductIndex());
