@@ -93,10 +93,10 @@ public class BubEntropyEstimatorAdapter {
       proxy.setVariable("display_flag", 0);
       if (debug)
         Log.info("about to call1");
-      proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag)");
+      proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag);");
       if (debug)
         Log.info("about to call2");
-      proxy.eval("BUB_est=sum(a(n+1))");
+      proxy.eval("BUB_est=sum(a(n+1));");
       if (debug)
         Log.info("about to get result");
       Object I = proxy.getVariable("BUB_est");
