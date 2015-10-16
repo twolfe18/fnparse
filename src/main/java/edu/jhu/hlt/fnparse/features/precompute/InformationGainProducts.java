@@ -249,9 +249,17 @@ public class InformationGainProducts {
 
   private int numUpdates = 0;
   public void update(File features) throws IOException {
+    TimeMarker tm = new TimeMarker();
+    int lines = 0;
     try (BufferedReader r = FileUtil.getReader(features)) {
-      for (String line = r.readLine(); line != null; line = r.readLine())
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
         observeLine(line);
+        if (tm.enoughTimePassed(15)) {
+          Log.info("read " + lines + " lines in "
+              + tm.secondsSinceFirstMark() + " seconds");
+        }
+        lines++;
+      }
       numUpdates++;
     }
   }

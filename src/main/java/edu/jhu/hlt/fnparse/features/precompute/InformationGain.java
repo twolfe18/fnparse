@@ -489,16 +489,20 @@ public class InformationGain implements Serializable, LineByLine {
 
   public List<TemplateIG> getTemplatesSorted(Comparator<TemplateIG> cmp) {
     TimeMarker tm = new TimeMarker();
+    int nt = 0;
+    for (int i = 0; i < templates.length; i++)
+      if (templates[i] != null && templates[i].numUpdates() > 0)
+        nt++;
     List<TemplateIG> l = new ArrayList<>();
     for (TemplateIG t : templates) {
-      if (t.numUpdates() == 0)
+      if (t == null || t.numUpdates() == 0)
         continue;
       t.ig();
       l.add(t);
       if (tm.enoughTimePassed(15)) {
         Log.info("took " + tm.secondsSinceFirstMark()
             + " seconds to compute MI for "
-            + l.size() + " of " + templates.length + " templates");
+            + l.size() + " of " + nt + " templates");
       }
     }
     Collections.sort(l, cmp);
