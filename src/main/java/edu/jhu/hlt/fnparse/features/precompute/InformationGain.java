@@ -463,109 +463,107 @@ public class InformationGain implements Serializable, LineByLine {
 
     final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
     Log.info("using BUB code in " + bubFuncParentDir.getPath());
-    BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
-    bubEst.debug = config.getBoolean("bubDebug", false);
+    try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
+      bubEst.debug = config.getBoolean("bubDebug", false);
 
-    final InformationGain input = new InformationGain(bubEst);
+      final InformationGain input = new InformationGain(bubEst);
 
-    String features = config.getString("features", "none");
-    if (!features.equals("none")) {
-      Log.info("updating stats from " + features);
-      input.run(new File(features));
-    }
+      String features = config.getString("features", "none");
+      if (!features.equals("none")) {
+        Log.info("updating stats from " + features);
+        input.run(new File(features));
+      }
 
-    String featuresGlob = config.getString("featuresGlob", "");
-    if (!featuresGlob.isEmpty()) {
-      File featuresParent = config.getExistingDir("featuresParent");
-      PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-      Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-        @Override
-        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-          if (pm.matches(path)) {
-            Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
-            input.run(path.toFile());
+      String featuresGlob = config.getString("featuresGlob", "");
+      if (!featuresGlob.isEmpty()) {
+        File featuresParent = config.getExistingDir("featuresParent");
+        PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+        Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+            if (pm.matches(path)) {
+              Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
+              input.run(path.toFile());
+            }
+            return FileVisitResult.CONTINUE;
           }
-          return FileVisitResult.CONTINUE;
-        }
-        @Override
-        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-          return FileVisitResult.CONTINUE;
-        }
-      });
-    }
-
-    Log.info("computing mutual information...");
-    List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
-
-    // You dont want this: Alphabet loads all feature names, too big for memory
-    Alphabet tNames = null;
-//    String tNamesFile = config.getString("templateAlph", "none");
-//    if (!tNamesFile.equals("none")) {
-//      Log.info("loading template names from " + tNamesFile);
-//      boolean header = false;
-//      tNames = new Alphabet(new File(tNamesFile), header);
-//    }
-
-    // This should fit much easiser in memory (only stores template names)
-    BiAlph tNames2 = null;
-    String tNames2File = config.getString("bialph", "");
-    if (!tNames2File.isEmpty())
-      tNames2 = new BiAlph(config.getExistingFile("bialph"), LineMode.ALPH);
-
-    int topK = config.getInt("topK", 0);
-    if (topK > 0)
-      Log.info("top " + topK + " templates:");
-
-    String outf = config.getString("outputFeatures", "none");
-    BufferedWriter w = null;
-    if (!outf.equals("none"))
-      w = FileUtil.getWriter(new File(outf));
-
-    // Loop over results
-    Exception last = null;
-    for (int i = 0; i < templates.size(); i++) {
-      TemplateIG t = templates.get(i);
-      MISummary mi = t.ig();
-      String prefix = String.format("%d\t%f\t%f\t%f\t%f",
-          t.getIndex(), mi.miSmoothed.mi(), mi.h_x, mi.h_yx, mi.h_y);
-      String line;
-      if (tNames != null) {
-        line = prefix + "\t" + tNames.get(t.getIndex()).name;
-      } else if (tNames2 != null) {
-        line = prefix + "\t" + tNames2.lookupTemplate(t.getIndex());
-      } else {
-        line = prefix;
+          @Override
+          public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+            return FileVisitResult.CONTINUE;
+          }
+        });
       }
-      if (i < topK)
-        System.out.println(line);
-      if (w != null) {
+
+      Log.info("computing mutual information...");
+      List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
+
+      // You dont want this: Alphabet loads all feature names, too big for memory
+      Alphabet tNames = null;
+      //    String tNamesFile = config.getString("templateAlph", "none");
+      //    if (!tNamesFile.equals("none")) {
+      //      Log.info("loading template names from " + tNamesFile);
+      //      boolean header = false;
+      //      tNames = new Alphabet(new File(tNamesFile), header);
+      //    }
+
+      // This should fit much easiser in memory (only stores template names)
+      BiAlph tNames2 = null;
+      String tNames2File = config.getString("bialph", "");
+      if (!tNames2File.isEmpty())
+        tNames2 = new BiAlph(config.getExistingFile("bialph"), LineMode.ALPH);
+
+      int topK = config.getInt("topK", 0);
+      if (topK > 0)
+        Log.info("top " + topK + " templates:");
+
+      String outf = config.getString("outputFeatures", "none");
+      BufferedWriter w = null;
+      if (!outf.equals("none"))
+        w = FileUtil.getWriter(new File(outf));
+
+      // Loop over results
+      Exception last = null;
+      for (int i = 0; i < templates.size(); i++) {
+        TemplateIG t = templates.get(i);
+        MISummary mi = t.ig();
+        String prefix = String.format("%d\t%f\t%f\t%f\t%f",
+            t.getIndex(), mi.miSmoothed.mi(), mi.h_x, mi.h_yx, mi.h_y);
+        String line;
+        if (tNames != null) {
+          line = prefix + "\t" + tNames.get(t.getIndex()).name;
+        } else if (tNames2 != null) {
+          line = prefix + "\t" + tNames2.lookupTemplate(t.getIndex());
+        } else {
+          line = prefix;
+        }
+        if (i < topK)
+          System.out.println(line);
+        if (w != null) {
+          try {
+            w.write(line);
+            w.newLine();
+          } catch (Exception e) {
+            last = e;
+          };
+        }
+      }
+      if (last != null)
+        last.printStackTrace();
+      if (w != null)
+        w.close();
+
+      String output = config.getString("outputIG", "none");
+      if (!output.equals("none")) {
+        Log.info("serializing InformationGain object to " + output);
         try {
-          w.write(line);
-          w.newLine();
+          FileUtil.serialize(input, new File(output));
         } catch (Exception e) {
-          last = e;
-        };
+          e.printStackTrace();
+        }
       }
+
+      Log.info("closing matlab/bub connection");
     }
-    if (last != null)
-      last.printStackTrace();
-    if (w != null)
-      w.close();
-
-    String output = config.getString("outputIG", "none");
-    if (!output.equals("none")) {
-      Log.info("serializing InformationGain object to " + output);
-      try {
-        FileUtil.serialize(input, new File(output));
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    }
-
-    // Cleanup
-    Log.info("closing matlab/bub connection");
-    bubEst.close();
-
     Log.info("done");
   }
 

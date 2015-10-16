@@ -24,7 +24,7 @@ import matlabcontrol.MatlabProxyFactoryOptions;
  *
  * @author travis
  */
-public class BubEntropyEstimatorAdapter {
+public class BubEntropyEstimatorAdapter implements AutoCloseable {
 
   private MatlabProxy proxy;
   public int kMax = 20;   // they claim 11-15 is good enough, may lower if too slow
@@ -106,6 +106,7 @@ public class BubEntropyEstimatorAdapter {
     }
   }
 
+  @Override
   public void close() {
     proxy.disconnect();
   }

@@ -615,13 +615,10 @@ public class InformationGainProducts {
     final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 4);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
-    final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
-    Log.info("using BUB code in " + bubFuncParentDir.getPath());
-    BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
 
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
-      + " templateAlphIsBialph=" + templateAlphIsBialph);
+    + " templateAlphIsBialph=" + templateAlphIsBialph);
     BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
 
     // Find the top K unigrams.
@@ -652,59 +649,61 @@ public class InformationGainProducts {
     for (int i = 0; i < 10 && i < prod3.size(); i++)
       Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
 
-    int numRoles = config.getInt("numRoles", 30);
-    int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
-    InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
-    igp.init(bialph, numRoles);
+    final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+    Log.info("using BUB code in " + bubFuncParentDir.getPath());
+    try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
+      int numRoles = config.getInt("numRoles", 30);
+      int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
+      InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
+      igp.init(bialph, numRoles);
 
-    // Scan each of the input files
-    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-      @Override
-      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-        if (pm.matches(path)) {
-          Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
-          igp.update(path.toFile());
+      // Scan each of the input files
+      PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+      Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+          if (pm.matches(path)) {
+            Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
+            igp.update(path.toFile());
 
-          if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
-            igp.writeOutProducts(output);
+            if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
+              igp.writeOutProducts(output);
+          }
+          return FileVisitResult.CONTINUE;
         }
-        return FileVisitResult.CONTINUE;
-      }
-      @Override
-      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-        return FileVisitResult.CONTINUE;
-      }
-    });
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+      });
 
-    // Write out final results
-    igp.writeOutProducts(output);
+      // Write out final results
+      igp.writeOutProducts(output);
 
-    // Show top products in log/command line
-    int topK = config.getInt("topK", 10);
-    List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-    for (int j = 0; j < byIG.size(); j++) {
-      TemplateIG t = byIG.get(j);
-      StringBuilder sb = new StringBuilder();
-      sb.append(String.valueOf(t.ig()));
-      int[] pieces = igp.getTemplatesForFeature(t.getIndex());
-      sb.append("\t" + pieces.length + "\t");
-      for (int i = 0; i < pieces.length; i++) {
-        if (i > 0) sb.append('*');
-        sb.append(String.valueOf(pieces[i]));
+      // Show top products in log/command line
+      int topK = config.getInt("topK", 10);
+      List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
+      for (int j = 0; j < byIG.size(); j++) {
+        TemplateIG t = byIG.get(j);
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.valueOf(t.ig()));
+        int[] pieces = igp.getTemplatesForFeature(t.getIndex());
+        sb.append("\t" + pieces.length + "\t");
+        for (int i = 0; i < pieces.length; i++) {
+          if (i > 0) sb.append('*');
+          sb.append(String.valueOf(pieces[i]));
+        }
+        sb.append('\t');
+        for (int i = 0; i < pieces.length; i++) {
+          if (i > 0) sb.append('*');
+          sb.append(bialph.lookupTemplate(pieces[i]));
+        }
+        if (j < topK)
+          System.out.println(sb.toString());
       }
-      sb.append('\t');
-      for (int i = 0; i < pieces.length; i++) {
-        if (i > 0) sb.append('*');
-        sb.append(bialph.lookupTemplate(pieces[i]));
-      }
-      if (j < topK)
-        System.out.println(sb.toString());
+      Log.info("closing matlab/bub connection");
     }
-
-    // Cleanup
-    Log.info("closing matlab/bub connection");
-    bubEst.close();
+    Log.info("done");
   }
 }
 
