@@ -394,12 +394,37 @@ public class InformationGain implements Serializable, LineByLine {
       return igCache;
     }
 
+    public double nmi() {
+      MISummary mis = ig();
+      double mi = mis.miSmoothed.mi();
+      double hx = hx();
+      assert mi > -0.1;    // numerical issues
+      return mi / (1 + hx);
+    }
+
+    public double hx() {
+      double hx = ig().h_x;
+      assert hx > -0.1;    // numerical issues
+      return hx;
+    }
+
     public static Comparator<TemplateIG> BY_IG_DECREASING = new Comparator<TemplateIG>() {
       @Override
       public int compare(TemplateIG o1, TemplateIG o2) {
         double mi1 = o1.ig().miSmoothed.mi();
         double mi2 = o2.ig().miSmoothed.mi();
         double d = mi2 - mi1;
+        if (d > 0) return 1;
+        if (d < 0) return -1;
+        return 0;
+      }
+    };
+    public static Comparator<TemplateIG> BY_NMI_DECREASING = new Comparator<TemplateIG>() {
+      @Override
+      public int compare(TemplateIG o1, TemplateIG o2) {
+        double fom1 = o1.nmi();
+        double fom2 = o2.nmi();
+        double d = fom1 - fom2;
         if (d > 0) return 1;
         if (d < 0) return -1;
         return 0;
@@ -462,7 +487,7 @@ public class InformationGain implements Serializable, LineByLine {
     }
   }
 
-  public List<TemplateIG> getTemplatesSortedByIGDecreasing() {
+  public List<TemplateIG> getTemplatesSorted(Comparator<TemplateIG> cmp) {
     TimeMarker tm = new TimeMarker();
     List<TemplateIG> l = new ArrayList<>();
     for (TemplateIG t : templates) {
@@ -476,7 +501,7 @@ public class InformationGain implements Serializable, LineByLine {
             + l.size() + " of " + templates.length + " templates");
       }
     }
-    Collections.sort(l, TemplateIG.BY_IG_DECREASING);
+    Collections.sort(l, cmp);
     Log.info("done");
     return l;
   }
@@ -525,7 +550,7 @@ public class InformationGain implements Serializable, LineByLine {
       }
 
       Log.info("computing mutual information...");
-      List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
+      List<TemplateIG> templates = input.getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
 
       // You dont want this: Alphabet loads all feature names, too big for memory
       Alphabet tNames = null;

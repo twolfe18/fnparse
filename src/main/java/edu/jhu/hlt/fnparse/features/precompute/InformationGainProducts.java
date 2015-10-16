@@ -376,7 +376,7 @@ public class InformationGainProducts {
     }
   }
 
-  public List<TemplateIG> getTemplatesSortedByIGDecreasing() {
+  public List<TemplateIG> getTemplatesSorted(Comparator<TemplateIG> cmp) {
     TimeMarker tm = new TimeMarker();
     List<TemplateIG> l = new ArrayList<>();
     for (TemplateIG t : products.values()) {
@@ -390,7 +390,7 @@ public class InformationGainProducts {
             + l.size() + " of " + products.size() + " templates");
       }
     }
-    Collections.sort(l, TemplateIG.BY_IG_DECREASING);
+    Collections.sort(l, cmp);
     Log.info("done");
     return l;
   }
@@ -401,32 +401,48 @@ public class InformationGainProducts {
 
   /**
    * Write out the results in format:
-   *   line = IG <tab> order <tab> featureInts
+   *   line = FOM <tab> mi <tab> hx <tab> order <tab> featureInts <tab> featureStrings
    * where featureInts is delimited by "*"
    */
-  public void writeOutProducts(File output) {
+  public void writeOutProducts(File output, int limit) {
     Log.info("writing output to " + output.getPath());
-    List<TemplateIG> byIG = getTemplatesSortedByIGDecreasing();
+    List<TemplateIG> templates = getTemplatesSorted(TemplateIG.BY_NMI_DECREASING);
     try (BufferedWriter w = FileUtil.getWriter(output)) {
-      if (byIG.size() == 0) {
+      if (templates.size() == 0) {
         w.write("<no templates>\n");
         Log.warn("no templates!");
       }
-      for (int j = 0; j < byIG.size(); j++) {
-        TemplateIG t = byIG.get(j);
+      for (int j = 0; j < templates.size() && (limit <= 0 || j < limit); j++) {
+        TemplateIG t = templates.get(j);
+
         StringBuilder sb = new StringBuilder();
-        sb.append(String.valueOf(t.ig()));
+
+        // FOM
+        sb.append(String.valueOf(t.nmi()));
+
+        // mi
+        sb.append("\t" + t.ig());
+
+        // hx
+        sb.append("\t" + t.hx());
+
+        // order
         int[] pieces = getTemplatesForFeature(t.getIndex());
         sb.append("\t" + pieces.length + "\t");
+
+        // featureInts
         for (int i = 0; i < pieces.length; i++) {
           if (i > 0) sb.append('*');
           sb.append(String.valueOf(pieces[i]));
         }
+
+        // featureStrings
         sb.append('\t');
         for (int i = 0; i < pieces.length; i++) {
           if (i > 0) sb.append('*');
           sb.append(lastBialph.lookupTemplate(pieces[i]));
         }
+
         w.write(sb.toString());
         w.newLine();
       }
@@ -434,6 +450,9 @@ public class InformationGainProducts {
     } catch (IOException e) {
       e.printStackTrace();
     }
+  }
+  public void writeOutProducts(File output) {
+    writeOutProducts(output, 0);
   }
 
   @SafeVarargs
@@ -692,28 +711,8 @@ public class InformationGainProducts {
 
       // Write out final results
       igp.writeOutProducts(output);
+      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 10));
 
-      // Show top products in log/command line
-      int topK = config.getInt("topK", 10);
-      List<TemplateIG> byIG = igp.getTemplatesSortedByIGDecreasing();
-      for (int j = 0; j < byIG.size(); j++) {
-        TemplateIG t = byIG.get(j);
-        StringBuilder sb = new StringBuilder();
-        sb.append(String.valueOf(t.ig()));
-        int[] pieces = igp.getTemplatesForFeature(t.getIndex());
-        sb.append("\t" + pieces.length + "\t");
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(String.valueOf(pieces[i]));
-        }
-        sb.append('\t');
-        for (int i = 0; i < pieces.length; i++) {
-          if (i > 0) sb.append('*');
-          sb.append(bialph.lookupTemplate(pieces[i]));
-        }
-        if (j < topK)
-          System.out.println(sb.toString());
-      }
       Log.info("closing matlab/bub connection");
     }
     Log.info("done");
