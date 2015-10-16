@@ -33,6 +33,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.StringUtils;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -376,9 +377,21 @@ public class InformationGainProducts {
   }
 
   public List<TemplateIG> getTemplatesSortedByIGDecreasing() {
+    TimeMarker tm = new TimeMarker();
     List<TemplateIG> l = new ArrayList<>();
-    l.addAll(products.values());
+    for (TemplateIG t : products.values()) {
+      if (t.numUpdates() == 0)
+        continue;
+      t.ig();
+      l.add(t);
+      if (tm.enoughTimePassed(15)) {
+        Log.info("took " + tm.secondsSinceFirstMark()
+            + " seconds to compute MI for "
+            + l.size() + " of " + products.size() + " templates");
+      }
+    }
     Collections.sort(l, TemplateIG.BY_IG_DECREASING);
+    Log.info("done");
     return l;
   }
 

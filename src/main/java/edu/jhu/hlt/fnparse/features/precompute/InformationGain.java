@@ -30,6 +30,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.vector.IntIntDenseVector;
 
 /**
@@ -291,13 +292,13 @@ public class InformationGain implements Serializable, LineByLine {
           int Dy = cy.getNumImplicitEntries();
           int Dx = cx.getNumImplicitEntries();
           long Dyx = Dy * Dx;
-          Log.info("calling BUB estimator for H[y,x]");
+          Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
           double hyx = bubEst.entropy(cyx, Dyx);
-          Log.info("calling BUB estimator for H[x]");
+          Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
           double hx = bubEst.entropy(cx);
 //          Log.info("calling BUB estimator for H[y]");
 //          double hy = bubEst.entropy(cy);
-          Log.info("calling MLE estimator for H[y]");
+          Log.info("calling MLE estimator for H[y]\t" + Describe.memoryUsage());
           double hy = mleEntropyEstimate(cy);
           igCache.h_x = hx;
           igCache.h_y = hy;
@@ -462,11 +463,21 @@ public class InformationGain implements Serializable, LineByLine {
   }
 
   public List<TemplateIG> getTemplatesSortedByIGDecreasing() {
+    TimeMarker tm = new TimeMarker();
     List<TemplateIG> l = new ArrayList<>();
-    for (TemplateIG t : templates)
-      if (t.numUpdates() > 0)
-        l.add(t);
+    for (TemplateIG t : templates) {
+      if (t.numUpdates() == 0)
+        continue;
+      t.ig();
+      l.add(t);
+      if (tm.enoughTimePassed(15)) {
+        Log.info("took " + tm.secondsSinceFirstMark()
+            + " seconds to compute MI for "
+            + l.size() + " of " + templates.length + " templates");
+      }
+    }
     Collections.sort(l, TemplateIG.BY_IG_DECREASING);
+    Log.info("done");
     return l;
   }
 
