@@ -5,3 +5,14 @@ https://github.com/diffplug/matlabcontrol
 # Install with
 mvn install:install-file -Dfile=lib/matlabcontrol-4.3.0-SNAPSHOT.jar -DgroupId=com.diffplug.matsim -DartifactId=matlabcontrol -Dversion=4.3.0 -Dpackaging=jar
 
+
+
+
+# Screw matlab... licensing + locking = programmer hell
+# octave seems to run the code I have fine.
+https://kenai.com/projects/javaoctave/pages/Home
+# Install with
+mvn install:install-file -Dfile=lib/javaoctave-0.6.4.jar -DgroupId=dk.ange.octave -DartifactId=javaoctave -Dversion=0.6.4 -Dpackaging=jar
+
+
+

@@ -30,9 +30,9 @@
       <version>4.5.2</version>
     </dependency>
     <dependency>
-      <groupId>com.diffplug.matsim</groupId>
-      <artifactId>matlabcontrol</artifactId>
-      <version>4.3.0</version>
+      <groupId>dk.ange.octave</groupId>
+      <artifactId>javaoctave</artifactId>
+      <version>0.6.4</version>
     </dependency>
     <dependency>
       <groupId>commons-io</groupId>

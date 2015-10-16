@@ -7,16 +7,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map.Entry;
 
+import dk.ange.octave.OctaveEngine;
+import dk.ange.octave.OctaveEngineFactory;
+import dk.ange.octave.type.Octave;
+import dk.ange.octave.type.OctaveDouble;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.vector.IntIntDenseVector;
-import matlabcontrol.MatlabProxy;
-import matlabcontrol.MatlabProxyFactory;
-import matlabcontrol.MatlabProxyFactoryOptions;
 
 /**
- * Calls some matlab code to compute entropy and mutual information.
+ * Calls some matlab/octave code to compute entropy and mutual information.
  *
  * @see http://www.stat.columbia.edu/~liam/research/info_est.html
  * Paninski, L. (2003). Estimation of entropy and mutual information.
@@ -26,26 +27,22 @@ import matlabcontrol.MatlabProxyFactoryOptions;
  */
 public class BubEntropyEstimatorAdapter implements AutoCloseable {
 
-  private MatlabProxy proxy;
+  // Turn off logging used by javaoctave
+  static {
+    System.setProperty("org.apache.commons.logging.Log",
+                       "org.apache.commons.logging.impl.NoOpLog");
+ }
+
+//  private MatlabProxy proxy;
+  private OctaveEngine octave;
   public int kMax = 20;   // they claim 11-15 is good enough, may lower if too slow
   public boolean debug = false;
 
   public BubEntropyEstimatorAdapter(File bubFuncParentDir) {
     if (!bubFuncParentDir.isDirectory() || !new File(bubFuncParentDir, "BUBfunc.m").isFile())
       throw new IllegalArgumentException("provided file is not a directory or does not contain BUBfunc.m: " + bubFuncParentDir.getPath());
-    MatlabProxyFactoryOptions.Builder builder = new MatlabProxyFactoryOptions.Builder();
-    MatlabProxyFactory factory = new MatlabProxyFactory(builder.build());
-    try {
-      proxy = factory.getProxy();
-      proxy.eval("addpath('" + bubFuncParentDir.getPath() + "')");
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  /** Make sure you've executed a command to add the BUB code to the path, see other constructor */
-  public BubEntropyEstimatorAdapter(MatlabProxy proxy) {
-    this.proxy = proxy;
+    octave = new OctaveEngineFactory().getScriptEngine();
+    octave.eval("addpath('" + bubFuncParentDir.getPath() + "');");
   }
 
   public <T> double entropy(Counts<T> counts, long dimension) {
@@ -86,21 +83,29 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
       for (long c : counts) N += c;
       if (debug)
         Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
-      proxy.setVariable("N", N);
-      proxy.setVariable("n", counts);
-      proxy.setVariable("m", dimension);
-      proxy.setVariable("k_max", kMax);
-      proxy.setVariable("display_flag", 0);
+
+      // Convert counts to double[] since javaoctave doesn't appear to support longs/ints
+      // TODO Implement an IntMatrixReader (current impl uses doubles only) in javaoctave
+      OctaveDouble n = new OctaveDouble(counts.length, 1);
+      for (int i = 0; i < counts.length; i++)
+        n.set(counts[i], i+1, 1);
+      octave.put("n", n);
+
+      octave.put("N", Octave.scalar(N));
+      octave.put("m", Octave.scalar(dimension));
+      octave.put("k_max", Octave.scalar(kMax));
+      octave.put("display_flag", Octave.scalar(0));
+
       if (debug)
         Log.info("about to call1");
-      proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag);");
+      octave.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag);");
       if (debug)
         Log.info("about to call2");
-      proxy.eval("BUB_est=sum(a(n+1));");
+      octave.eval("BUB_est=sum(a(n+1));");
       if (debug)
         Log.info("about to get result");
-      Object I = proxy.getVariable("BUB_est");
-      return ((double[]) I)[0];
+      OctaveDouble r = octave.get(OctaveDouble.class, "BUB_est");
+      return r.get(1);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -108,17 +113,17 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
 
   @Override
   public void close() {
-    proxy.disconnect();
+    octave.close();
   }
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     File bubParent = config.getExistingDir("bubFuncParentDir");
-    BubEntropyEstimatorAdapter bub = new BubEntropyEstimatorAdapter(bubParent);
-    long[] counts = new long[] {1, 2, 3, 4};
-    long dim = 4;
-    double I = bub.entropy(counts, dim);
-    System.out.println("n=" + Arrays.toString(counts) + " m=" + dim + " I=" + I);
-    bub.close();
+    try (BubEntropyEstimatorAdapter bub = new BubEntropyEstimatorAdapter(bubParent)) {
+      long[] counts = new long[] {1, 2, 3, 4};
+      long dim = 4;
+      double I = bub.entropy(counts, dim);
+      System.out.println("n=" + Arrays.toString(counts) + " m=" + dim + " I=" + I);
+    }
   }
 }
