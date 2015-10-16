@@ -466,23 +466,35 @@ public class InformationGainProducts {
     Log.info("reading template IGs from " + templateIGsFile.getPath());
     try (BufferedReader r = FileUtil.getReader(templateIGsFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
+
+        /** @see InformationGain#main for format */
         String[] toks = line.split("\t");
-        double ig = Double.parseDouble(toks[0]);
-        int template = Integer.parseInt(toks[1]);
+        int template = Integer.parseInt(toks[0]);
+
         String templateString = bialph.lookupTemplate(template);
-//        String templateString = toks[2];
         if (templateString == null) {
           Log.warn("skipping template " + template + " because it is not in"
               + " the provided BiAlph: " + bialph.getSource().getPath());
-        } else {
-          if (DEBUG_TEMPLATE != null && !DEBUG_TEMPLATE.equals(templateString))
-            Log.info("skipping " + templateString + " because DEBUG_TEMPLATE is set");
-          else
-            templateIGs.add(new Pair<>(templateString, ig));
+          continue;
         }
+
+        double ig = Double.parseDouble(toks[1]);
+        double hx = Double.parseDouble(toks[2]);
+//        double hyx = Double.parseDouble(toks[3]);
+//        double hy = Double.parseDouble(toks[4]);
+
+        // What we sort on
+        double fom = ig / (1 + hx);
+
+        if (DEBUG_TEMPLATE != null && !DEBUG_TEMPLATE.equals(templateString))
+          Log.info("skipping " + templateString + " because DEBUG_TEMPLATE is set");
+        else
+          templateIGs.add(new Pair<>(templateString, fom));
       }
     }
 
+    // Generating all products can blow up in time/space, specially when order>2
+    // This prunes the set of products being generated to only take the topK.
     int thresh = (int) Math.pow(templateIGs.size() * 25000, 1d / order);
     if (templateIGs.size() > thresh) {
       Log.info("pruning from " + templateIGs.size() + " => " + thresh);
@@ -512,7 +524,7 @@ public class InformationGainProducts {
       }
     }
 
-    // Sort and project
+    // Sort templates and project back to just template names (discarding score)
     Log.info("sorting " + prodIGs.size() + " template products by information gain...");
     Collections.sort(prodIGs, new Comparator<Pair<String[], Double>>() {
       @Override

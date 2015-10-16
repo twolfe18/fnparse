@@ -106,7 +106,7 @@ public class InformationGain implements Serializable, LineByLine {
 
     public MI miEmpirical = new MI();
     public MI miSmoothed = new MI();
-//    public double h_yx;   // TODO add this
+    public double h_yx;
     public double h_y_p, h_y, h_y_emp;
     public double h_x_p, h_x, h_x_emp;
 
@@ -280,8 +280,10 @@ public class InformationGain implements Serializable, LineByLine {
           double hx = bubEst.entropy(cx);
           Log.info("calling BUB estimator for H[y]");
           double hy = bubEst.entropy(cy);
-          this.igCache.miSmoothed =
-              this.igCache.miEmpirical =
+          igCache.h_x = hx;
+          igCache.h_y = hy;
+          igCache.h_yx = hyx;
+          igCache.miSmoothed = igCache.miEmpirical =
               new MIFixed(hx + hy - hyx);
           return igCache;
         }
@@ -523,13 +525,16 @@ public class InformationGain implements Serializable, LineByLine {
     Exception last = null;
     for (int i = 0; i < templates.size(); i++) {
       TemplateIG t = templates.get(i);
+      MISummary mi = t.ig();
+      String prefix = String.format("%d\t%f\t%f\t%f\t%f",
+          t.getIndex(), mi.miSmoothed.mi(), mi.h_x, mi.h_yx, mi.h_y);
       String line;
       if (tNames != null) {
-        line = t.ig() + "\t" + t.getIndex() + "\t" + tNames.get(t.getIndex()).name;
+        line = prefix + "\t" + tNames.get(t.getIndex()).name;
       } else if (tNames2 != null) {
-        line = t.ig() + "\t" + t.getIndex() + "\t" + tNames2.lookupTemplate(t.getIndex());
+        line = prefix + "\t" + tNames2.lookupTemplate(t.getIndex());
       } else {
-        line = t.ig() + "\t" + t.getIndex();
+        line = prefix;
       }
       if (i < topK)
         System.out.println(line);
