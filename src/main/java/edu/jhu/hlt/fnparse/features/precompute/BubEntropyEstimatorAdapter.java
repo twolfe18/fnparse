@@ -9,6 +9,7 @@ import java.util.Map.Entry;
 
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.vector.IntIntDenseVector;
 import matlabcontrol.MatlabProxy;
 import matlabcontrol.MatlabProxyFactory;
@@ -27,6 +28,7 @@ public class BubEntropyEstimatorAdapter {
 
   private MatlabProxy proxy;
   public int kMax = 20;   // they claim 11-15 is good enough, may lower if too slow
+  public boolean debug = false;
 
   public BubEntropyEstimatorAdapter(File bubFuncParentDir) {
     if (!bubFuncParentDir.isDirectory() || !new File(bubFuncParentDir, "BUBfunc.m").isFile())
@@ -82,13 +84,21 @@ public class BubEntropyEstimatorAdapter {
     try {
       long N = 0;
       for (long c : counts) N += c;
+      if (debug)
+        Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
       proxy.setVariable("N", N);
       proxy.setVariable("n", counts);
       proxy.setVariable("m", dimension);
       proxy.setVariable("k_max", kMax);
       proxy.setVariable("display_flag", 0);
+      if (debug)
+        Log.info("about to call1");
       proxy.eval("[a,MM]=BUBfunc(N,m,k_max,display_flag)");
+      if (debug)
+        Log.info("about to call2");
       proxy.eval("BUB_est=sum(a(n+1))");
+      if (debug)
+        Log.info("about to get result");
       Object I = proxy.getVariable("BUB_est");
       return ((double[]) I)[0];
     } catch (Exception e) {

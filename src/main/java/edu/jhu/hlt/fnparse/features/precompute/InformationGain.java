@@ -452,7 +452,6 @@ public class InformationGain implements Serializable, LineByLine {
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     System.out.println("usage:");
-    System.out.println("\tinputIG: serialized InformationGain file to read from [optional]");
     System.out.println("\tfeatures: int feature file produced by FeaturePrecomputation [optional]");
     System.out.println("\ttemplateAlph: alphabet file produced by FeaturePrecomputation for looking up template names [optional]");
     System.out.println("\ttopK: how many of the top templates to print [optional]");
@@ -463,6 +462,7 @@ public class InformationGain implements Serializable, LineByLine {
     final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
     Log.info("using BUB code in " + bubFuncParentDir.getPath());
     BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
+    bubEst.debug = config.getBoolean("bubDebug", false);
 
     final InformationGain input = new InformationGain(bubEst);
 
@@ -492,6 +492,9 @@ public class InformationGain implements Serializable, LineByLine {
       });
     }
 
+    Log.info("computing mutual information...");
+    List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
+
     // You dont want this: Alphabet loads all feature names, too big for memory
     Alphabet tNames = null;
 //    String tNamesFile = config.getString("templateAlph", "none");
@@ -501,13 +504,11 @@ public class InformationGain implements Serializable, LineByLine {
 //      tNames = new Alphabet(new File(tNamesFile), header);
 //    }
 
-    // This should fit much easiser in memory
+    // This should fit much easiser in memory (only stores template names)
     BiAlph tNames2 = null;
     String tNames2File = config.getString("bialph", "");
     if (!tNames2File.isEmpty())
       tNames2 = new BiAlph(config.getExistingFile("bialph"), LineMode.ALPH);
-
-    List<TemplateIG> templates = input.getTemplatesSortedByIGDecreasing();
 
     int topK = config.getInt("topK", 0);
     if (topK > 0)
