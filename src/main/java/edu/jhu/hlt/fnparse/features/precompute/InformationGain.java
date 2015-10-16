@@ -246,6 +246,23 @@ public class InformationGain implements Serializable, LineByLine {
       return updates;
     }
 
+    public static double mleEntropyEstimate(IntIntDenseVector cy) {
+      int z = 0;
+      int N = cy.getNumExplicitEntries();
+      for (int i = 0; i < N; i++)
+        if (cy.get(i) > 0)
+          z += cy.get(i);
+      double h = 0;
+      for (int i = 0; i < N; i++) {
+        int c = cy.get(i);
+        if (c > 0) {
+          double p = ((double) c) / z;
+          h += p * -Math.log(p);
+        }
+      }
+      return h;
+    }
+
     public MISummary ig() {
       if (igCache == null) {
 
@@ -278,8 +295,10 @@ public class InformationGain implements Serializable, LineByLine {
           double hyx = bubEst.entropy(cyx, Dyx);
           Log.info("calling BUB estimator for H[x]");
           double hx = bubEst.entropy(cx);
-          Log.info("calling BUB estimator for H[y]");
-          double hy = bubEst.entropy(cy);
+//          Log.info("calling BUB estimator for H[y]");
+//          double hy = bubEst.entropy(cy);
+          Log.info("calling MLE estimator for H[y]");
+          double hy = mleEntropyEstimate(cy);
           igCache.h_x = hx;
           igCache.h_y = hy;
           igCache.h_yx = hyx;
