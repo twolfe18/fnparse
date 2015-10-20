@@ -31,7 +31,7 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
   static {
     System.setProperty("org.apache.commons.logging.Log",
                        "org.apache.commons.logging.impl.NoOpLog");
- }
+  }
 
 //  private MatlabProxy proxy;
   private OctaveEngine octave;
@@ -78,12 +78,11 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
    * @return the BUB entropy estimate.
    */
   public double entropy(long[] counts, long dimension) {
+    long N = 0;
+    for (long c : counts) N += c;
+    if (debug)
+      Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
     try {
-      long N = 0;
-      for (long c : counts) N += c;
-      if (debug)
-        Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
-
       // Convert counts to double[] since javaoctave doesn't appear to support longs/ints
       // TODO Implement an IntMatrixReader (current impl uses doubles only) in javaoctave
       OctaveDouble n = new OctaveDouble(counts.length, 1);
@@ -105,8 +104,11 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
       if (debug)
         Log.info("about to get result");
       OctaveDouble r = octave.get(OctaveDouble.class, "BUB_est");
+      if (debug)
+        Log.info("result=" + r.get(1));
       return r.get(1);
     } catch (Exception e) {
+      Log.warn("m=" + dimension + " n.length=" + counts.length + " N=" + N);
       throw new RuntimeException(e);
     }
   }

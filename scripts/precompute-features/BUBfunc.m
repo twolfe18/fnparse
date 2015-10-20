@@ -117,7 +117,9 @@ else
             best_a=a;
             best_B=B;
             best_V1=V1;
-            disp(sprintf('current best k = %i; best max error = %2.3f',k,best_MM));
+            if(display_flag)
+              disp(sprintf('current best k = %i; best max error = %2.3f',k,best_MM));
+            end;
         end;
     end;
     if(0)

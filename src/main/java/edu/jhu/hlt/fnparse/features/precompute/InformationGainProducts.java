@@ -692,6 +692,7 @@ public class InformationGainProducts {
     final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
     Log.info("using BUB code in " + bubFuncParentDir.getPath());
     try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
+      bubEst.debug = config.getBoolean("bubDebug", false);
       int numRoles = config.getInt("numRoles", 30);
       int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
       InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
