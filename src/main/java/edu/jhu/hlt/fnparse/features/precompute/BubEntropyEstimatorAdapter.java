@@ -4,6 +4,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map.Entry;
 
@@ -14,6 +15,8 @@ import dk.ange.octave.type.OctaveDouble;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.prim.map.LongIntEntry;
+import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.vector.IntIntDenseVector;
 
 /**
@@ -37,11 +40,13 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
   private OctaveEngine octave;
   public int kMax = 20;   // they claim 11-15 is good enough, may lower if too slow
   public boolean debug = false;
+  public boolean allowMleFallback = true;
 
   public BubEntropyEstimatorAdapter(File bubFuncParentDir) {
     if (!bubFuncParentDir.isDirectory() || !new File(bubFuncParentDir, "BUBfunc.m").isFile())
       throw new IllegalArgumentException("provided file is not a directory or does not contain BUBfunc.m: " + bubFuncParentDir.getPath());
-    octave = new OctaveEngineFactory().getScriptEngine();
+    OctaveEngineFactory factory = new OctaveEngineFactory();
+    octave = factory.getScriptEngine();
     octave.eval("addpath('" + bubFuncParentDir.getPath() + "');");
   }
 
@@ -71,6 +76,42 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
     return entropy(cnt, dimension);
   }
 
+  /** Computes the dimension by taking the highest key */
+  public double entropy(LongIntHashMap counts) {
+    long dimension = counts.size();
+    List<Integer> c = new ArrayList<>();
+    Iterator<LongIntEntry> itr = counts.iterator();
+    while (itr.hasNext()) {
+      LongIntEntry e = itr.next();
+      long feat = e.index();
+      int count = e.get();
+      if (feat >= dimension)
+        dimension = feat + 1;
+      c.add(count);
+    }
+    Collections.sort(c);
+    Collections.reverse(c);
+    long[] cnt = new long[c.size()];
+    for (int i = 0; i < cnt.length; i++)
+      cnt[i] = c.get(i);
+    return entropy(cnt, dimension);
+  }
+
+  public static double mleEntropyEstimate(long[] counts) {
+    long z = 0;
+    for (long c : counts)
+      z += c;
+    double h = 0;
+    for (int i = 0; i < counts.length; i++) {
+      long c = counts[i];
+      if (c > 0) {
+        double p = ((double) c) / z;
+        h += p * -Math.log(p);
+      }
+    }
+    return h;
+  }
+
   /**
    * @param counts is a histogram of just counts, no feature indices
    *  (note: this function is invariant in permutation of this argument)
@@ -78,10 +119,20 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
    * @return the BUB entropy estimate.
    */
   public double entropy(long[] counts, long dimension) {
+    if (dimension < counts.length)
+      throw new IllegalArgumentException();
+
     long N = 0;
     for (long c : counts) N += c;
     if (debug)
       Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
+
+    if (N >= 10 * dimension && N >= 300 && allowMleFallback) {
+      if (debug)
+        Log.info("falling back on MLE for N/m is large case");
+      return mleEntropyEstimate(counts);
+    }
+
     try {
       // Convert counts to double[] since javaoctave doesn't appear to support longs/ints
       // TODO Implement an IntMatrixReader (current impl uses doubles only) in javaoctave

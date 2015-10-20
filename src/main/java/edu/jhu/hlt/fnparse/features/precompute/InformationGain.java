@@ -13,24 +13,24 @@ import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
-import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile.TemplateExtraction;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
-//import edu.jhu.hlt.ml.regularization.dirmult.SmoothedMutualInformation;
-import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.prim.map.LongIntEntry;
+import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.vector.IntIntDenseVector;
 
 /**
@@ -151,11 +151,23 @@ public class InformationGain implements Serializable, LineByLine {
     public static int HASHING_DIM = 4 * 512 * 1024;
     public static boolean FULL_BAYESIAN_H = false;
     public static boolean ADD_UNOBSERVED = false;
+
+    // Don't use hashing! I have run into problems where the BUB code cannot
+    // handle m > Integer.MAX_INT, and thus you have to be careful with filtering
+    // features, but I get very different entropy/MI estimates with and without
+    // feature hashing.
+    public static boolean USE_HASHING = false;
+
     private int index;
     private String name;
 
-    private IntIntDenseVector cy, cx;
-    private Counts<IntPair> cyx;    // |Y| ~= 20  |X| ~= 20 * 10,000
+    private IntIntDenseVector cy;
+    // (y:int) * (x:ProductIndex) can be represented as a ProductIndex :)
+    // ProductIndex can be represented exactly as a long (64 bits) without overflowing in reasonable situations
+    // I can store counts for long keys in LongIntHashMap
+    private LongIntHashMap cx2, cyx2;
+    private int numY; // ensure that all values of y are less than this
+
     private int updates;
     private MISummary igCache = null;
 
@@ -170,16 +182,17 @@ public class InformationGain implements Serializable, LineByLine {
 //    private SmoothedMutualInformation<Integer, ProductIndex> smi;
     private BubEntropyEstimatorAdapter bubEst;
 
-    public TemplateIG(int index) {
-      this(index, "template-" + index);
+    public TemplateIG(int index, int numY) {
+      this(index, "template-" + index, numY);
     }
 
-    public TemplateIG(int index, String name) {
+    public TemplateIG(int index, String name, int numY) {
       this.index = index;
       this.name = name;
       this.cy = new IntIntDenseVector();
-      this.cx = new IntIntDenseVector();
-      this.cyx = new Counts<>();
+      this.cx2 = new LongIntHashMap();
+      this.cyx2 = new LongIntHashMap();
+      this.numY = numY;
       this.updates = 0;
 //      this.smi = new SmoothedMutualInformation<>();
     }
@@ -216,24 +229,35 @@ public class InformationGain implements Serializable, LineByLine {
 //      }
       if (y != null) {
         for (int yy : y) {
+          if (yy >= numY)
+            throw new IllegalStateException("you set numY=" + numY + " and we just saw y=" + Arrays.toString(y));
           for (ProductIndex xpi : x) {
-            int xx;
-            if (xpi.getArity() == 1) {
-              // InformationGain only generates single template features which
-              // should easily fit in an int.
-              assert xpi.getProdFeature() < ((long) Integer.MAX_VALUE);
-              xx = (int) xpi.getProdFeature();
-              assert xx >= 0;
-            } else {
-              // InformationGainProducts generates product features which may
-              // overflow an int.
-              //              xx = xpi.getHashedProdFeatureNonNegative();
-              xx = xpi.getHashedProdFeatureModulo(HASHING_DIM);
-              assert xx >= 0;
-            }
-            cyx.increment(new IntPair(yy, xx));
+            // DAMN!
+            // I'm pretty sure all of my time iterating over files was spent
+            // in this code, specifically calling murmurhash on ProductIndices!
+//            int xx;
+//            if (xpi.getArity() == 1) {
+//              // InformationGain only generates single template features which
+//              // should easily fit in an int.
+//              assert xpi.getProdFeature() < ((long) Integer.MAX_VALUE);
+//              xx = (int) xpi.getProdFeature();
+//              assert xx >= 0;
+//            } else {
+//              // InformationGainProducts generates product features which may
+//              // overflow an int.
+//              //              xx = xpi.getHashedProdFeatureNonNegative();
+//              xx = xpi.getHashedProdFeatureModulo(HASHING_DIM);
+//              assert xx >= 0;
+//            }
             cy.add(yy, 1);
-            cx.add(xx, 1);
+            if (USE_HASHING) {
+              cyx2.add(xpi.prod(yy, numY).getProdFeatureModulo(HASHING_DIM), 1);
+              cx2.add(xpi.getProdFeatureModulo(HASHING_DIM), 1);
+            } else {
+              cyx2.add(xpi.prod(yy, numY).getProdFeature(), 1);
+              cx2.add(xpi.getProdFeature(), 1);
+            }
+
             updates++;
           }
         }
@@ -245,23 +269,6 @@ public class InformationGain implements Serializable, LineByLine {
 
     public int numUpdates() {
       return updates;
-    }
-
-    public static double mleEntropyEstimate(IntIntDenseVector cy) {
-      int z = 0;
-      int N = cy.getNumExplicitEntries();
-      for (int i = 0; i < N; i++)
-        if (cy.get(i) > 0)
-          z += cy.get(i);
-      double h = 0;
-      for (int i = 0; i < N; i++) {
-        int c = cy.get(i);
-        if (c > 0) {
-          double p = ((double) c) / z;
-          h += p * -Math.log(p);
-        }
-      }
-      return h;
     }
 
     public MISummary ig() {
@@ -289,36 +296,34 @@ public class InformationGain implements Serializable, LineByLine {
 //          return igCache;
 //        }
         if (this.bubEst != null) {
-          int Dy = cy.getNumImplicitEntries();
-          int Dx = cx.getNumImplicitEntries();
-          long Dyx = Dy * Dx;
           Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
-          double hyx = bubEst.entropy(cyx, Dyx);
+          double hyx = bubEst.entropy(cyx2);
           Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
-          double hx = bubEst.entropy(cx);
-//          Log.info("calling BUB estimator for H[y]");
-//          double hy = bubEst.entropy(cy);
-          Log.info("calling MLE estimator for H[y]\t" + Describe.memoryUsage());
-          double hy = mleEntropyEstimate(cy);
+          double hx = bubEst.entropy(cx2);
+          Log.info("calling BUB estimator for H[y]\t" + Describe.memoryUsage());
+          double hy = bubEst.entropy(cy);
           igCache.h_x = hx;
           igCache.h_y = hy;
           igCache.h_yx = hyx;
           igCache.miSmoothed = igCache.miEmpirical =
               new MIFixed(hx + hy - hyx);
           return igCache;
+        } else if (true) {
+          throw new RuntimeException("check this code, I believe it is out of date -- or just use BUB");
         }
 
         final double C_yx = updates, C_y = updates, C_x = updates;
         //          int D_y = cy.getNumImplicitEntries();
         //          int D_x = cx.getNumExplicitEntries();
         int D_y = 0;
-        int D_x = 0;
         for (int i = 0; i < cy.getNumImplicitEntries(); i++)
           if (cy.get(i) > 0)
             D_y++;
-        for (int i = 0; i < cx.getNumImplicitEntries(); i++)
-          if (cx.get(i) > 0)
-            D_x++;
+        int D_x = cx2.size();   // TODO should be max index in cx2, not size?
+//        int D_x = 0;
+//        for (int i = 0; i < cx.getNumImplicitEntries(); i++)
+//          if (cx.get(i) > 0)
+//            D_x++;
         final double Z_yx_p = C_yx + alpha_yx_p;
         final double Z_y_p = C_y + alpha_y_p * D_y;
         final double Z_x_p = C_x + alpha_x_p * D_x;
@@ -337,8 +342,15 @@ public class InformationGain implements Serializable, LineByLine {
           double p_y_p = (c_y + alpha_y_p) / Z_y_p;
           igCache.h_y_p += p_y_p * -Math.log(p_y_p);
         }
-        for (int i = 0; i < D_x; i++) {
-          double c_x = cx.get(i);
+        Iterator<LongIntEntry> itr = cx2.iterator();
+        while (itr.hasNext()) {
+         LongIntEntry e = itr.next();
+         double c_x = e.get();
+//        }
+//        for (Entry<ProductIndex, Integer> ci : cx.entrySet()) {
+////        for (int i = 0; i < D_x; i++) {
+////          double c_x = cx.get(i);
+//          double c_x = ci.getValue();
           if (c_x > 0) {
             double p_x_emp = c_x / C_x;
             igCache.h_x_emp += p_x_emp * -Math.log(p_x_emp);
@@ -358,10 +370,17 @@ public class InformationGain implements Serializable, LineByLine {
             ));
 
         // c(y,x)>0
-        for (Entry<IntPair, Integer> c : cyx.entrySet()) {
-          double c_yx = c.getValue();
-          double c_y = cy.get(c.getKey().first);
-          double c_x = cx.get(c.getKey().second);
+        itr = cyx2.iterator();
+        while (itr.hasNext()) {
+          LongIntEntry e = itr.next();
+//        for (Entry<Pair<Integer, ProductIndex>, Integer> c : cyx.entrySet()) {
+//          double c_yx = c.getValue();
+          double c_yx = e.get();
+//          double c_y = cy.get(c.getKey().get1());
+          double c_y = cy.get((int) (e.index() % ((long) numY)));
+//          double c_x = cx.get(c.getKey().second);
+//          double c_x = cx.getCount(c.getKey().get2());
+          double c_x = cx2.get(e.index() / ((long) numY));
           double n_y = c_y + alpha_y;
           double n_x = c_x + alpha_x;
 
@@ -394,17 +413,26 @@ public class InformationGain implements Serializable, LineByLine {
       return igCache;
     }
 
-    public double nmi() {
+    /** Can return a negative value, based on approximate entropies */
+    public double heuristicScore() {
       MISummary mis = ig();
       double mi = mis.miSmoothed.mi();
+//      assert mi > -0.1 : "mi=" + mi + " hx=" + hx;    // numerical issues
+//      if (mi < 0) {
+//        // For very entropic features with little signal, hx will be very
+//        // close to hxy, and since we are approximating each of them, the sum
+//        // could come out negative, even though it shouldn't from an information
+//        // theory point of view.
+//        // We don't want these features anyway.
+//        mi = 0;
+//      }
       double hx = hx();
-      assert mi > -0.1;    // numerical issues
-      return mi / (1 + hx);
+      return mi / (4 + hx * hx);
     }
 
     public double hx() {
       double hx = ig().h_x;
-      assert hx > -0.1;    // numerical issues
+      assert hx > -0.1 : "hx=" + hx;    // numerical issues
       return hx;
     }
 
@@ -422,9 +450,9 @@ public class InformationGain implements Serializable, LineByLine {
     public static Comparator<TemplateIG> BY_NMI_DECREASING = new Comparator<TemplateIG>() {
       @Override
       public int compare(TemplateIG o1, TemplateIG o2) {
-        double fom1 = o1.nmi();
-        double fom2 = o2.nmi();
-        double d = fom1 - fom2;
+        double fom1 = o1.heuristicScore();
+        double fom2 = o2.heuristicScore();
+        double d = fom2 - fom1;
         if (d > 0) return 1;
         if (d < 0) return -1;
         return 0;
@@ -449,7 +477,7 @@ public class InformationGain implements Serializable, LineByLine {
     ExperimentProperties config = ExperimentProperties.getInstance();
     templates = new TemplateIG[config.getInt("numTemplates", 3000)];  // TODO resize code
     for (int i = 0; i < templates.length; i++) {
-      templates[i] = new TemplateIG(i);
+      templates[i] = new TemplateIG(i, numRoles);
       templates[i].useBubEntropyEstimation(bubEst);
     }
 

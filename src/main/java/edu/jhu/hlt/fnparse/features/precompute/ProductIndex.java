@@ -49,6 +49,12 @@ public class ProductIndex {
     return featProd;
   }
 
+  public int getProdFeatureModulo(int modulus) {
+    long m = modulus;
+    long r = Math.floorMod(featProd, m);
+    return (int) r;
+  }
+
   public int getFeature() {
     return feat;
   }

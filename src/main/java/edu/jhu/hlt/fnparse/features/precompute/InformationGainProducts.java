@@ -225,7 +225,7 @@ public class InformationGainProducts {
       }
       Arrays.sort(intTemplates);
       baseFeatures.add(intTemplates);
-      TemplateIG tig = new TemplateIG(featIdx, StringUtils.join("*", strTemplates));
+      TemplateIG tig = new TemplateIG(featIdx, StringUtils.join("*", strTemplates), numRoles);
       tig.useBubEntropyEstimation(bubEst);
       products.put(intTemplates, tig);
       featIdx++;
@@ -426,7 +426,7 @@ public class InformationGainProducts {
         StringBuilder sb = new StringBuilder();
 
         // FOM
-        sb.append(String.valueOf(t.nmi()));
+        sb.append(String.valueOf(t.heuristicScore()));
 
         // mi
         sb.append("\t" + t.ig());
@@ -541,18 +541,52 @@ public class InformationGainProducts {
       templateIGs = templateIGs.subList(0, thresh);
     }
 
+    // Don't allow any features (products of templates) which have a cardinality
+    // of more than this. This is a heuristic, as templates may be correlated
+    // and have much lower actual cardinalities. But, if they are correlated it
+    // is unclear how much information they are adding.
+    long cardinalityLimit = 100 * 1024 * 1024;
+
     // Produce a list of template n-grams
     List<Pair<String[], Double>> prodIGs = new ArrayList<>();
     int n = templateIGs.size();
     Log.info("producing templates up to order=" + order + " from " + n + " templates");
     for (int i = 0; i < n - 1; i++) {
+
+      String t_i_name = templateIGs.get(i).get1();
+      int t_i = bialph.mapTemplate(t_i_name);
+      long Dx_i = bialph.cardinalityOfNewTemplate(t_i);
+      if (Dx_i > cardinalityLimit) {
+        Log.info("skipping1 " + t_i_name + " because of cardinality limit: " + Dx_i);
+        continue;
+      }
+
       if (order == 1)
         prodIGs.add(prod(templateIGs.get(i)));
       for (int j = i + 1; j < n; j++) {
+
+        String t_j_name = templateIGs.get(j).get1();
+        int t_j = bialph.mapTemplate(t_j_name);
+        long Dx_ij = Dx_i * bialph.cardinalityOfNewTemplate(t_j);
+        if (Dx_ij > cardinalityLimit) {
+          Log.info("skipping2 " + t_i_name + "*" + t_j_name + " because of cardinality limit: " + Dx_ij);
+          continue;
+        }
+
         if (order == 2)
           prodIGs.add(prod(templateIGs.get(i), templateIGs.get(j)));
+
         if (order == 3) {
           for (int k = j + 1; k < n; k++) {
+
+            String t_k_name = templateIGs.get(k).get1();
+            int t_k = bialph.mapTemplate(t_k_name);
+            long Dx_ijk = Dx_ij * bialph.cardinalityOfNewTemplate(t_k);
+            if (Dx_ijk > cardinalityLimit) {
+              Log.info("skipping3 " + t_i_name + "*" + t_j_name + "*" + t_k_name + " because of cardinality limit: " + Dx_ijk);
+              continue;
+            }
+
             prodIGs.add(prod(
                 templateIGs.get(i),
                 templateIGs.get(j),
@@ -670,8 +704,8 @@ public class InformationGainProducts {
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
-    double gain = config.getDouble("gain", 1.5);
-    int maxProducts = config.getInt("numProducts", 500);
+    double gain = config.getDouble("gain", 1.4);
+    int maxProducts = config.getInt("numProducts", 50);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
     int n2 = count(2, gain, 3, maxProducts);
@@ -720,7 +754,7 @@ public class InformationGainProducts {
 
       // Write out final results
       igp.writeOutProducts(output);
-      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 10));
+      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
 
       Log.info("closing matlab/bub connection");
     }
