@@ -545,7 +545,7 @@ public class InformationGainProducts {
     // of more than this. This is a heuristic, as templates may be correlated
     // and have much lower actual cardinalities. But, if they are correlated it
     // is unclear how much information they are adding.
-    long cardinalityLimit = 100 * 1024 * 1024;
+    long cardinalityLimit = 20 * 1024 * 1024;
 
     // Produce a list of template n-grams
     List<Pair<String[], Double>> prodIGs = new ArrayList<>();
@@ -704,8 +704,8 @@ public class InformationGainProducts {
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
-    double gain = config.getDouble("gain", 1.4);
-    int maxProducts = config.getInt("numProducts", 50);
+    double gain = config.getDouble("gain", 1.3);
+    int maxProducts = config.getInt("numProducts", 100);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
     int n2 = count(2, gain, 3, maxProducts);

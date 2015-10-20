@@ -298,12 +298,38 @@ public class BasicFeatureTemplates {
       else
         return null;
     });
+    tokenExtractors.put("BasicLabel", x -> {
+      if (x.indexInSent()) {
+        DependencyParse deps = x.sentence.getBasicDeps();
+        if (deps == null)
+          return null;
+        return "BasicLabel=" + deps.getLabel(x.index);
+      } else {
+        return null;
+      }
+    });
     tokenExtractors.put("CollapsedLabel", x -> {
       if (x.indexInSent()) {
         DependencyParse deps = x.sentence.getCollapsedDeps();
         if (deps == null)
           return null;
         return "CollapsedLabel=" + deps.getLabel(x.index);
+      } else {
+        return null;
+      }
+    });
+    tokenExtractors.put("BasicParentDir", x -> {
+      if (x.indexInSent()) {
+        DependencyParse deps = x.sentence.getBasicDeps();
+        if (deps == null)
+          return null;
+        int h = deps.getHead(x.index);
+        if (h < 0)
+          return "BasicParentDir=root";
+        else if (h < x.index)
+          return "BasicParentDir=left";
+        else
+          return "BasicParentDir=right";
       } else {
         return null;
       }
@@ -380,73 +406,81 @@ public class BasicFeatureTemplates {
       });
     }
 
-    // head1 parent
-    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head1Parent" + x.getKey();
-      addTemplate(name, new TemplateSS() {
-        private SentencePosition pos = new SentencePosition();
-        public String extractSS(TemplateContext context) {
-          int h = context.getHead1();
-          if (h == TemplateContext.UNSET)
-            return null;
-          DependencyParse deps = context.getSentence().getCollapsedDeps();
-          if (deps == null)
-            return null;
-          pos.index = deps.getHead(h);
-          pos.sentence = context.getSentence();
-          return name + "=" + x.getValue().apply(pos);
-        }
-      });
-    }
-
-    // head1 grandparent
-    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head1Grandparent" + x.getKey();
-      addTemplate(name, new TemplateSS() {
-        private SentencePosition pos = new SentencePosition();
-        public String extractSS(TemplateContext context) {
-          int h = context.getHead1();
-          if (h == TemplateContext.UNSET)
-            return null;
-          DependencyParse deps = context.getSentence().getCollapsedDeps();
-          if (deps == null)
-            return null;
-          pos.index = deps.getHead(h);
-          if (pos.index < 0)
-            return null;
-          pos.index = deps.getHead(pos.index);
-          pos.sentence = context.getSentence();
-          return name + "=" + x.getValue().apply(pos);
-        }
-      });
-    }
-
-    // head1 children
-    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head1ChildCollapsed" + x.getKey();
-      addTemplate(name, new Template() {
-        private SentencePosition pos = new SentencePosition();
-        public Iterable<String> extract(TemplateContext context) {
-          int h = context.getHead1();
-          if (h == TemplateContext.UNSET)
-            return null;
-          DependencyParse d = context.getSentence().getCollapsedDeps();
-          if (d == null)
-            return null;
-          int[] c = d.getChildren(h);
-          if (c.length == 0)
-            return Arrays.asList(name + "=NONE");
-          else {
+    Map<String, Function<Sentence, DependencyParse>> dps = new HashMap<>();
+    dps.put("Basic", s -> s.getBasicDeps());
+    dps.put("Collapsed", s -> s.getCollapsedDeps());
+    for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
+      // head1 parent
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head1Parent" + x.getKey();
+        addTemplate(name, new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public String extractSS(TemplateContext context) {
+            int h = context.getHead1();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse deps = extractDeps.apply(context.getSentence());
+            if (deps == null)
+              return null;
+            pos.index = deps.getHead(h);
             pos.sentence = context.getSentence();
-            List<String> cs = new ArrayList<>();
-            for (int cd : c) {
-              pos.index = cd;
-              cs.add(name + "=" + x.getValue().apply(pos));
-            }
-            return cs;
+            return name + "=" + x.getValue().apply(pos);
           }
-        }
-      });
+        });
+      }
+
+      // head1 grandparent
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head1Grandparent-" + dp.getKey() + "-" + x.getKey();
+        addTemplate(name, new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public String extractSS(TemplateContext context) {
+            int h = context.getHead1();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse deps = extractDeps.apply(context.getSentence());
+            if (deps == null)
+              return null;
+            pos.index = deps.getHead(h);
+            if (pos.index < 0)
+              return null;
+            pos.index = deps.getHead(pos.index);
+            pos.sentence = context.getSentence();
+            return name + "=" + x.getValue().apply(pos);
+          }
+        });
+      }
+
+      // head1 children
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head1Child-" + dp.getKey() +"-" + x.getKey();
+        addTemplate(name, new Template() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public Iterable<String> extract(TemplateContext context) {
+            int h = context.getHead1();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse d = extractDeps.apply(context.getSentence());
+            if (d == null)
+              return null;
+            int[] c = d.getChildren(h);
+            if (c.length == 0)
+              return Arrays.asList(name + "=NONE");
+            else {
+              pos.sentence = context.getSentence();
+              List<String> cs = new ArrayList<>();
+              for (int cd : c) {
+                pos.index = cd;
+                cs.add(name + "=" + x.getValue().apply(pos));
+              }
+              return cs;
+            }
+          }
+        });
+      }
     }
 
     // left, first, last, right
@@ -640,59 +674,28 @@ public class BasicFeatureTemplates {
     }
 
     // path features
-    for (Path.NodeType nt : Path.NodeType.values()) {
-      for (Path.EdgeType et : Path.EdgeType.values()) {
-        String name1 = "head1RootPath-" + nt + "-" + et + "-t";
-        addTemplate(name1, new TemplateSS() {
-          public String extractSS(TemplateContext context) {
-            int h = context.getHead1();
-            if (h == TemplateContext.UNSET)
-              return null;
-            Sentence s = context.getSentence();
-            DependencyParse deps = s.getCollapsedDeps();
-            if (deps == null)
-              return null;
-            Path p = new Path(s, deps, h, nt, et);
-            return name1 + "=" + p.getPath();
-          }
-        });
-        String name2 = "head1head2Path-" + nt + "-" + et + "-t";
-        addTemplate(name2, new TemplateSS() {
-          public String extractSS(TemplateContext context) {
-            int h1 = context.getHead1();
-            if (h1 == TemplateContext.UNSET)
-              return null;
-            int h2 = context.getHead2();
-            if (h2 == TemplateContext.UNSET)
-              return null;
-            Sentence s = context.getSentence();
-            DependencyParse deps = s.getCollapsedDeps();
-            if (deps == null)
-              return null;
-            Path p = new Path(s, deps, h1, h2, nt, et);
-            return name2 + "=" + p.getPath();
-          }
-        });
-        for (int length : Arrays.asList(1, 2, 3, 4)) {
-          String nameL = "head1RootPathNgram-" + nt + "-" + et + "-len" + length;
-          addTemplate(nameL, new Template() {
-            public Iterable<String> extract(TemplateContext context) {
+    for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
+      for (Path.NodeType nt : Path.NodeType.values()) {
+        for (Path.EdgeType et : Path.EdgeType.values()) {
+          String name1 = "head1RootPath-" + dp.getKey() + "-" + nt + "-" + et + "-t";
+          addTemplate(name1, new TemplateSS() {
+            private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+            public String extractSS(TemplateContext context) {
               int h = context.getHead1();
               if (h == TemplateContext.UNSET)
                 return null;
               Sentence s = context.getSentence();
-              DependencyParse deps = s.getCollapsedDeps();
+              DependencyParse deps = extractDeps.apply(s);
               if (deps == null)
                 return null;
               Path p = new Path(s, deps, h, nt, et);
-              Set<String> pieces = new HashSet<>();
-              p.pathNGrams(length, pieces, nameL + "=");
-              return pieces;
+              return name1 + "=" + p.getPath();
             }
           });
-          String nameL2 = "head1head2PathNgram-" + nt + "-" + et + "-len" + length;
-          addTemplate(nameL2, new Template() {
-            public Iterable<String> extract(TemplateContext context) {
+          String name2 = "head1head2Path-" + dp.getKey() + "-" + nt + "-" + et + "-t";
+          addTemplate(name2, new TemplateSS() {
+            private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+            public String extractSS(TemplateContext context) {
               int h1 = context.getHead1();
               if (h1 == TemplateContext.UNSET)
                 return null;
@@ -700,24 +703,61 @@ public class BasicFeatureTemplates {
               if (h2 == TemplateContext.UNSET)
                 return null;
               Sentence s = context.getSentence();
-              DependencyParse deps = s.getCollapsedDeps();
+              DependencyParse deps = extractDeps.apply(s);
               if (deps == null)
                 return null;
               Path p = new Path(s, deps, h1, h2, nt, et);
-              Set<String> pieces = new HashSet<>();
-              p.pathNGrams(length, pieces, nameL2 + "=");
-              return pieces;
+              return name2 + "=" + p.getPath();
             }
           });
+          for (int length : Arrays.asList(1, 2, 3, 4)) {
+            String nameL = "head1RootPathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
+            addTemplate(nameL, new Template() {
+              private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+              public Iterable<String> extract(TemplateContext context) {
+                int h = context.getHead1();
+                if (h == TemplateContext.UNSET)
+                  return null;
+                Sentence s = context.getSentence();
+                DependencyParse deps = extractDeps.apply(s);
+                if (deps == null)
+                  return null;
+                Path p = new Path(s, deps, h, nt, et);
+                Set<String> pieces = new HashSet<>();
+                p.pathNGrams(length, pieces, nameL + "=");
+                return pieces;
+              }
+            });
+            String nameL2 = "head1head2PathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
+            addTemplate(nameL2, new Template() {
+              private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+              public Iterable<String> extract(TemplateContext context) {
+                int h1 = context.getHead1();
+                if (h1 == TemplateContext.UNSET)
+                  return null;
+                int h2 = context.getHead2();
+                if (h2 == TemplateContext.UNSET)
+                  return null;
+                Sentence s = context.getSentence();
+                DependencyParse deps = extractDeps.apply(s);
+                if (deps == null)
+                  return null;
+                Path p = new Path(s, deps, h1, h2, nt, et);
+                Set<String> pieces = new HashSet<>();
+                p.pathNGrams(length, pieces, nameL2 + "=");
+                return pieces;
+              }
+            });
+          }
         }
       }
     }
 
     // ********** PosPatternGenerator ******************************************
     for (PosPatternGenerator.Mode mode : PosPatternGenerator.Mode.values()) {
-      for (int tagsLeft : Arrays.asList(0, 1, 2, 3)) {
-        for (int tagsRight : Arrays.asList(0, 1, 2, 3)) {
-          if (tagsLeft + tagsRight > 3) continue;
+      for (int tagsLeft : Arrays.asList(0, 1, 2, 3, 4)) {
+        for (int tagsRight : Arrays.asList(0, 1, 2, 3, 4)) {
+          if (tagsLeft + tagsRight > 4) continue;
           String name = String.format("span1PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
           addTemplate(name, new TemplateSS() {
             private PosPatternGenerator pat
@@ -738,6 +778,20 @@ public class BasicFeatureTemplates {
 
     // ********** Constituency parse features **********************************
     // basic:
+    addTemplate("span1StanfordDepth", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConstituencyParse cp = context.getSentence().getStanfordParse();
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n != null)
+          return "span1StanfordDepth=" + n.getDepth();
+        return null;
+      }
+    });
     addTemplate("span1StanfordCategory", new TemplateSS() {
       String extractSS(TemplateContext context) {
         Span s = context.getSpan1();
@@ -753,6 +807,20 @@ public class BasicFeatureTemplates {
         return "span1StanfordCategory=" + cat;
       }
     });
+    addTemplate("span1StanfordCategory2", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConstituencyParse cp = context.getSentence().getStanfordParse();
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n != null)
+          return "span1StanfordCategory2=" + n.getTag();
+        return null;
+      }
+    });
     addTemplate("span1StanfordRule", new TemplateSS() {
       String extractSS(TemplateContext context) {
         Span s = context.getSpan1();
@@ -766,6 +834,20 @@ public class BasicFeatureTemplates {
         if (n != null)
           rule = n.getRule();
         return "span1IsStanfordRule=" + rule;
+      }
+    });
+    addTemplate("span1StanfordRule2", new TemplateSS() {
+      String extractSS(TemplateContext context) {
+        Span s = context.getSpan1();
+        if (s == null)
+          return null;
+        ConstituencyParse cp = context.getSentence().getStanfordParse();
+        if (cp == null)
+          return null;
+        ConstituencyParse.Node n = cp.getConstituent(s);
+        if (n != null)
+          return "span1IsStanfordRule2=" + n.getRule();
+        return null;
       }
     });
     // Values of this map have the following interpretation:
@@ -1188,8 +1270,13 @@ public class BasicFeatureTemplates {
         len -> semaforPathLengthBuckets(len));
     distanceBucketings.put("Direction", len -> len == 0
         ? "0" : (len < 0 ? "-" : "+"));
-    distanceBucketings.put("Len5", len -> Math.abs(len) <= 5
-        ? String.valueOf(len) : (len < 0 ? "-" : "+"));
+//    distanceBucketings.put("Len5", len -> Math.abs(len) <= 5
+//        ? String.valueOf(len) : (len < 0 ? "-" : "+"));
+    for (int div = 1; div <= 5; div++) {
+      final int divL = div;
+      final String name = "discLen" + div;
+      distanceBucketings.put(name, stringLength -> discretizeWidth(name, divL, 8, stringLength));
+    }
     List<String> dpKeys = new ArrayList<>();
     dpKeys.addAll(distancePoints.keySet());
     Collections.sort(dpKeys);
@@ -1201,7 +1288,7 @@ public class BasicFeatureTemplates {
         ToIntFunction<TemplateContext> p2v = distancePoints.get(p2k);
         // Distance between two points
         for (Entry<String, IntFunction<String>> d : distanceBucketings.entrySet()) {
-          String name = String.format("Dist(%s,%s,%s)", d.getKey(), p1k, p2k);
+          String name = String.format("Dist-%s-%s-%s", d.getKey(), p1k, p2k);
           addTemplate(name, new TemplateSS() {
             @Override
             String extractSS(TemplateContext context) {
@@ -1216,7 +1303,7 @@ public class BasicFeatureTemplates {
           });
         }
         // N-grams between the two points
-        for (int n = 1; n <= 2; n++) {
+        for (int n = 1; n <= 3; n++) {
           for (Map.Entry<String, Function<SentencePosition, String>> ext : tokenExtractors.entrySet()) {
             if ("Word2".equals(ext.getKey()))
               continue;
