@@ -127,7 +127,7 @@ public class BubEntropyEstimatorAdapter implements AutoCloseable {
     if (debug)
       Log.info("N=" + N + " n.length=" + counts.length + " m=" + dimension + " k_max=" + kMax);
 
-    if (N >= 10 * dimension && N >= 300 && allowMleFallback) {
+    if (N >= 4 * dimension && N >= 300 && allowMleFallback) {
       if (debug)
         Log.info("falling back on MLE for N/m is large case");
       return mleEntropyEstimate(counts);

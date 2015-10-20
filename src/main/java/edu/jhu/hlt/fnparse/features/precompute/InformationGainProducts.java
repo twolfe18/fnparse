@@ -429,7 +429,7 @@ public class InformationGainProducts {
         sb.append(String.valueOf(t.heuristicScore()));
 
         // mi
-        sb.append("\t" + t.ig());
+        sb.append("\t" + t.ig().miSmoothed.mi());
 
         // hx
         sb.append("\t" + t.hx());
@@ -614,22 +614,6 @@ public class InformationGainProducts {
     return prods;
   }
 
-  public static List<String[]> filterByShard(List<String[]> all, ExperimentProperties config) {
-    int shard = config.getInt("shard", 0);
-    int numShards = config.getInt("numShards", 1);
-    assert shard >= 0 && shard < numShards;
-    Log.info("starting filtering products by shard=" + shard + " numShards=" + numShards);
-    List<String[]> keep = new ArrayList<>();
-    for (String[] feat : all) {
-      int h = 0;
-      for (String i : feat)
-        h = i.hashCode() + 31 * h;
-      if (Math.floorMod(h, numShards) == shard)
-        keep.add(feat);
-    }
-    Log.info("all.size=" + all.size() + " keep.size=" + keep.size());
-    return keep;
-  }
   public static int stringArrayHash(String[] ar) {
     int h = 0;
     for (String i : ar)
@@ -704,7 +688,7 @@ public class InformationGainProducts {
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
-    double gain = config.getDouble("gain", 1.3);
+    double gain = config.getDouble("gain", 1.5);
     int maxProducts = config.getInt("numProducts", 100);
     assert maxProducts > 0;
     int n1 = count(1, gain, 3, maxProducts);
