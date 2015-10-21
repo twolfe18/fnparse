@@ -44,6 +44,7 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.DropoutMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
@@ -1258,7 +1259,9 @@ public class RerankerTrainer {
       int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
-      trainer.statelessParams = trainer.cachedFeatures.new Params(dimension, numRoles);
+      CachedFeatures.Params params = trainer.cachedFeatures.new Params(dimension, numRoles, rand);
+      trainer.cachedFeatures.params = params;
+      trainer.statelessParams = params;
 
       // Make sure that DeterministicRolePruning knows about CachedFeatures
       trainer.pretrainConf.argPruningMode = Mode.CACHED_FEATURES;
@@ -1670,6 +1673,7 @@ public class RerankerTrainer {
       stripSyntax(test);
     }
 
+    final boolean dropout = config.getBoolean("dropout", false);
     Reranker model = null;
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
@@ -1707,6 +1711,11 @@ public class RerankerTrainer {
       LOG.info("just constructed model from saved params (skipping train): " + model);
     } else {
       // Train
+      if (dropout) {
+        Log.info("[main] turning on dropout");
+        trainer.cachedFeatures.params.setDropoutProbability(0.5);
+        trainer.cachedFeatures.params.setDropoutMode(DropoutMode.TRAIN);
+      }
       config.store(System.out, null);   // show the config for posterity
       LOG.info("[main] " + Describe.memoryUsage());
       LOG.info("[main] starting training, config:");
@@ -1720,6 +1729,7 @@ public class RerankerTrainer {
 //      model.serializeParams(modelFile);
     }
 
+
     // Release some memory
     LOG.info("[main] before GC: " + Describe.memoryUsage());
     ConcreteStanfordWrapper.dumpSingletons();
@@ -1727,8 +1737,13 @@ public class RerankerTrainer {
     System.gc();
     LOG.info("[main] after GC:  " + Describe.memoryUsage());
 
+
     // Evaluate
     LOG.info("[main] done training, evaluating");
+    if (dropout) {
+      Log.info("[main] turning off dropout");
+      model.cachedFeatures.params.setDropoutMode(DropoutMode.TEST);
+    }
     File diffArgsFile = new File(workingDir, "diffArgs.txt");
     File predictionsFile = new File(workingDir, "predictions.test-set.txt");
     File semDir = null;

@@ -94,6 +94,10 @@ public class CachedFeatures {
   // field here so that there is less book-keeping in RerankerTrainer.
   public PropbankFNParses sentIdsAndFNParses;
 
+  // You probably only want to instantiate one of these per module instance.
+  // This lets RerankerTrainer turn off dropout.
+  public Params params;
+
   /** A parse and its features */
   public static final class Item {
     public final FNParse parse;
@@ -351,6 +355,10 @@ public class CachedFeatures {
     }
   }
 
+  public static enum DropoutMode {
+    OFF, TRAIN, TEST
+  };
+
   /**
    * Actually provides the params!
    *
@@ -369,21 +377,39 @@ public class CachedFeatures {
      */
 
     // k -> feature -> weight
+    // Intercept is stored at position 0, followed by this.dimension non-intercept features
     private int dimension = 1 * 1024 * 1024;    // hashing trick
     private double[][] weightsCommit;
     private double[] weightPrune;
 
     private double l2Penalty = 1e-8;
 
-    public Params(int dimension, int numRoles) {
+    private DropoutMode dropoutMode = DropoutMode.OFF;
+    private double dropoutProbability = 0;
+    private Random rand;
+
+    /** {@link Random} is needed for dropout (can be null if no dropout) */
+    public Params(int dimension, int numRoles, Random rand) {
+      this.rand = rand;
       this.dimension = dimension;
-      this.weightsCommit = new double[numRoles][dimension];
-      this.weightPrune = new double[dimension];
-      long weightBytes = (numRoles + 1) * dimension * 8;
+      this.weightsCommit = new double[numRoles][dimension + 1];
+      this.weightPrune = new double[dimension + 1];
+      long weightBytes = (numRoles + 1) * (dimension + 1) * 8;
       Log.info("dimension=" + dimension
           + " numRoles=" + numRoles
           + " numTemplates=" + templateSet.cardinality()
           + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
+    }
+
+    public void setDropoutMode(DropoutMode mode) {
+      Log.info("toggling dropout mode from " + this.dropoutMode + " to " + mode);
+      this.dropoutMode = mode;
+    }
+    public void setDropoutProbability(double pDropout) {
+      if (pDropout < 0 || pDropout >= 1)
+        throw new IllegalArgumentException("must be in [0,1): " + pDropout);
+      assert pDropout == 0 || rand != null;
+      this.dropoutProbability = pDropout;
     }
 
     /**
@@ -421,9 +447,10 @@ public class CachedFeatures {
       int f2 = ((frame.getId() << 12) ^ a.k) * 3 + 1;
       int f3 = a.k * 3 + 2;
       IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector(3);
-      fv.add(Math.floorMod(f1, dimension), 1);
-      fv.add(Math.floorMod(f2, dimension), 1);
-      fv.add(Math.floorMod(f3, dimension), 1);
+      fv.add(0, 2);
+      fv.add(Math.floorMod(f1, dimension) + 1, 1);
+      fv.add(Math.floorMod(f2, dimension) + 1, 1);
+      fv.add(Math.floorMod(f3, dimension) + 1, 1);
       IntDoubleVector theta = new IntDoubleDenseVector(weightPrune);
       return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
     }
@@ -433,14 +460,21 @@ public class CachedFeatures {
      */
     private Adjoints scoreCommit(FNTagging f, Action a) {
 
+      if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
+        throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
+
       // Get the templates needed for all the features.
       Item cur = loadedSentId2Item.get(f.getSentence().getId());
       BaseTemplates data = cur.getFeatures(a.t, a.getSpan());
 
       // I should be able to use the same code as in InformationGainProducts.
-      IntDoubleVector features = new IntDoubleUnsortedVector(featureSet.length + 1);
+      IntDoubleVector features = new IntDoubleUnsortedVector();
+      features.add(0, 2);   // intercept
+
       List<ProductIndex> buf = new ArrayList<>();
-      for (int i = 0; i < featureSet.length; i++) {
+      final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
+      final int fsLen = featureSet.length;
+      for (int i = 0; i < fsLen; i++) {
         int[] feat = featureSet[i];
         // Note that these features don't need to be producted with k due to the
         // fact that we have separate weights for those.
@@ -449,8 +483,13 @@ public class CachedFeatures {
         // If I get a long here, I can zip them all together by multiplying by
         // featureSet.length and then adding in an offset.
         for (ProductIndex pi : buf) {
-          int h = pi.getHashedProdFeatureModulo(dimension);
-          features.add(h, 1);
+
+          if (dropoutMode == DropoutMode.TRAIN && rand.nextDouble() < dropoutProbability)
+            continue;
+
+//          int h = pi.getHashedProdFeatureModulo(dimension);
+          int h = pi.prod(i, fsLen).getProdFeatureModulo(dimension);
+          features.add(h + 1, v);   // +1 to make space for intercept
         }
         buf.clear();
       }
@@ -711,7 +750,8 @@ public class CachedFeatures {
 
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
-    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, new Random(9001));
+    Random rand = new Random(9001);
+    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, rand);
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
 //    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
@@ -732,7 +772,7 @@ public class CachedFeatures {
 
     int dimension = 256 * 1024;
     int numRoles = 20;
-    Params params = this.new Params(dimension, numRoles);
+    Params params = this.new Params(dimension, numRoles, rand);
 
     ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), false, false);
     for (int index = 0; index < ip.size(); index++) {
