@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.util.BitSet;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
@@ -15,6 +14,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.prim.map.IntIntHashMap;
 
 /**
  * Accumulates counts of feature occurrences. Note that this is done separate
@@ -26,8 +26,11 @@ import edu.jhu.hlt.tutils.TimeMarker;
  */
 public class FeatureCounts implements LineByLine {
 
+  public static boolean DEBUG = false;
+
   /** Reads count files produced by {@link FeatureCounts#main} */
   public static class FromFile {
+    public static final int MISSING_VALUE = -1;
     private Counts<Integer>[] t2f2count;
     @SuppressWarnings("unchecked")
     public FromFile(File previousOutputOfThisClassesMain) throws IOException {
@@ -54,33 +57,63 @@ public class FeatureCounts implements LineByLine {
 
           if (tm.enoughTimePassed(15)) {
             Log.info("read " + i + " lines in "
-                + tm.secondsSinceFirstMark() + " seconds");
+                + tm.secondsSinceFirstMark() + " seconds, "
+                + Describe.memoryUsage());
           }
         }
       }
+      Log.info("done");
     }
-    public BitSet countAtLeast(int c, int template) {
+
+    public int numFeatures(int template) {
+      return t2f2count[template].numNonZero();
+    }
+
+    /** Can return -1 */
+    public IntIntHashMap mapFeaturesByFrequency(int template) {
+      Counts<Integer> cnt = t2f2count[template];
+      int newSize = Math.max(10, (int) (4 * Math.log(cnt.numNonZero())));
+      IntIntHashMap oldF2newF = new IntIntHashMap(newSize, MISSING_VALUE);
+      for (int i : cnt.getKeysSortedByCount(true))
+        oldF2newF.put(i, oldF2newF.size());
+      return oldF2newF;
+    }
+
+    /** Can return -1 */
+    public int maxNewFeatureWithCountAtLeast(int c, int template) {
       if (c < 2)
         throw new IllegalArgumentException();
       Counts<Integer> cnt = t2f2count[template];
-      BitSet bs = new BitSet();
-      for (int i : cnt.countIsAtLeast(c))
-        bs.set(i);
-      return bs;
+      int newF = 0;
+      for (int i : cnt.getKeysSortedByCount(true)) {
+        if (cnt.getCount(i) < c)
+          break;
+        newF++;
+      }
+      if (DEBUG)
+        Log.info("c=" + c + " template=" + template + " newF=" + newF + " cnt.size=" + cnt.numNonZero());
+      return newF - 1;
     }
-    public BitSet freqInTop(int k, int template) {
+
+    public int maxNewFeatureIndexInTop(int k, int template) {
       if (k < 0)
         throw new IllegalArgumentException();
       Counts<Integer> cnt = t2f2count[template];
-      BitSet bs = new BitSet();
-      int size = 0;
+      int newF = 0;
+      int prevCount = -1;
       for (int i : cnt.getKeysSortedByCount(true)) {
-        bs.set(i);
-        if (++size == k)
+        int count = cnt.getCount(i);
+        if (newF > k && prevCount != count)
           break;
+        prevCount = count;
+        newF++;
       }
-      return bs;
+      assert newF > 0 : "k=" + k + " cnt.size=" + cnt.numNonZero();
+      if (DEBUG)
+        Log.info("k=" + k + " template=" + template + " newF=" + newF + " cnt.size=" + cnt.numNonZero());
+      return newF - 1;
     }
+
   }
 
   private int[][] tf2count;
@@ -104,8 +137,10 @@ public class FeatureCounts implements LineByLine {
   @Override
   public void observeLine(String line) {
     ffline.init(line, expectsSortedFeatureFiles);
-    for (Feature f : ffline.getFeatures())
-      tf2count[f.template][f.feature]++;
+    for (Feature f : ffline.getFeatures()) {
+      int[] r = tf2count[f.template];
+      r[f.feature]++;
+    }
   }
 
   public int getCount(int template, int feature) {
@@ -117,7 +152,7 @@ public class FeatureCounts implements LineByLine {
 
     File bialphFile = config.getExistingFile("bialph");
     File output = config.getFile("output");
-    String featuresGlob = config.getString("featuresGlob", "");
+    String featuresGlob = config.getString("featuresGlob", "glob:**/*");
     File featuresParent = config.getExistingDir("featuresParent");
 
     BiAlph bialph = new BiAlph(bialphFile, LineMode.ALPH);
