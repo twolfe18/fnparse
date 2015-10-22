@@ -412,7 +412,7 @@ public class BasicFeatureTemplates {
     for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
       // head1 parent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head1Parent" + x.getKey();
+        String name = "head1Parent-" + dp.getKey() + "-" + x.getKey();
         addTemplate(name, new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
