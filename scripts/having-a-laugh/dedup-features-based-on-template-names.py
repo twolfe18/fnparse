@@ -110,17 +110,19 @@ class Feature:
   def __init__(self, line, rank=None):
     ar = line.rstrip().split('\t')
     self.rank = rank
-    self.ig = float(ar[0])
-    self.order = int(ar[1])
-    self.int_templates = map(int, ar[2].split('*'))
-    self.str_templates = ar[3].split('*')
+    self.score = float(ar[0])
+    self.ig = float(ar[1])
+    self.hx = float(ar[2])
+    self.order = int(ar[3])
+    self.int_templates = map(int, ar[4].split('*'))
+    self.str_templates = ar[5].split('*')
     assert self.order == len(self.int_templates)
     assert self.order == len(self.str_templates)
 
   def __str__(self):
     if self.rank:
-      return "<Feat rank=%d n=%d ig=%.4f %s>" % (self.rank, self.order, self.ig, str(self.str_templates))
-    return "<Feat n=%d ig=%.4f %s>" % (self.order, self.ig, str(self.str_templates))
+      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f %s>" % (self.rank, self.order, self.ig, self.hx, str(self.str_templates))
+    return "<Feat n=%d ig=%.4f hx=%.4f %s>" % (self.order, self.ig, self.hx, str(self.str_templates))
 
   def features_in_one_str(self):
     return '*'.join(self.str_templates)
@@ -173,6 +175,7 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
       fs_str = ' + '.join(map(lambda f: f.features_in_one_str(), fs))
       of.write(fs_str + '\n')
     
+
 
 if __name__ == '__main__':
   if len(sys.argv) != 4:

@@ -1,0 +1,15 @@
+0.002511333307205133	0.35411359028916145	11.70496516184047	3	49*58*86	CollapsedLabel-2-grams-between-</S>-and-Span2.First*CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-Head1-and-Span1.First
+0.002368361896009306	0.05419530574703835	4.345461308258397	2	30*72	CollapsedLabel-1-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-</S>-and-<S>
+0.0022639742427152613	0.30528997204693376	11.43883421300772	3	46*58*82	CollapsedLabel-2-grams-between-</S>-and-Head2*CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-<S>-and-Span1.Last
+0.0013175168638422656	0.05021696379850926	5.840792298651473	2	58*93	CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-Head2-and-Span2.Last
+0.0013175168638422656	0.05021696379850926	5.840792298651473	2	58*99	CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-Span2.First-and-Span2.Last
+0.0013079859668548189	0.030286522115422265	4.37665189906646	2	32*86	CollapsedLabel-1-grams-between-Head1-and-Span2.First*CollapsedParentDir-1-grams-between-Head1-and-Span1.First
+8.178168470497281E-4	0.027772280847565334	5.473485829319239	3	32*79*86	CollapsedLabel-1-grams-between-Head1-and-Span2.First*CollapsedParentDir-1-grams-between-<S>-and-Head1*CollapsedParentDir-1-grams-between-Head1-and-Span1.First
+7.131973690712521E-4	0.032546607414451145	6.452502098993333	3	58*64*86	CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedLabel-2-grams-between-Head2-and-Span2.First*CollapsedParentDir-1-grams-between-Head1-and-Span1.First
+5.102773223700645E-4	0.04457434360455714	9.12979593176344	3	30*64*69	CollapsedLabel-1-grams-between-Head1-and-Span1.First*CollapsedLabel-2-grams-between-Head2-and-Span2.First*CollapsedLabel-2-grams-between-Span1.Last-and-Span2.First
+4.218281462641787E-4	0.06494783765972834	12.246123049805373	3	30*32*68	CollapsedLabel-1-grams-between-Head1-and-Span1.First*CollapsedLabel-1-grams-between-Head1-and-Span2.First*CollapsedLabel-2-grams-between-Span1.First-and-Span2.Last
+3.0033339543885957E-4	0.0286647218402436	9.562583607934153	3	32*58*77	CollapsedLabel-1-grams-between-Head1-and-Span2.First*CollapsedLabel-2-grams-between-Head1-and-Span1.First*CollapsedParentDir-1-grams-between-</S>-and-Span2.First
+2.087892396292206E-4	0.013273898431494402	7.718522321127838	3	24*29*82	CollapsedLabel-1-grams-between-<S>-and-Head2*CollapsedLabel-1-grams-between-Head1-and-Head2*CollapsedParentDir-1-grams-between-<S>-and-Span1.Last
+1.367196290705589E-4	0.013723370593158535	9.817128301413725	3	29*46*82	CollapsedLabel-1-grams-between-Head1-and-Head2*CollapsedLabel-2-grams-between-</S>-and-Head2*CollapsedParentDir-1-grams-between-<S>-and-Span1.Last
+1.171713747123099E-4	0.005600891670663799	6.618221294607831	2	17*24	CollapsedLabel-1-grams-between-</S>-and-Head1*CollapsedLabel-1-grams-between-<S>-and-Head2
+6.701597302570021E-5	5.90702746960936E-4	2.1941644280534778	2	79*82	CollapsedParentDir-1-grams-between-<S>-and-Head1*CollapsedParentDir-1-grams-between-<S>-and-Span1.Last

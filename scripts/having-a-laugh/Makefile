@@ -22,3 +22,18 @@ all: \
 # DIM=10
 # diff <(grep -oP '\[.+\]' propbank-${DIM}.fs | sort) <(grep -oP '\[.+\]' old/propbank-${DIM}.fs | sort)
 
+
+
+
+
+# New method: actually solve the knapsack problem
+# TODO filter out duplicates using dedup code
+knapsack-test-%.fs: igprod.txt
+	#awk '{print $$2, $$3}' <igprod.txt >/tmp/temp-knapsack-$*
+	python dedup-features-based-on-template-names.py igprod.txt 2000 /dev/stdout \
+		| grep '^<Feat' >/tmp/temp-knapsack-raw-$*
+	key-values mi hx </tmp/temp-knapsack-raw-$* >/tmp/temp-knapsack-$*
+	octave --eval "knapsack_feature_set('/tmp/temp-knapsack-$*', '/tmp/temp-knapsack-soln-$*', $*);"
+	lines /tmp/temp-knapsack-raw-$* /tmp/temp-knapsack-soln-$* true >knapsack-test-$*.fs
+
+
