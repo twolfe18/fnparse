@@ -14,7 +14,9 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.LineByLine;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.map.IntIntHashMap;
 
@@ -88,10 +90,16 @@ public class TemplateTransformer {
     public boolean expectSortedFeatureFiles = true;
     private File outputDir;
     private BufferedWriter outputFeatureFile;
+    private int shard;    // says which files to map over
+    private int numShards;
 
-    public Manager(File counts, BiAlph bialph, File outputDir) {
+    public Manager(File counts, BiAlph bialph, File outputDir, int shard, int numShards) {
       if (!outputDir.isDirectory())
         throw new IllegalArgumentException("outputDir must be directory: " + outputDir.getPath());
+      assert shard < numShards;
+      assert shard >= 0;
+      this.shard = shard;
+      this.numShards = numShards;
       // Read in feature counts
       FeatureCounts.FromFile fc;
       try {
@@ -201,6 +209,10 @@ public class TemplateTransformer {
      */
     @Override
     public void run(File features) throws IOException {
+      if (Math.floorMod(features.getPath().hashCode(), numShards) != shard) {
+        Log.info("skipping " + features.getPath() + " b/c not in shard " + shard + "/" + numShards);
+        return;
+      }
       File out = getOutputFor(features);
       Log.info("mapping " + features.getPath() + "  ==>  " + out.getPath());
       this.outputFeatureFile = FileUtil.getWriter(out);
@@ -259,7 +271,8 @@ public class TemplateTransformer {
     File outputFeatureFileDir = config.getExistingDir("outputFeatureFileDir");
     File countFile = config.getExistingFile("countFile");
     BiAlph bialph = new BiAlph(inputAlphabet, LineMode.ALPH);
-    Manager m = new Manager(countFile, bialph, outputFeatureFileDir);
+    IntPair shard = ShardUtils.getShard(config);
+    Manager m = new Manager(countFile, bialph, outputFeatureFileDir, shard.first, shard.second);
     String oa = "outputBialph";
     if (config.containsKey(oa)) {
       File outputAlphabet = config.getFile(oa);
