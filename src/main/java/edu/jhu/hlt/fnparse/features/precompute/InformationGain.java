@@ -165,7 +165,9 @@ public class InformationGain implements Serializable, LineByLine {
     // (y:int) * (x:ProductIndex) can be represented as a ProductIndex :)
     // ProductIndex can be represented exactly as a long (64 bits) without overflowing in reasonable situations
     // I can store counts for long keys in LongIntHashMap
-    private LongIntHashMap cx2, cyx2;
+    private LongIntHashMap cx, cyx;
+
+    // Used in computing indices for cyx
     private int numY; // ensure that all values of y are less than this
 
     private int updates;
@@ -190,8 +192,8 @@ public class InformationGain implements Serializable, LineByLine {
       this.index = index;
       this.name = name;
       this.cy = new IntIntDenseVector();
-      this.cx2 = new LongIntHashMap();
-      this.cyx2 = new LongIntHashMap();
+      this.cx = new LongIntHashMap();
+      this.cyx = new LongIntHashMap();
       this.numY = numY;
       this.updates = 0;
 //      this.smi = new SmoothedMutualInformation<>();
@@ -251,11 +253,11 @@ public class InformationGain implements Serializable, LineByLine {
 //            }
             cy.add(yy, 1);
             if (USE_HASHING) {
-              cyx2.add(xpi.prod(yy, numY).getProdFeatureModulo(HASHING_DIM), 1);
-              cx2.add(xpi.getProdFeatureModulo(HASHING_DIM), 1);
+              cyx.add(xpi.prod(yy, numY).getProdFeatureModulo(HASHING_DIM), 1);
+              cx.add(xpi.getProdFeatureModulo(HASHING_DIM), 1);
             } else {
-              cyx2.add(xpi.prod(yy, numY).getProdFeature(), 1);
-              cx2.add(xpi.getProdFeature(), 1);
+              cyx.add(xpi.prod(yy, numY).getProdFeature(), 1);
+              cx.add(xpi.getProdFeature(), 1);
             }
 
             updates++;
@@ -297,9 +299,9 @@ public class InformationGain implements Serializable, LineByLine {
 //        }
         if (this.bubEst != null) {
           Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
-          double hyx = bubEst.entropy(cyx2);
+          double hyx = bubEst.entropy(cyx);
           Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
-          double hx = bubEst.entropy(cx2);
+          double hx = bubEst.entropy(cx);
           Log.info("calling BUB estimator for H[y]\t" + Describe.memoryUsage());
           double hy = bubEst.entropy(cy);
           igCache.h_x = hx;
@@ -319,7 +321,7 @@ public class InformationGain implements Serializable, LineByLine {
         for (int i = 0; i < cy.getNumImplicitEntries(); i++)
           if (cy.get(i) > 0)
             D_y++;
-        int D_x = cx2.size();   // TODO should be max index in cx2, not size?
+        int D_x = cx.size();   // TODO should be max index in cx2, not size?
 //        int D_x = 0;
 //        for (int i = 0; i < cx.getNumImplicitEntries(); i++)
 //          if (cx.get(i) > 0)
@@ -342,7 +344,7 @@ public class InformationGain implements Serializable, LineByLine {
           double p_y_p = (c_y + alpha_y_p) / Z_y_p;
           igCache.h_y_p += p_y_p * -Math.log(p_y_p);
         }
-        Iterator<LongIntEntry> itr = cx2.iterator();
+        Iterator<LongIntEntry> itr = cx.iterator();
         while (itr.hasNext()) {
          LongIntEntry e = itr.next();
          double c_x = e.get();
@@ -370,7 +372,7 @@ public class InformationGain implements Serializable, LineByLine {
             ));
 
         // c(y,x)>0
-        itr = cyx2.iterator();
+        itr = cyx.iterator();
         while (itr.hasNext()) {
           LongIntEntry e = itr.next();
 //        for (Entry<Pair<Integer, ProductIndex>, Integer> c : cyx.entrySet()) {
@@ -380,7 +382,7 @@ public class InformationGain implements Serializable, LineByLine {
           double c_y = cy.get((int) (e.index() % ((long) numY)));
 //          double c_x = cx.get(c.getKey().second);
 //          double c_x = cx.getCount(c.getKey().get2());
-          double c_x = cx2.get(e.index() / ((long) numY));
+          double c_x = cx.get(e.index() / ((long) numY));
           double n_y = c_y + alpha_y;
           double n_x = c_x + alpha_x;
 

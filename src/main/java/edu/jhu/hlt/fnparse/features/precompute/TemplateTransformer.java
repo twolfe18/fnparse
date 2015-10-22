@@ -122,7 +122,7 @@ public class TemplateTransformer {
           int nf = fc.numFeatures(oldTemplateInt);
           if (nf < K * 2)
             continue;
-          if (nf == maxAllowableNewFeatureIndex)
+          if (maxAllowableNewFeatureIndex * 1.1 + 1 >= nf)
             continue;
           kept++;
           tt.addIntance(T + i++, "Top" + K, maxAllowableNewFeatureIndex);
@@ -135,7 +135,7 @@ public class TemplateTransformer {
           int nf = fc.numFeatures(oldTemplateInt);
           if (nf < Math.pow(2, K+2))
             continue;   // e.g.  2^(4+2)=64  2^(7+2)=512
-          if (nf == maxAllowableNewFeatureIndex)
+          if (maxAllowableNewFeatureIndex * 1.1 + 1 >= nf)
             continue;
           kept++;
           tt.addIntance(T + i++, "Cnt" + K, maxAllowableNewFeatureIndex);
@@ -254,6 +254,7 @@ public class TemplateTransformer {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+    FeatureCounts.DEBUG = config.getBoolean("debug", false);
     File inputAlphabet = config.getExistingFile("bialph");
     File outputFeatureFileDir = config.getExistingDir("outputFeatureFileDir");
     File countFile = config.getExistingFile("countFile");

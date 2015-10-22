@@ -63,6 +63,7 @@ public class ProductIndex {
    * Computes murmurhash on a sequence of the features with the product
    * cardinality on the end.
    * NOTE: May return a negative value!
+   * NOTE: Slow (compared to getProdFeature)!
    */
   public int getHashedProdFeature() {
     byte[] buf = new byte[(this.arity + 1) * 4];

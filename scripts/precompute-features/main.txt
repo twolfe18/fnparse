@@ -66,6 +66,66 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
 
 
 ############################################################################################
+### CREATE TEMPLATE FILTERS
+# e.g. "only have a feature fire if it is in the top K most frequent by this template"
+# or "only have this feature fire if is has fired at least K other times in the corpus"
+# These features will be put at the end of every line in the feature files and a new
+# alphabet will be writte out including them.
+
+# A) Compute the feature frequencies
+WD=parent/of/features
+BIALPH_BEFORE_FILTERS=bar
+mkdir $WD/feature-counts
+qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
+  java jar \
+    -Dbialph=$BIALPH_BEFORE_FILTERS \
+    -Doutput=$WD/feature-counts/all.txt.gz \
+    -DfeaturesParent=$WD/features \
+    edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
+qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
+  java jar \
+    -Dbialph=$BIALPH_BEFORE_FILTERS \
+    -Doutput=$WD/feature-counts/one-tenth.txt.gz \
+    -DfeaturesGlob="glob:**/shard*9.txt.gz" \
+    -DfeaturesParent=$WD/features \
+    edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
+qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
+  java jar \
+    -Dbialph=$BIALPH_BEFORE_FILTERS \
+    -Doutput=$WD/feature-counts/one-hundredth.txt.gz \
+    -DfeaturesGlob="glob:**/shard*99.txt.gz" \
+    -DfeaturesParent=$WD/features \
+    edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
+
+# B) Generate the filtered features based on the frequencies
+#   (if i try to do ~60G => +filters:~8x => 250G with one process... it is going to take a while...)
+mkdir $WD/features-filtered
+BIALPH_AFTER_FILTERS=$WD/features-filtered/alphabet.txt.gz
+COUNT_FILE=$WD/feature-counts/one-hundredth.txt.gz
+# Takes shard 0 and builds output bialph
+qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
+  java jar \
+    -DcountFile=$COUNT_FILE \
+    -DoutputBialph=$BIALPH_AFTER_FILTERS \
+    -Dbialph=$BIALPH_BEFORE_FILTERS \
+    -DoutputFeatureFileDir=$WD/features-filtered \
+    -DfeaturesGlob="shard:**/shard*0.txt.gz" \
+    -DfeaturesParent=$WD/features \
+    edu.jhu.hlt.fnparse.features.precompute.TemplateTransformer
+for SHARD in `seq 9`; do    # takes shards 1..9
+  qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
+    java jar \
+      -DcountFile=$COUNT_FILE \
+      -Dbialph=$BIALPH_BEFORE_FILTERS \
+      -DoutputFeatureFileDir=$WD/features-filtered \
+      -DfeaturesGlob="glob:**/shard*${SHARD}.txt.gz" \
+      -DfeaturesParent=$WD/features \
+      edu.jhu.hlt.fnparse.features.precompute.TemplateTransformer
+done
+
+
+
+############################################################################################
 ### COMPUTE INFORMATION GAIN
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
@@ -169,6 +229,16 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
       $PROD_IG_WD/fnparse.jar
 done
+
+
+
+
+############################################################################################
+# TODO Embed features?
+# Just run word2vec on my feature files (after filtering by top K templates by MI maybe)?
+# Pretty sure the embeddings will not be linear with the weights,
+#   will want some type of RBF kernel perceptron (average alpha*K(x,x') over all features for a given instance as decision rule).
+
 
 
 
