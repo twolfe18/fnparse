@@ -555,7 +555,8 @@ public class InformationGain implements Serializable, LineByLine {
     try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
       bubEst.debug = config.getBoolean("bubDebug", false);
 
-      final InformationGain input = new InformationGain(bubEst);
+      int numRoles = config.getInt("numRoles", 30);
+      final InformationGain input = new InformationGain(numRoles, bubEst);
 
       String features = config.getString("features", "none");
       if (!features.equals("none")) {

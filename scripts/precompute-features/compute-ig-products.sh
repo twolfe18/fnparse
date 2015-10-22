@@ -15,7 +15,7 @@ set -e
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
 
-if [[ $# != 10 ]]; then
+if [[ $# != 11 ]]; then
   echo "please provide:"
   echo "1) shard"
   echo "2) number of shards"
@@ -27,6 +27,7 @@ if [[ $# != 10 ]]; then
   echo "8) a file containing sentence ids to ignore"
   echo "9) an output file to dump template product (i.e. feature) IGs to"
   echo "10) a JAR file"
+  echo "11) number of roles expected"
   echo "where:"
   echo "a) shards sub-select over products (not data)"
   echo "b) feature file should be coherent -- share a single alphabet (provided)"
@@ -55,6 +56,8 @@ TEMPLATE_PROD_IG_OUTPUT=$9
 
 JAR=${10}
 
+NUM_ROLES=${11}
+
 java -Xmx22G -cp $JAR \
   -Dshard=$SHARD \
   -DnumShards=$NUM_SHARDS \
@@ -67,6 +70,7 @@ java -Xmx22G -cp $JAR \
   -Doutput=$TEMPLATE_PROD_IG_OUTPUT \
   -DignoreSentenceIds=$IGNORE_SENT_IDS \
   -DbubFuncParentDir=scripts/precompute-features \
+  -DnumRoles=$NUM_ROLES \
   edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
 
 echo "ret code: $?"

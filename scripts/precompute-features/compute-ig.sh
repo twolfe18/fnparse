@@ -32,13 +32,14 @@ echo "args: $@"
 #  -DoutputFeats=$OUTPUT \
 #  edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
-if [[ $# != 5 ]]; then
+if [[ $# != 6 ]]; then
   echo "please provide:"
   echo "1) a feature file parent directory"
   echo "2) a feature file glob"
   echo "3) an output file to put template IG estimates in"
   echo "4) a jar file"
   echo "5) a set of test set sentence ids to ignore"
+  echo "6) number of roles expected"
   exit 1
 fi
 
@@ -47,11 +48,13 @@ FEATS_GLOB=$2
 OUTPUT_IG_FILE=$3
 JAR=$4
 TEMPLATE_PROD_IG_OUTPUT=$5
+NUM_ROLES=$6
 
 java -Xmx20G -cp $JAR \
   -DfeaturesParent=$FEATS_PARENT \
   -DfeaturesGlob=$FEATS_GLOB \
   -DtopK=99999 \
+  -DnumRoles=$NUM_ROLES \
   -DoutputFeatures=$OUTPUT_IG_FILE \
   -DignoreSentenceIds=$TEMPLATE_PROD_IG_OUTPUT \
   -DbubFuncParentDir=scripts/precompute-features \
