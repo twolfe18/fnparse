@@ -58,6 +58,7 @@ java -Xmx20G -cp $JAR \
   -DoutputFeatures=$OUTPUT_IG_FILE \
   -DignoreSentenceIds=$TEMPLATE_PROD_IG_OUTPUT \
   -DbubFuncParentDir=scripts/precompute-features \
+  -DnumTemplates=12000 \
   edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
 echo "ret code: $?"
