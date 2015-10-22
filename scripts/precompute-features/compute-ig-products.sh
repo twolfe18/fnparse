@@ -66,7 +66,7 @@ java -Xmx22G -cp $JAR \
   -DtemplateIGs=$TEMPLATE_IG_FILE \
   -Doutput=$TEMPLATE_PROD_IG_OUTPUT \
   -DignoreSentenceIds=$IGNORE_SENT_IDS \
-  -DhashingTrickDim=`echo "256 * 1024" | bc` \
+  -DbubFuncParentDir=scripts/precompute-features \
   edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
 
 echo "ret code: $?"
