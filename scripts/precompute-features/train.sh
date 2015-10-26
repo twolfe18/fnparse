@@ -58,11 +58,17 @@ else
   exit 2
 fi
 
+#-DnumShards=1
+#-Dshard=0
+
+# TODO Put this back!
+#-DtrainTimeLimit=`echo "52 * 60" | bc` \
+
 #mvn compile exec:java -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
 java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DworkingDir=$WD \
   -DuseCachedFeatures=true \
-  -DallowDynamicStopping=false \
+  -DallowDynamicStopping=true \
   -Dperceptron=$PERCEPTRON \
   -DforceLeftRightInference=$FORCE_LEFT_RIGHT \
   -DoracleMode=$ORACLE_MODE \
@@ -88,16 +94,15 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
   -DdisallowConcreteStanford=true \
-  -DnumShards=1 \
-  -Dshard=0 \
   -DaddStanfordParses=false \
   -DrealTestSet=true \
+  -Ddropout=true \
   -DlrBatchScale=2048 \
   -DlrType=constant \
   -Dl2Penalty=1e-8 \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=`echo "52 * 60" | bc` \
+  -DtrainTimeLimit=5 \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \

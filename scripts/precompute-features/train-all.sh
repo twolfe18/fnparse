@@ -1,16 +1,17 @@
 
 set -eu
 
-if [[ $# != 8 ]]; then
+if [[ $# != 9 ]]; then
   echo "please provide:"
   echo "1) a working directory"
-  echo "2) propbank, i.e. either \"true\" or \"false\""
-  echo "3) a dimension in [10, 20, 40, 80, 160, 320, 640]"
-  echo "4) an oracle mode in [MIN, RAND_MIN, RAND_MAX, MAX]"
-  echo "5) a beam size, e.g. [1, 4, 16, 64]"
-  echo "6) force left right inference, i.e. either \"true\" or \"false\""
-  echo "7) perceptron, i.e. either \"true\" or \"false\""
-  echo "8) something to prefix job names and working directories with"
+  echo "2) a data directory (i.e. should be parent of coherent-shards-filtered/)"
+  echo "3) propbank, i.e. either \"true\" or \"false\""
+  echo "4) a dimension in [10, 20, 40, 80, 160, 320, 640]"
+  echo "5) an oracle mode in [MIN, RAND_MIN, RAND_MAX, MAX]"
+  echo "6) a beam size, e.g. [1, 4, 16, 64]"
+  echo "7) force left right inference, i.e. either \"true\" or \"false\""
+  echo "8) perceptron, i.e. either \"true\" or \"false\""
+  echo "9) something to prefix job names and working directories with"
   echo "where options 3,4,5,6,7 may also take on the special value"
   echo "\"#\", which means sweep all values."
   exit 1
@@ -18,13 +19,14 @@ fi
 
 # e.g. /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/final-results
 WD=$1
-PROPBANK=$2
-SET_DIM=$3
-SET_ORACLE_MODE=$4
-SET_BEAM_SIZE=$5
-SET_FORCE_LEFT_RIGHT=$6
-SET_PERCEPTRON=$7
-PREFIX=$8
+DD=$2
+PROPBANK=$3
+SET_DIM=$4
+SET_ORACLE_MODE=$5
+SET_BEAM_SIZE=$6
+SET_FORCE_LEFT_RIGHT=$7
+SET_PERCEPTRON=$8
+PREFIX=$9
 
 mkdir -p $WD/sge-logs
 #make jar
@@ -39,11 +41,9 @@ cp $JAR $JAR_STABLE
 if [[ $PROPBANK == "true" ]]; then
   MEM_OFFSET=20
   MEM_SLOPE="0.11"
-  DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 elif [[ $PROPBANK == "false" ]]; then
   MEM_OFFSET=5
   MEM_SLOPE="0.04"
-  DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 else
   echo "must provide a boolean for propbank: $PROPBANK"
   exit 2

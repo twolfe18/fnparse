@@ -279,12 +279,11 @@ done
 # 1) see Makefile in scripts/having-a-laugh (build feature sets based on product IG + dedup)
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
-WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/propbank
-IS_PROPBANK="true"
-DEFAULT_DIM=640
-#WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/framenet
-#IS_PROPBANK="false"
-#DEFAULT_DIM=320
+#WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/propbank
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments
+DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+IS_PROPBANK="false"
+DEFAULT_DIM=40
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1
@@ -297,6 +296,7 @@ FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-oracle \
+  $DD \
   $IS_PROPBANK \
   $DIM \
   $ORACLE_MODE \
@@ -313,6 +313,7 @@ FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-dim \
+  $DD \
   $IS_PROPBANK \
   $DIM \
   $ORACLE_MODE \
@@ -330,6 +331,7 @@ FORCE_LEFT_RIGHT="#"
 PERCEPTRON="#"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-beam \
+  $DD \
   $IS_PROPBANK \
   $DIM \
   $ORACLE_MODE \
@@ -346,6 +348,7 @@ FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-beam \
+  $DD \
   $IS_PROPBANK \
   $DIM \
   $ORACLE_MODE \

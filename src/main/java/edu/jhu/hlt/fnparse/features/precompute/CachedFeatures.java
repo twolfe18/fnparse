@@ -649,6 +649,7 @@ public class CachedFeatures {
               continue;
             } else {
               throw new RuntimeException("no parse for " + t.sentId
+                  + " in featureFile=" + featureFile.getPath()
                   + " in map of size " + sentId2parse.size());
             }
           }
