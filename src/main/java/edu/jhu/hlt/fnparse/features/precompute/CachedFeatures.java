@@ -401,9 +401,15 @@ public class CachedFeatures {
           + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
     }
 
+    public DropoutMode getDropoutMode() {
+      return this.dropoutMode;
+    }
     public void setDropoutMode(DropoutMode mode) {
       Log.info("toggling dropout mode from " + this.dropoutMode + " to " + mode);
       this.dropoutMode = mode;
+    }
+    public double getDropoutProbability() {
+      return this.dropoutProbability;
     }
     public void setDropoutProbability(double pDropout) {
       if (pDropout < 0 || pDropout >= 1)

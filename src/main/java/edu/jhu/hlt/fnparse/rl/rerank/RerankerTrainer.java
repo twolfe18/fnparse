@@ -680,6 +680,15 @@ public class RerankerTrainer {
       public double getAsDouble() {
         Log.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
 
+        // Turn off dropout when you make predictions
+        CachedFeatures.Params w = m.cachedFeatures.params;
+        boolean resetDropoutModeToTrain = false;
+        if (w.getDropoutMode() == DropoutMode.TRAIN) {
+          Log.info("[devLossFunc] about to toggle dropout mode for predictions");
+          resetDropoutModeToTrain = true;
+          w.setDropoutMode(DropoutMode.TEST);
+        }
+
         ExecutorService es = conf.threads > 1
           ? Executors.newWorkStealingPool(conf.threads)
           : Executors.newSingleThreadExecutor();
@@ -748,6 +757,12 @@ public class RerankerTrainer {
           for (Map.Entry<String, FPR> x : other.entrySet())
             Log.info("[devLossFunc] " + x.getKey() + "=" + x.getValue());
         }
+
+        if (resetDropoutModeToTrain) {
+          Log.info("[devLossFunc] about to toggle dropout back to how it was");
+          w.setDropoutMode(DropoutMode.TRAIN);
+        }
+
         return loss;
       }
     };
@@ -1740,26 +1755,35 @@ public class RerankerTrainer {
     Log.info("[main] after GC:  " + Describe.memoryUsage());
 
 
-    // Evaluate
+    // Evaluate on test
     Log.info("[main] done training, evaluating");
     if (dropout) {
       Log.info("[main] turning off dropout");
       model.cachedFeatures.params.setDropoutMode(DropoutMode.TEST);
     }
-    File diffArgsFile = new File(workingDir, "diffArgs.txt");
-    File predictionsFile = new File(workingDir, "predictions.test-set.txt");
-    File semDir = null;
+    File diffArgsFileTest = new File(workingDir, "diffArgs.test.txt");
+    File predictionsFileTest = new File(workingDir, "predictions.test.txt");
+    File diffArgsFileDev = new File(workingDir, "diffArgs.dev.txt");
+    File predictionsFileDev = new File(workingDir, "predictions.dev.txt");
+    File semDirTest = null, semDirDev = null;
     if (!propbank) {
       Log.info("[main] performing Semafor eval beceause we are working on FN");
-      semDir = new File(workingDir, "semaforEval");
-      if (!semDir.isDirectory()) semDir.mkdir();
+      semDirTest = new File(workingDir, "semaforEvalTest");
+      semDirDev = new File(workingDir, "semaforEvalDev");
+      if (!semDirTest.isDirectory()) semDirTest.mkdir();
+      if (!semDirDev.isDirectory()) semDirDev.mkdir();
     } else {
       Log.info("[main] skipping Semafor eval because we are working on propbank");
     }
-    Map<String, Double> perfResults = eval(model, trainer.trainConf, test, semDir, "[main]", diffArgsFile, predictionsFile);
+    Log.info("[main] evaluating on test");
+    Map<String, Double> perfResultsTest = eval(model, trainer.trainConf, test, semDirTest, "[main] test", diffArgsFileTest, predictionsFileTest);
     Map<String, String> results = new HashMap<>();
-    results.putAll(ResultReporter.mapToString(perfResults));
+    results.putAll(ResultReporter.mapToString(perfResultsTest));
     results.putAll(ResultReporter.mapToString(config));
+
+    // Evaluate on dev
+    Log.info("[main] evaluating on dev");
+    eval(model, trainer.trainConf, dev, semDirDev, "[main] dev", diffArgsFileDev, predictionsFileDev);
 
     // Serialize the model
     File jserFile = new File(workingDir, "model.jser");
@@ -1797,7 +1821,7 @@ public class RerankerTrainer {
     }
 
     // Report results back to tge
-    double mainResult = perfResults.get(BasicEvaluation.argOnlyMicroF1.getName());
+    double mainResult = perfResultsTest.get(BasicEvaluation.argOnlyMicroF1.getName());
     for (ResultReporter rr : trainer.reporters)
       rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
   }
