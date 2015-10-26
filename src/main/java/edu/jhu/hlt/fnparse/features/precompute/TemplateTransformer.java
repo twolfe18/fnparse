@@ -60,8 +60,7 @@ public class TemplateTransformer {
   }
 
   public void addIntance(int newTemplateInt, String partialName, int maxAllowableNewFeatureIndex) {
-    String n = baseTemplateString + "-" + partialName;
-    instances.add(new Instance(newTemplateInt, n, maxAllowableNewFeatureIndex));
+    instances.add(new Instance(newTemplateInt, partialName, maxAllowableNewFeatureIndex));
   }
 
   /** A particular transform */

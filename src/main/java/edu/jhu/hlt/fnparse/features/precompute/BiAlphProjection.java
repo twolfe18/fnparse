@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.Log;
 
 /**
  * Read in some int features and a bialph and spit out some int features (in a
- * new domain).
+ * new domain). Can be used to filter feature files.
  *
  * NOTE: This does not change the order over templates, so for example, if the
  * line of the feature file are sorted by template before the projection they
