@@ -32,6 +32,7 @@ public class FeatureCounts implements LineByLine {
   public static class FromFile {
     public static final int MISSING_VALUE = -1;
     private Counts<Integer>[] t2f2count;
+
     @SuppressWarnings("unchecked")
     public FromFile(File previousOutputOfThisClassesMain) throws IOException {
       TimeMarker tm = new TimeMarker();
@@ -63,6 +64,10 @@ public class FeatureCounts implements LineByLine {
         }
       }
       Log.info("done");
+    }
+
+    public void free(int template) {
+      t2f2count[template] = null;
     }
 
     public int numFeatures(int template) {
