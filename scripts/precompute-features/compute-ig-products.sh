@@ -71,6 +71,7 @@ java -Xmx22G -cp $JAR \
   -DignoreSentenceIds=$IGNORE_SENT_IDS \
   -DbubFuncParentDir=scripts/precompute-features \
   -DnumRoles=$NUM_ROLES \
+  -DnumTemplates=12000 \
   edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts
 
 echo "ret code: $?"
