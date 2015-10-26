@@ -148,6 +148,7 @@ public class TemplateTransformer {
           kept++;
           tt.addIntance(T + i++, "Cnt" + K, maxAllowableNewFeatureIndex);
         }
+        fc.free(oldTemplateInt);
       }
       Log.info("kept " + kept + " of " + total + " possible template transforms");
     }

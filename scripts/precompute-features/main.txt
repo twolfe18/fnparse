@@ -3,6 +3,16 @@
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
 
+
+DATASET=propbank
+NUM_ROLES=30
+#WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
+JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+
 ############################################################################################
 ### CREATE MANY SHARDS OF FEATURES
 
@@ -11,39 +21,32 @@
 # 1) I didn't originally serialize the parses with the Propbank data
 # 2) I wanted a way to cache parses across machines
 # 3) I can fit all of the FNParses in memory, but not with the parses as well
-#qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-#qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-#qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-#qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
+NUM_SHARDS=500
+PARSE_REDIS_SERVERS=(r5n28 r6n23 r5n09 r6n31)
 
-DATASET=framenet
-#WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
-JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-NUM_SHARDS=100
-PARSE_REDIS_SERVERS=(r5n23 r5n32 r6n03 r6n08)
-
-mkdir -p $WORKING_DIR/sge-logs
+mkdir -p $WORKING_DIR/raw-shards/sge-logs
 
 echo "copyinig jar to a safe place..."
-JAR_STABLE=$WORKING_DIR/fnparse.jar
+JAR_STABLE=$WORKING_DIR/raw-shards/fnparse.jar
 echo "    $JAR"
 echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
-# TODO move `cp $JAR $JAR_STABLE` up to this script
-echo "starting at `date`" >>$WORKING_DIR/commands.txt
+echo "starting at `date`" >>$WORKING_DIR/raw-shards/commands.txt
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
-  WD=$WORKING_DIR/job-$i-of-$NUM_SHARDS
+  WD=$WORKING_DIR/raw-shards/job-$i-of-$NUM_SHARDS
   J=`echo $i | awk '{print $1 % 4}'`
   PS=${PARSE_REDIS_SERVERS[$J]}
   echo "dispatching to $PS"
   mkdir -p $WD
   COMMAND="qsub -N fPreComp-$i-$NUM_SHARDS \
-    -o $WORKING_DIR/sge-logs \
+    -o $WORKING_DIR/raw-shards/sge-logs \
     scripts/precompute-features/extract-one-shard.sh \
       $WD \
       $JAR_STABLE \
@@ -51,14 +54,14 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $NUM_SHARDS \
       $PS \
       $DATASET"
-   echo $COMMAND >>$WORKING_DIR/commands.txt
+   echo $COMMAND >>$WORKING_DIR/raw-shards/commands.txt
    eval $COMMAND
 done
 
 
 ############################################################################################
 ### MERGE MANY SHARDS INTO A COHERENT ALPHABET
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 python -u scripts/precompute-features/bialph-merge-pipeline.py \
   $WORKING_DIR \
   $NUM_SHARDS \
@@ -73,53 +76,86 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
 # alphabet will be writte out including them.
 
 # A) Compute the feature frequencies
-WD=parent/of/features
-BIALPH_BEFORE_FILTERS=bar
-mkdir $WD/feature-counts
-qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
-  java jar \
+BIALPH_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/alphabet.txt.gz
+FEATS_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/features
+mkdir -p $WORKING_DIR/feature-counts/sge-logs
+
+echo "copyinig jar to a safe place..."
+JAR_STABLE=$WORKING_DIR/feature-counts/fnparse.jar
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
+qsub -N featCounts-full \
+  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
+  java -cp $JAR_STABLE -Xmx24G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WD/feature-counts/all.txt.gz \
-    -DfeaturesParent=$WD/features \
+    -Doutput=$WORKING_DIR/feature-counts/all.txt.gz \
+    -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
-qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
-  java jar \
+qsub -N featCounts-tenth \
+  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
+  java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WD/feature-counts/one-tenth.txt.gz \
+    -Doutput=$WORKING_DIR/feature-counts/one-tenth.txt.gz \
     -DfeaturesGlob="glob:**/shard*9.txt.gz" \
-    -DfeaturesParent=$WD/features \
+    -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
-qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
-  java jar \
+qsub -N featCounts-hundreth \
+  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
+  java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WD/feature-counts/one-hundredth.txt.gz \
+    -Doutput=$WORKING_DIR/feature-counts/one-hundredth.txt.gz \
     -DfeaturesGlob="glob:**/shard*99.txt.gz" \
-    -DfeaturesParent=$WD/features \
+    -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
+
 
 # B) Generate the filtered features based on the frequencies
 #   (if i try to do ~60G => +filters:~8x => 250G with one process... it is going to take a while...)
-mkdir $WD/features-filtered
-BIALPH_AFTER_FILTERS=$WD/features-filtered/alphabet.txt.gz
-COUNT_FILE=$WD/feature-counts/one-hundredth.txt.gz
+mkdir -p $WORKING_DIR/coherent-shards-filtered/sge-logs
+mkdir -p $WORKING_DIR/coherent-shards-filtered/features
+BIALPH_AFTER_FILTERS=$WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz
+
+# Make sure this is done!
+#COUNT_FILE=$WORKING_DIR/feature-counts/one-tenth.txt.gz
+COUNT_FILE=$WORKING_DIR/feature-counts/all.txt.gz
+
+echo "copyinig jar to a safe place..."
+JAR_STABLE=$WORKING_DIR/coherent-shards-filtered/fnparse.jar
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
 # Takes shard 0 and builds output bialph
-qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
-  java jar \
+qsub -N genFiltered-alph \
+  -b y -j y -cwd -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
+  -l 'mem_free=20G,num_proc=1,h_rt=12:00:00' \
+  java -cp $JAR_STABLE -Xmx19G -ea -server \
+    -Dshard=0 \
+    -DnumShards=$NUM_SHARDS \
     -DcountFile=$COUNT_FILE \
     -DoutputBialph=$BIALPH_AFTER_FILTERS \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -DoutputFeatureFileDir=$WD/features-filtered \
-    -DfeaturesGlob="shard:**/shard*0.txt.gz" \
-    -DfeaturesParent=$WD/features \
+    -DoutputFeatureFileDir=$WORKING_DIR/coherent-shards-filtered/features \
+    -DfeaturesGlob="glob:**/*" \
+    -DfeaturesParent=$WORKING_DIR/coherent-shards/features \
     edu.jhu.hlt.fnparse.features.precompute.TemplateTransformer
-for SHARD in `seq 9`; do    # takes shards 1..9
-  qsub -b y -j y -o foo -cwd -l 'mem_free=16G,num_proc=1,h_rt=12:00:00' \
-    java jar \
+for SHARD in `echo "$NUM_SHARDS-1" | bc | xargs seq`; do    # takes shards 1..
+  qsub -N genFiltered \
+    -b y -j y -cwd -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
+    -l 'mem_free=20G,num_proc=1,h_rt=12:00:00' \
+    java -cp $JAR_STABLE -Xmx19G -ea -server \
+      -Dshard=$SHARD \
+      -DnumShards=$NUM_SHARDS \
       -DcountFile=$COUNT_FILE \
       -Dbialph=$BIALPH_BEFORE_FILTERS \
-      -DoutputFeatureFileDir=$WD/features-filtered \
-      -DfeaturesGlob="glob:**/shard*${SHARD}.txt.gz" \
-      -DfeaturesParent=$WD/features \
+      -DoutputFeatureFileDir=$WORKING_DIR/coherent-shards-filtered/features \
+      -DfeaturesGlob="glob:**/*" \
+      -DfeaturesParent=$WORKING_DIR/coherent-shards/features \
       edu.jhu.hlt.fnparse.features.precompute.TemplateTransformer
 done
 
@@ -128,10 +164,10 @@ done
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 
 # 0) Find the sentence ids of the test set and don't use these for computing information gain
-TEST_SET_SENT_IDS="$WD/test-set-sentence-ids.txt"
+TEST_SET_SENT_IDS="$WORKING_DIR/test-set-sentence-ids.txt"
 mvn exec:java \
   -Dexec.mainClass=edu.jhu.hlt.fnparse.features.precompute.DumpSentenceIds \
   -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
@@ -142,36 +178,28 @@ mvn exec:java \
   -Doutput=$TEST_SET_SENT_IDS
 
 # 1) For each template
-mkdir -p $WD/ig/templates
-mkdir -p $WD/ig/templates/sge-logs
+mkdir -p $WORKING_DIR/ig/templates/sge-logs
 
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-JAR_STABLE=$WD/ig/templates/fnparse.jar
+JAR_STABLE=$WORKING_DIR/ig/templates/fnparse.jar
 echo "copying the jar to a safe place..."
 echo "    $JAR"
 echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
-#TEMPLATE_IG_FILE=$WD/ig/template-ig.txt
-#java -Xmx19G -cp $JAR \
-#  -DfeaturesParent=$WD/coherent-shards/features/ \
-#  -DfeaturesGlob="glob:**/*" \
-#  -DtopK=1000 \
-#  -DoutputFeatures=$TEMPLATE_IG_FILE \
-#  edu.jhu.hlt.fnparse.features.precompute.InformationGain
-
 # Do a 1/10 estimate of 1/10 of the data and average the answers (should take 1/10th the time but be approximate)
 N=10
-mkdir -p $WD/ig/templates/split-$N-filter10
+mkdir -p $WORKING_DIR/ig/templates/split-$N-filter10
 for i in `seq $N | awk '{print $1-1}'`; do
-  qsub -N split$N-$i-filter10-ig-template \
-    -o $WD/ig/templates/sge-logs \
+  qsub -N split$N-filter10-$i-ig-template \
+    -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
-      $WD/coherent-shards/features \
+      $WORKING_DIR/coherent-shards-filtered/features \
       "glob:**/*1${i}.txt.gz" \
-      $WD/ig/templates/split-$N-filter10/shard-${i}.txt \
+      $WORKING_DIR/ig/templates/split-$N-filter10/shard-${i}.txt \
       $JAR_STABLE \
-      $TEST_SET_SENT_IDS
+      $TEST_SET_SENT_IDS \
+      $NUM_ROLES
 done
 
 # Do a 1/10 estimate and average the answers (should take 1/10th the time but be approximate)
@@ -179,42 +207,44 @@ N=10
 mkdir -p $WD/ig/templates/split-$N
 for i in `seq $N | awk '{print $1-1}'`; do
   qsub -N split$N-$i-ig-template \
-    -o $WD/ig/templates/sge-logs \
+    -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
-      $WD/coherent-shards/features \
+      $WORKING_DIR/coherent-shards-filtered/features \
       "glob:**/*${i}.txt.gz" \
-      $WD/ig/templates/split-$N/shard-${i}.txt \
+      $WORKING_DIR/ig/templates/split-$N/shard-${i}.txt \
       $JAR_STABLE \
-      $TEST_SET_SENT_IDS
+      $TEST_SET_SENT_IDS \
+      $NUM_ROLES
 done
 
 # Do a full/proper estimate
 qsub -N full-ig-template \
-  -o $WD/ig/templates/sge-logs \
+  -o $WORKING_DIR/ig/templates/sge-logs \
   scripts/precompute-features/compute-ig.sh \
-    $WD/coherent-shards/features \
+    $WORKING_DIR/coherent-shards-filtered/features \
     "glob:**/*" \
-    $WD/ig/templates/full-ig.txt \
+    $WORKING_DIR/ig/templates/full-ig.txt \
     $JAR_STABLE \
-    $TEST_SET_SENT_IDS
+    $TEST_SET_SENT_IDS \
+    $NUM_ROLES
 
 
 ### After those jobs finish, average things
 python scripts/precompute-features/average-ig.py \
-  $WD/ig/templates/split-$N/shard-* \
-  >$WD/ig/templates/split-$N/average.txt
+  $WORKING_DIR/ig/templates/split-$N/shard-* \
+  >$WORKING_DIR/ig/templates/split-$N/average.txt
 
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
 #TEMPLATE_IG_FILE=$WD/ig/templates/split-$N/average.txt
-TEMPLATE_IG_FILE=$WD/ig/templates/full-ig.txt
-PROD_IG_WD=$WD/ig/products
+TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
+PROD_IG_WD=$WORKING_DIR/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
 cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
-NUM_SHARDS=300
-FEATS_PER_SHARD=300
+NUM_SHARDS=400
+FEATS_PER_SHARD=400
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
@@ -222,12 +252,13 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $NUM_SHARDS \
       $FEATS_PER_SHARD \
       $TEMPLATE_IG_FILE \
-      $WD/coherent-shards/features \
+      $WORKING_DIR/coherent-shards-filtered/features \
       "glob:**/*" \
-      $WD/coherent-shards/alphabet.txt.gz \
+      $WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz \
       $TEST_SET_SENT_IDS \
       $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
-      $PROD_IG_WD/fnparse.jar
+      $PROD_IG_WD/fnparse.jar \
+      $NUM_ROLES
 done
 
 
