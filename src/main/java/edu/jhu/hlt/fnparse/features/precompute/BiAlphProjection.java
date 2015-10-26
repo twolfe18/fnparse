@@ -6,14 +6,19 @@ import java.io.File;
 import java.io.IOException;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 
 /**
  * Read in some int features and a bialph and spit out some int features (in a
  * new domain). Can be used to filter feature files.
+ *
+ * NOTE: This is one of the few cases where ALPH_AS_TRIVIAL_BIALPH in
+ * {@link LineMode} is actually useful.
  *
  * NOTE: This does not change the order over templates, so for example, if the
  * line of the feature file are sorted by template before the projection they
@@ -55,6 +60,7 @@ public class BiAlphProjection {
     }
 
     public void replace(File inputFile, File outputFile, boolean append) throws IOException {
+      TimeMarker tm = new TimeMarker();
       Log.info(inputFile.getPath() + "  ==>  " + outputFile.getPath() + "  append=" + append);
       try (BufferedReader r = FileUtil.getReader(inputFile);
           BufferedWriter w = FileUtil.getWriter(outputFile, append)) {
@@ -63,6 +69,12 @@ public class BiAlphProjection {
           replace(line, sb);
           w.write(sb.toString());
           w.newLine();
+
+          if (tm.enoughTimePassed(15)) {
+            Log.info("processed " + tm.numMarks()
+              + " lines in " + tm.secondsSinceFirstMark() + " seconds, "
+              + Describe.memoryUsage());
+          }
         }
       }
     }
@@ -77,5 +89,6 @@ public class BiAlphProjection {
         config.getExistingFile("inputFeatures"),
         config.getFile("outputFeatures"),
         config.getBoolean("append", false));
+    Log.info("done");
   }
 }
