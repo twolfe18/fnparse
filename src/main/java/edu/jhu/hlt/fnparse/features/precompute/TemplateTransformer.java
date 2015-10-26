@@ -178,6 +178,18 @@ public class TemplateTransformer {
           TemplateTransformer tt = t2trans[templateInt];
           if (tt == null)
             continue;
+
+          // Build new->old feature map.
+          // This is used to give meaningful feature names to transformed features.
+          // E.g. if you have "Foo-Cnt10=45", you can go look up feature 45 in template "Foo"
+          IntIntHashMap o2n = tt.featuresToKeep;
+          IntIntHashMap n2o = new IntIntHashMap(o2n.size(), FeatureCounts.FromFile.MISSING_VALUE);
+          o2n.iterate((k,v) -> {
+            int oldK = n2o.put(v, k);
+            if (oldK >= 0)
+              Log.warn("double mapping? k=" + k + " v=" + v + " oldK=" + oldK);
+          });
+
           for (Instance inst : tt.instances) {    // loop over new templates
             int N = inst.maxAllowableNewFeatureIndex;
             for (int i = 0; i < N; i++) {         // loop over new features
@@ -187,7 +199,11 @@ public class TemplateTransformer {
               w.write('\t');
               w.write(inst.newTemplateString);              // template string
               w.write('\t');
-              w.write("i=" + i);                            // feature string
+              int v = n2o.get(i);
+              if (v >= 0)
+                w.write("i=" + v);                          // feature string
+              else
+                w.write("i=UNK" + i);
               w.newLine();
             }
           }
