@@ -215,7 +215,10 @@ AA(N+1,N+1)=AA(N+1,N+1)+lambda_N;
 
 if(0)
     [u,d,v]=svd(AA);
-    figure(66); plot(log(diag(d))); %plot log spectrum; AA starts getting singular (according to matlab default eps values) around N=500 if N/m < .5
+    figure(66);
+    if(display_flag)
+      plot(log(diag(d))); %plot log spectrum; AA starts getting singular (according to matlab default eps values) around N=500 if N/m < .5
+    end;
     svs=0; %inverse by svd; set svs=j to throw out j svds
     i=N+1-svs;
     invd=zeros(size(d));
@@ -261,7 +264,9 @@ Pn=a'*P;
 %maxbias=2*max(f.*abs(Pn+log(p.^p)));
 maxbias=m*max(abs(Pn+log(p.^p)));
 
-figure(22); plot(p,Pn+log(p.^p));
+if(display_flag)
+  figure(22); plot(p,Pn+log(p.^p));
+end;
 
 MM=sqrt(maxbias^2+N*(max(abs(diff(a))))^2)/log(2);
 if(display_flag)

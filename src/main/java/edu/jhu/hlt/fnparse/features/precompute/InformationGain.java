@@ -299,9 +299,9 @@ public class InformationGain implements Serializable, LineByLine {
 //        }
         if (this.bubEst != null) {
           Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
-          double hyx = bubEst.entropy(cyx);
+          double hyx = bubEst.entropyUsingDimensionNNZ(cyx);
           Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
-          double hx = bubEst.entropy(cx);
+          double hx = bubEst.entropyUsingDimensionNNZ(cx);
           Log.info("calling BUB estimator for H[y]\t" + Describe.memoryUsage());
           double hy = bubEst.entropy(cy);
           igCache.h_x = hx;

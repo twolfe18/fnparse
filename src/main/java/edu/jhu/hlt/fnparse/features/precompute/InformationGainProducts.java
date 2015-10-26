@@ -182,8 +182,8 @@ public class InformationGainProducts {
   public InformationGainProducts(List<String[]> features, int hashingTrickDim, BubEntropyEstimatorAdapter bubEstimator) {
     this.baseFeatureNames = features;
     this.hashingTrickDim = hashingTrickDim;
-    if (this.hashingTrickDim <= 0)
-      throw new RuntimeException("not implemented");
+    if (this.hashingTrickDim > 0)
+      throw new RuntimeException("don't this/not implemented: hashingTrickDim=" + hashingTrickDim);
     this.bubEst = bubEstimator;
     ExperimentProperties config = ExperimentProperties.getInstance();
     File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
@@ -239,7 +239,7 @@ public class InformationGainProducts {
 
     // Setup template cardinalities
     ExperimentProperties config = ExperimentProperties.getInstance();
-    template2cardinality = new int[config.getInt("numTemplates", 3000)];   // TODO resizing code
+    template2cardinality = new int[config.getInt("numTemplates", 30000)];   // TODO resizing code
     Arrays.fill(template2cardinality, -1);
     for (int t = relevantTemplates.nextSetBit(0); t >= 0; t = relevantTemplates.nextSetBit(t + 1)) {
       // Lookup cardinality for template[relevantTemplates[i]] (comes from a file)
@@ -333,6 +333,8 @@ public class InformationGainProducts {
     }
 
     if (tIndex == templates.length) {
+      if (FLATTEN_DEBUG)
+        System.out.println("done taking product, buffer.size=" + buffer.size() + "");
       buffer.add(cardValue);
       return;
     }
@@ -369,7 +371,10 @@ public class InformationGainProducts {
     if (FLATTEN_DEBUG)
       System.out.println("curTemplateCard=" + curTemplateCard);
     for (int i = startDataIndex; i < endDataIndex; i++) {
-      assert data.getValue(i) < curTemplateCard;
+      assert data.getValue(i) < curTemplateCard :
+        "data.getValue(" + i + ")=" + data.getValue(i)
+        + " curTemplate=" + curTemplate
+        + " curTemplateCard=" + curTemplateCard;
       int card = template2cardinality[data.getTemplate(i)];
       ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
       if (FLATTEN_DEBUG) {
@@ -498,7 +503,8 @@ public class InformationGainProducts {
   public static List<String[]> getProductsHeuristicallySorted(
       ExperimentProperties config,
       BiAlph bialph,
-      int order) throws IOException {
+      int order,
+      boolean showSkippedCard) throws IOException {
 
     // Read in the IG of the unigrams (templates)
     List<Pair<String, Double>> templateIGs = new ArrayList<>();
@@ -542,10 +548,15 @@ public class InformationGainProducts {
     }
 
     // Don't allow any features (products of templates) which have a cardinality
-    // of more than this. This is a heuristic, as templates may be correlated
-    // and have much lower actual cardinalities. But, if they are correlated it
-    // is unclear how much information they are adding.
-    long cardinalityLimit = 20 * 1024 * 1024;
+    // of more than this. The BUB octave/matlab code will crash if this is above
+    // 100M. It allocates a dense array this long (i.e. its costly in memory).
+    // This is a heuristic, as templates may be correlated and have much lower
+    // actual cardinalities. But, if they are correlated it is unclear how much
+    // information they are adding.
+    // Remember, this is D_x not D_yx. So if you were storing this many features
+    // in a discriminative model, you still need to multiply in D_y to get an
+    // estimate of how many weights you're learning.
+    long cardinalityLimit = 10 * 1024 * 1024;
 
     // Produce a list of template n-grams
     List<Pair<String[], Double>> prodIGs = new ArrayList<>();
@@ -557,7 +568,8 @@ public class InformationGainProducts {
       int t_i = bialph.mapTemplate(t_i_name);
       long Dx_i = bialph.cardinalityOfNewTemplate(t_i);
       if (Dx_i > cardinalityLimit) {
-        Log.info("skipping1 " + t_i_name + " because of cardinality limit: " + Dx_i);
+        if (showSkippedCard)
+          Log.info("skipping1 " + t_i_name + " because of cardinality limit: " + Dx_i);
         continue;
       }
 
@@ -569,7 +581,8 @@ public class InformationGainProducts {
         int t_j = bialph.mapTemplate(t_j_name);
         long Dx_ij = Dx_i * bialph.cardinalityOfNewTemplate(t_j);
         if (Dx_ij > cardinalityLimit) {
-          Log.info("skipping2 " + t_i_name + "*" + t_j_name + " because of cardinality limit: " + Dx_ij);
+          if (showSkippedCard)
+            Log.info("skipping2 " + t_i_name + "*" + t_j_name + " because of cardinality limit: " + Dx_ij);
           continue;
         }
 
@@ -583,7 +596,8 @@ public class InformationGainProducts {
             int t_k = bialph.mapTemplate(t_k_name);
             long Dx_ijk = Dx_ij * bialph.cardinalityOfNewTemplate(t_k);
             if (Dx_ijk > cardinalityLimit) {
-              Log.info("skipping3 " + t_i_name + "*" + t_j_name + "*" + t_k_name + " because of cardinality limit: " + Dx_ijk);
+              if (showSkippedCard)
+                Log.info("skipping3 " + t_i_name + "*" + t_j_name + "*" + t_k_name + " because of cardinality limit: " + Dx_ijk);
               continue;
             }
 
@@ -684,10 +698,11 @@ public class InformationGainProducts {
     // "gain" (high gain searches more higher order features, gain=1 searches
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
+    boolean showSkipCard = config.getBoolean("showSkipCard", true);
     IntPair shard = ShardUtils.getShard(config);
-    List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2), InformationGainProducts::stringArrayHash, shard);
-    List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
+    List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     double gain = config.getDouble("gain", 1.5);
     int maxProducts = config.getInt("numProducts", 100);
     assert maxProducts > 0;
@@ -712,7 +727,7 @@ public class InformationGainProducts {
     try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
       bubEst.debug = config.getBoolean("bubDebug", false);
       int numRoles = config.getInt("numRoles", 30);
-      int hashingTrickDim = config.getInt("hashingTrickDim", 512 * 1024);
+      int hashingTrickDim = config.getInt("hashingTrickDim", 0);
       InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
       igp.init(bialph, numRoles);
 
