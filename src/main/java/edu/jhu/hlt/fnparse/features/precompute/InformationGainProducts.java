@@ -699,7 +699,7 @@ public class InformationGainProducts {
     // "gain" (high gain searches more higher order features, gain=1 searches
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
-    boolean showSkipCard = config.getBoolean("showSkipCard", true);
+    boolean showSkipCard = config.getBoolean("showSkipCard", false);
     IntPair shard = ShardUtils.getShard(config);
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
