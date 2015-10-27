@@ -685,7 +685,7 @@ public class InformationGainProducts {
     final File output = config.getFile("output");
     Log.info("output=" + output.getPath());
 
-    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 4);
+    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 10);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
 
