@@ -256,7 +256,8 @@ public class InformationGainProducts {
         observeLine(line);
         if (tm.enoughTimePassed(15)) {
           Log.info("read " + lines + " lines in "
-              + tm.secondsSinceFirstMark() + " seconds");
+              + tm.secondsSinceFirstMark() + " seconds, "
+              + Describe.memoryUsage());
         }
         lines++;
       }
