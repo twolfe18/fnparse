@@ -1,161 +1,159 @@
-# <Feat rank=1 n=2 ig=0.3192 ['luMatch-WNRelatedSynSet', 'span1PosPat-FULL_POS-2-1']>
-# <Feat rank=3 n=2 ig=0.2970 ['head1RootPathNgram-LEMMA-DEP-len4', 'luMatch-WNRelatedSynSet']>
-# <Feat rank=18 n=2 ig=0.2010 ['head1RootPath-LEMMA-DEP-t', 'luMatch-WNRelated']>
-# <Feat rank=19 n=2 ig=0.2006 ['luMatch-WNRelated', 'span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=25 n=3 ig=0.1818 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1LastWord4', 'span1PosPat-COARSE_POS-1-1']>
-# <Feat rank=26 n=3 ig=0.1808 ['head1Lemma', 'head1RootPathNgram-LEMMA-DEP-len2', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=27 n=3 ig=0.1806 ['head1RootPathNgram-LEMMA-DEP-len2', 'head1Word', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=34 n=3 ig=0.1797 ['head1RootPathNgram-LEMMA-DEP-len2', 'head1Word4', 'span1StanfordRule']>
-# <Feat rank=43 n=3 ig=0.1793 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1FirstWord3', 'span1LastWord']>
-# <Feat rank=69 n=3 ig=0.1789 ['head1RootPath-POS-DEP-t', 'head1RootPathNgram-POS-DEP-len3', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=92 n=3 ig=0.1784 ['head1RootPath-LEMMA-DIRECTION-t', 'head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-COARSE_POS-1-0']>
-# <Feat rank=116 n=3 ig=0.1781 ['head1RootPath-NONE-DEP-t', 'head1RootPathNgram-LEMMA-DEP-len2', 'span1StanfordRule']>
-# <Feat rank=136 n=3 ig=0.1779 ['Dist(Len5,Span1.First,Span2.First)', 'head1RootPath-LEMMA-DIRECTION-t', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=195 n=3 ig=0.1775 ['head1RootPath-LEMMA-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1PosPat-FULL_POS-0-1']>
-# <Feat rank=223 n=3 ig=0.1774 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-FULL_POS-0-3', 'span1StanfordCategory']>
-# <Feat rank=272 n=3 ig=0.1772 ['head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1LastLemma', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=343 n=3 ig=0.1769 ['head1RootPathNgram-POS-DEP-len4', 'span1LastWord', 'span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=385 n=3 ig=0.1767 ['Dist(Len5,Head2,Span1.First)', 'head1RootPathNgram-LEMMA-DEP-len4', 'span1PosPat-FULL_POS-2-1']>
-# <Feat rank=396 n=3 ig=0.1767 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-COARSE_POS-1-1', 'span1PosPat-FULL_POS-0-2']>
-# <Feat rank=471 n=2 ig=0.1765 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=659 n=3 ig=0.1761 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1FirstLemma', 'span1LastLemma']>
-# <Feat rank=679 n=3 ig=0.1760 ['frameRoleArg', 'head1RootPathNgram-LEMMA-DEP-len2', 'head1Word']>
-# <Feat rank=735 n=3 ig=0.1759 ['head1RootPathNgram-LEMMA-DEP-len2', 'span1PosPat-FULL_POS-1-2', 'span1PosPat-WORD_SHAPE-1-2']>
-# <Feat rank=771 n=3 ig=0.1759 ['head1RootPathNgram-LEMMA-DEP-len4', 'span1LastWord3', 'span1PosPat-FULL_POS-1-0']>
-# <Feat rank=826 n=3 ig=0.1758 ['head1RootPathNgram-LEMMA-DEP-len4', 'span1FirstWord', 'span1LastWord3']>
-# <Feat rank=871 n=3 ig=0.1757 ['head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1PosPat-FULL_POS-2-1', 'span1PosPat-WORD_SHAPE-3-0']>
-# <Feat rank=995 n=3 ig=0.1755 ['head1RootPath-POS-DIRECTION-t', 'head1RootPathNgram-POS-DEP-len4', 'span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=1065 n=3 ig=0.1754 ['Dist(SemaforPathLengths,Span1.First,Span2.First)', 'head1RootPath-LEMMA-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len4']>
-# <Feat rank=1209 n=3 ig=0.1752 ['head1RootPathNgram-LEMMA-DEP-len4', 'span1PosPat-FULL_POS-3-0', 'span1RightLemma']>
-# <Feat rank=1331 n=3 ig=0.1750 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1LastBc1000/99', 'span1PosPat-FULL_POS-2-1']>
-# <Feat rank=1343 n=3 ig=0.1750 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1PosPat-COARSE_POS-2-1', 'span1RightWord']>
-# <Feat rank=2057 n=3 ig=0.1741 ['head1RootPathNgram-LEMMA-DEP-len4', 'span1PosPat-COARSE_POS-0-3', 'span1PosPat-WORD_SHAPE-2-1']>
-# <Feat rank=2100 n=3 ig=0.1740 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'head1Word3', 'span1PosPat-WORD_SHAPE-1-2']>
-# <Feat rank=2567 n=3 ig=0.1734 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1PosPat-FULL_POS-0-2', 'span1PosPat-WORD_SHAPE-0-3']>
-# <Feat rank=2629 n=3 ig=0.1733 ['head1Bc1000/99', 'head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1PosPat-COARSE_POS-1-2']>
-# <Feat rank=2727 n=2 ig=0.1731 ['head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1PosPat-FULL_POS-3-0']>
-# <Feat rank=2759 n=3 ig=0.1730 ['head1RootPathNgram-POS-DEP-len4', 'span1PosPat-COARSE_POS-1-2', 'span1PosPat-FULL_POS-3-0']>
-# <Feat rank=2772 n=2 ig=0.1730 ['head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=2831 n=2 ig=0.1728 ['Dist(Direction,Head2,Span1.First)', 'frameRole']>
-# <Feat rank=3052 n=3 ig=0.1721 ['head1RootPath-POS-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len4', 'span1FirstLemma']>
-# <Feat rank=3227 n=2 ig=0.1715 ['head1RootPathNgram-LEMMA-DEP-len2', 'span1PosPat-FULL_POS-0-3']>
-# <Feat rank=3286 n=2 ig=0.1713 ['Dist(Len5,Head2,Span1.First)', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=3329 n=3 ig=0.1710 ['head1ParentWord', 'head1RootPathNgram-LEMMA-DEP-len4', 'span1FirstWord']>
-# <Feat rank=3363 n=3 ig=0.1706 ['frameRole', 'head1RootPathNgram-LEMMA-DEP-len3', 'span1FirstWord4']>
-# <Feat rank=3425 n=3 ig=0.1703 ['frameRoleArg', 'head1Lemma', 'head1RootPathNgram-LEMMA-DEP-len3']>
-# <Feat rank=3430 n=3 ig=0.1702 ['frameRole', 'head1RootPath-POS-DEP-t', 'head1RootPathNgram-POS-DEP-len4']>
-# <Feat rank=3447 n=3 ig=0.1701 ['Role1', 'head1RootPathNgram-LEMMA-DEP-len4', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=3527 n=2 ig=0.1698 ['head1RootPathNgram-LEMMA-DIRECTION-len2', 'head1head2Path-LEMMA-DIRECTION-t']>
-# <Feat rank=3586 n=2 ig=0.1696 ['CollapsedParentDir-2-grams-between-</S>-and-<S>', 'head1RootPath-LEMMA-DIRECTION-t']>
-# <Feat rank=3694 n=3 ig=0.1692 ['head1RootPath-LEMMA-DEP-t', 'head1RootPathNgram-LEMMA-DEP-len3', 'role']>
-# <Feat rank=3702 n=2 ig=0.1691 ['head1RootPathNgram-POS-DEP-len4', 'span1PosPat-COARSE_POS-1-2']>
-# <Feat rank=3794 n=3 ig=0.1688 ['head1RootPathNgram-LEMMA-DEP-len4', 'head1Word', 'role']>
-# <Feat rank=4033 n=2 ig=0.1678 ['head1RootPathNgram-POS-DEP-len3', 'head1head2Path-LEMMA-DEP-t']>
-# <Feat rank=4183 n=3 ig=0.1663 ['Word-1-grams-between-Span2.First-and-Span2.Last', 'head1RootPathNgram-LEMMA-DEP-len4', 'head1Word4']>
-# <Feat rank=4219 n=3 ig=0.1661 ['frameInst', 'head1RootPath-LEMMA-DEP-t', 'head1RootPathNgram-LEMMA-DEP-len3']>
-# <Feat rank=4324 n=2 ig=0.1656 ['head1RootPath-LEMMA-DIRECTION-t', 'head1RootPathNgram-POS-DEP-len1']>
-# <Feat rank=4564 n=2 ig=0.1645 ['CollapsedParentDir-2-grams-between-</S>-and-Span2.First', 'head1RootPath-LEMMA-DEP-t']>
-# <Feat rank=4650 n=2 ig=0.1637 ['Dist(Len5,Span1.First,Span2.First)', 'head1RootPathNgram-LEMMA-DEP-len3']>
-# <Feat rank=4794 n=2 ig=0.1605 ['Dist(SemaforPathLengths,Span1.First,Span2.First)', 'head1RootPathNgram-LEMMA-DIRECTION-len4']>
-# <Feat rank=4891 n=3 ig=0.1597 ['CfgFeat-DirectChildren-Rule', 'head1RootPath-NONE-DEP-t', 'head1RootPathNgram-LEMMA-DEP-len2']>
-# <Feat rank=4982 n=2 ig=0.1590 ['head1RootPathNgram-NONE-DEP-len4', 'span1PosPat-WORD_SHAPE-2-1']>
-# <Feat rank=4985 n=2 ig=0.1590 ['CfgFeat-DirectChildren-Rule', 'head1RootPathNgram-LEMMA-DEP-len2']>
-# <Feat rank=5017 n=2 ig=0.1587 ['CfgFeat-ToRootPath-Rule', 'head1RootPathNgram-POS-DEP-len2']>
-# <Feat rank=5047 n=3 ig=0.1583 ['CfgFeat-DirectChildren-Category', 'head1RootPathNgram-LEMMA-DEP-len3', 'head1Word3']>
-# <Feat rank=5119 n=3 ig=0.1574 ['CfgFeat-DirectChildren-Rule', 'head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1LastWord']>
-# <Feat rank=5123 n=3 ig=0.1574 ['CfgFeat-DirectChildren-Category', 'CfgFeat-DirectChildren-Rule', 'head1RootPathNgram-LEMMA-DIRECTION-len3']>
-# <Feat rank=5206 n=2 ig=0.1570 ['head1RootPath-POS-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len2']>
-# <Feat rank=5260 n=3 ig=0.1567 ['CfgFeat-ToRootPath-Category', 'head1RootPathNgram-LEMMA-DEP-len3', 'head1WordWnSynset']>
-# <Feat rank=5280 n=2 ig=0.1566 ['Dist(Len5,Span1.First,Span2.Last)', 'head1Bc1000/99']>
-# <Feat rank=5465 n=3 ig=0.1554 ['CfgFeat-ToRootPath-Rule', 'head1Bc1000/99', 'head1RootPathNgram-LEMMA-DEP-len3']>
-# <Feat rank=5534 n=3 ig=0.1551 ['CfgFeat-ToRootPath-Rule', 'head1RootPathNgram-LEMMA-DEP-len2', 'span1PosPat-WORD_SHAPE-2-1']>
-# <Feat rank=5665 n=2 ig=0.1545 ['Dist(SemaforPathLengths,Span1.First,Span2.Last)', 'span1StanfordCategory']>
-# <Feat rank=5700 n=2 ig=0.1542 ['Pos2-2-grams-between-<S>-and-Span1.First', 'head1RootPath-POS-DEP-t']>
-# <Feat rank=5713 n=2 ig=0.1541 ['CfgFeat-ToRootBag-Rule', 'CfgFeat-ToRootPath-Rule']>
-# <Feat rank=5734 n=3 ig=0.1539 ['head1RootPath-NONE-DEP-t', 'head1RootPath-POS-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len3']>
-# <Feat rank=5774 n=3 ig=0.1536 ['CfgFeat-ToRootPath-Category', 'CfgFeat-ToRootPath-Rule', 'head1RootPathNgram-POS-DEP-len4']>
-# <Feat rank=5801 n=2 ig=0.1535 ['head1Lemma', 'head1RootPathNgram-LEMMA-DIRECTION-len3']>
-# <Feat rank=6132 n=2 ig=0.1525 ['frameRoleArg', 'span1span2Overlap']>
-# <Feat rank=6400 n=2 ig=0.1517 ['head1RootPathNgram-LEMMA-DEP-len1', 'span1PosPat-COARSE_POS-3-0']>
-# <Feat rank=6463 n=2 ig=0.1513 ['CollapsedLabel-2-grams-between-<S>-and-Span1.First', 'head1Word']>
-# <Feat rank=6546 n=3 ig=0.1508 ['CfgFeat-CommonParent-Category', 'CfgFeat-DirectChildren-Category', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=6701 n=3 ig=0.1505 ['head1Lemma', 'head1ParentWordWnSynset', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=6783 n=2 ig=0.1502 ['WordWnSynset-2-grams-between-<S>-and-Span1.First', 'span1StanfordRule']>
-# <Feat rank=6793 n=2 ig=0.1502 ['CfgFeat-CommonParent-Rule', 'head1RootPathNgram-POS-DEP-len4']>
-# <Feat rank=6892 n=3 ig=0.1497 ['CfgFeat-ToRootBag-Rule', 'head1RootPath-LEMMA-DEP-t', 'head1RootPath-POS-DEP-t']>
-# <Feat rank=7031 n=2 ig=0.1488 ['Word3-1-grams-between-<S>-and-Span1.First', 'head1Lemma']>
-# <Feat rank=7228 n=2 ig=0.1474 ['CfgFeat-ToRootPath-Category', 'head1RootPathNgram-LEMMA-DEP-len1']>
-# <Feat rank=7348 n=3 ig=0.1462 ['Word-1-grams-between-Head2-and-Span2.First', 'frameRole', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=7403 n=2 ig=0.1457 ['Word-1-grams-between-<S>-and-Span1.First', 'head1Word4']>
-# <Feat rank=7418 n=2 ig=0.1455 ['head1RootPathNgram-POS-DEP-len2', 'span1PosPat-FULL_POS-2-0']>
-# <Feat rank=7453 n=2 ig=0.1451 ['WordWnSynset-2-grams-between-</S>-and-Head2', 'span1PosPat-COARSE_POS-1-1']>
-# <Feat rank=7599 n=2 ig=0.1440 ['WordWnSynset-2-grams-between-</S>-and-Span2.First', 'head1RootPath-NONE-DEP-t']>
-# <Feat rank=7703 n=2 ig=0.1433 ['WordWnSynset-2-grams-between-</S>-and-Span2.Last', 'span1PosPat-FULL_POS-0-2']>
-# <Feat rank=7713 n=2 ig=0.1432 ['Role1', 'head1RootPathNgram-LEMMA-DEP-len3']>
-# <Feat rank=7715 n=3 ig=0.1432 ['head1RootPathNgram-LEMMA-DEP-len3', 'head1RootPathNgram-LEMMA-DEP-len4', 'head1head2Path-NONE-DEP-t']>
-# <Feat rank=7777 n=2 ig=0.1429 ['head1RootPathNgram-LEMMA-DEP-len3', 'role']>
-# <Feat rank=7840 n=2 ig=0.1424 ['Word4-2-grams-between-<S>-and-Span1.First', 'span1PosPat-COARSE_POS-0-2']>
-# <Feat rank=7859 n=2 ig=0.1423 ['Word3-2-grams-between-<S>-and-Span1.First', 'span1FirstWord4']>
-# <Feat rank=7953 n=2 ig=0.1416 ['Dist(Len5,Head1,Head2)', 'frameRoleArg']>
-# <Feat rank=7981 n=2 ig=0.1415 ['Lemma-2-grams-between-<S>-and-Span1.First', 'span1PosPat-COARSE_POS-2-0']>
-# <Feat rank=8007 n=2 ig=0.1413 ['Lemma-1-grams-between-<S>-and-Span1.First', 'head1RootPath-POS-DIRECTION-t']>
-# <Feat rank=8027 n=2 ig=0.1412 ['Word-2-grams-between-<S>-and-Span1.First', 'span1PosPat-FULL_POS-1-0']>
-# <Feat rank=8207 n=2 ig=0.1403 ['head1RootPathNgram-NONE-DEP-len3', 'span1PosPat-WORD_SHAPE-1-2']>
-# <Feat rank=8421 n=2 ig=0.1391 ['WordWnSynset-2-grams-between-</S>-and-Span1.Last', 'span1FirstWord']>
-# <Feat rank=8525 n=2 ig=0.1386 ['Dist(SemaforPathLengths,Head2,Span1.First)', 'span1FirstBc1000/99']>
-# <Feat rank=8565 n=2 ig=0.1385 ['CfgFeat-DirectChildren-Category', 'head1RootPathNgram-POS-DEP-len3']>
-# <Feat rank=8601 n=2 ig=0.1384 ['Word3-2-grams-between-</S>-and-Span2.First', 'span1LastWord4']>
-# <Feat rank=8742 n=2 ig=0.1378 ['Word4-1-grams-between-</S>-and-Head2', 'span1LastWord']>
-# <Feat rank=8797 n=2 ig=0.1376 ['Word3-2-grams-between-</S>-and-Head2', 'head1Word3']>
-# <Feat rank=8895 n=2 ig=0.1373 ['head1RootPathNgram-LEMMA-DIRECTION-len1', 'span1PosPat-COARSE_POS-0-3']>
-# <Feat rank=9025 n=2 ig=0.1367 ['head1Word', 'sentenceBc256/6']>
-# <Feat rank=9036 n=2 ig=0.1367 ['frameRole', 'span1FirstBc256/3']>
-# <Feat rank=9222 n=2 ig=0.1359 ['Lemma-2-grams-between-</S>-and-Span2.Last', 'span1PosPat-FULL_POS-0-1']>
-# <Feat rank=9238 n=2 ig=0.1358 ['Word-2-grams-between-</S>-and-Head2', 'span1PosPat-WORD_SHAPE-1-1']>
-# <Feat rank=9284 n=2 ig=0.1356 ['Lemma-2-grams-between-</S>-and-Span1.Last', 'span1FirstLemma']>
-# <Feat rank=9332 n=2 ig=0.1353 ['Lemma-2-grams-between-</S>-and-Span2.First', 'span1FirstWord3']>
-# <Feat rank=9376 n=1 ig=0.1351 ['span1StanfordRule']>
-# <Feat rank=9384 n=2 ig=0.1351 ['Word3-2-grams-between-</S>-and-Span2.Last', 'span1PosPat-WORD_SHAPE-3-0']>
-# <Feat rank=9423 n=2 ig=0.1349 ['Word4-2-grams-between-</S>-and-Span2.Last', 'head1WordWnSynset']>
-# <Feat rank=9478 n=2 ig=0.1347 ['Lemma-2-grams-between-</S>-and-Head2', 'span1PosPat-WORD_SHAPE-0-3']>
-# <Feat rank=9655 n=2 ig=0.1339 ['Word4-2-grams-between-</S>-and-Span2.First', 'span1LastLemma']>
-# <Feat rank=9661 n=2 ig=0.1339 ['Word4-2-grams-between-</S>-and-Head2', 'span1LastWord3']>
-# <Feat rank=9783 n=2 ig=0.1331 ['Word-2-grams-between-</S>-and-Span2.First', 'span1PosPat-WORD_SHAPE-2-0']>
-# <Feat rank=9894 n=1 ig=0.1320 ['head1Word']>
-# <Feat rank=10063 n=2 ig=0.1311 ['head1RootPath-POS-DIRECTION-t', 'head1RootPathNgram-NONE-DEP-len4']>
-# <Feat rank=10416 n=2 ig=0.1285 ['Word-2-grams-between-</S>-and-Span1.Last', 'span1PosPat-WORD_SHAPE-0-2']>
-# <Feat rank=10443 n=2 ig=0.1284 ['Word-2-grams-between-</S>-and-Span2.Last', 'span1LeftWord']>
-# <Feat rank=10498 n=1 ig=0.1281 ['head1Lemma']>
-# <Feat rank=10606 n=2 ig=0.1273 ['head1RootPath-NONE-DEP-t', 'head1RootPathNgram-POS-DIRECTION-len4']>
-# <Feat rank=10608 n=2 ig=0.1273 ['Word-2-grams-between-<S>-and-Head1', 'span1LeftLemma']>
-# <Feat rank=10644 n=1 ig=0.1270 ['head1RootPath-POS-DEP-t']>
-# <Feat rank=11087 n=1 ig=0.1235 ['CfgFeat-DirectChildren-Category']>
-# <Feat rank=11222 n=1 ig=0.1228 ['head1Word4']>
-# <Feat rank=11338 n=1 ig=0.1220 ['head1RootPath-LEMMA-DIRECTION-t']>
-# <Feat rank=11349 n=2 ig=0.1219 ['frame', 'head1RootPathNgram-LEMMA-DIRECTION-len4']>
-# <Feat rank=11376 n=1 ig=0.1218 ['head1RootPath-LEMMA-DEP-t']>
-# <Feat rank=11603 n=2 ig=0.1200 ['Word4-2-grams-between-</S>-and-Span1.Last', 'span1FirstWordWnSynset']>
-# <Feat rank=11618 n=2 ig=0.1198 ['arg', 'span1StanfordRule']>
-# <Feat rank=11656 n=1 ig=0.1196 ['frameRoleArg']>
-# <Feat rank=11657 n=1 ig=0.1196 ['frameRole']>
-# <Feat rank=11753 n=1 ig=0.1189 ['span1FirstWord']>
-# <Feat rank=11896 n=2 ig=0.1182 ['1', 'head1Word']>
-# <Feat rank=11940 n=1 ig=0.1178 ['head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=11995 n=1 ig=0.1176 ['span1FirstLemma']>
-# <Feat rank=12110 n=1 ig=0.1168 ['span1LastWord']>
-# <Feat rank=12349 n=1 ig=0.1152 ['span1LastLemma']>
-# <Feat rank=12409 n=1 ig=0.1149 ['head1Word3']>
-# <Feat rank=12630 n=1 ig=0.1136 ['CfgFeat-DirectChildren-Rule']>
-# <Feat rank=12633 n=1 ig=0.1136 ['head1RootPath-NONE-DEP-t']>
-# <Feat rank=12746 n=1 ig=0.1128 ['span1FirstWord4']>
-# <Feat rank=12760 n=1 ig=0.1128 ['head1RootPath-POS-DIRECTION-t']>
-# <Feat rank=13138 n=1 ig=0.1088 ['span1LastWord4']>
-# <Feat rank=13148 n=1 ig=0.1088 ['span1PosPat-FULL_POS-1-2']>
-# <Feat rank=13239 n=1 ig=0.1075 ['span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=13345 n=1 ig=0.1060 ['span1FirstWord3']>
-# <Feat rank=13417 n=1 ig=0.1052 ['CfgFeat-ToRootPath-Category']>
-# <Feat rank=13660 n=1 ig=0.1025 ['span1LastWord3']>
-# <Feat rank=13680 n=1 ig=0.1023 ['head1WordWnSynset']>
-# <Feat rank=13738 n=3 ig=0.1018 ['head1ChildCollapsedWord', 'head1RootPath-LEMMA-DIRECTION-t', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=13752 n=3 ig=0.1017 ['head1ChildCollapsedLemma', 'head1RootPath-LEMMA-DEP-t', 'span1PosPat-FULL_POS-3-0']>
-luMatch-WNRelatedSynSet*span1PosPat-FULL_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len4*luMatch-WNRelatedSynSet + head1RootPath-LEMMA-DEP-t*luMatch-WNRelated + luMatch-WNRelated*span1PosPat-COARSE_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len3*span1LastWord4*span1PosPat-COARSE_POS-1-1 + head1Lemma*head1RootPathNgram-LEMMA-DEP-len2*span1PosPat-FULL_POS-1-1 + head1RootPathNgram-LEMMA-DEP-len2*head1Word*span1PosPat-FULL_POS-1-1 + head1RootPathNgram-LEMMA-DEP-len2*head1Word4*span1StanfordRule + head1RootPathNgram-LEMMA-DEP-len3*span1FirstWord3*span1LastWord + head1RootPath-POS-DEP-t*head1RootPathNgram-POS-DEP-len3*span1PosPat-FULL_POS-1-2 + head1RootPath-LEMMA-DIRECTION-t*head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-COARSE_POS-1-0 + head1RootPath-NONE-DEP-t*head1RootPathNgram-LEMMA-DEP-len2*span1StanfordRule + Dist(Len5,Span1.First,Span2.First)*head1RootPath-LEMMA-DIRECTION-t*head1RootPathNgram-LEMMA-DEP-len4 + head1RootPath-LEMMA-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len3*span1PosPat-FULL_POS-0-1 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-FULL_POS-0-3*span1StanfordCategory + head1RootPathNgram-LEMMA-DIRECTION-len3*span1LastLemma*span1PosPat-FULL_POS-1-2 + head1RootPathNgram-POS-DEP-len4*span1LastWord*span1PosPat-COARSE_POS-2-1 + Dist(Len5,Head2,Span1.First)*head1RootPathNgram-LEMMA-DEP-len4*span1PosPat-FULL_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-COARSE_POS-1-1*span1PosPat-FULL_POS-0-2 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-FULL_POS-1-2 + head1RootPathNgram-LEMMA-DIRECTION-len4*span1FirstLemma*span1LastLemma + frameRoleArg*head1RootPathNgram-LEMMA-DEP-len2*head1Word + head1RootPathNgram-LEMMA-DEP-len2*span1PosPat-FULL_POS-1-2*span1PosPat-WORD_SHAPE-1-2 + head1RootPathNgram-LEMMA-DEP-len4*span1LastWord3*span1PosPat-FULL_POS-1-0 + head1RootPathNgram-LEMMA-DEP-len4*span1FirstWord*span1LastWord3 + head1RootPathNgram-LEMMA-DIRECTION-len3*span1PosPat-FULL_POS-2-1*span1PosPat-WORD_SHAPE-3-0 + head1RootPath-POS-DIRECTION-t*head1RootPathNgram-POS-DEP-len4*span1PosPat-COARSE_POS-2-1 + Dist(SemaforPathLengths,Span1.First,Span2.First)*head1RootPath-LEMMA-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len4 + head1RootPathNgram-LEMMA-DEP-len4*span1PosPat-FULL_POS-3-0*span1RightLemma + head1RootPathNgram-LEMMA-DIRECTION-len4*span1LastBc1000/99*span1PosPat-FULL_POS-2-1 + head1RootPathNgram-LEMMA-DIRECTION-len4*span1PosPat-COARSE_POS-2-1*span1RightWord + head1RootPathNgram-LEMMA-DEP-len4*span1PosPat-COARSE_POS-0-3*span1PosPat-WORD_SHAPE-2-1 + head1RootPathNgram-LEMMA-DIRECTION-len4*head1Word3*span1PosPat-WORD_SHAPE-1-2 + head1RootPathNgram-LEMMA-DIRECTION-len4*span1PosPat-FULL_POS-0-2*span1PosPat-WORD_SHAPE-0-3 + head1Bc1000/99*head1RootPathNgram-LEMMA-DIRECTION-len4*span1PosPat-COARSE_POS-1-2 + head1RootPathNgram-LEMMA-DIRECTION-len3*span1PosPat-FULL_POS-3-0 + head1RootPathNgram-POS-DEP-len4*span1PosPat-COARSE_POS-1-2*span1PosPat-FULL_POS-3-0 + head1RootPathNgram-LEMMA-DIRECTION-len4*span1PosPat-FULL_POS-1-1 + Dist(Direction,Head2,Span1.First)*frameRole + head1RootPath-POS-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len4*span1FirstLemma + head1RootPathNgram-LEMMA-DEP-len2*span1PosPat-FULL_POS-0-3 + Dist(Len5,Head2,Span1.First)*head1RootPathNgram-LEMMA-DEP-len4 + head1ParentWord*head1RootPathNgram-LEMMA-DEP-len4*span1FirstWord + frameRole*head1RootPathNgram-LEMMA-DEP-len3*span1FirstWord4 + frameRoleArg*head1Lemma*head1RootPathNgram-LEMMA-DEP-len3 + frameRole*head1RootPath-POS-DEP-t*head1RootPathNgram-POS-DEP-len4 + Role1*head1RootPathNgram-LEMMA-DEP-len4*span1PosPat-FULL_POS-1-2 + head1RootPathNgram-LEMMA-DIRECTION-len2*head1head2Path-LEMMA-DIRECTION-t + CollapsedParentDir-2-grams-between-</S>-and-<S>*head1RootPath-LEMMA-DIRECTION-t + head1RootPath-LEMMA-DEP-t*head1RootPathNgram-LEMMA-DEP-len3*role + head1RootPathNgram-POS-DEP-len4*span1PosPat-COARSE_POS-1-2 + head1RootPathNgram-LEMMA-DEP-len4*head1Word*role + head1RootPathNgram-POS-DEP-len3*head1head2Path-LEMMA-DEP-t + Word-1-grams-between-Span2.First-and-Span2.Last*head1RootPathNgram-LEMMA-DEP-len4*head1Word4 + frameInst*head1RootPath-LEMMA-DEP-t*head1RootPathNgram-LEMMA-DEP-len3 + head1RootPath-LEMMA-DIRECTION-t*head1RootPathNgram-POS-DEP-len1 + CollapsedParentDir-2-grams-between-</S>-and-Span2.First*head1RootPath-LEMMA-DEP-t + Dist(Len5,Span1.First,Span2.First)*head1RootPathNgram-LEMMA-DEP-len3 + Dist(SemaforPathLengths,Span1.First,Span2.First)*head1RootPathNgram-LEMMA-DIRECTION-len4 + CfgFeat-DirectChildren-Rule*head1RootPath-NONE-DEP-t*head1RootPathNgram-LEMMA-DEP-len2 + head1RootPathNgram-NONE-DEP-len4*span1PosPat-WORD_SHAPE-2-1 + CfgFeat-DirectChildren-Rule*head1RootPathNgram-LEMMA-DEP-len2 + CfgFeat-ToRootPath-Rule*head1RootPathNgram-POS-DEP-len2 + CfgFeat-DirectChildren-Category*head1RootPathNgram-LEMMA-DEP-len3*head1Word3 + CfgFeat-DirectChildren-Rule*head1RootPathNgram-LEMMA-DIRECTION-len3*span1LastWord + CfgFeat-DirectChildren-Category*CfgFeat-DirectChildren-Rule*head1RootPathNgram-LEMMA-DIRECTION-len3 + head1RootPath-POS-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len2 + CfgFeat-ToRootPath-Category*head1RootPathNgram-LEMMA-DEP-len3*head1WordWnSynset + Dist(Len5,Span1.First,Span2.Last)*head1Bc1000/99 + CfgFeat-ToRootPath-Rule*head1Bc1000/99*head1RootPathNgram-LEMMA-DEP-len3 + CfgFeat-ToRootPath-Rule*head1RootPathNgram-LEMMA-DEP-len2*span1PosPat-WORD_SHAPE-2-1 + Dist(SemaforPathLengths,Span1.First,Span2.Last)*span1StanfordCategory + Pos2-2-grams-between-<S>-and-Span1.First*head1RootPath-POS-DEP-t + CfgFeat-ToRootBag-Rule*CfgFeat-ToRootPath-Rule + head1RootPath-NONE-DEP-t*head1RootPath-POS-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len3 + CfgFeat-ToRootPath-Category*CfgFeat-ToRootPath-Rule*head1RootPathNgram-POS-DEP-len4 + head1Lemma*head1RootPathNgram-LEMMA-DIRECTION-len3 + frameRoleArg*span1span2Overlap + head1RootPathNgram-LEMMA-DEP-len1*span1PosPat-COARSE_POS-3-0 + CollapsedLabel-2-grams-between-<S>-and-Span1.First*head1Word + CfgFeat-CommonParent-Category*CfgFeat-DirectChildren-Category*head1RootPathNgram-LEMMA-DEP-len4 + head1Lemma*head1ParentWordWnSynset*head1RootPathNgram-LEMMA-DEP-len4 + WordWnSynset-2-grams-between-<S>-and-Span1.First*span1StanfordRule + CfgFeat-CommonParent-Rule*head1RootPathNgram-POS-DEP-len4 + CfgFeat-ToRootBag-Rule*head1RootPath-LEMMA-DEP-t*head1RootPath-POS-DEP-t + Word3-1-grams-between-<S>-and-Span1.First*head1Lemma + CfgFeat-ToRootPath-Category*head1RootPathNgram-LEMMA-DEP-len1 + Word-1-grams-between-Head2-and-Span2.First*frameRole*head1RootPathNgram-LEMMA-DEP-len4 + Word-1-grams-between-<S>-and-Span1.First*head1Word4 + head1RootPathNgram-POS-DEP-len2*span1PosPat-FULL_POS-2-0 + WordWnSynset-2-grams-between-</S>-and-Head2*span1PosPat-COARSE_POS-1-1 + WordWnSynset-2-grams-between-</S>-and-Span2.First*head1RootPath-NONE-DEP-t + WordWnSynset-2-grams-between-</S>-and-Span2.Last*span1PosPat-FULL_POS-0-2 + Role1*head1RootPathNgram-LEMMA-DEP-len3 + head1RootPathNgram-LEMMA-DEP-len3*head1RootPathNgram-LEMMA-DEP-len4*head1head2Path-NONE-DEP-t + head1RootPathNgram-LEMMA-DEP-len3*role + Word4-2-grams-between-<S>-and-Span1.First*span1PosPat-COARSE_POS-0-2 + Word3-2-grams-between-<S>-and-Span1.First*span1FirstWord4 + Dist(Len5,Head1,Head2)*frameRoleArg + Lemma-2-grams-between-<S>-and-Span1.First*span1PosPat-COARSE_POS-2-0 + Lemma-1-grams-between-<S>-and-Span1.First*head1RootPath-POS-DIRECTION-t + Word-2-grams-between-<S>-and-Span1.First*span1PosPat-FULL_POS-1-0 + head1RootPathNgram-NONE-DEP-len3*span1PosPat-WORD_SHAPE-1-2 + WordWnSynset-2-grams-between-</S>-and-Span1.Last*span1FirstWord + Dist(SemaforPathLengths,Head2,Span1.First)*span1FirstBc1000/99 + CfgFeat-DirectChildren-Category*head1RootPathNgram-POS-DEP-len3 + Word3-2-grams-between-</S>-and-Span2.First*span1LastWord4 + Word4-1-grams-between-</S>-and-Head2*span1LastWord + Word3-2-grams-between-</S>-and-Head2*head1Word3 + head1RootPathNgram-LEMMA-DIRECTION-len1*span1PosPat-COARSE_POS-0-3 + head1Word*sentenceBc256/6 + frameRole*span1FirstBc256/3 + Lemma-2-grams-between-</S>-and-Span2.Last*span1PosPat-FULL_POS-0-1 + Word-2-grams-between-</S>-and-Head2*span1PosPat-WORD_SHAPE-1-1 + Lemma-2-grams-between-</S>-and-Span1.Last*span1FirstLemma + Lemma-2-grams-between-</S>-and-Span2.First*span1FirstWord3 + span1StanfordRule + Word3-2-grams-between-</S>-and-Span2.Last*span1PosPat-WORD_SHAPE-3-0 + Word4-2-grams-between-</S>-and-Span2.Last*head1WordWnSynset + Lemma-2-grams-between-</S>-and-Head2*span1PosPat-WORD_SHAPE-0-3 + Word4-2-grams-between-</S>-and-Span2.First*span1LastLemma + Word4-2-grams-between-</S>-and-Head2*span1LastWord3 + Word-2-grams-between-</S>-and-Span2.First*span1PosPat-WORD_SHAPE-2-0 + head1Word + head1RootPath-POS-DIRECTION-t*head1RootPathNgram-NONE-DEP-len4 + Word-2-grams-between-</S>-and-Span1.Last*span1PosPat-WORD_SHAPE-0-2 + Word-2-grams-between-</S>-and-Span2.Last*span1LeftWord + head1Lemma + head1RootPath-NONE-DEP-t*head1RootPathNgram-POS-DIRECTION-len4 + Word-2-grams-between-<S>-and-Head1*span1LeftLemma + head1RootPath-POS-DEP-t + CfgFeat-DirectChildren-Category + head1Word4 + head1RootPath-LEMMA-DIRECTION-t + frame*head1RootPathNgram-LEMMA-DIRECTION-len4 + head1RootPath-LEMMA-DEP-t + Word4-2-grams-between-</S>-and-Span1.Last*span1FirstWordWnSynset + arg*span1StanfordRule + frameRoleArg + frameRole + span1FirstWord + 1*head1Word + head1RootPathNgram-LEMMA-DEP-len4 + span1FirstLemma + span1LastWord + span1LastLemma + head1Word3 + CfgFeat-DirectChildren-Rule + head1RootPath-NONE-DEP-t + span1FirstWord4 + head1RootPath-POS-DIRECTION-t + span1LastWord4 + span1PosPat-FULL_POS-1-2 + span1PosPat-COARSE_POS-2-1 + span1FirstWord3 + CfgFeat-ToRootPath-Category + span1LastWord3 + head1WordWnSynset + head1ChildCollapsedWord*head1RootPath-LEMMA-DIRECTION-t*span1PosPat-FULL_POS-1-1 + head1ChildCollapsedLemma*head1RootPath-LEMMA-DEP-t*span1PosPat-FULL_POS-3-0
+0.150506	0.177172	0.177172	2	5715*5934	head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2PathNgram-Collapsed-POS-DEP-len4-Top25
+0.014434	0.025997	0.801075	1	375	Dist-Direction-Span1.First-Span2.First
+0.013859	0.026863	0.938241	1	4038	Word-3-grams-between-Head1-and-Head2-Top25
+0.013856	0.027617	0.993080	1	3137	Lemma-3-grams-between-Head1-and-Head2-Top25
+0.013855	0.027603	0.992225	1	3155	Lemma-3-grams-between-Head1-and-Span2.First-Top25
+0.013817	0.026803	0.939886	1	4746	Word4-3-grams-between-Head1-and-Head2-Top25
+0.013817	0.026803	0.939886	1	4378	Word3-3-grams-between-Head1-and-Head2-Top25
+0.013802	0.026776	0.940052	1	4770	Word4-3-grams-between-Head1-and-Span2.Last-Top25
+0.013487	0.024254	0.798289	1	370	Dist-Direction-Head2-Span1.First
+0.010982	0.021595	0.966428	1	1594	span1LastBasicParentDir
+0.010368	0.018788	0.812163	1	3173	Lemma-3-grams-between-Head2-and-Span1.Last-Top25
+0.010352	0.018757	0.811901	1	3202	Lemma-3-grams-between-Span1.Last-and-Span2.Last-Top25
+0.009909	0.017098	0.725448	1	4097	Word-3-grams-between-Span1.Last-and-Span2.First-Top25
+0.376702	0.955142	1.535540	3	2517*5181*5747	CfgFeat-CommonParent-Rule-Top25*head1Bc1000/99-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.364730	0.894390	1.452195	3	2511*2517*5181	CfgFeat-CommonParent-Category-Top25*CfgFeat-CommonParent-Rule-Top25*head1Bc1000/99-Top25
+0.337406	0.898318	1.662424	3	2517*2548*5711	CfgFeat-CommonParent-Rule-Top25*CfgFeat-ToRootPath-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top625
+0.157750	0.394661	1.501814	2	2890*5709	Lemma-1-grams-between-Head1-and-Head2-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25
+0.156090	0.467722	1.996480	3	546*2511*2517	Dist-discLen5-Span1.Last-Span2.Last*CfgFeat-CommonParent-Category-Top25*CfgFeat-CommonParent-Rule-Top25
+0.156090	0.467722	1.996480	2	2511*2517	CfgFeat-CommonParent-Category-Top25*CfgFeat-CommonParent-Rule-Top25
+0.022775	0.061173	1.685984	1	6242	span1PosPat-FULL_POS-0-4-Top25
+0.022378	0.059893	1.676410	1	3498	Pos2-3-grams-between-Span1.First-and-Span2.Last-Top25
+0.021446	0.061451	1.865443	1	4800	Word4-3-grams-between-Span1.First-and-Span2.Last-Top125
+0.020318	0.046263	1.276959	1	2472	BasicLabel-3-grams-between-Span1.First-and-Span2.First-Top25
+0.020305	0.049682	1.446829	1	1711	span1span2Overlap
+0.019837	0.050502	1.545896	1	4069	Word-3-grams-between-Head2-and-Span1.First-Top125
+0.019797	0.040502	1.045867	1	4776	Word4-3-grams-between-Head2-and-Span1.First-Top25
+0.018411	0.040307	1.189332	1	3169	Lemma-3-grams-between-Head2-and-Span1.First-Top625
+0.018340	0.040093	1.186037	1	3186	Lemma-3-grams-between-Span1.First-and-Span2.First-Top625
+0.014867	0.040342	1.713446	1	5339	head1Parent-Basic-Word-Top25
+0.014742	0.041185	1.793734	1	3138	Lemma-3-grams-between-Head1-and-Head2-Top125
+0.014640	0.040843	1.789862	1	5351	head1Parent-Basic-Word4-Top25
+0.014592	0.041165	1.821073	1	1235	head1Bc256/3
+0.014541	0.038073	1.618301	1	4039	Word-3-grams-between-Head1-and-Head2-Top125
+0.014511	0.040732	1.806917	1	5347	head1Parent-Basic-Word3-Top25
+0.014422	0.038080	1.640430	1	4063	Word-3-grams-between-Head1-and-Span2.Last-Top125
+0.014246	0.040995	1.877722	1	5333	head1Parent-Basic-Lemma-Top25
+0.013850	0.040733	1.941056	1	1605	span1LastPos2
+0.013555	0.035952	1.652276	1	5356	head1Parent-Basic-WordWnSynset-Top25
+0.012968	0.038620	1.978099	1	510	Dist-discLen4-Head2-Span1.First
+0.012528	0.026332	1.101807	1	3139	Lemma-3-grams-between-Head1-and-Head2-Top625
+0.012444	0.034519	1.774004	1	538	Dist-discLen5-Head2-Span1.First
+0.012397	0.025788	1.080258	1	4380	Word3-3-grams-between-Head1-and-Head2-Top625
+0.012353	0.034562	1.797964	1	544	Dist-discLen5-Span1.First-Span2.Last
+0.012311	0.027089	1.200414	1	4807	Word4-3-grams-between-Span1.Last-and-Span2.First-Top625
+0.012093	0.032488	1.686477	1	5033	WordWnSynset-2-grams-between-Span1.Last-and-Span2.First-Top125
+0.328065	0.984537	2.001043	3	2517*5747*6048	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*span1LastBc1000/99-Top25
+0.262007	0.989878	2.778060	3	544*2517*5747	Dist-discLen5-Span1.First-Span2.Last*CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.262007	0.989878	2.778060	3	1711*2517*5709	span1span2Overlap*CfgFeat-CommonParent-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25
+0.262007	0.989878	2.778060	2	2517*5747	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.250030	0.823301	2.292808	3	2518*5741*6063	CfgFeat-CommonParent-Rule-Top125*head1head2Path-Collapsed-LEMMA-DEP-t-Top25*span1LastWord-Top25
+0.247245	0.919526	2.719092	3	2517*2522*6077	CfgFeat-CommonParent-Rule-Top25*CfgFeat-CommonParent-Rule-Cnt10*span1LastWord4-Top25
+0.226411	0.876764	2.872448	3	2518*2523*5741	CfgFeat-CommonParent-Rule-Top125*CfgFeat-DirectChildren-Category-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top25
+0.142802	0.569509	2.988096	2	5747*6055	head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*span1LastLemma-Top25
+0.139502	0.554548	2.975207	3	5718*5747*6077	head1head2Path-Basic-LEMMA-DIRECTION-t-Top3125*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*span1LastWord4-Top25
+0.139444	0.554280	2.974922	2	5741*6077	head1head2Path-Collapsed-LEMMA-DEP-t-Top25*span1LastWord4-Top25
+0.137996	0.529212	2.834980	3	2522*5716*5863	CfgFeat-CommonParent-Rule-Cnt10*head1head2Path-Basic-LEMMA-DIRECTION-t-Top125*head1head2PathNgram-Collapsed-LEMMA-DEP-len2-Top25
+0.133735	0.518794	2.879261	2	5715*5968	head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*role-Top25
+0.129289	0.505357	2.908748	3	5177*5718*5747	frameRoleArg-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top3125*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.129289	0.505357	2.908748	3	5173*5720*5741	frameRole-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Cnt10*head1head2Path-Collapsed-LEMMA-DEP-t-Top25
+0.129022	0.504340	2.908940	3	5171*5715*5746	frameInst-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Cnt10
+0.129022	0.504340	2.908940	3	5169*5709*5744	frame-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top3125
+0.127007	0.480211	2.780993	3	5747*5749*5959	head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top625*head2Word3-Top25
+0.125882	0.472345	2.752287	3	2517*5152*5761	CfgFeat-CommonParent-Rule-Top25*WordWnSynset-3-grams-between-Span1.First-and-Span2.Last-Top125*head1head2Path-Collapsed-POS-DEP-t-Top25
+0.120759	0.468227	2.877354	3	5741*5748*5952	head1head2Path-Collapsed-LEMMA-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top125*head2Lemma-Top25
+0.118971	0.457649	2.846736	3	5717*5741*5965	head1head2Path-Basic-LEMMA-DIRECTION-t-Top625*head1head2Path-Collapsed-LEMMA-DEP-t-Top25*head2WordWnSynset-Top25
+0.106584	0.425133	2.988700	3	370*2517*2522	Dist-Direction-Head2-Span1.First*CfgFeat-CommonParent-Rule-Top25*CfgFeat-CommonParent-Rule-Cnt10
+0.106584	0.425133	2.988700	3	1704*1711*2517	span1StanfordRule*span1span2Overlap*CfgFeat-CommonParent-Rule-Top25
+0.106584	0.425133	2.988700	2	1222*2517	arg*CfgFeat-CommonParent-Rule-Top25
+0.106584	0.425133	2.988700	1	2517	CfgFeat-CommonParent-Rule-Top25
+0.093272	0.323753	2.471080	3	2517*3185*6438	CfgFeat-CommonParent-Rule-Top25*Lemma-3-grams-between-Span1.First-and-Span2.First-Top125*span1StanfordRule-Top25
+0.091390	0.325828	2.565251	3	1704*2517*6438	span1StanfordRule*CfgFeat-CommonParent-Rule-Top25*span1StanfordRule-Top25
+0.040908	0.153021	2.740657	2	5722*5753	head1head2Path-Basic-NONE-DEP-t-Top125*head1head2Path-Collapsed-NONE-DEP-t-Top25
+0.040059	0.143662	2.586221	1	5753	head1head2Path-Collapsed-NONE-DEP-t-Top25
+0.038685	0.144009	2.722606	2	5721*5722	head1head2Path-Basic-NONE-DEP-t-Top25*head1head2Path-Basic-NONE-DEP-t-Top125
+0.032008	0.126709	2.958628	1	5735	head1head2Path-Basic-POS-DIRECTION-t-Top25
+0.025173	0.100433	2.989657	1	6438	span1StanfordRule-Top25
+0.024258	0.095762	2.947687	1	1701	span1StanfordCategory
+0.023928	0.090815	2.795367	1	6436	span1StanfordCategory-Top25
+0.022794	0.072021	2.159593	1	5151	WordWnSynset-3-grams-between-Span1.First-and-Span2.Last-Top25
+0.022731	0.071824	2.159797	1	5128	WordWnSynset-3-grams-between-Head2-and-Span1.First-Top25
+0.022439	0.075699	2.373551	1	3255	Pos-2-grams-between-Span1.First-and-Span2.First-Top25
+0.022387	0.077941	2.481524	1	4086	Word-3-grams-between-Span1.First-and-Span2.First-Top125
+0.021500	0.081262	2.779635	1	5863	head1head2PathNgram-Collapsed-LEMMA-DEP-len2-Top25
+0.020086	0.078296	2.898036	1	1702	span1StanfordCategory2
+0.019767	0.074318	2.759691	1	6437	span1StanfordCategory2-Top25
+0.256168	1.081420	3.221523	3	2517*5710*6266	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top125*span1PosPat-FULL_POS-1-3-Top25
+0.238403	1.124702	3.717644	3	2518*5169*5715	CfgFeat-CommonParent-Rule-Top125*frame-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.221374	1.065726	3.814147	3	2518*5715*6219	CfgFeat-CommonParent-Rule-Top125*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*span1PosPat-FULL_POS-0-0-Top125
+0.216962	1.056412	3.869105	3	2518*2953*3059	CfgFeat-CommonParent-Rule-Top125*Lemma-1-grams-between-Span2.First-and-Span2.Last-Top25*Lemma-2-grams-between-Span1.First-and-Span2.First-Top25
+0.216104	0.977211	3.521939	3	2512*2518*6072	CfgFeat-CommonParent-Category-Top125*CfgFeat-CommonParent-Rule-Top125*span1LastWord3-Top25
+0.213096	1.038954	3.875519	3	543*2518*5741	Dist-discLen5-Span1.First-Span2.First*CfgFeat-CommonParent-Rule-Top125*head1head2Path-Collapsed-LEMMA-DEP-t-Top25
+0.213096	1.038954	3.875519	3	1702*2518*5715	span1StanfordCategory2*CfgFeat-CommonParent-Rule-Top125*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.207166	0.966247	3.664125	3	2519*5709*6055	CfgFeat-CommonParent-Rule-Top625*head1head2Path-Basic-LEMMA-DEP-t-Top25*span1LastLemma-Top25
+0.206915	1.014504	3.902995	3	2511*2531*5715	CfgFeat-CommonParent-Category-Top25*CfgFeat-DirectChildren-Rule-Top625*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.196894	0.832417	3.227747	3	4667*5746*5747	Word4-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Cnt10*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.196894	0.832417	3.227747	3	4299*5721*5741	Word3-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Basic-NONE-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top25
+0.196894	0.832417	3.227747	3	3959*5747*5749	Word-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top625
+0.196894	0.832417	3.227747	3	3059*5709*5752	Lemma-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Cnt10
+0.196894	0.832417	3.227747	2	4667*5741	Word4-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top25
+0.195904	0.933374	3.764458	3	2518*6072*6440	CfgFeat-CommonParent-Rule-Top125*span1LastWord3-Top25*span1StanfordRule-Top625
+0.183635	0.812324	3.423588	2	3959*5715	Word-2-grams-between-Span1.First-and-Span2.First-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.182886	0.783520	3.284210	3	4649*5715*5716	Word4-2-grams-between-Head2-and-Span1.First-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top125
+0.182886	0.783520	3.284210	3	4281*5741*5745	Word3-2-grams-between-Head2-and-Span1.First-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Cnt5
+0.182550	0.873406	3.784470	3	2519*3828*5709	CfgFeat-CommonParent-Rule-Top625*Word-1-grams-between-Head2-and-Span2.Last-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25
+0.176154	0.811891	3.608994	3	2511*5715*5955	CfgFeat-CommonParent-Category-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head2Word-Top25
+0.175430	0.767807	3.376710	3	3065*5711*5715	Lemma-2-grams-between-Span1.First-and-Span2.Last-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top625*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.143860	0.718594	3.995076	3	2518*3011*6006	CfgFeat-CommonParent-Rule-Top125*Lemma-2-grams-between-Head1-and-Head2-Top25*span1FirstBc256/99-Top25
+0.139361	0.564453	3.050302	3	5715*5750*6072	head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top3125*span1LastWord3-Top25
+0.139304	0.564188	3.050050	2	5709*6072	head1head2Path-Basic-LEMMA-DEP-t-Top25*span1LastWord3-Top25
+0.138617	0.593479	3.281429	2	5716*5921	head1head2Path-Basic-LEMMA-DIRECTION-t-Top125*head1head2PathNgram-Collapsed-NONE-DEP-len4-Cnt10
+0.138377	0.600605	3.340364	2	4193*5748	Word3-1-grams-between-Span2.First-and-Span2.Last-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top125
+0.137985	0.584239	3.234073	3	4092*5715*5753	Word-3-grams-between-Span1.First-and-Span2.Last-Top125*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2Path-Collapsed-NONE-DEP-t-Top25
+0.137981	0.586001	3.246961	3	3168*5709*5722	Lemma-3-grams-between-Head2-and-Span1.First-Top125*head1head2Path-Basic-LEMMA-DEP-t-Top25*head1head2Path-Basic-NONE-DEP-t-Top125
+0.137161	0.597960	3.359546	2	4172*5716	Word3-1-grams-between-Head2-and-Span2.First-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top125
+0.129276	0.565296	3.372788	3	3853*5710*5742	Word-1-grams-between-Span2.First-and-Span2.Last-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top125*head1head2Path-Collapsed-LEMMA-DEP-t-Top125
+0.129002	0.582557	3.515887	3	5709*5752*6083	head1head2Path-Basic-LEMMA-DEP-t-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Cnt10*span1LastWordWnSynset-Top25
+0.128823	0.561207	3.356433	3	2925*5742*5748	Lemma-1-grams-between-Head2-and-Span2.First-Top25*head1head2Path-Collapsed-LEMMA-DEP-t-Top125*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top125
+0.127863	0.559170	3.373183	2	2953*5710	Lemma-1-grams-between-Span2.First-and-Span2.Last-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top125
+0.224877	1.136413	4.053481	3	2518*2925*5169	CfgFeat-CommonParent-Rule-Top125*Lemma-1-grams-between-Head2-and-Span2.First-Top25*frame-Top25
+0.219442	1.126042	4.131379	3	2518*3168*4172	CfgFeat-CommonParent-Rule-Top125*Lemma-3-grams-between-Head2-and-Span1.First-Top125*Word3-1-grams-between-Head2-and-Span2.First-Top25
+0.212824	1.100839	4.172541	3	2518*2521*4193	CfgFeat-CommonParent-Rule-Top125*CfgFeat-CommonParent-Rule-Cnt5*Word3-1-grams-between-Span2.First-and-Span2.Last-Top25
+0.212824	1.100839	4.172541	2	2518*4193	CfgFeat-CommonParent-Rule-Top125*Word3-1-grams-between-Span2.First-and-Span2.Last-Top25
+0.211800	1.087515	4.134620	3	2518*5151*5959	CfgFeat-CommonParent-Rule-Top125*WordWnSynset-3-grams-between-Span1.First-and-Span2.Last-Top25*head2Word3-Top25
+0.210119	1.092153	4.197772	3	2518*4172*5736	CfgFeat-CommonParent-Rule-Top125*Word3-1-grams-between-Head2-and-Span2.First-Top25*head1head2Path-Basic-POS-DIRECTION-t-Top125
+0.203110	1.053344	4.186067	3	454*2518*2925	Dist-discLen2-Head2-Span1.First*CfgFeat-CommonParent-Rule-Top125*Lemma-1-grams-between-Head2-and-Span2.First-Top25
+0.202450	1.034055	4.107702	3	1701*2518*5952	span1StanfordCategory*CfgFeat-CommonParent-Rule-Top125*head2Lemma-Top25
+0.201533	1.109976	4.507652	3	2518*5171*5685	CfgFeat-CommonParent-Rule-Top125*frameInst-Top25*head1Word-Top125
+0.198968	1.105481	4.556067	3	2522*4193*5716	CfgFeat-CommonParent-Rule-Cnt10*Word3-1-grams-between-Span2.First-and-Span2.Last-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top125
+0.194208	1.146268	4.902263	3	2518*4379*5173	CfgFeat-CommonParent-Rule-Top125*Word3-3-grams-between-Head1-and-Head2-Top125*frameRole-Top25
+0.190824	1.031571	4.405866	3	2518*5685*5762	CfgFeat-CommonParent-Rule-Top125*head1Word-Top125*head1head2Path-Collapsed-POS-DEP-t-Top125
+0.185273	0.976326	4.269664	3	1229*2518*3853	frameRoleArg*CfgFeat-CommonParent-Rule-Top125*Word-1-grams-between-Span2.First-and-Span2.Last-Top25
+0.184263	1.018997	4.530120	3	2522*5742*5962	CfgFeat-CommonParent-Rule-Cnt10*head1head2Path-Collapsed-LEMMA-DEP-t-Top125*head2Word4-Top25
+0.183614	1.023829	4.575978	3	2518*4075*5322	CfgFeat-CommonParent-Rule-Top125*Word-3-grams-between-Head2-and-Span1.Last-Top125*head1Lemma-Top125
+0.177232	1.037636	4.854681	3	2472*2518*6064	BasicLabel-3-grams-between-Span1.First-and-Span2.First-Top25*CfgFeat-CommonParent-Rule-Top125*span1LastWord-Top125
+0.175922	0.990090	4.628003	3	2518*4794*6083	CfgFeat-CommonParent-Rule-Top125*Word4-3-grams-between-Span1.First-and-Span2.First-Top125*span1LastWordWnSynset-Top25
+0.171904	0.931293	4.417504	3	1466*2518*6048	head1head2Path-Basic-NONE-DIRECTION-t*CfgFeat-CommonParent-Rule-Top125*span1LastBc1000/99-Top25
+0.166094	0.955711	4.754024	3	1605*2518*5685	span1LastPos2*CfgFeat-CommonParent-Rule-Top125*head1Word-Top125
+0.162498	0.897324	4.522062	3	2521*3825*5710	CfgFeat-CommonParent-Rule-Cnt5*Word-1-grams-between-Head2-and-Span2.First-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top125
+0.161864	0.905002	4.591126	3	404*2518*4919	Dist-SemaforPathLengths-Span1.First-Span2.Last*CfgFeat-CommonParent-Rule-Top125*WordWnSynset-1-grams-between-Span2.First-and-Span2.Last-Top25
+0.184496	1.111651	5.025331	3	1228*2518*5173	frameRole*CfgFeat-CommonParent-Rule-Top125*frameRole-Top25
+0.184408	1.111651	5.028208	3	376*2518*5171	Dist-Direction-Span1.First-Span2.Last*CfgFeat-CommonParent-Rule-Top125*frameInst-Top25
+0.180793	1.091481	5.037171	3	2519*5173*5748	CfgFeat-CommonParent-Rule-Top625*frameRole-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top125
+0.178530	1.121464	5.281664	3	1235*2518*5169	head1Bc256/3*CfgFeat-CommonParent-Rule-Top125*frame-Top25
+0.164836	0.997529	5.051663	2	2519*4172	CfgFeat-CommonParent-Rule-Top625*Word3-1-grams-between-Head2-and-Span2.First-Top25
+0.156469	0.968767	5.191446	3	2518*5705*6436	CfgFeat-CommonParent-Rule-Top125*head1WordWnSynset-Top125*span1StanfordCategory-Top25
+0.154317	0.951419	5.165374	2	2522*4175	CfgFeat-CommonParent-Rule-Cnt10*Word3-1-grams-between-Head2-and-Span2.Last-Top25
+0.152876	0.945597	5.185366	2	2517*5170	CfgFeat-CommonParent-Rule-Top25*frame-Top125
+0.152374	0.993995	5.523378	3	2518*6048*6054	CfgFeat-CommonParent-Rule-Top125*span1LastBc1000/99-Top25*span1LastCollapsedLabel-Cnt5
+0.150563	1.030441	5.843904	3	2519*5748*6242	CfgFeat-CommonParent-Rule-Top625*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top125*span1PosPat-FULL_POS-0-4-Top25
+0.142911	0.942329	5.593822	3	2518*2825*5686	CfgFeat-CommonParent-Rule-Top125*Dist-discLen2-Span1.First-Span2.First-Top25*head1Word-Top625
+0.153329	1.187862	6.747160	3	2518*5351*6078	CfgFeat-CommonParent-Rule-Top125*head1Parent-Basic-Word4-Top25*span1LastWord4-Top125
+0.144378	1.014119	6.024046	3	1230*2518*5705	head1BasicLabel*CfgFeat-CommonParent-Rule-Top125*head1WordWnSynset-Top125
+0.134975	0.946229	6.010394	2	2518*5969	CfgFeat-CommonParent-Rule-Top125*role-Top125
+0.133285	0.985130	6.391154	3	537*1229*2518	Dist-discLen5-Head1-Span2.Last*frameRoleArg*CfgFeat-CommonParent-Rule-Top125
+0.132468	0.986887	6.449994	3	1229*1574*2518	frameRoleArg*span1FirstBc1000/3*CfgFeat-CommonParent-Rule-Top125
+0.116259	0.945605	7.133626	3	1462*1594*2518	head1WordWnSynset*span1LastBasicParentDir*CfgFeat-CommonParent-Rule-Top125
+0.110514	0.911378	7.246714	2	1225*2519	frame*CfgFeat-CommonParent-Rule-Top625
+0.082744	0.820728	8.918882	3	1320*1367*2518	head1Parent-Basic-BasicParentDir*head1RootPath-Collapsed-NONE-DEP-t*CfgFeat-CommonParent-Rule-Top125
+0.054262	0.561816	9.353821	2	5746*6442	head1head2Path-Collapsed-LEMMA-DEP-t-Cnt10*span1StanfordRule-Cnt5

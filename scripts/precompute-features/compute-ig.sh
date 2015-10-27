@@ -32,7 +32,7 @@ echo "args: $@"
 #  -DoutputFeats=$OUTPUT \
 #  edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
-if [[ $# != 6 ]]; then
+if [[ $# != 7 ]]; then
   echo "please provide:"
   echo "1) a feature file parent directory"
   echo "2) a feature file glob"
@@ -40,6 +40,7 @@ if [[ $# != 6 ]]; then
   echo "4) a jar file"
   echo "5) a set of test set sentence ids to ignore"
   echo "6) number of roles expected"
+  echo "7) how many GB of memory to give to the JVM (e.g. \"20\", NOT \"20G\")"
   exit 1
 fi
 
@@ -49,8 +50,9 @@ OUTPUT_IG_FILE=$3
 JAR=$4
 TEMPLATE_PROD_IG_OUTPUT=$5
 NUM_ROLES=$6
+XMX=$7
 
-java -Xmx20G -cp $JAR \
+java -Xmx${XMX}G -cp $JAR \
   -DfeaturesParent=$FEATS_PARENT \
   -DfeaturesGlob=$FEATS_GLOB \
   -DtopK=99999 \
@@ -58,7 +60,7 @@ java -Xmx20G -cp $JAR \
   -DoutputFeatures=$OUTPUT_IG_FILE \
   -DignoreSentenceIds=$TEMPLATE_PROD_IG_OUTPUT \
   -DbubFuncParentDir=scripts/precompute-features \
-  -DnumTemplates=12000 \
+  -DnumTemplates=30000 \
   edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
 echo "ret code: $?"

@@ -1,21 +1,20 @@
-# <Feat rank=1 n=2 ig=0.3192 ['luMatch-WNRelatedSynSet', 'span1PosPat-FULL_POS-2-1']>
-# <Feat rank=3 n=2 ig=0.2970 ['head1RootPathNgram-LEMMA-DEP-len4', 'luMatch-WNRelatedSynSet']>
-# <Feat rank=18 n=2 ig=0.2010 ['head1RootPath-LEMMA-DEP-t', 'luMatch-WNRelated']>
-# <Feat rank=19 n=2 ig=0.2006 ['luMatch-WNRelated', 'span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=25 n=3 ig=0.1818 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1LastWord4', 'span1PosPat-COARSE_POS-1-1']>
-# <Feat rank=26 n=3 ig=0.1808 ['head1Lemma', 'head1RootPathNgram-LEMMA-DEP-len2', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=27 n=3 ig=0.1806 ['head1RootPathNgram-LEMMA-DEP-len2', 'head1Word', 'span1PosPat-FULL_POS-1-1']>
-# <Feat rank=34 n=3 ig=0.1797 ['head1RootPathNgram-LEMMA-DEP-len2', 'head1Word4', 'span1StanfordRule']>
-# <Feat rank=43 n=3 ig=0.1793 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1FirstWord3', 'span1LastWord']>
-# <Feat rank=69 n=3 ig=0.1789 ['head1RootPath-POS-DEP-t', 'head1RootPathNgram-POS-DEP-len3', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=92 n=3 ig=0.1784 ['head1RootPath-LEMMA-DIRECTION-t', 'head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-COARSE_POS-1-0']>
-# <Feat rank=116 n=3 ig=0.1781 ['head1RootPath-NONE-DEP-t', 'head1RootPathNgram-LEMMA-DEP-len2', 'span1StanfordRule']>
-# <Feat rank=136 n=3 ig=0.1779 ['Dist(Len5,Span1.First,Span2.First)', 'head1RootPath-LEMMA-DIRECTION-t', 'head1RootPathNgram-LEMMA-DEP-len4']>
-# <Feat rank=195 n=3 ig=0.1775 ['head1RootPath-LEMMA-DEP-t', 'head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1PosPat-FULL_POS-0-1']>
-# <Feat rank=223 n=3 ig=0.1774 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-FULL_POS-0-3', 'span1StanfordCategory']>
-# <Feat rank=272 n=3 ig=0.1772 ['head1RootPathNgram-LEMMA-DIRECTION-len3', 'span1LastLemma', 'span1PosPat-FULL_POS-1-2']>
-# <Feat rank=343 n=3 ig=0.1769 ['head1RootPathNgram-POS-DEP-len4', 'span1LastWord', 'span1PosPat-COARSE_POS-2-1']>
-# <Feat rank=385 n=3 ig=0.1767 ['Dist(Len5,Head2,Span1.First)', 'head1RootPathNgram-LEMMA-DEP-len4', 'span1PosPat-FULL_POS-2-1']>
-# <Feat rank=396 n=3 ig=0.1767 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-COARSE_POS-1-1', 'span1PosPat-FULL_POS-0-2']>
-# <Feat rank=471 n=2 ig=0.1765 ['head1RootPathNgram-LEMMA-DEP-len3', 'span1PosPat-FULL_POS-1-2']>
-luMatch-WNRelatedSynSet*span1PosPat-FULL_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len4*luMatch-WNRelatedSynSet + head1RootPath-LEMMA-DEP-t*luMatch-WNRelated + luMatch-WNRelated*span1PosPat-COARSE_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len3*span1LastWord4*span1PosPat-COARSE_POS-1-1 + head1Lemma*head1RootPathNgram-LEMMA-DEP-len2*span1PosPat-FULL_POS-1-1 + head1RootPathNgram-LEMMA-DEP-len2*head1Word*span1PosPat-FULL_POS-1-1 + head1RootPathNgram-LEMMA-DEP-len2*head1Word4*span1StanfordRule + head1RootPathNgram-LEMMA-DEP-len3*span1FirstWord3*span1LastWord + head1RootPath-POS-DEP-t*head1RootPathNgram-POS-DEP-len3*span1PosPat-FULL_POS-1-2 + head1RootPath-LEMMA-DIRECTION-t*head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-COARSE_POS-1-0 + head1RootPath-NONE-DEP-t*head1RootPathNgram-LEMMA-DEP-len2*span1StanfordRule + Dist(Len5,Span1.First,Span2.First)*head1RootPath-LEMMA-DIRECTION-t*head1RootPathNgram-LEMMA-DEP-len4 + head1RootPath-LEMMA-DEP-t*head1RootPathNgram-LEMMA-DIRECTION-len3*span1PosPat-FULL_POS-0-1 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-FULL_POS-0-3*span1StanfordCategory + head1RootPathNgram-LEMMA-DIRECTION-len3*span1LastLemma*span1PosPat-FULL_POS-1-2 + head1RootPathNgram-POS-DEP-len4*span1LastWord*span1PosPat-COARSE_POS-2-1 + Dist(Len5,Head2,Span1.First)*head1RootPathNgram-LEMMA-DEP-len4*span1PosPat-FULL_POS-2-1 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-COARSE_POS-1-1*span1PosPat-FULL_POS-0-2 + head1RootPathNgram-LEMMA-DEP-len3*span1PosPat-FULL_POS-1-2
+0.150506	0.177172	0.177172	2	5715*5934	head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*head1head2PathNgram-Collapsed-POS-DEP-len4-Top25
+0.014434	0.025997	0.801075	1	375	Dist-Direction-Span1.First-Span2.First
+0.376702	0.955142	1.535540	3	2517*5181*5747	CfgFeat-CommonParent-Rule-Top25*head1Bc1000/99-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.364730	0.894390	1.452195	3	2511*2517*5181	CfgFeat-CommonParent-Category-Top25*CfgFeat-CommonParent-Rule-Top25*head1Bc1000/99-Top25
+0.337406	0.898318	1.662424	3	2517*2548*5711	CfgFeat-CommonParent-Rule-Top25*CfgFeat-ToRootPath-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top625
+0.157750	0.394661	1.501814	2	2890*5709	Lemma-1-grams-between-Head1-and-Head2-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25
+0.328065	0.984537	2.001043	3	2517*5747*6048	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25*span1LastBc1000/99-Top25
+0.262007	0.989878	2.778060	3	544*2517*5747	Dist-discLen5-Span1.First-Span2.Last*CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.262007	0.989878	2.778060	3	1711*2517*5709	span1span2Overlap*CfgFeat-CommonParent-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top25
+0.262007	0.989878	2.778060	2	2517*5747	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Collapsed-LEMMA-DIRECTION-t-Top25
+0.250030	0.823301	2.292808	3	2518*5741*6063	CfgFeat-CommonParent-Rule-Top125*head1head2Path-Collapsed-LEMMA-DEP-t-Top25*span1LastWord-Top25
+0.256168	1.081420	3.221523	3	2517*5710*6266	CfgFeat-CommonParent-Rule-Top25*head1head2Path-Basic-LEMMA-DEP-t-Top125*span1PosPat-FULL_POS-1-3-Top25
+0.238403	1.124702	3.717644	3	2518*5169*5715	CfgFeat-CommonParent-Rule-Top125*frame-Top25*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25
+0.221374	1.065726	3.814147	3	2518*5715*6219	CfgFeat-CommonParent-Rule-Top125*head1head2Path-Basic-LEMMA-DIRECTION-t-Top25*span1PosPat-FULL_POS-0-0-Top125
+0.216962	1.056412	3.869105	3	2518*2953*3059	CfgFeat-CommonParent-Rule-Top125*Lemma-1-grams-between-Span2.First-and-Span2.Last-Top25*Lemma-2-grams-between-Span1.First-and-Span2.First-Top25
+0.224877	1.136413	4.053481	3	2518*2925*5169	CfgFeat-CommonParent-Rule-Top125*Lemma-1-grams-between-Head2-and-Span2.First-Top25*frame-Top25
+0.219442	1.126042	4.131379	3	2518*3168*4172	CfgFeat-CommonParent-Rule-Top125*Lemma-3-grams-between-Head2-and-Span1.First-Top125*Word3-1-grams-between-Head2-and-Span2.First-Top25
+0.212824	1.100839	4.172541	3	2518*2521*4193	CfgFeat-CommonParent-Rule-Top125*CfgFeat-CommonParent-Rule-Cnt5*Word3-1-grams-between-Span2.First-and-Span2.Last-Top25
+0.184496	1.111651	5.025331	3	1228*2518*5173	frameRole*CfgFeat-CommonParent-Rule-Top125*frameRole-Top25
+0.153329	1.187862	6.747160	3	2518*5351*6078	CfgFeat-CommonParent-Rule-Top125*head1Parent-Basic-Word4-Top25*span1LastWord4-Top125

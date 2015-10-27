@@ -68,7 +68,7 @@ fi
 java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DworkingDir=$WD \
   -DuseCachedFeatures=true \
-  -DallowDynamicStopping=true \
+  -DallowDynamicStopping=false \
   -Dperceptron=$PERCEPTRON \
   -DforceLeftRightInference=$FORCE_LEFT_RIGHT \
   -DoracleMode=$ORACLE_MODE \
@@ -82,6 +82,7 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DcachedFeatures.featuresParent=$DD/coherent-shards/features \
   -DcachedFeatures.featuresGlob="glob:**/*" \
   -DcachedFeatures.numDataLoadThreads=1 \
+  -DcachedFeatures.hashingTrickDim=`echo "2 * 1024 * 1024" | bc` \
   -DpretrainBatchSize=16 \
   -DtrainBatchSize=16 \
   -Dthreads=4 \
@@ -99,10 +100,10 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Ddropout=true \
   -DlrBatchScale=2048 \
   -DlrType=constant \
-  -Dl2Penalty=1e-8 \
+  -Dl2Penalty=0 \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=5 \
+  -DtrainTimeLimit=60 \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \

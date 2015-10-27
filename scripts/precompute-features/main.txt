@@ -189,9 +189,12 @@ cp $JAR $JAR_STABLE
 
 # Do a 1/10 estimate of 1/10 of the data and average the answers (should take 1/10th the time but be approximate)
 N=10
+XMX=16
+XMX_SGE=18
 mkdir -p $WORKING_DIR/ig/templates/split-$N-filter10
 for i in `seq $N | awk '{print $1-1}'`; do
   qsub -N split$N-filter10-$i-ig-template \
+    -l "mem_free=${XMX_SGE}G" \
     -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
       $WORKING_DIR/coherent-shards-filtered/features \
@@ -199,14 +202,18 @@ for i in `seq $N | awk '{print $1-1}'`; do
       $WORKING_DIR/ig/templates/split-$N-filter10/shard-${i}.txt \
       $JAR_STABLE \
       $TEST_SET_SENT_IDS \
-      $NUM_ROLES
+      $NUM_ROLES \
+      $XMX
 done
 
 # Do a 1/10 estimate and average the answers (should take 1/10th the time but be approximate)
 N=10
-mkdir -p $WD/ig/templates/split-$N
+XMX=20
+XMX_SGE=22
+mkdir -p $WORKING_DIR/ig/templates/split-$N
 for i in `seq $N | awk '{print $1-1}'`; do
   qsub -N split$N-$i-ig-template \
+    -l "mem_free=${XMX_SGE}G" \
     -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
       $WORKING_DIR/coherent-shards-filtered/features \
@@ -214,11 +221,15 @@ for i in `seq $N | awk '{print $1-1}'`; do
       $WORKING_DIR/ig/templates/split-$N/shard-${i}.txt \
       $JAR_STABLE \
       $TEST_SET_SENT_IDS \
-      $NUM_ROLES
+      $NUM_ROLES \
+      $XMX
 done
 
 # Do a full/proper estimate
+XMX=30
+XMX_SGE=32
 qsub -N full-ig-template \
+  -l "mem_free=${XMX_SGE}G" \
   -o $WORKING_DIR/ig/templates/sge-logs \
   scripts/precompute-features/compute-ig.sh \
     $WORKING_DIR/coherent-shards-filtered/features \
@@ -226,7 +237,8 @@ qsub -N full-ig-template \
     $WORKING_DIR/ig/templates/full-ig.txt \
     $JAR_STABLE \
     $TEST_SET_SENT_IDS \
-    $NUM_ROLES
+    $NUM_ROLES \
+    $XMX
 
 
 ### After those jobs finish, average things
@@ -237,14 +249,14 @@ python scripts/precompute-features/average-ig.py \
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
-#TEMPLATE_IG_FILE=$WD/ig/templates/split-$N/average.txt
-TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
+TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/split-$N/average.txt
+#TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
 PROD_IG_WD=$WORKING_DIR/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
 cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
-NUM_SHARDS=400
-FEATS_PER_SHARD=400
+NUM_SHARDS=500
+FEATS_PER_SHARD=500
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
@@ -280,10 +292,10 @@ done
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
 #WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/propbank
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments
+WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments/dropoutY-noreg
 DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 IS_PROPBANK="false"
-DEFAULT_DIM=40
+DEFAULT_DIM=160
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1
