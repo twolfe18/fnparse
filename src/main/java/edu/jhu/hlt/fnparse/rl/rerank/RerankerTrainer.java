@@ -1240,6 +1240,7 @@ public class RerankerTrainer {
         int n = strTemplates.size();
         int[] intTemplates = new int[n];
         for (int i = 0; i < n; i++) {
+          Log.info("looking up template: " + strTemplates.get(i));
           int t = bialph.mapTemplate(strTemplates.get(i));
           assert t >= 0;
           intTemplates[i] = t;

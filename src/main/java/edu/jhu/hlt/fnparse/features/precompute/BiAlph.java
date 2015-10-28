@@ -211,7 +211,12 @@ public class BiAlph {
   }
 
   public int mapTemplate(String templateName) {
-    return templateName2NewInt.get(templateName);
+    Integer t = templateName2NewInt.get(templateName);
+    if (t == null) {
+      Log.warn(templateName + " is not in map of size " + templateName2NewInt.size());
+      return -1;
+    }
+    return t;
   }
 
   public String lookupTemplate(int newTemplateIndex) {
