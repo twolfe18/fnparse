@@ -903,7 +903,7 @@ public class RerankerTrainer {
         Log.info("train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
         if (tStopRatio > conf.stoppingConditionFrequency
-            && (epoch > 0 || t.secondsSinceFirstMark() > conf.stoppingTimeMinutes * 60)) {
+            && (epoch > 0 || iter > 1000 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
           Log.info("[main] evaluating the stopping condition");
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
@@ -1824,6 +1824,8 @@ public class RerankerTrainer {
     double mainResult = perfResultsTest.get(BasicEvaluation.argOnlyMicroF1.getName());
     for (ResultReporter rr : trainer.reporters)
       rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
+
+    Log.info("[main] totally done!");
   }
 
   private static final String featureTemplatesSearch =
