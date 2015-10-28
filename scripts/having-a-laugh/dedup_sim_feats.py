@@ -195,9 +195,9 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
 # This has since been fixed in java code, but fixed double-named templates like:
 # intpu:  CfgFeat-CommonParent-Rule-CfgFeat-CommonParent-Rule-Top25
 # output: CfgFeat-CommonParent-Rule-Top25
-p = re.compile('^(.*)-((Top|Cnt)\d+)$')
+BROKEN_TEMPLATE_NAME_ENDING = re.compile('^(.*)-((Top|Cnt)\d+)$')
 def undo_template_name_bug(template_name):
-  m = p.match(template_name)
+  m = BROKEN_TEMPLATE_NAME_ENDING.match(template_name)
   if m:
     tt = m.group(1)
     rest = m.group(2)
