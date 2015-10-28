@@ -78,6 +78,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
@@ -1220,7 +1221,7 @@ public class RerankerTrainer {
         ? featureTemplates : featureTemplatesSearch;
     String otherFs = config.getString("featureSetFile", "");
     if (!otherFs.isEmpty())
-      fs = getFeatureSetFromFileNew(otherFs);
+      fs = getFeatureSetFromFileNewNew(otherFs);
     Log.info("using featureSet=" + fs);
 
     // Enable the CachedFeatures module
@@ -1877,6 +1878,29 @@ public class RerankerTrainer {
       */
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
+
+  /**
+   * Reads the tab-separated format:
+   * score, ig, hx, arity, intTemplates, stringTemplates
+   */
+  private static String getFeatureSetFromFileNewNew(String path) {
+    Log.info("[main] reading from " + path);
+    File f = new File(path);
+    if (!f.isFile())
+      throw new IllegalArgumentException("not a file: " + path);
+    List<String> features = new ArrayList<>();
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] toks = line.split("\t");
+        if (toks.length != 6)
+          Log.warn("uknown line format: " + line);
+        features.add(toks[5]);
+      }
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+    return StringUtils.join(" + ", features);
+  }
 
   private static String getFeatureSetFromFileNew(String path) {
     Log.info("[main] getFeatureSetFromFileNew path=" + path);
