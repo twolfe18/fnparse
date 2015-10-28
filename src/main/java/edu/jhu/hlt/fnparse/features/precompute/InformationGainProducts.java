@@ -754,7 +754,7 @@ public class InformationGainProducts {
 
       // Write out final results
       igp.writeOutProducts(output);
-      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
+//      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
 
       Log.info("closing matlab/bub connection");
     }
