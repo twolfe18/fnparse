@@ -66,6 +66,18 @@ public class InformationGainProducts {
     private int[] templates;
     private int[] features;
 
+    public String detailedString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("roles=");
+      sb.append(Arrays.toString(roles));
+      int n = features.length;
+      for (int i = 0; i < n; i++) {
+        String t = templates == null ? "null" : "" + templates[i];
+        sb.append(i + " " + t + " " + features[i] + "\n");
+      }
+      return sb.toString();
+    }
+
     public BaseTemplates(int[] templates, int[] features) {
       assert templates.length == features.length;
       this.roles = new int[] {-2};
@@ -372,10 +384,16 @@ public class InformationGainProducts {
     if (FLATTEN_DEBUG)
       System.out.println("curTemplateCard=" + curTemplateCard);
     for (int i = startDataIndex; i < endDataIndex; i++) {
-      assert data.getValue(i) < curTemplateCard :
-        "data.getValue(" + i + ")=" + data.getValue(i)
+      assert data.getValue(i) < curTemplateCard
+        && data.getTemplate(i) == curTemplate
+        : "data.getValue(" + i + ")=" + data.getValue(i)
+        + " data.getTemplate(" + i + ")=" + data.getTemplate(i)
         + " curTemplate=" + curTemplate
-        + " curTemplateCard=" + curTemplateCard;
+        + " curTemplateCard=" + curTemplateCard
+        + " dIndex=" + dIndex
+        + " tIndex=" + tIndex
+        + " templates=" + Arrays.toString(templates)
+        + " baseTemplates=" + data;
       int card = template2cardinality[data.getTemplate(i)];
       ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
       if (FLATTEN_DEBUG) {
