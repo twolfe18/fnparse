@@ -1,11 +1,27 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
 
 public class FeatureFile {
 
@@ -107,6 +123,121 @@ public class FeatureFile {
         tokenize();
       return features;
     }
+
+    /** ascending */
+    public boolean checkFeaturesAreSortedByTemplate() {
+      List<Feature> f = getFeatures();
+      for (int i = 1; i < features.size(); i++) {
+        int t = f.get(i - 1).template;
+        int tt = f.get(i).template;
+        if (t > tt)
+          return false;
+      }
+      return true;
+    }
+  }
+
+  public static class Iterbl implements Iterable<Line> {
+    public static String readLineOrBlowup(BufferedReader r) {
+      try {
+        return r.readLine();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    public final File file;
+    public final boolean sorted;
+    public Iterbl(File f, boolean featureAreSorted) {
+      this.file = f;
+      this.sorted = featureAreSorted;
+    }
+    @Override
+    public Iterator<Line> iterator() {
+      return new Iterator<Line>() {
+        private BufferedReader r = FileUtil.getReaderOrBlowup(file);
+        private String line = readLineOrBlowup(r);
+        @Override
+        public boolean hasNext() {
+          return line != null;
+        }
+        @Override
+        public Line next() {
+          String l = line;
+          line = readLineOrBlowup(r);
+          return new Line(l, sorted);
+        }
+      };
+    }
+  }
+
+  public static Iterable<Line> getLines(File f, boolean featuresSorted) {
+    return new Iterbl(f, featuresSorted);
+  }
+
+  /**
+   * Checks the integrity of a feature file given an alphabet and prints some
+   * stats.
+   */
+  public static void checkFeatureFileIntegrity(ExperimentProperties config)
+      throws IOException {
+
+    boolean featuresSorted = config.getBoolean("featuresSorted");
+    File featuresParent = config.getExistingDir("featuresParent");
+    String featuresGlob = config.getString("featuresGlob", "glob:**/*");
+
+    BiAlph bialph = new BiAlph(
+        config.getExistingFile("bialph"),
+        LineMode.valueOf(config.getString("bialph.lineMode", "ALPH_AS_TRIVIAL_BIALPH")));
+
+    // Scan each of the input files
+    boolean stopImmediately = config.getBoolean("stopImmediately", false);
+    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+      @Override
+      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+        if (pm.matches(path)) {
+          Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
+
+          // Things to check
+          // 1) are the features sorted?
+          // 2) are the cardinalities valid?
+
+          for (Line l : getLines(path.toFile(), featuresSorted)) {
+            if (featuresSorted && !l.checkFeaturesAreSortedByTemplate()) {
+              String msg = "you said the features were sorted by template and they weren't: " + l;
+              if (stopImmediately)
+                throw new RuntimeException(msg);
+              else
+                Log.warn(msg);
+            }
+
+            for (Feature f : l.getFeatures()) {
+              int card = bialph.getUpperBoundOnNumFeatures(f.template);
+              if (f.feature >= card) {
+                String msg = "bialph says cardinality of "
+                    + f.template + " (" + bialph.mapTemplate(f.template) + ") is "
+                    + card + " but we just observed a feature of " + f.feature
+                    + ": " + l;
+                if (stopImmediately)
+                  throw new RuntimeException(msg);
+                else
+                  Log.warn(msg);
+              }
+            }
+          }
+        }
+        return FileVisitResult.CONTINUE;
+      }
+      @Override
+      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+    });
+  }
+
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    checkFeatureFileIntegrity(config);
   }
 
 }

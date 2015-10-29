@@ -191,7 +191,7 @@ public class TemplateTransformer {
 
           for (Instance inst : tt.instances) {    // loop over new templates
             int N = inst.maxAllowableNewFeatureIndex;
-            for (int i = 0; i < N; i++) {         // loop over new features
+            for (int i = 0; i <= N; i++) {         // loop over new features
               w.write(String.valueOf(inst.newTemplateInt)); // template int
               w.write('\t');
               w.write(String.valueOf(i));                   // feature int

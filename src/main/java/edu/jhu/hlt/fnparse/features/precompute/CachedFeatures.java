@@ -598,6 +598,16 @@ public class CachedFeatures {
     keepBoth = config.getBoolean("cachedFeatureParams.keepBoth", true);
     keepKeys = config.getBoolean("cachedFeatureParams.keepKeys", false);
     keepValues = config.getBoolean("cachedFeatureParams.keepValues", false);
+
+    if (config.getBoolean("templateCardinalityBug", false)) {
+      Log.info("templateCardinalityBug: adding 1 to the cardinality of every "
+          + "template because of an earlier bug -- regenerating all of the "
+          + "data will fix this (code has been fixed), but this is for "
+          + "short-term results");
+      for (int i = 0; i < template2cardinality.length; i++)
+        if (template2cardinality[i] > 0)
+          template2cardinality[i]++;
+    }
   }
 
   /**
