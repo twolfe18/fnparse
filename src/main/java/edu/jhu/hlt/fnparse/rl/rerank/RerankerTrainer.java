@@ -904,7 +904,7 @@ public class RerankerTrainer {
         Log.info("train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
         if (tStopRatio > conf.stoppingConditionFrequency
-            && (epoch > 0 || iter > 1000 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
+            && (epoch > 0 || iter > 100 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
           Log.info("[main] evaluating the stopping condition");
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
