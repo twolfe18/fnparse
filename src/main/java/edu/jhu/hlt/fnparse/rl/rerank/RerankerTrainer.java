@@ -917,7 +917,7 @@ public class RerankerTrainer {
         Log.info("train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
         if (tStopRatio > conf.stoppingConditionFrequency
-            && (epoch > 0 || iter > 100 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
+            && (epoch > 0 || iter > 200 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
           Log.info("[main] evaluating the stopping condition");
           firstStopCondEval = System.currentTimeMillis();
           conf.tStoppingCondition.start();
@@ -1606,10 +1606,16 @@ public class RerankerTrainer {
 
       // Limit according to nTrain
       // TODO Move nTrain before shards by letting PropbankData know about nTrain
-      final int nTrain = config.getInt("nTrain", 999999);
-      final int nTest = config.getInt("nTest", 999999);
-      train = new ItemProvider.Slice(train, nTrain, trainer.rand);
-      test = new ItemProvider.Slice(test, nTest, trainer.rand);
+      final int nTrain = config.getInt("nTrain", 0);
+      if (nTrain > 0) {
+        Log.info("[main] limiting train " + train.size() + " => " + nTrain);
+        train = new ItemProvider.Slice(train, nTrain, trainer.rand);
+      }
+      final int nTest = config.getInt("nTest", 0);
+      if (nTest > 0) {
+        Log.info("[main] limiting test " + test.size() + " => " + nTest);
+        test = new ItemProvider.Slice(test, nTest, trainer.rand);
+      }
     }
 
     // Setup parameter averaging over the network

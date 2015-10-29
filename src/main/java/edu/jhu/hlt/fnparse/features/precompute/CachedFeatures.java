@@ -210,6 +210,7 @@ public class CachedFeatures {
     public Set<String> testSetSentIds;
     public Set<String> devSetSentIds;
     private int maxRole;
+
     public PropbankFNParses(ExperimentProperties config) {
       Log.info("loading sentId->FNparse mapping...");
       // This can be null since the only reason we need the parses is for
@@ -286,6 +287,9 @@ public class CachedFeatures {
     }
     public int testSize() {
       return testSetSentIds.size();
+    }
+    public int totalSize() {
+      return sentId2parse.size();
     }
   }
 

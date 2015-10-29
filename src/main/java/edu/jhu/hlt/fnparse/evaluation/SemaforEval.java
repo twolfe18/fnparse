@@ -185,7 +185,10 @@ public class SemaforEval {
     LOG.info("[tsvToXmlViaSemafor] " + tsv.getPath() + " => " + xml.getPath());
     if (!tsv.isFile())
       throw new IllegalArgumentException();
-    assert CLI.wcDashL(parseFile) == CLI.wcDashL(tokenFile);
+    if (CLI.wcDashL(parseFile) != CLI.wcDashL(tokenFile)) {
+      Log.warn("wc -l " + parseFile + " " + CLI.wcDashL(parseFile));
+      Log.warn("wc -l " + tokenFile + " " + CLI.wcDashL(tokenFile));
+    }
     execAndGetResults(new String[] {
         SEMAFOR_PREPARE_ANNO_SCRIPT.getPath(),
         "testFEPredictionsFile:" + tsv.getPath(),
