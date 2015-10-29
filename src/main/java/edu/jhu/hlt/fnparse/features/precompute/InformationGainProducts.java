@@ -155,7 +155,7 @@ public class InformationGainProducts {
       }
       return "(BaseTemplates k=" + (roles.length == 1 ? roles[0] : Arrays.toString(roles))
           + " features=" + StringUtils.trunc(tf, 80)
-          + " line=" + StringUtils.trunc(line, 80)
+          + " line=" + (line == null ? "null" : StringUtils.trunc(line, 80))
           + ")";
     }
   }
