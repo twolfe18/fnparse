@@ -319,7 +319,18 @@ public class CachedFeatures {
     }
     @Override
     public Iterator<FNParse> iterator() {
-      throw new RuntimeException("implement me");
+      final int n = size();
+      return new Iterator<FNParse>() {
+        private int i = 0;
+        @Override
+        public boolean hasNext() {
+          return i < n;
+        }
+        @Override
+        public FNParse next() {
+          return label(i++);
+        }
+      };
     }
     @Override
     public int size() {

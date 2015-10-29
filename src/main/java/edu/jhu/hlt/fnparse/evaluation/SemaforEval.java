@@ -63,7 +63,12 @@ public class SemaforEval {
     LOG.info("[writeByLine] writing " + items.size() + " items " + f.getPath());
     try (FileWriter w = new FileWriter(f)) {
       for (T t : items) {
-        w.write(show.apply(t));
+        String line = show.apply(t);
+        if (line.contains("\n")) {
+          Log.warn("this should not have a newline in it: " + line);
+          line = line.replaceAll("\n", " ");
+        }
+        w.write(line);
         w.write("\n");
       }
     } catch (Exception e) {
