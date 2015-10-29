@@ -412,8 +412,14 @@ public class RerankerTrainer {
       Log.info("[eval] calling semafor eval in " + semaforEvalDir.getPath());
       if (!semaforEvalDir.isDirectory())
         throw new IllegalArgumentException();
-      SemaforEval semEval = new SemaforEval(semaforEvalDir);
-      semEval.evaluate(y, yHat, new File(semaforEvalDir, "results.txt"));
+      try {
+        SemaforEval semEval = new SemaforEval(semaforEvalDir);
+        semEval.evaluate(y, yHat, new File(semaforEvalDir, "results.txt"));
+      } catch (Exception e) {
+        Log.warn("semafor evaluation failed! semaforEvalDir"
+            + semaforEvalDir.getPath() + " showStr=" + showStr);
+        e.printStackTrace();
+      }
     }
 
     // Write out predictions into a text file
