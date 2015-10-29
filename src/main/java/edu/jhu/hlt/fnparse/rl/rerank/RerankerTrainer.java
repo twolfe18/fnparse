@@ -858,6 +858,12 @@ public class RerankerTrainer {
       Log.info("Using multi-threading threads=" + conf.threads);
       es = Executors.newWorkStealingPool(conf.threads);
     }
+
+    // Subtract off the time spent before the first stopping condition evaluation,
+    // or else the first stopping condition evaluation will fire like 3 times in a row.
+    long start = System.currentTimeMillis();
+    long firstStopCondEval = -1;
+
     TimeMarker t = new TimeMarker();
     double minSecOfTrainingBeforeLrEst = 30 * 60;   // otherwise wait for at least an epoch
     boolean showTime = false;
@@ -905,13 +911,15 @@ public class RerankerTrainer {
         }
 
         // See if we should stop
-        double tStopRatio = conf.tHammingTrain.totalTimeInSeconds()
+        long pre = (firstStopCondEval > 0 ? firstStopCondEval : System.currentTimeMillis()) - start;
+        double tStopRatio = (conf.tHammingTrain.totalTimeInSeconds() - pre/1000d)
             / conf.tStoppingCondition.totalTimeInSeconds();
         Log.info("train/stop=" + tStopRatio
             + " threshold=" + conf.stoppingConditionFrequency);
         if (tStopRatio > conf.stoppingConditionFrequency
             && (epoch > 0 || iter > 1000 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
           Log.info("[main] evaluating the stopping condition");
+          firstStopCondEval = System.currentTimeMillis();
           conf.tStoppingCondition.start();
           boolean stop = conf.stopping.stop(iter, violation);
           conf.tStoppingCondition.stop();
@@ -1141,6 +1149,10 @@ public class RerankerTrainer {
           trainer.pretrainConf.testBeamSize =
           config.getInt("testBeamSize", 1);
     }
+
+    trainer.trainConf.stoppingConditionFrequency
+      = trainer.pretrainConf.stoppingConditionFrequency
+        = config.getDouble("stoppingConditionFrequency", 6);
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 5 * 60);
 
