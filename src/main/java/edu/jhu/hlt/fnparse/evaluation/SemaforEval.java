@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.CLI;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * A wrapper around SEMAFOR's wrapper around SemEval'07 evaluation script.
@@ -86,8 +87,12 @@ public class SemaforEval {
         sb.append(sep);
         sb.append(s.getPos(i));
       }
-      ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
-      DependencyParse deps = parser.getBasicDParse(s);
+      DependencyParse deps = s.getBasicDeps(false);
+      if (deps == null) {
+        Log.info("resorting to parser for basic dependency parse on " + s.getId());
+        ConcreteStanfordWrapper parser = ConcreteStanfordWrapper.getSingleton(true);
+        deps = parser.getBasicDParse(s);
+      }
       assert deps != null;
       for (int i = 0; i < n; i++) {   // dep label
         sb.append(sep);
