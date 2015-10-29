@@ -1784,14 +1784,20 @@ public class RerankerTrainer {
       Log.info("[main] skipping Semafor eval because we are working on propbank");
     }
     Log.info("[main] evaluating on test");
-    Map<String, Double> perfResultsTest = eval(model, trainer.trainConf, test, semDirTest, "[main] test", diffArgsFileTest, predictionsFileTest);
     Map<String, String> results = new HashMap<>();
-    results.putAll(ResultReporter.mapToString(perfResultsTest));
-    results.putAll(ResultReporter.mapToString(config));
+    Map<String, Double> perfResultsTest = new HashMap<>();
+    try {
+      perfResultsTest = eval(model, trainer.trainConf, test, semDirTest, "[main] test", diffArgsFileTest, predictionsFileTest);
+      results.putAll(ResultReporter.mapToString(perfResultsTest));
+      results.putAll(ResultReporter.mapToString(config));
 
-    // Evaluate on dev
-    Log.info("[main] evaluating on dev");
-    eval(model, trainer.trainConf, dev, semDirDev, "[main] dev", diffArgsFileDev, predictionsFileDev);
+      // Evaluate on dev
+      Log.info("[main] evaluating on dev");
+      eval(model, trainer.trainConf, dev, semDirDev, "[main] dev", diffArgsFileDev, predictionsFileDev);
+    } catch (Exception e) {
+      Log.warn("some type of evaluation failed!");
+      e.printStackTrace();
+    }
 
     // Serialize the model
     File jserFile = new File(workingDir, "model.jser");
@@ -1829,9 +1835,16 @@ public class RerankerTrainer {
     }
 
     // Report results back to tge
-    double mainResult = perfResultsTest.get(BasicEvaluation.argOnlyMicroF1.getName());
-    for (ResultReporter rr : trainer.reporters)
-      rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
+    String k = BasicEvaluation.argOnlyMicroF1.getName();
+    double mainResult = perfResultsTest.getOrDefault(k, -1.0);
+    for (ResultReporter rr : trainer.reporters) {
+      try {
+        rr.reportResult(mainResult, jobName, ResultReporter.mapToString(results));
+      } catch (Exception e) {
+        Log.warn("problem reporting result " + mainResult + " to " + rr);
+        e.printStackTrace();
+      }
+    }
 
     Log.info("[main] totally done!");
   }
