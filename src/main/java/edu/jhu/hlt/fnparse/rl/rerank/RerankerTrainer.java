@@ -911,13 +911,18 @@ public class RerankerTrainer {
         }
 
         // See if we should stop
-        long pre = (firstStopCondEval > 0 ? firstStopCondEval : System.currentTimeMillis()) - start;
-        double tStopRatio = (conf.tHammingTrain.totalTimeInSeconds() - pre/1000d)
-            / conf.tStoppingCondition.totalTimeInSeconds();
-        Log.info("train/stop=" + tStopRatio
-            + " threshold=" + conf.stoppingConditionFrequency);
-        if (tStopRatio > conf.stoppingConditionFrequency
-            && (epoch > 0 || iter > 200 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3))) {
+        boolean checkStop;
+        if (firstStopCondEval < 0) {
+          checkStop = epoch > 0 || iter > 200 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3);
+        } else {
+          double subOff = 0.9 * (System.currentTimeMillis() - start) / 1000d;
+          double tStopRatio = (conf.tHammingTrain.totalTimeInSeconds() - subOff)
+              / conf.tStoppingCondition.totalTimeInSeconds();
+          Log.info("train/stop=" + tStopRatio
+              + " threshold=" + conf.stoppingConditionFrequency);
+          checkStop = tStopRatio > conf.stoppingConditionFrequency;
+        }
+        if (checkStop) {
           Log.info("[main] evaluating the stopping condition");
           firstStopCondEval = System.currentTimeMillis();
           conf.tStoppingCondition.start();
@@ -927,6 +932,11 @@ public class RerankerTrainer {
             Log.info("[main] stopping due to " + conf.stopping);
             break outer;
           }
+        }
+        // Santity backup
+        if (t.secondsSinceFirstMark() > conf.stoppingTimeMinutes * 60) {
+          Log.info("[main] hit time check backup!");
+          break outer;
         }
 
         // See if we should re-estimate the learning rate.
