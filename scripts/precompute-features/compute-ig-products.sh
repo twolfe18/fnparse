@@ -2,7 +2,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=23G
+#$ -l mem_free=12G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
@@ -58,7 +58,7 @@ JAR=${10}
 
 NUM_ROLES=${11}
 
-java -Xmx22G -cp $JAR \
+java -Xmx11G -cp $JAR \
   -Dshard=$SHARD \
   -DnumShards=$NUM_SHARDS \
   -DnumProducts=$FEATS_PER_SHARD \

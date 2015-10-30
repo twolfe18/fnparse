@@ -3,15 +3,15 @@
 #$ -V
 #$ -l h_rt=72:00:00
 #$ -l mem_free=31G
-#$ -l num_proc=4
+#$ -l num_proc=3
 #$ -S /bin/bash
 
 set -eu
 
-echo "starting at `date` on $HOSTNAME"
+echo "starting at `date` on $HOSTNAME in `pwd`"
 echo "args: $@"
 
-if [[ $# != 12 ]]; then
+if [[ $# != 13 ]]; then
   echo "1) a working directory (WD)"
   echo "2) a data directory (DD)"
   echo "3) propbank, i.e. either \"true\" or \"false\""
@@ -20,15 +20,16 @@ if [[ $# != 12 ]]; then
   echo "6) a beam size, e.g. [1, 4, 16, 64]"
   echo "7) force left right inference, i.e. either \"true\" or \"false\""
   echo "8) perceptron, i.e. either \"true\" or \"false\""
-  echo "9) feature file"
-  echo "10) feature mode"
-  echo "11 what to set -Xmx in gigabytes, e.g. \"22\" -- you must set mem_free from above"
-  echo "12) a jar file in a stable location"
+  echo "9) nTrain limit (0 means no limit)"
+  echo "10) feature file"
+  echo "11) feature mode"
+  echo "12) what to set -Xmx in gigabytes, e.g. \"22\" -- you must set mem_free from above"
+  echo "13) a jar file in a stable location"
   exit 1
 fi
 
 # WD is for output (should not be same level as DD)
-# DD contains coherent-shards
+# DD contains coherent-shards-filtered
 #FEATURES=scripts/having-a-laugh/propbank-20.fs
 #FEATURE_MODE="LOCAL"  #"FULL"
 
@@ -40,10 +41,11 @@ ORACLE_MODE=$5
 BEAM_SIZE=$6
 FORCE_LEFT_RIGHT=$7
 PERCEPTRON=$8
-FEATURES=$9
-FEATURE_MODE=${10}
-MEM=${11}
-JAR=${12}
+NTRAIN=$9
+FEATURES=${10}
+FEATURE_MODE=${11}
+MEM=${12}
+JAR=${13}
 
 LOG=$WD/log.txt
 
@@ -61,14 +63,13 @@ fi
 #-DnumShards=1
 #-Dshard=0
 
-# TODO Put this back!
-#-DtrainTimeLimit=`echo "52 * 60" | bc` \
+#-DcachedFeatures.bialph=$DD/coherent-shards-filtered/alphabet.txt.gz
 
 #mvn compile exec:java -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
 java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DworkingDir=$WD \
   -DuseCachedFeatures=true \
-  -DallowDynamicStopping=false \
+  -DallowDynamicStopping=true \
   -Dperceptron=$PERCEPTRON \
   -DforceLeftRightInference=$FORCE_LEFT_RIGHT \
   -DoracleMode=$ORACLE_MODE \
@@ -76,16 +77,18 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DfeatureSetFile=${FEATURES} \
   -DfeatureMode=${FEATURE_MODE} \
   -DbeamSize=$BEAM_SIZE \
+  -DtemplateCardinalityBug=true \
   -DcachedFeatures.numRoles=$NR \
-  -DcachedFeatures.bialph=$DD/coherent-shards/alphabet.txt.gz \
+  -DcachedFeatures.bialph=$DD/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt \
   -DcachedFeatures.bialph.lineMode=ALPH \
-  -DcachedFeatures.featuresParent=$DD/coherent-shards/features \
+  -DcachedFeatures.featuresParent=$DD/coherent-shards-filtered/features \
   -DcachedFeatures.featuresGlob="glob:**/*" \
-  -DcachedFeatures.numDataLoadThreads=1 \
+  -DcachedFeatures.numDataLoadThreads=2 \
   -DcachedFeatures.hashingTrickDim=`echo "2 * 1024 * 1024" | bc` \
-  -DpretrainBatchSize=16 \
-  -DtrainBatchSize=16 \
-  -Dthreads=4 \
+  -DpretrainBatchSize=8 \
+  -DtrainBatchSize=8 \
+  -Dthreads=2 \
+  -DnTrain=$NTRAIN \
   -DtemplatedFeatureParams.throwExceptionOnComputingFeatures=true \
   -DgradientBugfix=true \
   -DignoreNoNullSpanFeatures=true \
@@ -94,16 +97,16 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
-  -DdisallowConcreteStanford=true \
+  -DdisallowConcreteStanford=false \
   -DaddStanfordParses=false \
   -DrealTestSet=true \
-  -Ddropout=true \
+  -Ddropout=false \
   -DlrBatchScale=2048 \
   -DlrType=constant \
-  -Dl2Penalty=0 \
+  -Dl2Penalty=1e-8 \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=60 \
+  -DtrainTimeLimit=`echo "2 * 15" | bc` \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \

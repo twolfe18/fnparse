@@ -160,7 +160,6 @@ for SHARD in `echo "$NUM_SHARDS-1" | bc | xargs seq`; do    # takes shards 1..
 done
 
 
-
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
@@ -257,7 +256,7 @@ mkdir -p $PROD_IG_WD/sge-logs
 cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
 NUM_SHARDS=500
 FEATS_PER_SHARD=500
-for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
+for i in `seq 221 $NUM_SHARDS | awk '{print $1 - 1}'`; do
   qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $i \
@@ -273,6 +272,27 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $NUM_ROLES
 done
 
+
+
+
+
+############################################################################################
+### Build feature sets
+# see Makefile in scripts/having-a-laugh
+
+## Build a filtered bilaph
+# After all the filters, these alphabets will have hundreds of millions of
+# features and will be hundreds of MB after gzipping. The bialphs which contain
+# all the templates selected by feature selection can be less than a million
+# feature (order of hundreds of templates).
+# This step just removes unused templates from the full bialph.
+BIALPH_FULL=$WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz
+BIALPH_SMALL=$WORKING_DIR/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt
+zcat $BIALPH_FULL \
+  | python scripts/having-a-laugh/filter_bialph.py \
+    /dev/stdin \
+    $BIALPH_SMALL \
+    scripts/having-a-laugh/${DATASET}-[1-9]*.fs
 
 
 
@@ -292,13 +312,20 @@ done
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
 #WD=/export/projects/twolfe/fnparse-output/experiments/for-sept-tacl/propbank
-WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments/dropoutY-noreg
-DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments/dropoutY-noreg
+#DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+
+WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/experiments-3h-last
+DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
 IS_PROPBANK="false"
-DEFAULT_DIM=160
+#WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a/experiments-3h-last
+#DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
+#IS_PROPBANK="true"
+DEFAULT_DIM=320
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1
+DEFAULT_NTRAIN=0
 
 # Oracle mode
 BEAM_SIZE=$DEFAULT_BEAM
@@ -306,6 +333,7 @@ ORACLE_MODE="#"
 DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
+NTRAIN=$DEFAULT_NTRAIN
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-oracle \
   $DD \
@@ -315,6 +343,7 @@ PERCEPTRON="false"
   $BEAM_SIZE \
   $FORCE_LEFT_RIGHT \
   $PERCEPTRON \
+  $NTRAIN \
   "N"
 
 # Dimension / feature set
@@ -323,6 +352,7 @@ ORACLE_MODE=$DEFAULT_ORACLE
 DIM="#"
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
+NTRAIN=$DEFAULT_NTRAIN
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-dim \
   $DD \
@@ -332,6 +362,7 @@ PERCEPTRON="false"
   $BEAM_SIZE \
   $FORCE_LEFT_RIGHT \
   $PERCEPTRON \
+  $NTRAIN \
   "D"
 
 # Force left right
@@ -341,8 +372,9 @@ ORACLE_MODE=$DEFAULT_ORACLE
 DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="#"
 PERCEPTRON="#"
+NTRAIN=$DEFAULT_NTRAIN
 ./scripts/precompute-features/train-all.sh \
-  $WD/sweep-beam \
+  $WD/sweep-perceptron \
   $DD \
   $IS_PROPBANK \
   $DIM \
@@ -350,7 +382,27 @@ PERCEPTRON="#"
   $BEAM_SIZE \
   $FORCE_LEFT_RIGHT \
   $PERCEPTRON \
+  $NTRAIN \
   "L"
+
+# Train size
+BEAM_SIZE=$DEFAULT_BEAM
+ORACLE_MODE=$DEFAULT_ORACLE
+DIM=$DEFAULT_DIM
+FORCE_LEFT_RIGHT="false"
+PERCEPTRON="false"
+NTRAIN="#"
+./scripts/precompute-features/train-all.sh \
+  $WD/sweep-size \
+  $DD \
+  $IS_PROPBANK \
+  $DIM \
+  $ORACLE_MODE \
+  $BEAM_SIZE \
+  $FORCE_LEFT_RIGHT \
+  $PERCEPTRON \
+  $NTRAIN \
+  "S"
 
 # Beam size
 BEAM_SIZE="#"
@@ -358,6 +410,7 @@ ORACLE_MODE=$DEFAULT_ORACLE
 DIM=$DEFAULT_DIM
 FORCE_LEFT_RIGHT="false"
 PERCEPTRON="false"
+NTRAIN=$DEFAULT_NTRAIN
 ./scripts/precompute-features/train-all.sh \
   $WD/sweep-beam \
   $DD \
@@ -367,6 +420,9 @@ PERCEPTRON="false"
   $BEAM_SIZE \
   $FORCE_LEFT_RIGHT \
   $PERCEPTRON \
+  $NTRAIN \
   "B"
+
+qinfo
 
 # vim: set syntax=sh
