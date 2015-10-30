@@ -120,6 +120,7 @@ public class RerankerTrainer {
     public double stoppingTimeMinutes = 55 * 60;  // maintain this as the tightest time constraint
     public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
+    public int stoppingConditionMaxExamples = 750;
 
     // If true (and dev settings permit), train2 will automatically add a
     // StoppingCondition.DevSet to the list of stopping conditions.
@@ -139,6 +140,7 @@ public class RerankerTrainer {
 
     // Learning rate estimation parameters
     public LearningRateSchedule learningRate = new LearningRateSchedule.Normal(1);
+    public int estimateLearningRateMaxExamples = 200;
     public double estimateLearningRateFreq = 8;       // Higher means estimate less frequently, time multiple of hammingTrain, <=0 means disabled
     public int estimateLearningRateGranularity = 3;   // Must be odd and >2, how many LR's to try
     public double estimateLearningRateSpread = 8;     // Higher means more spread out
@@ -149,8 +151,8 @@ public class RerankerTrainer {
     private double propDev = 0.2d;
     private int maxDev = 750;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
-    public double recallBiasLo = -1, recallBiasHi = 1;
-    public int tuneSteps = 5;
+    public double recallBiasLo = -0.5, recallBiasHi = 0.5;
+    public int tuneSteps = 3;
     public boolean tuneOnTrainingData = false;
 
     // Convenient extras
@@ -350,12 +352,15 @@ public class RerankerTrainer {
       File predictionsFile) {
 
     // Make predictions
-    ExecutorService es = conf.threads > 1
-      ? Executors.newWorkStealingPool(conf.threads)
+    // +1 is because an extra thread or two is allocated for reading data in,
+    // which is done by the time this code is running.
+    int nt = conf.threads > 1 ? conf.threads + 1 : 1;
+    ExecutorService es = nt > 1
+      ? Executors.newWorkStealingPool(nt)
       : Executors.newSingleThreadExecutor();
     List<Future<Pair<FNParse, FNParse>>> futures = new ArrayList<>();
     int n = ip.size();
-    Log.info("[main] using " + conf.threads + " threads to evaluate " + n + " parses");
+    Log.info("[main] using " + nt + " threads to evaluate " + n + " parses");
     for (int i = 0; i < n; i++) {
       final int ii = i;
       futures.add(es.submit(() -> {
@@ -388,12 +393,6 @@ public class RerankerTrainer {
     } catch (Exception e) {
       e.printStackTrace();
     }
-
-    // Make predictions
-//    List<FNParse> y = ItemProvider.allLabels(ip);
-//    List<State> initialStates = new ArrayList<>();
-//    for (FNParse p : y) initialStates.add(m.getInitialStateWithPruning(p, p));
-//    List<FNParse> yHat = m.predict(initialStates);
 
     // Call standard evaluation functions
     Map<String, Double> results = BasicEvaluation.evaluate(y, yHat);
@@ -483,6 +482,15 @@ public class RerankerTrainer {
    * @return the F1 on the dev set of the selected recall bias.
    */
   private double tuneModelForF1(Reranker model, Config conf, ItemProvider dev) {
+    final ItemProvider devUse;
+    if (dev.size() > conf.maxDev) {
+      Log.info("[main] cutting down dev set size: " + dev.size() + "  =>  " + conf.maxDev);
+      devUse = new ItemProvider.Slice(dev, conf.maxDev, conf.rand);
+    } else {
+      devUse = dev;
+    }
+    Log.info("[main] tuning on " + devUse.size() + " examples");
+
     // Insert the bias into the model
     Params.PruneThreshold tau = model.getPruningParams();
     DecoderBias bias = new DecoderBias();
@@ -501,7 +509,7 @@ public class RerankerTrainer {
         String msg = SHOW_FULL_EVAL_IN_TUNE
               ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
         Map<String, Double> results = eval(
-          model, conf, dev, semEvalDir, msg, diffArgsFile, predictionsFile);
+          model, conf, devUse, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         Log.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -525,7 +533,7 @@ public class RerankerTrainer {
         thresholdPerfR, conf.recallBiasLo, conf.recallBiasHi, conf.tuneSteps);
 
     // Log and set the best value
-    Log.info("[tuneModelForF1] chose recallBias=" + best.get1()
+    Log.info("[main] chose recallBias=" + best.get1()
         + " with " + conf.objective.getName() + "=" + best.get2());
     bias.setRecallBias(best.get1());
     return best.get2();
@@ -603,7 +611,7 @@ public class RerankerTrainer {
 
     // Make an adapter for LearningRateEstimator
     LearningRateEstimator.Model model = new LearningRateEstimator.Model() {
-      private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf);
+      private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf, conf.estimateLearningRateMaxExamples);
       private int seed = conf.rand.nextInt();
       @Override
       public void train() {
@@ -678,14 +686,23 @@ public class RerankerTrainer {
     }
   }
 
-  private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf) {
+  private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf, int nExampleLimit) {
+
+    final ItemProvider devUse;
+    if (dev.size() > nExampleLimit) {
+      Log.info("[main] cutting down dev: " + dev.size() + "  =>  " + nExampleLimit);
+      devUse = new ItemProvider.Slice(dev, nExampleLimit, conf.rand);
+    } else {
+      devUse = dev;
+    }
+
     return new DoubleSupplier() {
       final boolean showAllLosses = ExperimentProperties.getInstance()
         .getBoolean("showDevLossOther", false);
       final int earlyShow = ExperimentProperties.getInstance().getInt("showDevLossOther.earlyInterval", 20);
       @Override
       public double getAsDouble() {
-        Log.info("[devLossFunc] computing dev set loss on " + dev.size() + " examples");
+        Log.info("[devLossFunc] computing dev set loss on " + devUse.size() + " examples");
 
         // Turn off dropout when you make predictions
         CachedFeatures.Params w = m.cachedFeatures.params;
@@ -701,14 +718,14 @@ public class RerankerTrainer {
           : Executors.newSingleThreadExecutor();
 
         List<Future<DSResult>> futures = new ArrayList<>();
-        int n = dev.size();
+        int n = devUse.size();
         for (int i = 0; i < n; i++) {
           final int ii = i;
           futures.add(es.submit(() -> {
-            FNParse y = dev.label(ii);
+            FNParse y = devUse.label(ii);
             State init = useSyntaxSpanPruning
               ? m.getInitialStateWithPruning(y, y)
-              : State.initialState(y, dev.items(ii));
+              : State.initialState(y, devUse.items(ii));
             Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
               ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : m.getStatelessUpdate(init, y);
@@ -807,7 +824,7 @@ public class RerankerTrainer {
       double alpha = 0.05d;   // Lower numbers mean stop earlier.
       double k = 7;           // Size of history
       int skipFirst = 2;      // Drop the first value(s) to get the variance est. right.
-      DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf);
+      DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf, conf.stoppingConditionMaxExamples);
       dynamicStopping = conf.addStoppingCondition(
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
     } else {
