@@ -19,13 +19,26 @@ framenet-ig-feat.dedup.txt: framenet-ig-feat.txt
 
 framenet-%.fs: framenet-ig-feat.dedup.txt
 	#python dedup_sim_feats.py framenet-ig-feat.txt $* framenet-$*.fs
-	python poisson_feature_set.py framenet-ig-feat.dedup.txt framenet-$*.fs $* 2.5 0.005
+	python poisson_feature_set.py framenet-ig-feat.dedup.txt framenet-$*.fs $* 3 0.005
+
 
 propbank-ig-feat.txt:
-	ssh test1b "cat $(PB_WD)/ig/products/ig-files/shard-* | sort -rg" >propbank-ig-feat.txt
+	#ssh test1b "cat $(PB_WD)/ig/products/ig-files/shard-* | sort -rg" >propbank-ig-feat.txt
+	cat $(PB_WD)/ig/products/ig-files/shard-* | sort -rg >propbank-ig-feat.txt
 
-propbank-%.fs: propbank-ig-feat.txt
-	python dedup_sim_feats.py propbank-ig-feat.txt $* propbank-$*.fs
+propbank-ig-feat.dedup.txt: propbank-ig-feat.txt
+	awk '$$4 == 1' <propbank-ig-feat.txt >/tmp/c1pb
+	awk '$$4 == 2' <propbank-ig-feat.txt >/tmp/c2pb
+	awk '$$4 == 3' <propbank-ig-feat.txt >/tmp/c3pb
+	python dedup_sim_feats.py 5.0 /tmp/c1pb 400 /tmp/t1pb
+	python dedup_sim_feats.py 6.0 /tmp/c2pb 300 /tmp/t2pb
+	python dedup_sim_feats.py 6.0 /tmp/c3pb 300 /tmp/t3pb
+	cat /tmp/t[123]pb | sort -rg >propbank-ig-feat.dedup.txt
+
+propbank-%.fs: propbank-ig-feat.dedup.txt
+	#python dedup_sim_feats.py propbank-ig-feat.txt $* propbank-$*.fs
+	python poisson_feature_set.py propbank-ig-feat.dedup.txt propbank-$*.fs $* 3 0.005
+
 
 all: \
 	propbank-10.fs propbank-20.fs propbank-40.fs propbank-80.fs propbank-160.fs propbank-320.fs propbank-640.fs propbank-1280.fs \
