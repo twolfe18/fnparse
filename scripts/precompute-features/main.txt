@@ -315,13 +315,13 @@ zcat $BIALPH_FULL \
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments/dropoutY-noreg
 #DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 
-WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/experiments-3h-last
+WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/experiments
 DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
 IS_PROPBANK="false"
-#WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a/experiments-3h-last
+#WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a/experiments
 #DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
 #IS_PROPBANK="true"
-DEFAULT_DIM=320
+DEFAULT_DIM=640
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1

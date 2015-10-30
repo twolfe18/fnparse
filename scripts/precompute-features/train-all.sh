@@ -77,14 +77,15 @@ for ORACLE_MODE in MIN MAX RAND_MIN RAND_MAX; do
 if [[ $SET_ORACLE_MODE != "#" && $SET_ORACLE_MODE != $ORACLE_MODE ]]; then
   continue
 fi
-#for DIM in 20 40 80 160 320 640 1280; do
-for DIM in 40 80 160 320 640; do
+for DIM in 80 160 320 640 1280 2560; do
 if [[ $SET_DIM != "#" && $SET_DIM != $DIM ]]; then
   continue
 fi
-#for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
-for MODE in FULL LOCAL ARG-LOCATION; do
+for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
   MEM=`echo "$MEM_SLOPE * $DIM + $MEM_OFFSET" | bc | perl -pe 's/(\d+)\.\d+/\1/'`
+  if [[ $MEM > 58 ]]; then
+    MEM=58
+  fi
   MEM_SGE=`echo "$MEM + 2" | bc`
   if [[ $PROPBANK == "true" ]]; then
     FF=scripts/having-a-laugh/propbank-${DIM}.fs

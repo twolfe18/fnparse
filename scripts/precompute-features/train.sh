@@ -106,7 +106,7 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Dl2Penalty=1e-8 \
   -DglobalL2Penalty=1e-7 \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=`echo "2 * 15" | bc` \
+  -DtrainTimeLimit=`echo "8 * 60" | bc` \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
