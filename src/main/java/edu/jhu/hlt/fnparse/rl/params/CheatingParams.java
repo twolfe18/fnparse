@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
@@ -24,10 +25,10 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
 
   private Set<String> goldItems;
   private Set<String> goldParseIds;
-  private double[] theta;
+  private LazyL2UpdateVector theta;
 
   public CheatingParams(Iterable<FNParse> parses) {
-    theta = new double[2];
+    theta = new LazyL2UpdateVector(new IntDoubleDenseVector(2), 1);
     goldItems = new HashSet<>();
     goldParseIds = new HashSet<>();
     for (FNParse p : parses) {
@@ -54,15 +55,19 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
   }
 
   public void setWeightsByHand() {
-    theta[0] = -1d;
-    theta[1] =  2d;
+//    theta[0] = -1d;
+//    theta[1] =  2d;
+    theta.weights.set(0, -1);
+    theta.weights.set(1, 2);
   }
 
   @Override
   public void showWeights() {
     StringBuilder sb = new StringBuilder("[CheatingParams weights:\n");
-    sb.append("intercept = " + theta[0] + "\n");
-    sb.append("isGold    = " + theta[1] + "\n");
+//    sb.append("intercept = " + theta[0] + "\n");
+//    sb.append("isGold    = " + theta[1] + "\n");
+    sb.append("intercept = " + theta.weights.get(0) + "\n");
+    sb.append("isGold    = " + theta.weights.get(1) + "\n");
     sb.append("]");
     LOG.info(sb.toString());
   }
@@ -75,12 +80,12 @@ public class CheatingParams implements Params.Stateless, Params.PruneThreshold {
   public Adjoints score(FNTagging frames, Action a) {
     if (!goldParseIds.contains(frames.getId()))
       throw new IllegalStateException("this parse is unknown, can't cheat");
-    double[] f = new double[theta.length];
+    double[] f = new double[theta.weights.getNumImplicitEntries()];
     f[0] = 1d;
     f[1] = isGold(frames, a) ? 1d : 0d;
     double l2Penalty = 0;
     return new Adjoints.Vector(this, a,
-        new IntDoubleDenseVector(theta),
+        theta,
         new IntDoubleDenseVector(f),
         l2Penalty);
   }

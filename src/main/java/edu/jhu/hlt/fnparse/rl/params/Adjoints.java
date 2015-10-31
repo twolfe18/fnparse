@@ -1,16 +1,17 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.util.Iterator;
+import java.util.Random;
 import java.util.function.Supplier;
 
-import edu.jhu.prim.map.IntDoubleEntry;
-import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.prim.map.IntDoubleEntry;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
@@ -76,6 +77,35 @@ public interface Adjoints {
     }
   }
 
+  public static class LazyL2UpdateVector {
+    public final IntDoubleDenseVector weights;
+    private int numUpdatesDeferred;
+    private int updateInterval;
+
+    public LazyL2UpdateVector(IntDoubleDenseVector weights, int updateInterval) {
+      this.weights = weights;
+      this.numUpdatesDeferred = 0;
+      this.updateInterval = updateInterval;
+    }
+
+    public void maybeApplyL2Reg(double lambda) {
+      numUpdatesDeferred++;
+      if (numUpdatesDeferred == updateInterval) {
+        double p = Math.pow(1 - lambda, numUpdatesDeferred);
+        weights.scale(p);
+        numUpdatesDeferred = 0;
+      }
+    }
+
+    public void set(int index, double value) {
+      weights.set(index, value);
+    }
+
+    public void scale(double scale) {
+      weights.scale(scale);
+    }
+  }
+
   /**
    * Replaces Dense and Sparse
    */
@@ -97,22 +127,18 @@ public interface Adjoints {
     private final Action action;
 
     private final IntDoubleVector features;
-    private final IntDoubleVector weights;  // not owned by this class
+    private final LazyL2UpdateVector weights;  // not owned by this class
 
     private double score;
     private boolean computed;
 
-    // L2 update is dense, don't want to do it every iteration.
-    // Also don't want to implement a vector * scalar trick.
-    private int iter = 0;
-    private int itersBetweenL2Updates = 10;
     private final double l2Penalty;
 
-    public Vector(Object parent, Action a, double[] weights, double[] features, double l2Penalty) {
-      this(parent, a, new IntDoubleDenseVector(weights), new IntDoubleDenseVector(features), l2Penalty);
-    }
+//    public Vector(Object parent, Action a, double[] weights, double[] features, double l2Penalty) {
+//      this(parent, a, new LazyL2Update(new IntDoubleDenseVector(weights), 32), new IntDoubleDenseVector(features), l2Penalty);
+//    }
 
-    public Vector(Object parent, Action a, IntDoubleVector weights, IntDoubleVector features, double l2Penalty) {
+    public Vector(Object parent, Action a, LazyL2UpdateVector weights, IntDoubleVector features, double l2Penalty) {
       this.parent = parent;
       this.action = a;
       this.weights = weights;
@@ -143,7 +169,7 @@ public interface Adjoints {
     @Override
     public double forwards() {
       if (!computed) {
-        score = features.dot(weights);
+        score = features.dot(weights.weights);
         computed = true;
         if (PARANOID && (Double.isInfinite(score) || Double.isNaN(score)))
           throw new RuntimeException();
@@ -161,18 +187,9 @@ public interface Adjoints {
 //      }
       // Only do the l2Penalty update every k iterations for efficiency.
       if (l2Penalty > 0) {
-        if (iter++ % itersBetweenL2Updates == 0) {
-          weights.apply(new FnIntDoubleToDouble() {
-            private double s = itersBetweenL2Updates / 2;
-            @Override
-            public double call(int i, double w_i) {
-              double g = -2 * l2Penalty * w_i;
-              return w_i + s * g;
-            }
-          });
-          if (PARANOID)
-            weights.apply(VECTOR_VALUE_CHECK);
-        }
+        weights.maybeApplyL2Reg(l2Penalty);
+        if (PARANOID)
+          weights.weights.apply(VECTOR_VALUE_CHECK);
       }
       if (features instanceof IntDoubleUnsortedVector) {
         // Matt... how is it possible that there is no way to expose this functionality
@@ -184,7 +201,7 @@ public interface Adjoints {
           double f_i = i.get();
           double u = dScore_dForwards * f_i;
           assert Double.isFinite(u) && !Double.isNaN(u);
-          weights.add(idx, u);
+          weights.weights.add(idx, u);
         }
       } else {
         features.apply(new FnIntDoubleToDouble() {
@@ -192,14 +209,14 @@ public interface Adjoints {
           public double call(int idx, double f_i) {
             double u = dScore_dForwards * f_i;
             assert Double.isFinite(u) && !Double.isNaN(u);
-            weights.add(idx, u);
+            weights.weights.add(idx, u);
             return f_i;
           }
         });
       }
       if (PARANOID) {
         features.apply(VECTOR_VALUE_CHECK);
-        weights.apply(VECTOR_VALUE_CHECK);
+        weights.weights.apply(VECTOR_VALUE_CHECK);
       }
       //LOG.info("weight=" + weights);
     }
@@ -279,5 +296,50 @@ public interface Adjoints {
     public void backwards(double dScore_dForwards) {
       // no-op
     }
+  }
+
+
+  public static IntDoubleVector testSpeedOfL2Reg(double l2Penalty, Random rand, int skip) {
+    int nt = 1500;
+    int nnz = 200;
+    int dim = 2 * 1024 * 1024;
+    LazyL2UpdateVector weights = new LazyL2UpdateVector(new IntDoubleDenseVector(dim), skip);
+
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < nt; i++) {
+      // Draw a random vector
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
+      for (int j = 0; j < nnz; j++)
+        fv.add(rand.nextInt(dim), 1);
+
+      // Do a gradient
+      Adjoints.Vector a = new Adjoints.Vector(null, null, weights, fv, l2Penalty);
+      a.backwards(rand.nextGaussian());
+    }
+    double time = (System.currentTimeMillis() - start) / 1000d;
+    System.out.println("time=" + time + " nnz=" + nnz + " dim=" + dim + " l2Penalty=" + l2Penalty);
+    return weights.weights;
+  }
+
+  public static void foo(double l2Penalty) {
+    testSpeedOfL2Reg(0, new Random(9001), 1);
+    IntDoubleVector w1 = testSpeedOfL2Reg(l2Penalty, new Random(9001), 1);
+    IntDoubleVector w2 = testSpeedOfL2Reg(l2Penalty, new Random(9001), 32);
+    w2.scale(-1);
+    w1.add(w2);
+    double sqErr = w1.getL2Norm();
+    System.out.println("sqError=" + sqErr);
+  }
+
+  public static void main(String[] args) {
+    foo(1e-8);
+    foo(1e-8);
+    foo(1e-8);
+    foo(1e-6);
+    foo(1e-6);
+    foo(1e-6);
+    foo(1e-4);
+    foo(1e-4);
+    foo(1e-4);
   }
 }

@@ -43,6 +43,7 @@ import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -394,8 +395,10 @@ public class CachedFeatures {
     // k -> feature -> weight
     // Intercept is stored at position 0, followed by this.dimension non-intercept features
     private int dimension = 1 * 1024 * 1024;    // hashing trick
-    private double[][] weightsCommit;
-    private double[] weightPrune;
+//    private double[][] weightsCommit;
+//    private double[] weightPrune;
+    private LazyL2UpdateVector[] weightsCommit;
+    private LazyL2UpdateVector weightsPrune;
 
     private double l2Penalty = 1e-8;
 
@@ -404,11 +407,15 @@ public class CachedFeatures {
     private Random rand;
 
     /** {@link Random} is needed for dropout (can be null if no dropout) */
-    public Params(int dimension, int numRoles, Random rand) {
+    public Params(int dimension, int numRoles, Random rand, int updateL2Every) {
       this.rand = rand;
       this.dimension = dimension;
-      this.weightsCommit = new double[numRoles][dimension + 1];
-      this.weightPrune = new double[dimension + 1];
+//      this.weightsCommit = new double[numRoles][dimension + 1];
+//      this.weightPrune = new double[dimension + 1];
+      this.weightsCommit = new LazyL2UpdateVector[numRoles];
+      for (int i = 0; i < weightsCommit.length; i++)
+        this.weightsCommit[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension + 1), updateL2Every);
+      this.weightsPrune = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension + 1), updateL2Every);
       long weightBytes = (numRoles + 1) * (dimension + 1) * 8;
       Log.info("dimension=" + dimension
           + " numRoles=" + numRoles
@@ -472,8 +479,7 @@ public class CachedFeatures {
       fv.add(Math.floorMod(f1, dimension) + 1, 1);
       fv.add(Math.floorMod(f2, dimension) + 1, 1);
       fv.add(Math.floorMod(f3, dimension) + 1, 1);
-      IntDoubleVector theta = new IntDoubleDenseVector(weightPrune);
-      return new Adjoints.Vector(this, a, theta, fv, l2Penalty);
+      return new Adjoints.Vector(this, a, weightsPrune, fv, l2Penalty);
     }
 
     /**
@@ -515,8 +521,7 @@ public class CachedFeatures {
         buf.clear();
       }
 
-      IntDoubleVector theta = new IntDoubleDenseVector(weightsCommit[a.k]);
-      return new Adjoints.Vector(this, a, theta, features, l2Penalty);
+      return new Adjoints.Vector(this, a, weightsCommit[a.k], features, l2Penalty);
     }
 
     @Override
@@ -542,10 +547,12 @@ public class CachedFeatures {
     @Override
     public void scaleWeights(double scale) {
       for (int i = 0; i < weightsCommit.length; i++)
-        for (int j = 0; j < weightsCommit[i].length; j++)
-          weightsCommit[i][j] *= scale;
-      for (int i = 0; i < weightPrune.length; i++)
-        weightPrune[i] *= scale;
+        weightsCommit[i].scale(scale);
+      weightsPrune.scale(scale);
+//        for (int j = 0; j < weightsCommit[i].length; j++)
+//          weightsCommit[i][j] *= scale;
+//      for (int i = 0; i < weightPrune.length; i++)
+//        weightPrune[i] *= scale;
     }
 
     @Override
@@ -556,14 +563,16 @@ public class CachedFeatures {
         CachedFeatures.Params x = (CachedFeatures.Params) other;
         assert weightsCommit.length == x.weightsCommit.length;
         for (int i = 0; i < weightsCommit.length; i++) {
-          assert weightsCommit[i].length == x.weightsCommit[i].length;
-          for (int j = 0; j < weightsCommit[i].length; j++) {
-            weightsCommit[i][j] *= x.weightsCommit[i][j];
-          }
+//          assert weightsCommit[i].length == x.weightsCommit[i].length;
+//          for (int j = 0; j < weightsCommit[i].length; j++) {
+//            weightsCommit[i][j] *= x.weightsCommit[i][j];
+//          }
+          weightsCommit[i].weights.add(x.weightsCommit[i].weights);
         }
-        assert weightPrune.length == x.weightPrune.length;
-        for (int i = 0; i < weightPrune.length; i++)
-          weightPrune[i] *= x.weightPrune[i];
+//        assert weightPrune.length == x.weightPrune.length;
+//        for (int i = 0; i < weightPrune.length; i++)
+//          weightPrune[i] *= x.weightPrune[i];
+        weightsPrune.weights.add(x.weightsPrune.weights);
       } else {
         throw new RuntimeException("other=" + other.getClass().getName());
       }
@@ -804,7 +813,8 @@ public class CachedFeatures {
 
     int dimension = 256 * 1024;
     int numRoles = 20;
-    Params params = this.new Params(dimension, numRoles, rand);
+    int updateL2Every = 32;
+    Params params = this.new Params(dimension, numRoles, rand, updateL2Every);
 
     ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), false, false);
     for (int index = 0; index < ip.size(); index++) {

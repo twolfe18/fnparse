@@ -1322,7 +1322,8 @@ public class RerankerTrainer {
       int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
-      CachedFeatures.Params params = trainer.cachedFeatures.new Params(dimension, numRoles, rand);
+      int updateL2Every = config.getInt("cachedFeatures.updateL2Every", 32);
+      CachedFeatures.Params params = trainer.cachedFeatures.new Params(dimension, numRoles, rand, updateL2Every);
       trainer.cachedFeatures.params = params;
       trainer.statelessParams = params;
 

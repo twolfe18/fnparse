@@ -4,7 +4,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
-import java.util.List;
 
 import org.apache.log4j.Logger;
 
@@ -14,9 +13,8 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
-import edu.jhu.hlt.fnparse.util.AveragedWeights;
-import edu.jhu.hlt.fnparse.util.ModelViewer;
-import edu.jhu.hlt.fnparse.util.ModelViewer.FeatureWeight;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -40,9 +38,12 @@ public abstract class FeatureParams implements Serializable {
 
   public static int DEFAULT_DIMENSION = 1024;
 
-  public boolean averageFeatures = false;  // only applies upon construction
+  public static int UPDATE_L2_EVERY = 128;
 
-  protected AveragedWeights theta;
+//  public boolean averageFeatures = false;  // only applies upon construction
+
+//  protected AveragedWeights theta;
+  protected LazyL2UpdateVector theta;
   protected double l2Penalty;
 
   protected Alphabet<String> featureIndices;
@@ -55,7 +56,8 @@ public abstract class FeatureParams implements Serializable {
     this.featureIndices = new Alphabet<>();
     this.featureIndices.startGrowth(); // stops growing when doneTraining is called
     this.numBuckets = -1;
-    this.theta = new AveragedWeights(DEFAULT_DIMENSION, averageFeatures);
+//    this.theta = new AveragedWeights(DEFAULT_DIMENSION, averageFeatures);
+    this.theta = new LazyL2UpdateVector(new IntDoubleDenseVector(DEFAULT_DIMENSION), UPDATE_L2_EVERY);
     this.l2Penalty = l2Penalty;
   }
 
@@ -63,7 +65,8 @@ public abstract class FeatureParams implements Serializable {
   public FeatureParams(double l2Penalty, int numBuckets) {
     this.featureIndices = null;
     this.numBuckets = numBuckets;
-    this.theta = new AveragedWeights(numBuckets, averageFeatures);
+//    this.theta = new AveragedWeights(numBuckets, averageFeatures);
+    this.theta = new LazyL2UpdateVector(new IntDoubleDenseVector(numBuckets), UPDATE_L2_EVERY);
     this.l2Penalty = l2Penalty;
   }
 
@@ -89,7 +92,7 @@ public abstract class FeatureParams implements Serializable {
   /** Adds the weights from other to this */
   public void addWeights(Params other, boolean checkAlphabetEquality) {
     FeatureParams fp = (FeatureParams) other;
-    theta.add(fp.theta);
+    theta.weights.add(fp.theta.weights);
     if (checkAlphabetEquality) {
       if (featureIndices != null) {
         int n1 = featureIndices.size();
@@ -105,37 +108,39 @@ public abstract class FeatureParams implements Serializable {
   }
 
   public void scaleWeights(double scale) {
-    theta.scale(scale);
+    theta.weights.scale(scale);
   }
 
   public void serialize(DataOutputStream out) throws IOException {
-    out.writeBoolean(averageFeatures);
-    theta.serialize(out);
-    out.writeDouble(l2Penalty);
-    if (featureIndices != null) {
-      out.writeBoolean(true);
-      int n = featureIndices.size();
-      out.writeInt(n);
-      for (int i = 0; i < n; i++)
-        out.writeUTF(featureIndices.lookupObject(i));
-    } else {
-      out.writeBoolean(false);
-    }
-    out.writeInt(numBuckets);
+//    out.writeBoolean(averageFeatures);
+//    theta.serialize(out);
+//    out.writeDouble(l2Penalty);
+//    if (featureIndices != null) {
+//      out.writeBoolean(true);
+//      int n = featureIndices.size();
+//      out.writeInt(n);
+//      for (int i = 0; i < n; i++)
+//        out.writeUTF(featureIndices.lookupObject(i));
+//    } else {
+//      out.writeBoolean(false);
+//    }
+//    out.writeInt(numBuckets);
+    Log.warn("re-implement me!");
   }
 
   public void deserialize(DataInputStream in) throws IOException {
-    averageFeatures = in.readBoolean();
-    theta.deserialize(in);
-    l2Penalty = in.readDouble();
-    boolean alphabetBased = in.readBoolean();
-    if (alphabetBased) {
-      int n = in.readInt();
-      featureIndices = new Alphabet<>();
-      for (int i = 0; i < n; i++)
-        featureIndices.lookupIndex(in.readUTF(), true);
-    }
-    numBuckets = in.readInt();
+//    averageFeatures = in.readBoolean();
+//    theta.deserialize(in);
+//    l2Penalty = in.readDouble();
+//    boolean alphabetBased = in.readBoolean();
+//    if (alphabetBased) {
+//      int n = in.readInt();
+//      featureIndices = new Alphabet<>();
+//      for (int i = 0; i < n; i++)
+//        featureIndices.lookupIndex(in.readUTF(), true);
+//    }
+//    numBuckets = in.readInt();
+    throw new RuntimeException("re-implement me!");
   }
 
   public boolean isAlphabetBased() {
@@ -186,8 +191,9 @@ public abstract class FeatureParams implements Serializable {
 
   public FeatureParams sizeHint(int size) {
     assert isAlphabetBased() : "size must match numBuckets, don't use this method";
-    if (size > theta.dimension())
-      theta.grow(size);
+//    if (size > theta.dimension())
+//      theta.grow(size);
+    Log.warn("no longer supported");
     return this;
   }
 
@@ -197,8 +203,7 @@ public abstract class FeatureParams implements Serializable {
     // Make sure that theta is big enough
     checkSize();
 
-    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(this, a, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, a, theta, fv, l2Penalty);
     return adj;
   }
 
@@ -209,8 +214,7 @@ public abstract class FeatureParams implements Serializable {
     // Make sure that theta is big enough
     checkSize();
 
-    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(this, a, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, a, theta, fv, l2Penalty);
     return adj;
   }
 
@@ -220,8 +224,7 @@ public abstract class FeatureParams implements Serializable {
     // Make sure that theta is big enough
     checkSize();
 
-    IntDoubleVector weights = new IntDoubleDenseVector(theta.getWeights());
-    Adjoints.Vector adj = new Adjoints.Vector(this, pruneAction, weights, fv, l2Penalty);
+    Adjoints.Vector adj = new Adjoints.Vector(this, pruneAction, theta, fv, l2Penalty);
     return adj;
   }
 
@@ -245,38 +248,40 @@ public abstract class FeatureParams implements Serializable {
   }
 
   protected void checkSize() {
-    if (isAlphabetBased()) {
-      int n = featureIndices.size();
-      if (n > theta.dimension()) {
-        int ns = (int) (1.6d * n + 0.5d);
-        theta.grow(ns);
-      }
-    } else {
-      if (theta.dimension() < numBuckets)
-        theta.grow(numBuckets);
-    }
+    // IntDoubleDenseVector grows in its own
+//    if (isAlphabetBased()) {
+//      int n = featureIndices.size();
+//      if (n > theta.dimension()) {
+//        int ns = (int) (1.6d * n + 0.5d);
+//        theta.grow(ns);
+//      }
+//    } else {
+//      if (theta.dimension() < numBuckets)
+//        theta.grow(numBuckets);
+//    }
   }
 
   /** This will override Params.showWeights for extending classes */
   public void showWeights() {
-    Alphabet<String> featureIndices = getAlphabetForShowingWeights();
-    if (featureIndices == null) {
-      String meta = "[showFeatures " + getClass() + "]";
-      getLog().info(meta + " can't show features "
-          + "because we're using feature hashing with no custom "
-          + "getAlphabetForShowingWeights.");
-      if (showWeightsEvenWithoutAlphabet) {
-        StringBuilder sb = new StringBuilder();
-        sb.append(meta + " showing weights without an alphabet:\n");
-        sb.append(theta.toString(200));
-        getLog().info(sb.toString());
-      }
-      return;
-    }
-    String msg = getClass().getName();
-    int k = 15; // how many of the most extreme features to show
-    List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
-    ModelViewer.showBiggestWeights(w, k, msg, getLog());
+//    Alphabet<String> featureIndices = getAlphabetForShowingWeights();
+//    if (featureIndices == null) {
+//      String meta = "[showFeatures " + getClass() + "]";
+//      getLog().info(meta + " can't show features "
+//          + "because we're using feature hashing with no custom "
+//          + "getAlphabetForShowingWeights.");
+//      if (showWeightsEvenWithoutAlphabet) {
+//        StringBuilder sb = new StringBuilder();
+//        sb.append(meta + " showing weights without an alphabet:\n");
+//        sb.append(StringUtils.trim(theta.weights.toString(), 400));
+//        getLog().info(sb.toString());
+//      }
+//      return;
+//    }
+//    String msg = getClass().getName();
+//    int k = 15; // how many of the most extreme features to show
+//    List<FeatureWeight> w = ModelViewer.getSortedWeights(theta.getWeights(), featureIndices);
+//    ModelViewer.showBiggestWeights(w, k, msg, getLog());
+    Log.warn("re-implement me!");
   }
 
   /**

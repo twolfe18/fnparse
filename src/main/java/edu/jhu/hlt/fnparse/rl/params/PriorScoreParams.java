@@ -16,8 +16,11 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.Item;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 /**
  * Stores the prior score for an item in a HashMap keyed on (t,k,span)
@@ -96,7 +99,7 @@ public class PriorScoreParams implements Params.Stateless {
   }
 
   private Map<String, Item> index;
-  private double[] theta;
+  private LazyL2UpdateVector theta;
 
   /**
    * If featureMode = true, then this will learn weights for two features:
@@ -106,7 +109,7 @@ public class PriorScoreParams implements Params.Stateless {
    */
   public PriorScoreParams(ItemProvider ip, boolean featureMode) {
     if (featureMode)
-      theta = new double[9 * 2];
+      theta = new LazyL2UpdateVector(new IntDoubleDenseVector(9 * 2), 1);
     index = new HashMap<>();
     for (int i = 0; i < ip.size(); i++) {
       FNParse y = ip.label(i);
@@ -138,10 +141,11 @@ public class PriorScoreParams implements Params.Stateless {
     String key = itemKey(f, a);
     Item score = index.get(key);
     int offset = 0;
+    int thetaLen = theta.weights.getNumImplicitEntries();
     if (a.hasSpan())
-      offset = theta.length / 2;
+      offset = thetaLen / 2;
     if (theta != null) {
-      double[] feats = new double[theta.length];
+      double[] feats = new double[thetaLen];
       feats[offset + 0] = 1d;
       if (score == null) {
         feats[offset + 1] = 1d;
@@ -156,7 +160,7 @@ public class PriorScoreParams implements Params.Stateless {
         if (score.rank > 5)  feats[offset + 8] = 1d;
       }
       double l2Penalty = 0d;
-      return new Adjoints.Vector(this, a, theta, feats, l2Penalty);
+      return new Adjoints.Vector(this, a, theta, new IntDoubleDenseVector(feats), l2Penalty);
     } else {
       double s = score == null ? Double.NEGATIVE_INFINITY : score.getScore();
       return new Adjoints.Explicit(s, a, "priorScore");
@@ -165,39 +169,40 @@ public class PriorScoreParams implements Params.Stateless {
 
   public void setParamsByHand() {
     double recallBias = 2d;
-    theta[0] = FastMath.sqrt(1d / recallBias);
-    theta[2] = 1d;
-    theta[3] = 1d;
-    theta[9 + 0] = FastMath.sqrt(recallBias);
-    theta[9 + 1] = -999d;
-    theta[9 + 2] = 1d;
-    theta[9 + 3] = 1d;
+    theta.set(0, FastMath.sqrt(1d / recallBias));
+    theta.set(2, 1d);
+    theta.set(3, 1d);
+    theta.set(9 + 0, FastMath.sqrt(recallBias));
+    theta.set(9 + 1, -999d);
+    theta.set(9 + 2, 1d);
+    theta.set(9 + 3, 1d);
     if (SHOW_PARAMS_AFTER_UPDATE)
       logParams();
   }
 
   public void logParams() {
-    LOG.debug(String.format("[update] NS theta(intercept)     = %+.3f", theta[0]));
-    LOG.debug(String.format("[update] NS theta(not-in-k-best) = %+.3f", theta[1]));
-    LOG.debug(String.format("[update] NS theta(item-log-prob) = %+.3f", theta[2]));
-    LOG.debug(String.format("[update] NS theta(rank==1)       = %+.3f", theta[3]));
-    LOG.debug(String.format("[update] NS theta(rank==2)       = %+.3f", theta[4]));
-    LOG.debug(String.format("[update] NS theta(rank==3)       = %+.3f", theta[5]));
-    LOG.debug(String.format("[update] NS theta(rank==4)       = %+.3f", theta[6]));
-    LOG.debug(String.format("[update] NS theta(rank==5)       = %+.3f", theta[7]));
-    LOG.debug(String.format("[update] NS theta(rank>5)        = %+.3f", theta[8]));
-
-    LOG.debug(String.format("[update] theta(intercept)        = %+.3f", theta[9 + 0]));
-    LOG.debug(String.format("[update] theta(not-in-k-best)    = %+.3f", theta[9 + 1]));
-    LOG.debug(String.format("[update] theta(item-log-prob)    = %+.3f", theta[9 + 2]));
-    LOG.debug(String.format("[update] theta(rank==1)          = %+.3f", theta[9 + 3]));
-    LOG.debug(String.format("[update] theta(rank==2)          = %+.3f", theta[9 + 4]));
-    LOG.debug(String.format("[update] theta(rank==3)          = %+.3f", theta[9 + 5]));
-    LOG.debug(String.format("[update] theta(rank==4)          = %+.3f", theta[9 + 6]));
-    LOG.debug(String.format("[update] theta(rank==5)          = %+.3f", theta[9 + 7]));
-    LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
-
-    LOG.debug("");
+    Log.warn("re-implement me!");
+//    LOG.debug(String.format("[update] NS theta(intercept)     = %+.3f", theta[0]));
+//    LOG.debug(String.format("[update] NS theta(not-in-k-best) = %+.3f", theta[1]));
+//    LOG.debug(String.format("[update] NS theta(item-log-prob) = %+.3f", theta[2]));
+//    LOG.debug(String.format("[update] NS theta(rank==1)       = %+.3f", theta[3]));
+//    LOG.debug(String.format("[update] NS theta(rank==2)       = %+.3f", theta[4]));
+//    LOG.debug(String.format("[update] NS theta(rank==3)       = %+.3f", theta[5]));
+//    LOG.debug(String.format("[update] NS theta(rank==4)       = %+.3f", theta[6]));
+//    LOG.debug(String.format("[update] NS theta(rank==5)       = %+.3f", theta[7]));
+//    LOG.debug(String.format("[update] NS theta(rank>5)        = %+.3f", theta[8]));
+//
+//    LOG.debug(String.format("[update] theta(intercept)        = %+.3f", theta[9 + 0]));
+//    LOG.debug(String.format("[update] theta(not-in-k-best)    = %+.3f", theta[9 + 1]));
+//    LOG.debug(String.format("[update] theta(item-log-prob)    = %+.3f", theta[9 + 2]));
+//    LOG.debug(String.format("[update] theta(rank==1)          = %+.3f", theta[9 + 3]));
+//    LOG.debug(String.format("[update] theta(rank==2)          = %+.3f", theta[9 + 4]));
+//    LOG.debug(String.format("[update] theta(rank==3)          = %+.3f", theta[9 + 5]));
+//    LOG.debug(String.format("[update] theta(rank==4)          = %+.3f", theta[9 + 6]));
+//    LOG.debug(String.format("[update] theta(rank==5)          = %+.3f", theta[9 + 7]));
+//    LOG.debug(String.format("[update] theta(rank>5)           = %+.3f", theta[9 + 8]));
+//
+//    LOG.debug("");
   }
 
   @Override

@@ -64,9 +64,10 @@ public interface GlobalFeature extends Params.Stateful {
     }
 
     public void setParamsByHand() {
-      theta.add(featureIndex("intercept"), -2.5d);
-      theta.add(featureIndex("currentActionIsGold"), 1d);
-      theta.add(featureIndex("pairOfActionsAreBothGold"), 1d);
+//      theta.add(featureIndex("intercept"), -2.5d);
+//      theta.add(featureIndex("currentActionIsGold"), 1d);
+//      theta.add(featureIndex("pairOfActionsAreBothGold"), 1d);
+      throw new RuntimeException("re-implement me!");
     }
   }
 
