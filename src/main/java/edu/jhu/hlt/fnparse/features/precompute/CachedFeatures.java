@@ -400,14 +400,15 @@ public class CachedFeatures {
     private LazyL2UpdateVector[] weightsCommit;
     private LazyL2UpdateVector weightsPrune;
 
-    private double l2Penalty = 1e-8;
+    private double l2Penalty;
 
     private DropoutMode dropoutMode = DropoutMode.OFF;
     private double dropoutProbability = 0;
     private Random rand;
 
     /** {@link Random} is needed for dropout (can be null if no dropout) */
-    public Params(int dimension, int numRoles, Random rand, int updateL2Every) {
+    public Params(double l2Penalty, int dimension, int numRoles, Random rand, int updateL2Every) {
+      this.l2Penalty = l2Penalty;
       this.rand = rand;
       this.dimension = dimension;
 //      this.weightsCommit = new double[numRoles][dimension + 1];
@@ -417,7 +418,8 @@ public class CachedFeatures {
         this.weightsCommit[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension + 1), updateL2Every);
       this.weightsPrune = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension + 1), updateL2Every);
       long weightBytes = (numRoles + 1) * (dimension + 1) * 8;
-      Log.info("dimension=" + dimension
+      Log.info("globalL2Penalty=" + l2Penalty
+          + " dimension=" + dimension
           + " numRoles=" + numRoles
           + " numTemplates=" + templateSet.cardinality()
           + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
@@ -814,7 +816,8 @@ public class CachedFeatures {
     int dimension = 256 * 1024;
     int numRoles = 20;
     int updateL2Every = 32;
-    Params params = this.new Params(dimension, numRoles, rand, updateL2Every);
+    double l2Penalty = 1e-8;
+    Params params = this.new Params(l2Penalty, dimension, numRoles, rand, updateL2Every);
 
     ItemProvider ip = this.new ItemProvider(sentIdsAndFNParses.trainSize(), false, false);
     for (int index = 0; index < ip.size(); index++) {

@@ -1323,7 +1323,8 @@ public class RerankerTrainer {
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
       int updateL2Every = config.getInt("cachedFeatures.updateL2Every", 32);
-      CachedFeatures.Params params = trainer.cachedFeatures.new Params(dimension, numRoles, rand, updateL2Every);
+      double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
+      CachedFeatures.Params params = trainer.cachedFeatures.new Params(globalL2Penalty, dimension, numRoles, rand, updateL2Every);
       trainer.cachedFeatures.params = params;
       trainer.statelessParams = params;
 
