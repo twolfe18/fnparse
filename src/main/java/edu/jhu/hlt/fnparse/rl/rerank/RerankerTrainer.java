@@ -930,7 +930,7 @@ public class RerankerTrainer {
         // See if we should stop
         boolean checkStop;
         if (firstStopCondEval < 0) {
-          checkStop = epoch > 0 || iter > 200 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3);
+          checkStop = epoch > 0 || iter > 1000 || t.secondsSinceFirstMark() > (conf.stoppingTimeMinutes * 60 / 3);
         } else {
           double subOff = 0.9 * (System.currentTimeMillis() - start) / 1000d;
           double tStopRatio = (conf.tHammingTrain.totalTimeInSeconds() - subOff)

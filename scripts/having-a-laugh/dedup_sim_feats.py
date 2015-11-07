@@ -150,6 +150,12 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
   # Read in the sorted list of features
   # Take a budget of number of features
   # Greedily add to the feature set (they should arrive in decreasing order of IG) unless a similarity to a pre-existing feature is found
+
+  of = None
+  if output_ff:
+    print 'writing features to', output_ff
+    of = open(output_ff, 'w')
+
   fs = []
   for i, feat in enumerate(Feature.from_file(raw_feature_file, template_name_bug=TEMPLATE_NAME_BUG)):
     if i % 50 == 0:
@@ -161,6 +167,9 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
         #print sim, f, feat
         if sim > sim_max[1]:
           sim_max = (f, sim)
+          if sim_max[1] >= sim_thresh and not show:
+            # we've already proved that this feature won't be used
+            break
     if sim_max[1] < sim_thresh:
       if show:
         print 'keeping', feat
@@ -168,6 +177,8 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
         if sim_max[0]:
           similarity_feature(sim_max[0].str_templates, feat.str_templates, show=True)
       fs.append(feat)
+      of.write(f.str_like_input() + '\n')
+      of.flush()
       if len(fs) >= budget:
         break
     else:
@@ -182,15 +193,8 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
   print
   print 'final feature set:\n', '\n'.join(map(str, fs))
 
-  if output_ff:
-    print 'writing features to', output_ff
-    with open(output_ff, 'w') as of:
-      #for f in fs:
-      #  of.write('# ' + str(f) + '\n')
-      #fs_str = ' + '.join(map(lambda f: f.features_in_one_str(), fs))
-      #of.write(fs_str + '\n')
-      for f in fs:
-        of.write(f.str_like_input() + '\n')
+  if of:
+    of.close()
     
 # This has since been fixed in java code, but fixed double-named templates like:
 # intpu:  CfgFeat-CommonParent-Rule-CfgFeat-CommonParent-Rule-Top25

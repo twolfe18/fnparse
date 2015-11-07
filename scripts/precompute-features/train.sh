@@ -11,7 +11,7 @@ set -eu
 echo "starting at `date` on $HOSTNAME in `pwd`"
 echo "args: $@"
 
-if [[ $# != 13 ]]; then
+if [[ $# != 15 ]]; then
   echo "1) a working directory (WD)"
   echo "2) a data directory (DD)"
   echo "3) propbank, i.e. either \"true\" or \"false\""
@@ -23,8 +23,10 @@ if [[ $# != 13 ]]; then
   echo "9) nTrain limit (0 means no limit)"
   echo "10) feature file"
   echo "11) feature mode"
-  echo "12) what to set -Xmx in gigabytes, e.g. \"22\" -- you must set mem_free from above"
-  echo "13) a jar file in a stable location"
+  echo "12) a local feature L2 penalty"
+  echo "13) a global feature L2 penalty"
+  echo "14) what to set -Xmx in gigabytes, e.g. \"22\" -- you must set mem_free from above"
+  echo "15) a jar file in a stable location"
   exit 1
 fi
 
@@ -44,8 +46,10 @@ PERCEPTRON=$8
 NTRAIN=$9
 FEATURES=${10}
 FEATURE_MODE=${11}
-MEM=${12}
-JAR=${13}
+L2_LOCAL=${12}
+L2_GLOBAL=${13}
+MEM=${14}
+JAR=${15}
 
 LOG=$WD/log.txt
 
@@ -85,6 +89,7 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DcachedFeatures.featuresGlob="glob:**/*" \
   -DcachedFeatures.numDataLoadThreads=2 \
   -DcachedFeatures.hashingTrickDim=`echo "2 * 1024 * 1024" | bc` \
+  -DstoppingConditionFrequency=4 \
   -DpretrainBatchSize=8 \
   -DtrainBatchSize=8 \
   -Dthreads=2 \
@@ -103,10 +108,10 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Ddropout=false \
   -DlrBatchScale=2048 \
   -DlrType=constant \
-  -Dl2Penalty=1e-8 \
-  -DglobalL2Penalty=1e-7 \
+  -Dl2Penalty=${L2_LOCAL} \
+  -DglobalL2Penalty=${L2_GLOBAL} \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=`echo "8 * 60" | bc` \
+  -DtrainTimeLimit=`echo "48 * 60" | bc` \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
