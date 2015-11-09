@@ -111,9 +111,10 @@ public interface Adjoints {
       weights.scale(scale);
     }
 
-    public double[] makeCopyOfWeights() {
+    public double[] makeCopyOfWeights(int dimension) {
       int D = weights.getNumExplicitEntries();
-      double[] w = new double[D];
+      assert D <= dimension;
+      double[] w = new double[dimension];
       for (int i = 0; i < D; i++)
         w[i] = weights.get(i);
       return w;

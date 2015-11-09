@@ -542,9 +542,9 @@ public class CachedFeatures {
     @Override
     public void serialize(DataOutputStream out) throws IOException {
       double[][] w = new double[weightsCommit.length + 1][];
-      w[0] = weightsPrune.makeCopyOfWeights();
+      w[0] = weightsPrune.makeCopyOfWeights(dimension + 1);
       for (int i = 0; i < weightsCommit.length; i++)
-        w[i+1] = weightsCommit[i].makeCopyOfWeights();
+        w[i+1] = weightsCommit[i].makeCopyOfWeights(dimension + 1);
       ModelIO.writeTensor2(w, out);
     }
 

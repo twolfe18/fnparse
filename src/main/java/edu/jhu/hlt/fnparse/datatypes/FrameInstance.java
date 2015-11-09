@@ -187,7 +187,7 @@ public class FrameInstance {
   public void setArgument(int roleIdx, Span extent) {
     arguments[roleIdx] = extent;
   }
-  
+
   public void getRealizedArgs(Collection<Span> addTo) {
     for (int k = 0; k < arguments.length; k++)
       if (arguments[k] != Span.nullSpan)
