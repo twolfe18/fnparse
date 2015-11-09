@@ -4,45 +4,107 @@
 FN_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
 PB_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
 
-framenet-ig-feat.txt:
-	#ssh test1b "cat $(FN_WD)/ig/products/ig-files/shard-* | sort -rg" >framenet-ig-feat.txt
-	cat $(FN_WD)/ig/products/ig-files/shard-* | sort -rg >framenet-ig-feat.txt
+framenet-ig-feat.8.txt:
+	cat $(FN_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (8 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>framenet-ig-feat.8.txt
+framenet-ig-feat.16.txt:
+	cat $(FN_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (16 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>framenet-ig-feat.16.txt
+framenet-ig-feat.32.txt:
+	cat $(FN_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (32 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>framenet-ig-feat.32.txt
+framenet-ig-feat.64.txt:
+	cat $(FN_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (64 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>framenet-ig-feat.64.txt
+framenet-ig-feat.8.dedup.txt: framenet-ig-feat.8.txt
+	python dedup_sim_feats.py 7.0 framenet-ig-feat.8.txt 640 framenet-ig-feat.8.dedup.txt
+framenet-ig-feat.16.dedup.txt: framenet-ig-feat.16.txt
+	python dedup_sim_feats.py 7.0 framenet-ig-feat.16.txt 640 framenet-ig-feat.16.dedup.txt
+framenet-ig-feat.32.dedup.txt: framenet-ig-feat.32.txt
+	python dedup_sim_feats.py 7.0 framenet-ig-feat.32.txt 640 framenet-ig-feat.32.dedup.txt
+framenet-ig-feat.64.dedup.txt: framenet-ig-feat.64.txt
+	python dedup_sim_feats.py 7.0 framenet-ig-feat.64.txt 640 framenet-ig-feat.64.dedup.txt
 
-framenet-ig-feat.dedup.txt: framenet-ig-feat.txt
-	awk '$$4 == 1' <framenet-ig-feat.txt >/tmp/c1
-	awk '$$4 == 2' <framenet-ig-feat.txt >/tmp/c2
-	awk '$$4 == 3' <framenet-ig-feat.txt >/tmp/c3
-	python dedup_sim_feats.py 5.0 /tmp/c1 300 /tmp/t1
-	python dedup_sim_feats.py 6.0 /tmp/c2 200 /tmp/t2
-	python dedup_sim_feats.py 6.0 /tmp/c3 200 /tmp/t3
-	cat /tmp/t[123] | sort -rg >framenet-ig-feat.dedup.txt
+framenet-8-%.fs: framenet-ig-feat.8.dedup.txt
+	head -n $* framenet-ig-feat.8.dedup.txt >framenet-8-$*.fs
+framenet-16-%.fs: framenet-ig-feat.16.dedup.txt
+	head -n $* framenet-ig-feat.16.dedup.txt >framenet-16-$*.fs
+framenet-32-%.fs: framenet-ig-feat.32.dedup.txt
+	head -n $* framenet-ig-feat.32.dedup.txt >framenet-32-$*.fs
+framenet-64-%.fs: framenet-ig-feat.64.dedup.txt
+	head -n $* framenet-ig-feat.64.dedup.txt >framenet-64-$*.fs
+framenet-mix-%.fs: framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt framenet-ig-feat.32.dedup.txt
+	head -n $* framenet-ig-feat.8.dedup.txt >/tmp/mix-$*.temp
+	head -n $* framenet-ig-feat.16.dedup.txt >>/tmp/mix-$*.temp
+	head -n $* framenet-ig-feat.32.dedup.txt >>/tmp/mix-$*.temp
+	sort -u /tmp/mix-$*.temp >framenet-mix-$*.fs
 
-framenet-%.fs: framenet-ig-feat.dedup.txt
-	#python dedup_sim_feats.py framenet-ig-feat.txt $* framenet-$*.fs
-	python poisson_feature_set.py framenet-ig-feat.dedup.txt framenet-$*.fs $* 3 0.005
+framenet-all-features:
+	make -j 4 framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt framenet-ig-feat.32.dedup.txt framenet-ig-feat.64.dedup.txt
+	make framenet-8-40.fs framenet-8-160.fs framenet-8-640.fs
+	make framenet-16-40.fs framenet-16-160.fs framenet-16-640.fs
+	make framenet-32-40.fs framenet-32-160.fs framenet-32-640.fs
+	make framenet-64-40.fs framenet-64-160.fs framenet-64-640.fs
+	make framenet-mix-40.fs framenet-mix-160.fs framenet-mix-640.fs
 
+propbank-ig-feat.8.txt:
+	cat $(PB_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (8 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>propbank-ig-feat.8.txt
+propbank-ig-feat.16.txt:
+	cat $(PB_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (16 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>propbank-ig-feat.16.txt
+propbank-ig-feat.32.txt:
+	cat $(PB_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (32 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>propbank-ig-feat.32.txt
+propbank-ig-feat.64.txt:
+	cat $(PB_WD)/ig/products/ig-files/shard-* \
+		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (64 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \
+		| sort -rg \
+		>propbank-ig-feat.64.txt
+propbank-ig-feat.8.dedup.txt: propbank-ig-feat.8.txt
+	python dedup_sim_feats.py 7.0 propbank-ig-feat.8.txt 640 propbank-ig-feat.8.dedup.txt
+propbank-ig-feat.16.dedup.txt: propbank-ig-feat.16.txt
+	python dedup_sim_feats.py 7.0 propbank-ig-feat.16.txt 640 propbank-ig-feat.16.dedup.txt
+propbank-ig-feat.32.dedup.txt: propbank-ig-feat.32.txt
+	python dedup_sim_feats.py 7.0 propbank-ig-feat.32.txt 640 propbank-ig-feat.32.dedup.txt
+propbank-ig-feat.64.dedup.txt: propbank-ig-feat.64.txt
+	python dedup_sim_feats.py 7.0 propbank-ig-feat.64.txt 640 propbank-ig-feat.64.dedup.txt
 
-propbank-ig-feat.txt:
-	#ssh test1b "cat $(PB_WD)/ig/products/ig-files/shard-* | sort -rg" >propbank-ig-feat.txt
-	cat $(PB_WD)/ig/products/ig-files/shard-* | sort -rg >propbank-ig-feat.txt
+propbank-8-%.fs: propbank-ig-feat.8.dedup.txt
+	head -n $* propbank-ig-feat.8.dedup.txt >propbank-8-$*.fs
+propbank-16-%.fs: propbank-ig-feat.16.dedup.txt
+	head -n $* propbank-ig-feat.16.dedup.txt >propbank-16-$*.fs
+propbank-32-%.fs: propbank-ig-feat.32.dedup.txt
+	head -n $* propbank-ig-feat.32.dedup.txt >propbank-32-$*.fs
+propbank-64-%.fs: propbank-ig-feat.64.dedup.txt
+	head -n $* propbank-ig-feat.64.dedup.txt >propbank-64-$*.fs
+propbank-mix-%.fs: propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt propbank-ig-feat.32.dedup.txt
+	head -n $* propbank-ig-feat.8.dedup.txt >/tmp/mix-$*.temp
+	head -n $* propbank-ig-feat.16.dedup.txt >>/tmp/mix-$*.temp
+	head -n $* propbank-ig-feat.32.dedup.txt >>/tmp/mix-$*.temp
+	sort -u /tmp/mix-$*.temp >propbank-mix-$*.fs
 
-propbank-ig-feat.dedup.txt: propbank-ig-feat.txt
-	awk '$$4 == 1' <propbank-ig-feat.txt >/tmp/c1pb
-	awk '$$4 == 2' <propbank-ig-feat.txt >/tmp/c2pb
-	awk '$$4 == 3' <propbank-ig-feat.txt >/tmp/c3pb
-	python dedup_sim_feats.py 5.0 /tmp/c1pb 400 /tmp/t1pb
-	python dedup_sim_feats.py 6.0 /tmp/c2pb 300 /tmp/t2pb
-	python dedup_sim_feats.py 6.0 /tmp/c3pb 300 /tmp/t3pb
-	cat /tmp/t[123]pb | sort -rg >propbank-ig-feat.dedup.txt
-
-propbank-%.fs: propbank-ig-feat.dedup.txt
-	#python dedup_sim_feats.py propbank-ig-feat.txt $* propbank-$*.fs
-	python poisson_feature_set.py propbank-ig-feat.dedup.txt propbank-$*.fs $* 3 0.005
-
-
-all: \
-	propbank-10.fs propbank-20.fs propbank-40.fs propbank-80.fs propbank-160.fs propbank-320.fs propbank-640.fs propbank-1280.fs \
-	framenet-10.fs framenet-20.fs framenet-40.fs framenet-80.fs framenet-160.fs framenet-320.fs framenet-640.fs framenet-1280.fs
+propbank-all-features:
+	make -j 4 propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt propbank-ig-feat.32.dedup.txt propbank-ig-feat.64.dedup.txt
+	make propbank-8-40.fs propbank-8-160.fs propbank-8-640.fs
+	make propbank-16-40.fs propbank-16-160.fs propbank-16-640.fs
+	make propbank-32-40.fs propbank-32-160.fs propbank-32-640.fs
+	make propbank-64-40.fs propbank-64-160.fs propbank-64-640.fs
+	make propbank-mix-40.fs propbank-mix-160.fs propbank-mix-640.fs
 
 # NOTE: Here is how you can tell the difference between two feature sets (e.g. if you have new IG estimates):
 # DIM=10

@@ -29,3 +29,5 @@ semafor
 .classpath
 .project
 .settings
+scripts/having-a-laugh/*.fs
+scripts/having-a-laugh/*.txt

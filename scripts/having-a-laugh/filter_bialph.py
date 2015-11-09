@@ -26,6 +26,11 @@ def get_templates(feature_file_list):
     print 'read', (t-n), 'templates, up to', t, 'total'
   return templates
 
+# TODO Do this in java instead
+#def set2bytearray(a_set_of_ints):
+#  m = max(a_set_of_ints)
+#  b = array.array('c', 
+
 def filter_bialph(input_bialph_file, output_bialph_file, int_template_set, print_interval=250000):
   inl = 0
   outl = 0
