@@ -552,7 +552,7 @@ public class CachedFeatures {
     public void deserialize(DataInputStream in) throws IOException {
       double[][] w = ModelIO.readTensor2(in);
       assert w.length == weightsCommit.length + 1;
-      if (w[0].length != dimension)
+      if (w[0].length != dimension + 1)
         Log.info("[main] oldDimension=" + dimension + " newDimension=" + w[0].length);
       dimension = w[0].length;
       weightsPrune.set(w[0]);
