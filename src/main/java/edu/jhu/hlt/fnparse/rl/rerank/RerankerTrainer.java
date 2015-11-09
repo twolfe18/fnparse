@@ -128,7 +128,7 @@ public class RerankerTrainer {
     public double stoppingTimeMinutes = 55 * 60;  // maintain this as the tightest time constraint
     public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
-    public int stoppingConditionMaxExamples = 750;
+    public int stoppingConditionMaxExamples = 1000;
 
     // If true (and dev settings permit), train2 will automatically add a
     // StoppingCondition.DevSet to the list of stopping conditions.
@@ -1221,6 +1221,10 @@ public class RerankerTrainer {
     trainer.trainConf.stoppingConditionFrequency
       = trainer.pretrainConf.stoppingConditionFrequency
         = config.getDouble("stoppingConditionFrequency", 6);
+
+    trainer.trainConf.stoppingConditionMaxExamples
+      = trainer.pretrainConf.stoppingConditionMaxExamples
+        = config.getInt("stoppingConditionMaxExamples", 1000);
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 5 * 60);
 
