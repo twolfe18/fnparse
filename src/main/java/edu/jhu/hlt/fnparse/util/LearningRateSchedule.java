@@ -2,7 +2,7 @@ package edu.jhu.hlt.fnparse.util;
 
 import org.apache.commons.math3.util.FastMath;
 
-import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
+import edu.jhu.hlt.tutils.Log;
 
 public interface LearningRateSchedule {
 
@@ -70,7 +70,7 @@ public interface LearningRateSchedule {
       double it = FastMath.pow(iter + 1, squish);
       double lr = initial * smooth / (smooth + it);
       if (iter % 100 == 0)
-        RerankerTrainer.LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
+        Log.info("[main] iter=" + iter + " learningRate=" + lr);
       return lr;
     }
     @Override
@@ -95,7 +95,7 @@ public interface LearningRateSchedule {
     public double learningRate() {
       double lr = FastMath.exp(-iter / decayRate);
       if (iter % 100 == 0)
-        RerankerTrainer.LOG.info("[learningRate] iter=" + iter + " learningRate=" + lr);
+        Log.info("[main] iter=" + iter + " learningRate=" + lr);
       return lr;
     }
     @Override
