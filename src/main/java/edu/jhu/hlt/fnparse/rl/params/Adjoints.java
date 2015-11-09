@@ -101,8 +101,22 @@ public interface Adjoints {
       weights.set(index, value);
     }
 
+    public void set(double[] weights) {
+      this.weights.scale(0);
+      for (int i = 0; i < weights.length; i++)
+        this.weights.set(i, weights[i]);
+    }
+
     public void scale(double scale) {
       weights.scale(scale);
+    }
+
+    public double[] makeCopyOfWeights() {
+      int D = weights.getNumExplicitEntries();
+      double[] w = new double[D];
+      for (int i = 0; i < D; i++)
+        w[i] = weights.get(i);
+      return w;
     }
   }
 

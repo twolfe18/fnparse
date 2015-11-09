@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectInputStream;
@@ -23,6 +24,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
 
@@ -42,6 +44,35 @@ public interface Params extends Serializable {
 
   public void serialize(DataOutputStream out) throws IOException;
   public void deserialize(DataInputStream in) throws IOException;
+
+  default public void serializeToFile(File f) throws Exception {
+    Log.info("[main] writing params to " + f.getPath());
+    try (OutputStream os = FileUtil.getOutputStream(f, false);
+        DataOutputStream dos = new DataOutputStream(os)) {
+      serialize(dos);
+    }
+  }
+  default public void deserializeFromFile(File f) throws Exception {
+    Log.info("[main] reading params from " + f.getPath());
+    try (InputStream is = FileUtil.getInputStream(f);
+        DataInputStream dis = new DataInputStream(is)) {
+      deserialize(dis);
+    }
+  }
+  default public void serializeToFileRTE(File f) {  // RTE = RuntimeException
+    try {
+      serializeToFile(f);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+  default public void deserializeFromFileRTE(File f) {  // RTE = RuntimeException
+    try {
+      deserializeFromFile(f);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
 
   // For parameter averaging.
   // Params should only ever be instantiated at the same type as the

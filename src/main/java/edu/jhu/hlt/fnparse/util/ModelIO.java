@@ -267,7 +267,6 @@ public class ModelIO {
     return t2;
   }
 
-  /** Only works for hyper-cubic tensors */
   public static double[] readTensor1(DataInputStream dis) throws IOException {
     int x = dis.readInt();
     double[] t1 = new double[x];
@@ -276,7 +275,7 @@ public class ModelIO {
     return t1;
   }
 
-  /** Only works for hyper-cubic tensors */
+  /** Only works for hyper-rectangular tensors */
   public static void writeTensor3(double[][][] t3, DataOutputStream dos) throws IOException {
     int x = t3.length;
     int y = t3[0].length;
@@ -294,7 +293,7 @@ public class ModelIO {
     }
   }
 
-  /** Only works for hyper-cubic tensors */
+  /** Only works for rectangular tensors */
   public static void writeTensor2(double[][] t2, DataOutputStream dos) throws IOException {
     int x = t2.length;
     int y = t2[0].length;

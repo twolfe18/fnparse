@@ -3,7 +3,9 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.util.PriorityQueue;
 import java.util.Random;
+import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 
 import org.apache.commons.math3.util.FastMath;
@@ -12,6 +14,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Timer;
 
 
@@ -20,6 +23,82 @@ public interface StoppingCondition {
 
   public boolean stop(int iter, double violation);
   public int estimatedNumberOfIterations();
+
+  /**
+   * The point of this class is to track dev set loss across many iterations and
+   * save the model every time. When a wrapped/provided {@link StoppingCondition}
+   * returns true, this will re-instantiate the best params. IO is abstracted
+   * over using a user-provided function for saving and loading models file a
+   * file.
+   */
+  public static class ArgMinDevLossParamSetter implements StoppingCondition {
+    private StoppingCondition wrapped;
+    private File paramDir;
+    private PriorityQueue<Model> models;
+    private Consumer<File> modelSerializeWeights;
+    private Consumer<File> modelDeserializeWeights;
+
+    public ArgMinDevLossParamSetter(
+        StoppingCondition wrapping,
+        File paramDir,
+        Consumer<File> saveWeightsToFile,
+        Consumer<File> restoreWeightsFromFile) {
+      if (!paramDir.isDirectory())
+        throw new IllegalArgumentException(paramDir.getPath() + " is not a directory");
+      Log.info("[main] wrapping=" + wrapping + " paramDir=" + paramDir.getPath());
+      this.wrapped = wrapping;
+      this.paramDir = paramDir;
+      this.models = new PriorityQueue<>();
+      this.modelSerializeWeights = saveWeightsToFile;
+      this.modelDeserializeWeights = restoreWeightsFromFile;
+    }
+
+    @Override
+    public boolean stop(int iter, double violation) {
+
+      File mf = new File(paramDir, "model-" + System.currentTimeMillis() + ".bin");
+      Log.info("[main] writing iter=" + iter + " violation=" + violation + " to=" + mf.getPath());
+      modelSerializeWeights.accept(mf);
+      models.offer(new Model(mf, violation));
+
+      boolean st = wrapped.stop(iter, violation);
+      if (st) {
+        // Find the best parameters and re-assign them
+        Model best = models.peek();
+        Log.info("[main] restoring params from " + best);
+        modelDeserializeWeights.accept(best.file);
+      }
+
+      return st;
+    }
+
+    @Override
+    public int estimatedNumberOfIterations() {
+      return wrapped.estimatedNumberOfIterations();
+    }
+
+    /** A model, storing its performance and location on disk */
+    private static class Model implements Comparable<Model> {
+      public final File file;
+      public final double loss;
+      public Model(File file, double loss) {
+        this.file = file;
+        this.loss = loss;
+      }
+      @Override
+      public int compareTo(Model o) {
+        if (loss < o.loss)
+          return -1;
+        if (loss > o.loss)
+          return +1;
+        return 0;
+      }
+      @Override
+      public String toString() {
+        return "(Model file=" + file.getPath() + " loss=" + loss + ")";
+      }
+    }
+  }
 
   public static class Conjunction implements StoppingCondition {
     private StoppingCondition left, right;
@@ -188,7 +267,6 @@ public interface StoppingCondition {
       }
     }
 
-    /** You must override this method with one that might return true */
     @Override
     public boolean stop(int iter, double violation) {
 

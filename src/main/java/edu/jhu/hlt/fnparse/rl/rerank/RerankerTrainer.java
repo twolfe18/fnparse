@@ -126,6 +126,9 @@ public class RerankerTrainer {
     // StoppingCondition.DevSet to the list of stopping conditions.
     public boolean allowDynamicStopping = true;
 
+    // Go as long as is allowed by time, take argmin_{iter} loss(dev).
+    public boolean conventionalDevSetStopping = true;
+
     // Normally if a model has no Params.Stateful features, then getStatelessUpdate
     // is used to train the model. If this is true, getFullUpdate will always
     // be used, regardless of params.
@@ -149,7 +152,7 @@ public class RerankerTrainer {
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
-    private int maxDev = 750;
+    private int maxDev = 1000;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = -0.5, recallBiasHi = 0.5;
     public int tuneSteps = 3;
@@ -218,8 +221,6 @@ public class RerankerTrainer {
      * @return what is passed in.
      */
     public <T extends StoppingCondition> T addStoppingCondition(T s) {
-      if (!allowDynamicStopping && !(s instanceof StoppingCondition.Time))
-        throw new RuntimeException("can't add " + s);
       if (s instanceof StoppingCondition.Time) {
         double t = ((StoppingCondition.Time) s).getMaxMinutes();
         if (t < stoppingTimeMinutes) {
@@ -229,6 +230,10 @@ public class RerankerTrainer {
       }
       stopping = new StoppingCondition.Conjunction(stopping, s);
       return s;
+    }
+
+    public void setStoppingCondition(StoppingCondition s) {
+      stopping = s;
     }
 
     public String toString() {
@@ -820,6 +825,7 @@ public class RerankerTrainer {
       if (dev.size() == 0)
         throw new RuntimeException("no dev data!");
       Log.info("[main] adding dev set stopping on " + dev.size() + " examples");
+
       File rScript = new File("scripts/stop.sh");
       double alpha = 0.05d;   // Lower numbers mean stop earlier.
       double k = 7;           // Size of history
@@ -829,6 +835,21 @@ public class RerankerTrainer {
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
     } else {
       Log.info("[main] allowDynamicStopping=false leaving stopping condition as is");
+    }
+
+    // Perform an argmin_{iterations} loss(dev) to choose best params.
+    if (conf.conventionalDevSetStopping) {
+      if (m.cachedFeatures == null)
+        throw new RuntimeException("only supported for CachedFeatures");
+      File paramDir = new File(conf.workingDir, "conventionalStoppingParams");
+      Log.info("[main] setting up ArgMinDevLossParamSetter: paramDir=" + paramDir.getPath());
+      paramDir.mkdirs();
+      StoppingCondition.ArgMinDevLossParamSetter sc =
+          new StoppingCondition.ArgMinDevLossParamSetter(
+              conf.stopping, paramDir,
+              m.cachedFeatures.params::serializeToFileRTE,
+              m.cachedFeatures.params::deserializeFromFileRTE);
+      conf.setStoppingCondition(sc);
     }
 
     try {

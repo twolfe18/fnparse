@@ -255,6 +255,14 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
+    tokenExtractors.put("Word5", x -> {
+      if (x.indexInSent()) {
+        String s = x.sentence.getWord(x.index).toLowerCase();
+        return "Word5=" + s;
+      } else {
+        return null;
+      }
+    });
     tokenExtractors.put("WordWnSynset", x -> {
       if (!x.indexInSent())
         return null;

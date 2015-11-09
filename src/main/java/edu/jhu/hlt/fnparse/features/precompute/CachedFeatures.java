@@ -46,6 +46,7 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
@@ -395,8 +396,8 @@ public class CachedFeatures {
     // k -> feature -> weight
     // Intercept is stored at position 0, followed by this.dimension non-intercept features
     private int dimension = 1 * 1024 * 1024;    // hashing trick
-//    private double[][] weightsCommit;
-//    private double[] weightPrune;
+
+    // These must all have the same dimension for IO
     private LazyL2UpdateVector[] weightsCommit;
     private LazyL2UpdateVector weightsPrune;
 
@@ -411,8 +412,6 @@ public class CachedFeatures {
       this.l2Penalty = l2Penalty;
       this.rand = rand;
       this.dimension = dimension;
-//      this.weightsCommit = new double[numRoles][dimension + 1];
-//      this.weightPrune = new double[dimension + 1];
       this.weightsCommit = new LazyL2UpdateVector[numRoles];
       for (int i = 0; i < weightsCommit.length; i++)
         this.weightsCommit[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension + 1), updateL2Every);
@@ -424,6 +423,10 @@ public class CachedFeatures {
           + " numTemplates=" + templateSet.cardinality()
           + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
     }
+
+    // NOTE: If you make another constructor, LazyL2UpdateVector must be
+    // initialized because it stores updateInterval (cannot be determined later,
+    // needs to be known at construction).
 
     public DropoutMode getDropoutMode() {
       return this.dropoutMode;
@@ -538,12 +541,23 @@ public class CachedFeatures {
 
     @Override
     public void serialize(DataOutputStream out) throws IOException {
-      throw new RuntimeException("implement me");
+      double[][] w = new double[weightsCommit.length + 1][];
+      w[0] = weightsPrune.makeCopyOfWeights();
+      for (int i = 0; i < weightsCommit.length; i++)
+        w[i+1] = weightsCommit[i].makeCopyOfWeights();
+      ModelIO.writeTensor2(w, out);
     }
 
     @Override
     public void deserialize(DataInputStream in) throws IOException {
-      throw new RuntimeException("implement me");
+      double[][] w = ModelIO.readTensor2(in);
+      assert w.length == weightsCommit.length + 1;
+      if (w[0].length != dimension)
+        Log.info("[main] oldDimension=" + dimension + " newDimension=" + w[0].length);
+      dimension = w[0].length;
+      weightsPrune.set(w[0]);
+      for (int i = 1; i < w.length; i++)
+        weightsCommit[i-1].set(w[i]);
     }
 
     @Override
@@ -551,10 +565,6 @@ public class CachedFeatures {
       for (int i = 0; i < weightsCommit.length; i++)
         weightsCommit[i].scale(scale);
       weightsPrune.scale(scale);
-//        for (int j = 0; j < weightsCommit[i].length; j++)
-//          weightsCommit[i][j] *= scale;
-//      for (int i = 0; i < weightPrune.length; i++)
-//        weightPrune[i] *= scale;
     }
 
     @Override
@@ -565,15 +575,8 @@ public class CachedFeatures {
         CachedFeatures.Params x = (CachedFeatures.Params) other;
         assert weightsCommit.length == x.weightsCommit.length;
         for (int i = 0; i < weightsCommit.length; i++) {
-//          assert weightsCommit[i].length == x.weightsCommit[i].length;
-//          for (int j = 0; j < weightsCommit[i].length; j++) {
-//            weightsCommit[i][j] *= x.weightsCommit[i][j];
-//          }
           weightsCommit[i].weights.add(x.weightsCommit[i].weights);
         }
-//        assert weightPrune.length == x.weightPrune.length;
-//        for (int i = 0; i < weightPrune.length; i++)
-//          weightPrune[i] *= x.weightPrune[i];
         weightsPrune.weights.add(x.weightsPrune.weights);
       } else {
         throw new RuntimeException("other=" + other.getClass().getName());
