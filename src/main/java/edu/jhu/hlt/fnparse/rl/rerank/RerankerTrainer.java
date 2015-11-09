@@ -20,33 +20,42 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.*;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Predicate;
-
-import edu.jhu.hlt.fnparse.datatypes.*;
-import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
+import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
+import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.StdEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.experiment.grid.ResultReporter;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.DropoutMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
-import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
@@ -91,7 +100,6 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class RerankerTrainer {
-  public static final Logger LOG = Logger.getLogger(RerankerTrainer.class);
   public static boolean SHOW_FULL_EVAL_IN_TUNE = true;
   public static boolean PRUNE_DEBUG = false;
 
@@ -616,7 +624,8 @@ public class RerankerTrainer {
 
     // Make an adapter for LearningRateEstimator
     LearningRateEstimator.Model model = new LearningRateEstimator.Model() {
-      private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf, conf.estimateLearningRateMaxExamples);
+      private EvalFunc lossFunc = null; // null => SVM objective, else conf.objective
+      private DoubleSupplier devLoss = modelLossOnData(m, devSmall, conf, lossFunc, conf.estimateLearningRateMaxExamples);
       private int seed = conf.rand.nextInt();
       @Override
       public void train() {
@@ -691,7 +700,22 @@ public class RerankerTrainer {
     }
   }
 
-  private DoubleSupplier modelLossOnData(Reranker m, ItemProvider dev, Config conf, int nExampleLimit) {
+  /**
+   * Compute loss according to a model on some data.
+   * @param m is the model.
+   * @param dev is the data over which to compute loss.
+   * @param conf supplies details like number of threads and a random function.
+   * @param lossFunction may be null in which case the SVM objective will be
+   * used, otherwise should be a string like BasicEvaluation.argOnlyMicroF1.
+   * @param nExampleLimit is how many examples to limit the dev set to. If <=0,
+   * no limit is enforced. Otherwise a random slice is genrated.
+   */
+  private DoubleSupplier modelLossOnData(
+      Reranker m,
+      ItemProvider dev,
+      Config conf,
+      EvalFunc lossFunc,
+      int nExampleLimit) {
 
     final ItemProvider devUse;
     if (dev.size() > nExampleLimit) {
@@ -703,7 +727,7 @@ public class RerankerTrainer {
 
     return new DoubleSupplier() {
       final boolean showAllLosses = ExperimentProperties.getInstance()
-        .getBoolean("showDevLossOther", false);
+        .getBoolean("showDevLossOther", lossFunc != null);
       final int earlyShow = ExperimentProperties.getInstance().getInt("showDevLossOther.earlyInterval", 20);
       @Override
       public double getAsDouble() {
@@ -747,15 +771,21 @@ public class RerankerTrainer {
           }));
         }
 
+        Set<String> yIds = new HashSet<>();
         int i = 0;
         double loss = 0d;
+        List<SentenceEval> se = new ArrayList<>();
         Map<String, FPR> other = new HashMap<>();
         for (Future<DSResult> f : futures) {
           try {
             DSResult p = f.get();
             loss += p.loss;
-            if (showAllLosses)
-              BasicEvaluation.updateEvals(new SentenceEval(p.y, p.yhat), other, true);
+            yIds.add(p.y.getId());
+            if (showAllLosses) {
+              SentenceEval s = new SentenceEval(p.y, p.yhat);
+              se.add(s);
+              BasicEvaluation.updateEvals(s, other, true);
+            }
             // Print early!
             if (earlyShow > 0 && i > 0 && n > earlyShow * 3 && i % earlyShow == 0) {
               Log.info("[devLossFunc] after " + i + " updates, avgLoss=" + (loss/i));
@@ -769,6 +799,15 @@ public class RerankerTrainer {
             e.printStackTrace();
           }
         }
+        if (showAllLosses) {
+          loss = lossFunc.evaluate(se);
+        } else {
+          // Average
+          assert i > 0;
+          if (i < n)
+            Log.warn("only got " + i + " of " + n + " dev set items!");
+          loss /= i;
+        }
 
         try {
           Log.info("shutting down ES");
@@ -777,11 +816,8 @@ public class RerankerTrainer {
           e.printStackTrace();
         }
 
-        assert i > 0;
-        if (i < n)
-          Log.warn("only got " + i + " of " + n + " dev set items!");
-        loss /= i;
-        Log.info("[devLossFunc] loss=" + loss + " n=" + i + " nDev=" + n + " for conf=" + conf.name);
+        Log.info("[devLossFunc] loss=" + loss + " n=" + i + " nDev=" + n
+            + " yIds.size=" + yIds.size() + " for conf=" + conf.name);
         if (showAllLosses) {
           for (Map.Entry<String, FPR> x : other.entrySet())
             Log.info("[devLossFunc] " + x.getKey() + "=" + x.getValue());
@@ -801,22 +837,6 @@ public class RerankerTrainer {
    * Adds a stopping condition based on the dev set performance.
    */
   public void train2(Reranker m, ItemProvider train, ItemProvider dev, Config conf) {
-    /*
-    // Split the data
-    final ItemProvider train, dev;
-    if (conf.tuneOnTrainingData) {
-      Log.info("[main] tuneOnTrainingData=true");
-      train = ip;
-      dev = new ItemProvider.Slice(ip, Math.min(ip.size(), conf.maxDev), rand);
-    } else {
-      Log.info("[main] tuneOnTrainingData=false, splitting data");
-      conf.autoPropDev(ip.size());
-      ItemProvider.TrainTestSplit trainDev =
-          new ItemProvider.TrainTestSplit(ip, conf.propDev, conf.maxDev, rand);
-      train = trainDev.getTrain();
-      dev = trainDev.getTest();
-    }
-    */
     Log.info("[main] nTrain=" + train.size() + " nDev=" + dev.size() + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
@@ -824,13 +844,13 @@ public class RerankerTrainer {
     if (conf.allowDynamicStopping) {
       if (dev.size() == 0)
         throw new RuntimeException("no dev data!");
-      Log.info("[main] adding dev set stopping on " + dev.size() + " examples");
-
+      EvalFunc lossFunc = conf.objective; // null => SVM objective
+      Log.info("[main] adding dev set stopping, dev.size=" + dev.size() + " lossFunc=" + lossFunc);
       File rScript = new File("scripts/stop.sh");
-      double alpha = 0.05d;   // Lower numbers mean stop earlier.
-      double k = 7;           // Size of history
-      int skipFirst = 2;      // Drop the first value(s) to get the variance est. right.
-      DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf, conf.stoppingConditionMaxExamples);
+      double alpha = 0.1;     // Lower numbers mean stop earlier.
+      double k = 8;           // Size of history
+      int skipFirst = 3;      // Drop the first value(s) to get the variance est. right.
+      DoubleSupplier devLossFunc = modelLossOnData(m, dev, conf, lossFunc, conf.stoppingConditionMaxExamples);
       dynamicStopping = conf.addStoppingCondition(
           new StoppingCondition.DevSet(rScript, devLossFunc, alpha, k, skipFirst));
     } else {
