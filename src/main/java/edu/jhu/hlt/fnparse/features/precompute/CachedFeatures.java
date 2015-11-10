@@ -18,8 +18,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -40,6 +40,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.ContRefRoleClassifier;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
@@ -103,7 +104,7 @@ public class CachedFeatures {
   /** A parse and its features */
   public static final class Item {
     public final FNParse parse;
-    private Map<IntPair, BaseTemplates>[] features;
+    private Map<IntPair, BaseTemplates>[] features;   // t -> (i,j) -> BaseTemplates
 
     @SuppressWarnings("unchecked")
     public Item(FNParse parse) {
@@ -160,6 +161,7 @@ public class CachedFeatures {
       return m;
     }
   }
+
   public Map<FrameInstance, List<Span>> spansWithFeatures(FNTagging y) {
     Item cur = loadedSentId2Item.get(y.getSentence().getId());
     return cur.spansWithFeatures();
@@ -684,6 +686,7 @@ public class CachedFeatures {
         data.purgeLine();
         nnz.add(data.getFeatures().length);
 
+        // Group by sentence/parse id
         if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
           if (cur != null)
             addItem(cur, devSentIds, testSentIds);
@@ -796,8 +799,9 @@ public class CachedFeatures {
 
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
+    ContRefRoleClassifier crClassify = null;
     Random rand = new Random(9001);
-    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, rand);
+    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, crClassify, 1, 1, rand);
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
 //    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);

@@ -18,11 +18,13 @@ import java.util.Set;
 import com.google.common.collect.Iterables;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.PropbankReader;
+import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
@@ -34,6 +36,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -42,6 +45,7 @@ import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.prim.bimap.IntObjectBimap;
 
 /**
  * Compute features ahead of time. Only outputs basic templates, not products,
@@ -65,6 +69,10 @@ import edu.jhu.hlt.tutils.TimeMarker;
  * NOTE: It turns out that some spans may have multiple roles assigned to them
  * in FramNet. For this data, the k column will actually be a comma-separated
  * list of roles (or -1).
+ *
+ * NOTE: Now k takes on values of (role,), (frame,role), and (frame,). The
+ * values are stable across shards (so they do not need to be merged) and the
+ * values are written out to WD/role-names.txt.gz.
  *
  * @author travis
  */
@@ -199,21 +207,46 @@ public class FeaturePrecomputation {
     };
   }
 
+  private IntObjectBimap<String> kNames;    // all strings output for k
+  private int frUkn, fUkn, rUkn;
+
+  /**
+   * You need to provide a {@link FrameIndex} so that a stable bijection from
+   * role/frameRole names to ints can be made. This needs to be stable across
+   * shards since k names are not merged.
+   */
+  public FeaturePrecomputation(FrameIndex fi) {
+    kNames = new IntObjectBimap<>();
+    rUkn = kNames.lookupIndex("r=UKN", true);
+    frUkn = kNames.lookupIndex("fr=UKN", true);
+    fUkn = kNames.lookupIndex("f=UKN", true);
+    for (Frame f : fi.allFrames()) {
+      kNames.lookupIndex("f=" + f.getName(), true);
+      for (int k = 0; k < f.numRoles(); k++) {
+        kNames.lookupIndex("r=" + f.getRole(k), true);
+        kNames.lookupIndex("fr=" + f.getName() + "-" + f.getRole(k), true);
+      }
+    }
+    Log.info("kNames.size=" + kNames.size());
+  }
+
   /**
    * Compute all of the features and dump them to a file.
    */
-  public static void run(
+  public void run(
       Iterator<FNParse> data,
       File outputData,
-      File outputAlphabet) {
+      File outputAlphabet,
+      File outputRoleNames) {
     Log.info("writing features to " + outputData.getPath());
     Log.info("writing alphabet to " + outputAlphabet.getPath());
+    Log.info("writing role names to " + outputRoleNames.getPath());
 
     // Setup features
     Alphabet templates = new Alphabet();
 
     // This is how we prune spans
-    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
+    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, null, 1, 1, new Random(9001));
  
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -258,10 +291,23 @@ public class FeaturePrecomputation {
       e.printStackTrace();
     }
 
+    Log.info("saving the role names");
+    try (BufferedWriter w = FileUtil.getWriter(outputRoleNames)) {
+      w.write("-1\tnoRole\n");
+      for (int i = 0; i < kNames.size(); i++)
+        w.write(i + "\t" + kNames.lookupObject(i) + "\n");
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+
     Log.info("done");
   }
 
-  private static void emitAll(
+  /**
+   * Will emit k values for just the role (ignoring the frame, i.e. proper for PB)
+   * and for the frame and role (via {@link FrameRolePacking}).
+   */
+  private void emitAll(
       Writer w,
       FNParse y,
       edu.jhu.hlt.fnparse.features.precompute.Alphabet templates,
@@ -281,22 +327,40 @@ public class FeaturePrecomputation {
         continue;
 
       // Find if this (t,s) corresponds to a role
-//      int k = -1;
       StringBuilder k = null;
       if (s != Span.nullSpan) {
         FrameInstance fi = y.getFrameInstance(commit.t);
+        Frame f = fi.getFrame();
         int K = fi.getFrame().numRoles();
         for (int ki = 0; ki < K; ki++) {
           Span arg = fi.getArgument(ki);
           if (arg == s) {
-//            assert k < 0 : s + " is assigned to both k="
-//                + k + ":" + fi.getFrame().getRole(k)
-//                + " and k=" + ki + ":" + fi.getFrame().getRole(ki);
-//            k = ki;
+
+            String fs = f.getName();
+            String rs = f.getRole(ki);
+            String frs = fs + "-" + rs;
+
+            int role = kNames.lookupIndex("r=" + rs, false);
+            int frameRole = kNames.lookupIndex("fr=" + frs, false);
+            int frame = kNames.lookupIndex("f=" + fs, false);
+
+            if (role < 0) {
+              Log.warn("unknown r: " + rs);
+              role = rUkn;
+            }
+            if (frameRole < 0) {
+              Log.warn("unknown fr: " + frs);
+              frameRole = frUkn;
+            }
+            if (frame < 0) {
+              Log.warn("unknown f: " + fs);
+              frame = fUkn;
+            }
+
             if (k == null)
-              k = new StringBuilder(String.valueOf(ki));
+              k = new StringBuilder(role + "," + frameRole + "," + frame);
             else
-              k.append("," + ki);
+              k.append("," + role + "," + frameRole + "," + frame);
           }
         }
       }
@@ -351,11 +415,13 @@ public class FeaturePrecomputation {
     // Poorly named: provides parses via redis for both propbank/framenet
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
 
+    FrameIndex fi;
     Iterable<FNParse> data;
     String dataset = config.getString("dataset");
     IntPair shard = ShardUtils.getShard(config);
     if ("propbank".equalsIgnoreCase(dataset)) {
       Log.info("reading propbank");
+      fi = FrameIndex.getPropbank();
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
       data = config.getBoolean("debug", false)
@@ -363,6 +429,7 @@ public class FeaturePrecomputation {
               : Iterables.concat(pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
     } else if ("framenet".equalsIgnoreCase(dataset)) {
       Log.info("reading framenet");
+      fi = FrameIndex.getFrameNet();
       Iterable<FNParse> train = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
       Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
       data = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
@@ -390,6 +457,10 @@ public class FeaturePrecomputation {
       throw new RuntimeException("unknown dataset: " + dataset);
     }
 
-    run(data.iterator(), new File(wd, "features.txt.gz"), new File(wd, "template-feat-indices.txt.gz"));
+    FeaturePrecomputation fp = new FeaturePrecomputation(fi);
+    fp.run(data.iterator(),
+        new File(wd, "features.txt.gz"),
+        new File(wd, "template-feat-indices.txt.gz"),
+        new File(wd, "role-names.txt.gz"));
   }
 }
