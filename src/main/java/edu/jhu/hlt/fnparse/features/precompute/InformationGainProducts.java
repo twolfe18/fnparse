@@ -458,6 +458,9 @@ public class InformationGainProducts {
         // hx
         sb.append("\t" + t.hx());
 
+        // selectivity
+        sb.append("\t" + t.ig().selectivity);
+
         // order
         int[] pieces = getTemplatesForFeature(t.getIndex());
         sb.append("\t" + pieces.length + "\t");

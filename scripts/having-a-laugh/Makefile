@@ -4,6 +4,8 @@
 FN_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
 PB_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
 
+# TODO Update to penalize selectivity
+
 framenet-ig-feat.8.txt:
 	cat $(FN_WD)/ig/products/ig-files/shard-* \
 		| awk -F"\t" 'BEGIN{OFS="\t"} $$2>0.001 {$$1 = (8 * $$2) - (1+$$3)^(1.5) - 0.001 * $$4; print}' \

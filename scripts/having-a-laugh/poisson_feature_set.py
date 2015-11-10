@@ -1,4 +1,6 @@
 
+# NOTE: I'm pretty sure this is a bad idea, see Makefile for how to do it better
+
 import sys
 from dedup_sim_feats import Feature
 from math import pow, exp, factorial

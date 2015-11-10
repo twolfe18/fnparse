@@ -111,6 +111,9 @@ public class InformationGain implements Serializable, LineByLine {
     public double h_y_p, h_y, h_y_emp;
     public double h_x_p, h_x, h_x_emp;
 
+    // Fraction of the time this feature fired
+    public double selectivity;
+
     // Providence
     public double alpha_yx_p;
     public double alpha_y_p;
@@ -171,6 +174,7 @@ public class InformationGain implements Serializable, LineByLine {
     private int numY; // ensure that all values of y are less than this
 
     private int updates;
+    private int observations, observationsWithSomeX;
     private MISummary igCache = null;
 
     // alpha_yx_p works differently from alpha_[yx](_p)?
@@ -196,6 +200,8 @@ public class InformationGain implements Serializable, LineByLine {
       this.cyx = new LongIntHashMap();
       this.numY = numY;
       this.updates = 0;
+      this.observations = 0;
+      this.observationsWithSomeX = 0;
 //      this.smi = new SmoothedMutualInformation<>();
     }
 
@@ -229,6 +235,11 @@ public class InformationGain implements Serializable, LineByLine {
 //        if (y != null)
 //          smi.add(conv(y), x);
 //      }
+
+      this.observations++;
+      if (x.length > 0)
+        this.observationsWithSomeX++;
+
       if (y != null) {
         for (int yy : y) {
           if (yy >= numY)
@@ -289,6 +300,8 @@ public class InformationGain implements Serializable, LineByLine {
         igCache.templateName = name;
         MI emp = igCache.miEmpirical;
         MI smo = igCache.miSmoothed;
+
+        igCache.selectivity = ((double) observationsWithSomeX) / observations;
 
 //        if (smi != null) {
 //          smi.smoothManual3(alpha_yx_p, alpha_y_p, alpha_x_p, alpha_y, alpha_x);
@@ -429,7 +442,9 @@ public class InformationGain implements Serializable, LineByLine {
 //        mi = 0;
 //      }
       double hx = hx();
-      return mi / (4 + hx * hx);
+      double selPenalty = -Math.log(mis.selectivity + 1e-12);
+      assert selPenalty >= 0 : "selectivity=" + mis.selectivity;
+      return mi / (4 + hx * hx) - 0.1 * selPenalty;
     }
 
     public double hx() {
@@ -616,8 +631,8 @@ public class InformationGain implements Serializable, LineByLine {
       for (int i = 0; i < templates.size(); i++) {
         TemplateIG t = templates.get(i);
         MISummary mi = t.ig();
-        String prefix = String.format("%d\t%f\t%f\t%f\t%f",
-            t.getIndex(), mi.miSmoothed.mi(), mi.h_x, mi.h_yx, mi.h_y);
+        String prefix = String.format("%d\t%f\t%f\t%f\t%f\t%f",
+            t.getIndex(), mi.miSmoothed.mi(), mi.h_x, mi.h_yx, mi.h_y, mi.selectivity);
         String line;
         if (tNames != null) {
           line = prefix + "\t" + tNames.get(t.getIndex()).name;

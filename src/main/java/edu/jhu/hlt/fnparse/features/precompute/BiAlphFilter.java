@@ -19,7 +19,7 @@ import edu.jhu.hlt.tutils.Log;
 public class BiAlphFilter {
 
   public static class Feature {
-    public final double score, mi, hx;
+    public final double score, mi, hx, selectivity;
     public final int arity;
     public final int[] template_int;
     public final String[] template_str;
@@ -29,6 +29,7 @@ public class BiAlphFilter {
       score = Double.parseDouble(ar[i++]);
       mi = Double.parseDouble(ar[i++]);
       hx = Double.parseDouble(ar[i++]);
+      selectivity = Double.parseDouble(ar[i++]);
       arity = Integer.parseInt(ar[i++]);
       String[] is = ar[i++].split("\\*");
       template_str = ar[i++].split("\\*");

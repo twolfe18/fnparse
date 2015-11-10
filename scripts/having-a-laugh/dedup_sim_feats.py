@@ -11,7 +11,7 @@
 
 import os, codecs, re, collections, math, random, sys
 
-TEMPLATE_NAME_BUG = True
+TEMPLATE_NAME_BUG = False
 
 def tokenize_feature(name):
   return sorted(name.split('*'))
@@ -111,13 +111,15 @@ def debug():
 class Feature:
   def __init__(self, line, rank=None, template_name_bug=False):
     ar = line.rstrip().split('\t')
+    assert len(ar) == 7
     self.rank = rank
     self.score = float(ar[0])
     self.ig = float(ar[1])
     self.hx = float(ar[2])
-    self.order = int(ar[3])
+    self.selectivity = float(ar[3])
+    self.order = int(ar[4])
     self.int_templates = map(int, ar[4].split('*'))
-    self.str_templates = ar[5].split('*')
+    self.str_templates = ar[6].split('*')
     if template_name_bug:
       self.str_templates = map(undo_template_name_bug, self.str_templates)
     assert self.order == len(self.int_templates)
@@ -125,8 +127,8 @@ class Feature:
 
   def __str__(self):
     if self.rank:
-      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f %s>" % (self.rank, self.order, self.ig, self.hx, str(self.str_templates))
-    return "<Feat n=%d ig=%.4f hx=%.4f %s>" % (self.order, self.ig, self.hx, str(self.str_templates))
+      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f sel=%.4g %s>" % (self.rank, self.order, self.ig, self.hx, str(self.str_templates), self.selectivity)
+    return "<Feat n=%d ig=%.4f hx=%.4f sel=%.4g %s>" % (self.order, self.ig, self.hx, str(self.str_templates), self.selectivity)
 
   def str_like_input(self):
     #y = self.ig / (1 + self.hx * self.hx)
@@ -241,8 +243,6 @@ if __name__ == '__main__':
   b = int(sys.argv[3])
   of = sys.argv[4]
   build_feature_set(ff, output_ff=of, budget=b, sim_thresh=st, show=False)
-
-
 
 
 
