@@ -59,6 +59,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
+import edu.jhu.prim.tuple.Pair;
 import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
@@ -437,6 +438,25 @@ public class BasicFeatureTemplates {
           }
         });
       }
+      // head2 parent
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head2Parent-" + dp.getKey() + "-" + x.getKey();
+        addTemplate(name, new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public String extractSS(TemplateContext context) {
+            int h = context.getHead2();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse deps = extractDeps.apply(context.getSentence());
+            if (deps == null)
+              return null;
+            pos.index = deps.getHead(h);
+            pos.sentence = context.getSentence();
+            return name + "=" + x.getValue().apply(pos);
+          }
+        });
+      }
 
       // head1 grandparent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
@@ -446,6 +466,28 @@ public class BasicFeatureTemplates {
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
           public String extractSS(TemplateContext context) {
             int h = context.getHead1();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse deps = extractDeps.apply(context.getSentence());
+            if (deps == null)
+              return null;
+            pos.index = deps.getHead(h);
+            if (pos.index < 0)
+              return null;
+            pos.index = deps.getHead(pos.index);
+            pos.sentence = context.getSentence();
+            return name + "=" + x.getValue().apply(pos);
+          }
+        });
+      }
+      // head2 grandparent
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head2Grandparent-" + dp.getKey() + "-" + x.getKey();
+        addTemplate(name, new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public String extractSS(TemplateContext context) {
+            int h = context.getHead2();
             if (h == TemplateContext.UNSET)
               return null;
             DependencyParse deps = extractDeps.apply(context.getSentence());
@@ -489,6 +531,34 @@ public class BasicFeatureTemplates {
           }
         });
       }
+      // head2 children
+      for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+        String name = "head2Child-" + dp.getKey() +"-" + x.getKey();
+        addTemplate(name, new Template() {
+          private SentencePosition pos = new SentencePosition();
+          private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+          public Iterable<String> extract(TemplateContext context) {
+            int h = context.getHead2();
+            if (h == TemplateContext.UNSET)
+              return null;
+            DependencyParse d = extractDeps.apply(context.getSentence());
+            if (d == null)
+              return null;
+            int[] c = d.getChildren(h);
+            if (c.length == 0)
+              return Arrays.asList(name + "=NONE");
+            else {
+              pos.sentence = context.getSentence();
+              List<String> cs = new ArrayList<>();
+              for (int cd : c) {
+                pos.index = cd;
+                cs.add(name + "=" + x.getValue().apply(pos));
+              }
+              return cs;
+            }
+          }
+        });
+      }
     }
 
     // left, first, last, right
@@ -497,7 +567,6 @@ public class BasicFeatureTemplates {
     spanLocs.put("First", x -> x.start);
     spanLocs.put("Last", x -> x.end - 1);
     spanLocs.put("Right", x -> x.end);
-    // TODO put head in here
     for (Entry<String, Function<SentencePosition, String>> ex1 :
         tokenExtractors.entrySet()) {
       for (Entry<String, ToIntFunction<Span>> loc1 : spanLocs.entrySet()) {
@@ -517,7 +586,7 @@ public class BasicFeatureTemplates {
       }
     }
 
-    // head to span features
+    // head1 to span features
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
       String name = "head1ToLeft" + x.getKey();
       addTemplate(name, new Template() {
@@ -551,6 +620,55 @@ public class BasicFeatureTemplates {
         @Override
         public Iterable<String> extract(TemplateContext context) {
           int h = context.getHead1();
+          if (h == TemplateContext.UNSET)
+            return null;
+          Span s = context.getSpan1();
+          if (s == null)
+            return null;
+          if (h >= s.end)
+            return null;
+          Collection<String> elems = new HashSet<>();
+          pos.sentence = context.getSentence();
+          for (pos.index = h + 1; pos.index < s.end; pos.index++)
+            elems.add(namePref + ext.apply(pos));
+          return elems;
+        }
+      });
+    }
+    // head2 to span features
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head2ToLeft" + x.getKey();
+      addTemplate(name, new Template() {
+        private Function<SentencePosition, String> ext = x.getValue();
+        private String namePref = name + "=";
+        private SentencePosition pos = new SentencePosition();
+        @Override
+        public Iterable<String> extract(TemplateContext context) {
+          int h = context.getHead2();
+          if (h == TemplateContext.UNSET)
+            return null;
+          Span s = context.getSpan1();
+          if (s == null)
+            return null;
+          if (s.start >= h)
+            return null;
+          Collection<String> elems = new HashSet<>();
+          pos.sentence = context.getSentence();
+          for (pos.index = h - 1; pos.index >= s.start; pos.index--)
+            elems.add(namePref + ext.apply(pos));
+          return elems;
+        }
+      });
+    }
+    for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
+      String name = "head2ToRight" + x.getKey();
+      addTemplate(name, new Template() {
+        private Function<SentencePosition, String> ext = x.getValue();
+        private String namePref = name + "=";
+        private SentencePosition pos = new SentencePosition();
+        @Override
+        public Iterable<String> extract(TemplateContext context) {
+          int h = context.getHead2();
           if (h == TemplateContext.UNSET)
             return null;
           Span s = context.getSpan1();
@@ -623,6 +741,31 @@ public class BasicFeatureTemplates {
         Collections.sort(rels);
         StringBuilder rs = new StringBuilder();
         rs.append("span1GovDirRelations");
+        if (rels.size() == 0) {
+          rs.append("_NONE");
+        } else {
+          for (String rel : rels) {
+            rs.append("_");
+            rs.append(rel);
+          }
+        }
+        return rs.toString();
+      }
+    });
+    addTemplate("span2GovDirRelations", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Span s = context.getSpan2();
+        if (s == null)
+          return null;
+        DependencyParse deps = context.getSentence().getCollapsedDeps();
+        if (deps == null)
+          return null;
+        List<String> rels = new ArrayList<>();
+        for (int i = s.start; i < s.end; i++)
+          rels.add(parentRelTo(i, s.start, s.end - 1, deps));
+        Collections.sort(rels);
+        StringBuilder rs = new StringBuilder();
+        rs.append("span2GovDirRelations");
         if (rels.size() == 0) {
           rs.append("_NONE");
         } else {
@@ -775,9 +918,26 @@ public class BasicFeatureTemplates {
               Span s = context.getSpan1();
               if (s == null)
                 return null;
-              if (s.width() > 15 + tagsLeft + tagsRight)
-                return name + "=TOO_BIG";
+              if (s.width() > 10 + tagsLeft + tagsRight)
+                return null;
+//                return name + "=TOO_BIG";
               return name + "=" + pat.extract(s, context.getSentence());
+            }
+          });
+
+          String name2 = String.format("span2PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
+          addTemplate(name2, new TemplateSS() {
+            private PosPatternGenerator pat
+              = new PosPatternGenerator(tagsLeft, tagsRight, mode);
+            @Override
+            String extractSS(TemplateContext context) {
+              Span s = context.getSpan2();
+              if (s == null)
+                return null;
+              if (s.width() > 10 + tagsLeft + tagsRight)
+                return null;
+//                return name2 + "=TOO_BIG";
+              return name2 + "=" + pat.extract(s, context.getSentence());
             }
           });
         }
@@ -786,164 +946,173 @@ public class BasicFeatureTemplates {
 
     // ********** Constituency parse features **********************************
     // basic:
-    addTemplate("span1StanfordDepth", new TemplateSS() {
-      String extractSS(TemplateContext context) {
-        Span s = context.getSpan1();
-        if (s == null)
+    List<Pair<String, Function<TemplateContext, Span>>> spanExtractors = new ArrayList<>();
+    spanExtractors.add(new Pair<>("Span1", tc -> tc.getSpan1()));
+    spanExtractors.add(new Pair<>("Span2", tc -> tc.getSpan2()));
+
+    for (Pair<String, Function<TemplateContext, Span>> se : spanExtractors) {
+      addTemplate(se.get1() + "-StanfordDepth", new TemplateSS() {
+        String extractSS(TemplateContext context) {
+          Span s = se.get2().apply(context);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = context.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n != null)
+            return "span1StanfordDepth=" + n.getDepth();
           return null;
-        ConstituencyParse cp = context.getSentence().getStanfordParse();
-        if (cp == null)
+        }
+      });
+      addTemplate(se.get1() + "-StanfordCategory", new TemplateSS() {
+        String extractSS(TemplateContext context) {
+          Span s = se.get2().apply(context);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = context.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          String cat = "NONE";
+          if (n != null)
+            cat = n.getTag();
+          return "span1StanfordCategory=" + cat;
+        }
+      });
+      addTemplate(se.get1() + "-StanfordCategory2", new TemplateSS() {
+        String extractSS(TemplateContext context) {
+          Span s = se.get2().apply(context);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = context.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n != null)
+            return "span1StanfordCategory2=" + n.getTag();
           return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n != null)
-          return "span1StanfordDepth=" + n.getDepth();
-        return null;
-      }
-    });
-    addTemplate("span1StanfordCategory", new TemplateSS() {
-      String extractSS(TemplateContext context) {
-        Span s = context.getSpan1();
-        if (s == null)
+        }
+      });
+      addTemplate(se.get1() + "-StanfordRule", new TemplateSS() {
+        String extractSS(TemplateContext context) {
+          Span s = se.get2().apply(context);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = context.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          String rule = "NONE";
+          if (n != null)
+            rule = n.getRule();
+          return "span1IsStanfordRule=" + rule;
+        }
+      });
+      addTemplate(se.get1() + "-StanfordRule2", new TemplateSS() {
+        String extractSS(TemplateContext context) {
+          Span s = se.get2().apply(context);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = context.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n != null)
+            return "span1IsStanfordRule2=" + n.getRule();
           return null;
-        ConstituencyParse cp = context.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        String cat = "NONE";
-        if (n != null)
-          cat = n.getTag();
-        return "span1StanfordCategory=" + cat;
-      }
-    });
-    addTemplate("span1StanfordCategory2", new TemplateSS() {
-      String extractSS(TemplateContext context) {
-        Span s = context.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = context.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n != null)
-          return "span1StanfordCategory2=" + n.getTag();
-        return null;
-      }
-    });
-    addTemplate("span1StanfordRule", new TemplateSS() {
-      String extractSS(TemplateContext context) {
-        Span s = context.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = context.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        String rule = "NONE";
-        if (n != null)
-          rule = n.getRule();
-        return "span1IsStanfordRule=" + rule;
-      }
-    });
-    addTemplate("span1StanfordRule2", new TemplateSS() {
-      String extractSS(TemplateContext context) {
-        Span s = context.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = context.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n != null)
-          return "span1IsStanfordRule2=" + n.getRule();
-        return null;
-      }
-    });
+        }
+      });
+    }
+
     // Values of this map have the following interpretation:
     // Entries in the outer list should fire as separate features (a bag of features)
     // Entries in the inner list should be conjoined into one feature string
     SortedMap<String,
       Function<TemplateContext,
         List<List<ConstituencyParse.NodePathPiece>>>> node2Path = new TreeMap<>();
-    node2Path.put("DirectChildren", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
-      public List<List<NodePathPiece>> apply(TemplateContext t) {
-        Span s = t.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = t.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n == null)
-          return null;
-        List<NodePathPiece> children = new ArrayList<>();
-        for (Node c : n.getChildren())
-          children.add(new NodePathPiece(c, null));
-        return Arrays.asList(children);
-      }
-    });
-    node2Path.put("AllChildrenBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
-      public List<List<NodePathPiece>> apply(TemplateContext t) {
-        Span s = t.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = t.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n == null)
-          return null;
-        List<List<NodePathPiece>> children = new ArrayList<>();
-        helper(n, children);
-        if (children.size() == 0)
-          return null;
-        return children;
-      }
-      private void helper(ConstituencyParse.Node n, List<List<ConstituencyParse.NodePathPiece>> addTo) {
-        addTo.add(Arrays.asList(new NodePathPiece(n, null)));
-        for (ConstituencyParse.Node c : n.getChildren())
-          helper(c, addTo);
-      }
-    });
-    node2Path.put("ToRootPath", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
-      public List<List<NodePathPiece>> apply(TemplateContext t) {
-        Span s = t.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = t.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n == null)
-          return null;
-        List<NodePathPiece> parents = new ArrayList<>();
-        while (n != null) {
-          parents.add(new NodePathPiece(n, null));
-          n = n.getParent();
+    for (Pair<String, Function<TemplateContext, Span>> se : spanExtractors) {
+      node2Path.put(se.get1() + "-DirectChildren", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+        public List<List<NodePathPiece>> apply(TemplateContext t) {
+          Span s = se.get2().apply(t);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = t.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n == null)
+            return null;
+          List<NodePathPiece> children = new ArrayList<>();
+          for (Node c : n.getChildren())
+            children.add(new NodePathPiece(c, null));
+          return Arrays.asList(children);
         }
-        assert parents.size() > 0;
-        return Arrays.asList(parents);
-      }
-    });
-    node2Path.put("ToRootBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
-      public List<List<NodePathPiece>> apply(TemplateContext t) {
-        Span s = t.getSpan1();
-        if (s == null)
-          return null;
-        ConstituencyParse cp = t.getSentence().getStanfordParse();
-        if (cp == null)
-          return null;
-        ConstituencyParse.Node n = cp.getConstituent(s);
-        if (n == null)
-          return null;
-        List<List<NodePathPiece>> parents = new ArrayList<>();
-        while (n != null) {
-          parents.add(Arrays.asList(new NodePathPiece(n, ">")));
-          n = n.getParent();
+      });
+      node2Path.put(se.get1() + "-AllChildrenBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+        public List<List<NodePathPiece>> apply(TemplateContext t) {
+          Span s = se.get2().apply(t);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = t.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n == null)
+            return null;
+          List<List<NodePathPiece>> children = new ArrayList<>();
+          helper(n, children);
+          if (children.size() == 0)
+            return null;
+          return children;
         }
-        assert parents.size() > 0;
-        return parents;
-      }
-    });
+        private void helper(ConstituencyParse.Node n, List<List<ConstituencyParse.NodePathPiece>> addTo) {
+          addTo.add(Arrays.asList(new NodePathPiece(n, null)));
+          for (ConstituencyParse.Node c : n.getChildren())
+            helper(c, addTo);
+        }
+      });
+      node2Path.put(se.get1() + "-ToRootPath", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+        public List<List<NodePathPiece>> apply(TemplateContext t) {
+          Span s = se.get2().apply(t);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = t.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n == null)
+            return null;
+          List<NodePathPiece> parents = new ArrayList<>();
+          while (n != null) {
+            parents.add(new NodePathPiece(n, null));
+            n = n.getParent();
+          }
+          assert parents.size() > 0;
+          return Arrays.asList(parents);
+        }
+      });
+      node2Path.put(se.get1() + "-ToRootBag", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
+        public List<List<NodePathPiece>> apply(TemplateContext t) {
+          Span s = se.get2().apply(t);
+          if (s == null)
+            return null;
+          ConstituencyParse cp = t.getSentence().getStanfordParse();
+          if (cp == null)
+            return null;
+          ConstituencyParse.Node n = cp.getConstituent(s);
+          if (n == null)
+            return null;
+          List<List<NodePathPiece>> parents = new ArrayList<>();
+          while (n != null) {
+            parents.add(Arrays.asList(new NodePathPiece(n, ">")));
+            n = n.getParent();
+          }
+          assert parents.size() > 0;
+          return parents;
+        }
+      });
+    }
     node2Path.put("CommonParent", new Function<TemplateContext, List<List<ConstituencyParse.NodePathPiece>>>() {
       public List<List<NodePathPiece>> apply(TemplateContext t) {
         Span s1 = t.getSpan1();
