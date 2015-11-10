@@ -33,8 +33,18 @@ public class Frame {
   /**
    * @param modifierRoles is a list of all the possible modifier roles, e.g.
    * "ARGM-LOC", "ARGM-TMP", etc. PropbankFrames do not include these.
+   *
+   * @param universalRoles: if true, we will ignore the roles described in the
+   * given {@link PropbankFrame} in favor of a fixed list of ARG0...ARG5...etc.
+   * The reason to do this is that there are some mis-matches between the
+   * CoNLL-formatted instance data and the types listed in the frame index XML
+   * (e.g. instance data will point to ARG2 and the frame index doesn't have an
+   *  ARG2 for that frame...).
+   * Another benefit of using universalRoles is that you never have to worry
+   * about frame_i: {k=0 => ARG1 ...} and frame_j: {k=0 => ARG0 ...}, that is
+   * this makes k truely independent of t/frame.
    */
-  public Frame(PropbankFrame pf, int idx, List<String> modifierRoles) {
+  public Frame(PropbankFrame pf, int idx, List<String> modifierRoles, boolean universalRoles) {
     this.idx = idx;
     this.name = pf.id;
     this.lexicalUnits = null;
@@ -44,19 +54,24 @@ public class Frame {
     List<String> allRoleTypes = new ArrayList<>();
 
     int i = 0;
-    for (; i < pf.numRoles(); i++) {
-      String r = pf.getRole(i).getLabel();
-      allRoles.add(r);
-      allRoleTypes.add("core");
-      if (!seenRoles.add(r)) {
-//        Log.warn("duplicate roles: " + pf);
-        throw new RuntimeException("duplicate roles: " + pf);
+    if (universalRoles) {
+      allRoles.add("ARG0"); allRoleTypes.add("core");
+      allRoles.add("ARG1"); allRoleTypes.add("core");
+      allRoles.add("ARG2"); allRoleTypes.add("core");
+      allRoles.add("ARG3"); allRoleTypes.add("core");
+      allRoles.add("ARG4"); allRoleTypes.add("core");
+      allRoles.add("ARG5"); allRoleTypes.add("core");
+      allRoles.add("ARGA"); allRoleTypes.add("adj");
+      seenRoles.addAll(allRoles);
+    } else {
+      for (; i < pf.numRoles(); i++) {
+        String r = pf.getRole(i).getLabel();
+        allRoles.add(r);
+        allRoleTypes.add("core");
+        System.out.println("adding core role " + r + " to " + pf.name);
+        if (!seenRoles.add(r))
+          throw new RuntimeException("duplicate roles: " + pf);
       }
-//      assert seenRoles.add(r) :
-//        "non-unique roles: " + pf + "\n"
-//        + "If this is \"blabber-v-1\" and there are two ARG1s, then this "
-//        + "is a mistake in the data (see http://verbs.colorado.edu/propbank/framesets-english-aliases/blabber.html)\n"
-//        + "Also \"crinkle-v-1\", \"ding-v-1\", \"disembowel-v-1\", \"misread-v-1\", \"oscillate-v-1\", \"pass-v-19\", \"powder-v-2\", \"predominate-v-1\", \"re-case-v-1\", \"reincarnate-v-1\" appear to be wrong too.";
     }
 
     for (String mr : modifierRoles) {

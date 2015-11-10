@@ -34,6 +34,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
+import edu.jhu.hlt.fnparse.rl.ContRefRoleClassifier;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
@@ -106,7 +107,16 @@ public class Reranker implements Serializable {
   public boolean logArgPruningStats;
   public boolean logPredict;
 
+  // Module for caching/precomputing features.
   public CachedFeatures cachedFeatures;
+
+  // In PB, during decoding we train R-ARG-X/C-ARG-X to look like just plain
+  // ARG-X mentions, and when we run the transition system we may end up with
+  // multiple ARG-X mentions. This is responsible for finding the base ARG-X
+  // mention and clasifying the others in ref/cont roles, and building the final
+  // FrameInstances/FNParse.
+  // For FN, this can be null/not used.
+  public ContRefRoleClassifier crClassify;
 
   public Reranker(
       Params.Stateful thetaStateful,
@@ -114,6 +124,7 @@ public class Reranker implements Serializable {
       Params.PruneThreshold tauParams,
       DeterministicRolePruning.Mode argPruningMode,
       CachedFeatures cachedFeatures,
+      ContRefRoleClassifier crClassify,
       int trainBeamWidth,
       int testBeamWidth,
       Random rand) {
@@ -124,6 +135,7 @@ public class Reranker implements Serializable {
     this.thetaStateless = thetaStateless;
     this.argPruningMode = argPruningMode;
     this.cachedFeatures = cachedFeatures;
+    this.crClassify = crClassify;
     this.trainBeamWidth = trainBeamWidth;
     this.testBeamWidth = testBeamWidth;
     this.rand = rand;
@@ -372,7 +384,7 @@ public class Reranker implements Serializable {
         initialState, BFunc.NONE, solveMax, decode, testBeamWidth, model);
     fs.run();
     StateSequence ss = fs.getPath();
-    FNParse yhat = ss.getCur().decode();
+    FNParse yhat = crClassify.decode(ss.getCur());
     assert yhat != null;    // split maxbeam.pop and beam.pop? path vs decode?
     if (logPredict)
       LOG.info("[predict] done");
@@ -395,8 +407,8 @@ public class Reranker implements Serializable {
     LOG.info(desc + " T=" + init.numFrameInstance()
         + " TK=" + init.numFrameRoleInstances()
         + " O(n^2)=" + (n*(n-1)/2));
-    LOG.info(desc + " #committed=" + init.numCommitted()
-        + " #unCommitted=" + init.numUncommitted());
+//    LOG.info(desc + " #committed=" + init.numCommitted()
+//        + " #unCommitted=" + init.numUncommitted());
     StringBuilder sb = new StringBuilder("action types:");
     LOG.info(desc + " " + sb.toString());
     LOG.info(desc + " " + init.show());
@@ -729,7 +741,7 @@ public class Reranker implements Serializable {
         List<ScoredAction2> initialActions,
         boolean fullSearch,
         int beamSize) {
-      assert initialState.numCommitted() == 0;
+//      assert initialState.numCommitted() == 0;
       this.beamSize = beamSize;
       this.initialState = initialState;
       this.model = model;
@@ -1102,7 +1114,7 @@ public class Reranker implements Serializable {
       assert oracle.getLoss(gold) == 0;
       assert mostViolated.getLoss(gold) >= 0;
 
-      FNParse yHat = mostViolated.getCur().decode();
+      FNParse yHat = crClassify.decode(mostViolated.getCur());
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
       double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();

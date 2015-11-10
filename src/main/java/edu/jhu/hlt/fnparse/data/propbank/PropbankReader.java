@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.data;
+package edu.jhu.hlt.fnparse.data.propbank;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -8,7 +8,7 @@ import java.util.function.Predicate;
 import edu.jhu.hlt.concrete.Communication;
 import edu.jhu.hlt.concrete.ingest.conll.Conll2011;
 import edu.jhu.hlt.concrete.ingest.conll.Ontonotes5;
-import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
@@ -206,4 +206,23 @@ public class PropbankReader {
     return pw;
   }
 
+  public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    DataUtil.DEBUG = config.getBoolean("debug.DataUtil", false);
+    boolean showParses = config.getBoolean("showParses", true);
+
+    ParsePropbankData.Redis propbankAutoParses = null;
+    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+
+    ItemProvider tr = pbr.getTrainData();
+    int n = tr.size();
+    Log.info("train.size=" + n);
+    for (int i = 0; i < n; i++) {
+      FNParse y = tr.label(i);
+      if (showParses)
+        System.out.println(Describe.fnParse(y));
+    }
+    Log.info("done");
+  }
 }

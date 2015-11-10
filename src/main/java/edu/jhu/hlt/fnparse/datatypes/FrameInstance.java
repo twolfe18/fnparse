@@ -27,6 +27,9 @@ public class FrameInstance {
   protected Span[] arguments;
 
   // Only applies to Propbank
+  // Indices are the same as arguments, e.g. if index("ARG2") = 1, then
+  // instances of "ARG2" will show up in arguments[1] and instances of
+  // "C-ARG2" will show up in argumentContinuations[1] (ditto for ref roles).
   protected List<Span>[] argumentContinuations;
   protected List<Span>[] argumentReferences;
 
@@ -60,6 +63,13 @@ public class FrameInstance {
     }
   }
 
+  public List<Span> getContinuationRoleSpans(int k) {
+    return argumentContinuations[k];
+  }
+  public List<Span> getReferenceRoleSpans(int k) {
+    return argumentReferences[k];
+  }
+
   /**
    * Allows multiple spans per role.
    *
@@ -67,16 +77,19 @@ public class FrameInstance {
    */
   @SuppressWarnings("unchecked")
   public static FrameInstance buildPropbankFrameInstance(
-      Frame frame, Span target, List<Pair<String, Span>> arguments, Sentence sent)
-          throws PropbankDataException {
+      Frame frame,
+      Span target,
+      List<Pair<String, Span>> arguments,
+      Sentence sent) throws PropbankDataException {
     if (sent == null || frame == null || target == null || arguments == null)
       throw new IllegalArgumentException();
     int K = frame.numRoles();
     FrameInstance fi = new FrameInstance(frame, target, new Span[K], sent);
+    for (int k = 0; k < K; k++)
+      fi.arguments[k] = Span.nullSpan;
     fi.argumentContinuations = new List[K];
     fi.argumentReferences = new List[K];
     for (int k = 0; k < K; k++) {
-      fi.arguments[k] = Span.nullSpan;
       fi.argumentContinuations[k] = new ArrayList<>();
       fi.argumentReferences[k] = new ArrayList<>();
     }

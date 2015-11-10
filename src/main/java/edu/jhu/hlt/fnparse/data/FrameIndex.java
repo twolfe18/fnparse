@@ -154,18 +154,14 @@ public class FrameIndex implements FrameIndexInterface {
     byId = new Frame[nFrames + 1];
   }
 
-//  public static FrameIndex getPropbank(boolean grid) {
-//    File dir = grid
-//      //? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames")
-//      ? new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0-fixed-frames/frames")
-//      : new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/metadata/frames");
-//    return getPropbank(dir);
-//  }
-
   public static FrameIndex getPropbank() {
     if (propbank == null) {
-      LOG.info("reading propbank frames");
-      File dir = ExperimentProperties.getInstance().getExistingDir("data.propbank.frames");
+      Log.info("[main] reading propbank frames");
+
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      boolean universalRoles = config.getBoolean("data.propbank.universalRoles", true);
+
+      File dir = config.getExistingDir("data.propbank.frames");
       PropbankFrameIndex pfi = new PropbankFrameIndex(dir);
       // Sort the frames by name to prevent any change in ids (unless a frame is
       // added or removed...)
@@ -179,7 +175,7 @@ public class FrameIndex implements FrameIndexInterface {
       FrameIndex fi = new FrameIndex(frames.size());
       int numericId = 0;
       for (PropbankFrame pf : frames) {
-        Frame f = new Frame(pf, numericId, PropbankFrameIndex.MODIFIER_ROLES);
+        Frame f = new Frame(pf, numericId, PropbankFrameIndex.MODIFIER_ROLES, universalRoles);
         fi.allFrames.add(f);
         assert fi.byId[f.getId()] == null;
         fi.byId[f.getId()] = f;

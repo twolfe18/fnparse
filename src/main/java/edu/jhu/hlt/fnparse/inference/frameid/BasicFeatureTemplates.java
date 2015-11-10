@@ -28,8 +28,8 @@ import java.util.function.ToIntFunction;
 import org.apache.commons.math3.util.FastMath;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;

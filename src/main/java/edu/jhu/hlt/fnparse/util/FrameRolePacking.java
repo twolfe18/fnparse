@@ -5,7 +5,6 @@ import java.util.Random;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**

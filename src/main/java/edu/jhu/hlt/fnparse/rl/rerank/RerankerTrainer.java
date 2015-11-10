@@ -37,8 +37,8 @@ import java.util.function.Predicate;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
-import edu.jhu.hlt.fnparse.data.PropbankReader;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -60,6 +60,7 @@ import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.ContRefRoleClassifier;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
@@ -562,6 +563,7 @@ public class RerankerTrainer {
         tauParams,
         trainConf.argPruningMode,
         cachedFeatures,
+        new ContRefRoleClassifier(),
         pretrainConf.trainBeamSize,
         pretrainConf.testBeamSize,
         rand);
@@ -1819,6 +1821,7 @@ public class RerankerTrainer {
             glue.getTau(),
             trainer.trainConf.argPruningMode,
             trainer.cachedFeatures,
+            new ContRefRoleClassifier(),
             trainer.trainConf.trainBeamSize,
             trainer.trainConf.testBeamSize,
             trainer.rand);

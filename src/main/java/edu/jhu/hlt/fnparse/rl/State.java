@@ -6,8 +6,6 @@ import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -25,25 +23,106 @@ import edu.jhu.hlt.fnparse.rl.rerank.Item;
  * @author travis
  */
 public class State {
-  public static final Logger LOG = Logger.getLogger(State.class);
-  public static boolean PRUNE_SPANS = false;
 
   protected FNTagging frames;
   private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
 
   // Represents which spans a given t,k can be assigned to.
   // Does not represent (t,k,i,j) s.t. i=0,j=0 (i.e. nullSpan).
-  // A (t,k) being assigned to nullSpan is only captured by committed[t][k] = nullSpan.
+  // A (t,k) being assigned to nullSpan is only captured by committed[t][k] = SpanLL(nullSpan, null)
+  // NOTE: For continuation/reference roles, e.g. "R-ARG-X" or "C-ARG-X", they
+  // are indexed in possible in the same way that "ARG-X" is; meaning that it may
+  // be the case that sum_{s} possible[t,k,s] > 1 if k="ARG-X" and "R-ARG-X" or
+  // "C-ARG-X" appears in the sentence with t.
   private BitSet possible;
 
+  // OLD DOCS:
   // [committed[t][k] != null] => [\not\exists i,j s.t. possible(t,k,i,j)]
   // NOTE the direction of that implication!
   // It is the job of COMMIT.next to update committed if it loops over i,j and
   // finds no possible(t,k,i,j). This can happen because PRUNE.apply only loops
   // over the i,j that are pruned, not those that aren't!
-  private Span[][] committed;
+  //private Span[][] committed;
 
-  public State(FNTagging frames, StateIndex stateIndex, BitSet possible, Span[][] committed) {
+  // NEW DOCS:
+  // A linked list of: nullSpan? nonNullSpan*
+  // A nullSpan at the end indicates that this (t,k) has been pruned, and all
+  // remaining z_{t,k,s}=? are set to z_{t,k,s}=0.
+  // If there is no nullSpan, then COMMIT actions may append to this LL
+  // indicating that possible_{t,k,s}=1. This may be important for global
+  // features to inspect this LL.
+  private SpanLL[][] committed;
+
+  /*
+   * If we wanted to have an alternative to exactly one committed Span per (t,k),
+   * how would we do it?
+   * List<Span>[][]
+   * There is no reason why we couldn't make this persistent either
+   * SpanLL[][]
+   *
+   * If I'm going to make this change, what is the smallest change I could make
+   * to make either SPRL or target+arg labeling work?
+   * SPRL: This is exactly what is needed, k now indexes properties and SpanLL is an inverted index
+   *  You basically predict the (t,p,s) that you are most confident in (where p := property)
+   *  Then you grow a stack indexed by an s by noting that you usually get either 0 or >1 properties per span
+   *  What feature gets this?
+   *  ArgLoc should get this, assuming CommitIndex is updated properly
+   *    (may want re-write them so that they come out how you want for SPRL)
+   * Target+args: I think this is going to require a lot more changes
+   *    Need to have a dynamic (append only) stateIndex...
+   *
+   * While it is tempting to try to merge CommitIndex and SpanLL committed,
+   * and they are similar (they're basically append-only indices on spans/actions
+   * with two different keys: (t,k) vs (i,j),
+   * I don't think there is any need to, and it would break my global feature code.
+   */
+
+  /*
+   * Just realized something: for SPRL, we don't want committed : (t,k) -> Span*
+   * We want (t,Span) -> k*
+   */
+
+  /*
+   * Why do I even need committed anyway?
+   * Just to limit actions in COMMIT.next and PRUNE.next?
+   * GlobalFeatures are actually based on CommitIndex.
+   *
+   * From grepping through the source code, it appears that committed serves the following purposes:
+   * 1) make decode easy: add a FrameInstance for every (t,k) s.t. committed[t][k] != null
+   * 2) make PRUNE.next and COMMIT.next easy
+   *
+   * It seems like State.possible is already our source of ground truth and that
+   * State.committed is just an index on that, so why not remove committed as
+   * a central concept and add other indices.
+   * StateIndex (startsAt[i], endsAt[i], covers[i]) could all be added.
+   * committedA : (t,k) -> SpanLL
+   * committedB : (t,s) -> PropertyLL
+   *
+   * If you want to be pedantic and worry about linear time global features,
+   * you just have to write down the feature monoid for SpanLL and PropertyLL.
+   * For the near future, probably don't want to do this beause I am computing
+   * features for (a,SpanLL) where a is an arbitrary commit action/span.
+   *
+   * The real way to make this fast is to have a int id for every SpanLL/PropertyLL/action
+   * (in the case of action we basically want to come up with a stable index for
+   *  every possible action), and then cache the features for each (SpanLL.id, action.id)
+   */
+
+  /** Added so that each (t,k) may have more than one span */
+  public static final class SpanLL {
+    public final Span span;
+    public final SpanLL next;
+    public SpanLL(Span s, SpanLL n) {
+      this.span = s;
+      this.next = n;
+    }
+    @Override
+    public String toString() {
+      return span.shortString() + " -> " + next;
+    }
+  }
+
+  public State(FNTagging frames, StateIndex stateIndex, BitSet possible, SpanLL[][] committed) {
     this.frames = frames;
     this.stateIndex = stateIndex;
     this.possible = possible;
@@ -55,11 +134,11 @@ public class State {
     StateIndex stateIndex = new StateIndex.SpanMajor(frames.getFrameInstances(), n);
     BitSet possible = new BitSet();
     int T = frames.numFrameInstances();
-    Span[][] committed = new Span[T][];
+    SpanLL[][] committed = new SpanLL[T][];
     // Allow every possible Span for every (t,k)
     for (int t = 0; t < T; t++) {
       int K = frames.getFrameInstance(t).getFrame().numRoles();
-      committed[t] = new Span[K];
+      committed[t] = new SpanLL[K];
       for (int k = 0; k < K; k++)
         for (int i = 0; i < n; i++)
           for (int j = i + 1; j <= n; j++)
@@ -75,10 +154,10 @@ public class State {
     StateIndex stateIndex = new StateIndex.SpanMajor(frames.getFrameInstances(), n);
     BitSet possible = new BitSet();
     int T = frames.numFrameInstances();
-    Span[][] committed = new Span[T][];
+    SpanLL[][] committed = new SpanLL[T][];
     for (int t = 0; t < T; t++) {
       int K = frames.getFrameInstance(t).getFrame().numRoles();
-      committed[t] = new Span[K];
+      committed[t] = new SpanLL[K];
     }
     // Allow each of the items
     for (Item i : rerank) {
@@ -92,7 +171,7 @@ public class State {
 
   /** Sets nullSpan to be possible for all (t,k) */
   private static void allowNullSpanForEveryRole(
-      BitSet possible, StateIndex stateIndex, Span[][] committed) {
+      BitSet possible, StateIndex stateIndex, SpanLL[][] committed) {
     final int T = committed.length;
     final int s = Span.nullSpan.start;
     final int e = Span.nullSpan.end;
@@ -108,14 +187,14 @@ public class State {
     StateIndex stateIndex = new StateIndex.SpanMajor(parse.getFrameInstances(), n);
     BitSet possible = new BitSet();
     int T = parse.numFrameInstances();
-    Span[][] committed = new Span[T][];
+    SpanLL[][] committed = new SpanLL[T][];
     for (int t = 0; t < T; t++) {
       FrameInstance fi = parse.getFrameInstance(t);
       int K = fi.getFrame().numRoles();
-      committed[t] = new Span[K];
+      committed[t] = new SpanLL[K];
       for (int k = 0; k < K; k++) {
         Span gold = fi.getArgument(k);
-        committed[t][k] = gold;
+        committed[t][k] = new SpanLL(gold, null);
         for (int i = 0; i < n; i++) {
           for (int j = i + 1; j <= n; j++) {
             boolean p = i == gold.start && j == gold.end;
@@ -141,7 +220,7 @@ public class State {
     for (int t = 0; t < committed.length; t++) {
       int K = committed[t].length;
       for (int k = 0; k < K; k++) {
-        Span a = committed[t][k];
+        SpanLL a = committed[t][k];
         if (a == null && tForce < 0 && kForce < 0) {
           // Set for the first time
           tForce = t;
@@ -149,7 +228,7 @@ public class State {
         } else {
           // Check that we're only setting it exactly once
           assert (tForce < 0 && kForce < 0) // we haven't set it yet
-          || (a == null);               // we're not resetting it
+              || (a == null);               // we're not resetting it
         }
       }
     }
@@ -194,35 +273,15 @@ public class State {
   }
 
   /** Doesn't return a copy! Make sure you don't modify this! */
-  public Span[][] getCommitted() {
+  public SpanLL[][] getCommitted() {
     return committed;
   }
 
   /**
    * Returns a span if one has been chosen for this role, or null otherwise.
    */
-  public Span committed(int t, int k) {
+  public SpanLL committed(int t, int k) {
     return committed[t][k];
-  }
-
-  // TODO if slow, an index can be maintained for this
-  public int numCommitted() {
-    int comm = 0;
-    for (Span[] c : committed)
-      for (Span s : c)
-        if (s != null)
-          comm++;
-    return comm;
-  }
-
-  // TODO if slow, an index can be maintained for this
-  public int numUncommitted() {
-    int uncomm = 0;
-    for (Span[] c : committed)
-      for (Span s : c)
-        if (s == null)
-          uncomm++;
-    return uncomm;
   }
 
   /**
@@ -231,7 +290,7 @@ public class State {
    */
   public void noPossibleItems(int t, int k) {
     assert committed[t][k] == null;
-    committed[t][k] = Span.nullSpan;
+    committed[t][k] = new SpanLL(Span.nullSpan, committed[t][k]);
   }
 
   /**
@@ -240,32 +299,17 @@ public class State {
   public <T extends Collection<Span>> T getCommittedSpans(T addTo) {
     int T = committed.length;
     for (int t = 0; t < T; t++) {
-      for (Span s : committed[t]) {
-        if (s != null && s != Span.nullSpan)
-          addTo.add(s);
+      for (SpanLL s : committed[t]) {
+        for (SpanLL cur = s; cur != null; cur = cur.next) {
+          if (cur.span != Span.nullSpan)
+            addTo.add(cur.span);
+        }
       }
     }
     return addTo;
   }
 
-  /**
-   * If this State is a final state (all (t,k) are committed), then this will
-   * return the parse represented by this parse.
-   */
-  public FNParse decode() {
-    Sentence s = getSentence();
-    List<FrameInstance> fis = new ArrayList<>();
-    int T = numFrameInstance();
-    for (int t = 0; t < T; t++) {
-      int K = committed[t].length;
-      Span[] args = Arrays.copyOf(committed[t], K);
-      for (int k = 0; k < K; k++)
-        if (committed[t][k] == null)
-          args[k] = Span.nullSpan;
-      fis.add(FrameInstance.newFrameInstance(getFrame(t), getTarget(t), args, s));
-    }
-    return new FNParse(s, fis);
-  }
+  // decode used to be here, not it is ContRefRoleClassify (even if you don't have CR roles)
 
   public Frame getFrame(int t) {
     return frames.getFrameInstance(t).getFrame();
@@ -303,9 +347,9 @@ public class State {
     return stateIndex;
   }
 
-  public Span[][] copyOfCommitted() {
+  public SpanLL[][] copyOfCommitted() {
     int T = committed.length;
-    Span[][] c = new Span[T][];
+    SpanLL[][] c = new SpanLL[T][];
     for (int t = 0; t < T; t++)
       c[t] = Arrays.copyOf(committed[t], committed[t].length);
     return c;
@@ -331,9 +375,9 @@ public class State {
     int T = committed.length;
     for (int t = 0; t < T; t++) {
       for (int k = 0; k < committed[t].length; k++) {
-        Span a = committed[t][k];
+        SpanLL a = committed[t][k];
         Span ga = frames.getFrameInstance(t).getArgument(k);
-        String as = a == null ? "NULL" : a.shortString();
+        String as = a == null ? "NULL" : a.toString();
         String gs = ga.shortString();
         String p = ""+possible(t, k, ga);
         sb.append("t=" + t + " k=" + k + " committed=" + as + "\tgold=" + gs + "\tgoldPossible=" + p + "\n");

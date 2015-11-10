@@ -37,12 +37,6 @@ public class LearningTest {
   DeterministicRolePruning.Mode argPruningMode =
       DeterministicRolePruning.Mode.XUE_PALMER_HERMANN;
 
-  @Before
-  public void turnOffPruning() {
-    // TODO really really should put this in transition function...
-    State.PRUNE_SPANS = false;
-  }
-
   /**
    * Asserts that there is at least one Action that has a positive score out of
    * the given state.
@@ -243,7 +237,7 @@ public class LearningTest {
 
   public static void main(String[] args) {
     LearningTest lt = new LearningTest();
-    lt.turnOffPruning();
+//    lt.turnOffPruning();
     //lt.getsItRight(1);
     lt.fromPriorScores();
   }

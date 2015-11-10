@@ -13,10 +13,13 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.rl.State.SpanLL;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * A class representing a type of Action which provides the information needed
@@ -67,19 +70,29 @@ public interface ActionType {
 
 
   public static class CommitActionType implements ActionType {
-    public static final Logger LOG = Logger.getLogger(CommitActionType.class);
     private final int index;
     private boolean forceLeftRightInference = false;
 
-    public CommitActionType(int index) {
+    /*
+     * If false FrameInstance.argumentContinuations and FrameInstance.argumentReferences
+     * are not checked (as if they don't exist -- fine for FN, not PB). If true,
+     * mentions of "R-ARG-X" and "C-ARG-X" are treated the same as mentions of
+     * "ARG-X". As a post processing step, {@link State}s with multiple fillers
+     * of "ARG-X" are converted into a base form for "ARG-X" and an "R-ARG-X"
+     * or a "C-ARG-X".
+     */
+    private boolean handleContinuationAndReferenceRoles;
+
+    public CommitActionType(int index, boolean handleContinuationAndReferenceRoles) {
       this.index = index;
+      this.handleContinuationAndReferenceRoles = handleContinuationAndReferenceRoles;
     }
 
     public void forceLeftRightInference() {
       forceLeftRightInference(true);
     }
     public void forceLeftRightInference(boolean doForce) {
-      LOG.info("[COMMIT forceLeftRightInference] doForce=" + doForce);
+      Log.info("[main] doForce=" + doForce);
       this.forceLeftRightInference = doForce;
     }
 
@@ -115,9 +128,9 @@ public interface ActionType {
           next.set(si.index(a.t, a.k, i, j), false);
 
       // Update committed
-      Span[][] c = s.copyOfCommitted();
+      SpanLL[][] c = s.copyOfCommitted();
       assert c[a.t][a.k] == null;
-      c[a.t][a.k] = a.hasSpan() ? a.getSpan() : Span.nullSpan;
+      c[a.t][a.k] = new SpanLL(a.getSpanSafe(), c[a.t][a.k]);
 
       return new State(s.getFrames(), si, next, c);
     }
@@ -149,8 +162,12 @@ public interface ActionType {
             continue;
           }
 
-          Span a = st.committed(t, k);
-          if (a != null) continue;
+          SpanLL a = st.committed(t, k);
+
+          // This prevents assigning this (t,k) to more than one span
+          if (a != null)
+            continue;
+
           // Consider all possible spans
           boolean somePossible = false;
           for (int i = 0; i < n; i++) {
@@ -167,12 +184,16 @@ public interface ActionType {
           // are possible rather than the items it is *not pruning* (for a given t,k)
           if (!somePossible) {
             if (RerankerTrainer.PRUNE_DEBUG)
-              LOG.info("COMMIT.next cleaned up a (t,k) from PRUNE");
+              Log.info("COMMIT.next cleaned up a (t,k) from PRUNE");
             st.noPossibleItems(t, k);
           }
         }
       }
       return actions;
+    }
+
+    public static boolean implies(boolean a, boolean b) {
+      return !(a && !b);
     }
 
     @Override
@@ -182,7 +203,19 @@ public interface ActionType {
       final double costFP = 1d;
       final double costFN = Reranker.COST_FN;
       Span hyp = a.getSpanSafe();
+
       Span gold = y.getFrameInstance(a.t).getArgument(a.k);
+
+      // Check for continuation/reference roles
+      boolean cr = false;
+      if (handleContinuationAndReferenceRoles) {
+        FrameInstance tGold = y.getFrameInstance(a.t);
+        cr = hyp != Span.nullSpan
+            && (tGold.getContinuationRoleSpans(a.k).contains(hyp)
+                || tGold.getReferenceRoleSpans(a.k).contains(hyp));
+        assert implies(gold == Span.nullSpan, !cr);
+      }
+
       if (hyp == Span.nullSpan && gold == Span.nullSpan) {
         return 0;
       } else if (hyp != Span.nullSpan && gold == Span.nullSpan) {
@@ -190,7 +223,10 @@ public interface ActionType {
       } else if (hyp == Span.nullSpan && gold != Span.nullSpan) {
         return costFN;
       } else if (hyp != Span.nullSpan && gold != Span.nullSpan) {
-        return hyp == gold ? 0 : costFP + costFN;
+        // We want to allow COMMIT(t,k,s) when either y_{t,C-k,s}=0 or y_{t,R-k,s)=1.
+        // As a post-processing step we will classify all z_{t,k,*}=1 into the base
+        // and reference/continuation roles.
+        return hyp == gold || cr ? 0 : costFP + costFN;
       } else {
         throw new RuntimeException("wat");
       }
@@ -294,7 +330,7 @@ public interface ActionType {
       // If we need to mutate this, we will do so in the following loops
       // (by asking for a copy). If it makes it through these loops, then the
       // same array can be re-used.
-      Span[][] c = null;
+      SpanLL[][] c = null;
 
       // Update possible
       StateIndex si = s.getStateIndex();
@@ -319,7 +355,7 @@ public interface ActionType {
           if (prunedEverything && s.committed(t, k) == null) {
             if (c == null)
               c = s.copyOfCommitted();
-            c[t][k] = Span.nullSpan;
+            c[t][k] = new SpanLL(Span.nullSpan, c[t][k]);
           }
         }
       }
@@ -665,7 +701,8 @@ public interface ActionType {
     }
   };
 
-  public static final CommitActionType COMMIT = new CommitActionType(0);
+  public static final CommitActionType COMMIT = new CommitActionType(0,
+      ExperimentProperties.getInstance().getBoolean("handleRCroles"));
   public static final PruneActionType PRUNE = new PruneActionType(1);
   public static final ActionType[] ACTION_TYPES = new ActionType[] {
     COMMIT,
