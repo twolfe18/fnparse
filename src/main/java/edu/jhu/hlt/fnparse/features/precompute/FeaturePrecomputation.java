@@ -457,10 +457,13 @@ public class FeaturePrecomputation {
       throw new RuntimeException("unknown dataset: " + dataset);
     }
 
+    // Allows you to change compression, ["", ".gz", ".bz2"]
+    String suffix = config.getString("suffix", ".gz");
+
     FeaturePrecomputation fp = new FeaturePrecomputation(fi);
     fp.run(data.iterator(),
-        new File(wd, "features.txt.gz"),
-        new File(wd, "template-feat-indices.txt.gz"),
-        new File(wd, "role-names.txt.gz"));
+        new File(wd, "features.txt" + suffix),
+        new File(wd, "template-feat-indices.txt" + suffix),
+        new File(wd, "role-names.txt" + suffix));
   }
 }

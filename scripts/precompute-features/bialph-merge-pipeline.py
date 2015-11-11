@@ -7,6 +7,8 @@
 
 import glob, itertools, sys, os, math, subprocess, shutil, re, collections
 
+#SUF = '.gz'
+SUF = '.bz2'
 
 def qsub_and_parse_jid(command):
   s = subprocess.check_output(command)
@@ -125,7 +127,7 @@ class BiAlphMerger:
     return buf.pop()
 
   def output(self, depth, i):
-    return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt.gz" % (depth, i))
+    return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt%s" % (depth, i, SUF))
 
   def make_merge_job(self, dep1, dep2, in1, in2, out1, out2):
     ''' returns a jid '''
@@ -266,16 +268,18 @@ def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, d
 if __name__ == '__main__':
   # TODO Generalize these inputs to be suitable for a library.
   m = False # mock
-  if len(sys.argv) != 3:
+  if len(sys.argv) != 4:
     print 'please provide:'
     print '1) a working dir, e.g. /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
     print '2) how many shards are in the WD/raw-shards directory, e.g. 400 when job dirs are named job-*-of-400'
+    print '3) a compression suffix, e.g. ".gz" or ".bz2"'
     sys.exit(1)
   #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
   #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a'
   p = sys.argv[1]
   shards = str(int(sys.argv[2]))
-  alph_glob = os.path.join(p, 'raw-shards/job-*-of-' + shards + '/template-feat-indices.txt.gz')
+  SUF = sys.argv[3]
+  alph_glob = os.path.join(p, 'raw-shards/job-*-of-' + shards + '/template-feat-indices.txt' + SUF)
   merge_bialph_dir = os.path.join(p, 'merged-bialphs')
   jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
 
@@ -298,7 +302,7 @@ if __name__ == '__main__':
     if i == 0:
       # Choose a bialph to build the final alph with (they all have the same first 4 columns)
       bialph = merger.output(depth, name)
-      alph = os.path.join(proj_wd.path, 'alphabet.txt.gz')
+      alph = os.path.join(proj_wd.path, 'alphabet.txt' + SUF)
       proj_alph_jid = bialph2alph(bialph, alph, jid, proj_wd, mock=m)
       # This job depends on jid, so we can set the current job to wait for this
       dep = proj_alph_jid
@@ -306,8 +310,8 @@ if __name__ == '__main__':
     bialph = merger.output(depth, name)
     alph = merger.name2input[name]
     dn = os.path.dirname(alph)
-    features = os.path.join(dn, 'features.txt.gz')
-    output_features = os.path.join(feat_dir, name + '.txt.gz')
+    features = os.path.join(dn, 'features.txt' + SUF)
+    output_features = os.path.join(feat_dir, name + '.txt' + SUF)
     make_bialph_projection_job(features, bialph, output_features, dep, proj_wd, mock=m)
 
   print

@@ -2,7 +2,8 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
-
+#SUF=".gz"
+SUF=".bz2"
 
 DATASET=propbank
 NUM_ROLES=30
@@ -53,7 +54,8 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $i \
       $NUM_SHARDS \
       $PS \
-      $DATASET"
+      $DATASET \
+      $SUF"
    echo $COMMAND >>$WORKING_DIR/raw-shards/commands.txt
    eval $COMMAND
 done
@@ -76,7 +78,7 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
 # alphabet will be writte out including them.
 
 # A) Compute the feature frequencies
-BIALPH_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/alphabet.txt.gz
+BIALPH_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/alphabet.txt$SUF
 FEATS_BEFORE_FILTERS=$WORKING_DIR/coherent-shards/features
 mkdir -p $WORKING_DIR/feature-counts/sge-logs
 
@@ -91,7 +93,7 @@ qsub -N featCounts-full \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx24G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WORKING_DIR/feature-counts/all.txt.gz \
+    -Doutput=$WORKING_DIR/feature-counts/all.txt$SUF \
     -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
 qsub -N featCounts-tenth \
@@ -99,8 +101,8 @@ qsub -N featCounts-tenth \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WORKING_DIR/feature-counts/one-tenth.txt.gz \
-    -DfeaturesGlob="glob:**/shard*9.txt.gz" \
+    -Doutput=$WORKING_DIR/feature-counts/one-tenth.txt$SUF \
+    -DfeaturesGlob="glob:**/shard*9.txt$SUF" \
     -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
 qsub -N featCounts-hundreth \
@@ -108,8 +110,8 @@ qsub -N featCounts-hundreth \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
-    -Doutput=$WORKING_DIR/feature-counts/one-hundredth.txt.gz \
-    -DfeaturesGlob="glob:**/shard*99.txt.gz" \
+    -Doutput=$WORKING_DIR/feature-counts/one-hundredth.txt$SUF \
+    -DfeaturesGlob="glob:**/shard*99.txt$SUF" \
     -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
 
@@ -118,11 +120,11 @@ qsub -N featCounts-hundreth \
 #   (if i try to do ~60G => +filters:~8x => 250G with one process... it is going to take a while...)
 mkdir -p $WORKING_DIR/coherent-shards-filtered/sge-logs
 mkdir -p $WORKING_DIR/coherent-shards-filtered/features
-BIALPH_AFTER_FILTERS=$WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz
+BIALPH_AFTER_FILTERS=$WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF
 
 # Make sure this is done!
-#COUNT_FILE=$WORKING_DIR/feature-counts/one-tenth.txt.gz
-COUNT_FILE=$WORKING_DIR/feature-counts/all.txt.gz
+#COUNT_FILE=$WORKING_DIR/feature-counts/one-tenth.txt$SUF
+COUNT_FILE=$WORKING_DIR/feature-counts/all.txt$SUF
 
 echo "copyinig jar to a safe place..."
 JAR_STABLE=$WORKING_DIR/coherent-shards-filtered/fnparse.jar
@@ -197,7 +199,7 @@ for i in `seq $N | awk '{print $1-1}'`; do
     -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
       $WORKING_DIR/coherent-shards-filtered/features \
-      "glob:**/*1${i}.txt.gz" \
+      "glob:**/*1${i}.txt$SUF" \
       $WORKING_DIR/ig/templates/split-$N-filter10/shard-${i}.txt \
       $JAR_STABLE \
       $TEST_SET_SENT_IDS \
@@ -216,7 +218,7 @@ for i in `seq $N | awk '{print $1-1}'`; do
     -o $WORKING_DIR/ig/templates/sge-logs \
     scripts/precompute-features/compute-ig.sh \
       $WORKING_DIR/coherent-shards-filtered/features \
-      "glob:**/*${i}.txt.gz" \
+      "glob:**/*${i}.txt$SUF" \
       $WORKING_DIR/ig/templates/split-$N/shard-${i}.txt \
       $JAR_STABLE \
       $TEST_SET_SENT_IDS \
@@ -265,7 +267,7 @@ for i in `seq 221 $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $TEMPLATE_IG_FILE \
       $WORKING_DIR/coherent-shards-filtered/features \
       "glob:**/*" \
-      $WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz \
+      $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF \
       $TEST_SET_SENT_IDS \
       $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
       $PROD_IG_WD/fnparse.jar \
@@ -289,7 +291,7 @@ WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DAT
 # all the templates selected by feature selection can be less than a million
 # feature (order of hundreds of templates).
 # This step just removes unused templates from the full bialph.
-BIALPH_FULL=$WORKING_DIR/coherent-shards-filtered/alphabet.txt.gz
+BIALPH_FULL=$WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF
 BIALPH_SMALL=$WORKING_DIR/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt
 #zcat $BIALPH_FULL \
 #  | python scripts/having-a-laugh/filter_bialph.py \
