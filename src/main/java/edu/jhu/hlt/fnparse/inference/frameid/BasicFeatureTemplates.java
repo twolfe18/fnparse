@@ -228,10 +228,10 @@ public class BasicFeatureTemplates {
       else
         return null;
     });
-    tokenExtractors.put("Word2", x -> {
+    tokenExtractors.put("WordLex", x -> {
       if (x.indexInSent()
           && canLexicalize(x.index, x.sentence)) {
-        return "Word2=" + x.sentence.getWord(x.index);
+        return "WordLex=" + x.sentence.getWord(x.index);
       } else {
         return null;
       }
@@ -256,10 +256,10 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    tokenExtractors.put("Word5", x -> {
+    tokenExtractors.put("WordLC", x -> {
       if (x.indexInSent()) {
         String s = x.sentence.getWord(x.index).toLowerCase();
-        return "Word5=" + s;
+        return "WordLC=" + s;
       } else {
         return null;
       }
@@ -269,13 +269,16 @@ public class BasicFeatureTemplates {
         return null;
       IWord w = x.sentence.getWnWord(x.index);
       if (w == null)
-        return "WordWnSynset=FAILED_TO_GET_WN_WORD";
+        return null;
+//        return "WordWnSynset=FAILED_TO_GET_WN_WORD";
       ISynset ss = w.getSynset();
       if (ss == null)
-        return "WordWnSynset=FAILED_TO_GET_SYNSET";
+        return null;
+//        return "WordWnSynset=FAILED_TO_GET_SYNSET";
       ISynsetID id = ss.getID();
       if (id == null)
-        return "WordWnSynset=NO_SYNSET_ID";
+        return null;
+//        return "WordWnSynset=NO_SYNSET_ID";
       return "WordWnSynset=" + id;
     });
     tokenExtractors.put("Lemma", x -> {
@@ -359,7 +362,7 @@ public class BasicFeatureTemplates {
         return null;
       }
     });
-    for (int maxLen : Arrays.asList(3, 6, 99)) {
+    for (int maxLen : Arrays.asList(8, 99)) {
       String name = "Bc256/" + maxLen;
       tokenExtractors.put(name, x -> {
         if (x.indexInSent()) {
@@ -391,7 +394,7 @@ public class BasicFeatureTemplates {
 
     // head1
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name1 = "head1" + x.getKey();
+      String name1 = "Head1-" + x.getKey();
       addTemplate(name1, new TemplateSS() {
         private SentencePosition pos = new SentencePosition();
         public String extractSS(TemplateContext context) {
@@ -402,7 +405,7 @@ public class BasicFeatureTemplates {
           return name1 + "=" + x.getValue().apply(pos);
         }
       });
-      String name2 = "head2" + x.getKey();
+      String name2 = "Head2-" + x.getKey();
       addTemplate(name2, new TemplateSS() {
         private SentencePosition pos = new SentencePosition();
         public String extractSS(TemplateContext context) {
@@ -421,7 +424,7 @@ public class BasicFeatureTemplates {
     for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
       // head1 parent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head1Parent-" + dp.getKey() + "-" + x.getKey();
+        String name = "Head1-Parent-" + dp.getKey() + "-" + x.getKey();
         addTemplate(name, new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -440,7 +443,7 @@ public class BasicFeatureTemplates {
       }
       // head2 parent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head2Parent-" + dp.getKey() + "-" + x.getKey();
+        String name = "Head2-Parent-" + dp.getKey() + "-" + x.getKey();
         addTemplate(name, new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -460,7 +463,7 @@ public class BasicFeatureTemplates {
 
       // head1 grandparent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head1Grandparent-" + dp.getKey() + "-" + x.getKey();
+        String name = "Head1-Grandparent-" + dp.getKey() + "-" + x.getKey();
         addTemplate(name, new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -482,7 +485,7 @@ public class BasicFeatureTemplates {
       }
       // head2 grandparent
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head2Grandparent-" + dp.getKey() + "-" + x.getKey();
+        String name = "Head2-Grandparent-" + dp.getKey() + "-" + x.getKey();
         addTemplate(name, new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -505,7 +508,7 @@ public class BasicFeatureTemplates {
 
       // head1 children
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head1Child-" + dp.getKey() +"-" + x.getKey();
+        String name = "Head1-Child-" + dp.getKey() +"-" + x.getKey();
         addTemplate(name, new Template() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -533,7 +536,7 @@ public class BasicFeatureTemplates {
       }
       // head2 children
       for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-        String name = "head2Child-" + dp.getKey() +"-" + x.getKey();
+        String name = "Head2-Child-" + dp.getKey() +"-" + x.getKey();
         addTemplate(name, new Template() {
           private SentencePosition pos = new SentencePosition();
           private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
@@ -570,7 +573,7 @@ public class BasicFeatureTemplates {
     for (Entry<String, Function<SentencePosition, String>> ex1 :
         tokenExtractors.entrySet()) {
       for (Entry<String, ToIntFunction<Span>> loc1 : spanLocs.entrySet()) {
-        String name1 = "span1" + loc1.getKey() + ex1.getKey();
+        String name1 = "Span1-" + loc1.getKey() + "-" + ex1.getKey();
         TemplateSS temp1 = new TemplateSS() {
           private SentencePosition pos = new SentencePosition();
           public String extractSS(TemplateContext context) {
@@ -583,12 +586,25 @@ public class BasicFeatureTemplates {
           }
         };
         addTemplate(name1, temp1);
+        String name2 = "Span2-" + loc1.getKey() + "-" + ex1.getKey();
+        TemplateSS temp2 = new TemplateSS() {
+          private SentencePosition pos = new SentencePosition();
+          public String extractSS(TemplateContext context) {
+            Span s = context.getSpan2();
+            if (s == null)
+              return null;
+            pos.index = loc1.getValue().applyAsInt(s);
+            pos.sentence = context.getSentence();
+            return name2 + "=" + ex1.getValue().apply(pos);
+          }
+        };
+        addTemplate(name2, temp2);
       }
     }
 
     // head1 to span features
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head1ToLeft" + x.getKey();
+      String name = "Head1-ToLeft-" + x.getKey();
       addTemplate(name, new Template() {
         private Function<SentencePosition, String> ext = x.getValue();
         private String namePref = name + "=";
@@ -612,7 +628,7 @@ public class BasicFeatureTemplates {
       });
     }
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head1ToRight" + x.getKey();
+      String name = "Head1-ToRight-" + x.getKey();
       addTemplate(name, new Template() {
         private Function<SentencePosition, String> ext = x.getValue();
         private String namePref = name + "=";
@@ -637,7 +653,7 @@ public class BasicFeatureTemplates {
     }
     // head2 to span features
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head2ToLeft" + x.getKey();
+      String name = "Head2-ToLeft-" + x.getKey();
       addTemplate(name, new Template() {
         private Function<SentencePosition, String> ext = x.getValue();
         private String namePref = name + "=";
@@ -661,7 +677,7 @@ public class BasicFeatureTemplates {
       });
     }
     for (Map.Entry<String, Function<SentencePosition, String>> x : tokenExtractors.entrySet()) {
-      String name = "head2ToRight" + x.getKey();
+      String name = "Head2-ToRight-" + x.getKey();
       addTemplate(name, new Template() {
         private Function<SentencePosition, String> ext = x.getValue();
         private String namePref = name + "=";
@@ -686,9 +702,9 @@ public class BasicFeatureTemplates {
     }
 
     // span1 width
-    for (int div = 1; div <= 5; div++) {
+    for (int div : Arrays.asList(1, 2, 3)) {
       final int divL = div;
-      final String name = "span1Width/" + div;
+      final String name = "Span1-Width-Div" + div;
       addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
           Span t = context.getSpan1();
@@ -698,10 +714,30 @@ public class BasicFeatureTemplates {
         }
       });
     }
+    addTemplate("Span1-MultiWord", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Span t = context.getSpan1();
+        if (t == null)
+          return null;
+        if (t.width() > 1)
+          return "Y";
+        return null;
+      }
+    });
+    addTemplate("Span2-MultiWord", new TemplateSS() {
+      public String extractSS(TemplateContext context) {
+        Span t = context.getSpan2();
+        if (t == null)
+          return null;
+        if (t.width() > 1)
+          return "Y";
+        return null;
+      }
+    });
 
     // span1 depth
-    for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "span1DepthCol" + coarse;
+    for (int coarse : Arrays.asList(1)) {
+      String name = "Span1-DepthCol" + coarse;
       addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
           Span t = context.getSpan1();
@@ -716,7 +752,7 @@ public class BasicFeatureTemplates {
             int d = deps.getDepth(i);
             if (d < min) min = d;
           }
-          return discretizeWidth(name, coarse, 5, min);
+          return discretizeWidth(name, coarse, 6, min);
         }
       });
     }
@@ -727,7 +763,7 @@ public class BasicFeatureTemplates {
     // TODO distance to first POS going left|right
     // TODO count of POS to the left|right
 
-    addTemplate("span1GovDirRelations", new TemplateSS() {
+    addTemplate("Span1-GovDirRelations", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span s = context.getSpan1();
         if (s == null)
@@ -738,9 +774,9 @@ public class BasicFeatureTemplates {
         List<String> rels = new ArrayList<>();
         for (int i = s.start; i < s.end; i++)
           rels.add(parentRelTo(i, s.start, s.end - 1, deps));
-        Collections.sort(rels);
+//        Collections.sort(rels);
         StringBuilder rs = new StringBuilder();
-        rs.append("span1GovDirRelations");
+        rs.append("Span1-GovDirRelations");
         if (rels.size() == 0) {
           rs.append("_NONE");
         } else {
@@ -752,7 +788,7 @@ public class BasicFeatureTemplates {
         return rs.toString();
       }
     });
-    addTemplate("span2GovDirRelations", new TemplateSS() {
+    addTemplate("Span2-GovDirRelations", new TemplateSS() {
       public String extractSS(TemplateContext context) {
         Span s = context.getSpan2();
         if (s == null)
@@ -763,9 +799,9 @@ public class BasicFeatureTemplates {
         List<String> rels = new ArrayList<>();
         for (int i = s.start; i < s.end; i++)
           rels.add(parentRelTo(i, s.start, s.end - 1, deps));
-        Collections.sort(rels);
+//        Collections.sort(rels);
         StringBuilder rs = new StringBuilder();
-        rs.append("span2GovDirRelations");
+        rs.append("Span2-GovDirRelations");
         if (rels.size() == 0) {
           rs.append("_NONE");
         } else {
@@ -779,8 +815,8 @@ public class BasicFeatureTemplates {
     });
 
     // span1 left projection
-    for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "span1LeftProjCol" + coarse;
+    for (int coarse : Arrays.asList(2)) {
+      String name = "Span1-LeftProjCol-" + coarse;
       addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
           Span t = context.getSpan1();
@@ -800,10 +836,30 @@ public class BasicFeatureTemplates {
           return discretizeWidth(name, coarse, 5, toksLeft);
         }
       });
+      String name2 = "Span2-LeftProjCol-" + coarse;
+      addTemplate(name2, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          Span t = context.getSpan2();
+          if (t == null)
+            return null;
+          Sentence s = context.getSentence();
+          DependencyParse deps = s.getBasicDeps();
+          if (deps == null)
+            return null;
+          int min = s.size() + 1;
+          for (int i = t.start; i < t.end; i++) {
+            int d = deps.getProjLeft(i);
+            if (d < min) min = d;
+          }
+          assert min <= s.size();
+          int toksLeft = t.start - min;
+          return discretizeWidth(name2, coarse, 6, toksLeft);
+        }
+      });
     }
     // right projection
-    for (int coarse : Arrays.asList(1, 2, 3)) {
-      String name = "span1RightProjCol" + coarse;
+    for (int coarse : Arrays.asList(2)) {
+      String name = "Span1-RightProjCol-" + coarse;
       addTemplate(name, new TemplateSS() {
         public String extractSS(TemplateContext context) {
           Span t = context.getSpan1();
@@ -819,7 +875,26 @@ public class BasicFeatureTemplates {
             if (d > max) max = d;
           }
           int toksRight = (max - t.end) + 1;
-          return discretizeWidth(name, coarse, 5, toksRight);
+          return discretizeWidth(name, coarse, 6, toksRight);
+        }
+      });
+      String name2 = "Span2-RightProjCol-" + coarse;
+      addTemplate(name2, new TemplateSS() {
+        public String extractSS(TemplateContext context) {
+          Span t = context.getSpan2();
+          if (t == null)
+            return null;
+          Sentence s = context.getSentence();
+          DependencyParse deps = s.getBasicDeps();
+          if (deps == null)
+            return null;
+          int max = 0;
+          for (int i = t.start; i < t.end; i++) {
+            int d = deps.getProjRight(i);
+            if (d > max) max = d;
+          }
+          int toksRight = (max - t.end) + 1;
+          return discretizeWidth(name2, coarse, 6, toksRight);
         }
       });
     }
@@ -828,7 +903,7 @@ public class BasicFeatureTemplates {
     for (Entry<String, Function<Sentence, DependencyParse>> dp : dps.entrySet()) {
       for (Path.NodeType nt : Path.NodeType.values()) {
         for (Path.EdgeType et : Path.EdgeType.values()) {
-          String name1 = "head1RootPath-" + dp.getKey() + "-" + nt + "-" + et + "-t";
+          String name1 = "Head1-RootPath-" + dp.getKey() + "-" + nt + "-" + et + "-t";
           addTemplate(name1, new TemplateSS() {
             private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
             public String extractSS(TemplateContext context) {
@@ -843,7 +918,22 @@ public class BasicFeatureTemplates {
               return name1 + "=" + p.getPath();
             }
           });
-          String name2 = "head1head2Path-" + dp.getKey() + "-" + nt + "-" + et + "-t";
+          String name3 = "Head2-RootPath-" + dp.getKey() + "-" + nt + "-" + et + "-t";
+          addTemplate(name3, new TemplateSS() {
+            private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+            public String extractSS(TemplateContext context) {
+              int h = context.getHead2();
+              if (h == TemplateContext.UNSET)
+                return null;
+              Sentence s = context.getSentence();
+              DependencyParse deps = extractDeps.apply(s);
+              if (deps == null)
+                return null;
+              Path p = new Path(s, deps, h, nt, et);
+              return name3 + "=" + p.getPath();
+            }
+          });
+          String name2 = "Head1Head2-Path-" + dp.getKey() + "-" + nt + "-" + et + "-t";
           addTemplate(name2, new TemplateSS() {
             private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
             public String extractSS(TemplateContext context) {
@@ -861,8 +951,8 @@ public class BasicFeatureTemplates {
               return name2 + "=" + p.getPath();
             }
           });
-          for (int length : Arrays.asList(1, 2, 3, 4)) {
-            String nameL = "head1RootPathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
+          for (int length : Arrays.asList(1, 2, 3)) {
+            String nameL = "Head1-RootPathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
             addTemplate(nameL, new Template() {
               private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
               public Iterable<String> extract(TemplateContext context) {
@@ -879,7 +969,24 @@ public class BasicFeatureTemplates {
                 return pieces;
               }
             });
-            String nameL2 = "head1head2PathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
+            String name4 = "Head2-RootPathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
+            addTemplate(name4, new Template() {
+              private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
+              public Iterable<String> extract(TemplateContext context) {
+                int h = context.getHead2();
+                if (h == TemplateContext.UNSET)
+                  return null;
+                Sentence s = context.getSentence();
+                DependencyParse deps = extractDeps.apply(s);
+                if (deps == null)
+                  return null;
+                Path p = new Path(s, deps, h, nt, et);
+                Set<String> pieces = new HashSet<>();
+                p.pathNGrams(length, pieces, name4 + "=");
+                return pieces;
+              }
+            });
+            String nameL2 = "Head1Head2-PathNgram-" + dp.getKey() + "-" + nt + "-" + et + "-len" + length;
             addTemplate(nameL2, new Template() {
               private Function<Sentence, DependencyParse> extractDeps = dp.getValue();
               public Iterable<String> extract(TemplateContext context) {
@@ -909,7 +1016,7 @@ public class BasicFeatureTemplates {
       for (int tagsLeft : Arrays.asList(0, 1, 2, 3, 4)) {
         for (int tagsRight : Arrays.asList(0, 1, 2, 3, 4)) {
           if (tagsLeft + tagsRight > 4) continue;
-          String name = String.format("span1PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
+          String name = String.format("Span1-PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
           addTemplate(name, new TemplateSS() {
             private PosPatternGenerator pat
               = new PosPatternGenerator(tagsLeft, tagsRight, mode);
@@ -925,7 +1032,7 @@ public class BasicFeatureTemplates {
             }
           });
 
-          String name2 = String.format("span2PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
+          String name2 = String.format("Span2-PosPat-%s-%d-%d", mode, tagsLeft, tagsRight);
           addTemplate(name2, new TemplateSS() {
             private PosPatternGenerator pat
               = new PosPatternGenerator(tagsLeft, tagsRight, mode);
@@ -965,21 +1072,21 @@ public class BasicFeatureTemplates {
           return null;
         }
       });
-      addTemplate(se.get1() + "-StanfordCategory", new TemplateSS() {
-        String extractSS(TemplateContext context) {
-          Span s = se.get2().apply(context);
-          if (s == null)
-            return null;
-          ConstituencyParse cp = context.getSentence().getStanfordParse();
-          if (cp == null)
-            return null;
-          ConstituencyParse.Node n = cp.getConstituent(s);
-          String cat = "NONE";
-          if (n != null)
-            cat = n.getTag();
-          return "span1StanfordCategory=" + cat;
-        }
-      });
+//      addTemplate(se.get1() + "-StanfordCategory", new TemplateSS() {
+//        String extractSS(TemplateContext context) {
+//          Span s = se.get2().apply(context);
+//          if (s == null)
+//            return null;
+//          ConstituencyParse cp = context.getSentence().getStanfordParse();
+//          if (cp == null)
+//            return null;
+//          ConstituencyParse.Node n = cp.getConstituent(s);
+//          String cat = "NONE";
+//          if (n != null)
+//            cat = n.getTag();
+//          return "span1StanfordCategory=" + cat;
+//        }
+//      });
       addTemplate(se.get1() + "-StanfordCategory2", new TemplateSS() {
         String extractSS(TemplateContext context) {
           Span s = se.get2().apply(context);
@@ -994,21 +1101,21 @@ public class BasicFeatureTemplates {
           return null;
         }
       });
-      addTemplate(se.get1() + "-StanfordRule", new TemplateSS() {
-        String extractSS(TemplateContext context) {
-          Span s = se.get2().apply(context);
-          if (s == null)
-            return null;
-          ConstituencyParse cp = context.getSentence().getStanfordParse();
-          if (cp == null)
-            return null;
-          ConstituencyParse.Node n = cp.getConstituent(s);
-          String rule = "NONE";
-          if (n != null)
-            rule = n.getRule();
-          return "span1IsStanfordRule=" + rule;
-        }
-      });
+//      addTemplate(se.get1() + "-StanfordRule", new TemplateSS() {
+//        String extractSS(TemplateContext context) {
+//          Span s = se.get2().apply(context);
+//          if (s == null)
+//            return null;
+//          ConstituencyParse cp = context.getSentence().getStanfordParse();
+//          if (cp == null)
+//            return null;
+//          ConstituencyParse.Node n = cp.getConstituent(s);
+//          String rule = "NONE";
+//          if (n != null)
+//            rule = n.getRule();
+//          return "span1IsStanfordRule=" + rule;
+//        }
+//      });
       addTemplate(se.get1() + "-StanfordRule2", new TemplateSS() {
         String extractSS(TemplateContext context) {
           Span s = se.get2().apply(context);
@@ -1089,6 +1196,8 @@ public class BasicFeatureTemplates {
             n = n.getParent();
           }
           assert parents.size() > 0;
+          if (parents.size() > 5)
+            return Collections.emptyList();
           return Arrays.asList(parents);
         }
       });
@@ -1480,12 +1589,8 @@ public class BasicFeatureTemplates {
           });
         }
         // N-grams between the two points
-        for (int n = 1; n <= 3; n++) {
+        for (int n = 1; n <= 2; n++) {
           for (Map.Entry<String, Function<SentencePosition, String>> ext : tokenExtractors.entrySet()) {
-            if ("Word2".equals(ext.getKey()))
-              continue;
-            if (ext.getKey().toLowerCase().startsWith("bc"))
-              continue;
             final String name = String.format("%s-%d-grams-between-%s-and-%s",
                 ext.getKey(), n, p1k, p2k);
             final int ngram = n;
@@ -2027,7 +2132,13 @@ public class BasicFeatureTemplates {
   public static void main(String[] args) throws Exception {
     ExperimentProperties.init(args);
     Indexed ce = new BasicFeatureTemplates.Indexed();
-    ce.estimateCardinalityOfTemplates();
+//    ce.estimateCardinalityOfTemplates();
+    int i = 0;
+    List<String> all = ce.getBasicTemplateNames();
+    Collections.sort(all);
+    for (String t : all) {
+      System.out.println((i++) + "\t" + t);
+    }
   }
 
 }

@@ -35,7 +35,7 @@ import edu.jhu.prim.map.IntIntHashMap;
  */
 public class TemplateTransformer {
 
-  public static List<Integer> TOP_K_VALUES = Arrays.asList(25, 125, 625, 3125);
+  public static List<Integer> TOP_K_VALUES = Arrays.asList(10, 100, 1000);
   public static List<Integer> AT_LEAST_K_VALUES = Arrays.asList(8, 16);
 
   // Name of template being filtered
