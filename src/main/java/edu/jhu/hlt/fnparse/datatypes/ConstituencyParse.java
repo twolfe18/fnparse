@@ -10,8 +10,10 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -306,6 +308,16 @@ public class ConstituencyParse implements Serializable {
         best = n;
     }
     return best;
+  }
+
+  public Node getCommonParent(Node n1, Node n2) {
+    Set<Node> n1up = new HashSet<>();
+    for (Node cur = n1; cur != null; cur = cur.getParent())
+      n1up.add(cur);
+    for (Node cur = n2; cur != null; cur = cur.getParent())
+      if (n1up.contains(cur))
+        return cur;
+    return null;
   }
 
   public void indexBySpan() {

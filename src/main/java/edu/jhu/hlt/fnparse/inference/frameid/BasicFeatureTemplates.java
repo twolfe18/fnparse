@@ -1056,6 +1056,23 @@ public class BasicFeatureTemplates {
     List<Pair<String, Function<TemplateContext, Span>>> spanExtractors = new ArrayList<>();
     spanExtractors.add(new Pair<>("Span1", tc -> tc.getSpan1()));
     spanExtractors.add(new Pair<>("Span2", tc -> tc.getSpan2()));
+    spanExtractors.add(new Pair<>("CommonParent", tc -> {
+      ConstituencyParse cp = tc.getSentence().getStanfordParse();
+      if (cp == null)
+        return null;
+      Span s1 = tc.getSpan1();
+      Span s2 = tc.getSpan2();
+      if (s1 == null || s2 == null)
+        return null;
+      Node n1 = cp.getConstituent(s1);
+      Node n2 = cp.getConstituent(s2);
+      if (n1 == null || n2 == null)
+        return null;
+      Node n3 = cp.getCommonParent(n1, n2);
+      if (n3 == null)
+        return null;
+      return n3.getSpan();
+    }));
 
     for (Pair<String, Function<TemplateContext, Span>> se : spanExtractors) {
       addTemplate(se.get1() + "-StanfordDepth", new TemplateSS() {
@@ -1068,7 +1085,7 @@ public class BasicFeatureTemplates {
             return null;
           ConstituencyParse.Node n = cp.getConstituent(s);
           if (n != null)
-            return "span1StanfordDepth=" + n.getDepth();
+            return se.get1() + "-StanfordDepth=" + n.getDepth();
           return null;
         }
       });
@@ -1084,7 +1101,7 @@ public class BasicFeatureTemplates {
 //          String cat = "NONE";
 //          if (n != null)
 //            cat = n.getTag();
-//          return "span1StanfordCategory=" + cat;
+//          return se.get1() + "-StanfordCategory=" + cat;
 //        }
 //      });
       addTemplate(se.get1() + "-StanfordCategory2", new TemplateSS() {
@@ -1097,7 +1114,7 @@ public class BasicFeatureTemplates {
             return null;
           ConstituencyParse.Node n = cp.getConstituent(s);
           if (n != null)
-            return "span1StanfordCategory2=" + n.getTag();
+            return se.get1() + "-StanfordCategory2=" + n.getTag();
           return null;
         }
       });
@@ -1113,7 +1130,7 @@ public class BasicFeatureTemplates {
 //          String rule = "NONE";
 //          if (n != null)
 //            rule = n.getRule();
-//          return "span1IsStanfordRule=" + rule;
+//          return se.get1() + "-IsStanfordRule=" + rule;
 //        }
 //      });
       addTemplate(se.get1() + "-StanfordRule2", new TemplateSS() {
@@ -1126,7 +1143,7 @@ public class BasicFeatureTemplates {
             return null;
           ConstituencyParse.Node n = cp.getConstituent(s);
           if (n != null)
-            return "span1IsStanfordRule2=" + n.getRule();
+            return se.get1() + "-IsStanfordRule2=" + n.getRule();
           return null;
         }
       });
