@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -14,6 +13,59 @@ import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 public class Wat {
+
+  /*
+   * The one thing that I thought about but haven't added is how to do state merging.
+   * Two states are the same if the set index(z[t,f,k,s] == 1) is the same.
+   * I may derive these sets in different orders
+   *   (assuming all of my actions -- or pairs of actions) fill in a z[t,f,k,s]=1)
+   * There are N! strings representing a set of size N.
+   * We can represent ignorance of these N! ways by talking about strings composed out of an associative and communative operator
+   * Integer multiplication is a good example!
+   * If we represent each (t,f,k,s) with a unique prime, then the product of these is the name of that set.
+   * We can reduce the problem a bit to "find the first Z primes" + "index (t,f,k,s) into [1..Z]"
+   * Lets use capital letters to describe bounds, e.g. 0 <= t <= T.
+   * Assuming T=20 F=1000 K=30 S=100, Z=60M
+   *   60M ints is 240MB...
+   * The 50M-th prime is 982,451,653 = exp_2(29.87)
+   *   https://primes.utm.edu/lists/small/millions/
+   * Realistically we will have to represent sets upwards of 10 items, meaning we're going to need at least 300 bits, and a lot of math.
+   * What if we just take h(i) = primes[i % bigNumber], where i = index(t,f,k,s), and only store bigNumber primes?
+   * The probability of any collision, h(i) == h(i') where i != i' is p(c) = 0 * 1/bigNumber + (bigNumber-1)/bigNumber * 1/bigNumber
+   *   where the first prob is p(i and i' fall into the same bucket of size bigNumber) and the second is p(collision | same bucket)
+   * The probability of no collisions in a 50 item set is 1 - (1-p(c))^50
+   * Using the approximation p(c) = 1/bigNumber and bigNumber=10k
+   * p(no collision with 50 items) = 1 - (1-1/bigNumber)^50 = 0.00499, less than 1%!
+   * StateIndex can handle (t,f,k,s) => [1..Z]
+   * Just get the first 10k primes or so.
+   * Every RI which is fully fleshed out knows (t,f,k,s), so it has a prime.
+   * Every RILL can store the product over all RI (for RI nodes that are like (s,?) or (k,?), just make this "prime" to be 1)
+   * Every FILL can store the product over all FI.args : RILL
+   * Every time you make a new state, you put it into a DP hash table with the key being this product of primes.
+   * If you add and get a true collision (on the prod prime, not a hash-bucket collision), take the one with the higher objective.
+   */
+
+  public static class Config {
+    // Structural constraints
+    public boolean oneFramePerSpan = true;  // maybe false when doing joint PB+FN prediction?
+    public boolean oneRolePerSpan = true;   // false for SPRL where "role" means "property"
+    public boolean oneSpanPerRole = true;
+
+    // Transition constraints
+    public boolean frameByFrame = true;     // once a (t,f) is chosen, all args up to NO_MORE_ARGS must be chosen in a row
+    public boolean chooseArgRoleFirst = false;
+    public boolean chooseArgSpanFirst = true;
+
+    /*
+     * chooseArgRoleFirst means add (k,?) actions -- choose a k, then choose a s for that k
+     * chooseArgSpanFirst means add (s,?) actions -- choose a s, then choose a k label
+     * Both of these are two-step to get to a particular (t,f,k,s)=1
+     * deltaLoss is intuitive: if you choose (k,?), then deltaLoss=0 if \exists s s.t. y[t,f,k,s]=1
+     *              similarly, if you choose (s,?), then deltaLoss=0 if \exists k s.t. y[t,f,k,s]=1
+     * If you set both to true, then a loop over KxS is done in one step to choose a (t,f,k,s)
+     * This is very slow! O(... K^2 S^2) vs O(... K + S)
+     */
+  }
 
   // Values for q
   public static final int BASE = 0;
@@ -112,6 +164,7 @@ public class Wat {
     public final int numFrameInstances;
     // TODO add "last FI which is not STOP/FULL"? -- skip list of non-full FIs?
 
+
     /**
      * New target chosen (next actions will range over features)
      */
@@ -160,8 +213,13 @@ public class Wat {
       // flatMap(next, item.args) ++ next.next()
       // TODO Convert into recursive form so that we can cache actions in FILL
 
+      // TODO Maybe don't cache actions because we can't have the case where
+      // we are expanding 
+
       List<String> all = new ArrayList<>();
       if (item != NO_MORE_FRAMES) {
+        // TODO Need to check that we're not adding a target for a FI that
+        // we've already built (one frame per target)
         all.add("loop over targets");
       }
       for (FILL cur = this; cur != null; cur = cur.next) {
@@ -193,8 +251,7 @@ public class Wat {
   public static class State {
     private Sentence sentence;
     private FNParse label;      // may be null
-//    private Map<Span, List<Span>> prunedSpans;
-    private FNParseSpanPruning prunedSpans;
+    private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
     private FILL frames;
     private IntDoubleUnsortedVector[][][] staticFeatures;
     private double score;
@@ -211,6 +268,28 @@ public class Wat {
     // 2) assign frame to an existing target
     // 3a) choose a span/role given a particular (t,f) => choose a role
     // 3a) choose a role/span given a particular (t,f) => choose a span
+
+    // 1 and 2 require the fields in an FI
+    // 3a and 3b require the fields in an RI (and a FILL for context)
+
+    public final FI newFrame;
+    public final RI newArg;
+    public final FILL newArgLoc;   // for 3a and 3b
+    // Note that newArgLoc is the frame getting the new arg, but the FILL second
+    // constructor also needs a FILL which is the head of the State's FILL,
+    // which is implicit (carried in State), so it doesn't need to be in Action.
+
+    public Action(FI newFrame) {
+      this.newFrame = newFrame;
+      this.newArg = null;
+      this.newArgLoc = null;
+    }
+
+    public Action(RI newArg, FILL newArgLoc) {
+      this.newFrame = null;
+      this.newArg = newArg;
+      this.newArgLoc = newArgLoc;
+    }
   }
 
   // (,) -> (t,)
