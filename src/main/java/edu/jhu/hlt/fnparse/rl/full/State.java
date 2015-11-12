@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl;
+package edu.jhu.hlt.fnparse.rl.full;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -12,7 +12,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
-public class Wat {
+public class State {
 
   /*
    * The one thing that I thought about but haven't added is how to do state merging.
@@ -45,28 +45,6 @@ public class Wat {
    * If you add and get a true collision (on the prod prime, not a hash-bucket collision), take the one with the higher objective.
    */
 
-  public static class Config {
-    // Structural constraints
-    public boolean oneFramePerSpan = true;  // maybe false when doing joint PB+FN prediction?
-    public boolean oneRolePerSpan = true;   // false for SPRL where "role" means "property"
-    public boolean oneSpanPerRole = true;
-
-    // Transition constraints
-    public boolean frameByFrame = true;     // once a (t,f) is chosen, all args up to NO_MORE_ARGS must be chosen in a row
-    public boolean chooseArgRoleFirst = false;
-    public boolean chooseArgSpanFirst = true;
-
-    /*
-     * chooseArgRoleFirst means add (k,?) actions -- choose a k, then choose a s for that k
-     * chooseArgSpanFirst means add (s,?) actions -- choose a s, then choose a k label
-     * Both of these are two-step to get to a particular (t,f,k,s)=1
-     * deltaLoss is intuitive: if you choose (k,?), then deltaLoss=0 if \exists s s.t. y[t,f,k,s]=1
-     *              similarly, if you choose (s,?), then deltaLoss=0 if \exists k s.t. y[t,f,k,s]=1
-     * If you set both to true, then a loop over KxS is done in one step to choose a (t,f,k,s)
-     * This is very slow! O(... K^2 S^2) vs O(... K + S)
-     */
-  }
-
   // Values for q
   public static final int BASE = 0;
   public static final int CONT = 1;
@@ -98,6 +76,9 @@ public class Wat {
     // I could keep a log(n) time index on realizedSpans by keeping a balanced
     // tree of nodes sorted by spans.
 
+    public final boolean noMoreArgs;
+    public final boolean noMoreArgSpans;
+
     // This is monad bind!
     public RILL(RI r, RILL l) {
       item = r;
@@ -107,6 +88,8 @@ public class Wat {
       realizedRoles = l.realizedRoles | rm;
       realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
       realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
+      noMoreArgs = l.noMoreArgs || item == NO_MORE_ARGS;
+      noMoreArgSpans = l.noMoreArgSpans || item == NO_MORE_ARG_SPANS;
     }
 
     public int getNumRealizedArgs() {
@@ -133,10 +116,17 @@ public class Wat {
   // Put this at the head of a RILL to signify that no more args may be assigned to this FI
   public static final RI NO_MORE_ARGS = new RI(-1, -1, null);
 
-  public static class FI {
+  // See chooseAllArgSpansFirst
+  public static final RI NO_MORE_ARG_SPANS = new RI(-2, -2, null);
+
+  public class FI {
     public final Frame f;           // f==null means only this target has been selected, but it hasn't been labled yet
     public final Span t;
     public final RILL args;
+
+    // Every time a role is added to this frame, a new FI is created,
+    // thus it is safe to cache actions.
+    private List<String> actionCache;
 
     public FI(Frame f, Span t, RILL args) {
       this.f = f;
@@ -147,16 +137,57 @@ public class Wat {
     public boolean isFrozen() {
       return args.item == NO_MORE_ARGS;
     }
+
+    public List<String> next() {
+      if (actionCache != null)
+        return actionCache;
+      actionCache = new ArrayList<>();
+
+      if (args.noMoreArgs) {
+        return actionCache;
+      }
+      if (args.noMoreArgSpans) {
+        // Disallow (s,?) actions
+      }
+
+      // Add NO_MORE_ARGS action
+      // Add NO_MORE_ARG_SPANS action
+
+      /* Step 2 of 2-step actions */
+      RI ri = args.item;
+      if (ri.k < 0 && ri.s != null) {
+        // Loop over k
+        return actionCache;
+      } else if (ri.k >= 0 && ri.s == null) {
+        // Loop over s
+        return actionCache;
+      }
+
+      if (config.chooseArgOneStep) {
+        /* One step actions */
+        // Loop over (k,s)
+        return actionCache;
+      } else {
+        /* Step 1 of 2-step actions */
+        if (config.chooseArgRoleFirst) {
+          // Loop over k
+        }
+        if (config.chooseArgSpanFirst) {
+          // Loop over s
+        }
+        return actionCache;
+      }
+    }
   }
 
   // Put this at the head of a FILL to signify that no more frames appear in this sentence
-  public static final FI NO_MORE_FRAMES = new FI(null, null, null);
+  public static final FI NO_MORE_FRAMES = new State(null).new FI(null, null, null);
 
   // Q: How to tell apart:
   // 1) prepend new (t,f)
   // 2) replace newFrame (which contains a new role) with the corresponding (t,f) node in frames
   // A: case 1 has newFrame.args==null and case 2 has newFrame.args!=null :)
-  public static class FILL {    // aka "state"
+  public class FILL {    // aka "state"
     public final FI item;
     public final FILL next;
 
@@ -164,15 +195,30 @@ public class Wat {
     public final int numFrameInstances;
     // TODO add "last FI which is not STOP/FULL"? -- skip list of non-full FIs?
 
+    // I'm not allowing f to precede t in an action sequence, so we only need to check if we're done with (t,f)s
+    public final boolean noMoreFrames;
+
+    /**
+     * Put an end to any more frames/targets being predicted in this FILL.
+     * (Note, you can still add args even if you can't add frames)
+     */
+    public FILL(FILL preventAddingFramesTo) {
+      noMoreFrames = true;
+      next = preventAddingFramesTo;
+      item = NO_MORE_FRAMES;
+      numFrameInstances = preventAddingFramesTo.numFrameInstances;
+    }
 
     /**
      * New target chosen (next actions will range over features)
      */
     public FILL(FI highlightedTarget, FILL otherFrames) {
-      // This is monad bind!
       item = highlightedTarget;
       next = otherFrames;
       numFrameInstances = otherFrames.numFrameInstances + 1;
+      assert highlightedTarget != NO_MORE_FRAMES;
+      assert !otherFrames.noMoreFrames;
+      noMoreFrames = false;
     }
 
     /**
@@ -180,8 +226,10 @@ public class Wat {
      * Find it and make a new FI node to put at the head.
      */
     public FILL(FILL addArgTo, RI argToAdd, FILL allFrames) {
-      // This is monad bind!
       FI f = addArgTo.item;
+      assert f != NO_MORE_FRAMES;
+      assert !allFrames.noMoreFrames;
+      noMoreFrames = false;
 
       // Nodes at the front of allFrames (need to be copied due to mutation
       // down in the list). If addArgTo == allFrames, then this is O(1), and
@@ -213,15 +261,22 @@ public class Wat {
       // flatMap(next, item.args) ++ next.next()
       // TODO Convert into recursive form so that we can cache actions in FILL
 
-      // TODO Maybe don't cache actions because we can't have the case where
-      // we are expanding 
-
       List<String> all = new ArrayList<>();
-      if (item != NO_MORE_FRAMES) {
-        // TODO Need to check that we're not adding a target for a FI that
-        // we've already built (one frame per target)
-        all.add("loop over targets");
+      if (noMoreFrames) {
+        // Only check for new roles
+      } else {
+        // Loop over targets
+        // For each FILL s.t. f==null, loop over frames
+        // Add NO_MORE_FRAMES action
+        if (config.frameByFrame) {
+          // ???
+        }
       }
+
+      // TODO Need to check that we're not adding a target for a FI that
+      // we've already built (one frame per target)
+      all.add("loop over targets");
+
       for (FILL cur = this; cur != null; cur = cur.next) {
         if (cur.item.isFrozen()) {
           // We've settled on all of the args for this frame
@@ -243,53 +298,32 @@ public class Wat {
           all.add("loop over remaining spans");   // probably only want to do one of these
           all.add("loop over remaining roles");
         }
+
+        if (config.frameByFrame && all.size() > 0)
+          break;
       }
       return all;
     }
   }
 
-  public static class State {
-    private Sentence sentence;
-    private FNParse label;      // may be null
-    private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
-    private FILL frames;
-    private IntDoubleUnsortedVector[][][] staticFeatures;
-    private double score;
-    private double loss;
+  private Sentence sentence;
+  private FNParse label;      // may be null
+  private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
+  private FILL frames;
+  private IntDoubleUnsortedVector[][][] staticFeatures;   // [t,i,j] == (t,s)
+  private Config config;
+  private double score;
+  private double loss;
 
-    public State(FILL frames) {
-      this.frames = frames;
-    }
+  public State(FILL frames) {
+    this.frames = frames;
   }
 
-  public static class Action {
-    // What are the types of actions I need?
-    // 1) add target (no frame specified)
-    // 2) assign frame to an existing target
-    // 3a) choose a span/role given a particular (t,f) => choose a role
-    // 3a) choose a role/span given a particular (t,f) => choose a span
-
-    // 1 and 2 require the fields in an FI
-    // 3a and 3b require the fields in an RI (and a FILL for context)
-
-    public final FI newFrame;
-    public final RI newArg;
-    public final FILL newArgLoc;   // for 3a and 3b
-    // Note that newArgLoc is the frame getting the new arg, but the FILL second
-    // constructor also needs a FILL which is the head of the State's FILL,
-    // which is implicit (carried in State), so it doesn't need to be in Action.
-
-    public Action(FI newFrame) {
-      this.newFrame = newFrame;
-      this.newArg = null;
-      this.newArgLoc = null;
-    }
-
-    public Action(RI newArg, FILL newArgLoc) {
-      this.newFrame = null;
-      this.newArg = newArg;
-      this.newArgLoc = newArgLoc;
-    }
+  public List<String> next() {
+    List<String> all = new ArrayList<>();
+    all.add("loop over possible targets that hanven't been selected yet");
+    all.addAll(frames.next());
+    return all;
   }
 
   // (,) -> (t,)
@@ -319,4 +353,16 @@ public class Wat {
   // I think I'm settling on:
   // - Do NOT allow (s,k) expansion, even for one (t,f), only allow (s,?) or (k,?)
   // - Do allow for both (s,?) and (k,?) expansions. They both have their merit.
+
+
+
+  // In general:
+  // It is better to put next() in FI/RI because they are cached more
+  // HOWEVER, some actions depend on the entire list, things like NO_MORE_ARGS
+  // \t.(t,) -> FILL
+  // \f.(t,f) -> FI
+  // \s.(t,f,s) -> RILL
+  // \k.(t,f,k) -> RILL
+  // \s.(t,f,k,s) -> RI
+  // where \x means loop over x, slight bastardization of lambda notation
 }

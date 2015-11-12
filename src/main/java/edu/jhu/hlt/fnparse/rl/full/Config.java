@@ -1,0 +1,73 @@
+package edu.jhu.hlt.fnparse.rl.full;
+
+public class Config {
+
+  // Label constraints
+  public boolean useContRoles = false;
+  public boolean useRefRoles = false;
+
+  // Structural constraints
+  public boolean oneFramePerSpan = true;  // maybe false when doing joint PB+FN prediction?
+  public boolean oneRolePerSpan = true;   // false for SPRL where "role" means "property"
+  public boolean oneSpanPerRole = true;
+
+  // Transition constraints
+  public boolean frameByFrame = true;         // all actions involving roles must be punctuated by NO_MORE_ARGS
+  public boolean chooseArgRoleFirst = true;   // allow (t,f,k,?) actions
+  public boolean chooseArgSpanFirst = true;   // allow (t,f,?,s) actions
+  public boolean chooseArgOneStep = false;    // allow (t,f,?,?) actions
+
+  // Maybe transtition constraints
+  private boolean chooseAllArgSpansFirst = false;   // for each (t,f): all (t,f,?,s) actions must proceed all (t,f,k,s) actions
+  private boolean chooseAllTargetsFirst = false;    // all (t,) actions must proceed all (t,f) actions
+
+  /*
+   * SPRL settings:
+   */
+  public static final Config SPRL_SETTINGS;
+  public static final Config PB_SETTINGS;
+  public static final Config FN_SETTINGS;
+  static {
+    SPRL_SETTINGS = new Config();
+    SPRL_SETTINGS.chooseAllArgSpansFirst = true;  // (generally its a problem of choosing two spans)
+    SPRL_SETTINGS.oneRolePerSpan = false; // (remember, "role" == "property")
+    SPRL_SETTINGS.oneSpanPerRole = false;
+    SPRL_SETTINGS.useContRoles = false;
+    SPRL_SETTINGS.useRefRoles = false;
+
+    PB_SETTINGS = new Config();
+    PB_SETTINGS.useContRoles = true;
+    PB_SETTINGS.useRefRoles = true;
+
+    FN_SETTINGS = new Config();
+    FN_SETTINGS.frameByFrame = false;
+  }
+
+
+  /*
+   * On step two of (k,?) actions, if oneSpanPerRole then blank out all (k,s) which were not selected
+   * On step two of (?,s) actions, if oneRolePerSpan then blank out all (k,s) which were not selected
+   * "Blank out all ..." is slow, I had wanted to do this lazily with a flag saying "the one is set here"
+   * Naively, the one is set by looking through the LL of actions.
+   * Optimized:
+   *  use RILL.realizedRoles to filter the generation of (k,?) actions
+   *    step 2 of (k,?) + oneSpanPerRole => use LL to inspect which (k,s) was chosen
+   *  use RILL.??? to filter the generation of (?,s) actions
+   *    step 2 of (?,s) + oneRolePerSpan => use LL to inspect which (k,s) was chosen
+   */
+
+  /*
+   * chooseArgRoleFirst means add (k,?) actions -- choose a k, then choose a s for that k
+   * chooseArgSpanFirst means add (s,?) actions -- choose a s, then choose a k label
+   * Both of these are two-step to get to a particular (t,f,k,s)=1
+   * deltaLoss is intuitive: if you choose (k,?), then deltaLoss=0 if \exists s s.t. y[t,f,k,s]=1
+   *              similarly, if you choose (s,?), then deltaLoss=0 if \exists k s.t. y[t,f,k,s]=1
+   *
+   * Both of these actions will lead to a single (s,?) or (k,?) RI node being added,
+   * which must immediately be followed by a set of actions to choose the ? value,
+   * meaning that these two action templates cannot interact
+   *
+   * If you set chooseArgOneStep to true, then a loop over KxS is done in one step to choose a (t,f,k,s)
+   * This is very slow! O(... K^2 S^2) vs O(... K + S)
+   */
+}
