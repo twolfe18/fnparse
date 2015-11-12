@@ -426,6 +426,14 @@ public class CachedFeatures {
           + " and sizeOfWeights=" + (weightBytes / (1024d * 1024d)) + " MB");
     }
 
+    public int getLazyL2UpdateInterval() {
+      return weightsPrune.getUpdateInterval();
+    }
+
+    public int getDimension() {
+      return dimension;
+    }
+
     // NOTE: If you make another constructor, LazyL2UpdateVector must be
     // initialized because it stores updateInterval (cannot be determined later,
     // needs to be known at construction).
@@ -489,20 +497,16 @@ public class CachedFeatures {
       return new Adjoints.Vector(this, a, weightsPrune, fv, l2Penalty);
     }
 
-    /**
-     * @param a must be a COMMIT action.
-     */
-    private Adjoints scoreCommit(FNTagging f, Action a) {
-
+    public IntDoubleUnsortedVector getFeatures(FNTagging f, int t, Span s) {
       if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
         throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
 
       // Get the templates needed for all the features.
       Item cur = loadedSentId2Item.get(f.getSentence().getId());
-      BaseTemplates data = cur.getFeatures(a.t, a.getSpan());
+      BaseTemplates data = cur.getFeatures(t, s);
 
       // I should be able to use the same code as in InformationGainProducts.
-      IntDoubleVector features = new IntDoubleUnsortedVector();
+      IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
       features.add(0, 2);   // intercept
 
       List<ProductIndex> buf = new ArrayList<>();
@@ -527,7 +531,14 @@ public class CachedFeatures {
         }
         buf.clear();
       }
+      return features;
+    }
 
+    /**
+     * @param a must be a COMMIT action.
+     */
+    private Adjoints scoreCommit(FNTagging f, Action a) {
+      IntDoubleVector features = getFeatures(f, a.t, a.getSpan());
       return new Adjoints.Vector(this, a, weightsCommit[a.k], features, l2Penalty);
     }
 

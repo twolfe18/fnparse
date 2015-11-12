@@ -88,6 +88,10 @@ public interface Adjoints {
       this.updateInterval = updateInterval;
     }
 
+    public int getUpdateInterval() {
+      return updateInterval;
+    }
+
     public void maybeApplyL2Reg(double lambda) {
       numUpdatesDeferred++;
       if (numUpdatesDeferred == updateInterval) {

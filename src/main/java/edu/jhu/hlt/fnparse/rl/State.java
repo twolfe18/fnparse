@@ -25,15 +25,16 @@ import edu.jhu.hlt.fnparse.rl.rerank.Item;
 public class State {
 
   protected FNTagging frames;
-  private StateIndex stateIndex;  // (t,k,span) => int for indexing in possible
+  private StateIndex stateIndex;  // (t,k,q,span) => int for indexing into possible
 
   // Represents which spans a given t,k can be assigned to.
-  // Does not represent (t,k,i,j) s.t. i=0,j=0 (i.e. nullSpan).
-  // A (t,k) being assigned to nullSpan is only captured by committed[t][k] = SpanLL(nullSpan, null)
-  // NOTE: For continuation/reference roles, e.g. "R-ARG-X" or "C-ARG-X", they
-  // are indexed in possible in the same way that "ARG-X" is; meaning that it may
-  // be the case that sum_{s} possible[t,k,s] > 1 if k="ARG-X" and "R-ARG-X" or
-  // "C-ARG-X" appears in the sentence with t.
+  // Does not represent (t,k,q,i,j) s.t. i=0,j=0 (i.e. nullSpan).
+  // A (t,k,q) being assigned to nullSpan is only captured by
+  //   committed[t][k] = SpanLL(nullSpan, q, null)
+  // NOTE: For continuation/reference roles, e.g. R-ARG-X or C-ARG-X, they are
+  // indexed in possible in the same way that ARG-X is; meaning that it may be
+  // the case that sum_{s} possible[t,k,s] > 1 if k=ARG-X and R-ARG-X or C-ARG-X
+  // appears in the sentence with t.
   private BitSet possible;
 
   // OLD DOCS:
@@ -45,9 +46,12 @@ public class State {
   //private Span[][] committed;
 
   // NEW DOCS:
-  // A linked list of: nullSpan? nonNullSpan*
+  // A linked list of SpanLLs relevant to this (t,k) with a few rules:
+  // - at most one element is allowed with nullSpan, and it most appear at the head of the list
+  // - ref/cont roles (q values) are only allowed after (closer to the head) a base role
+  // - [unclear] ref/cont roles are mutually exclusive? appear at most once?
   // A nullSpan at the end indicates that this (t,k) has been pruned, and all
-  // remaining z_{t,k,s}=? are set to z_{t,k,s}=0.
+  // remaining z_{t,k,q,s}=? are set to z_{t,k,q,s}=0.
   // If there is no nullSpan, then COMMIT actions may append to this LL
   // indicating that possible_{t,k,s}=1. This may be important for global
   // features to inspect this LL.
@@ -108,12 +112,21 @@ public class State {
    *  every possible action), and then cache the features for each (SpanLL.id, action.id)
    */
 
+  /** This is where values of q come from */
+  public static enum RoleModifier {
+    BASE,
+    REFERENCE,
+    CONTINUATION,
+  }
+
   /** Added so that each (t,k) may have more than one span */
   public static final class SpanLL {
     public final Span span;
+    public final int q;         // e.g. RoleModifier.BASE.ordinal();
     public final SpanLL next;
-    public SpanLL(Span s, SpanLL n) {
+    public SpanLL(Span s, int q, SpanLL n) {
       this.span = s;
+      this.q = q;
       this.next = n;
     }
     @Override

@@ -11,10 +11,14 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance.PropbankDataException;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.rl.State.SpanLL;
-import edu.jhu.hlt.fnparse.rl.params.TemplatedFeatureParams;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.tutils.Beam.Beam1;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * In PB, during decoding we train R-ARG-X/C-ARG-X to look like just plain
@@ -49,6 +53,10 @@ public class ContRefRoleClassifier {
       this.span = span;
     }
 
+    public void setMentionType(MentionType t) {
+      this.type = t;
+    }
+
     public boolean isPruned() {
       return type == MentionType.PRUNE;
     }
@@ -74,11 +82,26 @@ public class ContRefRoleClassifier {
   }
 
   private int nTrain = 0;
-  private double[] weights;
-  private TemplatedFeatureParams features;
+  private LazyL2UpdateVector[] weights;
+  private CachedFeatures.Params features;
+
+  /**
+   * Borrows features from {@link CachedFeatures.Params}.
+   */
+  public ContRefRoleClassifier(CachedFeatures.Params features) {
+    this.features = features;
+    int updateInterval = features.getLazyL2UpdateInterval();
+    int D = features.getDimension();
+    this.weights = new LazyL2UpdateVector[MentionType.values().length];
+    for (int i = 0; i < weights.length; i++)
+      weights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+  }
 
   public void train(State x, FNParse y) {
     nTrain++;
+    
+    // TODO Do 4 independent SVM updates, one-vs-all
+    
     throw new RuntimeException("implement me");
   }
 
@@ -95,6 +118,24 @@ public class ContRefRoleClassifier {
 
     if (nTrain == 0)
       Log.warn("not trained to do this!");
+
+    // TODO Take only the spans which have a score of at least max_{spans} score(prune,span)
+    // Choose the best base role by span score
+    // If any remain, choose best r/c role by score, taking at most 1.
+
+
+    // What about relative features, like "this is the left-most mention"?
+    // I can't get these from CachedFeatures.Params...
+
+    List<ContRefRole> roles = new ArrayList<>();
+    Beam1<Span> bestBase = new Beam1<>();
+    Beam1<Span> bestRC = new Beam1<>();
+    for (SpanLL cur = mentions; cur != null; cur = cur.next) {
+      IntDoubleUnsortedVector fv = features.getFeatures(st.getFrames(), t, cur.span);
+      double[] scores = new double[weights.length];
+      for (int i = 0; i < scores.length; i++)
+        scores[i] = weights[i].weights.dot(fv);
+    }
 
     // TODO check that there is 0 or 1 nullSpans in the LL,
     // and that if there is 1 it is at the head
