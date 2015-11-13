@@ -2,22 +2,32 @@ package edu.jhu.hlt.fnparse.rl.full;
 
 public class Config {
 
-  // Label constraints
+  /** Label constraints *******************************************************/
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
 
-  // Structural constraints
+  /** Structural constraints **************************************************/
   public boolean oneFramePerSpan = true;  // maybe false when doing joint PB+FN prediction?
   public boolean oneRolePerSpan = true;   // false for SPRL where "role" means "property"
   public boolean oneSpanPerRole = true;
 
-  // Transition constraints
-  public boolean frameByFrame = true;         // all actions involving roles must be punctuated by NO_MORE_ARGS
+  /** Transition constraints **************************************************/
+  // All actions involving frames/roles must be punctuated by NO_MORE_FRAMES/NO_MORE_ARGS
+  public boolean frameByFrame = true;
   public boolean roleByRole = false;
+
+  // Two-step actions, e.g. (t,f) -> (k,?) -> (k,s), must be resolved immediately.
+  // This means that if there is a step 1 action to take then step 2 actions may not be generated.
+  public boolean immediatelyResolveArgs = true;       // p[(k,?) -> !(k,s)]=0 and p[(?,s) -> !(k,s)]=0 and p[(?,?) -> !(k,s)]=0
+  public boolean immediatelyResolveFrames = true;
+
+  // Dictates the types of step 1 actions generated
   public boolean chooseArgRoleFirst = true;   // allow (t,f,k,?) actions
   public boolean chooseArgSpanFirst = true;   // allow (t,f,?,s) actions
   public boolean chooseArgOneStep = false;    // allow (t,f,?,?) actions
   public boolean chooseFramesOnStep = false;  // allow loop over all (t,f)
+
+  public boolean framesBeforeArgs = false;   // require NO_MORE_FRAMES < all RIs
 
   // Maybe transtition constraints
   private boolean chooseAllArgSpansFirst = false;   // for each (t,f): all (t,f,?,s) actions must proceed all (t,f,k,s) actions

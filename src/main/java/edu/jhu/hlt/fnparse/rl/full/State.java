@@ -1,11 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -14,7 +11,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
-public class State implements GeneratesActions {
+public class State {
 
   /*
    * The one thing that I thought about but haven't added is how to do state merging.
@@ -96,12 +93,20 @@ public class State implements GeneratesActions {
 
     public final fj.data.Set<Span> realizedSpans;
 
+    // This can't be a RILL because it could be this, which would be an infinite self-loop
+    public final RI incomplete; // can be null
+
     // This is monad bind!
     public RILL(RI r, RILL l) {
       item = r;
       next = l;
-      assert r.k < 64 && r.k >= 0;
-      long rm = 1l << r.k;
+      final long rm;
+      if (r.k >= 0) {
+        assert r.k < 64;
+        rm = 1l << r.k;
+      } else {
+        rm = 0;
+      }
       realizedRoles = l.realizedRoles | rm;
       realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
       realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
@@ -109,9 +114,21 @@ public class State implements GeneratesActions {
       noMoreArgSpans = l.noMoreArgSpans || item == NO_MORE_ARG_SPANS;
       noMoreArgRoles = l.noMoreArgRoles || item == NO_MORE_ARG_ROLES;
 
-      // TODO This needs clarification for the non-add-arg cases
-      assert r.s != null && r.s != Span.nullSpan;
-      realizedSpans = l.realizedSpans.insert(r.s);
+      realizedSpans = r.s == null ? l.realizedSpans : l.realizedSpans.insert(r.s);
+
+      if (l.incomplete != null) {
+        if (completes(r, l.incomplete)) {
+          incomplete = null;
+        } else {
+          assert !incomplete(r) : "only can have one incomplete node?";
+          incomplete = l.incomplete;
+        }
+      } else {
+        if (incomplete(r))
+          incomplete = r;
+        else
+          incomplete = null;
+      }
     }
 
     public int getNumRealizedArgs() {
@@ -119,14 +136,26 @@ public class State implements GeneratesActions {
           + Long.bitCount(realizedRolesCont)
           + Long.bitCount(realizedRolesRef);
     }
+  }
 
+  public static boolean completes(RI completion, RI incomplete) {
+    if (incomplete.k >= 0 && incomplete.s == null)
+      return completion.k == incomplete.k && completion.s != null;
+    if (incomplete.s != null && incomplete.k < 0)
+      return completion.s == incomplete.s && completion.k >= 0;
+    if (incomplete.k < 0 && incomplete.s == null)
+      return completion.k >= 0 && completion.s != null;
+    throw new RuntimeException();
+  }
+  public static boolean incomplete(RI role) {
+    return role.k < 0 || role.s == null;
   }
 
   public static final RI NO_MORE_ARGS = new RI(-1, -1, null);
   public static final RI NO_MORE_ARG_SPANS = new RI(-2, -2, null);
   public static final RI NO_MORE_ARG_ROLES = new RI(-3, -3, null);
 
-  public final class FI implements GeneratesActions {
+  public final class FI {
 
     public final Frame f; // f==null means only this target has been selected, but it hasn't been labled yet
     public final Span t;  // Currently must be non-null. You could imagine assuming a frame exists THEN finding its extend (...AMR) but thats not what we're currently doing
@@ -145,68 +174,6 @@ public class State implements GeneratesActions {
     public FI withArg(RI arg) {
       return new FI(this, new RILL(arg, args));
     }
-
-    public boolean isFrozen() {
-      return args.item == NO_MORE_ARGS;
-    }
-
-    @Override
-    public double partialUpperBound() {
-      throw new RuntimeException("implement me");
-    }
-
-    /**
-     * - NO_MORE_ARGS
-     * - NO_MORE_ARG_SPANS
-     * - NO_MORE_ARG_ROLES
-     * - new (k,?) nodes
-     * - new (?,k) nodes
-     * - new (?,?) nodes      => Don't actually create nodes like this, just create one action per (k,s)
-     */
-    @Override
-    public void next(Beam beam, double prefixScore) {
-
-      if (args.noMoreArgs)
-        return;
-
-      // TODO NO_MORE_ARGS
-      RILL rill = new RILL(NO_MORE_ARGS, args);
-      FI fi = new FI(this, rill);
-      FILL howToGetOldFILL = ???;
-      beam.offer(new State(new FILL(fi, howToGetOldFILL)), ZERO);
-
-      // TODO NO_MORE_ARG_SPANS
-
-      // TODO NO_MORE_ARG_ROLES
-
-      for (RILL cur = args; cur != null; cur = cur.next) {
-        RI ri = cur.item;
-
-        if (ri.k < 0 && ri.s != null) {
-          // loop over roles
-          if (args.noMoreArgRoles) {
-            // deltaLoss should have accounted for the cost of missing any
-            // possible items stemming from open (?,s) nodes.
-            continue;
-          }
-
-        } else if (ri.k >= 0 && ri.s == null) {
-          // loop over spans
-          if (args.noMoreArgSpans) {
-            // deltaLoss should have accounted for the cost of missing any
-            // possible items stemming from open (k,?) nodes.
-            continue;
-          }
-
-        } else {
-          assert ri.k >= 0 && ri.s != null;
-        }
-
-        if (config.roleByRole)
-          break;
-      }
-    }
-
   }
 
   // Note NO_MORE_FRAMES really means "no more FIs".
@@ -216,10 +183,6 @@ public class State implements GeneratesActions {
   public static final FI NO_MORE_FRAMES = new State(null).new FI(null, null, null);
   public static final FI NO_MORE_TARGETS = new State(null).new FI(null, null, null);
 
-  // Q: How to tell apart:
-  // 1) prepend new (t,f)
-  // 2) replace newFrame (which contains a new role) with the corresponding (t,f) node in frames
-  // A: case 1 has newFrame.args==null and case 2 has newFrame.args!=null :)
   public static final class FILL {
 
     public final FI item;
@@ -234,6 +197,9 @@ public class State implements GeneratesActions {
     public final boolean noMoreFrames;
     public final boolean noMoreTargets;
 
+    // Should be FILL instead of FI?
+    public final FI incomplete;   // can be null
+
     /**
      * New target chosen (next actions will range over features)
      */
@@ -246,155 +212,21 @@ public class State implements GeneratesActions {
           : otherFrames.targetsSelectedSoFar;
       noMoreFrames = otherFrames.noMoreFrames || highlightedTarget == NO_MORE_FRAMES;
       noMoreTargets = otherFrames.noMoreTargets || highlightedTarget == NO_MORE_TARGETS;
-    }
 
-    // NOTE: This is gone because we cannot allow FILL to create its own FI
-    // nodes, which are non-static (this is a static class). More natural for
-    // This just to represent cons (LL) plus any monoid ops like numFrameInstances or targetsUsed
-//    /**
-//     * A new arg has been added to an existing frame, somewhere in allFrames.
-//     * Find it and make a new FI node to put at the head.
-//     */
-//    public FILL(FILL addArgTo, RI argToAdd, FILL allFrames) {
-//      FI f = addArgTo.item;
-//      assert f != NO_MORE_FRAMES;
-//
-//      // Nodes at the front of allFrames (need to be copied due to mutation
-//      // down in the list). If addArgTo == allFrames, then this is O(1), and
-//      // gets progressively more costly addArgTo is deeper in the allFrames list
-//      List<FI> head = new ArrayList<>();
-//      for (FILL cur = allFrames; cur != addArgTo; cur = cur.next)
-//        head.add(cur.item);
-//
-//      // Build FI with one new argument
-//      RILL newRoles = new RILL(argToAdd, f.args);
-//      item = new FI(f.f, f.t, newRoles);
-//      numFrameInstances = addArgTo.numFrameInstances;
-//
-//      // Glue together:
-//      // a) the tail of allFrames (from addArgTo on)
-//      FILL nextMut = addArgTo.next;
-//      // b) the frames that came before addArgTo
-//      for (int i = head.size() - 1; i >= 0; i--) {
-//        // Frames didn't change, the LL did
-//        // Make new LL nodes, not new FI nodes
-//        FI fi = head.get(i);
-//        nextMut = new FILL(fi, nextMut);
-//      }
-//      next = nextMut;
-//    }
-
-    /*
-     * Only non-LL nodes create actions.
-     * TODO Move stuff to State or FI
-    @Override
-    public void next(Beam beam, double prefixScore) {
-
-      assert item.t != null;
-      if (item.f == null) {
-        // Label this target
-        // (t,) -> (t,f)
-        // Note that this needs to be here because the only way to accomplish
-        // this is to add a new FI (to a FILL). FI doesn't know about FILL,
-        // so it can't add to this LL.
-
+      assert highlightedTarget.t != null;
+      if (otherFrames.incomplete == null) {
+        if (highlightedTarget.f == null)
+          incomplete = highlightedTarget;
+        else
+          incomplete = null;
       } else {
-
-        // Step 2/2 actions
-        boolean step2 = false;
-        for (RILL cur = item.args;
-            cur != null && cur.item != NO_MORE_ARGS;
-            cur = cur.next) {
-          int k = cur.item.k;   // TODO q
-          Span s = cur.item.s;
-
-          if (k >= 0 && s == null) {
-            // (k,?) actions, Step 2/2
-            step2 = true;
-          } else if (k < 0 && s != null) {
-            // (s,?) actions, Step 2/2
-            step2 = true;
-          } else if (k < 0 && s == null) {
-            // (?,?) actions, Step 2/2
-            step2 = true;
-          }
-
-          if (step2 && config.roleByRole) {
-            // This means we work one RILL at a time, thus there must not be
-            // any possible actions out of (cdr RILL), which gives us a nice
-            // speedup.
-            break;
-          }
-        }
-
-        if (!step2) {
-          // (k,?) actions, Step 1/2
-          if (config.chooseArgRoleFirst) {
-            long realizedRolesMask = item.args.realizedRoles;
-            int K = item.f.numRoles();
-            for (int k = 0; k < K; k++) {
-              long ki = 1l << k;
-              if ((realizedRolesMask & ki) == 0) {
-                // TODO Generate action for adding (k,?)
-              } else {
-                // TODO continuation/reference roles?
-              }
-            }
-          }
-
-          // (?,s) actions, Step 1/2
-          if (config.chooseArgSpanFirst) {
-            fj.data.Set<Span> realizedSpans = item.args.realizedSpans;
-            int t = -1;   // TODO old code assumes t:int, now t:Span
-            for (Span s : prunedSpans.getPossibleArgs(t)) {
-              if (!realizedSpans.member(s)) {
-                // TODO Generate action for adding (?,s)
-              }
-            }
-          }
-
-          // (k,s) actions (SLOW: high branching factor)
-          if (config.chooseArgOneStep) {
-            throw new RuntimeException("implement me");
-          }
-        }
-      }
-
-      // Recurse on (cdr FILL)
-      if (!config.frameByFrame) {
-        // To encourage the model to make cheap updates, add a slight penalty
-        // to actions further down the FILL.
-        double lenPenalty = 0.1;
-        next.next(beam, prefixScore - lenPenalty);
+        if (otherFrames.incomplete.t == highlightedTarget.t)
+          incomplete = null;
+        else
+          incomplete = otherFrames.incomplete;
       }
     }
-     */
 
-        // Escaping early!
-//        Double lb, ub;
-//        if ((lb = b.lowerBound()) != null
-//            && (ub = fiModel.scoreUpperBound()) != null
-//            && lb > lengthPenaltySum + ub) {
-//          break;
-//        }
-//        if (b.lowerBound() > prefixScore + -lengthPenaltySum)
-        /*
-         * The hardest thing to prune are the things deep in the tree.
-         * These are the only things you want to prune, since making a new state isn't that expensive and the beam will immediately reject it (no cascade of un-necessary work)
-         * 
-         * => prefix score is a necessary way to communicate down the tree
-         * => a way to communicate upper bounds *up the tree* is still needed.
-         */
-//        if (beam.lowerBound() > prefixScore + who)
-//          break;
-        // Who am I going to call next on?
-        // aka what is my subtree?
-        // I need to ask *that subtree* what its bound is.
-        // FILL_1 -> FILL_2 -> FILL_2
-        // What is the upper bound of FILL_2?
-        // Is it the same as the bound on FILL_1?
-        // => I think I'm close enough to having an implementation that works *without* pruning, so I'm going to get that working
-        //    After this is done, it may be easier to see the answer to who to ask for the upper bound.
   }
 
   private Sentence sentence;
@@ -419,76 +251,9 @@ public class State implements GeneratesActions {
   public Model<String> tfModel;
   public Model<String> tModel;
 
-  /*
-   * AH, you need to upper bound the actions that could be generated from under a given node (e.g. FILL can generate actions from g3)
-   * The saving grace is that the more g3 actions you evaluate, the better the chance that you'll find some high-scoring next states to push up the lower bound of you beam.
-   * 
-   * How do we get the upper bound on a score that may come from any action in a subset/subtree?
-   * Doing it backwards doesn't make sense: e.g. fillModel = fillModel + fiModel + rillModel + riModel
-   * (though this is the semantics you need for upper bounding actions)
-   * AH, you have a model where you pass down the prefix to the upper bound:
-   *
-   * => next() must be given a prefix score and a prefix score upper bound
-   */
-
   public State(FILL frames) {
     this.frames = frames;
   }
-
-  /**
-   * - NO_MORE_FRAMES
-   * - NO_MORE_TARGETS
-   * - (t,), which adds new FIs to the head of args:FILL
-   * - (t,) -> (t,f), which adds new FIs to the head of args:FILL
-   * 
-   * NOTE: The reason that We need State is that there are some actions which
-   * are only allowed at the head of a FILL (i.e. not relevant to each FI) such
-   * as NO_MORE_FRAMES.
-   * NOTE: Another reason is that for *mutation* (see below) to work, you need a
-   * need handle on the head of the list.
-   *
-   * The only reason I needed the "copy LL nodes up to a point" was due to the
-   * fact that FI has a RILL, prepending to that RILL is tantamount to mutation
-   * of a FI and a FILL. Mutation => Copying.
-   *
-   * Given that we are only mutating items in FILL and not in RILL, then perhaps
-   * the rule of non-LL nodes generate actions does not apply to FI/RILL.
-   * If RILL generated actions, it would generate:
-   * - (k,?) -> new RI for (k,s)
-   * - (?,k) -> new RI for (k,s)
-   * - (?,?) -> new RI for (k,s)
-   * This action would still need a pointer to the head of the list to perform
-   * the cons required by action/apply.
-   * BUT, we could say that RILL asks the RIs to give "potential new RI nodes" (cache).
-   * RILL generates the actions (implements next(), but RIs cache RIs they could lead to.
-   * => Lets implement RI caching later
-   *    Still need to figure out how to cache static features (RI) and not dynamic features (RILL)
-   *
-   * One last reason supporting the "non-LL nodes generate actoins" rule is that
-   * only the non-LL nodes have the proper/total information needed for global
-   * features. For example, numArgs. A RILL may know how many args have been
-   * added *before* it (in (cdr RILL)), but it doesn't know how many have been
-   * added in total.
-   */
-
-  /**
-   * Clarity:
-   * State == new FI nodes
-   * - NO_MORE_FRAMES
-   * - NO_MORE_TARGETS
-   * - new (t,?) nodes
-   * - new (t,f) nodes
-   * FI == new RI nodes
-   * - NO_MORE_ARGS
-   * - NO_MORE_ARG_SPANS
-   * - NO_MORE_ARG_ROLES
-   * - new (k,?) nodes
-   * - new (?,k) nodes
-   * - new (?,?) nodes      => Don't actually create nodes like this, just create one action per (k,s)
-   *
-   * => NO. Not right. One step out of State needed. See below.
-   */
-
 
   // Work out scoring after the transition system is working
   public static final Adjoints ZERO = null;
@@ -535,8 +300,11 @@ public class State implements GeneratesActions {
    * The reason that I did this was that:
    * adding an RI -> need to mutate FI -> need to replace node in FILL -> need State
    */
-  @Override
   public void next(Beam beam, double prefixScore) {
+
+    assert config.chooseArgOneStep || config.chooseArgRoleFirst || config.chooseArgSpanFirst;
+    assert !config.roleByRole || config.immediatelyResolveArgs
+      : "otherwise you could strange incomplete RIs";
 
     if (frames.noMoreFrames)
       return;
@@ -545,15 +313,33 @@ public class State implements GeneratesActions {
       beam.offer(new State(new FILL(NO_MORE_TARGETS, frames)), ZERO);
 
     /* New FI actions *********************************************************/
+
+    // Frames Step 2/2 [immediate]
+    if (frames.incomplete != null) {
+      Span t = frames.incomplete.t;
+      for (Frame f : prunedFIs.get(t)) {
+        RILL args2 = null;
+        FI fi2 = new FI(f, t, args2);
+        beam.offer(new State(new FILL(fi2, frames)), ZERO);
+      }
+      if (config.immediatelyResolveFrames)
+        return;
+    }
+
+
     // Frames Step 1/2
-    // TODO Need to check that (Frames Step 2/2) doesn't need to be run first.
     fj.data.Set<Span> tsf = frames.targetsSelectedSoFar;
+    int newTF = 0;
     for (Span t : prunedFIs.keySet()) {
-      if (!config.oneFramePerSpan || !tsf.member(t)) {
+      boolean tSeen = tsf.member(t);
+      if (!config.oneFramePerSpan || !tSeen) {
         // (t,)
-        RILL args = null;
-        FI fi = new FI(null, t, args);
-        beam.offer(new State(new FILL(fi, frames)), ZERO);
+        if (!frames.noMoreTargets && !tSeen) {
+          RILL args = null;
+          FI fi = new FI(null, t, args);
+          beam.offer(new State(new FILL(fi, frames)), ZERO);
+          newTF++;
+        }
 
         // (t,f)
         if (config.chooseFramesOnStep) {
@@ -561,97 +347,138 @@ public class State implements GeneratesActions {
             RILL args2 = null;
             FI fi2 = new FI(f, t, args2);
             beam.offer(new State(new FILL(fi2, frames)), ZERO);
+            newTF++;
           }
         }
       }
     }
+    if (newTF > 0 && config.framesBeforeArgs)
+      return;
+
+
+    // Args Step 2/2 [immediate]
+    if (config.immediatelyResolveArgs) {
+      for (FILL cur = frames; cur != null; cur = cur.next) {
+        RI incomplete = cur.item.args.incomplete;
+        if (incomplete != null) {
+          FI fi = cur.incomplete;
+          if (incomplete.k >= 0) {
+            // Loop over s
+            int t = -1; // TODO have t:Span need t:int
+            for (Span s : prunedSpans.getPossibleArgs(t)) {
+              RI newArg = new RI(incomplete.k, incomplete.q, s);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+            }
+          } else if (incomplete.s != null) {
+            // Loop over k
+            int K = fi.f.numRoles();
+            for (int k = 0; k < K; k++) {
+              int q = -1; // TODO
+              RI newArg = new RI(k, q, incomplete.s);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+            }
+          } else {
+            // Loop over (k,s)
+            int K = fi.f.numRoles();
+            int t = -1; // TODO have t:Span need t:int
+            for (Span s : prunedSpans.getPossibleArgs(t)) {
+              for (int k = 0; k < K; k++) {
+                int q = -1; // TODO
+                RI newArg = new RI(k, q, s);
+                beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+              }
+            }
+          }
+          return;
+        }
+      }
+    }
+
 
     /* New RI actions *********************************************************/
     for (FILL cur = frames; cur != null; cur = cur.next) {
-
       FI fi = cur.item;
       assert fi.t != null;
 
       if (fi.args.noMoreArgs)
         continue;
 
-      // Frames Step 2/2
+      // Args Step 1/2
+      if (config.chooseArgRoleFirst) {
+        // Loop over k
+        int K = fi.f.numRoles();
+        for (int k = 0; k < K; k++) {
+          int q = -1;   // TODO
+          RI newArg = new RI(k, q, null);
+          beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+        }
+      }
+      if (config.chooseArgSpanFirst) {
+        // Loop over s
+        int t = -1; // TODO have t:Span need t:int
+        for (Span s : prunedSpans.getPossibleArgs(t)) {
+          RI newArg = new RI(-1, -1, s);
+          beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+        }
+      }
+      if (config.chooseArgOneStep) {
+        // Loop over (k,s)
+        int K = fi.f.numRoles();
+        int t = -1; // TODO have t:Span need t:int
+        for (Span s : prunedSpans.getPossibleArgs(t)) {
+          for (int k = 0; k < K; k++) {
+            int q = -1;   // TODO
+            RI newArg = new RI(k, q, s);
+            beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+          }
+        }
+      }
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARGS)), ZERO);
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_SPANS)), ZERO);
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_ROLES)), ZERO);
+
+
+      // Frames Step 2/2 [!immediate]
       if (fi.f == null) {
-        // Loop over t
+        // Loop over f
+        for (Frame f : prunedFIs.get(fi.t)) {
+          beam.offer(new State(new FILL(new FI(f, fi.t, fi.args), cur)), ZERO);
+        }
+
+        // We could allow generation of (?,s) actions even if f is not known...
         continue;
       }
 
-      // Args Step 2/2
-      // (Takes precedence over Step 1/2)
-      boolean haveToCompleteAnArgForThisFrame = false;
-      for (RILL arg = fi.args; arg != null; arg = arg.next) {
-        RI ri = arg.item;
+      // Args Step 2/2 [!immediate]
+      if (!fi.args.noMoreArgs) {
+        for (RILL arg = fi.args; arg != null; arg = arg.next) {
+          RI ri = arg.item;
 
-        if (ri.k < 0 && ri.s != null) {
-          // loop over roles
-          if (arg.noMoreArgRoles) {
-            // deltaLoss should have accounted for the cost of missing any
-            // possible items stemming from open (?,s) nodes.
-            continue;
-          }
-          haveToCompleteAnArgForThisFrame = true;
-
-        } else if (ri.k >= 0 && ri.s == null) {
-          // loop over spans
-          if (arg.noMoreArgSpans) {
-            // deltaLoss should have accounted for the cost of missing any
-            // possible items stemming from open (k,?) nodes.
-            continue;
-          }
-          haveToCompleteAnArgForThisFrame = true;
-
-        } else {
-          assert ri.k >= 0 && ri.s != null;
-        }
-
-        if (config.roleByRole)
-          break;
-      } // END ARG LOOP
-
-
-      if (haveToCompleteAnArgForThisFrame) {
-        // Args Step 1/2
-        if (config.chooseArgRoleFirst) {
-          // Loop over k
-          int K = fi.f.numRoles();
-          for (int k = 0; k < K; k++) {
-            RI newArg = new RI(k, -1, null);
-            beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
-          }
-        }
-        if (config.chooseArgSpanFirst) {
-          // Loop over s
-          int t = -1; // TODO have t:Span need t:int
-          for (Span s : prunedSpans.getPossibleArgs(t)) {
-            RI newArg = new RI(-1, -1, s);
-            beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
-          }
-        }
-        if (config.chooseArgOneStep) {
-          // Loop over (k,s)
-          int K = fi.f.numRoles();
-          int t = -1; // TODO have t:Span need t:int
-          for (Span s : prunedSpans.getPossibleArgs(t)) {
+          // deltaLoss should have accounted for the cost of missing any
+          // possible items stemming from open (?,s) nodes.
+          if (ri.k < 0 && ri.s != null && !fi.args.noMoreArgRoles) {
+            // loop over roles
+            int K = fi.f.numRoles();
             for (int k = 0; k < K; k++) {
-              RI newArg = new RI(k, -1, s);
+              int q = -1;   // TODO
+              RI newArg = new RI(k, q, ri.s);
               beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
             }
+          } else if (ri.k >= 0 && ri.s == null && !fi.args.noMoreArgSpans) {
+            // deltaLoss should have accounted for the cost of missing any
+            // possible items stemming from open (k,?) nodes.
+            // loop over spans
+            int t = -1;   // TODO have t:Span need t:int
+            for (Span s : prunedSpans.getPossibleArgs(t)) {
+              RI newArg = new RI(ri.k, ri.q, s);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+            }
+          } else {
+            assert ri.k >= 0 && ri.s != null;
           }
-        }
-
-        // NO_MORE_ARGS
-        beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARGS)), ZERO);
-
-        // NO_MORE_ARG_SPANS
-        beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_SPANS)), ZERO);
-
-        // NO_MORE_ARG_ROLES
-        beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_ROLES)), ZERO);
+          if (config.roleByRole)
+            break;
+        } // END ARG LOOP
       }
 
       if (config.frameByFrame)
@@ -659,40 +486,6 @@ public class State implements GeneratesActions {
     } // END FRAME LOOP
 
   }
-
-  @Override
-  public double partialUpperBound() {
-    return tModel.scoreUpperBound();
-  }
-
-  // (,) -> (t,)
-  // (t,) -> (t,f)
-  // (t,f) -> (t,f,s) -> (t,f,s,k)
-  // (t,f) -> (t,f,k) -> (t,f,k,s)
-
-  // f(t,s)
-  // f(t,f,s)
-  // f(t,f,k)? -- this isn't terribly natural, ..except for dynamic/state features!
-
-  // First lets answer the question of if (3a) and (3b) style sequences can co-exist.
-  // How would a problem arise?
-  // If a given (t,k) had a (s,?) and (k,?) set of actions, and we could take more than one at the same time?
-  // If we let both of those expand, they would have one overlapping action... not particularly a bad thing
-  // If we allow either a (s,?) or a (k,?) to be added to a RILL, and force it to be immediately resolved, then an (s,k) will be chosen and it will prevent further (s,?) or (k,?) actions
-
-  // dynamic features for (t,f,k)?
-  // - RoleCooc
-  // - NumArgs
-  // + Useful for stopping quickly: "I can rule out ARG4 because I already have 3 args..."
-  // dynamic features for (t,f,s)?
-  // - RoleLoc
-  // - NumArgs
-  // + WAY more static features
-
-  // I think I'm settling on:
-  // - Do NOT allow (s,k) expansion, even for one (t,f), only allow (s,?) or (k,?)
-  // - Do allow for both (s,?) and (k,?) expansions. They both have their merit.
-
 
   public interface Model<X> {
     public Adjoints score(X x);
