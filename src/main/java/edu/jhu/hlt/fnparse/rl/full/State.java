@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -12,7 +14,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
-public class State {
+public class State implements GeneratesActions {
 
   /*
    * The one thing that I thought about but haven't added is how to do state merging.
@@ -50,7 +52,11 @@ public class State {
   public static final int CONT = 1;
   public static final int REF = 2;
 
-  public static class RI {
+  /**
+   * Does not generate any actions because it doesn't hold onto a LL (actions
+   * create nodes that are pushed onto the head of a LL).
+   */
+  public static final class RI {
     public final int k;   // k=-1 means only this span has been chosen, but it hasn't been labeled yet
     public final int q;
     public final Span s;
@@ -61,7 +67,8 @@ public class State {
     }
   }
 
-  public static class RILL {
+  public class RILL implements GeneratesActions {
+
     public final RI item;
     public final RILL next;
 
@@ -79,17 +86,23 @@ public class State {
     public final boolean noMoreArgs;
     public final boolean noMoreArgSpans;
 
+    public final fj.data.Set<Span> realizedSpans;
+
     // This is monad bind!
     public RILL(RI r, RILL l) {
       item = r;
       next = l;
-      assert r.k < 64;
+      assert r.k < 64 && r.k >= 0;
       long rm = 1l << r.k;
       realizedRoles = l.realizedRoles | rm;
       realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
       realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
       noMoreArgs = l.noMoreArgs || item == NO_MORE_ARGS;
       noMoreArgSpans = l.noMoreArgSpans || item == NO_MORE_ARG_SPANS;
+
+      // TODO This needs clarification for the non-add-arg cases
+      assert r.s != null && r.s != Span.nullSpan;
+      realizedSpans = l.realizedSpans.insert(r.s);
     }
 
     public int getNumRealizedArgs() {
@@ -98,35 +111,47 @@ public class State {
           + Long.bitCount(realizedRolesRef);
     }
 
-    public List<String> next() {
+    /**
+     * - add (t,f,k,?)
+     * - add (t,f,?,s)
+     * - add (t,f,k,s)
+     */
+    @Override
+    public void next(Beam beam, double prefixScore) {
       if (item.s == null && item.k >= 0) {
-        return Arrays.asList("find a span for role k");
+        assert config.chooseArgRoleFirst;
+//        return Arrays.asList("find a span for role k");
       } else if (item.s != null && item.k < 0) {
-        return Arrays.asList("find a role for span s");
+        assert config.chooseArgSpanFirst;
+//        return Arrays.asList("find a role for span s");
       } else if (item.s != null && item.k >= 0) {
         // This RILL has already been fixed, TODO could have FI skip this?
-        return Collections.emptyList();
+//        return Collections.emptyList();
       } else {
         assert item.s == null && item.k < 0;
         throw new IllegalStateException("must specify either k or s");
       }
     }
+
+    @Override
+    public double partialUpperBound() {
+      throw new RuntimeException("implement me");
+    }
   }
 
-  // Put this at the head of a RILL to signify that no more args may be assigned to this FI
   public static final RI NO_MORE_ARGS = new RI(-1, -1, null);
-
-  // See chooseAllArgSpansFirst
   public static final RI NO_MORE_ARG_SPANS = new RI(-2, -2, null);
+  public static final RI NO_MORE_ARG_ROLES = new RI(-3, -3, null);
 
-  public class FI {
+  public class FI implements GeneratesActions {
+
     public final Frame f;           // f==null means only this target has been selected, but it hasn't been labled yet
     public final Span t;
     public final RILL args;
 
     // Every time a role is added to this frame, a new FI is created,
     // thus it is safe to cache actions.
-    private List<String> actionCache;
+//    private List<String> actionCache;
 
     public FI(Frame f, Span t, RILL args) {
       this.f = f;
@@ -138,76 +163,92 @@ public class State {
       return args.item == NO_MORE_ARGS;
     }
 
-    public List<String> next() {
-      if (actionCache != null)
-        return actionCache;
-      actionCache = new ArrayList<>();
-
-      if (args.noMoreArgs) {
-        return actionCache;
-      }
-      if (args.noMoreArgSpans) {
-        // Disallow (s,?) actions
-      }
-
-      // Add NO_MORE_ARGS action
-      // Add NO_MORE_ARG_SPANS action
-
-      /* Step 2 of 2-step actions */
-      RI ri = args.item;
-      if (ri.k < 0 && ri.s != null) {
-        // Loop over k
-        return actionCache;
-      } else if (ri.k >= 0 && ri.s == null) {
-        // Loop over s
-        return actionCache;
-      }
-
-      if (config.chooseArgOneStep) {
-        /* One step actions */
-        // Loop over (k,s)
-        return actionCache;
-      } else {
-        /* Step 1 of 2-step actions */
-        if (config.chooseArgRoleFirst) {
-          // Loop over k
-        }
-        if (config.chooseArgSpanFirst) {
-          // Loop over s
-        }
-        return actionCache;
-      }
+    @Override
+    public double partialUpperBound() {
+      throw new RuntimeException("implement me");
     }
+
+    /**
+     * - NO_MORE_ARGS
+     * - NO_MORE_ARG_SPANS
+     * - NO_MORE_ARG_ROLES
+     * - (k,?) -> (k,s)
+     * - (?,s) -> (k,s)
+     * - (?,?) -> (k,s)
+     * - call next() on args:RILL
+     *
+     * NOTE: This class needs to exist because there are some actions which
+     * are only allowed from the head of a RILL (i.e. not relevant to every
+     * RI) such as NO_MORE_ARGS.
+     * 
+     * 
+     * new RI actions = {(t,f) -> (k,?), (t,f) -> (?,s), (t,f) -> (?,?)}
+     * new RI actions == "step 1 actions"
+     * new RI actions are added by FI because they must come from the head of a RILL
+     *
+     * complete RI actions = {(k,?) -> (k,s), (?,s) -> (k,s), (?,?) -> (k,s)}
+     * complete RI actions == "step 2 actions"
+     * complete RI actions are added by RILL because they depend on some existing RI info
+     * (they cannot go in RI because they depend on ...)
+     *
+     * DAMNIT!
+     * I think all actions need to be generated by a non LL node because they
+     * all need to ADD to the head of a LL, so they need that handle.
+     * => This is for the best because when we do surgery on a LL, we always keep
+     *    non LL nodes and copy LL nodes. The more that can go into non LL nodes,
+     *    the more we cache.
+     *
+     * NOTE: RI does not generate any actions.
+     */
+    @Override
+    public void next(Beam beam, double prefixScore) {
+
+      if (args.item == NO_MORE_ARGS)
+        return;
+
+      // Step 1/2 actions
+      // NO_MORE_ARG_SPANS
+      // NO_MORE_ARG_ROLES
+      // -> (k,?)
+      // 
+
+      // Step 2/2 actions
+      int k = args.item.k;   // TODO q
+      Span s = args.item.s;
+
+      if (k >= 0 && s == null) {
+        // (k,?) actions, Step 2/2
+      } else if (k < 0 && s != null) {
+        // (s,?) actions, Step 2/2
+      } else if (k < 0 && s == null) {
+        // (?,?) actions, Step 2/2
+      }
+
+      if (!config.roleByRole)
+        args.next(beam, prefixScore);
+    }
+
   }
 
-  // Put this at the head of a FILL to signify that no more frames appear in this sentence
+  // Note NO_MORE_FRAMES really means "no more FIs".
+  // By analogy to RILL and NO_MORE_ROLES, there is no true "no more frames
+  // (irrespective of t) in this sentence" action because it doesn't really
+  // make sense.
   public static final FI NO_MORE_FRAMES = new State(null).new FI(null, null, null);
+  public static final FI NO_MORE_TARGETS = new State(null).new FI(null, null, null);
 
   // Q: How to tell apart:
   // 1) prepend new (t,f)
   // 2) replace newFrame (which contains a new role) with the corresponding (t,f) node in frames
   // A: case 1 has newFrame.args==null and case 2 has newFrame.args!=null :)
-  public class FILL {    // aka "state"
+  public class FILL implements GeneratesActions {
+
     public final FI item;
     public final FILL next;
 
     // Caches which should be updateable in O(1) which may inform/prune next() or global features
     public final int numFrameInstances;
     // TODO add "last FI which is not STOP/FULL"? -- skip list of non-full FIs?
-
-    // I'm not allowing f to precede t in an action sequence, so we only need to check if we're done with (t,f)s
-    public final boolean noMoreFrames;
-
-    /**
-     * Put an end to any more frames/targets being predicted in this FILL.
-     * (Note, you can still add args even if you can't add frames)
-     */
-    public FILL(FILL preventAddingFramesTo) {
-      noMoreFrames = true;
-      next = preventAddingFramesTo;
-      item = NO_MORE_FRAMES;
-      numFrameInstances = preventAddingFramesTo.numFrameInstances;
-    }
 
     /**
      * New target chosen (next actions will range over features)
@@ -216,9 +257,6 @@ public class State {
       item = highlightedTarget;
       next = otherFrames;
       numFrameInstances = otherFrames.numFrameInstances + 1;
-      assert highlightedTarget != NO_MORE_FRAMES;
-      assert !otherFrames.noMoreFrames;
-      noMoreFrames = false;
     }
 
     /**
@@ -228,8 +266,6 @@ public class State {
     public FILL(FILL addArgTo, RI argToAdd, FILL allFrames) {
       FI f = addArgTo.item;
       assert f != NO_MORE_FRAMES;
-      assert !allFrames.noMoreFrames;
-      noMoreFrames = false;
 
       // Nodes at the front of allFrames (need to be copied due to mutation
       // down in the list). If addArgTo == allFrames, then this is O(1), and
@@ -256,74 +292,200 @@ public class State {
       next = nextMut;
     }
 
-    public List<String> next() {
-      // NOTE, this could be done recursively as:
-      // flatMap(next, item.args) ++ next.next()
-      // TODO Convert into recursive form so that we can cache actions in FILL
+    @Override
+    public double partialUpperBound() {
+      throw new RuntimeException("check/implement me");
+//      return tfModel.scoreUpperBound();
+    }
 
-      List<String> all = new ArrayList<>();
-      if (noMoreFrames) {
-        // Only check for new roles
+    /**
+     * Handles the following actions:
+     * - step 2 of (t,) instances, loop over frames
+     * - recurse on next FILL
+     * (These add to FILL)
+     *
+     * TODO These actions add to RILL and should be moved to FI
+     * - add roles for the FI on this FILL
+     *   (k,?)
+     *   (?,s)
+     *   (?,?)
+     */
+    @Override
+    public void next(Beam beam, double prefixScore) {
+
+      assert item.t != null;
+      if (item.f == null) {
+        // Label this target
+        // (t,) -> (t,f)
+        // Note that this needs to be here because the only way to accomplish
+        // this is to add a new FI (to a FILL). FI doesn't know about FILL,
+        // so it can't add to this LL.
+
       } else {
-        // Loop over targets
-        // For each FILL s.t. f==null, loop over frames
-        // Add NO_MORE_FRAMES action
-        if (config.frameByFrame) {
-          // ???
-        }
-      }
 
-      // TODO Need to check that we're not adding a target for a FI that
-      // we've already built (one frame per target)
-      all.add("loop over targets");
+        // Step 2/2 actions
+        boolean step2 = false;
+        for (RILL cur = item.args;
+            cur != null && cur.item != NO_MORE_ARGS;
+            cur = cur.next) {
+          int k = cur.item.k;   // TODO q
+          Span s = cur.item.s;
 
-      for (FILL cur = this; cur != null; cur = cur.next) {
-        if (cur.item.isFrozen()) {
-          // We've settled on all of the args for this frame
-          continue;
-        }
-        if (cur.item.args == null) {
-          // We've chosen a target but need to assign a frame to it
-          assert cur.item.f == null;
-          all.add("loop over frames");
-        } else {
-          // Assign roles to the given frame
-          for (RILL curr = item.args; curr != null; curr = curr.next) {
-            // Each RI may have either:
-            // a) k selected: loop over spans
-            // b) s selected: loop over roles
-            all.addAll(curr.next());
+          if (k >= 0 && s == null) {
+            // (k,?) actions, Step 2/2
+            step2 = true;
+          } else if (k < 0 && s != null) {
+            // (s,?) actions, Step 2/2
+            step2 = true;
+          } else if (k < 0 && s == null) {
+            // (?,?) actions, Step 2/2
+            step2 = true;
           }
-          all.add("STOP cur.item");
-          all.add("loop over remaining spans");   // probably only want to do one of these
-          all.add("loop over remaining roles");
+
+          if (step2 && config.roleByRole) {
+            // This means we work one RILL at a time, thus there must not be
+            // any possible actions out of (cdr RILL), which gives us a nice
+            // speedup.
+            break;
+          }
         }
 
-        if (config.frameByFrame && all.size() > 0)
-          break;
+        if (!step2) {
+          // (k,?) actions, Step 1/2
+          if (config.chooseArgRoleFirst) {
+            long realizedRolesMask = item.args.realizedRoles;
+            int K = item.f.numRoles();
+            for (int k = 0; k < K; k++) {
+              long ki = 1l << k;
+              if ((realizedRolesMask & ki) == 0) {
+                // TODO Generate action for adding (k,?)
+              } else {
+                // TODO continuation/reference roles?
+              }
+            }
+          }
+
+          // (?,s) actions, Step 1/2
+          if (config.chooseArgSpanFirst) {
+            fj.data.Set<Span> realizedSpans = item.args.realizedSpans;
+            int t = -1;   // TODO old code assumes t:int, now t:Span
+            for (Span s : prunedSpans.getPossibleArgs(t)) {
+              if (!realizedSpans.member(s)) {
+                // TODO Generate action for adding (?,s)
+              }
+            }
+          }
+
+          // (k,s) actions (SLOW: high branching factor)
+          if (config.chooseArgOneStep) {
+            throw new RuntimeException("implement me");
+          }
+        }
       }
-      return all;
+
+      // Recurse on (cdr FILL)
+      if (!config.frameByFrame) {
+        // To encourage the model to make cheap updates, add a slight penalty
+        // to actions further down the FILL.
+        double lenPenalty = 0.1;
+        next.next(beam, prefixScore - lenPenalty);
+      }
+
+
+        // Escaping early!
+//        Double lb, ub;
+//        if ((lb = b.lowerBound()) != null
+//            && (ub = fiModel.scoreUpperBound()) != null
+//            && lb > lengthPenaltySum + ub) {
+//          break;
+//        }
+//        if (b.lowerBound() > prefixScore + -lengthPenaltySum)
+        /*
+         * The hardest thing to prune are the things deep in the tree.
+         * These are the only things you want to prune, since making a new state isn't that expensive and the beam will immediately reject it (no cascade of un-necessary work)
+         * 
+         * => prefix score is a necessary way to communicate down the tree
+         * => a way to communicate upper bounds *up the tree* is still needed.
+         */
+//        if (beam.lowerBound() > prefixScore + who)
+//          break;
+        // Who am I going to call next on?
+        // aka what is my subtree?
+        // I need to ask *that subtree* what its bound is.
+        // FILL_1 -> FILL_2 -> FILL_2
+        // What is the upper bound of FILL_2?
+        // Is it the same as the bound on FILL_1?
+        // => I think I'm close enough to having an implementation that works *without* pruning, so I'm going to get that working
+        //    After this is done, it may be easier to see the answer to who to ask for the upper bound.
     }
   }
 
   private Sentence sentence;
   private FNParse label;      // may be null
+
+  // State space pruning
   private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
+  private Map<Span, List<Frame>> prunedFIs;    // TODO fill this in
+
+  // Represents z
   private FILL frames;
+
   private IntDoubleUnsortedVector[][][] staticFeatures;   // [t,i,j] == (t,s)
   private Config config;
-  private double score;
-  private double loss;
+
+//  private double score;
+//  private double loss;
+
+  public fj.data.Set<Span> targetsSelectedSoFar;
+
+  public Model<String> tfksModel;
+  public Model<String> tfsModel;
+  public Model<String> tfkModel;
+  public Model<String> tfModel;
+  public Model<String> tModel;
+
+  /*
+   * AH, you need to upper bound the actions that could be generated from under a given node (e.g. FILL can generate actions from g3)
+   * The saving grace is that the more g3 actions you evaluate, the better the chance that you'll find some high-scoring next states to push up the lower bound of you beam.
+   * 
+   * How do we get the upper bound on a score that may come from any action in a subset/subtree?
+   * Doing it backwards doesn't make sense: e.g. fillModel = fillModel + fiModel + rillModel + riModel
+   * (though this is the semantics you need for upper bounding actions)
+   * AH, you have a model where you pass down the prefix to the upper bound:
+   *
+   * => next() must be given a prefix score and a prefix score upper bound
+   */
 
   public State(FILL frames) {
     this.frames = frames;
   }
 
-  public List<String> next() {
-    List<String> all = new ArrayList<>();
-    all.add("loop over possible targets that hanven't been selected yet");
-    all.addAll(frames.next());
-    return all;
+  /**
+   * - NO_MORE_FRAMES
+   * - NO_MORE_TARGETS
+   * - (t,), which adds new FIs to the head of args:FILL
+   * - call next() on FILL
+   * 
+   * NOTE: The reason that We need State is that there are some actions which
+   * are only allowed at the head of a FILL (i.e. not relevant to each FI) such
+   * as NO_MORE_FRAMES.
+   */
+  @Override
+  public void next(Beam beam, double prefixScore) {
+
+    // NO_MORE_FRAMES
+
+
+    for (Span t : prunedFIs.keySet()) {
+      if (!targetsSelectedSoFar.member(t)) {
+        // (t,)
+      }
+    }
+  }
+
+  @Override
+  public double partialUpperBound() {
+    return tModel.scoreUpperBound();
   }
 
   // (,) -> (t,)
@@ -359,10 +521,44 @@ public class State {
   // In general:
   // It is better to put next() in FI/RI because they are cached more
   // HOWEVER, some actions depend on the entire list, things like NO_MORE_ARGS
-  // \t.(t,) -> FILL
-  // \f.(t,f) -> FI
-  // \s.(t,f,s) -> RILL
-  // \k.(t,f,k) -> RILL
-  // \s.(t,f,k,s) -> RI
+  // \t.(t,) -> FILL, track t already used
+  // \f.(t,f) -> FI, stateless loop over f
+  // \s.(t,f,s) -> RILL, track s already used
+  // \k.(t,f,k) -> RILL, track k already used
+  // \s.(t,f,k,s) -> RI, stateless loop over s
   // where \x means loop over x, slight bastardization of lambda notation
+
+
+
+  // Any actions generated that add to a LL must be generated one step higher.
+  // The actions I'm talking about are NO_MORE_ARGS and NO_MORE_FRAMES.
+  // If they in the LL, then we'd need to ensure that they are only generated from the head of the LL, which is not possible to check without backpointers, which we don't have because we want persistence
+
+
+  // How should next() really work?
+  // I could pass in a Beam into next() and the next() function could just
+  // add values to it. This way there would be no need for actions, they could
+  // just be successor states. Now that new State creation is cheap, having an
+  // action that represents a heavy-duty apply operation isn't really necessary.
+  // If no list of actions needs to be returned, then this solves my "slow copy of cached actions" problem,
+  // I can just traverse the many cached lists like an implicit tree.
+  /* => THIS is how you get implicit speedups by skipping whole sets of actions!
+        (note this conflicts with things like the two-step actions (k,?) and (?,s) -- ignoring that for now)
+      If every node in the State has a partial score (e.g. I can say g(t,f,k,s) = g(t,f,k) + g(k,s)),
+      And you could bound the remaining terms in the score's terms,
+      Then you could bail out on sets of actions by looking at: beam.worst > partialScore + upperBoundOnRest
+      Specifically, I have in mind that adding to a frame of depth D costs you -lambda*D in your model score, where big lambda encourages fast models
+      Remember that upper bounds can be constructed by using C*tanh(wx), which is gauranteed to be in [-C,C]
+   */
+
+  public interface Model<X> {
+    public Adjoints score(X x);
+    public double scoreUpperBound();  // return an upper bound on what score(x).forwards() could be (forall x), or -Infinity if one is not known
+  }
+
+  // I need to plan out:
+  // - what Models there are
+  // - who calls these Models
+  // If FILL, FI, RILL, RI all had models (possibly sums of models, which is a model),
+  // then a parent could look to its child's model to check its upper bound.
 }

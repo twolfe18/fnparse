@@ -127,6 +127,13 @@ public class ContRefRoleClassifier {
     // What about relative features, like "this is the left-most mention"?
     // I can't get these from CachedFeatures.Params...
 
+
+    // TODO This is a richer version of tau in tuneModelForF1
+    // tau weights COMMIT vs PRUNE
+    // here we will have multiple COMMITs
+    
+    
+
     List<ContRefRole> roles = new ArrayList<>();
     Beam1<Span> bestBase = new Beam1<>();
     Beam1<Span> bestRC = new Beam1<>();

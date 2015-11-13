@@ -13,6 +13,7 @@ public class Config {
 
   // Transition constraints
   public boolean frameByFrame = true;         // all actions involving roles must be punctuated by NO_MORE_ARGS
+  public boolean roleByRole = false;
   public boolean chooseArgRoleFirst = true;   // allow (t,f,k,?) actions
   public boolean chooseArgSpanFirst = true;   // allow (t,f,?,s) actions
   public boolean chooseArgOneStep = false;    // allow (t,f,?,?) actions
