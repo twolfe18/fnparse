@@ -17,6 +17,7 @@ public class Config {
   public boolean chooseArgRoleFirst = true;   // allow (t,f,k,?) actions
   public boolean chooseArgSpanFirst = true;   // allow (t,f,?,s) actions
   public boolean chooseArgOneStep = false;    // allow (t,f,?,?) actions
+  public boolean chooseFramesOnStep = false;  // allow loop over all (t,f)
 
   // Maybe transtition constraints
   private boolean chooseAllArgSpansFirst = false;   // for each (t,f): all (t,f,?,s) actions must proceed all (t,f,k,s) actions
