@@ -3,12 +3,14 @@ package edu.jhu.hlt.fnparse.rl.full;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 public class State {
@@ -59,7 +61,7 @@ public class State {
     public final Span s;
 
     // Instead of having a cache of FVs, just have a cache of RIs
-    public IntDoubleUnsortedVector staticFeatures;
+//    public IntDoubleUnsortedVector staticFeatures;
     public List<RI> successors;
 
     public RI(int k, int q, Span s) {
@@ -71,7 +73,7 @@ public class State {
     }
   }
 
-  public static final class RILL {
+  public final class RILL {
 
     public final RI item;
     public final RILL next;
@@ -95,6 +97,8 @@ public class State {
 
     // This can't be a RILL because it could be this, which would be an infinite self-loop
     public final RI incomplete; // can be null
+
+    public final Adjoints staticFeatures;
 
     // This is monad bind!
     public RILL(RI r, RILL l) {
@@ -129,6 +133,15 @@ public class State {
         else
           incomplete = null;
       }
+
+      staticFeatures = null;  // TODO sum
+      State.this.staticFeatures.scoreTFKS(t, f, k, q, s)
+      /*
+       * Well shit... seems like RILL needs to know about (t,f)
+       * Frame == RILL
+       * I really don't want to do that refactor...
+       * Is there a way that we can pass in (t,f)?
+       */
     }
 
     public int getNumRealizedArgs() {
@@ -180,8 +193,8 @@ public class State {
   // By analogy to RILL and NO_MORE_ROLES, there is no true "no more frames
   // (irrespective of t) in this sentence" action because it doesn't really
   // make sense.
-  public static final FI NO_MORE_FRAMES = new State(null).new FI(null, null, null);
-  public static final FI NO_MORE_TARGETS = new State(null).new FI(null, null, null);
+  public static final FI NO_MORE_FRAMES = new State(null, null).new FI(null, null, null);
+  public static final FI NO_MORE_TARGETS = new State(null, null).new FI(null, null, null);
 
   public static final class FILL {
 
@@ -239,30 +252,44 @@ public class State {
   // Represents z
   private FILL frames;
 
-  private IntDoubleUnsortedVector[][][] staticFeatures;   // [t,i,j] == (t,s)
+//  private IntDoubleUnsortedVector[][][] staticFeatures;   // [t,i,j] == (t,s)
+  private Adjoints[][][][] staticRScores;   // (t,s) => [t.start][t.end][s.start][s.end]
+  private Adjoints[][][] staticFScores;     // (t,f) => [t.start][t.end][f.id]
   private Config config;
 
 //  private double score;
 //  private double loss;
+  private Adjoints score;
 
-  public Model<String> tfksModel;
-  public Model<String> tfsModel;
-  public Model<String> tfkModel;
-  public Model<String> tfModel;
-  public Model<String> tModel;
+//  public Model<String> tfksModel;
+//  public Model<String> tfsModel;
+//  public Model<String> tfkModel;
+//  public Model<String> tfModel;
+//  public Model<String> tModel;
+  public StaticFeatureCache staticFeatures;
+  // TODO dynamic features?
 
-  public State(FILL frames) {
+  public State(FILL frames, Adjoints score) {
     this.frames = frames;
+    this.score = score;
   }
 
   // Work out scoring after the transition system is working
   public static final Adjoints ZERO = null;
+  public static final Random RAND = new Random(9001);
+  public static Adjoints randScore() {
+    return new Adjoints() {
+      private double s = RAND.nextGaussian();
+      @Override public double forwards() { return s; }
+      @Override public void backwards(double dErr_dObjective) {}
+    };
+  }
 
   /**
    * Replaces the node tail.item with newFrame (in the list this.frames).
    * O(1) if tail == this.frames and O(T) otherwise.
    */
-  public State surgery(FILL tail, FI newFrame) {
+  public State surgery(FILL tail, FI newFrame, Adjoints score) {
     // Pick off the states between this.frames and tail
     List<FI> copy = new ArrayList<>();
     for (FILL c = this.frames; c != tail; c = c.next) {
@@ -277,12 +304,13 @@ public class State {
     for (int i = copy.size() - 1; i >= 0; i--)
       newFILL = new FILL(copy.get(i), newFILL);
 
-    return new State(newFILL);
+    Adjoints full = new Adjoints.Sum(this.score, score);
+    return new State(newFILL, full);
   }
 
   // Sugar
-  public static State scons(FI car, FILL cdr) {
-    return new State(cons(car, cdr));
+  public static State scons(FI car, FILL cdr, Adjoints score) {
+    return new State(cons(car, cdr), score);
   }
 
   // Sugar
@@ -295,22 +323,63 @@ public class State {
     return new RILL(car, cdr);
   }
 
+  // Sugar
+  public static void push(edu.jhu.hlt.tutils.Beam<State> beam, State s) {
+    double score = s.score.forwards();
+    beam.push(s, score);
+  }
+
+
+  /*
+   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
+   *   oracle: {b0: 0.1, b1: -10, b2: 0}
+   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
+   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
+   */
+
+
   /**
    * Ok, screw it, I'm going to do all of the actions out of this one method.
    * The reason that I did this was that:
    * adding an RI -> need to mutate FI -> need to replace node in FILL -> need State
    */
-  public void next(Beam beam, double prefixScore) {
+  public void next(edu.jhu.hlt.tutils.Beam<State> beam, boolean oracle) {
 
-    assert config.chooseArgOneStep || config.chooseArgRoleFirst || config.chooseArgSpanFirst;
+    assert config.chooseArgOneStep
+        || config.chooseArgRoleFirst
+        || config.chooseArgSpanFirst;
     assert !config.roleByRole || config.immediatelyResolveArgs
       : "otherwise you could strange incomplete RIs";
 
+    /*
+     * How to do features?
+     * dynamic features: compute these on construction
+     * static features: how do we keep this O(1)?
+     *
+     * Store the static scores, and their sums, in the tree.
+     * RI: static features for (t,f,k,s) -- need to read this out of State.cachedFeatures
+     *
+     * Want to cache the dot product AND maintain the backwards structure (for gradients)
+     * Adjoints.caching? Sure, need to make your own impl (tutils is messed up, fnparse/Adjoints doesn't cache)
+     *
+     * Should [Adjoints staticScore] go in?
+     * - RI
+     * + RILL: roll up Adjoints for all RI
+     * - FI: if we didn't have it here, then FILL would have to look through FI to get the RILL Adjoints
+     * + FILL: roll up Adjoints for entire subtree
+     * + State: they must at least be here because we score States
+     *
+     * When you do a LL cons, e.g. surgery, then we have to do new Adjoints,
+     * as long as the two adjoints in the sum are not re-computing a dot product,
+     * then its fine. Since we'll be using State.staticFeatures anyway, then
+     * the dot products will be cached anyway.
+     */
+
     if (frames.noMoreFrames)
       return;
-    beam.offer(new State(new FILL(NO_MORE_FRAMES, frames)), ZERO);
+    push(beam, new State(new FILL(NO_MORE_FRAMES, frames), randScore()));
     if (!frames.noMoreTargets)
-      beam.offer(new State(new FILL(NO_MORE_TARGETS, frames)), ZERO);
+      beam.offer(new State(new FILL(NO_MORE_TARGETS, frames)), randScore());
 
     /* New FI actions *********************************************************/
 
@@ -320,7 +389,7 @@ public class State {
       for (Frame f : prunedFIs.get(t)) {
         RILL args2 = null;
         FI fi2 = new FI(f, t, args2);
-        beam.offer(new State(new FILL(fi2, frames)), ZERO);
+        beam.offer(new State(new FILL(fi2, frames)), randScore());
       }
       if (config.immediatelyResolveFrames)
         return;
@@ -337,7 +406,7 @@ public class State {
         if (!frames.noMoreTargets && !tSeen) {
           RILL args = null;
           FI fi = new FI(null, t, args);
-          beam.offer(new State(new FILL(fi, frames)), ZERO);
+          beam.offer(new State(new FILL(fi, frames)), randScore());
           newTF++;
         }
 
@@ -346,7 +415,7 @@ public class State {
           for (Frame f : prunedFIs.get(t)) {
             RILL args2 = null;
             FI fi2 = new FI(f, t, args2);
-            beam.offer(new State(new FILL(fi2, frames)), ZERO);
+            beam.offer(new State(new FILL(fi2, frames)), randScore());
             newTF++;
           }
         }
@@ -367,7 +436,7 @@ public class State {
             int t = -1; // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
               RI newArg = new RI(incomplete.k, incomplete.q, s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
             }
           } else if (incomplete.s != null) {
             // Loop over k
@@ -375,7 +444,7 @@ public class State {
             for (int k = 0; k < K; k++) {
               int q = -1; // TODO
               RI newArg = new RI(k, q, incomplete.s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
             }
           } else {
             // Loop over (k,s)
@@ -385,7 +454,7 @@ public class State {
               for (int k = 0; k < K; k++) {
                 int q = -1; // TODO
                 RI newArg = new RI(k, q, s);
-                beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+                beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
               }
             }
           }
@@ -410,7 +479,7 @@ public class State {
         for (int k = 0; k < K; k++) {
           int q = -1;   // TODO
           RI newArg = new RI(k, q, null);
-          beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+          beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
         }
       }
       if (config.chooseArgSpanFirst) {
@@ -418,7 +487,7 @@ public class State {
         int t = -1; // TODO have t:Span need t:int
         for (Span s : prunedSpans.getPossibleArgs(t)) {
           RI newArg = new RI(-1, -1, s);
-          beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+          beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
         }
       }
       if (config.chooseArgOneStep) {
@@ -429,20 +498,20 @@ public class State {
           for (int k = 0; k < K; k++) {
             int q = -1;   // TODO
             RI newArg = new RI(k, q, s);
-            beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+            beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
           }
         }
       }
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARGS)), ZERO);
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_SPANS)), ZERO);
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_ROLES)), ZERO);
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARGS)), randScore());
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_SPANS)), randScore());
+      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_ROLES)), randScore());
 
 
       // Frames Step 2/2 [!immediate]
       if (fi.f == null) {
         // Loop over f
         for (Frame f : prunedFIs.get(fi.t)) {
-          beam.offer(new State(new FILL(new FI(f, fi.t, fi.args), cur)), ZERO);
+          beam.offer(new State(new FILL(new FI(f, fi.t, fi.args), cur)), randScore());
         }
 
         // We could allow generation of (?,s) actions even if f is not known...
@@ -462,7 +531,7 @@ public class State {
             for (int k = 0; k < K; k++) {
               int q = -1;   // TODO
               RI newArg = new RI(k, q, ri.s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
             }
           } else if (ri.k >= 0 && ri.s == null && !fi.args.noMoreArgSpans) {
             // deltaLoss should have accounted for the cost of missing any
@@ -471,7 +540,7 @@ public class State {
             int t = -1;   // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
               RI newArg = new RI(ri.k, ri.q, s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), ZERO);
+              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
             }
           } else {
             assert ri.k >= 0 && ri.s != null;
@@ -490,5 +559,16 @@ public class State {
   public interface Model<X> {
     public Adjoints score(X x);
     public double scoreUpperBound();  // return an upper bound on what score(x).forwards() could be (forall x), or -Infinity if one is not known
+  }
+
+  // TODO Try array and hashmap implementations
+  public interface StaticFeatureCache {
+    public Adjoints scoreT(Span t);
+    public Adjoints scoreTF(Span t, Frame f);
+    public Adjoints scoreTS(Span t, Span s);
+    public Adjoints scoreFK(Frame f, int k, int q);
+    public Adjoints scoreFKS(Frame f, int k, int q, Span s);
+    public Adjoints scoreTFKS(Span t, Frame f, int k, int q, Span s);
+    // etc?
   }
 }
