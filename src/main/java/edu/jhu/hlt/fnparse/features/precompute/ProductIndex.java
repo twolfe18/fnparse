@@ -5,6 +5,8 @@ import edu.jhu.util.hash.MurmurHash3;
 public class ProductIndex {
 
   public static final int SEED = 9001;
+
+  /** a.k.a. "One", multiplicative identity */
   public static final ProductIndex NIL = new ProductIndex(0, 1, 0, 0);
 
   private long featProd, cardProd;
@@ -48,6 +50,20 @@ public class ProductIndex {
   public long getProdFeature() {
     return featProd;
   }
+  public int getProdFeatureSafe() {
+    if (featProd > Integer.MAX_VALUE)
+      throw new RuntimeException();
+    return (int) featProd;
+  }
+
+  public long getProdCardinality() {
+    return cardProd;
+  }
+  public int getProdCardinalitySafe() {
+    if (cardProd > Integer.MAX_VALUE)
+      throw new RuntimeException();
+    return (int) cardProd;
+  }
 
   public int getProdFeatureModulo(int modulus) {
     long m = modulus;
@@ -57,6 +73,10 @@ public class ProductIndex {
 
   public int getFeature() {
     return feat;
+  }
+
+  public int getCardinality() {
+    return card;
   }
 
   /**
