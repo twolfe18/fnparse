@@ -29,6 +29,10 @@ public class FrameRolePacking {
     }
   }
 
+  public int getNumFrames() {
+    return roleOffsets.length;
+  }
+
   public int index(Frame f) {
     return roleOffsets[f.getId()] + f.numRoles();
   }

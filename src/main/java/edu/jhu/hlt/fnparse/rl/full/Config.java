@@ -7,7 +7,23 @@ public class Config {
   public boolean useRefRoles = false;
 
   /** Structural constraints **************************************************/
+
+  // False is not implemented!
+  // It requires a change to the COMPLETE_F action:
+  // It can't just be an argmax like it is when oneFramePerSpan=true
+  // It should be some more complex circuit which has fertility penalties.
+  // However, this should get too complex in light of the alternative:
+  //   Another way to do this is to set chooseFramesOneStep=true, which means
+  // that (t,?) states are never created -- this is what causes problems with
+  // evaluation: do we allow a second (t,?) action if !oneFramePerSpan? If so,
+  // does the second one "get credit" (is there an index in y/z corresponding to
+  // (t,?) for each frame instance? this is not possible...).
+  // This second option is much more expressive since subsequent actions can
+  // use arbitrary dynamic features.
   public boolean oneFramePerSpan = true;  // maybe false when doing joint PB+FN prediction?
+
+  // Similarly, these control how step 2 of (k,?) and (?,s) work:
+  // If they are true you get an argmax.
   public boolean oneRolePerSpan = true;   // false for SPRL where "role" means "property"
   public boolean oneSpanPerRole = true;
 

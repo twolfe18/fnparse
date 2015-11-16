@@ -1,16 +1,28 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
-import edu.jhu.hlt.fnparse.rl.params.Adjoints;
+import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.prim.map.IntDoubleEntry;
+import edu.jhu.prim.tuple.Pair;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 public class State {
 
@@ -51,19 +63,16 @@ public class State {
   public static final int REF = 2;
 
   /**
-   * Does not generate any actions because it doesn't hold onto a LL (actions
-   * create nodes that are pushed onto the head of a LL).
+   * Does not have any features:Adjoints because this class is static and does
+   * not have access to State.staticFeatureCache, see RILL's constructor.
    */
   public static final class RI {
     public final int k;   // k=-1 means only this span has been chosen, but it hasn't been labeled yet
     public final int q;
     public final Span s;
 
-    // Instead of having a cache of FVs, just have a cache of RIs
-//    public IntDoubleUnsortedVector staticFeatures;
-//    public List<RI> successors;
-
     public RI(int k, int q, Span s) {
+      assert s != Span.nullSpan;
       assert k >= 0 || s != null
           : "don't create nodes for this, just generate an action for every (k,s) value";
       this.k = k;
@@ -195,8 +204,12 @@ public class State {
       return new FI(this.f, this.t, new RILL(this, arg, this.args));
     }
 
-    // TODO memoize
-    public Target target() { return new Target(t); }
+    /** Returns null if either t or f are null */
+    public Pair<Span, Frame> getTF() {
+      if (t == null) return null;
+      if (f == null) return null;
+      return new Pair<>(t, f);
+    }
   }
 
   // Note NO_MORE_FRAMES really means "no more FIs".
@@ -252,7 +265,8 @@ public class State {
   }
 
   private Sentence sentence;
-  private FNParse label;      // may be null
+//  private FNParse label;      // may be null
+  private LabelIndex label;     // may be null
 
   // State space pruning
   private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
@@ -277,9 +291,16 @@ public class State {
   private double coefRand = 0;
 
   // This is the objective being optimzed, which is some combination of model score and loss.
+  // Note: This will include the scores of states that lead up to this state (sum over actions).
   private Adjoints score;
 
+  public Weights weights;
+
   public StaticFeatureCache staticFeatureCache; // knows how to compute static features, does so lazily
+
+  public FrameRolePacking frPacking;
+
+  public Random rand;
 
   public State(FILL frames, Adjoints score) {
     this.frames = frames;
@@ -334,13 +355,199 @@ public class State {
   }
 
 
-  public static Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
+  public Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
     assert newFI.args.item == newRI;
+
+    /* Get the dynamic features (on FI,RI) ************************************/
+    List<ProductIndex> dynFeats = Arrays.asList(ProductIndex.NIL);
+    if (newFI.t != null) {
+      // Use static features of target span
+      List<ProductIndex> at = staticFeatureCache.featT(newFI.t);
+      List<ProductIndex> buf = new ArrayList<>(dynFeats.size() * at.size());
+      for (ProductIndex yy : dynFeats)
+        for (ProductIndex xx : at)
+          buf.add(yy.prod(xx.getProdFeatureSafe(), xx.getProdCardinalitySafe()));
+      dynFeats = buf;
+    }
+    if (newFI.f != null) {
+      // Use an indicator on frames
+      int f = frPacking.index(newFI.f);
+      int n = frPacking.getNumFrames();
+      for (int i = 0; i < dynFeats.size(); i++)
+        dynFeats.set(i, dynFeats.get(i).prod(f, n));
+    }
+    if (newRI.k >= 0) {
+      // Use an indicator on roles
+      assert newRI.q < 0 : "not implemented yet";
+      assert newFI.f != null : "roles are frame-relative unless you say otherwise";
+      int k = frPacking.index(newFI.f, newRI.k);
+      int n = frPacking.size();
+      for (int i = 0; i < dynFeats.size(); i++)
+        dynFeats.set(i, dynFeats.get(i).prod(k, n));
+    }
+    if (newRI.s != null) {
+      assert newFI.t != null : "change me if you really want this";
+      List<ProductIndex> at = staticFeatureCache.featTS(newFI.t, newRI.s);
+      List<ProductIndex> buf = new ArrayList<>(dynFeats.size() * at.size());
+      for (ProductIndex yy : dynFeats)
+        for (ProductIndex xx : at)
+          buf.add(yy.prod(xx.getProdFeatureSafe(), xx.getProdCardinalitySafe()));
+      dynFeats = buf;
+    }
+
+    Adjoints score = null;
+
+    if (coefLoss != 0) {
+
+      double fp = 0;
+      double fn = 0;
+      int possibleFN;
+
+      switch (actionType) {
+
+      /* (t,f) STUFF **********************************************************/
+      // NOTE: Fall-through!
+      case NEW_TF:
+        assert newFI.t != null;
+        assert newFI.f != null;
+        if (!label.contains(newFI.t, newFI.f));
+          fp += 1;
+      case NEW_T:
+        assert newFI.t != null;
+        if (!label.containsTarget(newFI.t))
+          fp += 1;
+        break;
+
+      // NOTE: Fall-through!
+      case STOP_TF:
+        // Gold(t,f) - History(t,f)
+//        Set<Pair<Span, Frame>> tf = label.buildTargetFrameSet();
+        Set<Pair<Span, Frame>> tf = label.borrowTargetFrameSet();
+        possibleFN = tf.size();
+        for (FILL cur = frames; cur != null; cur = cur.next) {
+          Pair<Span, Frame> tfi = cur.item.getTF();
+          if (tfi != null) {
+//            tf.remove(tfi);
+            possibleFN--;
+          }
+        }
+//        fn += 1 * tf.size();
+        fn += 1 * possibleFN;
+      case STOP_T:
+        // Gold(t,f) - History(t,f)
+        // Since I only want the size of that set, I don't need to construct it,
+        // just iterate through History, decrement a count if !inGold
+        Set<Span> t = label.borrowTargetSet();
+        Set<Span> check1 = new HashSet<>(), check2 = new HashSet<>();
+        possibleFN = t.size();
+        for (FILL cur = frames; cur != null; cur = cur.next) {
+          Span tt = cur.item.t;
+          if (tt != null) {
+            /*
+             * (t,?) can show up more than once if !config.oneFramePerSpan
+             * I believe this means that we must change step 2:
+             * Instead of doing an argmax (oneFramePerSpan)
+             * We must do a threshold (take all (t,f) s.t. score > 0)
+             * Can we have different thresholds for different fertilities?
+             *   a) take max(score) if score > t0
+             *   b) take secondMax(score) if score > t1 and (a)
+             *   etc
+             * I think this is a better idea, but for now I will require oneFramePerSpan
+             */
+            assert config.oneFramePerSpan : "not implemented yet";
+            assert check1.add(tt) || check2.add(tt) : "you can have (t,?) then "
+                + "(t,f), but there shouldn't be more than two targets activated";
+            if (t.contains(cur.item.t))
+              possibleFN--;
+          }
+        }
+        fn += 1 * possibleFN;
+        break;
+
+      /* (k,s) STUFF **********************************************************/
+      case NEW_KS:
+        assert newRI.k >= 0;
+        assert newRI.q < 0 : "not implemented yet";
+        assert newRI.s != null && newRI.s != Span.nullSpan;
+        if (!label.contains(newFI.t, newFI.f, newRI.k, newRI.s))
+          fp += 1;
+        break;
+      case NEW_S:
+        assert newRI.s != null && newRI.s != Span.nullSpan;
+        if (!label.contains(newFI.t, newFI.f, newRI.s))
+          fp += 1;
+        break;
+      case NEW_K:
+        assert newRI.q < 0 : "not implemented yet";
+        if (!label.contains(newFI.t, newFI.f, newRI.k))
+          fp += 1;
+        break;
+
+      case STOP_KS:
+      case STOP_S:
+      case STOP_K:
+        // Find all (k,s) present in the label but not yet the history
+        assert newFI.t != null && newFI.f != null;
+        
+        /*
+         * Damnit I'm confused!
+         * I want to count the Gold (t,f,k,s) which are
+         * a) not in history already
+         * b) match this STOP action
+         * I need to build an index for (b) and then filter (a) by brute force.
+         */
+
+//        Set<Pair<Integer, Span>> possibleArgs = label.getArguments(newFI.t, newFI.f);
+        Set<int[]> possibleArgs =
+          actionType == AT.STOP_KS ? label.get(LabelIndex.encode(newFI.t, newFI.f, newRI.k, newRI.s))
+              : actionType == AT.STOP_K ? label.get(LabelIndex.encode(newFI.t, newFI.f, newRI.k))
+                  : actionType == AT.STOP_S ? label.get(LabelIndex.encode(newFI.t, newFI.f, newRI.s))
+                      : null;
+        possibleFN = possibleArgs.size();
+        for (RILL cur = newFI.args; cur != null; cur = cur.next) {
+          int k = cur.item.k;
+          int q = cur.item.q;
+          Span s = cur.item.s;
+          assert q < 0 : "not implemented yet";
+          if (k >= 0 && s != null) {
+            if (possibleArgs.contains(LabelIndex.encode(newFI.t, newFI.f, k, s)))
+              possibleFN--;
+          }
+        }
+        fn += 1 * possibleFN;
+        break;
+
+      default:
+        throw new RuntimeException("implement this type: " + actionType);
+      }
+
+      assert score == null;
+      score = new Adjoints.Constant(coefLoss * (fp + fn));
+    }
+
+    if (coefModelScore != 0) {
+      Adjoints m = weights.getScore(actionType, dynFeats);
+      m = new Adjoints.Scale(coefModelScore, m);
+      if (score == null)
+        score = m;
+      else
+        score = new Adjoints.Sum(score, m);
+    }
+
+    if (coefRand != 0) {
+      double rr = 2 * coefRand * (rand.nextDouble() - 0.5);
+      Adjoints r = new Adjoints.Constant(rr);
+      if (score != null)
+        score = new Adjoints.Sum(score, r);
+      else
+        score = r;
+    }
+
     throw new RuntimeException("implement me");
   }
 
-  public static Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
-    throw new RuntimeException("implement me");
+  public Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
+    return f(actionType, newFI, new RI(-1, -1, null), stateFeats);
   }
 
   public static Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
@@ -351,6 +558,7 @@ public class State {
     throw new RuntimeException("implement me");
   }
 
+  // Action type
   enum AT {
     STOP_T, STOP_TF,
     NEW_T, NEW_TF,
@@ -358,30 +566,6 @@ public class State {
     STOP_K, STOP_S, STOP_KS,
     NEW_K, NEW_S, NEW_KS,
     COMPLETE_K, COMPLETE_S
-  }
-
-  public static class Target {
-    public final int start, end;
-    public Target(int start, int end) {
-      this.start = start;
-      this.end = end;
-    }
-    public Target(Span t) {
-      this(t.start, t.end);
-    }
-    public Span getSpan() { return Span.getSpan(start, end); }
-  }
-
-  public static class Arg {
-    public final int start, end;
-    public Arg(int start, int end) {
-      this.start = start;
-      this.end = end;
-    }
-    public Arg(Span t) {
-      this(t.start, t.end);
-    }
-    public Span getSpan() { return Span.getSpan(start, end); }
   }
 
   /**
@@ -394,8 +578,18 @@ public class State {
     assert config.chooseArgOneStep
         || config.chooseArgRoleFirst
         || config.chooseArgSpanFirst;
+
     assert !config.roleByRole || config.immediatelyResolveArgs
       : "otherwise you could strange incomplete RIs";
+
+    assert !config.frameByFrame || config.immediatelyResolveFrames
+      : "otherwise you could strange incomplete FIs";
+
+    assert config.oneFramePerSpan // there is no analog for frames of chooseArg*First
+        && (config.oneSpanPerRole || !config.chooseArgRoleFirst)  // chooseArgRoleFirst is the only thing that creates (k,?) states which require the argmax_{spans} step 2
+        && (config.oneRolePerSpan || !config.chooseArgSpanFirst)  // similarly for chooseArgSpanFirst
+        : "TODO Implement a non-argmax step 2 for these cases"
+          + " or use chooseFramesOneSte/chooseArgsOneStep";
 
     /*
      * How to do features?
@@ -449,6 +643,17 @@ public class State {
      *    the state doesn't really featurize k -- it hasn't been chosen yet;
      *    then take products with those features too.
      *    e.g. f(a_{t,f,k,?}) = f(state) \otimes f(k) \otimes I(Type(t,f,k,?))
+     */
+
+    /*
+     * How to handle q?
+     * q really depends on k, in the same way k depends on f.
+     * So it should be another dimension in the tensor?
+     * Could I just have `class Role` which does k+q?
+     * The only thing that we're arguing about is whether the transition system should know about the constraint !k => !q
+     * If the transition system doesn't know this, then it has to loop over more k/k+q. Three times more...
+     * So it should know. It just makes some things hard, like numRealizedRoles...
+     * => Deal with it as you go.
      */
 
     if (frames.noMoreFrames)
@@ -615,6 +820,7 @@ public class State {
 
 
       // Frames Step 2/2 [!immediate]
+      assert !config.immediatelyResolveFrames;
       if (fi.f == null) {
         // Loop over f
         for (Frame f : prunedFIs.get(fi.t)) {
@@ -628,6 +834,7 @@ public class State {
       }
 
       // Args Step 2/2 [!immediate]
+      assert !config.immediatelyResolveArgs;
       if (!fi.args.noMoreArgs) {
         for (RILL arg = fi.args; arg != null; arg = arg.next) {
           RI ri = arg.item;
@@ -669,6 +876,51 @@ public class State {
 
   }
 
+  public static class Weights {
+    private LazyL2UpdateVector[] at2w;    // indexed by actionType.ordinal()
+    private int dimension;                // length of at2w[i], for feature hahing
+    private double l2Lambda;
+    private double learningRate;
+
+    public Weights() {
+      this(1 * 1024 * 1024, 32, 1e-6, 0.05);
+    }
+
+    public Weights(int dimension, int updateInterval, double l2Lambda, double learningRate) {
+      this.l2Lambda = l2Lambda;
+      this.learningRate = learningRate;
+      this.dimension = dimension;
+      int N = AT.values().length;
+      this.at2w = new LazyL2UpdateVector[N];
+      for (int i = 0; i < N; i++)
+        this.at2w[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
+    }
+
+    public Adjoints getScore(final AT actionType, final List<ProductIndex> features) {
+      final LazyL2UpdateVector w = at2w[actionType.ordinal()];
+      final IntDoubleUnsortedVector fx = new IntDoubleUnsortedVector(features.size());
+      for (ProductIndex xi : features)
+        fx.add(xi.getProdFeatureModulo(dimension), 1);
+      return new Adjoints() {
+        public Action getAction() {
+          throw new RuntimeException("don't call this");
+        }
+        public double forwards() {
+          return fx.dot(w.weights);
+        }
+        public void backwards(double dErr_dForwards) {
+          double a = learningRate * -dErr_dForwards;
+          Iterator<IntDoubleEntry> iter = fx.iterator();
+          while (iter.hasNext()) {
+            IntDoubleEntry ide = iter.next();
+            w.weights.add(ide.index(), a * ide.get());
+          }
+          w.maybeApplyL2Reg(l2Lambda);
+        }
+      };
+    }
+  }
+
   // TODO Try array and hashmap implementations, compare runtime
   public interface StaticFeatureCache {
     public Adjoints scoreT(Span t);
@@ -678,5 +930,11 @@ public class State {
     public Adjoints scoreFKS(Frame f, int k, int q, Span s);
     public Adjoints scoreTFKS(Span t, Frame f, int k, int q, Span s);
     // etc?
+    public List<ProductIndex> featT(Span t);
+    public List<ProductIndex> featTF(Span t, Frame f);
+    public List<ProductIndex> featTS(Span t, Span s);
+    public List<ProductIndex> featFK(Frame f, int k, int q);
+    public List<ProductIndex> featFKS(Frame f, int k, int q, Span s);
+    public List<ProductIndex> featTFKS(Span t, Frame f, int k, int q, Span s);
   }
 }
