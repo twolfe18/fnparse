@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.rl.full;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -12,7 +11,6 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
-import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 public class State {
 
@@ -268,17 +266,20 @@ public class State {
   private Adjoints[][][] staticFScores;     // (t,f) => [t.start][t.end][f.id]
   private Config config;
 
-//  private double score;
-//  private double loss;
+  /* Parameters that determine the search objective.
+   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
+   *   oracle: {b0: 0.1, b1: -10, b2: 0}
+   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
+   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
+   */
+  private double coefModelScore = 1;
+  private double coefLoss = 0;
+  private double coefRand = 0;
+
+  // This is the objective being optimzed, which is some combination of model score and loss.
   private Adjoints score;
 
-//  public Model<String> tfksModel;
-//  public Model<String> tfsModel;
-//  public Model<String> tfkModel;
-//  public Model<String> tfModel;
-//  public Model<String> tModel;
   public StaticFeatureCache staticFeatureCache; // knows how to compute static features, does so lazily
-  // TODO dynamic features?
 
   public State(FILL frames, Adjoints score) {
     this.frames = frames;
@@ -287,13 +288,6 @@ public class State {
 
   public List<ProductIndex> getStateFeatures() {
     throw new RuntimeException("implement me");
-  }
-
-  // Work out scoring after the transition system is working
-  public static final Adjoints ZERO = null;
-  public static final Random RAND = new Random(9001);
-  public static Adjoints randScore() {
-    return null;
   }
 
   /**
@@ -330,11 +324,6 @@ public class State {
   }
 
   // Sugar
-//  public static RILL cons(RI car, RILL cdr) {
-//    return new RILL(car, cdr);
-//  }
-
-  // Sugar
   public static void push(edu.jhu.hlt.tutils.Beam<State> beam, State s) {
     double score = s.score.forwards();
     beam.push(s, score);
@@ -361,13 +350,6 @@ public class State {
     List<ProductIndex> yx = otimes(y, stateFeats);
     throw new RuntimeException("implement me");
   }
-
-  /*
-   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
-   *   oracle: {b0: 0.1, b1: -10, b2: 0}
-   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
-   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
-   */
 
   enum AT {
     STOP_T, STOP_TF,
@@ -687,12 +669,7 @@ public class State {
 
   }
 
-  public interface Model<X> {
-    public Adjoints score(X x);
-    public double scoreUpperBound();  // return an upper bound on what score(x).forwards() could be (forall x), or -Infinity if one is not known
-  }
-
-  // TODO Try array and hashmap implementations
+  // TODO Try array and hashmap implementations, compare runtime
   public interface StaticFeatureCache {
     public Adjoints scoreT(Span t);
     public Adjoints scoreTF(Span t, Frame f);
