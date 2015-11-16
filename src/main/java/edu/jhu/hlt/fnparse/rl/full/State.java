@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
@@ -62,7 +63,7 @@ public class State {
 
     // Instead of having a cache of FVs, just have a cache of RIs
 //    public IntDoubleUnsortedVector staticFeatures;
-    public List<RI> successors;
+//    public List<RI> successors;
 
     public RI(int k, int q, Span s) {
       assert k >= 0 || s != null
@@ -71,6 +72,10 @@ public class State {
       this.q = q;
       this.s = s;
     }
+  }
+
+  public static Adjoints sum(Adjoints... adjoints) {
+    throw new RuntimeException("implement me");
   }
 
   public final class RILL {
@@ -86,22 +91,25 @@ public class State {
 //    public BitSet realizedSpans;  // probably better left to just traversing the list
     // NOTE: If you had a dependency tree, you could use a token index to represent a span/argLocation... limiting to length 64 sentences might be a problem though...
 
-    // I could keep a log(n) time index on realizedSpans by keeping a balanced
-    // tree of nodes sorted by spans.
-
     public final boolean noMoreArgs;
     public final boolean noMoreArgSpans;
     public final boolean noMoreArgRoles;
 
     public final fj.data.Set<Span> realizedSpans;
 
-    // This can't be a RILL because it could be this, which would be an infinite self-loop
+    // Next RI which is either (k,?) or (?,s)
+    // TODO This probably makes more sense as a RILL
     public final RI incomplete; // can be null
 
+    // Sum of static features for all RI in this list
     public final Adjoints staticFeatures;
 
-    // This is monad bind!
-    public RILL(RI r, RILL l) {
+    /**
+     * @param f is needed in order to lookup features.
+     * @param r is the new RI being prepended.
+     * @param l is the list being prepeded to.
+     */
+    public RILL(FI f, RI r, RILL l) {
       item = r;
       next = l;
       final long rm;
@@ -134,14 +142,9 @@ public class State {
           incomplete = null;
       }
 
-      staticFeatures = null;  // TODO sum
-      State.this.staticFeatures.scoreTFKS(t, f, k, q, s)
-      /*
-       * Well shit... seems like RILL needs to know about (t,f)
-       * Frame == RILL
-       * I really don't want to do that refactor...
-       * Is there a way that we can pass in (t,f)?
-       */
+      staticFeatures = sum(
+          l.staticFeatures,
+          State.this.staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s));
     }
 
     public int getNumRealizedArgs() {
@@ -174,19 +177,28 @@ public class State {
     public final Span t;  // Currently must be non-null. You could imagine assuming a frame exists THEN finding its extend (...AMR) but thats not what we're currently doing
     public final RILL args;
 
-    public FI(FI copy, RILL args) {
-      this(copy.f, copy.t, args);
-    }
+    // Used to keep track of when (?,s) actions are allowed.
+    // When args.realizedSpans.size == possibleArgs.size, you're done
+    // (if config.oneArgPerSpan...)
+    /**
+     * Set of spans which can make an argument allowable a priori.
+     * s \not\in possibleArgs  \rightarrow  z_{t,f,k,s}=0 \forall t,f,k
+     */
+    public final List<Span> possibleArgs;
 
     public FI(Frame f, Span t, RILL args) {
       this.f = f;
       this.t = t;
       this.args = args;
+      this.possibleArgs = null;   // TODO
     }
 
-    public FI withArg(RI arg) {
-      return new FI(this, new RILL(arg, args));
+    public FI prependArg(RI arg) {
+      return new FI(this.f, this.t, new RILL(this, arg, this.args));
     }
+
+    // TODO memoize
+    public Target target() { return new Target(t); }
   }
 
   // Note NO_MORE_FRAMES really means "no more FIs".
@@ -203,7 +215,6 @@ public class State {
 
     // Caches which should be updateable in O(1) which may inform/prune next() or global features
     public final int numFrameInstances;
-    // TODO add "last FI which is not STOP/FULL"? -- skip list of non-full FIs?
 
     public final fj.data.Set<Span> targetsSelectedSoFar;
 
@@ -266,7 +277,7 @@ public class State {
 //  public Model<String> tfkModel;
 //  public Model<String> tfModel;
 //  public Model<String> tModel;
-  public StaticFeatureCache staticFeatures;
+  public StaticFeatureCache staticFeatureCache; // knows how to compute static features, does so lazily
   // TODO dynamic features?
 
   public State(FILL frames, Adjoints score) {
@@ -274,22 +285,22 @@ public class State {
     this.score = score;
   }
 
+  public List<ProductIndex> getStateFeatures() {
+    throw new RuntimeException("implement me");
+  }
+
   // Work out scoring after the transition system is working
   public static final Adjoints ZERO = null;
   public static final Random RAND = new Random(9001);
   public static Adjoints randScore() {
-    return new Adjoints() {
-      private double s = RAND.nextGaussian();
-      @Override public double forwards() { return s; }
-      @Override public void backwards(double dErr_dObjective) {}
-    };
+    return null;
   }
 
   /**
    * Replaces the node tail.item with newFrame (in the list this.frames).
    * O(1) if tail == this.frames and O(T) otherwise.
    */
-  public State surgery(FILL tail, FI newFrame, Adjoints score) {
+  public State surgery(FILL tail, FI newFrame, Adjoints partialScore) {
     // Pick off the states between this.frames and tail
     List<FI> copy = new ArrayList<>();
     for (FILL c = this.frames; c != tail; c = c.next) {
@@ -304,7 +315,7 @@ public class State {
     for (int i = copy.size() - 1; i >= 0; i--)
       newFILL = new FILL(copy.get(i), newFILL);
 
-    Adjoints full = new Adjoints.Sum(this.score, score);
+    Adjoints full = sum(this.score, partialScore);
     return new State(newFILL, full);
   }
 
@@ -319,9 +330,9 @@ public class State {
   }
 
   // Sugar
-  public static RILL cons(RI car, RILL cdr) {
-    return new RILL(car, cdr);
-  }
+//  public static RILL cons(RI car, RILL cdr) {
+//    return new RILL(car, cdr);
+//  }
 
   // Sugar
   public static void push(edu.jhu.hlt.tutils.Beam<State> beam, State s) {
@@ -329,6 +340,44 @@ public class State {
     beam.push(s, score);
   }
 
+  public static List<ProductIndex> otimes(ProductIndex newFeat, List<ProductIndex> others) {
+    throw new RuntimeException("implement me");
+  }
+
+
+  public static Adjoints f(AT actionType, FI fi, int k, Arg s, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  public static Adjoints f(AT actionType, FI fi, Arg s, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  public static Adjoints f(AT actionType, FI fi, int k, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  public static Adjoints f(AT actionType, Target t, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  public static Adjoints f(AT actionType, Target t, Frame f, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  public static Adjoints f(AT actionType, Frame f, List<ProductIndex> stateFeats) {
+    throw new RuntimeException("implement me");
+  }
+
+  // TODO features above should just take FI and RI
+
+  public static Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
+    int i = actionType.ordinal();
+    int n = AT.values().length;
+    ProductIndex y = new ProductIndex(i, n);
+    List<ProductIndex> yx = otimes(y, stateFeats);
+    throw new RuntimeException("implement me");
+  }
 
   /*
    * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
@@ -337,6 +386,38 @@ public class State {
    *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
    */
 
+  enum AT {
+    STOP_T, STOP_TF,
+    NEW_T, NEW_TF,
+    COMPLETE_F,
+    STOP_K, STOP_S, STOP_KS,
+    NEW_K, NEW_S, NEW_KS,
+    COMPLETE_K, COMPLETE_S
+  }
+
+  public static class Target {
+    public final int start, end;
+    public Target(int start, int end) {
+      this.start = start;
+      this.end = end;
+    }
+    public Target(Span t) {
+      this(t.start, t.end);
+    }
+    public Span getSpan() { return Span.getSpan(start, end); }
+  }
+
+  public static class Arg {
+    public final int start, end;
+    public Arg(int start, int end) {
+      this.start = start;
+      this.end = end;
+    }
+    public Arg(Span t) {
+      this(t.start, t.end);
+    }
+    public Span getSpan() { return Span.getSpan(start, end); }
+  }
 
   /**
    * Ok, screw it, I'm going to do all of the actions out of this one method.
@@ -373,13 +454,48 @@ public class State {
      * as long as the two adjoints in the sum are not re-computing a dot product,
      * then its fine. Since we'll be using State.staticFeatures anyway, then
      * the dot products will be cached anyway.
+     *
+     * Ok, I have static features figured out, how to handle dynamic features?
+     * Could compute one feature vector when next() is called and then product it with:
+     *
+     * Top level (type-level) features: "What is a good type of action to take here?"
+     * - NO_MORE_FRAMES
+     * - NO_MORE_TARGETS
+     * - Type(t,?)
+     * - Type(t,f)
+     * - Type(t,f,k,?) 
+     * - Type(t,f,?,s)
+     * - Type(t,f,k,s)
+     *
+     * I had said that states corresponding to (t,f,k,s) are unacceptable because
+     * they do not commit to any piece of the label. What this paper originally
+     * taught me was that you don't have to commit to 1s in the label, but you
+     * do have to make Proj(z) smaller. In this sense too, (t,f,k,s) actions are
+     * not true actions and must be considered "in the same step" as other actions,
+     * which defeats the goal of hiding the loop over (k,s) behind an action.
+     * => Poor mans solution: Don't allow (t,f,k,s) actions and figure out where
+     *    to put them later!
+     *
+     * Back to business, how to dynamically featurize things?
+     * => Just have one set of State features and then product each of them with
+     *    the action type.
+     * => Another option is: if the action type knows a bit more than the current
+     *    state, e.g. (t,f,k,?) knows it is choosing something to do with k whereas
+     *    the state doesn't really featurize k -- it hasn't been chosen yet;
+     *    then take products with those features too.
+     *    e.g. f(a_{t,f,k,?}) = f(state) \otimes f(k) \otimes I(Type(t,f,k,?))
      */
 
     if (frames.noMoreFrames)
       return;
-    push(beam, new State(new FILL(NO_MORE_FRAMES, frames), randScore()));
-    if (!frames.noMoreTargets)
-      beam.offer(new State(new FILL(NO_MORE_TARGETS, frames)), randScore());
+
+    final List<ProductIndex> sf = getStateFeatures();
+
+    push(beam, new State(new FILL(NO_MORE_FRAMES, frames), f(AT.STOP_TF, sf)));
+
+    if (!frames.noMoreTargets) {
+      push(beam, new State(new FILL(NO_MORE_TARGETS, frames), f(AT.STOP_T, sf)));
+    }
 
     /* New FI actions *********************************************************/
 
@@ -389,7 +505,7 @@ public class State {
       for (Frame f : prunedFIs.get(t)) {
         RILL args2 = null;
         FI fi2 = new FI(f, t, args2);
-        beam.offer(new State(new FILL(fi2, frames)), randScore());
+        push(beam, new State(new FILL(fi2, frames), f(AT.COMPLETE_F, f, sf)));
       }
       if (config.immediatelyResolveFrames)
         return;
@@ -402,11 +518,13 @@ public class State {
     for (Span t : prunedFIs.keySet()) {
       boolean tSeen = tsf.member(t);
       if (!config.oneFramePerSpan || !tSeen) {
+        Target tt = new Target(t);
+
         // (t,)
         if (!frames.noMoreTargets && !tSeen) {
           RILL args = null;
           FI fi = new FI(null, t, args);
-          beam.offer(new State(new FILL(fi, frames)), randScore());
+          push(beam, new State(new FILL(fi, frames), f(AT.NEW_T, tt, sf)));
           newTF++;
         }
 
@@ -415,7 +533,7 @@ public class State {
           for (Frame f : prunedFIs.get(t)) {
             RILL args2 = null;
             FI fi2 = new FI(f, t, args2);
-            beam.offer(new State(new FILL(fi2, frames)), randScore());
+            push(beam, new State(new FILL(fi2, frames), f(AT.NEW_TF, tt, f, sf)));
             newTF++;
           }
         }
@@ -436,7 +554,8 @@ public class State {
             int t = -1; // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
               RI newArg = new RI(incomplete.k, incomplete.q, s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+              Adjoints feats = f(AT.COMPLETE_S, fi, new Arg(s), sf);
+              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else if (incomplete.s != null) {
             // Loop over k
@@ -444,17 +563,20 @@ public class State {
             for (int k = 0; k < K; k++) {
               int q = -1; // TODO
               RI newArg = new RI(k, q, incomplete.s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+              Adjoints feats = f(AT.COMPLETE_K, fi, k, sf);
+              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else {
             // Loop over (k,s)
             int K = fi.f.numRoles();
             int t = -1; // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
+              Arg ss = new Arg(s);
               for (int k = 0; k < K; k++) {
                 int q = -1; // TODO
                 RI newArg = new RI(k, q, s);
-                beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+                Adjoints feats = f(AT.NEW_KS, fi, k, ss, sf);
+                push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
               }
             }
           }
@@ -473,45 +595,68 @@ public class State {
         continue;
 
       // Args Step 1/2
+      boolean noMoreNewK = false;
       if (config.chooseArgRoleFirst) {
         // Loop over k
+        int KK = fi.args.getNumRealizedArgs();
         int K = fi.f.numRoles();
-        for (int k = 0; k < K; k++) {
-          int q = -1;   // TODO
-          RI newArg = new RI(k, q, null);
-          beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+        if (KK >= K) {
+          noMoreNewK = true;
+        } else {
+          for (int k = 0; k < K; k++) {
+            int q = -1;   // TODO
+            RI newArg = new RI(k, q, null);
+            Adjoints feats = f(AT.NEW_K, fi, k, sf);
+            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+          }
         }
       }
+      boolean noMoreNewS = false;
       if (config.chooseArgSpanFirst) {
         // Loop over s
-        int t = -1; // TODO have t:Span need t:int
-        for (Span s : prunedSpans.getPossibleArgs(t)) {
-          RI newArg = new RI(-1, -1, s);
-          beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+        if (fi.args.realizedSpans.size() >= fi.possibleArgs.size()) {
+          noMoreNewS = true;
+        } else {
+          int t = -1; // TODO have t:Span need t:int
+          //        for (Span s : prunedSpans.getPossibleArgs(t)) {
+          for (Span s : fi.possibleArgs) {
+            RI newArg = new RI(-1, -1, s);
+            Adjoints feats = f(AT.NEW_S, fi, new Arg(s), sf);
+            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+          }
         }
       }
-      if (config.chooseArgOneStep) {
+      if (config.chooseArgOneStep && !noMoreNewK && !noMoreNewS) {
         // Loop over (k,s)
         int K = fi.f.numRoles();
         int t = -1; // TODO have t:Span need t:int
         for (Span s : prunedSpans.getPossibleArgs(t)) {
+          Arg ss = new Arg(s);
           for (int k = 0; k < K; k++) {
             int q = -1;   // TODO
             RI newArg = new RI(k, q, s);
-            beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+            Adjoints feats = f(AT.NEW_KS, fi, k, ss, sf);
+            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
           }
         }
       }
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARGS)), randScore());
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_SPANS)), randScore());
-      beam.offer(this.surgery(cur, fi.withArg(NO_MORE_ARG_ROLES)), randScore());
+
+      // STOP actions
+      if (!noMoreNewK && !noMoreNewS)
+        push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARGS), f(AT.STOP_KS, sf)));
+      if (!noMoreNewS)
+        push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARG_SPANS), f(AT.STOP_S, sf)));
+      if (!noMoreNewK)
+        push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARG_ROLES), f(AT.STOP_K, sf)));
 
 
       // Frames Step 2/2 [!immediate]
       if (fi.f == null) {
         // Loop over f
+        Target t = new Target(fi.t);
         for (Frame f : prunedFIs.get(fi.t)) {
-          beam.offer(new State(new FILL(new FI(f, fi.t, fi.args), cur)), randScore());
+          Adjoints feats = f(AT.COMPLETE_F, t, f, sf);
+          push(beam, new State(new FILL(new FI(f, fi.t, fi.args), cur), feats));
         }
 
         // We could allow generation of (?,s) actions even if f is not known...
@@ -527,11 +672,13 @@ public class State {
           // possible items stemming from open (?,s) nodes.
           if (ri.k < 0 && ri.s != null && !fi.args.noMoreArgRoles) {
             // loop over roles
+            Arg s = new Arg(ri.s);
             int K = fi.f.numRoles();
             for (int k = 0; k < K; k++) {
               int q = -1;   // TODO
               RI newArg = new RI(k, q, ri.s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+              Adjoints feats = f(AT.COMPLETE_K, fi, k, s, sf);
+              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else if (ri.k >= 0 && ri.s == null && !fi.args.noMoreArgSpans) {
             // deltaLoss should have accounted for the cost of missing any
@@ -540,7 +687,8 @@ public class State {
             int t = -1;   // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
               RI newArg = new RI(ri.k, ri.q, s);
-              beam.offer(this.surgery(cur, fi.withArg(newArg)), randScore());
+              Adjoints feats = f(AT.COMPLETE_S, fi, ri.k, new Arg(s), sf);
+              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else {
             assert ri.k >= 0 && ri.s != null;
