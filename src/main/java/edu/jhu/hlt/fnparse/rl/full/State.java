@@ -345,31 +345,14 @@ public class State {
   }
 
 
-  public static Adjoints f(AT actionType, FI fi, int k, Arg s, List<ProductIndex> stateFeats) {
+  public static Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
+    assert newFI.args.item == newRI;
     throw new RuntimeException("implement me");
   }
 
-  public static Adjoints f(AT actionType, FI fi, Arg s, List<ProductIndex> stateFeats) {
+  public static Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
     throw new RuntimeException("implement me");
   }
-
-  public static Adjoints f(AT actionType, FI fi, int k, List<ProductIndex> stateFeats) {
-    throw new RuntimeException("implement me");
-  }
-
-  public static Adjoints f(AT actionType, Target t, List<ProductIndex> stateFeats) {
-    throw new RuntimeException("implement me");
-  }
-
-  public static Adjoints f(AT actionType, Target t, Frame f, List<ProductIndex> stateFeats) {
-    throw new RuntimeException("implement me");
-  }
-
-  public static Adjoints f(AT actionType, Frame f, List<ProductIndex> stateFeats) {
-    throw new RuntimeException("implement me");
-  }
-
-  // TODO features above should just take FI and RI
 
   public static Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
     int i = actionType.ordinal();
@@ -505,7 +488,7 @@ public class State {
       for (Frame f : prunedFIs.get(t)) {
         RILL args2 = null;
         FI fi2 = new FI(f, t, args2);
-        push(beam, new State(new FILL(fi2, frames), f(AT.COMPLETE_F, f, sf)));
+        push(beam, new State(new FILL(fi2, frames), f(AT.COMPLETE_F, fi2, sf)));
       }
       if (config.immediatelyResolveFrames)
         return;
@@ -518,13 +501,11 @@ public class State {
     for (Span t : prunedFIs.keySet()) {
       boolean tSeen = tsf.member(t);
       if (!config.oneFramePerSpan || !tSeen) {
-        Target tt = new Target(t);
-
         // (t,)
         if (!frames.noMoreTargets && !tSeen) {
           RILL args = null;
           FI fi = new FI(null, t, args);
-          push(beam, new State(new FILL(fi, frames), f(AT.NEW_T, tt, sf)));
+          push(beam, new State(new FILL(fi, frames), f(AT.NEW_T, fi, sf)));
           newTF++;
         }
 
@@ -533,7 +514,7 @@ public class State {
           for (Frame f : prunedFIs.get(t)) {
             RILL args2 = null;
             FI fi2 = new FI(f, t, args2);
-            push(beam, new State(new FILL(fi2, frames), f(AT.NEW_TF, tt, f, sf)));
+            push(beam, new State(new FILL(fi2, frames), f(AT.NEW_TF, fi2, sf)));
             newTF++;
           }
         }
@@ -554,7 +535,7 @@ public class State {
             int t = -1; // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
               RI newArg = new RI(incomplete.k, incomplete.q, s);
-              Adjoints feats = f(AT.COMPLETE_S, fi, new Arg(s), sf);
+              Adjoints feats = f(AT.COMPLETE_S, fi, newArg, sf);
               push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else if (incomplete.s != null) {
@@ -563,7 +544,7 @@ public class State {
             for (int k = 0; k < K; k++) {
               int q = -1; // TODO
               RI newArg = new RI(k, q, incomplete.s);
-              Adjoints feats = f(AT.COMPLETE_K, fi, k, sf);
+              Adjoints feats = f(AT.COMPLETE_K, fi, newArg, sf);
               push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
             }
           } else {
@@ -571,11 +552,10 @@ public class State {
             int K = fi.f.numRoles();
             int t = -1; // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
-              Arg ss = new Arg(s);
               for (int k = 0; k < K; k++) {
                 int q = -1; // TODO
                 RI newArg = new RI(k, q, s);
-                Adjoints feats = f(AT.NEW_KS, fi, k, ss, sf);
+                Adjoints feats = f(AT.NEW_KS, fi, newArg, sf);
                 push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
               }
             }
@@ -605,9 +585,10 @@ public class State {
         } else {
           for (int k = 0; k < K; k++) {
             int q = -1;   // TODO
-            RI newArg = new RI(k, q, null);
-            Adjoints feats = f(AT.NEW_K, fi, k, sf);
-            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+            RI newRI = new RI(k, q, null);
+            FI newFI = fi.prependArg(newRI);
+            Adjoints feats = f(AT.NEW_K, newFI, newRI, sf);
+            push(beam, this.surgery(cur, newFI, feats));
           }
         }
       }
@@ -620,9 +601,10 @@ public class State {
           int t = -1; // TODO have t:Span need t:int
           //        for (Span s : prunedSpans.getPossibleArgs(t)) {
           for (Span s : fi.possibleArgs) {
-            RI newArg = new RI(-1, -1, s);
-            Adjoints feats = f(AT.NEW_S, fi, new Arg(s), sf);
-            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+            RI newRI = new RI(-1, -1, s);
+            FI newFI = fi.prependArg(newRI);
+            Adjoints feats = f(AT.NEW_S, newFI, newRI, sf);
+            push(beam, this.surgery(cur, newFI, feats));
           }
         }
       }
@@ -631,12 +613,12 @@ public class State {
         int K = fi.f.numRoles();
         int t = -1; // TODO have t:Span need t:int
         for (Span s : prunedSpans.getPossibleArgs(t)) {
-          Arg ss = new Arg(s);
           for (int k = 0; k < K; k++) {
             int q = -1;   // TODO
-            RI newArg = new RI(k, q, s);
-            Adjoints feats = f(AT.NEW_KS, fi, k, ss, sf);
-            push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+            RI newRI = new RI(k, q, s);
+            FI newFI = fi.prependArg(newRI);
+            Adjoints feats = f(AT.NEW_KS, newFI, newRI, sf);
+            push(beam, this.surgery(cur, newFI, feats));
           }
         }
       }
@@ -653,10 +635,10 @@ public class State {
       // Frames Step 2/2 [!immediate]
       if (fi.f == null) {
         // Loop over f
-        Target t = new Target(fi.t);
         for (Frame f : prunedFIs.get(fi.t)) {
-          Adjoints feats = f(AT.COMPLETE_F, t, f, sf);
-          push(beam, new State(new FILL(new FI(f, fi.t, fi.args), cur), feats));
+          FI newFI = new FI(f, fi.t, fi.args);
+          Adjoints feats = f(AT.COMPLETE_F, newFI, sf);
+          push(beam, this.surgery(cur, newFI, feats));
         }
 
         // We could allow generation of (?,s) actions even if f is not known...
@@ -672,13 +654,13 @@ public class State {
           // possible items stemming from open (?,s) nodes.
           if (ri.k < 0 && ri.s != null && !fi.args.noMoreArgRoles) {
             // loop over roles
-            Arg s = new Arg(ri.s);
             int K = fi.f.numRoles();
             for (int k = 0; k < K; k++) {
               int q = -1;   // TODO
-              RI newArg = new RI(k, q, ri.s);
-              Adjoints feats = f(AT.COMPLETE_K, fi, k, s, sf);
-              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+              RI newRI = new RI(k, q, ri.s);
+              FI newFI = fi.prependArg(newRI);
+              Adjoints feats = f(AT.COMPLETE_K, newFI, newRI, sf);
+              push(beam, this.surgery(cur, newFI, feats));
             }
           } else if (ri.k >= 0 && ri.s == null && !fi.args.noMoreArgSpans) {
             // deltaLoss should have accounted for the cost of missing any
@@ -686,9 +668,10 @@ public class State {
             // loop over spans
             int t = -1;   // TODO have t:Span need t:int
             for (Span s : prunedSpans.getPossibleArgs(t)) {
-              RI newArg = new RI(ri.k, ri.q, s);
-              Adjoints feats = f(AT.COMPLETE_S, fi, ri.k, new Arg(s), sf);
-              push(beam, this.surgery(cur, fi.prependArg(newArg), feats));
+              RI newRI = new RI(ri.k, ri.q, s);
+              FI newFI = fi.prependArg(newRI);
+              Adjoints feats = f(AT.COMPLETE_S, newFI, newRI, sf);
+              push(beam, this.surgery(cur, newFI, feats));
             }
           } else {
             assert ri.k >= 0 && ri.s != null;
