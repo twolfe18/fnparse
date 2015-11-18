@@ -36,6 +36,14 @@ public class Config {
   // This means that if there is a step 1 action to take then step 2 actions may not be generated.
   public boolean immediatelyResolveArgs = true;       // p[(k,?) -> !(k,s)]=0 and p[(?,s) -> !(k,s)]=0 and p[(?,?) -> !(k,s)]=0
   public boolean immediatelyResolveFrames = true;
+  /* The case where you should not use immediatelyResolve=false is when you want
+   * to do something like lay down all of the spans and then label them using
+   * joint features on all of the spane. The same applies to doing target id
+   * before frame id.
+   * The case where you need to set immediatelyResolve=true is when you can
+   * create two partial commits where one of them could lead to a completion
+   * that conflicts with the other partial commit.
+   */
 
   // Dictates the types of step 1 actions generated
   public boolean chooseArgRoleFirst = true;   // allow (t,f,k,?) actions

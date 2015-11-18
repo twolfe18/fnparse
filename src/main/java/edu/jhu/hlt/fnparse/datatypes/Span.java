@@ -1,9 +1,40 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import org.apache.log4j.Logger;
-
 public final class Span implements Comparable<Span> {
-  public static final Logger LOG = Logger.getLogger(Span.class);
+
+  // TODO Use this for Span[] vs Span[][]
+  /** Densely embeds all spans into the natural numbers */
+  public static int index(Span s) {
+    /*
+key = (i,j) where i<j
+M = number of mentions
+
+There are two arrangements: {locality in i, locality in j}
+(locality in j is preffered)
+and two orderings: {small blocks in front, big blocks in front}.
+(small blocks in front is preferred due to easier math)
+
+<none s.t. j=0>
+(i=0, j=1)     // 1 of these
+(i=0, j=2)
+(i=1, j=2)     // 2 of these
+(i=0, j=3)
+(i=1, j=3)
+(i=2, j=3)     // 3 of these
+...
+
+index(i,j) = Z(j) + i
+where Z(j) = sum_{t=1}^{j-1} t = i*(i-1)/2
+(Note: related formula for the sum of the first k natural numbers
+is k*(k+1)/2, this is the first k-1 numbers, hence (k-1)*k/2)
+
+index(i=2,j=4) = Z(4) + 2
+Z(4) = 4*3/2 = 6
+=> 8, correct!
+     */
+    int Z = s.end * (s.end - 1) / 2;
+    return Z + s.start;
+  }
 
   public int start;  // inclusive
   public int end;    // non-inclusive
@@ -29,11 +60,6 @@ public final class Span implements Comparable<Span> {
     // make a bigger table if the previous was too small
     if(end > internedSpans.length) {
       int newInternedMaxSentSize = end + 10;
-      // sanity check
-      if(newInternedMaxSentSize > 200) {
-        String desc = "(" + start + ", " + end + ")";
-        LOG.warn("what are you doing with these huge sentences? " + desc);
-      }
 
       Span[][] newInternedSpans = new Span[newInternedMaxSentSize][];
       for(int s=0; s<newInternedSpans.length; s++) {
@@ -131,7 +157,6 @@ public final class Span implements Comparable<Span> {
   public String shortString() {
     return start + "-" + end;
   }
-
 
   public boolean equals(int start, int end) {
     return start == this.start && end == this.end;

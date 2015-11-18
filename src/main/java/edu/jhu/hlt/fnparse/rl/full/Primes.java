@@ -10,6 +10,11 @@ import java.util.Random;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 
+/**
+ * A way to get primes (from disk).
+ *
+ * TODO Consider using {@link java.math.BigInteger#probablePrime(int, Random)} instead.
+ */
 public class Primes {
 
   // the 1M-th prime is 15,485,863 -- no where near Integer.MAX_VALUE
