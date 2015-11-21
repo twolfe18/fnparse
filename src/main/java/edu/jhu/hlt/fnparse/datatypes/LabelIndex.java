@@ -22,7 +22,7 @@ public class LabelIndex {
   private final FNParse y;
   private Map<Span, List<FrameInstance>> byTarget;
   private Set<Pair<Span, Frame>> fis;
-  private Set<Span> targets;
+//  private Set<Span> targets;
 
 //  private Set<int[]> tfks;      // [t.start, t.end, f.id, k, s.start, s.end]
 //  private Set<int[]> tfk;       // [t.start, t.end, f.id, k]
@@ -47,7 +47,7 @@ public class LabelIndex {
     this.y = y;
     this.byTarget = new HashMap<>();
     this.fis = new HashSet<>();
-    this.targets = new HashSet<>();
+//    this.targets = new HashSet<>();
 
     this.all = new HashMap<>();
 
@@ -192,35 +192,35 @@ public class LabelIndex {
 //    return tf2tfs.getOrDefault(new Pair<>(t, f), Collections.emptySet());
 //  }
 
-  public Set<int[]> borrowTfksSet() {
-    return tfks;
-  }
-
-  public Set<int[]> borrowTfkSet() {
-    return tfk;
-  }
-
-  public Set<int[]> borrowTfsSet() {
-    return tfs;
-  }
-
-  public Set<int[]> buildTfksSet() {
-    Set<int[]> s = new HashSet<>();
-    s.addAll(tfks);
-    return s;
-  }
-
-  public Set<int[]> buildTfkSet() {
-    Set<int[]> s = new HashSet<>();
-    s.addAll(tfk);
-    return s;
-  }
-
-  public Set<int[]> buildTfsSet() {
-    Set<int[]> s = new HashSet<>();
-    s.addAll(tfs);
-    return s;
-  }
+//  public Set<int[]> borrowTfksSet() {
+//    return tfks;
+//  }
+//
+//  public Set<int[]> borrowTfkSet() {
+//    return tfk;
+//  }
+//
+//  public Set<int[]> borrowTfsSet() {
+//    return tfs;
+//  }
+//
+//  public Set<int[]> buildTfksSet() {
+//    Set<int[]> s = new HashSet<>();
+//    s.addAll(tfks);
+//    return s;
+//  }
+//
+//  public Set<int[]> buildTfkSet() {
+//    Set<int[]> s = new HashSet<>();
+//    s.addAll(tfk);
+//    return s;
+//  }
+//
+//  public Set<int[]> buildTfsSet() {
+//    Set<int[]> s = new HashSet<>();
+//    s.addAll(tfs);
+//    return s;
+//  }
 
   public FNParse getParse() { return y; }
 
@@ -230,7 +230,8 @@ public class LabelIndex {
   }
 
   public boolean containsTarget(Span target) {
-    return targets.contains(target);
+//    return targets.contains(target);
+    return byTarget.containsKey(target);
   }
 
   public boolean contains(Span target, Frame f) {

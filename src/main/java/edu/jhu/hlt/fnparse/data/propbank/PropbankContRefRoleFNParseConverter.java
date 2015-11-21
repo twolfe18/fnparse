@@ -27,6 +27,5 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 public class PropbankContRefRoleFNParseConverter {
 
   // TODO
-  lskdfdsl
-  
+
 }
