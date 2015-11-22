@@ -53,12 +53,26 @@ public class State {
     public final int k;   // k=-1 means only this span has been chosen, but it hasn't been labeled yet
     public final int q;
     public final Span s;
+    public final BigInteger sig;
 
-    public RI(int k, int q, Span s) {
+    public final boolean noMoreArgs;
+    public final boolean noMoreArgSpans;
+    public final boolean noMoreArgRoles;
+
+    public RI(int k, int q, Span s, BigInteger sig) {
+      this(k, q, s, sig, false, false, false);
+    }
+
+    public RI(int k, int q, Span s, BigInteger sig,
+        boolean noMoreArgs, boolean noMoreArgSpans, boolean noMoreArgRoles) {
       assert s != Span.nullSpan;
       this.k = k;
       this.q = q;
       this.s = s;
+      this.sig  = sig;
+      this.noMoreArgs = noMoreArgs;
+      this.noMoreArgSpans = noMoreArgSpans;
+      this.noMoreArgRoles = noMoreArgRoles;
     }
   }
 
@@ -97,26 +111,26 @@ public class State {
     // Product of a unique prime at every (t,f,k,s)
     public final BigInteger sig;
 
-    // Use this constructor for an empty list of RIs
-    private RILL() {
-      item = null;
-      next = null;
-      realizedRoles = 0;
-      realizedRolesCont = 0;
-      realizedRolesRef = 0;
-      noMoreArgs = false;
-      noMoreArgSpans = false;
-      noMoreArgRoles = false;
-      realizedSpans = fj.data.Set.empty(Ord.<Span>comparableOrd());
-//      incomplete = null;
-      staticFeatures = Adjoints.Constant.ZERO;
-      sig = BigInteger.valueOf(1);
-    }
+//    // Use this constructor for an empty list of RIs
+//    private RILL() {
+//      item = null;
+//      next = null;
+//      realizedRoles = 0;
+//      realizedRolesCont = 0;
+//      realizedRolesRef = 0;
+//      noMoreArgs = false;
+//      noMoreArgSpans = false;
+//      noMoreArgRoles = false;
+//      realizedSpans = fj.data.Set.empty(Ord.<Span>comparableOrd());
+////      incomplete = null;
+//      staticFeatures = Adjoints.Constant.ZERO;
+//      sig = BigInteger.valueOf(1);
+//    }
 
     /**
      * @param f is needed in order to lookup features.
      * @param r is the new RI being prepended.
-     * @param l is the list being prepeded to.
+     * @param l is the list being prepeded to, may be null when creating a list with one element
      */
     public RILL(FI f, RI r, RILL l) {
       item = r;
@@ -128,41 +142,33 @@ public class State {
       } else {
         rm = 0;
       }
-      realizedRoles = l.realizedRoles | rm;
-      realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
-      realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
-      noMoreArgs = l.noMoreArgs || item == NO_MORE_ARGS;
-      noMoreArgSpans = l.noMoreArgSpans || item == NO_MORE_ARG_SPANS;
-      noMoreArgRoles = l.noMoreArgRoles || item == NO_MORE_ARG_ROLES;
-
-      realizedSpans = r.s == null || r.s == Span.nullSpan
-          ? l.realizedSpans : l.realizedSpans.insert(r.s);
-
-//      if (l.incomplete != null) {
-//        if (completes(r, l.incomplete)) {
-//          incomplete = null;
-//        } else {
-//          assert !incomplete(r) : "only can have one incomplete node?";
-//          incomplete = l.incomplete;
-//        }
-//      } else {
-//        if (incomplete(r))
-//          incomplete = r;
-//        else
-//          incomplete = null;
-//      }
-
-      staticFeatures = sum(
-          l.staticFeatures,
-          State.this.staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s));
-
-      int p;
-      if (r.k >= 0 && r.s != null) {
-        p = primes.get(f.t, f.f, r.k, r.s);
+      if (l == null) {
+        realizedRoles = rm;
+        realizedRolesCont = (r.q == CONT ? rm : 0);
+        realizedRolesRef = (r.q == REF ? rm : 0);
+        noMoreArgs = r.noMoreArgs;
+        noMoreArgSpans = r.noMoreArgSpans;
+        noMoreArgRoles = r.noMoreArgRoles;
+        if (r.s == null)
+          realizedSpans = fj.data.Set.<Span>empty(Ord.comparableOrd());
+        else
+          realizedSpans = fj.data.Set.single(Ord.comparableOrd(), r.s);
+        staticFeatures = staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s);
+        sig = r.sig;
       } else {
-        p = primes.getSpecialRI(f.t, f.f, r);
+        realizedRoles = l.realizedRoles | rm;
+        realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
+        realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
+        noMoreArgs = l.noMoreArgs || item.noMoreArgs;
+        noMoreArgSpans = l.noMoreArgSpans || item.noMoreArgSpans;
+        noMoreArgRoles = l.noMoreArgRoles || item.noMoreArgRoles;
+        realizedSpans = r.s == null || r.s == Span.nullSpan
+            ? l.realizedSpans : l.realizedSpans.insert(r.s);
+        staticFeatures = sum(
+            l.staticFeatures,
+            staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s));
+        sig = l.sig.multiply(r.sig);
       }
-      sig = l.sig.multiply(BigInteger.valueOf(p));
     }
 
     public int getNumRealizedArgs() {
@@ -171,29 +177,6 @@ public class State {
           + Long.bitCount(realizedRolesRef);
     }
   }
-
-//  public static boolean completes(RI completion, RI incomplete) {
-//    if (incomplete.k >= 0 && incomplete.s == null)
-//      return completion.k == incomplete.k && completion.s != null;
-//    if (incomplete.s != null && incomplete.k < 0)
-//      return completion.s == incomplete.s && completion.k >= 0;
-//    if (incomplete.k < 0 && incomplete.s == null)
-//      return completion.k >= 0 && completion.s != null;
-//    throw new RuntimeException();
-//  }
-//  public static boolean incomplete(RI role) {
-//    return role != null && (role.k < 0 || role.s == null);
-//  }
-//  public static boolean incomplete(FI frame) {
-//    return frame != null && (frame.t == null || frame.f == null);
-//  }
-
-  public static final State DUMMY_STATE = new State();
-  public static final RILL NO_ARGS = DUMMY_STATE.new RILL();
-
-  public static final RI NO_MORE_ARGS = new RI(-1, -1, null);
-  public static final RI NO_MORE_ARG_SPANS = new RI(-2, -2, null);
-  public static final RI NO_MORE_ARG_ROLES = new RI(-3, -3, null);
 
   public final class FI {
 
@@ -210,15 +193,100 @@ public class State {
      */
     public final List<Span> possibleArgs;
 
+    /*
+     * sig is a product of primes.
+     * we use integer multiplication because it is commutative, like set add.
+     * it turns out that the elements in our set have some structure,
+     *   specifically they are products of indices like t*f*k*s
+     * but if our elements are represented as primes, we can't factor them
+     * we could have chosen addition in the outer monoid:
+     *   the only trouble is with addition:
+     *   if we want to have the property that sig = list of monoid operations
+     *   doesn't collide, then we need to ensure something like
+     *   x + y == x + z => y == z
+     *   with mult/primes this is easy: we can talk about prime factorizations of x+y or x+z, which are unique
+     *   with addition, the naive thing to do is use powers of two... need T*K*F*S bits... too big
+     *   with mult/primes (optimally), you need (less than) D*log(P) where D is the number of realized (t,f,k,s) and P is the Dth prime.
+     *   e.g. D=15 => P=47 => D*log(P) = 84 bits...
+     *   this bound is based on the trick that you can sort the (t,f,k,s) by some a priori score and assign small primes to things likely to be in the set (product)
+     *   this does grow faster than I thought:
+     *   awk 'BEGIN{p=1} {p *= $1; print NR, $1, log(p)/log(2)}' <(zcat primes1.byLine.txt.gz) | head -n 20
+1 2 1
+2 3 2.58496
+3 5 4.90689
+4 7 7.71425
+5 11 11.1737
+6 13 14.8741
+7 17 18.9616
+8 19 23.2095
+9 23 27.7331
+10 29 32.5911
+11 31 37.5452
+12 37 42.7547
+13 41 48.1123
+14 43 53.5385
+15 47 59.0931
+16 53 64.821
+17 59 70.7037
+18 61 76.6344
+19 67 82.7005
+20 71 88.8502
+     * This means that even if you guess perfectly on your sort order,
+     * you still can only fit 15 items in a uint64_t.
+     *
+     * The way I have it implemented (no sort over primes), the number of bits
+     * needed is going to be something like 580 bits for 25 (t,f,k,s) and
+     * 900 for 40. It should grow slightly faster than linear in nnz.
+     *
+     * zcat data/primes/primes1.byLine.txt.gz | shuf | awk 'BEGIN{p=1} {p *= $1; if (NR % 25 == 0) { print log(p)/log(2); p=1; }}' | head -n 1000 | plot
+     */
+
+    private boolean noMoreFrames = false;
+    private boolean noMoreTargets = false;
+
     public FI(Frame f, Span t, RILL args) {
+      this(f, t, args, false, false);
+    }
+
+    public FI(Frame f, Span t, RILL args,
+        boolean noMoreFrames, boolean noMoreTargets) {
       this.f = f;
       this.t = t;
       this.args = args;
       this.possibleArgs = null;   // TODO
     }
 
+    public FI noMoreFrames() {
+      return new FI(f, t, args, true, true);
+    }
+
+    public FI noMoreTargets() {
+      return new FI(f, t, args, false, true);
+    }
+
+    public boolean moreTargetsAllowed() { return noMoreTargets; }
+    public boolean moreFramesAllowed() { return noMoreFrames; }
+
     public FI prependArg(RI arg) {
-      return new FI(this.f, this.t, new RILL(this, arg, this.args));
+      RILL rill = new RILL(this, arg, this.args);
+      return new FI(this.f, this.t, rill);
+    }
+
+    /*
+     * We need to include a prime for noMore* because they are legitimately
+     * different states (z will include more 0s than if we didn't add the constraint).
+     * This does not work if you have other prune operations, you would need a
+     * prime for every index in z which was set to 0. This is a trick which works
+     * because there is exactly one way (up to re-ordering) to get a subset of 2^N:
+     * have commit actions for the 1 bits and have one extra item for "no more".
+     */
+    public BigInteger getSig() {
+      BigInteger p = args.sig;
+      if (noMoreTargets)
+        p = p.multiply(BigInteger.valueOf(primes.getSpecialFI(SpecialFrame.NO_MORE_TARGETS)));
+      if (noMoreFrames)
+        p = p.multiply(BigInteger.valueOf(primes.getSpecialFI(SpecialFrame.NO_MORE_FRAMES)));
+      return p;
     }
 
     /** Returns null if either t or f are null */
@@ -228,21 +296,90 @@ public class State {
       return new Pair<>(t, f);
     }
 
-    public int getSpecialPrime() {
-      return primes.getSpecialFI(this);
+    /*
+     * WARNING: Code below is not bad (like it may seem)
+     *
+     * Incomplete FI/RI are not the same as CLOSE/NO_MORE* FI/RI
+     * They both need to have a prime multiplied into the signature to distinguish states
+     * BUT we don't want to put incomplete FI/RI into their LL because this means there may be more than one sig that leads to the completed form
+     */
+
+    /*
+     * Clarity:
+     * If you put FI/RI representing NO_MORE* into FILL/RILLs, then you have to explicitly skip over them in for loops.
+     * That sucks, so just put NO_MORE* in State/FI.
+     * You given State/FI methods which return their respective type, but with NO_MORE* enforced.
+     * The Signatures for these types must check special flags which say if NO_MORE* have been added to the State/FI.
+     * Flags in FI/RI are NOT NEEDED because NO_MORE* is not accumulated by cons (LL constructor).
+     */
+
+    /* noMore(Targets|Frames) are not incomplete nodes, thus should appear as FI in a FILL
+     * The alternative is to put them in State.
+     *
+     * They should at least match now NO_MORE_ARG* work.
+     * Those are:
+     * 1) real RI nodes
+     * 2) flags in RILL
+     *
+     * Can I think of a reason to not do the following:
+     * 1) never have FI/RI nodes for these NO_MORE* nodes
+     * 2) have both a flag and sig in the parent of the LL which holds notions of NO_MORE
+     *
+     * In a way FI is (a special) first node of RILL
+     * Same for State and FILL
+     * The only thing I could see wanting by not putting these special aggregates in the first node is the ability to "replay" time.
+     * Also its a bit more conceptually clean if you don't have any speical first nodes
+     * But do we absolutely need special first nodes for anything in particular?
+     * Every LL node could store all the aggregates.
+     * Having a special first node lets each LL node not have extra fields and join operations
+     *
+     * Oooh, lets say that you wanted to do NO_MORE_ARGS on a FI/RILL which is not at the head of State/FILL
+     * We could do this with a special node (FI) by keeping all of the an entire RILL and only making a new FI node.
+     * one new FI node is about the same as prepending a RI to a RILL, so no real win there.
+     *
+     * Bottom up?
+     * If you started thinking about this tree in bottom-up fashion, you would have
+     * RI = {t,f,k,s}
+     * If you wanted to group these things with special FI/RILL nodes, you could then drop the (t,f), but only as an optimization.
+     * This is a nice way to think about this: we are always conceptually equal in some way to a LL.
+     * This is how we get O(1) updates.
+     * The reason to have State/FI/RILL nodes are that they are indices on accumulators that we wish to keep for global features.
+     * Since the State/FI/RILL hierachy is fixed depth, we can say that mutating it is O(1), which lets us do cool things like add an argument to the second (t,f) while the first is still open.
+     *
+     * Thats an interesting way to think about "frozen":
+     * You are always adding nodes to a LL, but you have a dummy node called frozen (which may point to more items in the LL)
+     * When you want to add children to an item in this LL, you may only do so if it appears before frozen in the LL
+     * Freezing a node may only be done by moving it behind the frozen node.
+     * Since we are O(n) where n is the number of nodes before frozen, we can allow any of the 1..n nodes in front to be pushed back behind frozen, triggering an O(n) operation (mutating a list item at depth n is O(n))
+     *
+     * It would be nice to connect this to what I was thinking about coref,
+     * and come up with a universal description of how you do these append-only list/tree-like persistent state representations with accumulators for global features...
+     * But I want to get this working soon.
+     */
+
+    public FI noMoreArgs() {
+      int p = primes.getSpecialRI(t, f, SpecialRole.NO_MORE_ARGS);
+      RI nma = new RI(-1, -1, null, BigInteger.valueOf(p), true, true, true);
+      RILL nmall = new RILL(this, nma, args);
+      return new FI(f, t, nmall);
+    }
+
+    public FI noMoreArgSpans() {
+      int p = primes.getSpecialRI(t, f, SpecialRole.NO_MORE_ARG_SPANS);
+      RI nma = new RI(-1, -1, null, BigInteger.valueOf(p), false, true, false);
+      RILL nmall = new RILL(this, nma, args);
+      return new FI(f, t, nmall);
+    }
+
+    public FI noMoreArgRoles() {
+      int p = primes.getSpecialRI(t, f, SpecialRole.NO_MORE_ARG_ROLES);
+      RI nma = new RI(-1, -1, null, BigInteger.valueOf(p), false, false, true);
+      RILL nmall = new RILL(this, nma, args);
+      return new FI(f, t, nmall);
     }
   }
 
-  // Note NO_MORE_FRAMES really means "no more FIs".
-  // By analogy to RILL and NO_MORE_ROLES, there is no true "no more frames
-  // (irrespective of t) in this sentence" action because it doesn't really
-  // make sense.
-  public static final FI NO_MORE_FRAMES = new State().new FI(null, null, null);
-  public static final FI NO_MORE_TARGETS = new State().new FI(null, null, null);
-
-  public static final FILL NO_FRAMES = new FILL();
-
-  public static final class FILL {
+  public final class FILL {
 
     public final FI item;
     public final FILL next;
@@ -252,24 +389,11 @@ public class State {
 
     public final fj.data.Set<Span> targetsSelectedSoFar;
 
-    public final boolean noMoreFrames;
-    public final boolean noMoreTargets;
+    private boolean noMoreFrames;
+    private boolean noMoreTargets;
 
-    // Should be FILL instead of FI?
-//    public final FI incomplete;   // can be null
-
+    // Includes primes for noMore*
     public final BigInteger sig;
-
-    public FILL() {
-      item = DUMMY_STATE.new FI(null, null, NO_ARGS);
-      next = null;
-      numFrameInstances = 0;
-      targetsSelectedSoFar = fj.data.Set.empty(Ord.<Span>comparableOrd());
-      noMoreFrames = false;
-      noMoreTargets = false;
-//      incomplete = null;
-      sig = BigInteger.valueOf(1);
-    }
 
     /**
      * New target chosen (next actions will range over features)
@@ -277,37 +401,82 @@ public class State {
     public FILL(FI highlightedTarget, FILL otherFrames) {
       item = highlightedTarget;
       next = otherFrames;
-      numFrameInstances = otherFrames.numFrameInstances + 1;
-      targetsSelectedSoFar = highlightedTarget.t != null
-          ? otherFrames.targetsSelectedSoFar.insert(highlightedTarget.t)
-          : otherFrames.targetsSelectedSoFar;
-      noMoreFrames = otherFrames.noMoreFrames || highlightedTarget == NO_MORE_FRAMES;
-      noMoreTargets = otherFrames.noMoreTargets || highlightedTarget == NO_MORE_TARGETS;
-
-//      if (otherFrames.incomplete == null) {
-//        if (highlightedTarget.f == null)
-//          incomplete = highlightedTarget;
-//        else
-//          incomplete = null;
-//      } else {
-//        if (otherFrames.incomplete.t == highlightedTarget.t)
-//          incomplete = null;
-//        else
-//          incomplete = otherFrames.incomplete;
-//      }
-
-      if (highlightedTarget == NO_MORE_FRAMES || highlightedTarget ==  NO_MORE_TARGETS) {
-        int p = highlightedTarget.getSpecialPrime();
-        sig = otherFrames.sig.multiply(BigInteger.valueOf(p));
+      BigInteger sig;
+      if (otherFrames == null) {
+        sig = highlightedTarget.getSig();
+        noMoreFrames = !highlightedTarget.moreFramesAllowed();
+        noMoreTargets = !highlightedTarget.moreTargetsAllowed();
+        numFrameInstances = 1;
+        assert highlightedTarget.t != null;
+        targetsSelectedSoFar = fj.data.Set.single(Ord.comparableOrd(), highlightedTarget.t);
+      } else {
+        sig = highlightedTarget.getSig().multiply(otherFrames.sig);
+        noMoreFrames = otherFrames.noMoreFrames || !highlightedTarget.moreFramesAllowed();
+        noMoreTargets = otherFrames.noMoreTargets || !highlightedTarget.moreTargetsAllowed();
+        numFrameInstances = otherFrames.numFrameInstances + 1;
+        targetsSelectedSoFar = highlightedTarget.t != null
+            ? otherFrames.targetsSelectedSoFar.insert(highlightedTarget.t)
+                : otherFrames.targetsSelectedSoFar;
       }
-//      if (highlightedTarget.args == null)
-//        sig = otherFrames.sig;
-      else {
-        sig = highlightedTarget.args.sig.multiply(otherFrames.sig);
-      }
+      int p = 1;
+      if (noMoreTargets)
+        p *= primes.getSpecialFI(SpecialFrame.NO_MORE_TARGETS);
+      if (noMoreTargets)
+        p *= primes.getSpecialFI(SpecialFrame.NO_MORE_FRAMES);
+      this.sig = p == 1 ? sig : sig.multiply(BigInteger.valueOf(p));
+//      this.noMoreFrames = false;
+//      this.noMoreTargets = false;
     }
 
+    public FILL noMoreFrames() {
+      // TODO Copy everything
+      FILL fill = null;
+      fill.noMoreFrames = true;
+      fill.noMoreTargets = true;
+      return fill;
+    }
+
+    public FILL noMoreTargets() {
+      // TODO Copy everything
+      FILL fill = null;
+      fill.noMoreFrames = false;
+      fill.noMoreTargets = true;
+      return fill;
+    }
+
+    public boolean moreTargetsAllowed() { return !noMoreTargets; }
+    public boolean moreFramesAllowed() { return !noMoreFrames; }
   }
+
+
+  // Oh crap! For the primes stuff, these need to have a different prime for every (t,f)...
+  // These need the same code transform as noMoreTargets/etc: have boolean field instead of special value.
+//  public RI NO_MORE_ARGS;// = new RI(-1, -1, null);
+//  public RI NO_MORE_ARG_SPANS;// = new RI(-2, -2, null);
+//  public RI NO_MORE_ARG_ROLES;// = new RI(-3, -3, null);
+
+  // This isn't needed anymore because RILL's constructor can now take null tail
+//  public RILL NO_ARGS;// = DUMMY_STATE.new RILL();
+
+  // Note NO_MORE_FRAMES really means "no more FIs".
+  // By analogy to RILL and NO_MORE_ROLES, there is no true "no more frames
+  // (irrespective of t) in this sentence" action because it doesn't really
+  // make sense.
+//  public FI NO_MORE_FRAMES;// = new State().new FI(null, null, null);
+//  public FI NO_MORE_TARGETS;// = new State().new FI(null, null, null);
+
+  // This isn't needed anymore because FILL's constructor can now take null tail
+//  public FILL NO_FRAMES;// = new FILL();
+
+//  private void initSpecialValues() {
+////    NO_ARGS = new RILL();
+////    NO_MORE_ARGS = new RI(-1, -1, null);
+////    NO_MORE_ARG_SPANS = new RI(-2, -2, null);
+////    NO_MORE_ARG_ROLES = new RI(-3, -3, null);
+//    NO_MORE_FRAMES = new FI(null, null, null);
+//    NO_MORE_TARGETS = new FI(null, null, null);
+////    NO_FRAMES = new FILL();
+//  }
 
   public Sentence sentence;
   public LabelIndex label;     // may be null
@@ -325,7 +494,45 @@ public class State {
   // and the next State will have incomplete=null.
   // NOTE: If you have an incomplete FI, there is only one FILL in state, so you
   // can just check that, you don't need to put it here.
-  public final RILL incomplete;
+//  public final RILL incomplete;
+  public final Incomplete incomplete;
+
+  /** Stores a pointer to a node in the tree which is incomplete */
+  public static class Incomplete {
+    // Don't need FILL b/c there is one per State
+    // Don't need RILL b/c there is one per FI
+    public final FI fi;
+    public final RI ri;
+
+    public Incomplete(FI fi) {
+      this.fi = fi;
+      this.ri = null;
+    }
+
+    public Incomplete(FI fi, RI ri) {
+      this.fi = fi;
+      this.ri = ri;
+    }
+
+    public FI getFI() { return fi; }
+    public RI getRI() { return ri; }
+
+    public boolean isFrame() {
+      return ri == null;
+    }
+
+    public boolean isArg() {
+      return ri != null;
+    }
+
+    public boolean missingArgSpan() {
+      return ri != null && ri.s == null;
+    }
+
+    public boolean missingArgRole() {
+      return ri != null && ri.k < 0;
+    }
+  }
 
   // This is the objective being optimized, which is some combination of model score and loss.
   // Note: This will include the scores of states that lead up to this state (sum over actions).
@@ -360,21 +567,21 @@ public class State {
   public Random rand;
 
   public boolean incompleteFI() {
-    if (frames == NO_FRAMES)
-      return false;
-    if (frames == null)
-      return false;
-    if (frames.item == null)
-      return false;
+//    if (frames == null)
+//      return false;
+//    if (frames.item == null)
+//      return false;
     return frames.item.f == null || frames.item.t == null;
   }
 
   private State() {
-    this(NO_FRAMES, null, Adjoints.Constant.ZERO);
+    this.frames = new FILL(new FI(null, null, null, false, false), null);
+    this.incomplete = null;
+    this.score = Adjoints.Constant.ZERO;
   }
 
   /** Doesn't initialize most fields */
-  private State(FILL frames, RILL incomplete, Adjoints score) {
+  private State(FILL frames, Incomplete incomplete, Adjoints score) {
     this.frames = frames;
     this.incomplete = incomplete;
     this.score = score;
@@ -387,7 +594,7 @@ public class State {
     this.staticFeatureCache = new RandStaticFeatureCache();
   }
 
-  public State(FILL frames, RILL incomplete, Adjoints score, State copyEverythingElseFrom) {
+  public State(FILL frames, Incomplete incomplete, Adjoints score, State copyEverythingElseFrom) {
     this(frames, incomplete, score);
     sentence = copyEverythingElseFrom.sentence;
     label = copyEverythingElseFrom.label;
@@ -485,8 +692,8 @@ public class State {
   }
 
   /**
-   * Replaces the node tail.item with newFrame (in the list this.frames).
-   * O(1) if tail == this.frames and O(T) otherwise.
+   * Search (for tail) and replace (with newFrame) in this.frames.
+   * O(1) if always tail == this.frames and O(T) otherwise.
    */
   public State surgery(FILL tail, FI newFrame, Adjoints partialScore) {
     assert this.incomplete == null : "didn't design this to handle incomplete RILL";
@@ -588,7 +795,7 @@ public class State {
         // Gold(t,f) - History(t,f)
         Set<Pair<Span, Frame>> tf = label.borrowTargetFrameSet();
         possibleFN = tf.size();
-        for (FILL cur = frames; cur != NO_FRAMES; cur = cur.next) {
+        for (FILL cur = frames; cur != null; cur = cur.next) {
           Pair<Span, Frame> tfi = cur.item.getTF();
           if (tfi != null)
             possibleFN--;
@@ -601,7 +808,7 @@ public class State {
         Set<Span> t = label.borrowTargetSet();
         Set<Span> check1 = new HashSet<>(), check2 = new HashSet<>();
         possibleFN = t.size();
-        for (FILL cur = frames; cur != NO_FRAMES; cur = cur.next) {
+        for (FILL cur = frames; cur != null; cur = cur.next) {
           Span tt = cur.item.t;
           if (tt != null) {
             /*
@@ -662,7 +869,7 @@ public class State {
                   : actionType == AT.STOP_S ? label.get(LabelIndex.encode(newFI.t, newFI.f, newRI.s))
                       : null;
         possibleFN = possibleArgs.size();
-        for (RILL cur = newFI.args; cur != NO_ARGS; cur = cur.next) {
+        for (RILL cur = newFI.args; cur != null; cur = cur.next) {
           int k = cur.item.k;
           int q = cur.item.q;
           Span s = cur.item.s;
@@ -733,17 +940,60 @@ public class State {
     return new State(new FILL(fi, this.frames), this.incomplete, sum(this.score, partialScore));
   }
 
+  private void nextComplete(Beam beam, List<ProductIndex> sf) {
+    assert incomplete.isArg() : "frame incomplete not implemented yet";
+    if (incomplete.isFrame()) {
+      Log.debug("incomplete FI");
+      //      Span t = frames.incomplete.t;
+      //      for (Frame f : prunedFIs.get(t)) {
+      //        RILL args2 = null;
+      //        FI fi2 = new FI(f, t, args2);
+      //        push(beam, copy(new FILL(fi2, frames), f(AT.COMPLETE_F, fi2, sf)));
+      //      }
+      throw new RuntimeException("implement me");
+    } else {
+      FI fi = frames.item;
+      if (incomplete.missingArgSpan()) {
+        // Loop over s
+        Log.debug("incomplete RI - span");
+        int t = -1; // TODO have t:Span need t:int
+        for (Span s : prunedSpans.getPossibleArgs(t)) {
+          int p = primes.get(fi.t, fi.f, incomplete.ri.k, s);
+          BigInteger sig = BigInteger.valueOf(p);
+          RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
+          Adjoints feats = sum(score, f(AT.COMPLETE_S, fi, newArg, sf));
+          RILL tail = incomplete.fi.args;
+          RILL newArgs = new RILL(fi, newArg, tail);
+          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs), frames.next);
+          push(beam, new State(newFrames, null, feats));
+        }
+      } else if (incomplete.missingArgRole()) {
+        // Loop over k
+        int K = fi.f.numRoles();
+        for (int k = 0; k < K; k++) {
+          Log.debug("incomplete RI - role");
+          int q = -1; // TODO
+          int p = primes.get(fi.t, fi.f, k, incomplete.ri.s);
+          BigInteger sig = BigInteger.valueOf(p);
+          RI newArg = new RI(k, q, incomplete.ri.s, sig);
+          Adjoints feats = sum(score, f(AT.COMPLETE_K, fi, newArg, sf));
+          RILL tail = incomplete.fi.args;
+          RILL newArgs = new RILL(fi, newArg, tail);
+          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs), frames.next);
+          push(beam, new State(newFrames, null, feats));
+        }
+      } else {
+        throw new RuntimeException();
+      }
+    }
+  }
+
   /**
    * Add all successor states to the given beam.
    */
   public void next(Beam beam) {
 
     Log.debug("Starting to compute next()");
-
-    boolean incFI = incompleteFI(); // incomplete(frames.item.args.item);
-    boolean incRI = incomplete != null;
-    assert !(incRI && incFI)
-        : "you can only build one incomplete thing at a time!";
 
     /*
      * Note: The bounds on exiting beam search early also depend on the search
@@ -757,49 +1007,14 @@ public class State {
       return;
     }
 
+    // TODO Compute these in the constructor?
+    // Or have some other way by which we can share state features between
+    // the pre- and post-incomplete states?
     final List<ProductIndex> sf = getStateFeatures();
 
-    if (incRI) {
-      // TODO Have to complete this (k,?) or (?,s)
-      Log.debug("incomplete RI");
-      FI fi = frames.item;
-      RI incomplete = this.incomplete.item;
-      if (incomplete.k >= 0) {
-        // Loop over s
-        int t = -1; // TODO have t:Span need t:int
-        for (Span s : prunedSpans.getPossibleArgs(t)) {
-          RI newArg = new RI(incomplete.k, incomplete.q, s);
-          Adjoints feats = sum(score, f(AT.COMPLETE_S, fi, newArg, sf));
-          RILL newArgs = new RILL(fi, newArg, this.incomplete.next);
-          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs), frames.next);
-          push(beam, new State(newFrames, null, feats));
-        }
-      } else if (incomplete.s != null) {
-        // Loop over k
-        int K = fi.f.numRoles();
-        for (int k = 0; k < K; k++) {
-          int q = -1; // TODO
-          RI newArg = new RI(k, q, incomplete.s);
-          Adjoints feats = sum(score, f(AT.COMPLETE_K, fi, newArg, sf));
-          RILL newArgs = new RILL(fi, newArg, this.incomplete.next);
-          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs), frames.next);
-          push(beam, new State(newFrames, null, feats));
-        }
-      } else {
-        throw new RuntimeException("this isn't really incomplete!");
-      }
+    if (incomplete != null) {
+      nextComplete(beam, sf);
       return;
-    }
-
-    if (incFI) {
-      Log.debug("incomplete FI");
-//      Span t = frames.incomplete.t;
-//      for (Frame f : prunedFIs.get(t)) {
-//        RILL args2 = null;
-//        FI fi2 = new FI(f, t, args2);
-//        push(beam, copy(new FILL(fi2, frames), f(AT.COMPLETE_F, fi2, sf)));
-//      }
-      throw new RuntimeException("implement me");
     }
 
     assert incomplete == null : "we should have handled that by this point";
@@ -887,6 +1102,20 @@ public class State {
             noMoreNewS = false;
             RI newRI = new RI(-1, -1, s);
             FI newFI = fi.prependArg(newRI);
+            
+            
+            // TODO Need to set incomplete here!
+            
+            // NOTE: These RI do/don't need primes!
+            // Option 1) Just put (k,?) and (?,s) RIs into the RILL
+            // Option 2) Have special incomplete fields in State, modify equals/hashcode
+            // Both solve the problem, but the first option has a slight problem:
+            // If we did manage to allows concurrent (k,?) and (?,s) actions, then
+            // we could have two different sigs for deriving the same (k,s)
+            // (different paths across a diamond). If we exclude the incomplete
+            // nodes from the list, then we don't have to worry about this.
+            
+            
             Adjoints feats = f(AT.NEW_S, newFI, newRI, sf);
             push(beam, this.surgery(cur, newFI, feats));
           }
@@ -904,7 +1133,8 @@ public class State {
                 continue;
               noMoreNewK = false;
               int q = -1;   // TODO
-              RI newRI = new RI(k, q, s);
+              int p = primes.get(fi.t, fi.f, k, s);
+              RI newRI = new RI(k, q, s, BigInteger.valueOf(p), false, false, false);
               FI newFI = fi.prependArg(newRI);
               Adjoints feats = f(AT.NEW_KS, newFI, newRI, sf);
               push(beam, this.surgery(cur, newFI, feats));
@@ -918,11 +1148,11 @@ public class State {
       // STOP actions
       if (fi.f != null) {
         if (!noMoreNewK && !noMoreNewS)
-          push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARGS), f(AT.STOP_KS, sf)));
+          push(beam, this.surgery(cur, fi.noMoreArgs(), f(AT.STOP_KS, sf)));
         if (!noMoreNewS)
-          push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARG_SPANS), f(AT.STOP_S, sf)));
+          push(beam, this.surgery(cur, fi.noMoreArgSpans(), f(AT.STOP_S, sf)));
         if (!noMoreNewK)
-          push(beam, this.surgery(cur, fi.prependArg(NO_MORE_ARG_ROLES), f(AT.STOP_K, sf)));
+          push(beam, this.surgery(cur, fi.noMoreArgRoles(), f(AT.STOP_K, sf)));
       }
 
       if (config.frameByFrame)
@@ -1089,15 +1319,28 @@ public class State {
     }
   };
 
+  enum SpecialFrame {
+    NO_MORE_FRAMES,
+    NO_MORE_TARGETS,
+  };
+
+  enum SpecialRole {
+    NO_MORE_ARGS,
+    NO_MORE_ARG_SPANS,
+    NO_MORE_ARG_ROLES,
+  };
+
   public static class PrimesAdapter {
     private Primes primes;
     private FrameRolePacking frp;
-    private int specialK = 3;
-    private int specialF = 2;
+    private int specialK;
+    private int specialF;
     private int nn;
     private int D, K;
 
     public PrimesAdapter(Primes p, int sentenceLength, FrameRolePacking frp) {
+      this.specialK = SpecialRole.values().length;
+      this.specialF = SpecialFrame.values().length;
       this.primes = p;
       this.frp = frp;
       this.nn = 1 + sentenceLength * (sentenceLength - 1) / 2;
@@ -1105,26 +1348,12 @@ public class State {
       this.K = specialK + frp.size();
     }
 
-    public int getSpecialFI(FI fi) {
-      if (fi == NO_MORE_FRAMES)
-        return primes.get(0);
-      else if (fi == NO_MORE_TARGETS)
-        return primes.get(1);
-      else
-        throw new RuntimeException();
+    public int getSpecialFI(SpecialFrame f) {
+      return primes.get(f.ordinal());
     }
 
-    public int getSpecialRI(Span t, Frame f, RI ri) {
-      int k;
-      if (ri == NO_MORE_ARGS) {
-        k = frp.index(f) + 0;
-      } else if (ri == NO_MORE_ARG_SPANS) {
-        k = frp.index(f) + 1;
-      } else if (ri == NO_MORE_ARG_ROLES) {
-        k = frp.index(f) + 2;
-      } else {
-        throw new RuntimeException();
-      }
+    public int getSpecialRI(Span t, Frame f, SpecialRole r) {
+      int k = r.ordinal();
       int i = ProductIndex.NIL
           .prod(Span.index(t), nn)
           .prod(Span.index(Span.nullSpan), nn)
