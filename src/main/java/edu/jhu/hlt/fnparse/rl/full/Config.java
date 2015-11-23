@@ -52,6 +52,7 @@ public class Config {
   public static final Config SPRL_SETTINGS;
   public static final Config PB_SETTINGS;
   public static final Config FN_SETTINGS;
+  public static final Config FAST_SETTINGS;
   static {    // TODO Specify some settings as you do experiments to see what works well.
     SPRL_SETTINGS = new Config();
 
@@ -60,5 +61,9 @@ public class Config {
     PB_SETTINGS.useRefRoles = true;
 
     FN_SETTINGS = new Config();
+
+    FAST_SETTINGS = new Config();
+    FAST_SETTINGS.frameByFrame = true;
+    FAST_SETTINGS.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
   }
 }

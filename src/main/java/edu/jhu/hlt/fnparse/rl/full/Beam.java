@@ -22,8 +22,6 @@ public interface Beam {
    * b) assess them to be different and keep the one with the worse score.
    *
    * We need a Set<State> for dedup and PriorityQueue<State> for top-k
-   *
-   * TODO Implement hashCode and equals for State
    */
 
   /**
@@ -78,16 +76,25 @@ public interface Beam {
     private TreeSet<BeamItem> scores;
     private HashMap<State, BeamItem> table;   // ensures that entries in scores are unique up to State
     private int capacity;
+    private int numCollapses, numOffers;
 
     public DoubleBeam(int capacity) {
       this.capacity = capacity;
       this.table = new HashMap<>((int) (capacity * 1.5 + 1));
       this.scores = new TreeSet<>();
+      this.numCollapses = 0;
+      this.numOffers = 0;
     }
 
     public void clear() {
       scores.clear();
       table.clear();
+      numCollapses = 0;
+      numOffers = 0;
+    }
+
+    public double getCollapseRate() {
+      return ((double) numCollapses) / numOffers;
     }
 
     /**
@@ -95,16 +102,21 @@ public interface Beam {
      */
     @Override
     public void offer(State s) {
+      numOffers++;
       double sc = s.score.forwards();
       BeamItem old = table.get(s);
-      if (old != null && old.score < sc) {
-        // If this state is the same as something on our beam,
-        // then choose the higher scoring of the two.
-        scores.remove(old);
-        BeamItem si = new BeamItem(s, sc);
-        boolean added = scores.add(si);
-        assert added;
-        table.put(s, si);
+      if (old != null) {
+        numCollapses++;
+        if (old.score < sc) {
+          // If this state is the same as something on our beam,
+          // then choose the higher scoring of the two.
+          scores.remove(old);
+          BeamItem si = new BeamItem(s, sc);
+          boolean added = scores.add(si);
+          assert added;
+          table.put(s, si);
+        }
+        // else no op: we've proven this state is equivalent and lower-scoring than something we know about
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
         BeamItem si = new BeamItem(s, sc);

@@ -507,14 +507,9 @@ public class State {
       }
     }
 
+    /** Assumes that the given sentence has parses already */
     public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode) {
-//      ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
-//      Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
-
-//      DeterministicRolePruning.Mode mode = DeterministicRolePruning.Mode.XUE_PALMER_HERMANN;
-//      DeterministicRolePruning drp = new DeterministicRolePruning(mode, dParser, null);
       DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
-//      drp.cachedFeatures = cachedFeatures;
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
     }
@@ -619,7 +614,6 @@ public class State {
   @Override
   public boolean equals(Object other) {
     if (other instanceof State) {
-      // TODO measure collision rate
       BigInteger os = ((State) other).getSig();
       return getSig().equals(os);
     }
@@ -1078,11 +1072,11 @@ public class State {
 
       // STOP actions
       if (fi.f != null) {
-        if (!noMoreNewK && !noMoreNewS)
+        if (!noMoreNewK && !noMoreNewS && !(fi.noMoreArgRoles && fi.noMoreArgSpans))
           push(beam, this.surgery(cur, fi.noMoreArgs(), f(AT.STOP_KS, sf)));
-        if (!noMoreNewS)
+        if (!noMoreNewS && !fi.noMoreArgSpans)
           push(beam, this.surgery(cur, fi.noMoreArgSpans(), f(AT.STOP_S, sf)));
-        if (!noMoreNewK)
+        if (!noMoreNewK && !fi.noMoreArgRoles)
           push(beam, this.surgery(cur, fi.noMoreArgRoles(), f(AT.STOP_K, sf)));
       }
 
@@ -1319,6 +1313,7 @@ public class State {
     private Primes primes;
     private int nPrimes;
     private FrameRolePacking frp;
+    private int maxIdx = 1;
 
     public PrimesAdapter(Primes p, FrameRolePacking frp) {
       this.primes = p;
@@ -1328,6 +1323,10 @@ public class State {
 
     private int gp(int h) {
       assert h >= 0;
+      if (h > maxIdx) {
+        Log.info("new maxIdx=" + h);
+        maxIdx = h;
+      }
       return primes.get(h % nPrimes);
     }
 
@@ -1489,7 +1488,7 @@ public class State {
     inf.coefLoss = 0;
     inf.coefRand = 0;
     inf.frPacking = frp;
-    inf.config = Config.FN_SETTINGS;
+    inf.config = Config.FAST_SETTINGS;
     inf.primes = new PrimesAdapter(new Primes(config), frp);
     inf.label = new LabelIndex(y);
     inf.sentence = y.getSentence();
@@ -1502,10 +1501,11 @@ public class State {
     State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
         .setFramesToGoldLabels();
 
-    Beam.DoubleBeam cur = new Beam.DoubleBeam(4);
-    Beam.DoubleBeam next = new Beam.DoubleBeam(4);
+    int beamSize = 16;
+    Beam.DoubleBeam cur = new Beam.DoubleBeam(beamSize);
+    Beam.DoubleBeam next = new Beam.DoubleBeam(beamSize);
     s0.next(next);
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; true; i++) {
       Log.debug("starting iter=" + i);
       Beam.DoubleBeam t = cur; cur = next; next = t;
       assert next.size() == 0;
@@ -1513,9 +1513,12 @@ public class State {
         State s = cur.pop();
         s.next(next);
       }
+      Log.info("collapseRate=" + next.getCollapseRate());
+      if (next.size() == 0) {
+        // How to keep track of best overall?
+        break;
+      }
     }
-
-    Log.debug("done, beam.size=" + next.size());
   }
 
 
