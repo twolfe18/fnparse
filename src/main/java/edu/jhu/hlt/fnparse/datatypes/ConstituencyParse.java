@@ -17,11 +17,10 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.Document.Constituent;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * Wraps edu.jhu.hlt.concrete.Parse and builds a tree (with pointers)
@@ -30,7 +29,6 @@ import edu.jhu.hlt.tutils.Document.Constituent;
  */
 public class ConstituencyParse implements Serializable {
   private static final long serialVersionUID = 2258695730724020087L;
-  public static Logger LOG = Logger.getLogger(ConstituencyParse.class);
 
   public static class NodePathPiece implements Serializable {
     private static final long serialVersionUID = -7502757950662681044L;
@@ -369,7 +367,7 @@ public class ConstituencyParse implements Serializable {
     if (builtPointers)
       return;
 
-    //LOG.info("building pointers");
+    //Log.info("building pointers");
     //TIMER.start();
 
     if (usingTutils) {
@@ -397,11 +395,11 @@ public class ConstituencyParse implements Serializable {
       // Use concrete representation
       for (Node cur : nodes.values()) {
         if (cur == null) {
-          LOG.warn("gap in the nodes?");
+          Log.warn("gap in the nodes?");
           assert false;
           continue;
         }
-        //LOG.info("[buildPointers] " + i + " = " + cur);
+        //Log.info("[buildPointers] " + i + " = " + cur);
         if (cur.base.getHeadChildIndex() >= 0)
           cur.headChild = nodes.get(cur.base.getHeadChildIndex());
         for (int childIdx : cur.base.getChildList()) {

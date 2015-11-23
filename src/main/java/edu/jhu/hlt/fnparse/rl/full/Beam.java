@@ -1,13 +1,14 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import java.math.BigInteger;
 import java.util.HashMap;
-import java.util.TreeMap;
+import java.util.TreeSet;
 
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam {
 
-  public void offer(State next, Adjoints score);
+  public void offer(State next);//, Adjoints score);
 
   /*
    * tutils' Beam uses TreeSet.add which uses Beam.Item.compareTo
@@ -31,6 +32,40 @@ public interface Beam {
    */
   public Double lowerBound();
 
+  public State pop();
+
+  /**
+   * Compares first on score, then on State.sig.
+   * Will never return compareTo == 0,
+   * thus you should only ever construct pairs of instances s.t. (score,sig) are unique!
+   */
+  public static class BeamItem implements Comparable<BeamItem> {
+    public final State state;
+    public final double score;
+    public BeamItem(State state, double score) {
+      this.state = state;
+      this.score = score;
+    }
+    @Override
+    public int compareTo(BeamItem o) {
+      if (score < o.score)
+        return +1;
+      if (score > o.score)
+        return -1;
+      BigInteger s1 = state.getSig();
+      BigInteger s2 = o.state.getSig();
+      int c = s1.compareTo(s2);
+      if (c == 0) {
+        if (this != o) {  // TreeSet/Map calls compare(key,key) for some stupid reason...
+          System.err.println("state=" + state.show());
+          System.err.println("other=" + o.state.show());
+          throw new RuntimeException("should not have duplicates!");
+        }
+      }
+      return c;
+    }
+  }
+
   /**
    * Differs from tutils Beam in that it checks for State equality first (taking
    * the higher scoring of two items) before resorting to beam pruning.
@@ -40,14 +75,14 @@ public interface Beam {
    * to add a little jitter to the scores.
    */
   public static class DoubleBeam implements Beam {
-    private TreeMap<Double, State> scores;
-    private HashMap<State, Adjoints> table;
+    private TreeSet<BeamItem> scores;
+    private HashMap<State, BeamItem> table;   // ensures that entries in scores are unique up to State
     private int capacity;
 
     public DoubleBeam(int capacity) {
       this.capacity = capacity;
       this.table = new HashMap<>((int) (capacity * 1.5 + 1));
-      this.scores = new TreeMap<>();
+      this.scores = new TreeSet<>();
     }
 
     public void clear() {
@@ -59,20 +94,31 @@ public interface Beam {
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
      */
     @Override
-    public void offer(State s, Adjoints score) {
-      Adjoints old = table.get(s);
-      if (old != null && old.forwards() < score.forwards()) {
-        scores.remove(old.forwards());
-        scores.put(score.forwards(), s);
-        table.put(s, score);
+    public void offer(State s) {
+      double sc = s.score.forwards();
+      BeamItem old = table.get(s);
+      if (old != null && old.score < sc) {
+        // If this state is the same as something on our beam,
+        // then choose the higher scoring of the two.
+        scores.remove(old);
+        BeamItem si = new BeamItem(s, sc);
+        boolean added = scores.add(si);
+        assert added;
+        table.put(s, si);
       } else if (scores.size() < capacity) {
-        scores.put(score.forwards(), s);
-        table.put(s, score);
-      } else {
-        State evicted = scores.pollLastEntry().getValue();
-        table.remove(evicted);
-        scores.put(score.forwards(), s);
-        table.put(s, score);
+        // If this is a new state and we have room, then add this item without eviction
+        BeamItem si = new BeamItem(s, sc);
+        scores.add(si);
+        table.put(s, si);
+      } else if (sc > lowerBound()) {
+        // Remove the worst item on the beam.
+        BeamItem worst = scores.pollLast();
+        table.remove(worst.state);
+        // Add this item
+        BeamItem si = new BeamItem(s, sc);
+        scores.add(si);
+        BeamItem old2 = table.put(s, si);
+        assert old2 == null;
       }
     }
 
@@ -80,7 +126,15 @@ public interface Beam {
     public Double lowerBound() {
       if (size() == 0)
         return null;
-      return scores.lastKey();
+      return scores.last().score;
+    }
+
+    @Override
+    public State pop() {
+      BeamItem bi = scores.pollFirst();
+      BeamItem r = table.remove(bi.state);
+      assert r != null;
+      return bi.state;
     }
 
     public int size() { return scores.size(); }

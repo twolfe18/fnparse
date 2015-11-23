@@ -29,6 +29,7 @@ public class DependencyParse implements Serializable {
   private transient int[][] children;
   private transient int hashCode = 0;
 
+  // TODO Replace with custom Java serialization (e.g. see Span)
   public static final BiConsumer<DependencyParse, DataOutputStream> SERIALIZATION_FUNC = (deps, dos) -> {
     int n = deps.heads.length;
     try {

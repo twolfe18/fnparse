@@ -230,7 +230,7 @@ public class DeterministicRolePruning
         return p;
       if (cParser == null) {
         throw new RuntimeException("Sentence did not contain a parse, "
-            + "and you didn't provide a parser. Sentence.id=" + s.getId());
+            + "and you didn't provide a cParser. Sentence.id=" + s.getId());
       }
       //return parser.getCParse(s);
       return cParser.apply(s);
@@ -327,9 +327,12 @@ public class DeterministicRolePruning
           }
         } else if (mode == Mode.XUE_PALMER_DEP
             || mode == Mode.XUE_PALMER_DEP_HERMANN) {
-          if (sent.getBasicDeps() == null)
+          if (sent.getBasicDeps() == null) {
+            if (dParser == null)
+              throw new RuntimeException("no dParse and no dParser! sent.id=" + sent.getId());
             sent.setBasicDeps(dParser.apply(sent));
             //sent.setBasicDeps(parser.getBasicDParse(sent));
+          }
           possibleSpans = DependencyBasedXuePalmerRolePruning
               .getMask(input, mode);
         } else if (mode == Mode.DEPENDENCY_SPANS) {

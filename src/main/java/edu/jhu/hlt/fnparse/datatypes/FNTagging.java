@@ -1,11 +1,10 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.HasSentence;
@@ -18,8 +17,8 @@ import edu.jhu.hlt.fnparse.util.HasSentence;
  * 
  * @author travis
  */
-public class FNTagging implements HasId, HasSentence {
-  public static Logger LOG = Logger.getLogger(FNTagging.class);
+public class FNTagging implements HasId, HasSentence, Serializable {
+  private static final long serialVersionUID = 6732344909323712341L;
 
   protected Sentence sent;
   protected List<FrameInstance> frameInstances;
@@ -33,7 +32,7 @@ public class FNTagging implements HasId, HasSentence {
     for(FrameInstance fi : frameMentions) {
       FrameInstance collision = seenTargets.get(fi.getTarget());
       if (collision != null) {
-        //LOG.info("target collision in " + s.getId() + "@" + fi.getTarget()
+        //Log.info("target collision in " + s.getId() + "@" + fi.getTarget()
         //    + ":" + collision + ", " + fi);
         // Keep the one with more arguments
         if (fi.numRealizedArguments() > collision.numRealizedArguments()) {

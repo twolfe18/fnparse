@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -14,7 +15,8 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public class FrameInstance {
+public class FrameInstance implements Serializable {
+  private static final long serialVersionUID = 7449903277653964511L;
 
   protected Frame frame;
   protected Span target;

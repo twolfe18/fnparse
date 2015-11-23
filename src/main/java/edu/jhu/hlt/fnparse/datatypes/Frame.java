@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -7,7 +8,8 @@ import java.util.Set;
 
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
 
-public class Frame {
+public class Frame implements Serializable {
+  private static final long serialVersionUID = 8807170122216944787L;
 
   private int idx;
   private String name;                 // e.g. "Commerce_buy"

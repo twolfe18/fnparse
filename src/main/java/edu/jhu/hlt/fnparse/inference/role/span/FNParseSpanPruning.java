@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.inference.role.span;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -21,6 +22,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.Log;
 
 /**
  * This specifies a set of frames marked in text (FNTagging) as well as a pruned
@@ -28,7 +30,9 @@ import edu.jhu.hlt.tutils.FPR;
  * 
  * @author travis
  */
-public class FNParseSpanPruning extends FNTagging {
+public class FNParseSpanPruning extends FNTagging implements Serializable {
+  private static final long serialVersionUID = -8606045163978711124L;
+
   // Irrespective of role.
   // Every key should be a FrameInstance.frameMention
   private Map<FrameInstance, List<Span>> possibleArgs;
@@ -53,7 +57,7 @@ public class FNParseSpanPruning extends FNTagging {
       for (Span sp : spans) {
         foundNS |= sp == Span.nullSpan;
         if (sp.end > s.size()) {
-          LOG.warn(sp + " cannot fit in a sentence of length "+ s.size() + " (" + s.getId() + ")");
+          Log.warn(sp + " cannot fit in a sentence of length "+ s.size() + " (" + s.getId() + ")");
           //assert false;
         }
         assert seen.add(sp);
@@ -155,6 +159,10 @@ public class FNParseSpanPruning extends FNTagging {
     FrameInstance fi = getFrameInstance(frameInstanceIndex);
     FrameInstance key = FrameInstance.frameMention(
         fi.getFrame(), fi.getTarget(), fi.getSentence());
+    return getPossibleArgs(key);
+  }
+
+  public List<Span> getPossibleArgs(FrameInstance key) {
     List<Span> args = possibleArgs.get(key);
     if (args == null)
       throw new IllegalStateException();

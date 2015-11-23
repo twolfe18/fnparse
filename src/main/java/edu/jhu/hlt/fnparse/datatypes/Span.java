@@ -1,10 +1,39 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-public final class Span implements Comparable<Span> {
+import java.io.File;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Hash;
+
+public final class Span implements Comparable<Span>, Serializable {
+  private static final long serialVersionUID = -7592836078770608357L;
+
+  private void writeObject(ObjectOutputStream out) throws IOException {
+    out.writeInt(start);
+    out.writeInt(end);
+  }
+
+  private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    start = in.readInt();
+    end = in.readInt();
+  }
+
+  // https://docs.oracle.com/javase/7/docs/platform/serialization/spec/input.html#5903
+  private Object readResolve() {
+    return Span.getSpan(start, end);
+  }
 
   // TODO Use this for Span[] vs Span[][]
-  /** Densely embeds all spans into the natural numbers */
+  /**
+   * Densely embeds all spans into the natural numbers.
+   * Doesn't work for nullSpan, requires start<end.
+   */
   public static int index(Span s) {
+    assert s.start < s.end;
     /*
 key = (i,j) where i<j
 M = number of mentions
@@ -144,14 +173,16 @@ Z(4) = 4*3/2 = 6
   }
 
   public int hashCode() {
-    int w = end - start;
-    return (w << 16) ^ start;
+//    int w = end - start;
+//    return (w << 16) ^ start;
+    return Hash.mix(start, end - start);
   }
 
   /** Puts a hash in the lower 16 bits of the returned int (may overflow) */
   public int hashCode16() {
-    int w = end - start;
-    return (w << 9) ^ start;
+//    int w = end - start;
+//    return (w << 9) ^ start;
+    return hashCode() & 0xFFFF;
   }
 
   public String shortString() {
@@ -179,6 +210,26 @@ Z(4) = 4*3/2 = 6
     int c1 = end - o.end;
     if (c1 != 0) return c1;
     return start - o.start;
+  }
+
+  public static void main(String[] args) {
+    // Check that readResolve is working
+    // (so that interning + java serialization is working)
+    Span a = Span.getSpan(1, 2);
+
+    Span b = new Span(1, 2);
+
+    assert a != b;
+    System.out.println(a == b);
+
+    File f = new File("/tmp/foo");
+    FileUtil.serialize(b, f);
+    Span bb = (Span) FileUtil.deserialize(f);
+
+    assert bb != b;
+    assert bb == a;
+    System.out.println(bb == b);
+    System.out.println(bb == a);
   }
 }
 

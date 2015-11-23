@@ -1,17 +1,17 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
-import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.IRAMDictionary;
@@ -20,8 +20,9 @@ import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
-public class Sentence implements HasId {
-  public static final Logger LOG = Logger.getLogger(Sentence.class);
+public class Sentence implements HasId, Serializable {
+  private static final long serialVersionUID = 4441193252111939157L;
+
 //  public static final Sentence nullSentence =
 //      new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
 
@@ -161,7 +162,7 @@ public class Sentence implements HasId {
       allStems = stemmer.findStems(w, WordNetPosUtil.ptb2wordNet(pos[i]));
     }
     catch(java.lang.IllegalArgumentException e) {
-      LOG.warn("bad word? " + getLU(i));
+      Log.warn("bad word? " + getLU(i));
     }
     if(allStems.isEmpty())
       return new LexicalUnit(w, fnTag);

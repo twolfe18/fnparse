@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,7 +11,8 @@ import java.util.Map;
  * 
  * @author travis
  */
-public class FNParse extends FNTagging {
+public class FNParse extends FNTagging implements Serializable {
+  private static final long serialVersionUID = -1190604209550969930L;
 
   /**
    * @param s is the Sentence that has been parsed
