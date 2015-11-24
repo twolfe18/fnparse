@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Random;
 
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Hash;
@@ -212,7 +213,54 @@ Z(4) = 4*3/2 = 6
     return start - o.start;
   }
 
+  private static int eqLoop(Span needle1, Span needle2, Span[] haystack) {
+    int c = 0;
+    for (int i = 0; i < haystack.length; i++)
+      if (haystack[i] == needle1 || haystack[i] == needle2)
+        c++;
+    return c;
+  }
+
+  private static int equalsLoop(Span needle1, Span needle2, Span[] haystack) {
+    int c = 0;
+    for (int i = 0; i < haystack.length; i++)
+      if (haystack[i].equals(needle1) || haystack[i].equals(needle2))
+        c++;
+    return c;
+  }
+
   public static void main(String[] args) {
+
+    Span needle1 = Span.getSpan(3, 5);
+    Span needle2 = Span.getSpan(7, 17);
+    Span[] haystack = new Span[20000000];
+    Random rand = new Random(9001);
+    for (int i = 0; i < haystack.length; i++) {
+      int a = rand.nextInt(60);
+      int b = rand.nextInt(60);
+      if (a == b)
+        b++;
+      if (a > b) {
+        int t = a; a = b; b = t;
+      }
+      haystack[i] = Span.getSpan(a, b);
+    }
+
+    long s1 = System.currentTimeMillis();
+    int c = 0;
+    for (int i = 0; i < 10; i++)
+      c += eqLoop(needle1, needle2, haystack);
+    long s2 = System.currentTimeMillis();
+    int d = 0;
+    for (int i = 0; i < 10; i++)
+      d += equalsLoop(needle1, needle2, haystack);
+    long s3 = System.currentTimeMillis();
+
+    System.out.println((s2-s1) + " for == and " + (s3-s2) + " for equals");
+    assert c == d;
+  }
+
+  public static void serCheck() {
     // Check that readResolve is working
     // (so that interning + java serialization is working)
     Span a = Span.getSpan(1, 2);

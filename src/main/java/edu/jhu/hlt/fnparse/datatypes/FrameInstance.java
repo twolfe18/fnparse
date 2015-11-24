@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.prim.tuple.Pair;
@@ -231,4 +232,18 @@ public class FrameInstance implements Serializable {
       return false;
     }
   }
+
+  public static Comparator<FrameInstance> BY_SENTENCE_POSITION_ASC = new Comparator<FrameInstance>() {
+    @Override
+    public int compare(FrameInstance o1, FrameInstance o2) {
+      Span t1 = o1.getTarget();
+      Span t2 = o2.getTarget();
+      // I think this may not be a consistent < operation... gives funny sorts.
+//      if (!t1.overlaps(t2))
+//        return t1.start - t2.start;
+//      if (t1.width() != t2.width())
+//        return t1.width() - t2.width();
+      return t1.end - t2.end;
+    }
+  };
 }

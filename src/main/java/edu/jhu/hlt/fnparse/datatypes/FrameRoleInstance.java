@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import edu.jhu.hlt.tutils.Hash;
+
 /**
  * Represents a role to be filled in for a particular FrameInstance.
  *
@@ -11,10 +13,6 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
   public final int role;
 
   public FrameRoleInstance(Frame frame, Span target, int role) {
-    if (frame == null)
-      throw new IllegalArgumentException();
-    if (role >= frame.numRoles())
-      throw new IllegalArgumentException();
     this.frame = frame;
     this.target = target;
     this.role = role;
@@ -22,10 +20,9 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
 
   @Override
   public int hashCode() {
-    int h = (role << 11) ^ frame.getId();
-    if (target != null)
-      h ^= (target.hashCode16() << 16);
-    return h;
+    int f = frame == null ? 41 : frame.getId();
+    int t = target == null ? 37 : target.hashCode();
+    return Hash.mix(Hash.mix(f, role), t);
   }
 
   @Override
@@ -33,7 +30,7 @@ public class FrameRoleInstance implements Comparable<FrameRoleInstance> {
     if (other instanceof FrameRoleInstance) {
       FrameRoleInstance fri = (FrameRoleInstance) other;
       return role == fri.role
-          && frame.equals(fri.frame)
+          && (frame == fri.frame || (frame != null && frame.equals(fri.frame)))
           && (target == fri.target || (target != null && target.equals(fri.target)));
     }
     return false;

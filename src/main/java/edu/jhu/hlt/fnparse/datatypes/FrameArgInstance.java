@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.Arrays;
 
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Hash;
 
 /**
  * You can use this to represent the target annotation as well, just set role=-1
@@ -16,16 +17,12 @@ public class FrameArgInstance extends FrameRoleInstance {
   public FrameArgInstance(Frame f, Span t, int k, Span a) {
     super(f, t, k);
     this.argument = a;
-    if (role < 0 && a != null) {
-      throw new IllegalArgumentException(
-          "Use role=-1 and argument=null for targets");
-    }
   }
 
   @Override
   public int hashCode() {
     int a = argument == null ? 2111 : argument.hashCode();
-    return super.hashCode() * 223 + a;
+    return Hash.mix(super.hashCode(), a);
   }
 
   @Override

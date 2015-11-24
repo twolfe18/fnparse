@@ -101,6 +101,23 @@ public class Describe {
     return sb.toString();
   }
 
+  public static String frameInstaceJustArgsTerse(FrameInstance fi) {
+    StringBuilder sb = new StringBuilder();
+//    sb.append('[');
+    int K = fi.getFrame().numRoles();
+    boolean first = true;
+    for (int i = 0; i < K; i++) {
+      Span s = fi.getArgument(i);
+      if (s != Span.nullSpan) {
+        String sep = first ? "" : " ";
+        sb.append(String.format("%s%d@%s", sep, i, s.shortString()));
+        first = false;
+      }
+    }
+//    sb.append(']');
+    return sb.toString();
+  }
+
   // Sort by frame and position in sentence
   public static final Comparator<FrameInstance> fiComparator = new Comparator<FrameInstance>() {
     @Override

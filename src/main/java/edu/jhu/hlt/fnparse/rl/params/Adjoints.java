@@ -77,6 +77,7 @@ public interface Adjoints {
     }
   }
 
+  // TODO move to tutils
   public static class LazyL2UpdateVector {
     public final IntDoubleDenseVector weights;
     private int numUpdatesDeferred;
@@ -152,10 +153,6 @@ public interface Adjoints {
     private boolean computed;
 
     private final double l2Penalty;
-
-//    public Vector(Object parent, Action a, double[] weights, double[] features, double l2Penalty) {
-//      this(parent, a, new LazyL2Update(new IntDoubleDenseVector(weights), 32), new IntDoubleDenseVector(features), l2Penalty);
-//    }
 
     public Vector(Object parent, Action a, LazyL2UpdateVector weights, IntDoubleVector features, double l2Penalty) {
       this.parent = parent;

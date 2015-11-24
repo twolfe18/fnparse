@@ -8,7 +8,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam {
 
-  public void offer(State next);//, Adjoints score);
+  public void offer(State next);
 
   /*
    * tutils' Beam uses TreeSet.add which uses Beam.Item.compareTo
@@ -91,6 +91,10 @@ public interface Beam {
       table.clear();
       numCollapses = 0;
       numOffers = 0;
+    }
+
+    public int getNumOffers() {
+      return numOffers;
     }
 
     public double getCollapseRate() {

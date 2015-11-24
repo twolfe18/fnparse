@@ -16,9 +16,10 @@ public class Config {
   enum FrameActionTransitionSystem {
     TARGET_FIRST,
     ONE_STEP,
+    ASSUME_FRAMES_ARE_GIVEN,
   }
 
-  public FrameActionTransitionSystem frameMode = FrameActionTransitionSystem.TARGET_FIRST;
+  public FrameActionTransitionSystem frameMode = FrameActionTransitionSystem.ASSUME_FRAMES_ARE_GIVEN;
 
   // You may only add to a single args:RILL at a time.
   // You can add to the next RILL after you prepend NO_MORE_ARGS.
