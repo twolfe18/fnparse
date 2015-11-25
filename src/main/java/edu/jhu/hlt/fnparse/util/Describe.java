@@ -86,17 +86,23 @@ public class Describe {
 
   public static String frameInstance(FrameInstance fi) {
     StringBuilder sb = new StringBuilder();
+    Sentence s = fi.getSentence();
     sb.append(String.format("FrameInstance of %s triggered by %s @ %d-%d:",
         fi.getFrame().getName(),
-        Arrays.toString(fi.getSentence().getWordFor(fi.getTarget())),
+        Arrays.toString(s.getWordFor(fi.getTarget())),
         fi.getTarget().start,
         fi.getTarget().end));
-    for(int i=0; i<fi.numArguments(); i++) {
-      Span extent = fi.getArgument(i);
-      if(extent == Span.nullSpan) continue;
+    for (int k = 0; k < fi.numArguments(); k++) {
+      Span extent = fi.getArgument(k);
+      if (extent == Span.nullSpan)
+        continue;
       sb.append(String.format(" %s=\"%s\"",
-          fi.getFrame().getRole(i),
-          span(fi.getArgument(i), fi.getSentence())));
+          fi.getFrame().getRole(k),
+          span(fi.getArgument(k), s)));
+      for (Span cont : fi.getContinuationRoleSpans(k))
+        sb.append(" CONT=\"" + span(cont, s) + "\"");
+      for (Span ref : fi.getReferenceRoleSpans(k))
+        sb.append(" REF=\"" + span(ref, s) + "\"");
     }
     return sb.toString();
   }
@@ -106,11 +112,15 @@ public class Describe {
 //    sb.append('[');
     int K = fi.getFrame().numRoles();
     boolean first = true;
-    for (int i = 0; i < K; i++) {
-      Span s = fi.getArgument(i);
+    for (int k = 0; k < K; k++) {
+      Span s = fi.getArgument(k);
       if (s != Span.nullSpan) {
         String sep = first ? "" : " ";
-        sb.append(String.format("%s%d@%s", sep, i, s.shortString()));
+        sb.append(String.format("%s%d@%s", sep, k, s.shortString()));
+        for (Span cont : fi.getContinuationRoleSpans(k))
+          sb.append(" C-" + k + "@" + cont.shortString());
+        for (Span ref : fi.getReferenceRoleSpans(k))
+          sb.append(" R-" + k + "@" + ref.shortString());
         first = false;
       }
     }

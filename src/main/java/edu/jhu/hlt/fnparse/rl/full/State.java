@@ -17,6 +17,7 @@ import java.util.function.Function;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -43,6 +44,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
@@ -51,20 +53,13 @@ import fj.Ord;
 
 public class State {
 
-  public static final boolean DEBUG = false;
+  public static final boolean DEBUG = true;
   public static int NUM_NEXT_EVALS = 0;
 
   // For prototyping
   public static final Alphabet<String> ALPH = new Alphabet<>();
   public static int ALPH_DIM = 250_000;
   public static double ALPH_DIM_GROW_RATE = 4;
-
-  // Values for q
-  public enum RoleType {
-    BASE,
-    CONT,
-    REF,
-  }
 
   enum SpecialFrame {
     NO_MORE_FRAMES,
@@ -96,7 +91,7 @@ public class State {
     @Override
     public String toString() {
       String ss = s == null ? "null" : s.shortString();
-      return "(RI k=" + k + " s=" + ss + " sig=" + sig + ")";
+      return "(RI k=" + k + " q=" + q + " s=" + ss + " sig=" + sig + ")";
     }
   }
 
@@ -769,6 +764,7 @@ public class State {
       double fp = 0;
       double fn = 0;
       int possibleFN;
+      boolean hit;
 
       switch (actionType) {
 
@@ -808,7 +804,7 @@ public class State {
           if (tfi != null)
             possibleFN--;
         }
-        fn += 1 * possibleFN;
+        fn +=  possibleFN;
       case STOP_T:
 
         assert false: "properly implement FN counting for args";
@@ -841,36 +837,113 @@ public class State {
               possibleFN--;
           }
         }
-        fn += 1 * possibleFN;
+        fn += possibleFN;
         break;
 
       /* (k,s) STUFF **********************************************************/
       case NEW_KS:
-      case COMPLETE_K:
-      case COMPLETE_S:
         assert newRI.k >= 0;
-        assert newRI.q != RoleType.BASE : "not implemented yet";
         assert newRI.s != null && newRI.s != Span.nullSpan;
-        if (!info.label.contains(newFI.t, newFI.f, newRI.k, newRI.s))
+        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+        if (!hit)
           fp += 1;
+        if (info.config.oneKperS) {
+          Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
+          fn += purview.size();
+          if (hit) {
+            assert purview.size() > 0;
+            fn--;
+          }
+        }
+        if (info.config.oneSperK) {
+          /*
+           * Then any (k,s') are not reachable!
+           * By induction, we know that we haven't added any s' already, so we
+           * can just find all items matching on k and assume they're set to 0.
+           */
+          // Account for FNs
+          SetOfSets<FrameArgInstance> purview;
+          if (newRI.q == RoleType.BASE) {
+            // Then you're also prohibiting any non-base args
+            purview = new SetOfSets<>(
+                info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
+                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
+                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
+          } else {
+            purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
+          }
+          fn += purview.size();
+          if (hit) {
+            assert purview.size() > 0;
+            fn--;
+          }
+        }
+
         break;
       case NEW_S:
         assert newRI.s != null && newRI.s != Span.nullSpan;
-        if (!info.label.contains(newFI.t, newFI.f, newRI.s))
+        hit = info.label.contains(newFI.t, newFI.f, newRI.s);
+        if (!hit)
           fp += 1;
+        if (info.config.oneKperS) {
+          // Account for FNs: even if we're right, we can get at most one right
+          Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
+          fn += purview.size();
+          if (hit) {
+            assert purview.size() > 0;
+            fn--;
+          }
+        }
         break;
       case NEW_K:
-        assert newRI.q != RoleType.BASE : "not implemented yet";
-        if (!info.label.contains(newFI.t, newFI.f, newRI.k))
+        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q);
+        if (!hit)
           fp += 1;
+        if (info.config.oneSperK) {
+          // Account for FNs: even if we're right, we can get at most one right
+          // Does this matter?
+          // If we set set this constraint, then we can get at best one of the N items...
+          // The place where it makes a difference is if we could mix transition
+          // systems...
+          SetOfSets<FrameArgInstance> purview;
+          if (newRI.q == RoleType.BASE) {
+            // Then you're also prohibiting any non-base args
+            purview = new SetOfSets<>(
+                info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
+                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
+                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
+          } else {
+            purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
+          }
+          fn += purview.size();
+          if (hit) {
+            assert purview.size() > 0;
+            fn--;
+          }
+        }
+        break;
+
+      case COMPLETE_K:
+        assert newRI.k >= 0;
+        assert newRI.s != null && newRI.s != Span.nullSpan;
+        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+        if (!hit)
+          fp += 1;
+        // Any FN penalty due to oneKperS has been paid for in the NEW_S action
+        break;
+      case COMPLETE_S:
+        assert newRI.k >= 0;
+        assert newRI.s != null && newRI.s != Span.nullSpan;
+        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+        if (!hit)
+          fp += 1;
+        // Any FN penalty due to oneSperK has been paid for in the NEW_K action
         break;
 
       case STOP_KS:     // given (t,f): z_{t,f,k,s}=0
         assert info.config.argMode == ArgActionTransitionSystem.ONE_STEP;
       case STOP_S:      // forall k, given (t,f): z_{t,f,k,s}=0
       case STOP_K:      // forall s, given (t,f): z_{t,f,k,s}=0
-
-        assert false : "handle cont/ref roles!";
 
         // Find all (k,s) present in the label but not yet the history
         assert newFI.t != null && newFI.f != null;
@@ -880,27 +953,39 @@ public class State {
          * b) match this STOP action
          * I need to build an index for (b) and then filter (a) by brute force.
          */
-        Set<FrameArgInstance> goldItems;
-        if (actionType == AT.STOP_KS)
-          goldItems = info.label.get(newFI.t, newFI.f, newRI.k, newRI.s);
-        else if (actionType == AT.STOP_K)
-          goldItems = info.label.get(newFI.t, newFI.f, newRI.k);
-        else if (actionType == AT.STOP_S)
-          goldItems = info.label.get(newFI.t, newFI.f, newRI.s);
-        else
+        SetOfSets<FrameArgInstance> goldItems2;
+        if (actionType == AT.STOP_KS) {
+          goldItems2 = new SetOfSets<>(
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE, newRI.s),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF, newRI.s),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT, newRI.s));
+        } else if (actionType == AT.STOP_K) {
+          goldItems2 = new SetOfSets<>(
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT));
+        } else if (actionType == AT.STOP_S) {
+          goldItems2 = new SetOfSets<>(
+              info.label.get(newFI.t, newFI.f, newRI.s));
+        } else {
           throw new RuntimeException();
-        possibleFN = goldItems.size();
+        }
+
+        Set<IntTrip> foo = new HashSet<>();
+        possibleFN = goldItems2.size();
         for (RILL cur = newFI.args; cur != null; cur = cur.next) {
           int k = cur.item.k;
           RoleType q = cur.item.q;
           Span s = cur.item.s;
-          assert q == RoleType.BASE : "not implemented yet";
+          assert foo.add(new IntTrip(k, q.ordinal(), Span.indexMaybeNullSpan(s))) : "these should be unique!";
           if (k >= 0 && s != null) {
-            if (goldItems.contains(new FrameArgInstance(newFI.f, newFI.t, k, s)))
+            assert q != null;
+            int kk = LabelIndex.k(newFI.f, k, q);
+            if (goldItems2.contains(new FrameArgInstance(newFI.f, newFI.t, kk, s)))
               possibleFN--;
           }
         }
-        fn += 1 * possibleFN;
+        fn += possibleFN;
         break;
 
       default:
@@ -960,6 +1045,34 @@ public class State {
   }
 
   /**
+   * A set of sets, each of which is assumed to be disjoint, which is viewed
+   * as a single set. The backing sets may be mutated and this should still
+   * work fine.
+   */
+  public static class SetOfSets<T> {
+    private Set<T>[] sets;
+
+    @SafeVarargs
+    public SetOfSets(Set<T>... sets) {
+      this.sets = sets;
+    }
+
+    public boolean contains(T t) {
+      for (Set<T> st : sets)
+        if (st.contains(t))
+          return true;
+      return false;
+    }
+
+    /** O(n) where n is the number of sets */
+    public int size() {
+      int s = 0;
+      for (Set<T> st : sets) s += st.size();
+      return s;
+    }
+  }
+
+  /**
    * AT == Action type
    * This is how actions are scored: we have State (dynamic) features
    * which are producted with the action type to get a featurized score.
@@ -970,7 +1083,8 @@ public class State {
     COMPLETE_F,
     STOP_K, STOP_S, STOP_KS,
     NEW_K, NEW_S, NEW_KS,
-    COMPLETE_K, COMPLETE_S
+    COMPLETE_K, // step 2 of (?,s)
+    COMPLETE_S, // step 2 of (k,?)
   }
 
   private void nextComplete(Beam beam, Beam overall, List<ProductIndex> sf) {
@@ -1027,13 +1141,13 @@ public class State {
 
     // NEW
     RI newRI = new RI(k, q, null, null);
-    if (DEBUG) Log.debug("adding new REF of (k,?) k=" + k + "\t" + fi + "\t" + newRI);
+    if (DEBUG) Log.debug("adding new (k,?) k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
     Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
     push(beam, overall, st);
 
     // STOP
-    if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + "\t" + fi + "\t" + newRI);
+    if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
     int p = info.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
     RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
     Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
@@ -1182,16 +1296,19 @@ public class State {
            * This will be k:int which is the first k s.t. !fi.argHasAppeared(k)
            * TODO Choosing a permutation to loop over k?
            */
-          if (fi.argHasAppeared(k, RoleType.BASE)) {
+          boolean ha = fi.argHasAppeared(k, RoleType.BASE);
+          if (ha) {
 
             if (info.config.useContRoles && !fi.argHasAppeared(k, RoleType.CONT)) {
-              if (DEBUG) Log.debug("adding CONT roles for k=" + k);
               step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
+              if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
+                break;
             }
 
             if (info.config.useRefRoles && !fi.argHasAppeared(k, RoleType.REF)) {
-              if (DEBUG) Log.debug("adding REF roles for k=" + k);
               step1Pushed += nextK(beam, overall, cur, k, RoleType.REF, sf);
+              if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
+                break;
             }
 
             if (info.config.oneSperK) {
@@ -1200,8 +1317,7 @@ public class State {
             }
           }
 
-          if (DEBUG) Log.debug("adding BASE roles for k=" + k);
-          step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
+          step1Pushed += nextK(beam, overall, cur, k, RoleType.BASE, sf);
 
           if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
             break;
@@ -1435,6 +1551,30 @@ public class State {
     return y;
   }
 
+  public static void addDummyContRefRole(FNParse y, Random r, RoleType rt) {
+    // Make a random span that this cont/ref role will be located at
+    int n = y.getSentence().size();
+    Span s = Span.randomSpan(n, r);
+
+    // Find a realized role to cont/ref
+    boolean added = false;
+    FrameInstance fi = y.getFrameInstance(0);
+    int K = fi.getFrame().numRoles();
+    for (int k = 0; k < K; k++) {
+      if (fi.getArgument(k) != Span.nullSpan) {
+        if (rt == RoleType.CONT)
+          fi.addContinuationRole(k, s);
+        else if (rt == RoleType.REF)
+          fi.addReferenceRole(k, s);
+        else
+          throw new IllegalArgumentException("not cont/ref: " + rt);
+        added = true;
+        break;
+      }
+    }
+    assert added;
+  }
+
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
 
@@ -1453,7 +1593,15 @@ public class State {
     inf.config.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
 //    inf.config.argMode = ArgActionTransitionSystem.ROLE_FIRST;
 //    inf.config.argMode = ArgActionTransitionSystem.ONE_STEP;
-    inf.config.frameByFrame = false;
+    inf.config.frameByFrame = true;
+
+    inf.config.useContRoles = true;
+    inf.config.useRefRoles = false;
+
+    if (inf.config.useContRoles)
+      addDummyContRefRole(y, inf.rand, RoleType.CONT);
+    if (inf.config.useRefRoles)
+      addDummyContRefRole(y, inf.rand, RoleType.REF);
 
     inf.primes = new PrimesAdapter(new Primes(config), frp);
     inf.label = new LabelIndex(y);
@@ -1471,7 +1619,7 @@ public class State {
     State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
         .setFramesToGoldLabels();
 
-    int beamSize = 16;
+    int beamSize = 1;
     Beam.DoubleBeam cur = new Beam.DoubleBeam(beamSize);
     Beam.DoubleBeam next = new Beam.DoubleBeam(beamSize);
     Beam.DoubleBeam all = new Beam.DoubleBeam(256);

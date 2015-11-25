@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -67,9 +68,13 @@ public class FrameInstance implements Serializable {
   }
 
   public List<Span> getContinuationRoleSpans(int k) {
+    if (argumentContinuations == null)
+      return Collections.emptyList();
     return argumentContinuations[k];
   }
   public List<Span> getReferenceRoleSpans(int k) {
+    if (argumentReferences == null)
+      return Collections.emptyList();
     return argumentReferences[k];
   }
 
@@ -134,6 +139,27 @@ public class FrameInstance implements Serializable {
         throw new DependentRoleException("too many references: " + r, fi);
     }
     return fi;
+  }
+
+  /** USE SPARINGLY (for debugging) */
+  public void addContinuationRole(int k, Span s) {
+    assert arguments[k] != Span.nullSpan : "should be continuing an existing role/k";
+    if (argumentContinuations == null) {
+      argumentContinuations = new List[arguments.length];
+      for (int i = 0; i < argumentContinuations.length; i++)
+        argumentContinuations[i] = new ArrayList<>();
+    }
+    argumentContinuations[k].add(s);
+  }
+  /** USE SPARINGLY (for debugging) */
+  public void addReferenceRole(int k, Span s) {
+    assert arguments[k] != Span.nullSpan : "should be referring to an existing role/k";
+    if (argumentReferences == null) {
+      argumentReferences = new List[arguments.length];
+      for (int i = 0; i < argumentReferences.length; i++)
+        argumentReferences[i] = new ArrayList<>();
+    }
+    argumentReferences[k].add(s);
   }
 
   /**

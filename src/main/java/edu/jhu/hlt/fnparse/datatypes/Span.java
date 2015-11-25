@@ -66,6 +66,12 @@ Z(4) = 4*3/2 = 6
     return Z + s.start;
   }
 
+  public static int indexMaybeNullSpan(Span s) {
+    if (s == Span.nullSpan)
+      return 0;
+    return 1 + index(s);
+  }
+
   public int start;  // inclusive
   public int end;    // non-inclusive
 
@@ -213,6 +219,15 @@ Z(4) = 4*3/2 = 6
     return start - o.start;
   }
 
+  public static Span randomSpan(int n, Random r) {
+    int start = r.nextInt(n);
+    int maxWidth = n - start;
+    int end = start + r.nextInt(maxWidth) + 1;
+    assert end <= n;
+    return Span.getSpan(start, end);
+  }
+
+  // For benchmark
   private static int eqLoop(Span needle1, Span needle2, Span[] haystack) {
     int c = 0;
     for (int i = 0; i < haystack.length; i++)
@@ -220,7 +235,7 @@ Z(4) = 4*3/2 = 6
         c++;
     return c;
   }
-
+  // For benchmark
   private static int equalsLoop(Span needle1, Span needle2, Span[] haystack) {
     int c = 0;
     for (int i = 0; i < haystack.length; i++)
@@ -228,7 +243,7 @@ Z(4) = 4*3/2 = 6
         c++;
     return c;
   }
-
+  // For benchmark
   public static void main(String[] args) {
 
     Span needle1 = Span.getSpan(3, 5);
