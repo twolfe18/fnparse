@@ -114,6 +114,8 @@ public class Describe {
         first = false;
       }
     }
+    if (first)
+      sb.append("NO_ARGS");
 //    sb.append(']');
     return sb.toString();
   }

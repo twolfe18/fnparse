@@ -37,6 +37,10 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   // Every key should be a FrameInstance.frameMention
   private Map<FrameInstance, List<Span>> possibleArgs;
 
+  public void addSpan(FrameInstance key, Span value) {
+    possibleArgs.get(key).add(value);
+  }
+
   public FNParseSpanPruning(
       Sentence s,
       List<FrameInstance> frameMentions,

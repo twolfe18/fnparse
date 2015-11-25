@@ -43,6 +43,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.map.IntIntHashMap;
+import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.util.Alphabet;
@@ -71,7 +72,6 @@ public class State {
     public final BigInteger sig;
 
     public RI(int k, int q, Span s, BigInteger sig) {
-      assert s != Span.nullSpan;
       this.k = k;
       this.q = q;
       this.s = s;
@@ -85,8 +85,8 @@ public class State {
     }
   }
 
-  public static Adjoints sum(Adjoints... adjoints) {
-    return new Adjoints.Sum(adjoints);
+  public static Adjoints sum(Adjoints partialScore, Adjoints prefixScore) {
+    return new Adjoints.Sum(partialScore, new Adjoints.OnlyShowScore("Prefix", prefixScore));
   }
 
   public final class RILL {
@@ -108,6 +108,13 @@ public class State {
 
     // Product of a unique prime at every (t,f,k,s)
     public final BigInteger sig;
+
+    @Override
+    public String toString() {
+      String ss = item.s == null ? "?" : item.s.shortString();
+      String ks = item.k < 0 ? "?" : String.valueOf(item.k);
+      return ks + "@" + ss + " -> " + next;
+    }
 
     /**
      * @param f is needed in order to lookup features.
@@ -439,6 +446,26 @@ public class State {
   // Represents z
   public final FILL frames;
 
+  // A pointer into frames, which by default points to the head, of the first
+  // FI which is capable of generating some actions. Some FI will be complete,
+  // as in some span has been chosen for every role (if ROLE_BY_ROL or ROLE_FIRST),
+  // etc, and can generate no more actions, at the cost of iterating over all
+  // possible roles (e.g.).
+  // TODO Replace this with a "frozen" list which contains only FI wihch are done
+  // (yield no actions). This is desirable over the current solution (firstNotDone)
+  // because it means that surgery operations (copy a prefix of a LL) is cheaper.
+  // The current solution was chosen because it is easier to implement.
+  /*
+   * How to implement frozen/done list:
+   * Option 1: The action that leads to the done FI needs to move that FI to frozen.
+   *           Requires "one step of look ahead"
+   *           Normally you know a FI is done when no actions are generated from it.
+   * Option 2: Clean up after an done FI.
+   *           Requires a mutation to frames:FILL and frozen:FILL when you realize a FI is done.
+   * no clear winner, do later.
+   */
+  private FILL firstNotDone;
+
   // Switch back to the the traditional meaning: noMoreFrames refers no (?,f) not (t,f)
   // We just won't allow any operations that set noMoreFrames=true && noMoreTargets=false;
   public final boolean noMoreFrames;
@@ -529,10 +556,37 @@ public class State {
     }
 
     /** Assumes that the given sentence has parses already */
-    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode) {
+    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing) {
       DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
+      if (includeGoldSpansIfMissing) {
+        if (label == null)
+          throw new RuntimeException("you need a label to perform this operation");
+        int adds = 0;
+        int realized = 0;
+        int present = 0;
+        List<FrameInstance> fis = label.getParse().getFrameInstances();
+        for (FrameInstance fi : fis) {
+          FrameInstance key = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
+          present += prunedSpans.getPossibleArgs(key).size();
+          int K = fi.getFrame().numRoles();
+          for (int k = 0; k < K; k++) {
+            Span s = fi.getArgument(k);
+            if (s != Span.nullSpan) {
+              realized++;
+              if (!prunedSpans.getPossibleArgs(key).contains(s)) {
+                adds++;
+                prunedSpans.addSpan(key, s);
+              }
+            }
+          }
+        }
+        Log.debug("includeGoldSpansIfMissing: adds=" + adds
+            + " realized=" + realized + " presentBefore=" + present
+            + " nFI=" + label.getParse().numFrameInstances()
+            + " nTokens=" + sentence.size());
+      }
     }
   }
 
@@ -656,8 +710,7 @@ public class State {
    * Search (for tail) and replace (with newFrame) in this.frames.
    * O(1) if always tail == this.frames and O(T) otherwise.
    */
-  public State surgery(FILL tail, FI newFrame, Adjoints partialScore) {
-    assert this.incomplete == null : "didn't design this to handle incomplete RILL";
+  public State surgery(FILL tail, FI newFrame, Incomplete newIncomplete, Adjoints newStateScore) {
     assert !noMoreFrames;
 
     // Pick off the states between this.frames and tail
@@ -674,8 +727,7 @@ public class State {
     for (int i = copy.size() - 1; i >= 0; i--)
       newFILL = new FILL(copy.get(i), newFILL);
 
-    Adjoints full = sum(this.score, partialScore);
-    return new State(newFILL, noMoreFrames, noMoreTargets, incomplete, full, info);
+    return new State(newFILL, noMoreFrames, noMoreTargets, newIncomplete, newStateScore, info);
   }
 
   // Sugar
@@ -824,8 +876,15 @@ public class State {
         assert newRI.k >= 0;
         assert newRI.q < 0 : "not implemented yet";
         assert newRI.s != null && newRI.s != Span.nullSpan;
-        if (!info.label.contains(newFI.t, newFI.f, newRI.k, newRI.s))
+        if (!info.label.contains(newFI.t, newFI.f, newRI.k, newRI.s)) {
+          
+          if (newRI.k == 1 && newRI.s == Span.getSpan(4, 6) && newFI.t == Span.getSpan(3, 4)) {
+//          if (newRI.k == 1 && newRI.s == Span.getSpan(4, 6)) {
+            Log.warn("wat");
+          }
+          
           fp += 1;
+        }
         break;
       case NEW_S:
         assert newRI.s != null && newRI.s != Span.nullSpan;
@@ -956,7 +1015,8 @@ public class State {
       //      }
       throw new RuntimeException("implement me");
     } else {
-      FI fi = frames.item;
+      FILL fill = incomplete.fill;
+      FI fi = fill.item;
       if (incomplete.missingArgSpan()) {
         // Loop over s
 //        int t = -1; // TODO have t:Span need t:int
@@ -964,30 +1024,30 @@ public class State {
         Set<Span> uniq = new HashSet<>();
         for (Span s : info.getPossibleArgs(fi)) {
           assert uniq.add(s);
-          int p = info.primes.get(fi.t, fi.f, incomplete.ri.k, s);
-          BigInteger sig = BigInteger.valueOf(p);
+
+          BigInteger sig = BigInteger.valueOf(info.primes.get(fi.t, fi.f, incomplete.ri.k, s));
           RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
           Log.debug("incomplete RI - span " + newArg);
+
           Adjoints feats = sum(f(AT.COMPLETE_S, fi, newArg, sf), score);
-          RILL tail = incomplete.fi.args;
-          RILL newArgs = new RILL(fi, newArg, tail);
-          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs).withGold(fi.goldFI), frames.next);
-          push(beam, overall, new State(newFrames, noMoreFrames, noMoreTargets, null, feats, info));
+          FI newFI = fi.prependArg(newArg);
+          push(beam, overall, this.surgery(fill, newFI, null, feats));
         }
       } else if (incomplete.missingArgRole()) {
         // Loop over k
         int K = fi.f.numRoles();
         for (int k = 0; k < K; k++) {
-          int q = -1; // TODO
-          int p = info.primes.get(fi.t, fi.f, k, incomplete.ri.s);
-          BigInteger sig = BigInteger.valueOf(p);
-          RI newArg = new RI(k, q, incomplete.ri.s, sig);
-          Log.debug("incomplete RI - role " + newArg);
-          Adjoints feats = sum(f(AT.COMPLETE_K, fi, newArg, sf), score);
-          RILL tail = incomplete.fi.args;
-          RILL newArgs = new RILL(fi, newArg, tail);
-          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs).withGold(fi.goldFI), frames.next);
-          push(beam, overall, new State(newFrames, noMoreFrames, noMoreTargets, null, feats, info));
+//          int q = -1; // TODO
+//          int p = info.primes.get(fi.t, fi.f, k, incomplete.ri.s);
+//          BigInteger sig = BigInteger.valueOf(p);
+//          RI newArg = new RI(k, q, incomplete.ri.s, sig);
+//          Log.debug("incomplete RI - role " + newArg);
+//          Adjoints feats = sum(f(AT.COMPLETE_K, fi, newArg, sf), score);
+//          RILL tail = incomplete.fi.args;
+//          RILL newArgs = new RILL(fi, newArg, tail);
+//          FILL newFrames = new FILL(new FI(fi.f, fi.t, newArgs).withGold(fi.goldFI), frames.next);
+//          push(beam, overall, new State(newFrames, noMoreFrames, noMoreTargets, null, feats, info));
+          assert false : "copy surgery code from above";
         }
       } else {
         throw new RuntimeException();
@@ -1052,7 +1112,7 @@ public class State {
             Log.debug("adding new (t,) at " + t.shortString());
             FI fi = new FI(null, t, null).withGold(null);
             Adjoints feats = sum(this.score, f(AT.NEW_T, fi, sf));
-            Incomplete inc = new Incomplete(fi);
+            Incomplete inc = new Incomplete(frames);
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
           break;
@@ -1073,47 +1133,80 @@ public class State {
       }
     }
 
+    if (firstNotDone == null)
+      firstNotDone = frames;
+
     // NEW (k,s) actions
-    for (FILL cur = frames; cur != null; cur = cur.next) {
+    int fiProcessed = 0;
+    for (FILL cur = firstNotDone;
+        cur != null && !(info.config.frameByFrame && fiProcessed > 0);
+        cur = cur.next) {
+
       FI fi = cur.item;
-      Log.debug("generating args for " + fi);
+      Log.debug("generating args for " + fi + " (" + cur.numFrameInstances + ")");
+      System.out.println();
       assert fi.t != null;
 
-      if (fi.noMoreArgRoles && fi.noMoreArgSpans) {
+      // Auto-bump the first not-done index
+      if (fiProcessed == 0) {
+        if (cur != firstNotDone)
+          Log.debug("bumping firstNotDone");
+        firstNotDone = cur;
+      }
 
-        Log.debug("no more args are allowed because: fi.noMoreArgRoles && fi.noMoreArgSpans");
-
-        // When going frameByFrame, we know that only one RILL is being added to at a time,
-        // and thus has !fi.args.noMoreArgs. Since FILLs/RILLs are prepend-only, the one
-        // FILL/RILL being prepended to must be at the head of the list.
-        if (info.config.frameByFrame)
-          break;
-
+      ArgActionTransitionSystem am = info.config.argMode;
+      if (fi.noMoreArgRoles
+          && (am == ArgActionTransitionSystem.ROLE_BY_ROLE
+          || am == ArgActionTransitionSystem.ROLE_FIRST)) {
+        Log.debug("no more args are allowed because: fi.noMoreArgRoles");
         continue;
       }
 
-      // How do we check that these actions are licensed?
-      // (k,?): this role must not have been used already (implicit oneRolePerFrame)
-      // (?,s): this span must not have been used already (implicit oneRolePerSpan)
+      if (fi.noMoreArgSpans
+          && (am == ArgActionTransitionSystem.SPAN_BY_SPAN
+          || am == ArgActionTransitionSystem.SPAN_FIRST)) {
+        Log.debug("no more args are allowed because: fi.noMoreArgSpans");
+        continue;
+      }
+
+      if (fi.noMoreArgRoles && fi.noMoreArgSpans) {
+        Log.debug("no more args are allowed because: fi.noMoreArgRoles && fi.noMoreArgSpans");
+        continue;
+      }
+
+      // Step 1 of actions that generate (k,s)
+      int step1Pushed = 0;
       int K;
-      boolean noMoreNewK = true;
-      boolean noMoreNewS = true;
       switch (info.config.argMode) {
       case ROLE_FIRST:
       case ROLE_BY_ROLE:
         // Loop over k
         K = fi.f.numRoles();
         for (int k = 0; k < K; k++) {
-          if (fi.argHasAppeared(k))
+          if (info.config.oneKperS && fi.argHasAppeared(k)) {
+            Log.debug("skipping k=" + k);
             continue;
-          Log.debug("adding new (k,?) k=" + k + " fi=" + fi);
-          noMoreNewK = false;
+          }
+
           int q = -1;   // TODO
-          BigInteger sig = null;    // needs to be set on step 2, don't know s yet.
-          RI newRI = new RI(k, q, null, sig);
-          Adjoints feats = sum(f(AT.NEW_K, fi, newRI, sf), score);
-          State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(fi, newRI), feats, info);
+          RI newRI = new RI(k, q, null, null);
+
+          // NEW
+          Log.debug("adding new (k,?) k=" + k + "\t" + fi + "\t" + newRI);
+          Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
+          State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
           push(beam, overall, st);
+
+          // STOP
+          Log.debug("adding noMoreArgRoles for k=" + k + "\t" + fi + "\t" + newRI);
+          int p = info.primes.get(fi.t, fi.f, k, Span.nullSpan);
+          RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
+          Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
+          Incomplete incS = null;   // Stop doesn't need a completion
+          push(beam, overall, this.surgery(cur, fi.prependArg(riStop), incS, featsS));
+
+          step1Pushed += 2;
+
           if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
             break;
         }
@@ -1122,15 +1215,32 @@ public class State {
       case SPAN_BY_SPAN:
         // Loop over s
         for (Span s : info.getPossibleArgs(fi)) {
-          if (fi.spanHasAppeared(s))
+          if (info.config.oneKperS && fi.spanHasAppeared(s)) {
+            Log.debug("skipping s=" + s.shortString());
             continue;
-          Log.debug("adding new (?,s) s=" + s.shortString() + " fi=" + fi);
-          noMoreNewS = false;
-          BigInteger sig = null;    // needs to be set on step 2, don't know k yet.
-          RI newRI = new RI(-1, -1, s, sig);
-          Adjoints feats = sum(f(AT.NEW_S, fi, newRI, sf), score);
-          State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(fi, newRI), feats, info);
+          }
+
+          RI newRI = new RI(-1, -1, s, null);
+
+          // NEW
+          Log.debug("adding new (?,s) s=" + s.shortString() + "\t" + fi + "\t" + newRI);
+          Adjoints featsN = sum(f(AT.NEW_S, fi, newRI, sf), score);
+          State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
           push(beam, overall, st);
+
+          // STOP
+          Log.debug("adding noMoreArgRoles for s=" + s.shortString() + "\t" + fi + "\t" + newRI);
+          Adjoints featsS = sum(f(AT.STOP_S, fi, newRI, sf), score);
+          Incomplete incS = null;   // Stop doesn't need a completion
+          push(beam, overall, this.surgery(cur, fi.noMoreArgSpans(), incS, featsS));
+
+          // This is broken: I need to accumulate this span in realizedSpans, but with some signifier
+          // to the decoder that this should not be addded to any particular k.
+          if (true)
+            throw new RuntimeException("figure out how to have something like nullRole...");
+
+          step1Pushed += 2;
+
           if (info.config.argMode == ArgActionTransitionSystem.SPAN_BY_SPAN)
             break;
         }
@@ -1141,20 +1251,32 @@ public class State {
         // Loop over (k,s)
         K = fi.f.numRoles();
         for (Span s : info.getPossibleArgs(fi)) {
-          if (fi.spanHasAppeared(s))
+          if (info.config.oneKperS && fi.spanHasAppeared(s))
             continue;
-          noMoreNewS = false;
           for (int k = 0; k < K; k++) {
-            if (fi.argHasAppeared(k))
+            if (info.config.oneSperK && fi.argHasAppeared(k))
               continue;
-            Log.debug("adding new (k,s) k=" + k + " s=" + s.shortString() + " fi=" + fi);
-            noMoreNewK = false;
+
             int q = -1;   // TODO
             int p = info.primes.get(fi.t, fi.f, k, s);
             RI newRI = new RI(k, q, s, BigInteger.valueOf(p));
-            FI newFI = fi.prependArg(newRI);
-            Adjoints feats = f(AT.NEW_KS, newFI, newRI, sf);
-            push(beam, overall, this.surgery(cur, newFI, feats));
+            Incomplete inc = null;  // ONE_STEP doesn't need a completion
+
+            // NEW
+            Log.debug("adding new (k,s) k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
+            Adjoints featsN = sum(f(AT.NEW_KS, fi, newRI, sf), score);
+            push(beam, overall, this.surgery(cur, fi.prependArg(newRI), inc, featsN));
+
+            // STOP
+            Log.debug("adding noMoreArgRoles for k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
+            Adjoints featsS = sum(f(AT.STOP_KS, fi, newRI, sf), score);
+//            push(beam, overall, this.surgery(cur, fi.noMoreArgRoles(), inc, featsS));
+
+            step1Pushed += 2;
+
+            // See related complaint above
+            if (true)
+              throw new RuntimeException("figure out how to have something like nullRole...");
           }
         }
         break;
@@ -1162,30 +1284,10 @@ public class State {
         throw new RuntimeException("implement me: " + info.config.argMode);
       }
 
-      // STOP actions
-      // TODO add these back after fixing!
-      //        if (!noMoreNewK && !noMoreNewS && !(fi.noMoreArgRoles && fi.noMoreArgSpans)) {
-      //          Log.debug("adding noMoreArgSpans+Roles for fi=" + fi);
-      //          push(beam, overall, this.surgery(cur, fi.noMoreArgs(), f(AT.STOP_KS, fi, sf)));
-      //        }
-      //        if (!noMoreNewS && !fi.noMoreArgSpans) {
-      //          Log.debug("adding noMoreArgSpans for fi=" + fi);
-      //          push(beam, overall, this.surgery(cur, fi.noMoreArgSpans(), f(AT.STOP_S, fi, sf)));
-      //        }
-      if (!noMoreNewK && !fi.noMoreArgRoles) {
-        K = fi.f.numRoles();
-        for (int k = 0; k < K; k++) {
-          int q = -1;   // TODO
-          RI ri = new RI(k, q, null, null);
-          Log.debug("adding noMoreArgRoles for " + fi + " " + ri);
-          push(beam, overall, this.surgery(cur, fi.noMoreArgRoles(), f(AT.STOP_K, fi, ri, sf)));
-          if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
-            break;
-        }
-      }
+      Log.debug("step1Pushed=" + step1Pushed + " fiProcessed=" + fiProcessed);
+      if (step1Pushed > 0)
+        fiProcessed++;
 
-      if (info.config.frameByFrame)
-        break;
     } // END FRAME LOOP
 
   }
@@ -1193,22 +1295,21 @@ public class State {
   /** Stores a pointer to a node in the tree which is incomplete */
   public class Incomplete {
     // Don't need FILL b/c there is one per State
+//    public final FI fi;
+    // Do need FILL over FI since I need to be able to do surgery using this
+    public final FILL fill;
     // Don't need RILL b/c there is one per FI
-    public final FI fi;
     public final RI ri;
 
-    public Incomplete(FI fi) {
-      this.fi = fi;
+    public Incomplete(FILL fi) {
+      this.fill = fi;
       this.ri = null;
     }
 
-    public Incomplete(FI fi, RI ri) {
-      this.fi = fi;
+    public Incomplete(FILL fi, RI ri) {
+      this.fill = fi;
       this.ri = ri;
     }
-
-    public FI getFI() { return fi; }
-    public RI getRI() { return ri; }
 
     public boolean isFrame() {
       return ri == null;
@@ -1228,10 +1329,11 @@ public class State {
 
     @Override
     public String toString() {
-      return "(Incomplete fi=" + fi + " ri=" + ri + ")";
+      return "(Incomplete fi=" + fill.item + " ri=" + ri + ")";
     }
 
     public BigInteger getSig() {
+      FI fi = fill.item;
       int p;
       if (isFrame())
         p = info.primes.get(fi.t);
@@ -1422,13 +1524,13 @@ public class State {
     private Primes primes;
     private int nPrimes;
     private FrameRolePacking frp;
-    private int maxIdx = 1;
 
     // Optimization for assiging small primes:
     // As (t,f,k,s) come in, they are hashed, then looked up through this
     // map to get something in [0,n), which then map onto the first (smallest)
     // n primes, making signatures smaller/faster.
-    private IntIntHashMap hash2dense;
+//    private IntIntHashMap hash2dense;
+    private LongIntHashMap hash2dense;
 
     private static final int MISSING = -1;
 
@@ -1436,15 +1538,12 @@ public class State {
       this.primes = p;
       this.nPrimes = p.size();
       this.frp = frp;
-      this.hash2dense = new IntIntHashMap(30 * 10 * 5 * 30, MISSING);
+//      this.hash2dense = new IntIntHashMap(30 * 10 * 5 * 30, MISSING);
+      this.hash2dense = new LongIntHashMap(30 * 10 * 5 * 30, MISSING);
     }
 
-    private int gp(int h) {
+    private int gp(long h) {
       assert h >= 0;
-      if (h > maxIdx) {
-        Log.info("new maxIdx=" + h + " hash2dense.size=" + hash2dense.size());
-        maxIdx = h;
-      }
 //      return primes.get(h % nPrimes);
       int hd = hash2dense.get(h);
       if (hd == MISSING) {
@@ -1482,7 +1581,7 @@ public class State {
       return gp(2 * index(t) * (1 + frp.index(f, k)) * index(s));
     }
 
-    private static int index(Span span) {
+    private static long index(Span span) {
       if (span == Span.nullSpan)
         return 1;
       return 2 + Span.index(span);
@@ -1620,7 +1719,9 @@ public class State {
     inf.staticFeatureCache = new RandStaticFeatureCache();
 
     inf.setTargetPruningToGoldLabels();
-    inf.setArgPruningUsingSyntax(DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN);
+    boolean addSpansIfMissing = true;   // for train at least
+    inf.setArgPruningUsingSyntax(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
 
     State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
         .setFramesToGoldLabels();

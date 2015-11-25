@@ -11,6 +11,10 @@ public class Config {
   // TODO Work on getting oneXperY constraints back.
   //  For now I'm assuming that you've backed them into the transition system informally
 
+  // TODO If these are switched to false then we need to test better
+  public boolean oneKperS = true;
+  public boolean oneSperK = true;
+
   /** Transition constraints **************************************************/
   // How are new (t,f) nodes created?
   enum FrameActionTransitionSystem {
