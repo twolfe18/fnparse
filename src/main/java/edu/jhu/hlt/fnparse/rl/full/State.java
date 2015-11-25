@@ -60,9 +60,21 @@ public class State {
   public static double ALPH_DIM_GROW_RATE = 4;
 
   // Values for q
-  public static final int BASE = 0;
-  public static final int CONT = 1;
-  public static final int REF = 2;
+  public enum RoleType {
+    BASE,
+    CONT,
+    REF,
+  }
+
+  enum SpecialFrame {
+    NO_MORE_FRAMES,
+    NO_MORE_TARGETS,
+  }
+
+  enum SpecialRole {
+    NO_MORE_ARG_SPANS,
+    NO_MORE_ARG_ROLES,
+  }
 
   /**
    * Does not have any features:Adjoints because this class is static and does
@@ -70,11 +82,11 @@ public class State {
    */
   public static final class RI {
     public final int k;   // k=-1 means only this span has been chosen, but it hasn't been labeled yet
-    public final int q;
+    public final RoleType q;
     public final Span s;
     public final BigInteger sig;
 
-    public RI(int k, int q, Span s, BigInteger sig) {
+    public RI(int k, RoleType q, Span s, BigInteger sig) {
       this.k = k;
       this.q = q;
       this.s = s;
@@ -106,9 +118,6 @@ public class State {
     // Does not count nullSpan
     public final fj.data.Set<Span> realizedSpans;
 
-    // Sum of static features for all RI in this list
-//    public final Adjoints staticFeatures;
-
     // Product of a unique prime at every (t,f,k,s)
     public final BigInteger sig;
 
@@ -136,23 +145,19 @@ public class State {
       }
       if (l == null) {
         realizedRoles = rm;
-        realizedRolesCont = (r.q == CONT ? rm : 0);
-        realizedRolesRef = (r.q == REF ? rm : 0);
+        realizedRolesCont = (r.q == RoleType.CONT ? rm : 0);
+        realizedRolesRef = (r.q == RoleType.REF ? rm : 0);
         if (r.s == null)
           realizedSpans = fj.data.Set.<Span>empty(Ord.comparableOrd());
         else
           realizedSpans = fj.data.Set.single(Ord.comparableOrd(), r.s);
-//        staticFeatures = info.staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s);
         sig = r.sig;
       } else {
         realizedRoles = l.realizedRoles | rm;
-        realizedRolesCont = l.realizedRolesCont | (r.q == CONT ? rm : 0);
-        realizedRolesRef = l.realizedRolesRef | (r.q == REF ? rm : 0);
+        realizedRolesCont = l.realizedRolesCont | (r.q == RoleType.CONT ? rm : 0);
+        realizedRolesRef = l.realizedRolesRef | (r.q == RoleType.REF ? rm : 0);
         realizedSpans = r.s == null || r.s == Span.nullSpan
             ? l.realizedSpans : l.realizedSpans.insert(r.s);
-//        staticFeatures = sum(
-//            l.staticFeatures,
-//            info.staticFeatureCache.scoreTFKS(f.t, f.f, r.k, r.q, r.s));
         sig = l.sig.multiply(r.sig);
       }
     }
@@ -195,54 +200,6 @@ public class State {
       return this;
     }
 
-    /*
-     * sig is a product of primes.
-     * we use integer multiplication because it is commutative, like set add.
-     * it turns out that the elements in our set have some structure,
-     *   specifically they are products of indices like t*f*k*s
-     * but if our elements are represented as primes, we can't factor them
-     * we could have chosen addition in the outer monoid:
-     *   the only trouble is with addition:
-     *   if we want to have the property that sig = list of monoid operations
-     *   doesn't collide, then we need to ensure something like
-     *   x + y == x + z => y == z
-     *   with mult/primes this is easy: we can talk about prime factorizations of x+y or x+z, which are unique
-     *   with addition, the naive thing to do is use powers of two... need T*K*F*S bits... too big
-     *   with mult/primes (optimally), you need (less than) D*log(P) where D is the number of realized (t,f,k,s) and P is the Dth prime.
-     *   e.g. D=15 => P=47 => D*log(P) = 84 bits...
-     *   this bound is based on the trick that you can sort the (t,f,k,s) by some a priori score and assign small primes to things likely to be in the set (product)
-     *   this does grow faster than I thought:
-     *   awk 'BEGIN{p=1} {p *= $1; print NR, $1, log(p)/log(2)}' <(zcat primes1.byLine.txt.gz) | head -n 20
-1 2 1
-2 3 2.58496
-3 5 4.90689
-4 7 7.71425
-5 11 11.1737
-6 13 14.8741
-7 17 18.9616
-8 19 23.2095
-9 23 27.7331
-10 29 32.5911
-11 31 37.5452
-12 37 42.7547
-13 41 48.1123
-14 43 53.5385
-15 47 59.0931
-16 53 64.821
-17 59 70.7037
-18 61 76.6344
-19 67 82.7005
-20 71 88.8502
-     * This means that even if you guess perfectly on your sort order,
-     * you still can only fit 15 items in a uint64_t.
-     *
-     * The way I have it implemented (no sort over primes), the number of bits
-     * needed is going to be something like 580 bits for 25 (t,f,k,s) and
-     * 900 for 40. It should grow slightly faster than linear in nnz.
-     *
-     * zcat data/primes/primes1.byLine.txt.gz | shuf | awk 'BEGIN{p=1} {p *= $1; if (NR % 25 == 0) { print log(p)/log(2); p=1; }}' | head -n 1000 | plot
-     */
-
     public FI(Frame f, Span t, RILL args) {
       this(f, t, args, false, false);
     }
@@ -256,10 +213,19 @@ public class State {
       this.noMoreArgRoles = noMoreArgRoles;
     }
 
-    public boolean argHasAppeared(int k) {
+    public boolean argHasAppeared(int k, RoleType q) {
       if (args == null)
         return false;
-      return (args.realizedRoles & (1 << k)) != 0;
+      switch (q) {
+      case BASE:
+        return (args.realizedRoles & (1 << k)) != 0;
+      case REF:
+        return (args.realizedRolesRef & (1 << k)) != 0;
+      case CONT:
+        return (args.realizedRolesCont & (1 << k)) != 0;
+      default:
+        throw new RuntimeException("q=" + q);
+      }
     }
 
     public boolean spanHasAppeared(Span s) {
@@ -847,6 +813,8 @@ public class State {
 
         assert false: "properly implement FN counting for args";
 
+        assert false : "handle cont/ref roles!";
+
         // Gold(t,f) - History(t,f)
         // Since I only want the size of that set, I don't need to construct it,
         // just iterate through History, decrement a count if !inGold
@@ -881,7 +849,7 @@ public class State {
       case COMPLETE_K:
       case COMPLETE_S:
         assert newRI.k >= 0;
-        assert newRI.q < 0 : "not implemented yet";
+        assert newRI.q != RoleType.BASE : "not implemented yet";
         assert newRI.s != null && newRI.s != Span.nullSpan;
         if (!info.label.contains(newFI.t, newFI.f, newRI.k, newRI.s))
           fp += 1;
@@ -892,7 +860,7 @@ public class State {
           fp += 1;
         break;
       case NEW_K:
-        assert newRI.q < 0 : "not implemented yet";
+        assert newRI.q != RoleType.BASE : "not implemented yet";
         if (!info.label.contains(newFI.t, newFI.f, newRI.k))
           fp += 1;
         break;
@@ -901,6 +869,8 @@ public class State {
         assert info.config.argMode == ArgActionTransitionSystem.ONE_STEP;
       case STOP_S:      // forall k, given (t,f): z_{t,f,k,s}=0
       case STOP_K:      // forall s, given (t,f): z_{t,f,k,s}=0
+
+        assert false : "handle cont/ref roles!";
 
         // Find all (k,s) present in the label but not yet the history
         assert newFI.t != null && newFI.f != null;
@@ -922,9 +892,9 @@ public class State {
         possibleFN = goldItems.size();
         for (RILL cur = newFI.args; cur != null; cur = cur.next) {
           int k = cur.item.k;
-          int q = cur.item.q;
+          RoleType q = cur.item.q;
           Span s = cur.item.s;
-          assert q < 0 : "not implemented yet";
+          assert q == RoleType.BASE : "not implemented yet";
           if (k >= 0 && s != null) {
             if (goldItems.contains(new FrameArgInstance(newFI.f, newFI.t, k, s)))
               possibleFN--;
@@ -1021,7 +991,7 @@ public class State {
         // Loop over s
         for (Span s : info.getPossibleArgs(fi)) {
 
-          BigInteger sig = BigInteger.valueOf(info.primes.get(fi.t, fi.f, incomplete.ri.k, s));
+          BigInteger sig = BigInteger.valueOf(info.primes.get(fi.t, fi.f, incomplete.ri.k, incomplete.ri.q, s));
           RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
           if (DEBUG) Log.debug("incomplete RI - span " + newArg);
 
@@ -1049,6 +1019,28 @@ public class State {
         throw new RuntimeException();
       }
     }
+  }
+
+  /** Returns the number of items pushed onto the beam */
+  private int nextK(Beam beam, Beam overall, FILL cur, int k, RoleType q, List<ProductIndex> sf) {
+    FI fi = cur.item;
+
+    // NEW
+    RI newRI = new RI(k, q, null, null);
+    if (DEBUG) Log.debug("adding new REF of (k,?) k=" + k + "\t" + fi + "\t" + newRI);
+    Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
+    State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
+    push(beam, overall, st);
+
+    // STOP
+    if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + "\t" + fi + "\t" + newRI);
+    int p = info.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
+    RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
+    Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
+    Incomplete incS = null;   // Stop doesn't need a completion
+    push(beam, overall, this.surgery(cur, fi.prependArg(riStop), incS, featsS));
+
+    return 2;
   }
 
   /**
@@ -1190,29 +1182,26 @@ public class State {
            * This will be k:int which is the first k s.t. !fi.argHasAppeared(k)
            * TODO Choosing a permutation to loop over k?
            */
-          if (info.config.oneKperS && fi.argHasAppeared(k)) {
-            if (DEBUG) Log.debug("skipping k=" + k);
-            continue;
+          if (fi.argHasAppeared(k, RoleType.BASE)) {
+
+            if (info.config.useContRoles && !fi.argHasAppeared(k, RoleType.CONT)) {
+              if (DEBUG) Log.debug("adding CONT roles for k=" + k);
+              step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
+            }
+
+            if (info.config.useRefRoles && !fi.argHasAppeared(k, RoleType.REF)) {
+              if (DEBUG) Log.debug("adding REF roles for k=" + k);
+              step1Pushed += nextK(beam, overall, cur, k, RoleType.REF, sf);
+            }
+
+            if (info.config.oneSperK) {
+              if (DEBUG) Log.debug("skipping BASE role k=" + k);
+              continue;
+            }
           }
 
-          int q = -1;   // TODO
-          RI newRI = new RI(k, q, null, null);
-
-          // NEW
-          if (DEBUG) Log.debug("adding new (k,?) k=" + k + "\t" + fi + "\t" + newRI);
-          Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
-          State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
-          push(beam, overall, st);
-
-          // STOP
-          if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + "\t" + fi + "\t" + newRI);
-          int p = info.primes.get(fi.t, fi.f, k, Span.nullSpan);
-          RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
-          Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
-          Incomplete incS = null;   // Stop doesn't need a completion
-          push(beam, overall, this.surgery(cur, fi.prependArg(riStop), incS, featsS));
-
-          step1Pushed += 2;
+          if (DEBUG) Log.debug("adding BASE roles for k=" + k);
+          step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
 
           if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
             break;
@@ -1227,7 +1216,7 @@ public class State {
             continue;
           }
 
-          RI newRI = new RI(-1, -1, s, null);
+          RI newRI = new RI(-1, null, s, null);
 
           // NEW
           if (DEBUG) Log.debug("adding new (?,s) s=" + s.shortString() + "\t" + fi + "\t" + newRI);
@@ -1248,6 +1237,9 @@ public class State {
 
           step1Pushed += 2;
 
+          if (true)
+            throw new RuntimeException("add support for cont/ref roles");
+
           if (info.config.argMode == ArgActionTransitionSystem.SPAN_BY_SPAN)
             break;
         }
@@ -1261,11 +1253,12 @@ public class State {
           if (info.config.oneKperS && fi.spanHasAppeared(s))
             continue;
           for (int k = 0; k < K; k++) {
-            if (info.config.oneSperK && fi.argHasAppeared(k))
+            if (info.config.oneKperS && fi.argHasAppeared(k, RoleType.BASE))
               continue;
 
-            int q = -1;   // TODO
-            int p = info.primes.get(fi.t, fi.f, k, s);
+            assert false : "generate cont/ref roles!";
+            RoleType q = RoleType.BASE;
+            int p = info.primes.get(fi.t, fi.f, k, q, s);
             RI newRI = new RI(k, q, s, BigInteger.valueOf(p));
             Incomplete inc = null;  // ONE_STEP doesn't need a completion
 
@@ -1282,8 +1275,12 @@ public class State {
 //            step1Pushed++;
           }
         }
-        Adjoints featsS = sum(f(AT.STOP_KS, fi, new RI(-1, -1, null, null), sf), score);
+        Adjoints featsS = sum(f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf), score);
         push(beam, overall, this.surgery(cur, fi.noMoreArgs(), null, featsS));
+
+        if (true)
+          throw new RuntimeException("add support for cont/ref roles");
+
         break;
       default:
         throw new RuntimeException("implement me: " + info.config.argMode);
@@ -1345,7 +1342,7 @@ public class State {
       else if (missingArgRole())
         p = info.primes.get(fi.t, fi.f, ri.s);
       else if (missingArgSpan())
-        p = info.primes.get(fi.t, fi.f, ri.k);
+        p = info.primes.get(fi.t, fi.f, ri.k, ri.q);
       else
         throw new RuntimeException();
       return BigInteger.valueOf(p);
@@ -1400,17 +1397,6 @@ public class State {
       return 0;
     }
   };
-
-  enum SpecialFrame {
-    NO_MORE_FRAMES,
-    NO_MORE_TARGETS,
-  };
-
-  enum SpecialRole {
-    NO_MORE_ARG_SPANS,
-    NO_MORE_ARG_ROLES,
-  };
-
 
   public static FNParse getParse(ExperimentProperties config) {
     File cache = new File("/tmp/fnparse.example");
