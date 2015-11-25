@@ -33,6 +33,9 @@ import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
+import edu.jhu.hlt.fnparse.rl.full.weights.RandStaticFeatureCache;
+import edu.jhu.hlt.fnparse.rl.full.weights.StaticFeatureCache;
+import edu.jhu.hlt.fnparse.rl.full.weights.Weights;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -42,9 +45,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.prim.map.LongIntHashMap;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.util.Alphabet;
 import fj.Ord;
 
@@ -993,7 +994,7 @@ public class State {
    * This is how actions are scored: we have State (dynamic) features
    * which are producted with the action type to get a featurized score.
    */
-  enum AT {
+  public enum AT {
     STOP_T, STOP_TF,
     NEW_T, NEW_TF,
     COMPLETE_F,
@@ -1383,115 +1384,6 @@ public class State {
     }
   }
 
-  public static abstract class WeightsMatrix<T> {
-    private LazyL2UpdateVector[] at2w;
-    private int dimension;
-    private double l2Lambda;
-    private double learningRate;
-
-    public WeightsMatrix() {
-      this(1 << 22, 32, 1e-6, 0.05);
-    }
-
-    public WeightsMatrix(int dimension, int updateInterval, double l2Lambda, double learningRate) {
-      this.l2Lambda = l2Lambda;
-      this.learningRate = learningRate;
-      this.dimension = dimension;
-      int N = numRows();
-      this.at2w = new LazyL2UpdateVector[N];
-      for (int i = 0; i < N; i++)
-        this.at2w[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
-    }
-
-    public abstract int numRows();
-
-    public abstract int row(T t);
-
-    public Adjoints getScore(T t, List<ProductIndex> features) {
-      final LazyL2UpdateVector w = at2w[row(t)];
-      return new ProductIndexAdjoints(learningRate, l2Lambda, dimension, features, w);
-    }
-  }
-
-  public static class Weights extends WeightsMatrix<AT> {
-    @Override public int numRows() { return AT.values().length; }
-    @Override public int row(AT t) { return t.ordinal(); }
-  }
-
-  public static abstract class AbstractStaticFeatureCache
-      extends WeightsMatrix<FeatType>
-      implements StaticFeatureCache {
-
-    @Override public int numRows() { return FeatType.values().length; }
-    @Override public int row(FeatType t) { return t.ordinal(); }
-
-    public Adjoints scoreT(Span t) {
-      return getScore(FeatType.T, featT(t));
-    }
-    public Adjoints scoreTF(Span t, Frame f) {
-      return getScore(FeatType.TF, featTF(t, f));
-    }
-    public Adjoints scoreTS(Span t, Span s) {
-      return getScore(FeatType.TS, featTS(t, s));
-    }
-    public Adjoints scoreFK(Frame f, int k, int q) {
-      return getScore(FeatType.FK, featFK(f, k, q));
-    }
-    public Adjoints scoreFKS(Frame f, int k, int q, Span s) {
-      return getScore(FeatType.FKS, featFKS(f, k, q, s));
-    }
-    public Adjoints scoreTFKS(Span t, Frame f, int k, int q, Span s) {
-      return getScore(FeatType.TFKS, featTFKS(t, f, k, q, s));
-    }
-  }
-
-  // TODO make a real one :)
-  public static class RandStaticFeatureCache extends AbstractStaticFeatureCache {
-    private Random rand = new Random(9001);
-    private int D = 9001;
-    @Override
-    public List<ProductIndex> featT(Span t) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-    @Override
-    public List<ProductIndex> featTF(Span t, Frame f) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-    @Override
-    public List<ProductIndex> featTS(Span t, Span s) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-    @Override
-    public List<ProductIndex> featFK(Frame f, int k, int q) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-    @Override
-    public List<ProductIndex> featFKS(Frame f, int k, int q, Span s) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-    @Override
-    public List<ProductIndex> featTFKS(Span t, Frame f, int k, int q, Span s) {
-      return Arrays.asList(new ProductIndex(rand.nextInt(D), D));
-    }
-  }
-
-  // TODO Try array and hashmap implementations, compare runtime
-  public interface StaticFeatureCache {
-    public Adjoints scoreT(Span t);
-    public Adjoints scoreTF(Span t, Frame f);
-    public Adjoints scoreTS(Span t, Span s);
-    public Adjoints scoreFK(Frame f, int k, int q);
-    public Adjoints scoreFKS(Frame f, int k, int q, Span s);
-    public Adjoints scoreTFKS(Span t, Frame f, int k, int q, Span s);
-    // etc?
-    public List<ProductIndex> featT(Span t);
-    public List<ProductIndex> featTF(Span t, Frame f);
-    public List<ProductIndex> featTS(Span t, Span s);
-    public List<ProductIndex> featFK(Frame f, int k, int q);
-    public List<ProductIndex> featFKS(Frame f, int k, int q, Span s);
-    public List<ProductIndex> featTFKS(Span t, Frame f, int k, int q, Span s);
-  }
-
   public static enum FeatType {
     T, TF, TS, FK, FKS, TFKS;
   };
@@ -1515,155 +1407,10 @@ public class State {
   };
 
   enum SpecialRole {
-//    NO_MORE_ARGS,
     NO_MORE_ARG_SPANS,
     NO_MORE_ARG_ROLES,
   };
 
-  /**
-   * Finds an index for every sub-set of (t,f,k,s) assignments via hashing.
-   * There will be collisions either way, and I need something working now!
-   */
-  public static class PrimesAdapter {
-    private Primes primes;
-    private int nPrimes;
-    private FrameRolePacking frp;
-
-    // Optimization for assiging small primes:
-    // As (t,f,k,s) come in, they are hashed, then looked up through this
-    // map to get something in [0,n), which then map onto the first (smallest)
-    // n primes, making signatures smaller/faster.
-//    private IntIntHashMap hash2dense;
-    private LongIntHashMap hash2dense;
-
-    private static final int MISSING = -1;
-
-    public PrimesAdapter(Primes p, FrameRolePacking frp) {
-      this.primes = p;
-      this.nPrimes = p.size();
-      this.frp = frp;
-//      this.hash2dense = new IntIntHashMap(30 * 10 * 5 * 30, MISSING);
-      this.hash2dense = new LongIntHashMap(30 * 10 * 5 * 30, MISSING);
-    }
-
-    private int gp(long h) {
-      assert h >= 0;
-//      return primes.get(h % nPrimes);
-      int hd = hash2dense.get(h);
-      if (hd == MISSING) {
-        hd = hash2dense.size();
-        hash2dense.put(h, hd);
-      }
-      return primes.get(hd % nPrimes);
-    }
-
-    public int get(Span t) {
-      return gp(17 * index(t));
-    }
-
-    public int getSpecial(SpecialFrame f) {
-      return gp(13 * (1 + f.ordinal()));
-    }
-
-    public int get(Span t, Frame f) {
-      return gp(11 * index(t) * (f.getId() + 1));
-    }
-
-    public int getSpecial(Span t, Frame f, SpecialRole r) {
-      return gp(7 * index(t) * (1 + f.getId()) * (1 + r.ordinal()));
-    }
-
-    public int get(Span t, Frame f, int k) {
-      return gp(5 * index(t) * (1 + frp.index(f, k)));
-    }
-
-    public int get(Span t, Frame f, Span s) {
-      return gp(3 * index(t) * (1 + f.getId()) * index(s));
-    }
-
-    public int get(Span t, Frame f, int k, Span s) {
-      return gp(2 * index(t) * (1 + frp.index(f, k)) * index(s));
-    }
-
-    private static long index(Span span) {
-      if (span == Span.nullSpan)
-        return 1;
-      return 2 + Span.index(span);
-    }
-  }
-
-//  public static class PrimesAdapter {
-//    private Primes primes;
-//    private FrameRolePacking frp;
-//    private int specialK;
-//    private int specialF;
-//    private int nn;
-//    private int D, K;
-//
-//    public PrimesAdapter(Primes p, int sentenceLength, FrameRolePacking frp) {
-//      this.nn = 1 + sentenceLength * (sentenceLength - 1) / 2;
-//      this.specialF = SpecialFrame.values().length;
-//      this.specialK = SpecialRole.values().length;
-//      this.primes = p;
-//      this.frp = frp;
-//      this.D = p.size() - specialF;
-//      this.K = specialK + frp.size();
-//    }
-//
-//    public int getSpecialFI(SpecialFrame f) {
-//      return primes.get(f.ordinal());
-//    }
-//
-//    // I need primes for (t,?), (t,f,k,?), and (t,f,?,s)
-//    // (t,f,k,?) => use s=nullSpan?
-//    // (t,f,?,s) => use k=K, or some other special value?
-//    // (t,?,?,?) => use f=0,k=0,s=nullSpan
-//    public int get(Span t) {
-//      throw new RuntimeException("implement me");
-//    }
-//    public int get(Span t, Frame f) {
-//      throw new RuntimeException("implement me");
-//    }
-//    public int get(Span t, Frame f, int k) {
-//      return get(t, f, k, Span.nullSpan);
-//    }
-//    public int get(Span t, Frame f, Span s) {
-//      throw new RuntimeException("implement me");
-//    }
-//
-//    public int getSpecialRI(Span t, Frame f, SpecialRole r) {
-//      int k = r.ordinal();
-//      int i = ProductIndex.NIL
-//          .prod(Span.index(t), nn)
-//          .prod(Span.index(Span.nullSpan), nn)
-//          .prod(k, K)
-//          .getProdFeatureModulo(D);
-//      i += specialF;
-//      return primes.get(i);
-//    }
-//
-//    public int get(Span t, Frame f, int kk, Span s) {
-//      // Make room for:
-//      // i=0: NO_MORE_FRAMES
-//      // i=1: NO_MORE_TARGETS
-//      // NOTE: This is different than NO_MORE_ARG* in that we hash into fewer
-//      // buckets rather than add to K. This is because these values don't depend
-//      // on (t,f), so there is no reason to product them into anything.
-//      // Make room for:
-//      // k=0: NO_MORE_ARGS
-//      // k=1: NO_MORE_ARG_SPANS
-//      // k=2: NO_MORE_ARG_ROLES
-//      int k = specialK + frp.index(f, kk);
-//      int i = ProductIndex.NIL
-//          .prod(Span.index(t), nn)
-//          .prod(Span.index(s), nn)
-//          .prod(k, K)
-//          .getProdFeatureModulo(D);
-//      i += 2;
-//
-//      return primes.get(i);
-//    }
-//  }
 
   public static FNParse getParse(ExperimentProperties config) {
     File cache = new File("/tmp/fnparse.example");

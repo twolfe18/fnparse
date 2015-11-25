@@ -66,6 +66,7 @@ public class LabelIndex {
         add(new FrameArgInstance(f, tt, k, s), val);
       }
     }
+    throw new RuntimeException("add cont/ref roles!");
   }
 
   private void add(FrameArgInstance key, FrameArgInstance value) {
@@ -110,6 +111,16 @@ public class LabelIndex {
     return all2.getOrDefault(new FrameArgInstance(f, t, k, s), Collections.emptySet());
   }
 
+  /*
+   * Can I just pack cont/ref roles down into a single k:int?
+   * [0,k) are normal
+   * [K,2K) are continuation
+   * [2K,3K) are reference
+   *
+   * The only reason this solution isn't used everywhere is that the
+   * transition system needs to be aware of cont/ref roles so that loops
+   * aren't 3x longer than they need to be.
+   */
 
   public boolean contains(Span t, Frame f, int k) {
 //    return get(encode(t, f, k)).size() > 0;
