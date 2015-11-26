@@ -32,6 +32,7 @@ import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
@@ -57,7 +58,7 @@ import fj.Ord;
 
 public class State {
 
-  public static final boolean DEBUG = true;
+  public static final boolean DEBUG = false;
   public static int NUM_NEXT_EVALS = 0;
 
   // For prototyping
@@ -485,9 +486,8 @@ public class State {
     public double coefLoss;
     public double coefRand;
 
+    // Houses dynamic and static features
     public Weights weights;
-
-    public StaticFeatureCache staticFeatureCache; // knows how to compute static features, does so lazily
 
     public FrameRolePacking frPacking;
 
@@ -497,6 +497,10 @@ public class State {
     public PrimesAdapter primes;
 
     public Random rand;
+
+    public int numFrames() {
+      return frPacking.getNumFrames();
+    }
 
     /** Does not include nullSpan */
     public List<Span> getPossibleArgs(FI fi) {
@@ -713,53 +717,29 @@ public class State {
     overallBestStates.offer(s);
   }
 
-  public static List<ProductIndex> otimes(ProductIndex newFeat, List<ProductIndex> others) {
-    throw new RuntimeException("implement me");
+  private List<ProductIndex> argLocFeats(AT actionType, FI newFI, RI newRI) {
+    List<ProductIndex> feats = new ArrayList<>();
+    Span s2 = newRI.s;
+    assert s2 != null;
+    ProductIndex rT = BasicFeatureTemplates.spanPosRel2(newFI.t, s2);
+    ProductIndex f = new ProductIndex(newFI.f.getId(), info.numFrames());
+    ProductIndex fr = new ProductIndex(info.frPacking.index(newFI.f, newRI.k), info.frPacking.size());
+    for (RILL cur = newFI.args; cur != null; cur = cur.next) {
+      RI ri = cur.item;
+      Span s1 = ri.s;
+      if (s1 == Span.nullSpan)    // TODO Build skip-list
+        continue;
+      ProductIndex rA = BasicFeatureTemplates.spanPosRel2(s1, s2);
+      feats.add(rA);
+      feats.add(rA.prod(rT.getProdCardinalitySafe(), rT.getProdCardinalitySafe()));
+      feats.add(rA.prod(f.getProdCardinalitySafe(), f.getProdCardinalitySafe()));
+      feats.add(rA.prod(fr.getProdCardinalitySafe(), fr.getProdCardinalitySafe()));
+    }
+    return feats;
   }
 
   public Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
     assert (info.coefLoss != 0) || (info.coefModelScore != 0) || (info.coefRand != 0);
-
-    // TODO I do not know why I added this...
-//    /* Get the dynamic features (on FI,RI) ************************************/
-//    List<ProductIndex> dynFeats = Arrays.asList(ProductIndex.NIL);
-//    if (newFI.t != null) {
-//      // Use static features of target span
-//      List<ProductIndex> at = info.staticFeatureCache.featT(newFI.t);
-//      List<ProductIndex> buf = new ArrayList<>(dynFeats.size() * at.size());
-//      for (ProductIndex yy : dynFeats)
-//        for (ProductIndex xx : at)
-//          buf.add(yy.prod(xx.getProdFeatureSafe(), xx.getProdCardinalitySafe()));
-//      dynFeats = buf;
-//    }
-//    if (newRI != null && newRI.k >= 0) {
-//      // Use an indicator on roles
-//      assert newRI.q < 0 : "not implemented yet";
-//      assert newFI.f != null : "roles are frame-relative unless you say otherwise";
-//      int k = info.frPacking.index(newFI.f, newRI.k);
-//      int n = info.frPacking.size();
-//      assert k < n;
-//      for (int i = 0; i < dynFeats.size(); i++)
-//        dynFeats.set(i, dynFeats.get(i).prod(k, n));
-//    } else if (newFI.f != null) {
-//      // Since role indicator feature includes frame, only need this if not using roles.
-//      // Use an indicator on frames
-//      int f = newFI.f.getId();
-//      int n = info.frPacking.getNumFrames();
-//      assert f < n;
-//      for (int i = 0; i < dynFeats.size(); i++)
-//        dynFeats.set(i, dynFeats.get(i).prod(f, n));
-//    }
-//    if (newRI != null && newRI.s != null) {
-//      assert newFI.t != null : "change me if you really want this";
-//      List<ProductIndex> at = info.staticFeatureCache.featTS(newFI.t, newRI.s);
-//      List<ProductIndex> buf = new ArrayList<>(dynFeats.size() * at.size());
-//      for (ProductIndex yy : dynFeats)
-//        for (ProductIndex xx : at)
-//          buf.add(yy.prod(xx.getProdFeatureSafe(), xx.getProdCardinalitySafe()));
-//      dynFeats = buf;
-//    }
-
 
     Adjoints score = null;
 
@@ -981,7 +961,9 @@ public class State {
           int k = cur.item.k;
           RoleType q = cur.item.q;
           Span s = cur.item.s;
-          assert foo.add(new IntTrip(k, q.ordinal(), Span.indexMaybeNullSpan(s))) : "these should be unique!";
+          assert foo.add(new IntTrip(k, q.ordinal(), Span.indexMaybeNullSpan(s)))
+            : "these should be unique! k=" + k + " q=" + q + " s=" + s.shortString()
+            + "\n" + foo;
           if (k >= 0 && s != null) {
             assert q != null;
             int kk = LabelIndex.k(newFI.f, k, q);
@@ -1148,7 +1130,8 @@ public class State {
     if (DEBUG) Log.debug("adding new (k,?) k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
     Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
-    st.firstNotDone = this.firstNotDone;
+    // TODO Check that this is correct and meaure speedup
+//    st.firstNotDone = this.firstNotDone;
     push(beam, overall, st);
 
     // STOP
@@ -1373,13 +1356,16 @@ public class State {
         // Loop over (k,s)
         K = fi.f.numRoles();
         for (Span s : info.getPossibleArgs(fi)) {
-          if (info.config.oneKperS && fi.spanHasAppeared(s))
+          boolean hs = fi.spanHasAppeared(s);
+          if (info.config.oneKperS && hs)
             continue;
           for (int k = 0; k < K; k++) {
-            if (info.config.oneKperS && fi.argHasAppeared(k, RoleType.BASE))
+            boolean ha = fi.argHasAppeared(k, RoleType.BASE);
+            if (info.config.oneKperS && ha)
               continue;
 
             assert false : "generate cont/ref roles!";
+
             RoleType q = RoleType.BASE;
             int p = info.primes.get(fi.t, fi.f, k, q, s);
             RI newRI = new RI(k, q, s, BigInteger.valueOf(p));
@@ -1390,6 +1376,7 @@ public class State {
             Adjoints featsN = sum(f(AT.NEW_KS, fi, newRI, sf), score);
             push(beam, overall, this.surgery(cur, fi.prependArg(newRI), inc, featsN));
             step1Pushed++;
+            
 
             // STOP
 //            if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
@@ -1586,7 +1573,8 @@ public class State {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     FNParse y = getParse(config);
-    y = PropbankContRefRoleFNParseConverter.flatten(y);
+//    wait a second, this shouldnt be flat!
+//    y = PropbankContRefRoleFNParseConverter.flatten(y);
     Log.info(Describe.fnParse(y));
 
     FrameRolePacking frp = new FrameRolePacking(FrameIndex.getFrameNet());
@@ -1604,7 +1592,7 @@ public class State {
     inf.config.frameByFrame = true;
 
     inf.config.useContRoles = true;
-    inf.config.useRefRoles = false;
+    inf.config.useRefRoles = true;
 
     if (inf.config.useContRoles)
       addDummyContRefRole(y, inf.rand, RoleType.CONT);
@@ -1615,7 +1603,6 @@ public class State {
     inf.label = new LabelIndex(y);
     inf.sentence = y.getSentence();
     inf.weights = new Weights();
-    inf.staticFeatureCache = new RandStaticFeatureCache();
 
     long start = System.currentTimeMillis();
 
@@ -1649,9 +1636,9 @@ public class State {
       }
     }
 
-    State finalState = all.pop();
-    assert finalState == lastState;
-//    State finalState = lastState;
+//    State finalState = all.pop();
+//    assert finalState == lastState;
+    State finalState = lastState;
     FNParse yhat = finalState.decode();
 
     System.out.println(Describe.fnParse(yhat));

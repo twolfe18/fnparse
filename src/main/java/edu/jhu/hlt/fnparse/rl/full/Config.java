@@ -51,6 +51,16 @@ public class Config {
   // NOTE: framesBeforeArgs was removed because we're not currently predicting (t,f),
   // but this is a good thing to consider when adding that functionality.
 
+
+  /** Features ****************************************************************/
+  public boolean argLocFeature = true;
+  public boolean numArgsFeature = true;
+  public boolean roleCoocFeature = true;
+
+
+
+
+
   /*
    * SPRL settings:
    */

@@ -41,6 +41,7 @@ import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.Path;
+import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
@@ -81,6 +82,33 @@ public class BasicFeatureTemplates {
     if (i < j) return "L";
     if (j > i) return "R";
     return "E";
+  }
+
+  private static ProductIndex[] sprMemo = new ProductIndex[4 * 5];
+  static {
+    for (int i = 0; i < sprMemo.length; i++)
+      sprMemo[i] = new ProductIndex(i, sprMemo.length);
+  }
+  public static ProductIndex spanPosRel2(Span s1, Span s2) {
+    int f = 0;
+    f = f * 5 + posRel2(s1.start, s2.start).getFeature();
+    f = f * 5 + posRel2(s1.end, s2.end).getFeature();
+    f = f * 5 + posRel2(s1.start, s2.end).getFeature();
+    f = f * 5 + posRel2(s1.end, s2.start).getFeature();
+    return sprMemo[f];
+  }
+
+  private static ProductIndex PI_B = new ProductIndex(0, 5);
+  private static ProductIndex PI_A = new ProductIndex(1, 5);
+  private static ProductIndex PI_L = new ProductIndex(2, 5);
+  private static ProductIndex PI_R = new ProductIndex(3, 5);
+  private static ProductIndex PI_E = new ProductIndex(4, 5);
+  public static ProductIndex posRel2(int i, int j) {
+    if (i+1 == j) return PI_B;
+    if (j+1 == i) return PI_A;
+    if (i < j) return PI_L;
+    if (j > i) return PI_R;
+    return PI_E;
   }
 
   private static String discretizeWidth(String name, int divisor, int maxCardinality, int width) {
