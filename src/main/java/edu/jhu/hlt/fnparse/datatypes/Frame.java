@@ -24,8 +24,6 @@ public class Frame implements Serializable {
       String[] roles) {
     if(roles == null || roles.length == 0)
       throw new IllegalArgumentException();
-    if(lexicalUnits == null)
-      throw new IllegalArgumentException(name + " has no LUs");
     this.idx = id;
     this.name = name;
     this.lexicalUnits = lexicalUnits;

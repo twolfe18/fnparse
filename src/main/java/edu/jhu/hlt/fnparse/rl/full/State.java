@@ -17,6 +17,7 @@ import java.util.function.Function;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankContRefRoleFNParseConverter;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
@@ -28,6 +29,8 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
@@ -41,6 +44,7 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -1144,6 +1148,7 @@ public class State {
     if (DEBUG) Log.debug("adding new (k,?) k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
     Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
+    st.firstNotDone = this.firstNotDone;
     push(beam, overall, st);
 
     // STOP
@@ -1152,7 +1157,9 @@ public class State {
     RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
     Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
     Incomplete incS = null;   // Stop doesn't need a completion
-    push(beam, overall, this.surgery(cur, fi.prependArg(riStop), incS, featsS));
+    State ss = this.surgery(cur, fi.prependArg(riStop), incS, featsS);
+    // TODO How to update firstNotDone with surgery?
+    push(beam, overall, ss);
 
     return 2;
   }
@@ -1579,6 +1586,7 @@ public class State {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     FNParse y = getParse(config);
+    y = PropbankContRefRoleFNParseConverter.flatten(y);
     Log.info(Describe.fnParse(y));
 
     FrameRolePacking frp = new FrameRolePacking(FrameIndex.getFrameNet());
@@ -1623,6 +1631,7 @@ public class State {
     Beam.DoubleBeam cur = new Beam.DoubleBeam(beamSize);
     Beam.DoubleBeam next = new Beam.DoubleBeam(beamSize);
     Beam.DoubleBeam all = new Beam.DoubleBeam(256);
+    State lastState = null;
     push(next, all, s0);
     for (int i = 0; true; i++) {
       if (DEBUG) Log.debug("starting iter=" + i);
@@ -1630,6 +1639,7 @@ public class State {
       assert next.size() == 0;
       while (cur.size() > 0) {
         State s = cur.pop();
+        lastState = s;
         s.next(next, all);
       }
       if (DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
@@ -1638,6 +1648,21 @@ public class State {
         break;
       }
     }
+
+    State finalState = all.pop();
+    assert finalState == lastState;
+//    State finalState = lastState;
+    FNParse yhat = finalState.decode();
+
+    System.out.println(Describe.fnParse(yhat));
+    System.out.println();
+    SentenceEval se = new SentenceEval(y, yhat);
+    BasicEvaluation.showResults("[eval]", BasicEvaluation.evaluate(Arrays.asList(se)));
+    System.out.println();
+
+    System.out.println(FNDiff.diffArgs(y, yhat, true));
+    System.out.println();
+
     System.out.println("took " + (System.currentTimeMillis() - start) + " ms");
     System.out.println("all.size: " + all.size());
     System.out.println("collapseRate: " + all.getCollapseRate());
@@ -1645,5 +1670,35 @@ public class State {
     System.out.println("numNextEvals: " + NUM_NEXT_EVALS);
   }
 
+  /**
+   * Returns a {@link FNParse} possibly with continuation/reference roles.
+   * @see PropbankContRefRoleFNParseConverter#flatten(FNParse)
+   * in order to flatten down into a representation that evaluation can handle.
+   */
+  public FNParse decode() {
+    Sentence s = info.sentence;
+    List<FrameInstance> fis = new ArrayList<>();
+    for (FILL cur = frames; cur != null; cur = cur.next) {
+      FI fi = cur.item;
+      List<Pair<String, Span>> arguments = new ArrayList<>();
+      for (RILL curr = fi.args; curr != null; curr = curr.next) {
+        RI ri = curr.item;
+        if (ri.s == Span.nullSpan)
+          continue;
+        String role = fi.f.getRole(ri.k);
+        if (ri.q == RoleType.CONT)
+          role = "C-" + role;
+        else if (ri.q == RoleType.REF)
+          role = "R-" + role;
+        arguments.add(new Pair<>(role, ri.s));
+      }
+      try {
+        fis.add(FrameInstance.buildPropbankFrameInstance(fi.f, fi.t, arguments, s));
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
+    return new FNParse(s, fis);
+  }
 
 }

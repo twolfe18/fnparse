@@ -96,8 +96,10 @@ public class Describe {
       Span extent = fi.getArgument(k);
       if (extent == Span.nullSpan)
         continue;
-      sb.append(String.format(" %s=\"%s\"",
+      sb.append(String.format(" %s[%d]=%s \"%s\"",
           fi.getFrame().getRole(k),
+          k,
+          extent.shortString(),
           span(fi.getArgument(k), s)));
       for (Span cont : fi.getContinuationRoleSpans(k))
         sb.append(" CONT=\"" + span(cont, s) + "\"");
