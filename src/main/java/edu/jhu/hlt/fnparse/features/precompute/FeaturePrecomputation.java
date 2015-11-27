@@ -246,7 +246,7 @@ public class FeaturePrecomputation {
     Alphabet templates = new Alphabet();
 
     // This is how we prune spans
-    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, null, 1, 1, new Random(9001));
+    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
  
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();

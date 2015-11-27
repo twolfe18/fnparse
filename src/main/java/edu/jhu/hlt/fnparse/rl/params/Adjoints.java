@@ -129,7 +129,7 @@ public interface Adjoints {
   /**
    * Replaces Dense and Sparse
    */
-  public static class Vector implements Adjoints {
+  public static class Vector implements Adjoints, edu.jhu.hlt.tutils.scoring.Adjoints {
     public static final Logger LOG = Logger.getLogger(Vector.class);
     public static final boolean PARANOID = false;
     public static final FnIntDoubleToDouble VECTOR_VALUE_CHECK = new FnIntDoubleToDouble() {

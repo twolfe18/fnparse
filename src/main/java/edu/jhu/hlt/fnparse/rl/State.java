@@ -122,11 +122,9 @@ public class State {
   /** Added so that each (t,k) may have more than one span */
   public static final class SpanLL {
     public final Span span;
-    public final int q;         // e.g. RoleModifier.BASE.ordinal();
     public final SpanLL next;
-    public SpanLL(Span s, int q, SpanLL n) {
+    public SpanLL(Span s, SpanLL n) {
       this.span = s;
-      this.q = q;
       this.next = n;
     }
     @Override
@@ -381,6 +379,30 @@ public class State {
       //return at.unapply(a, this);
       return null;
     }
+  }
+
+  /**
+   * If this State is a final state (all (t,k) are committed), then this will
+   * return the parse represented by this parse.
+   */
+  public FNParse decode() {
+    Sentence s = getSentence();
+    List<FrameInstance> fis = new ArrayList<>();
+    int T = numFrameInstance();
+    for (int t = 0; t < T; t++) {
+      int K = committed[t].length;
+      Span[] args = new Span[K];  //Arrays.copyOf(committed[t], K);
+      for (int k = 0; k < K; k++) {
+        if (committed[t][k] == null) {
+          args[k] = Span.nullSpan;
+        } else {
+          args[k] = committed[t][k].span;
+          assert committed[t][k].next == null;
+        }
+      }
+      fis.add(FrameInstance.newFrameInstance(getFrame(t), getTarget(t), args, s));
+    }
+    return new FNParse(s, fis);
   }
 
   public String show() {

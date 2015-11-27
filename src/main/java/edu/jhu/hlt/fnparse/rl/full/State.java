@@ -14,6 +14,8 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 
+import org.omg.CORBA.ARG_IN;
+
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -31,6 +33,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
@@ -38,9 +41,7 @@ import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
-import edu.jhu.hlt.fnparse.rl.full.weights.RandStaticFeatureCache;
-import edu.jhu.hlt.fnparse.rl.full.weights.StaticFeatureCache;
-import edu.jhu.hlt.fnparse.rl.full.weights.Weights;
+import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
@@ -53,6 +54,7 @@ import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 import fj.Ord;
 
@@ -74,6 +76,10 @@ public class State {
   enum SpecialRole {
     NO_MORE_ARG_SPANS,
     NO_MORE_ARG_ROLES,
+  }
+
+  public static enum FeatType {
+    T, TF, TS, FK, FKS, TFKS;
   }
 
   /**
@@ -487,7 +493,16 @@ public class State {
     public double coefRand;
 
     // Houses dynamic and static features
-    public Weights weights;
+    /*
+     * TODO This is the wrong interface!
+     * This takes AT -> stateFeatures -> Adjoints
+     * What I need is something like:
+     *   AT -> FI -> RI -> Adjoints
+     * The stateFeatures discussed above are not-action specific, and thus may not be of high value for the truely discriminative stuff
+     * I need a hook to hang things like ArgLoc/NumArgs/ArgCooc on!
+     * 
+     */
+    public WeightsPerActionType weights;
 
     public FrameRolePacking frPacking;
 
@@ -715,27 +730,6 @@ public class State {
     }
     next.offer(s);
     overallBestStates.offer(s);
-  }
-
-  private List<ProductIndex> argLocFeats(AT actionType, FI newFI, RI newRI) {
-    List<ProductIndex> feats = new ArrayList<>();
-    Span s2 = newRI.s;
-    assert s2 != null;
-    ProductIndex rT = BasicFeatureTemplates.spanPosRel2(newFI.t, s2);
-    ProductIndex f = new ProductIndex(newFI.f.getId(), info.numFrames());
-    ProductIndex fr = new ProductIndex(info.frPacking.index(newFI.f, newRI.k), info.frPacking.size());
-    for (RILL cur = newFI.args; cur != null; cur = cur.next) {
-      RI ri = cur.item;
-      Span s1 = ri.s;
-      if (s1 == Span.nullSpan)    // TODO Build skip-list
-        continue;
-      ProductIndex rA = BasicFeatureTemplates.spanPosRel2(s1, s2);
-      feats.add(rA);
-      feats.add(rA.prod(rT.getProdCardinalitySafe(), rT.getProdCardinalitySafe()));
-      feats.add(rA.prod(f.getProdCardinalitySafe(), f.getProdCardinalitySafe()));
-      feats.add(rA.prod(fr.getProdCardinalitySafe(), fr.getProdCardinalitySafe()));
-    }
-    return feats;
   }
 
   public Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
@@ -1005,7 +999,16 @@ public class State {
     return score;
   }
 
-  // For prettier logs :)
+  public Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
+    return f(actionType, newFI, null, stateFeats);
+  }
+
+  // Only used for noMoreTargets and noMoreFrames
+  public Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
+    return f(actionType, null, null, stateFeats);
+  }
+
+  /** For prettier logs */
   public static class LossA extends Adjoints.Constant {
     private static final long serialVersionUID = 6821523594344630559L;
     private double fp, fn;
@@ -1018,16 +1021,6 @@ public class State {
     public String toString() {
       return String.format("(Loss fp=%.1f fn=%.1f)", fp,fn);
     }
-  }
-
-  public Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
-    return f(actionType, newFI, null, stateFeats);
-  }
-
-  // Only used for noMoreTargets and noMoreFrames
-  public Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
-//    return info.weights.getScore(actionType, stateFeats);
-    return f(actionType, null, null, stateFeats);
   }
 
   /**
@@ -1459,42 +1452,6 @@ public class State {
     }
   }
 
-  public static class ProductIndexAdjoints implements Adjoints {
-    private int[] featIdx;
-    private LazyL2UpdateVector weights;
-    private double l2Reg;
-    private double lr;
-
-    public ProductIndexAdjoints(double learningRate, double l2Reg, int dimension, List<ProductIndex> features, LazyL2UpdateVector weights) {
-      this.lr = learningRate;
-      this.l2Reg = l2Reg;
-      this.weights = weights;
-      this.featIdx = new int[features.size()];
-      for (int i = 0; i < featIdx.length; i++)
-        featIdx[i] = features.get(i).getProdFeatureModulo(dimension);
-    }
-
-    @Override
-    public double forwards() {
-      double d = 0;
-      for (int i = 0; i < featIdx.length; i++)
-        d += weights.weights.get(featIdx[i]);
-      return d;
-    }
-
-    @Override
-    public void backwards(double dErr_dForwards) {
-      double a = lr * -dErr_dForwards;
-      for (int i = 0; i < featIdx.length; i++)
-        weights.weights.add(featIdx[i], a);
-      weights.maybeApplyL2Reg(l2Reg);
-    }
-  }
-
-  public static enum FeatType {
-    T, TF, TS, FK, FKS, TFKS;
-  };
-
   public static final Comparator<State> BY_SCORE_DESC = new Comparator<State>() {
     @Override
     public int compare(State o1, State o2) {
@@ -1602,7 +1559,7 @@ public class State {
     inf.primes = new PrimesAdapter(new Primes(config), frp);
     inf.label = new LabelIndex(y);
     inf.sentence = y.getSentence();
-    inf.weights = new Weights();
+    inf.weights = new WeightsPerActionType();
 
     long start = System.currentTimeMillis();
 
@@ -1688,4 +1645,205 @@ public class State {
     return new FNParse(s, fis);
   }
 
+  /**
+   * Does all feature dispatch.
+   */
+  public static class GeneralizedWeights {
+    private Info info;
+    private WeightsPerActionType globalFeatureWeights;
+    private WeightsPerActionType stateFeatureWeights;
+
+    private CachedFeatures.Params staticFeatures;
+    // Weights for static features are in CachedFeatures.Params
+    // (f,t,s) -> at -> k -> score
+    // (f,t,s) -> at -> score
+    private LazyL2UpdateVector[] at2sfWeights;
+    private LazyL2UpdateVector[][] at2k2sfWeights;
+    private double staticL2Penalty = 1e-7;
+
+    public GeneralizedWeights(Info info) {
+      this.info = info;
+      this.globalFeatureWeights = new WeightsPerActionType();
+      this.stateFeatureWeights = new WeightsPerActionType();
+    }
+
+    public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
+
+      List<ProductIndex> gf = globalFeatures(actionType, fi, ri);
+      Adjoints gfa = globalFeatureWeights.getScore(actionType, gf);
+
+      Adjoints sfa = stateFeatureWeights.getScore(actionType, stateFeatures);
+
+      // How to map between t:int and t:span
+      // Depends on the original order that the FrameInstances for the feature precomputation.
+      int t = -1;
+      assert false : "t needs to switched from int to Span!";
+      IntDoubleUnsortedVector f = staticFeatures.getFeatures(s, t, ri.s);
+      LazyL2UpdateVector w = at2sfWeights[actionType.ordinal()];
+      Adjoints staticScore = new edu.jhu.hlt.fnparse.rl.params.Adjoints.Vector(null, null, w, f, staticL2Penalty);
+      if (ri.k >= 0) {
+        // TODO k or (f,k)?
+        staticScore = new Adjoints.Sum(staticScore,
+            new edu.jhu.hlt.fnparse.rl.params.Adjoints.Vector(
+                null, null, at2k2sfWeights[actionType.ordinal()][ri.k], f, staticL2Penalty));
+      }
+
+      return new Adjoints.Sum(gfa, sfa, staticScore);
+    }
+
+    // TODO take prod of this with each feature you add
+    enum GF {
+      ARG_LOC,
+      NUM_ARG,
+      ROLE_COOC;
+      public final ProductIndex index = new ProductIndex(ordinal(), GF.values().length);
+    }
+
+    public static void stack(List<ProductIndex> addTo, ProductIndex... features) {
+      int n = features.length;
+      for (int i = 0; i < n; i++) {
+        ProductIndex pi = features[i];
+        if (pi != ProductIndex.NIL)
+          addTo.add(pi.prod(i, n));
+      }
+    }
+
+    private List<ProductIndex> globalFeatures(AT actionType, FI fi, RI ri) {
+      List<ProductIndex> feats = new ArrayList<>();
+
+      ProductIndex f = new ProductIndex(fi.f.getId(), info.numFrames());
+
+      // Handles COMMIT vs PRUNE
+      if (ri.s != null)
+        f = f.prod(ri.s == Span.nullSpan);
+      // This branching is fine as long as s==null is the same for a given AT and the weights are AT specific
+
+      ProductIndex fk = null;
+      ProductIndex fkq = null;
+      if (ri.k >= 0) {
+        fk = new ProductIndex(info.frPacking.index(fi.f, ri.k), info.frPacking.size())
+            .prod(ri.s == Span.nullSpan);
+        fkq = fk.prod(ri.q.ordinal(), RoleType.values().length);
+      }
+
+      // argLoc
+      if (info.config.argLocFeature) {
+        ProductIndex gf = GF.ARG_LOC.index;
+        switch (actionType) {
+        case COMPLETE_S:
+        case NEW_S:
+          assert ri.s != Span.nullSpan;
+          Span s2 = ri.s;
+          assert s2 != null;
+          ProductIndex rT = BasicFeatureTemplates.spanPosRel2(fi.t, s2);
+          for (RILL cur = fi.args; cur != null; cur = cur.next) {
+            RI ri2 = cur.item;
+            if (ri2 == ri)
+              continue;
+            Span s1 = ri.s;
+            if (s1 == Span.nullSpan)    // TODO Build skip-list
+              continue;
+            ProductIndex rA = gf.flatProd(BasicFeatureTemplates.spanPosRel2(s1, s2));
+            if (fk == null) {
+              stack(feats, rA, rA.flatProd(rT), rA.flatProd(f), ProductIndex.NIL);
+            } else {
+              stack(feats, rA, rA.flatProd(rT), rA.flatProd(f), rA.flatProd(fk));
+            }
+          }
+          break;
+        default:
+          break;
+        }
+      }
+
+      // numArgs
+      if (info.config.numArgsFeature) {
+        ProductIndex gf = GF.NUM_ARG.index;
+        switch (actionType) {
+        case NEW_K:
+        case COMPLETE_K:
+        case COMPLETE_S:
+          int n = 8;
+          int na = Math.min(n, fi.args.getNumRealizedArgs());
+          ProductIndex nap = gf.prod(na, n);
+          ProductIndex gt0 = gf.prod(na >= 1);
+          ProductIndex gt1 = gf.prod(na >= 2);
+          ProductIndex gt2 = gf.prod(na >= 3);
+          if (fk == null) {
+            stack(feats,
+                nap,
+                nap.flatProd(f),
+                ProductIndex.NIL,
+                gt0,
+                gt1,
+                gt2,
+                gt0.flatProd(f),
+                gt1.flatProd(f),
+                gt2.flatProd(f),
+                ProductIndex.NIL,
+                ProductIndex.NIL,
+                ProductIndex.NIL);
+          } else {
+            stack(feats,
+                nap,
+                nap.flatProd(f),
+                nap.flatProd(fk),
+                gt0,
+                gt1,
+                gt2,
+                gt0.flatProd(f),
+                gt1.flatProd(f),
+                gt2.flatProd(f),
+                gt0.flatProd(fk),
+                gt1.flatProd(fk),
+                gt2.flatProd(fk));
+          }
+          break;
+        default:
+          break;
+        }
+      }
+
+      // Role co-occurrence
+      if (info.config.roleCoocFeature) {
+        ProductIndex gf = GF.NUM_ARG.index;
+        switch (actionType) {
+        case NEW_K:
+        case COMPLETE_K:
+        case COMPLETE_S:
+          int k1 = info.frPacking.index(fi.f, ri.k);
+          int k0 = info.frPacking.index(fi.f);
+          int n = info.frPacking.size();
+          for (RILL cur = fi.args; cur != null; cur = cur.next) {
+            RI ri2 = cur.item;
+            if (ri2 == ri)
+              continue;
+            Span s1 = ri.s;
+            if (s1 == Span.nullSpan)    // TODO Build skip-list
+              continue;
+            int k2 = info.frPacking.index(fi.f, ri2.k);
+            int p;
+            if (k1 < k2) {
+              p = k1 * n + k2;
+            } else if (k1 > k2) {
+              p = k2 * n + k1;
+            } else {
+              p = k0 * n + k0;
+            }
+            feats.add(gf.prod(p, n * n));
+          }
+          break;
+        default:
+          break;
+        }
+      }
+
+      return feats;
+    }
+  }
+
+  private List<ProductIndex> argLocFeats(AT actionType, FI newFI, RI newRI) {
+    List<ProductIndex> feats = new ArrayList<>();
+    return feats;
+  }
 }

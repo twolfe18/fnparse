@@ -9,6 +9,9 @@ public class ProductIndex {
   /** a.k.a. "One", multiplicative identity */
   public static final ProductIndex NIL = new ProductIndex(0, 1, 0, 0);
 
+  public static final ProductIndex FALSE = new ProductIndex(0, 2);
+  public static final ProductIndex TRUE = new ProductIndex(1, 2);
+
   private long featProd, cardProd;
   private int feat, card;
   private int arity;    // cache/memo, makes a few things O(1) instead of LL traversal
@@ -122,8 +125,17 @@ public class ProductIndex {
     return arity;
   }
 
+  public ProductIndex prod(boolean b) {
+    return prod(b ? 1 : 0, 2);
+  }
+
   public ProductIndex prod(int feat, int card) {
     return new ProductIndex(feat, card, this);
+  }
+
+  /** You loose the chain in the argument, calls getProd(Feat|Card)Safe */
+  public ProductIndex flatProd(ProductIndex other) {
+    return prod(other.getProdFeatureSafe(), other.getProdCardinalitySafe());
   }
 
   public ProductIndex div() {

@@ -34,7 +34,6 @@ import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
-import edu.jhu.hlt.fnparse.rl.ContRefRoleClassifier;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.StateSequence;
 import edu.jhu.hlt.fnparse.rl.TransitionFunction;
@@ -116,7 +115,7 @@ public class Reranker implements Serializable {
   // mention and clasifying the others in ref/cont roles, and building the final
   // FrameInstances/FNParse.
   // For FN, this can be null/not used.
-  public ContRefRoleClassifier crClassify;
+//  public ContRefRoleClassifier crClassify;
 
   public Reranker(
       Params.Stateful thetaStateful,
@@ -124,7 +123,6 @@ public class Reranker implements Serializable {
       Params.PruneThreshold tauParams,
       DeterministicRolePruning.Mode argPruningMode,
       CachedFeatures cachedFeatures,
-      ContRefRoleClassifier crClassify,
       int trainBeamWidth,
       int testBeamWidth,
       Random rand) {
@@ -135,7 +133,6 @@ public class Reranker implements Serializable {
     this.thetaStateless = thetaStateless;
     this.argPruningMode = argPruningMode;
     this.cachedFeatures = cachedFeatures;
-    this.crClassify = crClassify;
     this.trainBeamWidth = trainBeamWidth;
     this.testBeamWidth = testBeamWidth;
     this.rand = rand;
@@ -384,7 +381,7 @@ public class Reranker implements Serializable {
         initialState, BFunc.NONE, solveMax, decode, testBeamWidth, model);
     fs.run();
     StateSequence ss = fs.getPath();
-    FNParse yhat = crClassify.decode(ss.getCur());
+    FNParse yhat = ss.getCur().decode();  // crClassify.decode(ss.getCur());
     assert yhat != null;    // split maxbeam.pop and beam.pop? path vs decode?
     if (logPredict)
       LOG.info("[predict] done");
@@ -1114,7 +1111,7 @@ public class Reranker implements Serializable {
       assert oracle.getLoss(gold) == 0;
       assert mostViolated.getLoss(gold) >= 0;
 
-      FNParse yHat = crClassify.decode(mostViolated.getCur());
+      FNParse yHat = mostViolated.getCur().decode();  // crClassify.decode(mostViolated.getCur());
       assert yHat != null : "mostViolated returned non-terminal state?";
       SentenceEval se = new SentenceEval(gold, yHat);
       double loss = se.argOnlyFP() + COST_FN * se.argOnlyFN();

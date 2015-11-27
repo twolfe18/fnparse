@@ -23,24 +23,23 @@ public interface StateIndex {
    * You cannot pass in "special values" for start and end (see ASpan),
    * must be valid spans.
    */
-  public int index(int t, int k, int q, int start, int end);
+  public int index(int t, int k, int start, int end);
 
   /**
    * Inverse of index()
    */
-  public TKQS lookup(int index);
+  public TKS lookup(int index);
 
-  public static class TKQS {
-    public final int t, k, q, start, end;
-    public TKQS(int t, int k, int q, int start, int end) {
+  public static class TKS {
+    public final int t, k, start, end;
+    public TKS(int t, int k, int start, int end) {
       this.t = t;
       this.k = k;
-      this.q = q;
       this.start = start;
       this.end = end;
     }
     public String toString() {
-      return "t=" + t + " k=" + k + " q=" + q + " start=" + start + " end=" + end;
+      return "t=" + t + " k=" + k + " start=" + start + " end=" + end;
     }
   }
 
@@ -81,7 +80,7 @@ public interface StateIndex {
     }
 
     @Override
-    public int index(int t, int k, int q, int start, int end) {
+    public int index(int t, int k, int start, int end) {
       assert (start >= 0 && start < end && end <= n)
           || (start == Span.nullSpan.start && end == Span.nullSpan.end);
 
@@ -104,15 +103,11 @@ public interface StateIndex {
 
       // It is old code for indexing (t,k,s) up to here.
       // All that we need to do to incorporate q is lay them out modulo 3
-      assert 0 <= q && q < 3;
-      return 3 * index + q;
+      return index;
     }
 
     @Override
-    public TKQS lookup(int index) {
-
-      int q = index % 3;
-      index /= 3;
+    public TKS lookup(int index) {
 
       // Code below here is old (doesn't know about q)
       int tk = index % TK;
@@ -138,7 +133,7 @@ public interface StateIndex {
         LOG.info("[lookup] t=" + t + " k=" + k + " start=" + start + " end=" + end);
       }
 
-      return new TKQS(t, k, q, start, end);
+      return new TKS(t, k, start, end);
     }
 
     @Override

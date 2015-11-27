@@ -3,11 +3,18 @@ package edu.jhu.hlt.fnparse.rl.full.weights;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
-import edu.jhu.hlt.fnparse.rl.full.State.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
+/**
+ * A weights matrix where rows are indexed by T, and you provide a bijection
+ * between T and int. Useful for doing a cheap product with T (you pass in
+ * features which have different weights for each T, which is equivalent to
+ * taking the product of those features with T).
+ *
+ * @author travis
+ */
 public abstract class WeightsMatrix<T> {
   private LazyL2UpdateVector[] at2w;
   private int dimension;

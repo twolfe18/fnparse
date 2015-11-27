@@ -121,6 +121,13 @@ public class BasicFeatureTemplates {
       //return String.format("%s=%d", name, w);
   }
 
+  public static ProductIndex discretizeWidth2(int divisor, int maxCardinality, int width) {
+    int w = width / divisor;
+    if (w >= maxCardinality-1)
+      return new ProductIndex(maxCardinality-1, maxCardinality);
+    return new ProductIndex(w, maxCardinality);
+  }
+
   /**
   * Describes the position of the parent of p w.r.t. i and j.
   */

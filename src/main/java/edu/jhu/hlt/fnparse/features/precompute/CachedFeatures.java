@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
@@ -40,7 +41,6 @@ import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.inference.role.span.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
-import edu.jhu.hlt.fnparse.rl.ContRefRoleClassifier;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
@@ -498,11 +498,14 @@ public class CachedFeatures {
     }
 
     public IntDoubleUnsortedVector getFeatures(FNTagging f, int t, Span s) {
+      return getFeatures(f.getSentence(), t, s);
+    }
+    public IntDoubleUnsortedVector getFeatures(Sentence sent, int t, Span s) {
       if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
         throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
 
       // Get the templates needed for all the features.
-      Item cur = loadedSentId2Item.get(f.getSentence().getId());
+      Item cur = loadedSentId2Item.get(sent.getId());
       BaseTemplates data = cur.getFeatures(t, s);
 
       // I should be able to use the same code as in InformationGainProducts.
@@ -810,9 +813,8 @@ public class CachedFeatures {
 
     TemplateContext ctx = new TemplateContext();
     HeadFinder hf = new SemaforicHeadFinder();
-    ContRefRoleClassifier crClassify = null;
     Random rand = new Random(9001);
-    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, crClassify, 1, 1, rand);
+    Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, rand);
     BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
 
 //    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
