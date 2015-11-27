@@ -11,10 +11,10 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 public class CheatingParams implements Params.Stateless, Params.PruneThreshold {

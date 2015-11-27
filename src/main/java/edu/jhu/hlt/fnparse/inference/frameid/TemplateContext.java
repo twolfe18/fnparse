@@ -2,9 +2,9 @@ package edu.jhu.hlt.fnparse.inference.frameid;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * All of the information needed for a template to make an extraction.

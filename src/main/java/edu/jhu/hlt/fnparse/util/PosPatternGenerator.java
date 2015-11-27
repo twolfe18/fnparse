@@ -5,7 +5,7 @@ import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * This class extracts features from POS tag sequences like:

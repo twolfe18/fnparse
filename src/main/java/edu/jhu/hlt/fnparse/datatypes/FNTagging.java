@@ -8,6 +8,7 @@ import java.util.Map;
 
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.HasSentence;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * A Sentence with Frame targets tagged, but no arguments (necessarily) labeled.

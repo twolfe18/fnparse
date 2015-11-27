@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.util;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.parse.cky.data.BinaryTree;
 
 public class BinaryTreeWithParent {

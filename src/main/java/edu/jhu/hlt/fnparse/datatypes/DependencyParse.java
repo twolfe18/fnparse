@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import edu.jhu.hlt.tutils.Span;
+
 /**
  * Note: Punctuation is not parsed in the Stanford parser, so we mark its' head
  * as DependencyParse.PUNC.

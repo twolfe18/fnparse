@@ -6,7 +6,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * footnote 9 of

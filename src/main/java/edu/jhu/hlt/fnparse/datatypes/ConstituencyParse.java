@@ -21,6 +21,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * Wraps edu.jhu.hlt.concrete.Parse and builds a tree (with pointers)

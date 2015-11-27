@@ -8,6 +8,8 @@ import java.util.*;
 import org.junit.Before;
 import org.junit.Test;
 
+import edu.jhu.hlt.tutils.Span;
+
 public class ExpansionTest {
 	
 	private Random r;

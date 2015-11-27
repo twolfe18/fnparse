@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.heads;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 public class BraindeadHeadFinder implements HeadFinder {
 

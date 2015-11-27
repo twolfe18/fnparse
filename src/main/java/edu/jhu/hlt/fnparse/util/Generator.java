@@ -7,7 +7,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.SynchronousQueue;
 import java.util.function.Consumer;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 
 public class Generator<T> implements Iterable<T> {

@@ -4,6 +4,7 @@ import java.util.Arrays;
 
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Hash;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * You can use this to represent the target annotation as well, just set role=-1

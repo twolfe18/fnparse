@@ -5,6 +5,7 @@ import java.util.*;
 import edu.jhu.hlt.fnparse.data.*;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.fnparse.util.DataSplitter;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * there seems to be a mismatch between how I'm trying to do pruning

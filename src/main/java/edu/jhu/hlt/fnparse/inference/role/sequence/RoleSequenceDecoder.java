@@ -7,7 +7,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 public class RoleSequenceDecoder {
   public static Logger LOG = Logger.getLogger(RoleSequenceDecoder.class);

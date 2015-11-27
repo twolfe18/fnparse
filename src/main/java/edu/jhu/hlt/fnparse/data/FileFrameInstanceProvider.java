@@ -20,7 +20,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 public class FileFrameInstanceProvider implements FrameInstanceProvider {
   public static final Logger LOG = Logger.getLogger(FileFrameInstanceProvider.class);

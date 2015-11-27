@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.rl;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * @deprecated this has been folded into Action

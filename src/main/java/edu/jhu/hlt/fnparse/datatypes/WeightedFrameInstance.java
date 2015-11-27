@@ -7,6 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.arrays.Multinomials;
 
 public class WeightedFrameInstance extends FrameInstance {

@@ -3,8 +3,8 @@ package edu.jhu.hlt.fnparse.rl;
 import java.util.Arrays;
 import java.util.Collection;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.HasSpan;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * A persistent data structure for storing things (e.g. Actions) that have a

@@ -7,11 +7,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * Takes a feature file with int features and packs it using a {@link DataOutputStream}.
@@ -25,7 +25,7 @@ import edu.jhu.hlt.tutils.Log;
 public class BinaryPacker {
 
   /**
-   * Reads the format defined in {@link FeaturePrecomputation#emit(java.io.Writer, edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target, edu.jhu.hlt.fnparse.datatypes.Span, int, java.util.List)}
+   * Reads the format defined in {@link FeaturePrecomputation#emit(java.io.Writer, edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target, edu.jhu.hlt.tutils.Span, int, java.util.List)}
    */
   public static void pack(String inputLine, DataOutputStream output) throws IOException {
     String[] toks = inputLine.split("\t");

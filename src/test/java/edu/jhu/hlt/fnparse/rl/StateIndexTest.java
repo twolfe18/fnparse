@@ -12,8 +12,8 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.StateIndex.TKS;
+import edu.jhu.hlt.tutils.Span;
 
 public class StateIndexTest {
   public static final Logger LOG = Logger.getLogger(StateIndexTest.class);

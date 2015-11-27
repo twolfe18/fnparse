@@ -4,6 +4,7 @@ import java.util.List;
 
 import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * The semantics of these has changed a bit since last time.

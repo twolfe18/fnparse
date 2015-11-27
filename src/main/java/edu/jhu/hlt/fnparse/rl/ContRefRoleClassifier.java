@@ -10,12 +10,12 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance.PropbankDataException;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.rl.State.SpanLL;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.tutils.Beam.Beam1;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
@@ -133,12 +133,14 @@ public class ContRefRoleClassifier {
     // here we will have multiple COMMITs
     
     
+    Sentence sent = st.getSentence();
+    Span tt = st.getTarget(t);
 
     List<ContRefRole> roles = new ArrayList<>();
     Beam1<Span> bestBase = new Beam1<>();
     Beam1<Span> bestRC = new Beam1<>();
     for (SpanLL cur = mentions; cur != null; cur = cur.next) {
-      IntDoubleUnsortedVector fv = features.getFeatures(st.getFrames(), t, cur.span);
+      IntDoubleUnsortedVector fv = features.getFeatures(sent, tt, cur.span);
       double[] scores = new double[weights.length];
       for (int i = 0; i < scores.length; i++)
         scores[i] = weights[i].weights.dot(fv);

@@ -21,7 +21,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
@@ -37,6 +36,7 @@ import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.fnparse.util.KpTrainDev;
 import edu.jhu.hlt.fnparse.util.ParserLoader;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.util.math.FastMath;
 

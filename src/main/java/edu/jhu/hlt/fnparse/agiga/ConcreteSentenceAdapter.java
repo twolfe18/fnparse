@@ -16,8 +16,8 @@ import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.HasSentence;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * Converts from a Concrete Sentence to a datatypes.Sentence.

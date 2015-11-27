@@ -34,7 +34,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.GenerousEvaluation;
 import edu.jhu.hlt.fnparse.inference.ApproxF1MbrDecoder;
@@ -53,6 +52,7 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.tutils.FPR;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.nlp.depparse.DepParseDecoder;
 import edu.jhu.parse.dep.EdgeScores;
 

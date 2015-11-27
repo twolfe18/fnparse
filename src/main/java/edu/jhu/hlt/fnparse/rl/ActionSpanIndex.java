@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.util.HasSpan;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * SpanIndex doesn't care about (t,k), only (i,j). This class allows you to

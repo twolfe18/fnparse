@@ -27,7 +27,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
 import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
@@ -40,10 +39,12 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Hash;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.bimap.IntObjectBimap;
 
@@ -82,18 +83,16 @@ public class FeaturePrecomputation {
     public static final String NO_DOC_ID = "noDocId".intern();
     public final String docId;      // must contain corpus id if theres more than one corpus
     public final String sentId;
-    public final int target;
+    public final Span target;
     private final int hash;
-    public Target(String sentId, int target) {
+    public Target(String sentId, Span target) {
       this(NO_DOC_ID, sentId, target);
     }
-    public Target(String docId, String sentId, int target) {
+    public Target(String docId, String sentId, Span target) {
       this.docId = docId;
       this.sentId = sentId;
       this.target = target;
-      this.hash = sentId.hashCode()
-          ^ Integer.rotateLeft(docId.hashCode(), 16)
-          ^ Integer.rotateLeft(target, 24);
+      this.hash = Hash.mix(sentId.hashCode(), Hash.mix(docId.hashCode(), target.hashCode()));
     }
 
     @Override
@@ -111,24 +110,29 @@ public class FeaturePrecomputation {
       return false;
     }
     public static String toLine(Target t) {
-      return t.docId + "\t" + t.sentId + "\t" + t.target;
+      return t.docId + "\t" + t.sentId + "\t" + t.target.shortString();
     }
     public static void toDos(Target t, DataOutputStream dos) throws IOException {
       dos.writeUTF(t.docId);
       dos.writeUTF(t.sentId);
-      dos.writeInt(t.target);
-    }
-    public static Target fromLine(String line) {
-      String[] ar = line.split("\t");
-      if (ar.length == 3)
-        return new Target(ar[0], ar[1], Integer.parseInt(ar[2]));
-      throw new RuntimeException(Arrays.toString(ar));
+      dos.writeInt(t.target.start);
+      dos.writeInt(t.target.end);
     }
     public static Target fromDis(DataInputStream dis) throws IOException {
       String docId = dis.readUTF();
       String sentId = dis.readUTF();
-      int target = dis.readInt();
+      int start = dis.readInt();
+      int end = dis.readInt();
+      Span target = Span.getSpan(start, end);
       return new Target(docId, sentId, target);
+    }
+    public static Target fromLine(String line) {
+      String[] ar = line.split("\t");
+      if (ar.length == 3) {
+        Span target = Span.inverseShortString(ar[2]);
+        return new Target(ar[0], ar[1], target);
+      }
+      throw new RuntimeException(Arrays.toString(ar));
     }
   }
 
@@ -327,6 +331,7 @@ public class FeaturePrecomputation {
         continue;
 
       // Find if this (t,s) corresponds to a role
+      Span ta = y.getFrameInstance(commit.t).getTarget();
       StringBuilder k = null;
       if (s != Span.nullSpan) {
         FrameInstance fi = y.getFrameInstance(commit.t);
@@ -368,7 +373,7 @@ public class FeaturePrecomputation {
         k = new StringBuilder("-1");
 
       String docId = "na";  // Not currently needed
-      Target t = new Target(docId, y.getId(), commit.t);
+      Target t = new Target(docId, y.getId(), ta);
 
       // Extract features
       List<Feature> features = new ArrayList<>();

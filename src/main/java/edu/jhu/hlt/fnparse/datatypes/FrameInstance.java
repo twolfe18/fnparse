@@ -8,6 +8,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 
 /**

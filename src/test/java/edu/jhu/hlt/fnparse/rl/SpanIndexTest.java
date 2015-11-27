@@ -12,8 +12,8 @@ import java.util.Random;
 
 import org.junit.Test;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.RandomSpan;
+import edu.jhu.hlt.tutils.Span;
 
 public class SpanIndexTest {
   private Random rand = new Random(9001);

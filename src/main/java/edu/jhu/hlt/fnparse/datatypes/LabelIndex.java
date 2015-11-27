@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 
 /**

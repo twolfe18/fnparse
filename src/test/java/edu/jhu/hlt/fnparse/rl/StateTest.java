@@ -10,8 +10,8 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.RandomSpan;
+import edu.jhu.hlt.tutils.Span;
 
 public class StateTest {
 

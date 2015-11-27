@@ -4,6 +4,8 @@ import static edu.jhu.hlt.fnparse.util.ScalaLike.require;
 
 import java.util.Iterator;
 
+import edu.jhu.hlt.tutils.Span;
+
 public class Expansion {
 
   /**

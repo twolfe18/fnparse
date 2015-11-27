@@ -4,6 +4,7 @@ import java.util.*;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.*;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * Right now my decoder takes a max over headwords (j) for every role (k).

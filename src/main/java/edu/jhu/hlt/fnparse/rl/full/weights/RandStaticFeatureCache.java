@@ -5,8 +5,8 @@ import java.util.List;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.tutils.Span;
 
 public class RandStaticFeatureCache extends AbstractStaticFeatureCache {
   private Random rand = new Random(9001);

@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.tutils.Span;
+
 /**
  * a Sentence with Frame's identified with their arguments.
  * 

@@ -2,10 +2,10 @@ package edu.jhu.hlt.fnparse.rl.full;
 
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.full.State.SpecialFrame;
 import edu.jhu.hlt.fnparse.rl.full.State.SpecialRole;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.map.LongIntHashMap;
 
 /**

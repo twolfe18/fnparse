@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Optional;
 
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Span;
+
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -34,7 +36,6 @@ import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.tutils.Timer;
 
 /**

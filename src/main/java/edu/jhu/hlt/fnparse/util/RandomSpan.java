@@ -2,7 +2,7 @@ package edu.jhu.hlt.fnparse.util;
 
 import java.util.Random;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 public class RandomSpan {

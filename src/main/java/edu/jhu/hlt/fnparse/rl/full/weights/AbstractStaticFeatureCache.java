@@ -1,8 +1,8 @@
 package edu.jhu.hlt.fnparse.rl.full.weights;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.full.State.FeatType;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public abstract class AbstractStaticFeatureCache

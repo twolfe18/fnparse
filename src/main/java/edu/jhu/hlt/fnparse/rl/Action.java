@@ -3,9 +3,9 @@ package edu.jhu.hlt.fnparse.rl;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasSpan;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * represents a constraint on the set of arguments a particular

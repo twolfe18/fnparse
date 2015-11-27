@@ -30,7 +30,6 @@ import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
@@ -52,6 +51,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
@@ -1676,9 +1676,7 @@ public class State {
 
       // How to map between t:int and t:span
       // Depends on the original order that the FrameInstances for the feature precomputation.
-      int t = -1;
-      assert false : "t needs to switched from int to Span!";
-      IntDoubleUnsortedVector f = staticFeatures.getFeatures(s, t, ri.s);
+      IntDoubleUnsortedVector f = staticFeatures.getFeatures(s, fi.t, ri.s);
       LazyL2UpdateVector w = at2sfWeights[actionType.ordinal()];
       Adjoints staticScore = new edu.jhu.hlt.fnparse.rl.params.Adjoints.Vector(null, null, w, f, staticL2Penalty);
       if (ri.k >= 0) {

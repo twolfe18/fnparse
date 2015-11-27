@@ -25,7 +25,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
@@ -56,6 +55,8 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
@@ -104,30 +105,43 @@ public class CachedFeatures {
   /** A parse and its features */
   public static final class Item {
     public final FNParse parse;
-    private Map<IntPair, BaseTemplates>[] features;   // t -> (i,j) -> BaseTemplates
+//    private Map<IntPair, BaseTemplates>[] features;   // t -> (i,j) -> BaseTemplates
+//    private Map<SpanPair, BaseTemplates> features2;
+    private Map<Span, Map<Span, BaseTemplates>> features3;
 
     @SuppressWarnings("unchecked")
     public Item(FNParse parse) {
       if (parse == null)
         throw new IllegalArgumentException();
       this.parse = parse;
-      int T = parse.numFrameInstances();
-      this.features = new Map[T];
-      for (int t = 0; t < T; t++)
-        this.features[t] = new HashMap<>();
+//      int T = parse.numFrameInstances();
+//      this.features = new Map[T];
+//      for (int t = 0; t < T; t++)
+//        this.features[t] = new HashMap<>();
+//      this.features2 = new HashMap<>();
+      this.features3 = new HashMap<>();
     }
 
-    public void setFeatures(int t, Span arg, BaseTemplates features) {
+    public void setFeatures(Span t, Span arg, BaseTemplates features) {
       if (arg.start < 0 || arg.end < 0)
         throw new IllegalArgumentException("span=" + arg);
       if (features.getTemplates() == null)
         throw new IllegalArgumentException();
-      BaseTemplates old = this.features[t].put(new IntPair(arg.start, arg.end), features);
+//      BaseTemplates old = this.features[t].put(new IntPair(arg.start, arg.end), features);
+//      BaseTemplates old = this.features2.get(new SpanPair(t, arg));
+      Map<Span, BaseTemplates> m = features3.get(t);
+      if (m == null) {
+        m = new HashMap<>();
+        features3.put(t, m);
+      }
+      BaseTemplates old = m.put(arg, features);
       assert old == null;
     }
 
-    public BaseTemplates getFeatures(int t, Span arg) {
-      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
+    public BaseTemplates getFeatures(Span t, Span arg) {
+//      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
+//      BaseTemplates feats = this.features2.get(new SpanPair(t, arg));
+      BaseTemplates feats = this.features3.get(t).get(arg);
       assert feats != null;
       return feats;
     }
@@ -139,19 +153,23 @@ public class CachedFeatures {
     public Map<FrameInstance, List<Span>> spansWithFeatures() {
       boolean pedantic = !ExperimentProperties.getInstance().getBoolean("ignoreNoNullSpanFeatures", false);
       Map<FrameInstance, List<Span>> m = new HashMap<>();
-      for (int t = 0; t < this.features.length; t++) {
-        FrameInstance yt = parse.getFrameInstance(t);
+      for (FrameInstance yt : parse.getFrameInstances()) {
         FrameInstance key = FrameInstance.frameMention(yt.getFrame(), yt.getTarget(), parse.getSentence());
         List<Span> values = new ArrayList<>();
         // Gaurantee that nullSpan is in there by putting it first
         values.add(Span.nullSpan);
         boolean sawNullSpan = false;
-        for (IntPair s : this.features[t].keySet()) {
-          if (s.first == Span.nullSpan.start && s.second == Span.nullSpan.end) {
+        for (Span s : this.features3.get(yt.getTarget()).keySet()) {
+          if (s != Span.nullSpan)
+            values.add(s);
+          else
             sawNullSpan = true;
-          } else {
-            values.add(Span.getSpan(s.first, s.second));
-          }
+//        for (IntPair s : this.features[t].keySet()) {
+//          if (s.first == Span.nullSpan.start && s.second == Span.nullSpan.end) {
+//            sawNullSpan = true;
+//          } else {
+//            values.add(Span.getSpan(s.first, s.second));
+//          }
         }
         if (!sawNullSpan && pedantic)
           Log.warn("no features for nullSpan!");
@@ -462,7 +480,8 @@ public class CachedFeatures {
       if (a.getActionType() != ActionType.COMMIT)
         throw new RuntimeException();
       Item cur = loadedSentId2Item.get(f.getSentence().getId());
-      return cur.getFeatures(a.t, a.getSpan());
+      Span t = f.getFrameInstance(a.t).getTarget();
+      return cur.getFeatures(t, a.getSpan());
     }
 
     @Override
@@ -497,10 +516,10 @@ public class CachedFeatures {
       return new Adjoints.Vector(this, a, weightsPrune, fv, l2Penalty);
     }
 
-    public IntDoubleUnsortedVector getFeatures(FNTagging f, int t, Span s) {
+    public IntDoubleUnsortedVector getFeatures(FNTagging f, Span t, Span s) {
       return getFeatures(f.getSentence(), t, s);
     }
-    public IntDoubleUnsortedVector getFeatures(Sentence sent, int t, Span s) {
+    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
       if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
         throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
 
@@ -541,7 +560,8 @@ public class CachedFeatures {
      * @param a must be a COMMIT action.
      */
     private Adjoints scoreCommit(FNTagging f, Action a) {
-      IntDoubleVector features = getFeatures(f, a.t, a.getSpan());
+      Span t = f.getFrameInstance(a.t).getTarget();
+      IntDoubleVector features = getFeatures(f, t, a.getSpan());
       return new Adjoints.Vector(this, a, weightsCommit[a.k], features, l2Penalty);
     }
 
@@ -691,7 +711,8 @@ public class CachedFeatures {
         numLines++;
         String[] toks = line.split("\t");
 
-        Target t = new Target(toks[0], toks[1], Integer.parseInt(toks[2]));
+        Span ta = Span.inverseShortString(toks[2]);
+        Target t = new Target(toks[0], toks[1], ta);
 
         String[] spanToks = toks[3].split(",");
         Span span = Span.getSpan(Integer.parseInt(spanToks[0]), Integer.parseInt(spanToks[1]));

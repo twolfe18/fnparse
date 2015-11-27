@@ -4,8 +4,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.util.DataStreamSerializable;
+import edu.jhu.hlt.tutils.Span;
 
 public class Item implements DataStreamSerializable {
   private int t;  // index of frame instance

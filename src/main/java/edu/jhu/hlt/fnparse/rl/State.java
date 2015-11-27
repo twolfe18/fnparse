@@ -11,9 +11,9 @@ import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.fnparse.rl.StateIndex.TKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Item;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * Represents a sentence, the frame-targets realized, and the constraints on the

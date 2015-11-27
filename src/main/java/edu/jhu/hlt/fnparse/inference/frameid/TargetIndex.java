@@ -14,8 +14,8 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.Span;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 
 /**

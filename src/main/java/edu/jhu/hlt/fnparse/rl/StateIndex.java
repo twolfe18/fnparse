@@ -7,7 +7,7 @@ import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.Span;
+import edu.jhu.hlt.tutils.Span;
 
 /**
  * A dense and efficient bijection between the integers and (t,k,span).
