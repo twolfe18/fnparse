@@ -14,8 +14,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 
-import org.omg.CORBA.ARG_IN;
-
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -54,6 +52,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
+import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 import fj.Ord;
@@ -502,7 +501,8 @@ public class State {
      * I need a hook to hang things like ArgLoc/NumArgs/ArgCooc on!
      * 
      */
-    public WeightsPerActionType weights;
+//    public WeightsPerActionType weights;
+    public GeneralizedWeights weights;
 
     public FrameRolePacking frPacking;
 
@@ -977,7 +977,7 @@ public class State {
     }
 
     if (info.coefModelScore != 0) {
-      Adjoints m = info.weights.getScore(actionType, stateFeats);
+      Adjoints m = info.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
       m = new Adjoints.Scale(info.coefModelScore, m);
       if (score == null)
         score = m;
@@ -1534,6 +1534,7 @@ public class State {
 //    y = PropbankContRefRoleFNParseConverter.flatten(y);
     Log.info(Describe.fnParse(y));
 
+    boolean kDependsOnF = true;
     FrameRolePacking frp = new FrameRolePacking(FrameIndex.getFrameNet());
     Info inf = new Info();
     inf.rand = new Random(9001);
@@ -1559,7 +1560,7 @@ public class State {
     inf.primes = new PrimesAdapter(new Primes(config), frp);
     inf.label = new LabelIndex(y);
     inf.sentence = y.getSentence();
-    inf.weights = new WeightsPerActionType();
+    inf.weights = new GeneralizedWeights(inf, kDependsOnF);
 
     long start = System.currentTimeMillis();
 
@@ -1661,10 +1662,22 @@ public class State {
     private LazyL2UpdateVector[][] at2k2sfWeights;
     private double staticL2Penalty = 1e-7;
 
-    public GeneralizedWeights(Info info) {
+    public GeneralizedWeights(Info info, boolean kDependsOnF) {
       this.info = info;
       this.globalFeatureWeights = new WeightsPerActionType();
       this.stateFeatureWeights = new WeightsPerActionType();
+
+      int updateInterval = 32;
+      int D = 1 << 18;
+      int K = kDependsOnF ? info.frPacking.size() : 100;
+      Log.info("D=" + D + " K=" + K + " AT.size=" + AT.values().length + " all: " + (8d * D * K * AT.values().length)/(1024d * 1024d) + " MB");
+      this.at2sfWeights = new LazyL2UpdateVector[AT.values().length];
+      this.at2k2sfWeights = new LazyL2UpdateVector[AT.values().length][K];
+      for (int i = 0; i < at2k2sfWeights.length; i++) {
+        this.at2sfWeights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+        for (int k = 0; k < K; k++)
+          this.at2k2sfWeights[i][k] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+      }
     }
 
     public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
@@ -1717,11 +1730,11 @@ public class State {
       // This branching is fine as long as s==null is the same for a given AT and the weights are AT specific
 
       ProductIndex fk = null;
-      ProductIndex fkq = null;
+//      ProductIndex fkq = null;
       if (ri.k >= 0) {
         fk = new ProductIndex(info.frPacking.index(fi.f, ri.k), info.frPacking.size())
             .prod(ri.s == Span.nullSpan);
-        fkq = fk.prod(ri.q.ordinal(), RoleType.values().length);
+//        fkq = fk.prod(ri.q.ordinal(), RoleType.values().length);
       }
 
       // argLoc

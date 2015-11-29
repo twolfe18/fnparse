@@ -10,15 +10,22 @@
 
   <dependencies>
     <dependency>
+      <groupId>log4j</groupId>
+      <artifactId>log4j</artifactId>
+      <version>1.2.17</version>
+    </dependency>
+    <dependency>
       <groupId>org.functionaljava</groupId>
       <artifactId>functionaljava</artifactId>
       <version>3.1</version>
     </dependency>
+<!--
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-conll</artifactId>
       <version>4.6.3-SNAPSHOT</version>
     </dependency>
+-->
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>tutils</artifactId>
