@@ -6,16 +6,12 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.data.LFgExample;
-import edu.jhu.gm.data.FgExampleList;
-import edu.jhu.hlt.fnparse.inference.stages.Stage.StageDatum;
-
 /**
  * takes a List<StageDatum> and implements FgExamleList
  * 
  * @author travis
  */
-public class StageDatumExampleList<I, O> implements FgExampleList {
+public class StageDatumExampleList<I, O> {
   public static final Logger LOG = Logger.getLogger(StageDatumExampleList.class);
 
   private final List<StageDatum<I, O>> data;

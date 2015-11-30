@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.util;
 
-import edu.jhu.gm.feat.FeatureVector;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 public class FeatureUtils {
-  public static final FeatureVector emptyFeatures = new FeatureVector();
+  public static final IntDoubleUnsortedVector emptyFeatures = new IntDoubleUnsortedVector();
 }

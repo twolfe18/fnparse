@@ -2,9 +2,9 @@ package edu.jhu.hlt.fnparse.features;
 
 import java.util.List;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.*;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * The semantics of these has changed a bit since last time.
@@ -31,14 +31,14 @@ public interface Features {
 
 	/** frame */
 	public static interface F extends Features {
-		public void featurize(FeatureVector v, Refinements r, int i, Frame t, Sentence s);
+		public void featurize(IntDoubleUnsortedVector v, Refinements r, int i, Frame t, Sentence s);
 	}
 	/** frame + role */
 	public static interface R extends Features {
-		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Sentence s);
+		public void featurize(IntDoubleUnsortedVector v, Refinements r, int i, Frame t, int j, int k, Sentence s);
 	}
 	/** frame + role + expansion */
 	public static interface RE extends Features {
-		public void featurize(FeatureVector v, Refinements r, int i, Frame t, int j, int k, Span arg, Sentence s);
+		public void featurize(IntDoubleUnsortedVector v, Refinements r, int i, Frame t, int j, int k, Span arg, Sentence s);
 	}
 }

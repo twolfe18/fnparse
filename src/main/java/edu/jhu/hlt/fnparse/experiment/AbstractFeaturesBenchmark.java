@@ -2,10 +2,10 @@ package edu.jhu.hlt.fnparse.experiment;
 
 import java.util.Random;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.features.Refinements;
 import edu.jhu.hlt.tutils.Timer;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * the best i could get is 19% with StringBuilder.setLength(0)
@@ -40,7 +40,7 @@ public class AbstractFeaturesBenchmark
 
   public boolean newWay;
   public AbstractFeaturesBenchmark(boolean newWay) {
-    super(null);	// FIXME
+    super();	// FIXME
     this.newWay = newWay;
   }
 
@@ -51,7 +51,7 @@ public class AbstractFeaturesBenchmark
     Timer t = new Timer("fv");
     for (int i=0; i<numAdds; i++) {
       t.start();
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       for (int j=0; j<numFeatsPerAdd; j++) {
         b(fv, Refinements.noRefinements, "foo", "bar", "baz");
         //b(fv, "foo", String.valueOf(r.nextInt(100)));

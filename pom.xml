@@ -31,11 +31,18 @@
       <artifactId>tutils</artifactId>
       <version>1.0.2-SNAPSHOT</version>
     </dependency>
+<!--
     <dependency>
       <groupId>edu.jhu.pacaya</groupId>
       <artifactId>pacaya</artifactId>
       <version>3.0.9</version>
     </dependency>
+-->
+<dependency>
+  <groupId>edu.jhu.hlt</groupId>
+  <artifactId>concrete-util</artifactId>
+  <version>4.8.3</version>
+</dependency>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-stanford</artifactId>

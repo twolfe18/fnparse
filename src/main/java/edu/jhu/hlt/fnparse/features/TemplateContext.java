@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.frameid;
+package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;

@@ -14,7 +14,7 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.CheatingParams;
 import edu.jhu.hlt.fnparse.rl.params.Params;

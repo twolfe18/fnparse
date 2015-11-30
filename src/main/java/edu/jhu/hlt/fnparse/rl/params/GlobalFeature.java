@@ -5,12 +5,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Supplier;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
@@ -20,6 +19,7 @@ import edu.jhu.hlt.fnparse.util.FeatureUtils;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -46,9 +46,9 @@ public interface GlobalFeature extends Params.Stateful {
       this.cheat = cheat;
     }
     @Override
-    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
-      FeatureVector fv = new FeatureVector();
+    //public IntDoubleUnsortedVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       FNTagging frames = state.getFrames();
       b(fv, "intercept");
       if (cheat.isGold(frames, a2)) {
@@ -84,11 +84,11 @@ public interface GlobalFeature extends Params.Stateful {
       super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
-    //public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
-    public FeatureVector getFeatures(FNTagging frames, Action a2) {
+    //public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(FNTagging frames, Action a2) {
       if (!a2.hasSpan())
         return FeatureUtils.emptyFeatures;
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       FrameInstance fi = frames.getFrameInstance(a2.t);
       Frame frame = fi.getFrame();
       String f = frame.getName();
@@ -136,7 +136,7 @@ public interface GlobalFeature extends Params.Stateful {
       super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
       if (!a2.hasSpan())
         return FeatureUtils.emptyFeatures;
       Span s2 = a2.getSpan();
@@ -154,7 +154,7 @@ public interface GlobalFeature extends Params.Stateful {
       }
 
       // Make some features
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       Frame frame = state.getFrame(a2.t);
       String f = frame.getName();
       String r = frame.getRole(a2.k);
@@ -197,10 +197,10 @@ public interface GlobalFeature extends Params.Stateful {
       super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
       if (!a2.hasSpan())
         return FeatureUtils.emptyFeatures;
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       List<Action> rel = new ArrayList<>();
       for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
         Action a = ii.payload;
@@ -242,8 +242,8 @@ public interface GlobalFeature extends Params.Stateful {
       super(l2Penalty, BUCKETS);  // Use Hashing
     }
     @Override
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
-      FeatureVector fv = new FeatureVector();
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       int decArgs = 0;
       for (IndexItem ii = ai.allActions(); ii != null; ii = ii.prevNonEmptyItem) {
         Action a = ii.payload;
@@ -277,9 +277,9 @@ public interface GlobalFeature extends Params.Stateful {
         frPacking = new FrameRolePacking(FrameIndex.getFrameNet());
     }
     @Override
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
       Frame f = state.getFrame(a2.t);
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
         Action a = i.payload;
         if (a.t != a2.t)
@@ -327,8 +327,8 @@ public interface GlobalFeature extends Params.Stateful {
         frPacking = new FrameRolePacking(FrameIndex.getFrameNet());
     }
     @Override
-    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a2) {
+    //public IntDoubleUnsortedVector getFeatures(State state, SpanIndex<Action> ai, Action a2) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a2) {
       // must be >0 because 0 is the implicit backoff label
       final int SAME_TARGET = 1;
       final int BEFORE = 2;
@@ -345,7 +345,7 @@ public interface GlobalFeature extends Params.Stateful {
       da2 = da2 << REL_BITS; // move over to make room for rel type
 
       int previousActions = 0;
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       //for (IndexItem<Action> i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
       for (IndexItem i = ai.allActions(); i != null; i = i.prevNonEmptyItem) {
         previousActions++;
@@ -443,10 +443,10 @@ public interface GlobalFeature extends Params.Stateful {
     // X = {x} = set of spans already committed to
     // find x s.t. q.s < x.s < q.e < x.e
     @Override
-    //public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
-    public FeatureVector getFeatures(State s, CommitIndex ai, Action a) {
+    //public IntDoubleUnsortedVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
+    public IntDoubleUnsortedVector getFeatures(State s, CommitIndex ai, Action a) {
       if (a.hasSpan()) {
-        FeatureVector fv = new FeatureVector();
+        IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
         List<Action> overlappingActions = new ArrayList<>();
         ai.crosses(a.start, a.end, overlappingActions);
 
@@ -528,8 +528,8 @@ public interface GlobalFeature extends Params.Stateful {
     }
 
     @Override
-    //public FeatureVector getFeatures(State state, SpanIndex<Action> ai, Action a) {
-    public FeatureVector getFeatures(State state, CommitIndex ai, Action a) {
+    //public IntDoubleUnsortedVector getFeatures(State state, SpanIndex<Action> ai, Action a) {
+    public IntDoubleUnsortedVector getFeatures(State state, CommitIndex ai, Action a) {
       if (!a.hasSpan()) return FeatureUtils.emptyFeatures;
       Span s = a.getSpan();
 
@@ -538,7 +538,7 @@ public interface GlobalFeature extends Params.Stateful {
       IndexItem mLeft = s.start > 0 ? ai.endsAt(s.start - 1) : null;
       IndexItem mRight = s.end < ai.getSentenceSize() ? ai.startsAt(s.end) : null;
 
-      FeatureVector fv = new FeatureVector();
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
 
       // TODO conjoin these features with frame and/or role?
 

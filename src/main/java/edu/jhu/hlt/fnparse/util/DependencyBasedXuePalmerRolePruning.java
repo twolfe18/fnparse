@@ -13,7 +13,7 @@ import org.apache.log4j.Logger;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.role.span.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.tutils.Span;
 
 public class DependencyBasedXuePalmerRolePruning {

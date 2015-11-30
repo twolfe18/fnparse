@@ -17,7 +17,6 @@ import java.util.Random;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.Action;

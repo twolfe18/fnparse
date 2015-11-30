@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.util;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
+import edu.jhu.hlt.fnparse.features.TemplateContext;
 
 public class SentencePosition {
   public int index;

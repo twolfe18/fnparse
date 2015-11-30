@@ -1,16 +1,16 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplateContext;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures;
+import edu.jhu.hlt.fnparse.features.TemplateContext;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * Lifts TemplatedFeatures into Stateless.Params. Does so by only looking at the
@@ -58,7 +58,7 @@ public class TemplatedFeatureParams
    * This implementation is specifically for PRUNE(t,k,*) actions.
    */
   @Override
-  public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+  public IntDoubleUnsortedVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
     // How COMMIT(t,k,nullSpan) used to be implemented.
     assert !pruneAction.hasSpan();
     assert pruneAction.getSpanSafe() == Span.nullSpan;
@@ -69,7 +69,7 @@ public class TemplatedFeatureParams
    * This implementation is used for COMMIT(t,k,*) actions.
    */
   @Override
-  public FeatureVector getFeatures(FNTagging f, Action a) {
+  public IntDoubleUnsortedVector getFeatures(FNTagging f, Action a) {
     if (throwExceptionOnComputingFeatures) {
       throw new RuntimeException("someone shouldn't be calling this because " +
         "templatedFeatures.throwExceptionOnComputingFeatures was specified!");
@@ -93,7 +93,7 @@ public class TemplatedFeatureParams
     context.setSpan2(fi.getTarget());
 
     // Compute the features
-    FeatureVector fv = new FeatureVector();
+    IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
     if (showFeatures)
       features.featurizeDebug(fv, context, "[TemplatedFeatureParams]");
     else

@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.role.span;
+package edu.jhu.hlt.fnparse.pruning;
 
 import java.io.Serializable;
 import java.util.ArrayList;

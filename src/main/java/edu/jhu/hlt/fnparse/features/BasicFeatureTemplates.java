@@ -1,9 +1,5 @@
-package edu.jhu.hlt.fnparse.inference.frameid;
+package edu.jhu.hlt.fnparse.features;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -13,59 +9,38 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Random;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
 
-import org.apache.commons.math3.util.FastMath;
-
-import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
-import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
-import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.Node;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse.NodePathPiece;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.Path;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateSS;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.TemplateSS;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
-import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
-import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
-import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
-import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
-import edu.jhu.hlt.fnparse.inference.stages.Stage;
-import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.GlobalParameters;
+//import edu.jhu.hlt.fnparse.inference.frameid.FrameIdStage;
+//import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
+//import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadStage;
+//import edu.jhu.hlt.fnparse.inference.role.head.RoleHeadToSpanStage;
+//import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
+//import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
+//import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanPruningStage;
 import edu.jhu.hlt.fnparse.util.PosPatternGenerator;
 import edu.jhu.hlt.fnparse.util.SentencePosition;
-import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.data.BrownClusters;
-import edu.jhu.hlt.tutils.rand.ReservoirSample;
 import edu.jhu.prim.tuple.Pair;
-import edu.mit.jwi.item.IPointer;
 import edu.mit.jwi.item.ISynset;
 import edu.mit.jwi.item.ISynsetID;
 import edu.mit.jwi.item.IWord;
-import edu.mit.jwi.item.IWordID;
 
 public class BasicFeatureTemplates {
 
@@ -186,15 +161,13 @@ public class BasicFeatureTemplates {
     return false;
   }
 
-
-  private static BasicFeatureTemplates.Indexed SINGLETON;
-  public static BasicFeatureTemplates.Indexed getInstance() {
-    if (SINGLETON == null) {
-      SINGLETON = new BasicFeatureTemplates.Indexed();
-    }
-    return SINGLETON;
-  }
-
+//  private static BasicFeatureTemplates.Indexed SINGLETON;
+//  public static BasicFeatureTemplates.Indexed getInstance() {
+//    if (SINGLETON == null) {
+//      SINGLETON = new BasicFeatureTemplates.Indexed();
+//    }
+//    return SINGLETON;
+//  }
 
   protected BrownClusters bc256 = new BrownClusters(BrownClusters.bc256dirAuto());
   protected BrownClusters bc1000 = new BrownClusters(BrownClusters.bc1000dirAuto());
@@ -1389,129 +1362,129 @@ public class BasicFeatureTemplates {
 
 
     /* FRAME-TARGET FEATURES **************************************************/
-    addTemplate("luMatch", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        Span t = context.getTarget();
-        if (t == null)
-          return null;
-        if (t.width() != 1)
-          return null;
-        TargetPruningData tpd = TargetPruningData.getInstance();
-        LexicalUnit lu = context.getSentence().getFNStyleLU(
-            t.start, tpd.getWordnetDict(), true);
-        Frame f = context.getFrame();
-        if (tpd.getFramesFromLU(lu).contains(f))
-          return "luMatch";
-        else
-          return null;
-      }
-    });
-    addTemplate("luMatch-WNSynSet", new TemplateSS() {
-      public String extractSS(TemplateContext context) {
-        Span t = context.getTarget();
-        if (t == null)
-          return null;
-        if (t.width() != 1)
-          return null;
-        TargetPruningData tpd = TargetPruningData.getInstance();
-        IWord word = context.getSentence().getWnWord(t.start);
-        if (word == null)
-          return null;
-        Set<IWord> synset = new HashSet<>();
-        synset.addAll(word.getSynset().getWords());
-        boolean hadAChance = false;
-        int c = 0;
-        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
-          hadAChance = true;
-          // see if syn-set match for (head1, prototype)
-          Span pt = p.getTarget();
-          if (pt.width() != 1)
-            continue;
-          IWord otherWord = p.getSentence().getWnWord(pt.start);
-          if (synset.contains(otherWord))
-            c++;
-        }
-        if (c == 0 && hadAChance)
-          return "NO-luMatch-WNSynSet";
-        c = (int) FastMath.pow(c, 0.6d);
-        return "luMatch-WnSynSet=" + c;
-      }
-    });
-    addTemplate("luMatch-WNRelated", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Span t = context.getTarget();
-        if (t == null)
-          return null;
-        if (t.width() != 1)
-          return null;
-        List<String> ret = new ArrayList<>();
-        TargetPruningData tpd = TargetPruningData.getInstance();
-        IWord word = context.getSentence().getWnWord(t.start);
-        if (word == null)
-          return null;
-        Map<IPointer, List<IWordID>> rel = word.getRelatedMap();
-        boolean hadAChance = false;
-        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
-          hadAChance = true;
-          // see if syn-set match for (head1, prototype)
-          Span pt = p.getTarget();
-          if (pt.width() != 1)
-            continue;
-          IWord otherWord = p.getSentence().getWnWord(pt.start);
-          if (otherWord == null)
-            continue;
-          for (Map.Entry<IPointer, List<IWordID>> x : rel.entrySet()) {
-            if (x.getValue().contains(otherWord.getID()))
-              ret.add("luMatch-WNRelated=" + x.getKey().getName());
-          }
-        }
-        if (ret.size() == 0) {
-          if (hadAChance)
-            ret.add("NO-luMatch-WNRelated");
-          else return null;
-        }
-        return ret;
-      }
-    });
-    addTemplate("luMatch-WNRelatedSynSet", new Template() {
-      public Iterable<String> extract(TemplateContext context) {
-        Span t = context.getTarget();
-        if (t == null)
-          return null;
-        if (t.width() != 1)
-          return null;
-        List<String> ret = new ArrayList<>();
-        TargetPruningData tpd = TargetPruningData.getInstance();
-        IWord word = context.getSentence().getWnWord(t.start);
-        if (word == null)
-          return null;
-        Map<IPointer, List<ISynsetID>> relSS = word.getSynset().getRelatedMap();
-        boolean hadAChance = false;
-        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
-          hadAChance = true;
-          // see if syn-set match for (head1, prototype)
-          Span pt = p.getTarget();
-          if (pt.width() != 1)
-            continue;
-          IWord otherWord = p.getSentence().getWnWord(pt.start);
-          if (otherWord == null)
-            continue;
-          for (Map.Entry<IPointer, List<ISynsetID>> x : relSS.entrySet()) {
-            for (ISynsetID ssid : x.getValue()) {
-              ISynset ss = tpd.getWordnetDict().getSynset(ssid);
-              if (ss.getWords().contains(otherWord))
-                ret.add("luMatch-WNRelatedSynSet=" + x.getKey().getName());
-            }
-          }
-        }
-        if (ret.size() == 0) {
-          if (hadAChance)
-            ret.add("NO-luMatch-WNRelatedSynSet");
-          else return null;
-        }
-        return ret;
-      }
-    });
+//    addTemplate("luMatch", new TemplateSS() {
+//      public String extractSS(TemplateContext context) {
+//        Span t = context.getTarget();
+//        if (t == null)
+//          return null;
+//        if (t.width() != 1)
+//          return null;
+//        TargetPruningData tpd = TargetPruningData.getInstance();
+//        LexicalUnit lu = context.getSentence().getFNStyleLU(
+//            t.start, tpd.getWordnetDict(), true);
+//        Frame f = context.getFrame();
+//        if (tpd.getFramesFromLU(lu).contains(f))
+//          return "luMatch";
+//        else
+//          return null;
+//      }
+//    });
+//    addTemplate("luMatch-WNSynSet", new TemplateSS() {
+//      public String extractSS(TemplateContext context) {
+//        Span t = context.getTarget();
+//        if (t == null)
+//          return null;
+//        if (t.width() != 1)
+//          return null;
+//        TargetPruningData tpd = TargetPruningData.getInstance();
+//        IWord word = context.getSentence().getWnWord(t.start);
+//        if (word == null)
+//          return null;
+//        Set<IWord> synset = new HashSet<>();
+//        synset.addAll(word.getSynset().getWords());
+//        boolean hadAChance = false;
+//        int c = 0;
+//        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
+//          hadAChance = true;
+//          // see if syn-set match for (head1, prototype)
+//          Span pt = p.getTarget();
+//          if (pt.width() != 1)
+//            continue;
+//          IWord otherWord = p.getSentence().getWnWord(pt.start);
+//          if (synset.contains(otherWord))
+//            c++;
+//        }
+//        if (c == 0 && hadAChance)
+//          return "NO-luMatch-WNSynSet";
+//        c = (int) Math.pow(c, 0.6d);
+//        return "luMatch-WnSynSet=" + c;
+//      }
+//    });
+//    addTemplate("luMatch-WNRelated", new Template() {
+//      public Iterable<String> extract(TemplateContext context) {
+//        Span t = context.getTarget();
+//        if (t == null)
+//          return null;
+//        if (t.width() != 1)
+//          return null;
+//        List<String> ret = new ArrayList<>();
+//        TargetPruningData tpd = TargetPruningData.getInstance();
+//        IWord word = context.getSentence().getWnWord(t.start);
+//        if (word == null)
+//          return null;
+//        Map<IPointer, List<IWordID>> rel = word.getRelatedMap();
+//        boolean hadAChance = false;
+//        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
+//          hadAChance = true;
+//          // see if syn-set match for (head1, prototype)
+//          Span pt = p.getTarget();
+//          if (pt.width() != 1)
+//            continue;
+//          IWord otherWord = p.getSentence().getWnWord(pt.start);
+//          if (otherWord == null)
+//            continue;
+//          for (Map.Entry<IPointer, List<IWordID>> x : rel.entrySet()) {
+//            if (x.getValue().contains(otherWord.getID()))
+//              ret.add("luMatch-WNRelated=" + x.getKey().getName());
+//          }
+//        }
+//        if (ret.size() == 0) {
+//          if (hadAChance)
+//            ret.add("NO-luMatch-WNRelated");
+//          else return null;
+//        }
+//        return ret;
+//      }
+//    });
+//    addTemplate("luMatch-WNRelatedSynSet", new Template() {
+//      public Iterable<String> extract(TemplateContext context) {
+//        Span t = context.getTarget();
+//        if (t == null)
+//          return null;
+//        if (t.width() != 1)
+//          return null;
+//        List<String> ret = new ArrayList<>();
+//        TargetPruningData tpd = TargetPruningData.getInstance();
+//        IWord word = context.getSentence().getWnWord(t.start);
+//        if (word == null)
+//          return null;
+//        Map<IPointer, List<ISynsetID>> relSS = word.getSynset().getRelatedMap();
+//        boolean hadAChance = false;
+//        for (FrameInstance p : tpd.getPrototypesByFrame(context.getFrame())) {
+//          hadAChance = true;
+//          // see if syn-set match for (head1, prototype)
+//          Span pt = p.getTarget();
+//          if (pt.width() != 1)
+//            continue;
+//          IWord otherWord = p.getSentence().getWnWord(pt.start);
+//          if (otherWord == null)
+//            continue;
+//          for (Map.Entry<IPointer, List<ISynsetID>> x : relSS.entrySet()) {
+//            for (ISynsetID ssid : x.getValue()) {
+//              ISynset ss = tpd.getWordnetDict().getSynset(ssid);
+//              if (ss.getWords().contains(otherWord))
+//                ret.add("luMatch-WNRelatedSynSet=" + x.getKey().getName());
+//            }
+//          }
+//        }
+//        if (ret.size() == 0) {
+//          if (hadAChance)
+//            ret.add("NO-luMatch-WNRelatedSynSet");
+//          else return null;
+//        }
+//        return ret;
+//      }
+//    });
 
     /* FRAME-ROLE FEATURES ****************************************************/
     addTemplate("argHeadRelation1", new TemplateSS() {
@@ -1900,10 +1873,9 @@ public class BasicFeatureTemplates {
   }
 
 
-  /**
+  /*
    * Methods and data structures on top of the enclosing class with some functionality to estimate
    * the cardinality of templates and products (features)
-   */
   public static class Indexed extends BasicFeatureTemplates {
     private List<Function<GlobalParameters, Function<String, Stage<?, ?>>>> stages;
     private Map<String, Consumer<Stage<?, ?>>> syntaxModes;
@@ -2049,7 +2021,7 @@ public class BasicFeatureTemplates {
       File outputFile = config.getFile("output");
       int part = config.getInt("part");
       int numParts = config.getInt("numParts");
-      RoleHeadStage.SHOW_FEATURES = config.getBoolean("roleHeadStage.showFeatures", false);
+//      RoleHeadStage.SHOW_FEATURES = config.getBoolean("roleHeadStage.showFeatures", false);
 
       // Load cardinalities that were estimated on another run (useful for partial failures)
       String precompFilenameKey = "precomputed";
@@ -2098,8 +2070,8 @@ public class BasicFeatureTemplates {
 
       // Load data ahead of time to ensure fair timing
       if (!fakeIt) {
-        TargetPruningData.getInstance().getWordnetDict();
-        TargetPruningData.getInstance().getPrototypesByFrame();
+//        TargetPruningData.getInstance().getWordnetDict();
+//        TargetPruningData.getInstance().getPrototypesByFrame();
       }
 
       // parallelize with FileWriter that uses append
@@ -2180,17 +2152,18 @@ public class BasicFeatureTemplates {
       Log.info("done, results are in " + outputFile.getPath());
     }
   }
+  */
 
-  public static void main(String[] args) throws Exception {
-    ExperimentProperties.init(args);
-    Indexed ce = new BasicFeatureTemplates.Indexed();
-//    ce.estimateCardinalityOfTemplates();
-    int i = 0;
-    List<String> all = ce.getBasicTemplateNames();
-    Collections.sort(all);
-    for (String t : all) {
-      System.out.println((i++) + "\t" + t);
-    }
-  }
+//  public static void main(String[] args) throws Exception {
+//    ExperimentProperties.init(args);
+//    Indexed ce = new BasicFeatureTemplates.Indexed();
+////    ce.estimateCardinalityOfTemplates();
+//    int i = 0;
+//    List<String> all = ce.getBasicTemplateNames();
+//    Collections.sort(all);
+//    for (String t : all) {
+//      System.out.println((i++) + "\t" + t);
+//    }
+//  }
 
 }

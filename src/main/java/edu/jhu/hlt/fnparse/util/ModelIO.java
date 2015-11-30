@@ -14,7 +14,6 @@ import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.FgModel;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
@@ -22,7 +21,11 @@ import edu.jhu.util.Alphabet;
 
 public class ModelIO {
 
-  public static Logger LOG = Logger.getLogger(ModelIO.class);
+  // Came from pacaya, removing that dependency
+  public static interface FgModel {
+    public int getNumParams();
+    public void updateDoublesFromModel(double[] values);
+  }
 
   public static boolean preventOverwrites = false;
 
@@ -76,7 +79,7 @@ public class ModelIO {
       Alphabet<String> featIdx,
       File f,
       boolean outputZeroFeatures) {
-    LOG.info("writing human readable model to " + f.getPath());
+    Log.info("writing human readable model to " + f.getPath());
     if(preventOverwrites && f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is already a file");
     if(model == null || featIdx == null)

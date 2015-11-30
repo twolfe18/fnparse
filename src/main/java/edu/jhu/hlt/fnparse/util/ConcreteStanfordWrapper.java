@@ -38,6 +38,8 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.tutils.Timer;
 
+import edu.jhu.hlt.concrete.analytics.base.AnalyticException;
+
 /**
  * Calls concrete-stanford and wraps the results in fnparse data structures.
  *

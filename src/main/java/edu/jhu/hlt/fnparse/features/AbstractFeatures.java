@@ -4,14 +4,12 @@ import java.io.Serializable;
 import java.util.Collections;
 import java.util.List;
 
-import org.apache.commons.math3.util.FastMath;
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.LexicalUnit;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.HasParserParams;
 import edu.jhu.hlt.fnparse.util.HasFeatureAlphabet;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -27,7 +25,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
   // NOTE: This can produce a LOT of output, so only use for debugging
   public static boolean PRINT_UNSEEN_FEATURES = false;
 
-  public static final FeatureVector emptyFeatures = new FeatureVector();
+  public static final IntDoubleUnsortedVector emptyFeatures = new IntDoubleUnsortedVector();
   public static final LexicalUnit luStart = new LexicalUnit("<S>", "<S>");
   public static final LexicalUnit luEnd = new LexicalUnit("</S>", "</S>");
 
@@ -69,15 +67,16 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
 
   protected boolean debug = false;
 
-  protected final HasParserParams globalParams;
-
-  public AbstractFeatures(HasParserParams globalParams) {
-    this.globalParams = globalParams;
-  }
+//  protected final HasParserParams globalParams;
+//
+//  public AbstractFeatures(HasParserParams globalParams) {
+//    this.globalParams = globalParams;
+//  }
 
   @Override
   public Alphabet<String> getAlphabet() {
-    return globalParams.getParserParams().getAlphabet();
+//    return globalParams.getParserParams().getAlphabet();
+    throw new RuntimeException("re-implement me");
   }
 
   /**
@@ -109,7 +108,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
     return name;
   }
 
-  protected final void b(FeatureVector fv, Refinements refs, String... featureNamePieces) {
+  protected final void b(IntDoubleUnsortedVector fv, Refinements refs, String... featureNamePieces) {
     b(fv, refs, 1d, featureNamePieces);
   }
 
@@ -118,7 +117,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
    * if there are refinements, those indices will not be returned.
    */
   protected final void b(
-      FeatureVector fv,
+      IntDoubleUnsortedVector fv,
       Refinements refs,
       double weight,
       String... featureNamePieces) {
@@ -146,7 +145,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
         } else {
           weight *= refs.getWeight(ri);
           if (weightingPower != 1d)
-            weight = FastMath.pow(weight, weightingPower);
+            weight = Math.pow(weight, weightingPower);
         }
         fv.add(idx, weight);
       }
@@ -158,7 +157,7 @@ public abstract class AbstractFeatures<T extends AbstractFeatures<?>>
           } else {
             weight *= refs.getWeight(ri);
             if (weightingPower != 1d)
-              weight = FastMath.pow(weight, weightingPower);
+              weight = Math.pow(weight, weightingPower);
           }
           fv.add(idx, weight);
         } else if (PRINT_UNSEEN_FEATURES) {

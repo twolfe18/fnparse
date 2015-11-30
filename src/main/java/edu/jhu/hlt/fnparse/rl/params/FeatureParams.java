@@ -7,7 +7,6 @@ import java.io.Serializable;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.CommitIndex;
@@ -17,6 +16,7 @@ import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 import edu.jhu.util.Alphabet;
 
@@ -71,20 +71,20 @@ public abstract class FeatureParams implements Serializable {
   }
 
   /** Override one of the getFeatures methods */
-  public FeatureVector getFeatures(FNTagging frames, Action a) {
+  public IntDoubleUnsortedVector getFeatures(FNTagging frames, Action a) {
     throw new RuntimeException("you should have either overriden this "
         + "method or called the other one");
   }
 
   /** Override one of the getFeatures methods */
-  //public FeatureVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
-  public FeatureVector getFeatures(State s, CommitIndex ai, Action a) {
+  //public IntDoubleUnsortedVector getFeatures(State s, SpanIndex<Action> ai, Action a) {
+  public IntDoubleUnsortedVector getFeatures(State s, CommitIndex ai, Action a) {
     throw new RuntimeException("you should have either overriden this "
         + "method or called the other one");
   }
 
   /** Override one of the getFeatures methods */
-  public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+  public IntDoubleUnsortedVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
     throw new RuntimeException("you should have either overriden this "
         + "method or called the other one");
   }
@@ -148,11 +148,11 @@ public abstract class FeatureParams implements Serializable {
     return numBuckets <= 0;
   }
 
-  public void b(FeatureVector fv, String... pieces) {
+  public void b(IntDoubleUnsortedVector fv, String... pieces) {
     b(fv, 1d, pieces);
   }
 
-  public void b(FeatureVector fv, double w, String... pieces) {
+  public void b(IntDoubleUnsortedVector fv, double w, String... pieces) {
     StringBuilder sb = new StringBuilder(pieces[0]);
     for (int i = 1; i < pieces.length; i++)
       sb.append("-" + pieces[i]);
@@ -198,7 +198,7 @@ public abstract class FeatureParams implements Serializable {
   }
 
   public Adjoints score(FNTagging frames, Action a) {
-    FeatureVector fv = getFeatures(frames, a);
+    IntDoubleUnsortedVector fv = getFeatures(frames, a);
 
     // Make sure that theta is big enough
     checkSize();
@@ -209,7 +209,7 @@ public abstract class FeatureParams implements Serializable {
 
   //public Adjoints score(State s, SpanIndex<Action> ai, Action a) {
   public Adjoints score(State s, CommitIndex ai, Action a) {
-    FeatureVector fv = getFeatures(s, ai, a);
+    IntDoubleUnsortedVector fv = getFeatures(s, ai, a);
 
     // Make sure that theta is big enough
     checkSize();
@@ -219,7 +219,7 @@ public abstract class FeatureParams implements Serializable {
   }
 
   public Adjoints score(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
-    FeatureVector fv = getFeatures(frames, pruneAction, providenceInfo);
+    IntDoubleUnsortedVector fv = getFeatures(frames, pruneAction, providenceInfo);
 
     // Make sure that theta is big enough
     checkSize();

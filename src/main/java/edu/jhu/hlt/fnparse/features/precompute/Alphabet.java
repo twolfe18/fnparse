@@ -9,10 +9,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.TemplateAlphabet;
-import edu.jhu.hlt.fnparse.inference.frameid.BasicFeatureTemplates;
-import edu.jhu.hlt.fnparse.inference.frameid.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;

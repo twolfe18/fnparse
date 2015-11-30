@@ -4,7 +4,6 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.tutils.Span;
-import edu.stanford.nlp.util.RuntimeInterruptedException;
 
 import java.math.BigInteger;
 import java.util.*;

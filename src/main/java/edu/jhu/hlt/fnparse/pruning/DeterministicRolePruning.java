@@ -1,7 +1,5 @@
-package edu.jhu.hlt.fnparse.inference.role.span;
+package edu.jhu.hlt.fnparse.pruning;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -13,12 +11,6 @@ import java.util.Random;
 import java.util.Set;
 import java.util.function.Function;
 
-import org.apache.log4j.Logger;
-
-import edu.jhu.gm.data.LabeledFgExample;
-import edu.jhu.gm.model.FactorGraph;
-import edu.jhu.gm.model.FgModel;
-import edu.jhu.gm.model.VarConfig;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
@@ -30,22 +22,19 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameRoleInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
-import edu.jhu.hlt.fnparse.inference.stages.Stage;
+import edu.jhu.hlt.fnparse.inference.stages.IDecodable;
+import edu.jhu.hlt.fnparse.inference.stages.StageDatum;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.GlobalParameters;
 import edu.jhu.hlt.fnparse.util.RandomBracketing;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
-public class DeterministicRolePruning
-    implements Stage<FNTagging, FNParseSpanPruning> {
-  public static final Logger LOG =
-      Logger.getLogger(DeterministicRolePruning.class);
+public class DeterministicRolePruning {
 
   public static enum Mode {
     // Take all constituents in Stanford's constituency parse
@@ -87,8 +76,7 @@ public class DeterministicRolePruning
   public static boolean PEDANTIC = false;
   public boolean showPruningRecall;
 
-  private Mode mode = LatentConstituencyPipelinedParser.DEFAULT_PRUNING_METHOD;
-  private final FgModel weights = new FgModel(0);
+  private Mode mode = Mode.XUE_PALMER_HERMANN;
   //private ConcreteStanfordWrapper parser;
   private Function<Sentence, ConstituencyParse> cParser;
   private Function<Sentence, DependencyParse> dParser;
@@ -123,57 +111,21 @@ public class DeterministicRolePruning
     String key = "deterministicRolePruningMethod";
     String value = configuration.get(key);
     if (value != null) {
-      LOG.info("setting " + key + " to " + value);
+      Log.info("setting " + key + " to " + value);
       mode = Mode.valueOf(value);
       assert mode != null;
     }
   }
 
-  @Override
-  public FgModel getWeights() {
-    return weights;
-  }
-
-  @Override
-  public void setWeights(FgModel weights) {
-    LOG.info("[setWeights] not actually doing anything");
-  }
-
-  @Override
-  public boolean logDomain() {
-    return false;
-  }
-
-  @Override
   public String getName() {
     return this.getClass().getName();
   }
 
-  @Override
-  public void scanFeatures(
-      List<? extends FNTagging> unlabeledExamples,
-      List<? extends FNParseSpanPruning> labels,
-      double maxTimeInMinutes,
-      int maxFeaturesAdded) {
-    LOG.info("[scanFeatures] not actually doing anything");
-  }
-
-  @Override
-  public void train(List<FNTagging> x, List<FNParseSpanPruning> y) {
-    LOG.info("[train] not actually doing anything");
-  }
-
-  @Override
-  public void scanFeatures(List<FNParse> data) {
-    LOG.info("[scanFeatures] not actually doing anything");
-  }
-
-  @Override
   public StageDatumExampleList<FNTagging, FNParseSpanPruning> setupInference(
       List<? extends FNTagging> input,
       List<? extends FNParseSpanPruning> output) {
     if (showPruningRecall) {
-      LOG.info("[setupInference] for " + input.size() + " sentences in "
+      Log.info("[setupInference] for " + input.size() + " sentences in "
           + mode + " mode");
     }
     List<StageDatum<FNTagging, FNParseSpanPruning>> data = new ArrayList<>();
@@ -199,12 +151,12 @@ public class DeterministicRolePruning
     public FNParseSpanPruning getGold() {
       throw new RuntimeException();
     }
-    @Override
-    public LabeledFgExample getExample() {
-      FactorGraph fg = new FactorGraph();
-      VarConfig gold = new VarConfig();
-      return new LabeledFgExample(fg, gold);
-    }
+//    @Override
+//    public LabeledFgExample getExample() {
+//      FactorGraph fg = new FactorGraph();
+//      VarConfig gold = new VarConfig();
+//      return new LabeledFgExample(fg, gold);
+//    }
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
       //return new Decodable(input, mode, parser);
@@ -282,7 +234,7 @@ public class DeterministicRolePruning
               // TODO: single-token targets are gauranteed to be nodes in the
               // tree, but multi-word targets often won't be.
               // Solution: take the smallest node that dominates the entire target.
-              LOG.warn("[" + mode + " decode] target is not a span! "
+              Log.warn("[" + mode + " decode] target is not a span! "
                   + Describe.span(fi.getTarget(), fi.getSentence()));
             } else {
               xuePalmerHelper(pred, spanSet);
@@ -291,7 +243,7 @@ public class DeterministicRolePruning
               Span parent;
               if (pred.getParent() == null) {
                 parent = Span.getSpan(0, fi.getSentence().size());
-                LOG.warn("pred has no parent " + pred + " in "
+                Log.warn("pred has no parent " + pred + " in "
                     + fi.getSentence().getId());
               } else {
                 parent = pred.getParent().getSpan();
@@ -315,7 +267,7 @@ public class DeterministicRolePruning
             //spans.addAll(spanSet);
             for (Span s : spanSet) {
               if (s.end > sent.size() || s.start < 0 || s.start >= s.end) {
-                LOG.warn("bad span: " + s + " vs " + sent.size());
+                Log.warn("bad span: " + s + " vs " + sent.size());
                 continue;
               }
               assert s != Span.nullSpan;
@@ -395,16 +347,6 @@ public class DeterministicRolePruning
       xuePalmerHelper(node.getParent(), spans);
   }
 
-  @Override
-  public void saveModel(DataOutputStream dos, GlobalParameters globals) {
-    LOG.info("not actually saving anything");
-  }
-
-  @Override
-  public void loadModel(DataInputStream dis, GlobalParameters globals) {
-    LOG.info("not actually loading anything");
-  }
-
   // shows spans
   public static void main(String[] args) {
     ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
@@ -415,16 +357,16 @@ public class DeterministicRolePruning
         FileFrameInstanceProvider.debugFIP.getParsedSentences())) {
       FNParseSpanPruning mask = prune.setupInference(
           Arrays.asList(parse), null).decodeAll().get(0);
-      LOG.info(Describe.fnParse(parse));
+      Log.info(Describe.fnParse(parse));
       for (int i = 0; i < mask.numFrameInstances(); i++) {
         FrameInstance frame = mask.getFrameInstance(i);
-        LOG.info("sentence:\n" + Describe.sentenceWithDeps(mask.getSentence(), true));
-        LOG.info("possible args for " + Describe.frameInstance(frame));
+        Log.info("sentence:\n" + Describe.sentenceWithDeps(mask.getSentence(), true));
+        Log.info("possible args for " + Describe.frameInstance(frame));
         for (Span s : mask.getPossibleArgs(i))
-          LOG.info("\t" + Describe.span(s, parse.getSentence()));
-        LOG.info("");
+          Log.info("\t" + Describe.span(s, parse.getSentence()));
+        Log.info("");
       }
-      LOG.info("------------------------------------------------------");
+      Log.info("------------------------------------------------------");
     }
   }
 
@@ -461,7 +403,7 @@ public class DeterministicRolePruning
         }
       }
       if (fpr.getTP() > 0)
-        LOG.info(mode + " recall " + fpr.recall());
+        Log.info(mode + " recall " + fpr.recall());
     }
   }
 }

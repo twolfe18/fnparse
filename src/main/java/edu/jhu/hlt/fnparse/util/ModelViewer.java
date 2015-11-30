@@ -6,8 +6,6 @@ import java.util.List;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.gm.model.FgModel;
-import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class ModelViewer {
@@ -54,32 +52,16 @@ public class ModelViewer {
   }
 
   public static List<FeatureWeight> getSortedWeights(double[] weights, Alphabet<String> names) {
-    FgModel model = new FgModel(weights.length);
-    model.updateModelFromDoubles(weights);
-    return getSortedWeights(model, names);
+    List<String> fn = new ArrayList<>();
+    for (int i = 0; i < weights.length; i++)
+      fn.add(names.lookupObject(i));
+    return getSortedWeights(weights, fn);
   }
 
   public static List<FeatureWeight> getSortedWeights(double[] weights, List<String> names) {
     List<FeatureWeight> w = new ArrayList<>();
     for (int i = 0; i < weights.length; i++)
       w.add(new FeatureWeight(names.get(i), weights[i]));
-    Collections.sort(w);
-    return w;
-  }
-
-  public static List<FeatureWeight> getSortedWeights(FgModel weights, Alphabet<String> names) {
-    List<FeatureWeight> w = new ArrayList<>();
-//    assert names.size() <= weights.getNumParams()
-//        : "weights should be able to accomodate all the features in the alphabet!";
-    final int n = Math.min(weights.getNumParams(), names.size());
-    weights.apply(new FnIntDoubleToDouble() {
-      @Override
-      public double call(int arg0, double arg1) {
-        if (arg0 < n)
-          w.add(new FeatureWeight(names.lookupObject(arg0), arg1));
-        return arg1;
-      }
-    });
     Collections.sort(w);
     return w;
   }

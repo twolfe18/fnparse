@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.inference.frameid;
+package edu.jhu.hlt.fnparse.features;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -6,14 +6,14 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
-import edu.jhu.util.Alphabet;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
+import edu.jhu.util.Alphabet;
 
 /**
  * Issue: how to handle availability of information...
@@ -320,7 +320,7 @@ public abstract class TemplatedFeatures implements Serializable {
     return Describe.span(s, ctx.getSentence()) + " @ " + s.toString();
   }
 
-  public static void showFeatures(FeatureVector fv, Alphabet<String> params) {
+  public static void showFeatures(IntDoubleUnsortedVector fv, Alphabet<String> params) {
     fv.apply(new FnIntDoubleToDouble() {
       @Override
       public double call(int arg0, double arg1) {
@@ -337,7 +337,7 @@ public abstract class TemplatedFeatures implements Serializable {
    * Same as featurize, but prints the given message, context of the extraction,
    * and the features extracted.
    */
-  public void featurizeDebug(FeatureVector v, TemplateContext context, String message) {
+  public void featurizeDebug(IntDoubleUnsortedVector v, TemplateContext context, String message) {
     featurize(v, context);
     Log.info("");
     Log.info(message);
@@ -350,7 +350,7 @@ public abstract class TemplatedFeatures implements Serializable {
     Log.info("");
   }
 
-  public void featurize(FeatureVector v, TemplateContext context) {
+  public void featurize(IntDoubleUnsortedVector v, TemplateContext context) {
     if (templates == null) {
       try {
         templates = parseTemplates(templateString);

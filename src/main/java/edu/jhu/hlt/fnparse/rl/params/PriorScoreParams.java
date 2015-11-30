@@ -9,9 +9,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.math3.util.FastMath;
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.rl.Action;
@@ -29,7 +26,6 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
  */
 public class PriorScoreParams implements Params.Stateless {
   private static final long serialVersionUID = -4304333193787905873L;
-  public static final Logger LOG = Logger.getLogger(PriorScoreParams.class);
   public static boolean SHOW_PARAMS_AFTER_UPDATE = true;
 
   /**
@@ -169,10 +165,10 @@ public class PriorScoreParams implements Params.Stateless {
 
   public void setParamsByHand() {
     double recallBias = 2d;
-    theta.set(0, FastMath.sqrt(1d / recallBias));
+    theta.set(0, Math.sqrt(1d / recallBias));
     theta.set(2, 1d);
     theta.set(3, 1d);
-    theta.set(9 + 0, FastMath.sqrt(recallBias));
+    theta.set(9 + 0, Math.sqrt(recallBias));
     theta.set(9 + 1, -999d);
     theta.set(9 + 2, 1d);
     theta.set(9 + 3, 1d);
