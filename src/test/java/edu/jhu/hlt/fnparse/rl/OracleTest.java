@@ -36,7 +36,7 @@ public class OracleTest {
     Reranker model = new Reranker(
         Params.Stateful.NONE, Params.Stateless.NONE, tau,
         DeterministicRolePruning.Mode.STANFORD_CONSTITUENTS,
-        beam, beam, rand);
+        null, beam, beam, rand);
     for (FNParse y : getParses()) {
       if (y.numFrameInstances() == 0)
         continue;

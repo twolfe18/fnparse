@@ -19,13 +19,21 @@
       <artifactId>functionaljava</artifactId>
       <version>3.1</version>
     </dependency>
-<!--
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-conll</artifactId>
       <version>4.6.3-SNAPSHOT</version>
     </dependency>
--->
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>miscommunication</artifactId>
+      <version>4.6.3-SNAPSHOT</version>
+    </dependency>
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-analytics-base</artifactId>
+      <version>4.6.3-SNAPSHOT</version>
+    </dependency>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>tutils</artifactId>
@@ -37,12 +45,12 @@
       <artifactId>pacaya</artifactId>
       <version>3.0.9</version>
     </dependency>
+    <dependency>
+      <groupId>edu.jhu.hlt</groupId>
+      <artifactId>concrete-util</artifactId>
+      <version>4.8.3</version>
+    </dependency>
 -->
-<dependency>
-  <groupId>edu.jhu.hlt</groupId>
-  <artifactId>concrete-util</artifactId>
-  <version>4.8.3</version>
-</dependency>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-stanford</artifactId>
@@ -77,6 +85,12 @@
       <groupId>com.googlecode.efficient-java-matrix-library</groupId>
       <artifactId>ejml</artifactId>
       <version>0.25</version>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.12</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 

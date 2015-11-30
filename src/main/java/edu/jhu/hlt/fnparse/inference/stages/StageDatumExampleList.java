@@ -14,6 +14,9 @@ import org.apache.log4j.Logger;
 public class StageDatumExampleList<I, O> {
   public static final Logger LOG = Logger.getLogger(StageDatumExampleList.class);
 
+  public interface LFgExample {
+  }
+
   private final List<StageDatum<I, O>> data;
   private LFgExample[] cache;
 
@@ -33,7 +36,6 @@ public class StageDatumExampleList<I, O> {
       cache = new LFgExample[data.size()];
   }
 
-  @Override
   public Iterator<LFgExample> iterator() {
     return new Iterator<LFgExample>() {
       private Iterator<StageDatum<I, O>> iter = data.iterator();
@@ -53,7 +55,7 @@ public class StageDatumExampleList<I, O> {
   }
 
   private static int inMem = 0;
-  @Override
+
   public LFgExample get(int index) {
     if (cache != null) {
       if (cache[index] == null) {
@@ -82,7 +84,6 @@ public class StageDatumExampleList<I, O> {
     return data;
   }
 
-  @Override
   public int size() {
     return data.size();
   }

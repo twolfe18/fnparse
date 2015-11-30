@@ -9,7 +9,6 @@ import java.util.Random;
 
 import org.apache.log4j.Logger;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -149,7 +148,7 @@ public class LearningTest {
     int beamWidth = 10;
     Params.PruneThreshold tau = Params.PruneThreshold.Const.ZERO;
     Reranker model = new Reranker(
-        Stateful.NONE, theta, tau, argPruningMode, beamWidth, beamWidth, rand);
+        Stateful.NONE, theta, tau, argPruningMode, null, beamWidth, beamWidth, rand);
     Reranker.LOG_FORWARD_SEARCH = false;
 
     evaluate(model, ip, 0.99d, 0.99d);
@@ -172,7 +171,7 @@ public class LearningTest {
     trainer.statelessParams = theta;
     LOG.info("[getsItRight] before: ");
     theta.showWeights();
-    Reranker model = trainer.train1(ip);
+    Reranker model = trainer.train1(ip, null);
     LOG.info("[getsItRight] after " + iters + ": ");
     theta.showWeights();
     evaluate(model, ip, 0.99d, 0.99d);
@@ -216,19 +215,19 @@ public class LearningTest {
       PriorScoreParams theta = new PriorScoreParams(ip, true);
       if (byHand) {
         theta.setParamsByHand();
-        model = new Reranker(Stateful.NONE, theta, tau, argPruningMode, beamWidth, beamWidth, rand);
+        model = new Reranker(Stateful.NONE, theta, tau, argPruningMode, null, beamWidth, beamWidth, rand);
       } else {
         RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
         trainer.statelessParams = theta;
         trainer.pretrainConf.batchSize = 20;
-        model = trainer.train1(ip);
+        model = trainer.train1(ip, null);
       }
     } else {
       // Intersect the items dumped to disk with oracle parameters,
       // check how good the score can be.
       CheatingParams oracle = new CheatingParams(ItemProvider.allLabels(ip));
       oracle.setWeightsByHand();
-      model = new Reranker(Stateful.NONE, oracle, tau, argPruningMode, beamWidth, beamWidth, rand);
+      model = new Reranker(Stateful.NONE, oracle, tau, argPruningMode, null, beamWidth, beamWidth, rand);
       Assert.assertTrue("I dumped support for using items for pruning", false);
     }
 

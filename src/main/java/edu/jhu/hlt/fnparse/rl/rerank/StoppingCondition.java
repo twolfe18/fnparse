@@ -8,18 +8,13 @@ import java.util.Random;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 
-import org.apache.commons.math3.util.FastMath;
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.fnparse.util.EMA;
 import edu.jhu.hlt.fnparse.util.QueueAverage;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Timer;
 
-
 public interface StoppingCondition {
-  public static final Logger LOG = Logger.getLogger(StoppingCondition.class);
 
   public boolean stop(int iter, double violation);
   public int estimatedNumberOfIterations();
@@ -113,11 +108,11 @@ public interface StoppingCondition {
     @Override
     public boolean stop(int iter, double violation) {
       if (left.stop(iter, violation)) {
-        LOG.info(toString() + " stopping because of " + left);
+        Log.info(toString() + " stopping because of " + left);
         return true;
       }
       if (right.stop(iter, violation)) {
-        LOG.info(toString() + " stopping because of " + right);
+        Log.info(toString() + " stopping because of " + right);
         return true;
       }
       return false;
@@ -153,7 +148,7 @@ public interface StoppingCondition {
         return false;
       boolean stop = elapsedMins() > maxMinutes;
       if (stop)
-        LOG.info(toString() + " stopping due to time");
+        Log.info(toString() + " stopping due to time");
       return stop;
     }
     public double elapsedMins() {
@@ -271,9 +266,9 @@ public interface StoppingCondition {
     public boolean stop(int iter, double violation) {
 
       // Compute held-out loss
-      LOG.info("[DevSet stop] calling dev set loss function");
+      Log.info("[DevSet stop] calling dev set loss function");
       double devLoss = devLossFunc.getAsDouble();
-      LOG.info("[DevSet stop] writing loss=" + devLoss + " to file=" + historyFile.getPath());
+      Log.info("[DevSet stop] writing loss=" + devLoss + " to file=" + historyFile.getPath());
       assert Double.isFinite(devLoss);
       assert !Double.isNaN(devLoss);
       assert devLoss >= 0 : "technically this isn't needed...";
@@ -291,7 +286,7 @@ public interface StoppingCondition {
         return false;
 
       // Call rScript
-      LOG.info("[DevSet stop] iter=" + iter + " calling " + toString());
+      Log.info("[DevSet stop] iter=" + iter + " calling " + toString());
       rScriptTimer.start();
       try {
         ProcessBuilder pb = new ProcessBuilder(
@@ -303,9 +298,9 @@ public interface StoppingCondition {
         stderr.start();
         int r = p.waitFor();
         if (r != 0 || stdout.getLines().isEmpty()) {
-          LOG.warn("stderr: " + stderr.getLines());
-          LOG.warn(p);
-          LOG.warn("[DevSet stop] error during call: " + r);
+          Log.warn("stderr: " + stderr.getLines());
+          Log.warn(p);
+          Log.warn("[DevSet stop] error during call: " + r);
           //throw new RuntimeException("exit value: " + r);
           return false;
         }
@@ -319,7 +314,7 @@ public interface StoppingCondition {
       } finally {
         double secs = rScriptTimer.stop() / 1000d;
         if (secs > 1d)
-          LOG.warn("[DevSet stop] slow rScript, secs=" + secs);
+          Log.warn("[DevSet stop] slow rScript, secs=" + secs);
       }
       return false;
     }
@@ -407,11 +402,11 @@ public interface StoppingCondition {
       // Add this violation to our estimate
       this.iter++;
       if (!olderBucket.isFull()) {
-        LOG.info(toString() + " pushing to old");
+        Log.info(toString() + " pushing to old");
         olderBucket.push(violation);
         return false;
       } else if (!newBucket.isFull()) {
-        LOG.info(toString() + " pushing to new");
+        Log.info(toString() + " pushing to new");
         newBucket.push(violation);
         return false;
       }
@@ -428,9 +423,9 @@ public interface StoppingCondition {
       // Do t-test on bucket means
       double oldMeanVar = olderBucket.getVariance() / bucketSize;
       double newMeanVar = newBucket.getVariance() / bucketSize;
-      double t = absRedPerIter / FastMath.sqrt(oldMeanVar + newMeanVar);
+      double t = absRedPerIter / Math.sqrt(oldMeanVar + newMeanVar);
 
-      LOG.info(String.format(
+      Log.info(String.format(
           "%s iter=%d reduction=%.2g absRedPerIter=%.2g relRedPerIter=%.2g "
           + "iter%%decorrelate=%d t=%.3f oldMeanVar=%.3f newMeanVar=%.3f",
           toString(), this.iter, hi - lo, absRedPerIter, relRedPerIter,
@@ -441,13 +436,13 @@ public interface StoppingCondition {
         boolean b = relRedPerIter < this.minRelRedPerIter;
         boolean p = t > this.maxPvalue;
         if (p)
-          LOG.info(toString() + " stopping because of t-test");
+          Log.info(toString() + " stopping because of t-test");
         if (a && b)
-          LOG.info(toString() + " stopping because of absolute and relative error");
+          Log.info(toString() + " stopping because of absolute and relative error");
         else if (a)
-          LOG.info(toString() + " stopping because of absolute error");
+          Log.info(toString() + " stopping because of absolute error");
         else if (b)
-          LOG.info(toString() + " stopping because of relative error");
+          Log.info(toString() + " stopping because of relative error");
         return p || a || b;
       } else {
         return false;
@@ -496,7 +491,7 @@ public interface StoppingCondition {
       assert !Double.isNaN(red);
       assert Double.isFinite(red);
       if (VERBOSE) {
-        LOG.info("[HammingConvergence] iter=" + iter + " tol=" + tol
+        Log.info("[HammingConvergence] iter=" + iter + " tol=" + tol
             + " slow=" + slow.getAverage() + " fast=" + fast.getAverage()
             + " violation=" + violation + " red=" + red);
       }
@@ -506,13 +501,13 @@ public interface StoppingCondition {
           return true;
         int k = Math.max(1, inARow / 10);
         if (curRun % k == 0) {
-          LOG.info("[HammingConvergence] curRun=" + curRun
+          Log.info("[HammingConvergence] curRun=" + curRun
               + " inARow=" + inARow + " iter=" + iter);
         }
       } else {
         double t = Math.min(0.25d, inARow / (iter + 1));
         if (((double) curRun) / inARow > t) {
-          LOG.info("[HammingConvergence] resetting after curRun=" + curRun
+          Log.info("[HammingConvergence] resetting after curRun=" + curRun
               + " inARow=" + inARow + " iter=" + iter);
         }
         curRun = 0;

@@ -49,14 +49,12 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.IntArrayList;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
@@ -109,7 +107,6 @@ public class CachedFeatures {
 //    private Map<SpanPair, BaseTemplates> features2;
     private Map<Span, Map<Span, BaseTemplates>> features3;
 
-    @SuppressWarnings("unchecked")
     public Item(FNParse parse) {
       if (parse == null)
         throw new IllegalArgumentException();
@@ -836,7 +833,7 @@ public class CachedFeatures {
     HeadFinder hf = new SemaforicHeadFinder();
     Random rand = new Random(9001);
     Reranker r = new Reranker(null, null, null, Mode.CACHED_FEATURES, this, 1, 1, rand);
-    BasicFeatureTemplates.Indexed ti = BasicFeatureTemplates.getInstance();
+    BasicFeatureTemplates ti = new BasicFeatureTemplates();
 
 //    Map<String, FNParse> sentId2parse = getPropbankSentId2Parse(config);
     sentIdsAndFNParses = new PropbankFNParses(config);

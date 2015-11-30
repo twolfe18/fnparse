@@ -1,7 +1,7 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
-import edu.jhu.hlt.tutils.Hash;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * Represents a role to be filled in for a particular FrameInstance.

@@ -12,11 +12,9 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.util.zip.GZIPOutputStream;
 
-import org.apache.log4j.Logger;
-
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Timer;
-import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
 import edu.jhu.util.Alphabet;
 
 public class ModelIO {
@@ -105,7 +103,7 @@ public class ModelIO {
   }
 
   public static void writeBinary(FgModel model, File f) {
-    LOG.info("writing model to " + f.getPath());
+    Log.info("writing model to " + f.getPath());
     if(preventOverwrites && f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is already a file");
     try {
@@ -129,51 +127,53 @@ public class ModelIO {
   }
 
   public static void writeBinaryWithStringFeatureNames(FgModel model, Alphabet<String> featureNames, DataOutputStream dos) {
-    int n = model.getNumParams();
-    try {
-      dos.writeInt(n);
-      model.apply(new FnIntDoubleToDouble() {
-        @Override
-        public double call(int arg0, double arg1) {
-          String fn = featureNames.lookupObject(arg0);
-          try {
-            dos.writeUTF(fn);
-            dos.writeDouble(arg1);
-          } catch (Exception e) {
-            throw new RuntimeException(e);
-          }
-          return arg1;
-        }
-      });
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+//    int n = model.getNumParams();
+//    try {
+//      dos.writeInt(n);
+//      model.apply(new FnIntDoubleToDouble() {
+//        @Override
+//        public double call(int arg0, double arg1) {
+//          String fn = featureNames.lookupObject(arg0);
+//          try {
+//            dos.writeUTF(fn);
+//            dos.writeDouble(arg1);
+//          } catch (Exception e) {
+//            throw new RuntimeException(e);
+//          }
+//          return arg1;
+//        }
+//      });
+//    } catch (Exception e) {
+//      throw new RuntimeException(e);
+//    }
+    throw new RuntimeException("re-implement me");
   }
 
   public static FgModel readBinaryWithStringFeatureNames(Alphabet<String> featureNames, DataInputStream dis) {
     if (!featureNames.isGrowing())
       throw new RuntimeException();
-    try {
-      int n = dis.readInt();
-      assert n > 0;
-      int[] indices = new int[n];
-      double[] weights = new double[n];
-      for (int i = 0; i < n; i++) {
-        String fn = dis.readUTF();
-        weights[i] = dis.readDouble();
-        indices[i] = featureNames.lookupIndex(fn, true);
-      }
-      FgModel model = new FgModel(featureNames.size());
-      for (int i = 0; i < n; i++)
-        model.add(indices[i], weights[i]);
-      return model;
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+//    try {
+//      int n = dis.readInt();
+//      assert n > 0;
+//      int[] indices = new int[n];
+//      double[] weights = new double[n];
+//      for (int i = 0; i < n; i++) {
+//        String fn = dis.readUTF();
+//        weights[i] = dis.readDouble();
+//        indices[i] = featureNames.lookupIndex(fn, true);
+//      }
+//      FgModel model = new FgModel(featureNames.size());
+//      for (int i = 0; i < n; i++)
+//        model.add(indices[i], weights[i]);
+//      return model;
+//    } catch (Exception e) {
+//      throw new RuntimeException(e);
+//    }
+    throw new RuntimeException("re-implement me");
   }
 
   public static FgModel readBinary(File f) {
-    LOG.info("reading binary model from " + f.getPath());
+    Log.info("reading binary model from " + f.getPath());
     if(!f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is not a file");
     try {
@@ -187,21 +187,22 @@ public class ModelIO {
   }
 
   public static FgModel readBinary(DataInputStream dis) throws IOException {
-    int dimension = dis.readInt();
-    LOG.debug("[readBinary] dimension=" + dimension);
-    FgModel model = new FgModel(dimension);
-    double[] values = new double[dimension];
-    for(int i=0; i<dimension; i++)
-      values[i] = dis.readDouble();
-    model.updateModelFromDoubles(values);
-    return model;
+//    int dimension = dis.readInt();
+//    Log.debug("[readBinary] dimension=" + dimension);
+//    FgModel model = new FgModel(dimension);
+//    double[] values = new double[dimension];
+//    for(int i=0; i<dimension; i++)
+//      values[i] = dis.readDouble();
+//    model.updateModelFromDoubles(values);
+//    return model;
+    throw new RuntimeException("re-implement me");
   }
 
   /**
    * @return an alphabet from a file which is guaranteed to not be growing.
    */
   public static Alphabet<String> readAlphabet(File f) {
-    LOG.info("reading alphabet from " + f.getPath());
+    Log.info("reading alphabet from " + f.getPath());
     if(!f.isFile())
       throw new IllegalArgumentException(f.getPath() + " is not a file");
     Timer t = Timer.start("");
@@ -214,7 +215,7 @@ public class ModelIO {
     }
     alph.stopGrowth();
     t.stop();
-    LOG.info(String.format("read %d entries from %s in %.1f seconds",
+    Log.info(String.format("read %d entries from %s in %.1f seconds",
         alph.size(), f.getPath(), t.totalTimeInSeconds()));
     return alph;
   }
@@ -238,7 +239,7 @@ public class ModelIO {
         }
       }
       t.stop();
-      LOG.info(String.format(
+      Log.info(String.format(
           "[ModelIO.writeAlphabet] wrote %d entries to %s in %.1f seconds",
           alph.size(), f.getPath(), t.totalTimeInSeconds()));
     } catch (Exception e) {

@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.inference.stages;
 
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList.LFgExample;
+
 /**
  * Does one step in a pipeline.
  * An example would be the "frameId" stage:
@@ -35,7 +37,7 @@ public interface StageDatum<Input, Output> {
   public Output getGold();
 
   /** For training */
-//  public LabeledFgExample getExample();
+  public LFgExample getExample();
 
   /** For prediction */
   public IDecodable<Output> getDecodable();

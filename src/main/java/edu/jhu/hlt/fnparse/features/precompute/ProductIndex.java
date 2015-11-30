@@ -1,6 +1,6 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
-import edu.jhu.util.hash.MurmurHash3;
+import edu.jhu.hlt.tutils.hash.MurmurHash3;
 
 public class ProductIndex {
 

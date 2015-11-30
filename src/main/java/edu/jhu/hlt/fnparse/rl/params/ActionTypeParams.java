@@ -1,9 +1,9 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.Action;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * Says what the action type is.
@@ -26,8 +26,8 @@ public class ActionTypeParams extends FeatureParams implements Params.Stateless 
   }
 
   @Override
-  public FeatureVector getFeatures(FNTagging frames, Action a) {
-    FeatureVector fv = new FeatureVector();
+  public IntDoubleUnsortedVector getFeatures(FNTagging frames, Action a) {
+    IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
     String s = "a.hasSpan=" + a.hasSpan();
     String t = "at=" + a.getActionType().getName();
     b(fv, s, t);

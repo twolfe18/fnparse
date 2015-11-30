@@ -7,7 +7,6 @@ import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
-import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.Log;
@@ -15,17 +14,11 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
-import edu.mit.jwi.IRAMDictionary;
-import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IWord;
-import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
 
 public class Sentence implements HasId, Serializable {
   private static final long serialVersionUID = 4441193252111939157L;
-
-//  public static final Sentence nullSentence =
-//      new Sentence("nullSentenceDataset", "nullSentence", new String[0], new String[0], new String[0], new int[0], new String[0]);
 
   /**
    * a __globally__ unique identifier
@@ -194,26 +187,27 @@ public class Sentence implements HasId, Serializable {
   private transient IWord[] wnWords = null;
   public IWord getWnWord(int i) {
     if (wnWords == null) {
-      wnWords = new IWord[tokens.length];
-      TargetPruningData tpd = TargetPruningData.getInstance();
-      IRAMDictionary dict = tpd.getWordnetDict();
-      WordnetStemmer stemmer = tpd.getStemmer();
-      for (int idx = 0; idx < tokens.length; idx++) {
-        edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(getPos(idx));
-        if (tag == null)
-          continue;
-        String w = getWord(idx).trim().replace("_", "");
-        if (w.length() == 0)
-          continue;
-        List<String> stems = stemmer.findStems(w, tag);
-        if (stems == null || stems.size() == 0)
-          continue;
-        IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
-        if (ti == null || ti.getWordIDs().isEmpty())
-          continue;
-        IWordID t = ti.getWordIDs().get(0);
-        wnWords[idx] = dict.getWord(t);
-      }
+//      wnWords = new IWord[tokens.length];
+//      TargetPruningData tpd = TargetPruningData.getInstance();
+//      IRAMDictionary dict = tpd.getWordnetDict();
+//      WordnetStemmer stemmer = tpd.getStemmer();
+//      for (int idx = 0; idx < tokens.length; idx++) {
+//        edu.mit.jwi.item.POS tag = WordNetPosUtil.ptb2wordNet(getPos(idx));
+//        if (tag == null)
+//          continue;
+//        String w = getWord(idx).trim().replace("_", "");
+//        if (w.length() == 0)
+//          continue;
+//        List<String> stems = stemmer.findStems(w, tag);
+//        if (stems == null || stems.size() == 0)
+//          continue;
+//        IIndexWord ti = dict.getIndexWord(stems.get(0), tag);
+//        if (ti == null || ti.getWordIDs().isEmpty())
+//          continue;
+//        IWordID t = ti.getWordIDs().get(0);
+//        wnWords[idx] = dict.getWord(t);
+//      }
+      throw new RuntimeException("re-implement me");
     }
     return wnWords[i];
   }

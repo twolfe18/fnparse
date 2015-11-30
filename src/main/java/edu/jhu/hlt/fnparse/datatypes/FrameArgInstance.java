@@ -3,8 +3,8 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.Arrays;
 
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.Hash;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * You can use this to represent the target annotation as well, just set role=-1

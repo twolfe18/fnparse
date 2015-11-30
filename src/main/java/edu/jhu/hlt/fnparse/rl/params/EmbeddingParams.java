@@ -5,9 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Random;
 
-import org.apache.log4j.Logger;
-
-import edu.jhu.gm.feat.FeatureVector;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -15,7 +12,6 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.util.RandomInitialization;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
-import edu.jhu.prim.util.math.FastMath;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -42,7 +38,7 @@ import edu.jhu.prim.vector.IntDoubleVector;
  * @author travis
  */
 public class EmbeddingParams implements Params.Stateless {
-  public static final Logger LOG = Logger.getLogger(EmbeddingParams.class);
+  private static final long serialVersionUID = 4072691018985558507L;
 
   public interface FrameRoleEmbeddingParams {
     public int dimension(); // returned EmbeddingAdjoints should have forward scores of this dimension
@@ -66,7 +62,7 @@ public class EmbeddingParams implements Params.Stateless {
   // Used for debugging.
   public static class FeatureEmbeddingAdjoints implements EmbeddingAdjoints {
     private IntDoubleVector features;
-    public FeatureEmbeddingAdjoints(FeatureVector features) {
+    public FeatureEmbeddingAdjoints(IntDoubleUnsortedVector features) {
       this.features = features;
     }
     @Override
@@ -260,7 +256,7 @@ public class EmbeddingParams implements Params.Stateless {
   public static double l2norm(double[] v) {
     double d = 0d;
     for (double vv : v) d += vv * vv;
-    return FastMath.sqrt(d);
+    return Math.sqrt(d);
   }
 
   public static double l2norm(double[][] v) {
@@ -269,7 +265,7 @@ public class EmbeddingParams implements Params.Stateless {
       double s = l2norm(vv);
       d += s * s;
     }
-    return FastMath.sqrt(d);
+    return Math.sqrt(d);
   }
 
   public static boolean regular(double[] fr) {
@@ -338,7 +334,7 @@ public class EmbeddingParams implements Params.Stateless {
     EmbeddingAdjoints fr, ctx;
     if (debugParams != null) {
       // Use features instead of embeddings
-      FeatureVector fv = debugParams.getFeatures(frames, a);
+      IntDoubleUnsortedVector fv = debugParams.getFeatures(frames, a);
       fr = new OnesEmbeddingAdjoints(1);
       ctx = new FeatureEmbeddingAdjoints(fv);
     } else {

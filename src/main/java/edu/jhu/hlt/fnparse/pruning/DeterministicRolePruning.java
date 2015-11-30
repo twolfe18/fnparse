@@ -34,6 +34,8 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList.LFgExample;
+
 public class DeterministicRolePruning {
 
   public static enum Mode {
@@ -151,12 +153,13 @@ public class DeterministicRolePruning {
     public FNParseSpanPruning getGold() {
       throw new RuntimeException();
     }
-//    @Override
-//    public LabeledFgExample getExample() {
+    @Override
+    public LFgExample getExample() {
 //      FactorGraph fg = new FactorGraph();
 //      VarConfig gold = new VarConfig();
 //      return new LabeledFgExample(fg, gold);
-//    }
+      throw new RuntimeException();
+    }
     @Override
     public IDecodable<FNParseSpanPruning> getDecodable() {
       //return new Decodable(input, mode, parser);

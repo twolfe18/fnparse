@@ -23,11 +23,6 @@ import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.WeightedFrameInstance.ArgTheory;
-import edu.jhu.hlt.fnparse.experiment.grid.FinalResults;
-import edu.jhu.hlt.fnparse.inference.role.span.LatentConstituencyPipelinedParser;
-import edu.jhu.hlt.fnparse.inference.role.span.RoleSpanLabelingStage;
 import edu.jhu.hlt.fnparse.util.HasId;
 import edu.jhu.hlt.tutils.Span;
 
@@ -318,57 +313,57 @@ public interface ItemProvider extends Iterable<FNParse> {
     }
   }
 
-  public static class Slow implements ItemProvider {
-    private FNParse[] labels;
-    private List<Item>[] items;
-    private LatentConstituencyPipelinedParser parser;
-    private File modelDir = new File("saved-models/good-latent-span/");
-    @SuppressWarnings("unchecked")
-    public Slow(List<FNParse> parses) {
-      if (!modelDir.isDirectory())
-        throw new RuntimeException("model dir doesn't exist: " + modelDir.getPath());
-
-      FinalResults hasParser = new FinalResults(modelDir, new Random(9001), "span", 0, false);
-      hasParser.loadModel();
-      parser = (LatentConstituencyPipelinedParser) hasParser.getParser();
-      hasParser = null;
-      RoleSpanLabelingStage rsls = (RoleSpanLabelingStage) parser.getRoleLabelingStage();
-      rsls.maxSpansPerArg = 10;
-
-      // will return FNParses with WeightedFrameInstances
-      List<FNParse> hyp = parser.parse(DataUtil.stripAnnotations(parses), parses);
-      assert hyp.size() == parses.size();
-
-      int n = parses.size();
-      labels = new FNParse[n];
-      items = new List[n];
-      for (int i = 0; i < n; i++) {
-        labels[i] = parses.get(i);
-        items[i] = new ArrayList<>();
-        FNParse h = hyp.get(i);
-        int T = h.numFrameInstances();
-        for (int t = 0; t < T; t++) {
-          WeightedFrameInstance wfi = (WeightedFrameInstance) h.getFrameInstance(t);
-          int K = wfi.getFrame().numRoles();
-          for (int k = 0; k < K; k++)
-            for (ArgTheory atk : wfi.getArgumentTheories(k))
-              items[i].add(new Item(t, k, atk.span, atk.weight));
-        }
-      }
-    }
-    @Override
-    public int size() {
-      assert labels.length == items.length;
-      return labels.length;
-    }
-    @Override
-    public FNParse label(int i) {
-      return labels[i];
-    }
-    @Override
-    public List<Item> items(int i) {
-      return items[i];
-    }
-  }
+//  public static class Slow implements ItemProvider {
+//    private FNParse[] labels;
+//    private List<Item>[] items;
+//    private LatentConstituencyPipelinedParser parser;
+//    private File modelDir = new File("saved-models/good-latent-span/");
+//    @SuppressWarnings("unchecked")
+//    public Slow(List<FNParse> parses) {
+//      if (!modelDir.isDirectory())
+//        throw new RuntimeException("model dir doesn't exist: " + modelDir.getPath());
+//
+//      FinalResults hasParser = new FinalResults(modelDir, new Random(9001), "span", 0, false);
+//      hasParser.loadModel();
+//      parser = (LatentConstituencyPipelinedParser) hasParser.getParser();
+//      hasParser = null;
+//      RoleSpanLabelingStage rsls = (RoleSpanLabelingStage) parser.getRoleLabelingStage();
+//      rsls.maxSpansPerArg = 10;
+//
+//      // will return FNParses with WeightedFrameInstances
+//      List<FNParse> hyp = parser.parse(DataUtil.stripAnnotations(parses), parses);
+//      assert hyp.size() == parses.size();
+//
+//      int n = parses.size();
+//      labels = new FNParse[n];
+//      items = new List[n];
+//      for (int i = 0; i < n; i++) {
+//        labels[i] = parses.get(i);
+//        items[i] = new ArrayList<>();
+//        FNParse h = hyp.get(i);
+//        int T = h.numFrameInstances();
+//        for (int t = 0; t < T; t++) {
+//          WeightedFrameInstance wfi = (WeightedFrameInstance) h.getFrameInstance(t);
+//          int K = wfi.getFrame().numRoles();
+//          for (int k = 0; k < K; k++)
+//            for (ArgTheory atk : wfi.getArgumentTheories(k))
+//              items[i].add(new Item(t, k, atk.span, atk.weight));
+//        }
+//      }
+//    }
+//    @Override
+//    public int size() {
+//      assert labels.length == items.length;
+//      return labels.length;
+//    }
+//    @Override
+//    public FNParse label(int i) {
+//      return labels[i];
+//    }
+//    @Override
+//    public List<Item> items(int i) {
+//      return items[i];
+//    }
+//  }
 
 }

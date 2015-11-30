@@ -300,16 +300,17 @@ public class Reranker implements Serializable {
       LOG.info("[getItemProvider] getting cached items from " + cache.getPath());
       items = new ItemProvider.Caching(cache, fip);
     } else {
-      LOG.info("[getItemProvider] parsing to get items...");
-      List<FNParse> parses = DataUtil.iter2list(fip.getParsedSentences());
-      parses = parses.subList(0, n);
-      ItemProvider.Caching c = new ItemProvider.Caching(new ItemProvider.Slow(parses));
-      LOG.info("[getItemProvider] saving cached items to " + cache.getPath());
-      try { c.save(cache); }
-      catch (Exception e) {
-        throw new RuntimeException(e);
-      }
-      items = c;
+      throw new RuntimeException("re-implement me");
+//      LOG.info("[getItemProvider] parsing to get items...");
+//      List<FNParse> parses = DataUtil.iter2list(fip.getParsedSentences());
+//      parses = parses.subList(0, n);
+//      ItemProvider.Caching c = new ItemProvider.Caching(new ItemProvider.Slow(parses));
+//      LOG.info("[getItemProvider] saving cached items to " + cache.getPath());
+//      try { c.save(cache); }
+//      catch (Exception e) {
+//        throw new RuntimeException(e);
+//      }
+//      items = c;
     }
 
     // Add parses

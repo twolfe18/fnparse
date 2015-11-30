@@ -26,6 +26,7 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * Parameterizes a score function on (state,action) pairs
@@ -274,18 +275,18 @@ public interface Params extends Serializable {
         super(l2Penalty, hashBuckets);
       }
       @Override
-      public FeatureVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
+      public IntDoubleUnsortedVector getFeatures(FNTagging frames, PruneAdjoints pruneAction, String... providenceInfo) {
         Frame f = null;
         if (pruneAction.t >= 0)
           f = frames.getFrameInstance(pruneAction.t).getFrame();
         int k = pruneAction.k;
-        FeatureVector fv = new FeatureVector();
+        IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
         bb(fv, f, k, null);
         for (String pi : providenceInfo)
           bb(fv, f, k, pi);
         return fv;
       }
-      private void bb(FeatureVector fv, Frame f, int k, String provInfo) {
+      private void bb(IntDoubleUnsortedVector fv, Frame f, int k, String provInfo) {
         double interceptW = 0.2d;
         double nonInterceptW = 0.1d;
         if (provInfo == null)

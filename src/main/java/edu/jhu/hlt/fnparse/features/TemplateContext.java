@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.features;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.inference.role.sequence.RoleSequenceStage;
 import edu.jhu.hlt.fnparse.inference.stages.Stage;
 import edu.jhu.hlt.tutils.Span;
 
@@ -142,6 +141,7 @@ public class TemplateContext {
   public Span getTarget() {
     return target;
   }
+  @SuppressWarnings("unused")
   public void setTarget(Span target) {
     if (DEBUG && sentence != null) {
       assert target.start >= 0;
@@ -152,6 +152,7 @@ public class TemplateContext {
   public int getTargetHead() {
     return targetHead;
   }
+  @SuppressWarnings("unused")
   public void setTargetHead(int head) {
     assert head == UNSET || target == null || target.includes(head);
     if (DEBUG && sentence != null) {

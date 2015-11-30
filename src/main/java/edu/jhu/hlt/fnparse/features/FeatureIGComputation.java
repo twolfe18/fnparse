@@ -105,7 +105,7 @@ public class FeatureIGComputation {
     TemplateContext ctx = new TemplateContext();
 
     HeadFinder hf = new SemaforicHeadFinder();
-    BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
+    BasicFeatureTemplates templateIndex = new BasicFeatureTemplates();
     List<String> templates = templateIndex.getBasicTemplateNames();
     List<String> features = products(templates, this.order);
     List<String> featuresRel = features.stream().filter(s -> Math.floorMod(s.hashCode(), numShards) == shard).collect(Collectors.toList());

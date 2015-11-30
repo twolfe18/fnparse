@@ -5,11 +5,11 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Iterator;
 
-import org.apache.log4j.Logger;
-
-import edu.jhu.gm.feat.FeatureVector;
-import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.prim.map.IntDoubleEntry;
+import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 
 /**
  * A dense vector of doubles that you can add to. Allows efficient averaging,
@@ -24,7 +24,6 @@ import edu.jhu.prim.util.Lambda.FnIntDoubleToDouble;
  */
 public class AveragedWeights implements Serializable {
   private static final long serialVersionUID = 1L;
-  public static final Logger LOG = Logger.getLogger(AveragedWeights.class);
 
   // Useful for debugging (e.g. network parameter averaging is only compatible
   // with feature hashing, which means this class should never grow).
@@ -121,7 +120,7 @@ public class AveragedWeights implements Serializable {
   public void grow(int dimension) {
     if (dimension <= theta.length)
       throw new IllegalArgumentException();
-    LOG.info("[grow] dimension " + theta.length + " => " + dimension);
+    Log.info("[grow] dimension " + theta.length + " => " + dimension);
     if (!GROWING_ALLOWED)
       throw new RuntimeException("growing is not allowed! use feature hashing?");
     theta = Arrays.copyOf(theta, dimension);
@@ -151,14 +150,12 @@ public class AveragedWeights implements Serializable {
     }
   }
 
-  public void add(FeatureVector a) {
-    a.apply(new FnIntDoubleToDouble() {
-      @Override
-      public double call(int arg0, double arg1) {
-        add(arg0, arg1);
-        return arg1;
-      }
-    });
+  public void add(IntDoubleUnsortedVector a) {
+    Iterator<IntDoubleEntry> itr = a.iterator();
+    while (itr.hasNext()) {
+      IntDoubleEntry ide = itr.next();
+      add(ide.index(), ide.get());
+    }
   }
 
   public void add(int index, double value) {

@@ -1,7 +1,5 @@
 package edu.jhu.hlt.fnparse.util;
 
-import org.apache.commons.math3.util.FastMath;
-
 import edu.jhu.hlt.tutils.Log;
 
 public interface LearningRateSchedule {
@@ -67,7 +65,7 @@ public interface LearningRateSchedule {
     }
     @Override
     public double learningRate() {
-      double it = FastMath.pow(iter + 1, squish);
+      double it = Math.pow(iter + 1, squish);
       double lr = initial * smooth / (smooth + it);
       if (iter % 100 == 0)
         Log.info("[main] iter=" + iter + " learningRate=" + lr);
@@ -93,7 +91,7 @@ public interface LearningRateSchedule {
     }
     @Override
     public double learningRate() {
-      double lr = FastMath.exp(-iter / decayRate);
+      double lr = Math.exp(-iter / decayRate);
       if (iter % 100 == 0)
         Log.info("[main] iter=" + iter + " learningRate=" + lr);
       return lr;

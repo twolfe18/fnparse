@@ -176,7 +176,7 @@ public class BasicFeatureTemplates {
   protected Map<String, Template> basicTemplates;
   protected Map<String, Template> labelTemplates;
 
-  private BasicFeatureTemplates() {
+  public BasicFeatureTemplates() {
     init();
   }
 

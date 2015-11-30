@@ -11,6 +11,7 @@ import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.arrays.Multinomials;
 
 public class WeightedFrameInstance extends FrameInstance {
+  private static final long serialVersionUID = 1L;
 
   public static class ArgTheory {
     public Span span;

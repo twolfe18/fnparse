@@ -56,16 +56,16 @@ public class Primes {
     return primes.length;
   }
 
-  // TODO It takes less than a second to generate 1M primes this way:
-  // Ditch the file-based solution!
-  public static void main(String[] args) {
-    long start = System.currentTimeMillis();
-    long s = 0;
-    for (int i = 2; i < 1000000;
-        i = org.apache.commons.math3.primes.Primes.nextPrime(i + 1)) {
-      s += i;
-    }
-    System.out.println(System.currentTimeMillis() - start);
-    System.out.println(s);
-  }
+//  // TODO It takes less than a second to generate 1M primes this way:
+//  // Ditch the file-based solution!
+//  public static void main(String[] args) {
+//    long start = System.currentTimeMillis();
+//    long s = 0;
+//    for (int i = 2; i < 1000000;
+//        i = org.apache.commons.math3.primes.Primes.nextPrime(i + 1)) {
+//      s += i;
+//    }
+//    System.out.println(System.currentTimeMillis() - start);
+//    System.out.println(s);
+//  }
 }

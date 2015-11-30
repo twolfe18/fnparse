@@ -13,7 +13,7 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.util.GlobalParameters;
 //import edu.jhu.hlt.fnparse.util.HasFactorGraph;
-import edu.jhu.hlt.fnparse.util.HasFgModel;
+//import edu.jhu.hlt.fnparse.util.HasFgModel;
 
 /**
  * For big factor graphs, the bottleneck is often feature extraction.
@@ -33,7 +33,7 @@ import edu.jhu.hlt.fnparse.util.HasFgModel;
  * 
  * @author travis
  */
-public interface Stage<Input, Output> extends HasFgModel {
+public interface Stage<Input, Output> { //extends HasFgModel {
 
   public String getName();
 

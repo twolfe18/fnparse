@@ -25,14 +25,14 @@ public class NetworkAvgParamsTest {
       super(l2Penalty, numBuckets);
     }
     public void set(int i, double v) {
-      theta.getWeights()[i] = v;
+      theta.weights.set(i, v);
     }
     public double get(int i) {
-      return theta.getWeights()[i];
+      return theta.weights.get(i);
     }
     public void show(String name) {
       System.out.print(name);
-      double[] w = theta.getWeights();
+      double[] w = theta.weights.getInternalElements();
       for (int i = 0; i < w.length; i++)
         System.out.printf("  %.2f", w[i]);
       System.out.println();

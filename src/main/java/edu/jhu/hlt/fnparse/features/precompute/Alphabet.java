@@ -40,7 +40,7 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
     super();
     this.hf = new SemaforicHeadFinder();
     this.templateName2index = new HashMap<>();
-    BasicFeatureTemplates.Indexed templateIndex = BasicFeatureTemplates.getInstance();
+    BasicFeatureTemplates templateIndex = new BasicFeatureTemplates();
     for (String tn : templateIndex.getBasicTemplateNames()) {
       Template t = templateIndex.getBasicTemplate(tn);
       this.add(new TemplateAlphabet(t, tn, size()));
@@ -74,9 +74,9 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
     this.templateName2index = new HashMap<>();
     this.hf = new SemaforicHeadFinder();
     Log.info("reading template alphabets from " + file.getPath());
-    BasicFeatureTemplates.Indexed templateMap = null;
+    BasicFeatureTemplates templateMap = null;
     try {
-      templateMap = BasicFeatureTemplates.getInstance();
+      templateMap = new BasicFeatureTemplates();
     } catch (Exception e) {
       Log.warn("can't load Templates due to:");
       e.printStackTrace();
@@ -115,9 +115,9 @@ public class Alphabet extends ArrayList<TemplateAlphabet> {
     Log.info("reading template alphabets from " + file.getPath());
 
     // Get the string -> template map
-    BasicFeatureTemplates.Indexed templateMap = null;
+    BasicFeatureTemplates templateMap = null;
     try {
-      templateMap = BasicFeatureTemplates.getInstance();
+      templateMap = new BasicFeatureTemplates();
     } catch (Exception e) {
       Log.warn("can't load Templates due to:");
       e.printStackTrace();

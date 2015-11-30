@@ -159,25 +159,26 @@ public abstract class TemplatedFeatures implements Serializable {
     List<String> tokens = tokenizeProducts(templateToken);
 
     // Holds the templates
-    BasicFeatureTemplates.Indexed bft = BasicFeatureTemplates.getInstance();
+    BasicFeatureTemplates bft = new BasicFeatureTemplates();
 
     // Lookup Templates
     int n = tokens.size();
     Template[] templates = new Template[n];
     for (int i = 0; i < n; i++) {
-      if (i == 0) {
-        templates[i] = bft.getStageTemplate(tokens.get(i));
-        if (templates[i] == null) {
-          // you must have meant "<template>-<syntax_mode>"
-          String[] tt = tokens.get(i).split("-");
-          if (tt.length == 2
-              && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
-            templates[i] = bft.getStageTemplate(tt[0]);
-          }
-        }
-      }
-      if (templates[i] == null)
-        templates[i] = bft.getBasicTemplate(tokens.get(i));
+//      if (i == 0) {
+//        templates[i] = bft.getStageTemplate(tokens.get(i));
+//        if (templates[i] == null) {
+//          // you must have meant "<template>-<syntax_mode>"
+//          String[] tt = tokens.get(i).split("-");
+//          if (tt.length == 2
+//              && Arrays.asList("regular", "latent", "none").contains(tt[1])) {
+//            templates[i] = bft.getStageTemplate(tt[0]);
+//          }
+//        }
+//      }
+//      if (templates[i] == null)
+//        templates[i] = bft.getBasicTemplate(tokens.get(i));
+      templates[i] = bft.getBasicTemplate(tokens.get(i));
     }
 
     // Verify all the templates

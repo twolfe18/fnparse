@@ -39,13 +39,13 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.Hash;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.bimap.IntObjectBimap;
 
 /**

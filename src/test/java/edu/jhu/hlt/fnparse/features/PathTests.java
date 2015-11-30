@@ -15,12 +15,11 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.Path.EdgeType;
 import edu.jhu.hlt.fnparse.features.Path.NodeType;
-import edu.jhu.hlt.fnparse.inference.ParserTests;
 
 public class PathTests {
 	@Test
 	public void basic() {
-		FNParse parse = ParserTests.makeDummyParse();
+		FNParse parse = null; // FIXME
 		Sentence sent = parse.getSentence();
 		List<String> toks = Arrays.asList(sent.getWords());
 		int start = toks.indexOf("fox");
