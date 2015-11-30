@@ -69,6 +69,11 @@ public interface ActionType {
   public double deltaLoss(State s, Action a, FNParse y);
 
 
+  public static boolean implies(boolean a, boolean b) {
+    return !(a && !b);
+  }
+
+
   public static class CommitActionType implements ActionType {
     private final int index;
     private boolean forceLeftRightInference = false;
@@ -190,10 +195,6 @@ public interface ActionType {
         }
       }
       return actions;
-    }
-
-    public static boolean implies(boolean a, boolean b) {
-      return !(a && !b);
     }
 
     @Override

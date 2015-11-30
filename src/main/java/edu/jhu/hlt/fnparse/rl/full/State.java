@@ -4,10 +4,12 @@ import java.io.File;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -31,26 +33,28 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
-import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
+import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.prim.map.IntDoubleEntry;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
@@ -59,7 +63,7 @@ import fj.Ord;
 
 public class State {
 
-  public static final boolean DEBUG = false;
+  public static boolean DEBUG = false;
   public static int NUM_NEXT_EVALS = 0;
 
   // For prototyping
@@ -67,12 +71,12 @@ public class State {
   public static int ALPH_DIM = 250_000;
   public static double ALPH_DIM_GROW_RATE = 4;
 
-  enum SpecialFrame {
+  public static enum SpecialFrame {
     NO_MORE_FRAMES,
     NO_MORE_TARGETS,
   }
 
-  enum SpecialRole {
+  public static enum SpecialRole {
     NO_MORE_ARG_SPANS,
     NO_MORE_ARG_ROLES,
   }
@@ -105,8 +109,24 @@ public class State {
     }
   }
 
-  public static Adjoints sum(Adjoints partialScore, Adjoints prefixScore) {
+  public static Adjoints sum1(Adjoints partialScore, Adjoints prefixScore) {
     return new Adjoints.Sum(partialScore, new Adjoints.OnlyShowScore("Prefix", prefixScore));
+  }
+  public static Adjoints sum2(Adjoints maybeNull, Adjoints notNull) {
+    if (notNull == null)
+      throw new IllegalArgumentException();
+    if (maybeNull == null)
+      return notNull;
+    return new Adjoints.Sum(maybeNull, notNull);
+  }
+  public static Adjoints sum3(Adjoints maybeNull, Adjoints alsoMaybeNull) {
+    if (maybeNull == null && alsoMaybeNull != null)
+      return alsoMaybeNull;
+    if (maybeNull != null && alsoMaybeNull == null)
+      return maybeNull;
+    if (maybeNull != null && alsoMaybeNull != null)
+      return new Adjoints.Sum(maybeNull, alsoMaybeNull);
+    throw new IllegalArgumentException("at least one must be non-null!");
   }
 
   public final class RILL {
@@ -115,13 +135,16 @@ public class State {
     public final RILL next;
 
     // Caches which should be updateable in O(1) which may inform/prune next() or global features
-    public final long realizedRoles;  // does 64 roles play when you have to deal with C/R roles?
+    public final long realizedRoles;        // z=1
     public final long realizedRolesCont;
     public final long realizedRolesRef;
+    public final long fixedRoles;           // z=1 | z=0
+    public final long fixedRolesCont;
+    public final long fixedRolesRef;
 
     // TODO See LazySet in Node code?
     // Does not count nullSpan
-    public final fj.data.Set<Span> realizedSpans;
+    public final fj.data.Set<Span> realizedSpans;   // z=1
 
     // Product of a unique prime at every (t,f,k,s)
     public final BigInteger sig;
@@ -141,26 +164,40 @@ public class State {
     public RILL(FI f, RI r, RILL l) {
       item = r;
       next = l;
-      final long rm;
+      final long realizedMask;
+      final long fixedMask;
       if (r.k >= 0) {
         assert r.k < 64;
-        rm = 1l << r.k;
+        if (r.s != null && r.s != Span.nullSpan) {
+          realizedMask = 1l << r.k;
+        } else {
+          realizedMask = 0;
+        }
+        fixedMask = 1l << r.k;
       } else {
-        rm = 0;
+        realizedMask = 0;
+        fixedMask = 0;
       }
       if (l == null) {
-        realizedRoles = rm;
-        realizedRolesCont = (r.q == RoleType.CONT ? rm : 0);
-        realizedRolesRef = (r.q == RoleType.REF ? rm : 0);
-        if (r.s == null)
+        realizedRoles = realizedMask;
+        realizedRolesCont = (r.q == RoleType.CONT ? realizedMask : 0);
+        realizedRolesRef = (r.q == RoleType.REF ? realizedMask : 0);
+        fixedRoles = fixedMask;
+        fixedRolesCont = (r.q == RoleType.CONT ? fixedMask : 0);
+        fixedRolesRef = (r.q == RoleType.REF ? fixedMask : 0);
+        if (r.s == null) {
           realizedSpans = fj.data.Set.<Span>empty(Ord.comparableOrd());
-        else
+        } else {
           realizedSpans = fj.data.Set.single(Ord.comparableOrd(), r.s);
+        }
         sig = r.sig;
       } else {
-        realizedRoles = l.realizedRoles | rm;
-        realizedRolesCont = l.realizedRolesCont | (r.q == RoleType.CONT ? rm : 0);
-        realizedRolesRef = l.realizedRolesRef | (r.q == RoleType.REF ? rm : 0);
+        realizedRoles = l.realizedRoles | realizedMask;
+        realizedRolesCont = l.realizedRolesCont | (r.q == RoleType.CONT ? realizedMask : 0);
+        realizedRolesRef = l.realizedRolesRef | (r.q == RoleType.REF ? realizedMask : 0);
+        fixedRoles = l.fixedRoles | fixedMask;
+        fixedRolesCont = l.fixedRolesCont | (r.q == RoleType.CONT ? fixedMask : 0);
+        fixedRolesRef = l.fixedRolesRef | (r.q == RoleType.REF ? fixedMask : 0);
         realizedSpans = r.s == null || r.s == Span.nullSpan
             ? l.realizedSpans : l.realizedSpans.insert(r.s);
         sig = l.sig.multiply(r.sig);
@@ -171,6 +208,12 @@ public class State {
       return Long.bitCount(realizedRoles)
           + Long.bitCount(realizedRolesCont)
           + Long.bitCount(realizedRolesRef);
+    }
+
+    public int getNumFixedArgs() {
+      return Long.bitCount(fixedRoles)
+          + Long.bitCount(fixedRolesCont)
+          + Long.bitCount(fixedRolesRef);
     }
   }
 
@@ -192,9 +235,11 @@ public class State {
       String ts = t == null ? "null" : t.shortString();
       String fs = f == null ? "null" : f.getName();
       return "(FI " + ts + " " + fs
-          + " nArgs=" + (args == null ? 0 : args.getNumRealizedArgs())
+          + " nRealized=" + getNumRealizedArgs()
+          + " nFixed=" + getNumFixedArgs()
           + " nmaSpans=" + noMoreArgSpans
           + " nmaRoles=" + noMoreArgRoles
+          + " numRoles=" + f.numRoles()
           + (goldFI == null ? "" : " " + Describe.frameInstaceJustArgsTerse(goldFI))
           + ")";
     }
@@ -218,16 +263,43 @@ public class State {
       this.noMoreArgRoles = noMoreArgRoles;
     }
 
-    public boolean argHasAppeared(int k, RoleType q) {
+    public int getNumRealizedArgs() {
+      if (args == null)
+        return 0;
+      return args.getNumRealizedArgs();
+    }
+
+    public int getNumFixedArgs() {
+      if (args == null)
+        return 0;
+      return args.getNumFixedArgs();
+    }
+
+    public boolean argIsRealized(int k, RoleType q) {
       if (args == null)
         return false;
       switch (q) {
       case BASE:
-        return (args.realizedRoles & (1 << k)) != 0;
+        return (args.realizedRoles & (1l << k)) != 0;
       case REF:
-        return (args.realizedRolesRef & (1 << k)) != 0;
+        return (args.realizedRolesRef & (1l << k)) != 0;
       case CONT:
-        return (args.realizedRolesCont & (1 << k)) != 0;
+        return (args.realizedRolesCont & (1l << k)) != 0;
+      default:
+        throw new RuntimeException("q=" + q);
+      }
+    }
+
+    public boolean argIsFixed(int k, RoleType q) {
+      if (args == null)
+        return false;
+      switch (q) {
+      case BASE:
+        return (args.fixedRoles & (1l << k)) != 0;
+      case REF:
+        return (args.fixedRolesRef & (1l << k)) != 0;
+      case CONT:
+        return (args.fixedRolesCont & (1l << k)) != 0;
       default:
         throw new RuntimeException("q=" + q);
       }
@@ -271,21 +343,22 @@ public class State {
       // NOTE: Since noMoreArgs = noMoreSpans & noMoreRoles, don't use a separate
       // prime for noMoreArgs.
       BigInteger b = args == null ? BigInteger.ONE : args.sig;
+      PrimesAdapter pa = info.config.primes;
 
       // Need primes for (t,f)...
       // Want to be able to tell apart the states...
       // What happens when a (t,?) is completed?
       assert t != null;
       if (f == null)
-        b = b.multiply(BigInteger.valueOf(info.primes.get(t)));
+        b = b.multiply(BigInteger.valueOf(pa.get(t)));
       else
-        b = b.multiply(BigInteger.valueOf(info.primes.get(t, f)));
+        b = b.multiply(BigInteger.valueOf(pa.get(t, f)));
 
       long p = 1;
       if (noMoreArgSpans)
-        p *= info.primes.getSpecial(t, f, SpecialRole.NO_MORE_ARG_SPANS);
+        p *= pa.getSpecial(t, f, SpecialRole.NO_MORE_ARG_SPANS);
       if (noMoreArgRoles)
-        p *= info.primes.getSpecial(t, f, SpecialRole.NO_MORE_ARG_ROLES);
+        p *= pa.getSpecial(t, f, SpecialRole.NO_MORE_ARG_ROLES);
       if (p == 1)
         return b;
       else
@@ -408,12 +481,6 @@ public class State {
         sig = highlightedTarget.getSig().multiply(otherFrames.sig);
       }
     }
-
-    public int getNumRealizedArgs() {
-      if (item.args == null)
-        return 0;
-      return item.args.getNumRealizedArgs();
-    }
   }
 
 
@@ -469,6 +536,29 @@ public class State {
     this.info = everythingElse;
   }
 
+  public static class GeneralizedCoef {
+    public final double coef;
+    public final boolean muteForwards;
+    public GeneralizedCoef(double coef, boolean muteForwards) {
+      if (Double.isNaN(coef))
+        throw new IllegalArgumentException();
+      if (Double.isInfinite(coef))
+        throw new RuntimeException("not tested yet");
+      this.coef = coef;
+      this.muteForwards = muteForwards;
+    }
+    public boolean iszero() {
+      return coef == 0;
+    }
+    public boolean nonzero() {
+      return coef != 0;
+    }
+    @Override
+    public String toString() {
+      return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
+    }
+  }
+
   /** Everything that is annoying to copy in State */
   public static class Info {
     public Sentence sentence;
@@ -487,10 +577,16 @@ public class State {
      *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
      *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
      */
-    public double coefModelScore;
-    public double coefLoss;
-    public double coefRand;
+//    public double coefModelScore = 1;
+//    public double coefLoss = 0;
+//    public double coefRand = 0;
+    public GeneralizedCoef coefLoss;
+    public GeneralizedCoef coefModel;
+    public GeneralizedCoef coefRand;
 
+    public int beamSize = 1;
+
+    // NOTE: These come from Config now!
     // Houses dynamic and static features
     /*
      * TODO This is the wrong interface!
@@ -502,19 +598,49 @@ public class State {
      * 
      */
 //    public WeightsPerActionType weights;
-    public GeneralizedWeights weights;
-
-    public FrameRolePacking frPacking;
+//    public GeneralizedWeights weights;
+//    public FrameRolePacking frPacking;
 
     // Map (t,f,k,s) -> P, where P is the set primes (though any given
     // implementation may use P_n, the first n primes, and map multiple (t,f,k,s)
     // to the same prime via hashing).
-    public PrimesAdapter primes;
+//    public PrimesAdapter primes;
 
-    public Random rand;
+//    public Random rand;
+
+    @Override
+    public String toString() {
+      return "(Info " + showCoefs() + ")";
+    }
+
+    /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
+    public Info setOracleCoefs() {
+      coefLoss = new GeneralizedCoef(1, false);
+      coefModel = new GeneralizedCoef(1, true);
+      coefRand = new GeneralizedCoef(0, false);
+      return this;
+    }
+    public Info setMostViolatedCoefs() {
+      coefLoss = new GeneralizedCoef(-1, false);
+      coefModel = new GeneralizedCoef(1, false);
+      coefRand = new GeneralizedCoef(0, false);
+      return this;
+    }
+    public Info setDecodeCoefs() {
+      coefLoss = new GeneralizedCoef(0, false);
+      coefModel = new GeneralizedCoef(1, false);
+      coefRand = new GeneralizedCoef(0, false);
+      return this;
+    }
+    public boolean anyCoefNonzero() {
+      return coefLoss.nonzero() || coefModel.nonzero() || coefRand.nonzero();
+    }
+    public String showCoefs() {
+      return "((loss " + coefLoss + ") (model " + coefModel + ") (rand " + coefRand + "))";
+    }
 
     public int numFrames() {
-      return frPacking.getNumFrames();
+      return config.frPacking.getNumFrames();
     }
 
     /** Does not include nullSpan */
@@ -581,12 +707,12 @@ public class State {
 
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
-    return new State(frames, true, true, incomplete, sum(partialScore, score), info);
+    return new State(frames, true, true, incomplete, sum1(partialScore, score), info);
   }
 
   public State noMoreTargets(Adjoints partialScore) {
     assert !noMoreTargets;
-    return new State(frames, noMoreFrames, true, incomplete, sum(partialScore, score), info);
+    return new State(frames, noMoreFrames, true, incomplete, sum1(partialScore, score), info);
   }
 
   public String show() {
@@ -596,6 +722,7 @@ public class State {
     sb.append("  nmF=" + noMoreFrames + "\n");
     sb.append("  sig=" + getSig() + "\n");
     sb.append("  inc=" + incomplete + "\n");
+    sb.append("  score=" + score.forwards() + "\n");
     for (FILL cur = frames; cur != null; cur = cur.next) {
       FI fi = cur.item;
       sb.append("    " + fi + "\n");
@@ -650,7 +777,7 @@ public class State {
       ff(f, "noFramesYet");
     } else {
       ff(f, "nFI=" + frames.numFrameInstances);
-      ff(f, "nArgs[0]=" + frames.getNumRealizedArgs());
+      ff(f, "nArgs[0]=" + frames.item.getNumRealizedArgs());
 //      if (frames.item.args.next != null)
 //        ff(f, "nArgs[1]=" + frames.item.args.next.getNumRealizedArgs());
 //      else
@@ -668,11 +795,11 @@ public class State {
       p = frames.sig;
     }
     if (noMoreTargets) {
-      int x = info.primes.getSpecial(SpecialFrame.NO_MORE_TARGETS);
+      int x = info.config.primes.getSpecial(SpecialFrame.NO_MORE_TARGETS);
       p = p.multiply(BigInteger.valueOf(x));
     }
     if (noMoreFrames) {
-      int x = info.primes.getSpecial(SpecialFrame.NO_MORE_FRAMES);
+      int x = info.config.primes.getSpecial(SpecialFrame.NO_MORE_FRAMES);
       p = p.multiply(BigInteger.valueOf(x));
     }
     if (incomplete != null) {
@@ -733,11 +860,11 @@ public class State {
   }
 
   public Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
-    assert (info.coefLoss != 0) || (info.coefModelScore != 0) || (info.coefRand != 0);
 
-    Adjoints score = null;
+    Adjoints mutedScore = null;
+    Adjoints unmutedScore = null;
 
-    if (info.coefLoss != 0) {
+    if (info.coefLoss.nonzero()) {
 
       double fp = 0;
       double fn = 0;
@@ -972,31 +1099,35 @@ public class State {
         throw new RuntimeException("implement this type: " + actionType);
       }
 
-      assert score == null;
-      score = new Adjoints.Scale(info.coefLoss, new LossA(fp, fn));
-    }
-
-    if (info.coefModelScore != 0) {
-      Adjoints m = info.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
-      m = new Adjoints.Scale(info.coefModelScore, m);
-      if (score == null)
-        score = m;
+      Adjoints a = new Adjoints.Scale(info.coefLoss.coef, new LossA(fp, fn));
+      if (info.coefLoss.muteForwards)
+        mutedScore = sum2(mutedScore, a);
       else
-        score = new Adjoints.Sum(score, m);
+        unmutedScore = sum2(unmutedScore, a);
     }
 
-    if (info.coefRand != 0) {
-      double rr = 2 * (info.rand.nextDouble() - 0.5);
-      Adjoints r = new Adjoints.Constant(rr);
-      r = new Adjoints.Scale(info.coefRand, r);
-      if (score != null)
-        score = new Adjoints.Sum(score, r);
+    if (info.coefModel.nonzero()) {
+      Adjoints a = info.config.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
+      a = new Adjoints.Scale(info.coefModel.coef, a);
+      if (info.coefModel.muteForwards)
+        mutedScore = sum2(mutedScore, a);
       else
-        score = r;
+        unmutedScore = sum2(unmutedScore, a);
     }
 
-    assert score != null;
-    return score;
+    if (info.coefRand.nonzero()) {
+      double rr = 2 * (info.config.rand.nextDouble() - 0.5);
+      Adjoints a = new Adjoints.Constant(rr);
+      a = new Adjoints.Scale(info.coefRand.coef, a);
+      if (info.coefModel.muteForwards)
+        mutedScore = sum2(mutedScore, a);
+      else
+        unmutedScore = sum2(unmutedScore, a);
+    }
+
+    if (mutedScore != null)
+      mutedScore = new MutedAdjoints(true, false, mutedScore);
+    return sum3(mutedScore, unmutedScore);
   }
 
   public Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
@@ -1013,7 +1144,8 @@ public class State {
     private static final long serialVersionUID = 6821523594344630559L;
     private double fp, fn;
     public LossA(double fp, double fn) {
-      super(fp + fn);
+      super(100 - (fp + fn));
+      assert super.forwards() >= 0;
       this.fp = fp;
       this.fn = fn;
     }
@@ -1084,11 +1216,11 @@ public class State {
         // Loop over s
         for (Span s : info.getPossibleArgs(fi)) {
 
-          BigInteger sig = BigInteger.valueOf(info.primes.get(fi.t, fi.f, incomplete.ri.k, incomplete.ri.q, s));
+          BigInteger sig = BigInteger.valueOf(info.config.primes.get(fi.t, fi.f, incomplete.ri.k, incomplete.ri.q, s));
           RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
           if (DEBUG) Log.debug("incomplete RI - span " + newArg);
 
-          Adjoints feats = sum(f(AT.COMPLETE_S, fi, newArg, sf), score);
+          Adjoints feats = sum1(f(AT.COMPLETE_S, fi, newArg, sf), score);
           FI newFI = fi.prependArg(newArg);
           push(beam, overall, this.surgery(fill, newFI, null, feats));
         }
@@ -1120,18 +1252,18 @@ public class State {
 
     // NEW
     RI newRI = new RI(k, q, null, null);
-    if (DEBUG) Log.debug("adding new (k,?) k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
-    Adjoints featsN = sum(f(AT.NEW_K, fi, newRI, sf), score);
+    if (DEBUG) Log.debug("adding new (k,?) k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
+    Adjoints featsN = sum1(f(AT.NEW_K, fi, newRI, sf), score);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
     // TODO Check that this is correct and meaure speedup
 //    st.firstNotDone = this.firstNotDone;
     push(beam, overall, st);
 
     // STOP
-    if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " q=" + q + "\t" + fi + "\t" + newRI);
-    int p = info.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
+    if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
+    int p = info.config.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
     RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
-    Adjoints featsS = sum(f(AT.STOP_K, fi, newRI, sf), score);
+    Adjoints featsS = sum1(f(AT.STOP_K, fi, newRI, sf), score);
     Incomplete incS = null;   // Stop doesn't need a completion
     State ss = this.surgery(cur, fi.prependArg(riStop), incS, featsS);
     // TODO How to update firstNotDone with surgery?
@@ -1199,7 +1331,7 @@ public class State {
           if (!noMoreTargets) {
             if (DEBUG) Log.debug("adding new (t,) at " + t.shortString());
             FI fi = new FI(null, t, null).withGold(null);
-            Adjoints feats = sum(this.score, f(AT.NEW_T, fi, sf));
+            Adjoints feats = sum1(this.score, f(AT.NEW_T, fi, sf));
             Incomplete inc = new Incomplete(frames);
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -1210,7 +1342,7 @@ public class State {
           for (Frame f : info.prunedFIs.get(t)) {
             if (DEBUG) Log.debug("adding new (t,f) at " + t.shortString() + "\t" + f.getName());
             FI fi = new FI(f, t, null).withGold(null);
-            Adjoints feats = sum(this.score, f(AT.NEW_TF, fi, sf));
+            Adjoints feats = sum1(this.score, f(AT.NEW_TF, fi, sf));
             Incomplete inc = null;
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -1279,31 +1411,41 @@ public class State {
            * This will be k:int which is the first k s.t. !fi.argHasAppeared(k)
            * TODO Choosing a permutation to loop over k?
            */
-          boolean ha = fi.argHasAppeared(k, RoleType.BASE);
-          if (ha) {
+          boolean baseYes = fi.argIsRealized(k, RoleType.BASE);
+          boolean baseFixed = fi.argIsFixed(k, RoleType.BASE);
+          assert ActionType.implies(baseYes, baseFixed);
 
-            if (info.config.useContRoles && !fi.argHasAppeared(k, RoleType.CONT)) {
-              step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
-              if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
-                break;
-            }
+          if (DEBUG)
+            Log.info("k=" + k + " baseYes=" + baseYes + " baseFixed=" + baseFixed);
 
-            if (info.config.useRefRoles && !fi.argHasAppeared(k, RoleType.REF)) {
-              step1Pushed += nextK(beam, overall, cur, k, RoleType.REF, sf);
-              if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
-                break;
-            }
-
-            if (info.config.oneSperK) {
-              if (DEBUG) Log.debug("skipping BASE role k=" + k);
-              continue;
+          if (baseYes && info.config.useContRoles && !fi.argIsFixed(k, RoleType.CONT)) {
+            step1Pushed += nextK(beam, overall, cur, k, RoleType.CONT, sf);
+            if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE) {
+              if (DEBUG) Log.info("break CONT");
+              break;
             }
           }
 
-          step1Pushed += nextK(beam, overall, cur, k, RoleType.BASE, sf);
+          if (baseYes && info.config.useRefRoles && !fi.argIsFixed(k, RoleType.REF)) {
+            step1Pushed += nextK(beam, overall, cur, k, RoleType.REF, sf);
+            if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE) {
+              if (DEBUG) Log.info("break REF");
+              break;
+            }
+          }
 
-          if (info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE)
+          if (baseYes && info.config.oneSperK) {
+            if (DEBUG) Log.debug("skipping BASE role k=" + k + " " + fi.f.getRole(k));
+            continue;
+          }
+
+          if (!baseFixed)
+            step1Pushed += nextK(beam, overall, cur, k, RoleType.BASE, sf);
+
+          if (step1Pushed > 0 && info.config.argMode == ArgActionTransitionSystem.ROLE_BY_ROLE) {
+            if (DEBUG) Log.info("break ROLE_BY_ROLE");
             break;
+          }
         }
         break;
       case SPAN_FIRST:
@@ -1319,13 +1461,13 @@ public class State {
 
           // NEW
           if (DEBUG) Log.debug("adding new (?,s) s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          Adjoints featsN = sum(f(AT.NEW_S, fi, newRI, sf), score);
+          Adjoints featsN = sum1(f(AT.NEW_S, fi, newRI, sf), score);
           State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
           push(beam, overall, st);
 
           // STOP
           if (DEBUG) Log.debug("adding noMoreArgRoles for s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          Adjoints featsS = sum(f(AT.STOP_S, fi, newRI, sf), score);
+          Adjoints featsS = sum1(f(AT.STOP_S, fi, newRI, sf), score);
           Incomplete incS = null;   // Stop doesn't need a completion
           push(beam, overall, this.surgery(cur, fi.noMoreArgSpans(), incS, featsS));
 
@@ -1353,20 +1495,22 @@ public class State {
           if (info.config.oneKperS && hs)
             continue;
           for (int k = 0; k < K; k++) {
-            boolean ha = fi.argHasAppeared(k, RoleType.BASE);
-            if (info.config.oneKperS && ha)
-              continue;
+
+            assert false : "handle yes/fixed, especially as it relates to cont/ref roles";
+//            boolean ha = fi.argHasAppeared(k, RoleType.BASE);
+//            if (info.config.oneKperS && ha)
+//              continue;
 
             assert false : "generate cont/ref roles!";
 
             RoleType q = RoleType.BASE;
-            int p = info.primes.get(fi.t, fi.f, k, q, s);
+            int p = info.config.primes.get(fi.t, fi.f, k, q, s);
             RI newRI = new RI(k, q, s, BigInteger.valueOf(p));
             Incomplete inc = null;  // ONE_STEP doesn't need a completion
 
             // NEW
             if (DEBUG) Log.debug("adding new (k,s) k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-            Adjoints featsN = sum(f(AT.NEW_KS, fi, newRI, sf), score);
+            Adjoints featsN = sum1(f(AT.NEW_KS, fi, newRI, sf), score);
             push(beam, overall, this.surgery(cur, fi.prependArg(newRI), inc, featsN));
             step1Pushed++;
             
@@ -1378,7 +1522,7 @@ public class State {
 //            step1Pushed++;
           }
         }
-        Adjoints featsS = sum(f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf), score);
+        Adjoints featsS = sum1(f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf), score);
         push(beam, overall, this.surgery(cur, fi.noMoreArgs(), null, featsS));
 
         if (true)
@@ -1441,11 +1585,11 @@ public class State {
       FI fi = fill.item;
       int p;
       if (isFrame())
-        p = info.primes.get(fi.t);
+        p = info.config.primes.get(fi.t);
       else if (missingArgRole())
-        p = info.primes.get(fi.t, fi.f, ri.s);
+        p = info.config.primes.get(fi.t, fi.f, ri.s);
       else if (missingArgSpan())
-        p = info.primes.get(fi.t, fi.f, ri.k, ri.q);
+        p = info.config.primes.get(fi.t, fi.f, ri.k, ri.q);
       else
         throw new RuntimeException();
       return BigInteger.valueOf(p);
@@ -1465,14 +1609,15 @@ public class State {
     }
   };
 
-  public static FNParse getParse(ExperimentProperties config) {
+  @SuppressWarnings("unchecked")
+  public static List<FNParse> getParse(ExperimentProperties config) {
     File cache = new File("/tmp/fnparse.example");
-    FNParse y;
+    List<FNParse> ys;
     if (cache.isFile()) {
-      Log.info("loading FNParse from disk: " + cache.getPath());
-      y = (FNParse) FileUtil.deserialize(cache);
+      Log.info("loading List<FNParse> from disk: " + cache.getPath());
+      ys = (List<FNParse>) FileUtil.deserialize(cache);
     } else {
-      Log.info("computing FNParse to cache...");
+      Log.info("computing List<FNParse> to cache...");
 
       // Get the fnparse
       ItemProvider trainAndDev = new ItemProvider.ParseWrapper(DataUtil.iter2list(
@@ -1482,100 +1627,70 @@ public class State {
       ItemProvider.TrainTestSplit foo =
           new ItemProvider.TrainTestSplit(trainAndDev, propDev, maxDev, new Random(9001));
       ItemProvider train = foo.getTrain();
-      //    ItemProvider dev = foo.getTest();
-      //    FNParse y = FileFrameInstanceProvider.fn15trainFIP.getParsedSentences().next();
-      y = train.label(1);
-      Sentence s = y.getSentence();
 
-      // Add the dparse
-      ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
-      Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
-      Function<Sentence, ConstituencyParse> cParser = csw::getCParse;
-      s.setBasicDeps(dParser.apply(s));
-      s.setStanfordParse(cParser.apply(s));
+      ys = new ArrayList<>();
+      for (int i = 0; i < 300; i++) {
+        FNParse y = train.label(i);
+        Sentence s = y.getSentence();
+
+        // Add the dparse
+        ConcreteStanfordWrapper csw = ConcreteStanfordWrapper.getSingleton(false);
+        Function<Sentence, DependencyParse> dParser = csw::getBasicDParse;
+        Function<Sentence, ConstituencyParse> cParser = csw::getCParse;
+        s.setBasicDeps(dParser.apply(s));
+        s.setStanfordParse(cParser.apply(s));
+
+        ys.add(y);
+      }
 
       // Save to disk
-      Log.info("saving FNParse to disk: " + cache.getPath());
-      FileUtil.serialize(y, cache);
+      Log.info("saving List<FNParse> to disk: " + cache.getPath());
+      FileUtil.serialize(ys, cache);
     }
 
-    return y;
+    return ys;
   }
 
-  public static void addDummyContRefRole(FNParse y, Random r, RoleType rt) {
+  /** returns true if it could add the dummy role */
+  public static boolean addDummyContRefRole(FNParse y, Random r, RoleType rt) {
+    if (y.numFrameInstances() == 0)
+      return false;
+
     // Make a random span that this cont/ref role will be located at
     int n = y.getSentence().size();
     Span s = Span.randomSpan(n, r);
 
     // Find a realized role to cont/ref
-    boolean added = false;
-    FrameInstance fi = y.getFrameInstance(0);
-    int K = fi.getFrame().numRoles();
-    for (int k = 0; k < K; k++) {
-      if (fi.getArgument(k) != Span.nullSpan) {
-        if (rt == RoleType.CONT)
-          fi.addContinuationRole(k, s);
-        else if (rt == RoleType.REF)
-          fi.addReferenceRole(k, s);
-        else
-          throw new IllegalArgumentException("not cont/ref: " + rt);
-        added = true;
-        break;
+    for (FrameInstance fi : y.getFrameInstances()) {
+      int K = fi.getFrame().numRoles();
+      for (int k = 0; k < K; k++) {
+        if (fi.getArgument(k) != Span.nullSpan) {
+          if (rt == RoleType.CONT)
+            fi.addContinuationRole(k, s);
+          else if (rt == RoleType.REF)
+            fi.addReferenceRole(k, s);
+          else
+            throw new IllegalArgumentException("not cont/ref: " + rt);
+          return true;
+        }
       }
     }
-    assert added;
+    return false;
   }
 
-  public static void main(String[] args) {
-    ExperimentProperties config = ExperimentProperties.init(args);
+  public static FNParse runInference2(Info inf) {
+    State s = runInference(inf);
+    FNParse y = s.decode();
+    return y;
+  }
 
-    FNParse y = getParse(config);
-//    wait a second, this shouldnt be flat!
-//    y = PropbankContRefRoleFNParseConverter.flatten(y);
-    Log.info(Describe.fnParse(y));
-
-    boolean kDependsOnF = true;
-    FrameRolePacking frp = new FrameRolePacking(FrameIndex.getFrameNet());
-    Info inf = new Info();
-    inf.rand = new Random(9001);
-    inf.coefModelScore = 0;
-    inf.coefLoss = -10;
-    inf.coefRand = 1;
-    inf.frPacking = frp;
-//    inf.config = Config.FAST_SETTINGS;
-    inf.config = new Config();
-    inf.config.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
-//    inf.config.argMode = ArgActionTransitionSystem.ROLE_FIRST;
-//    inf.config.argMode = ArgActionTransitionSystem.ONE_STEP;
-    inf.config.frameByFrame = true;
-
-    inf.config.useContRoles = true;
-    inf.config.useRefRoles = true;
-
-    if (inf.config.useContRoles)
-      addDummyContRefRole(y, inf.rand, RoleType.CONT);
-    if (inf.config.useRefRoles)
-      addDummyContRefRole(y, inf.rand, RoleType.REF);
-
-    inf.primes = new PrimesAdapter(new Primes(config), frp);
-    inf.label = new LabelIndex(y);
-    inf.sentence = y.getSentence();
-    inf.weights = new GeneralizedWeights(inf, kDependsOnF);
-
-    long start = System.currentTimeMillis();
-
-    inf.setTargetPruningToGoldLabels();
-    boolean addSpansIfMissing = true;   // for train at least
-    inf.setArgPruningUsingSyntax(
-        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
-
+  public static State runInference(Info inf) {
     State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
         .setFramesToGoldLabels();
 
-    int beamSize = 1;
-    Beam.DoubleBeam cur = new Beam.DoubleBeam(beamSize);
-    Beam.DoubleBeam next = new Beam.DoubleBeam(beamSize);
-    Beam.DoubleBeam all = new Beam.DoubleBeam(256);
+    Beam.DoubleBeam cur = new Beam.DoubleBeam(inf.beamSize);
+    Beam.DoubleBeam next = new Beam.DoubleBeam(inf.beamSize);
+    Beam.DoubleBeam all = new Beam.DoubleBeam(inf.beamSize * 16);
     State lastState = null;
     push(next, all, s0);
     for (int i = 0; true; i++) {
@@ -1594,25 +1709,175 @@ public class State {
       }
     }
 
-//    State finalState = all.pop();
-//    assert finalState == lastState;
-    State finalState = lastState;
-    FNParse yhat = finalState.decode();
+    State finalState = all.pop();
+    // NOTE: coefLoss sign flip: >0 means avoid loss (counter to intuition)
+    if (inf.coefLoss.coef > 0 && inf.coefModel.iszero() && inf.coefRand.iszero()) {
+//      assert finalState == lastState;
+      if (finalState != lastState) {
+        System.out.println("coefs: " + inf.showCoefs());
+        System.out.println("\nfinal: " + finalState.show());
+        System.out.println("\nlast: " + lastState.show());
+        assert false;
+      }
+    }
 
-    System.out.println(Describe.fnParse(yhat));
-    System.out.println();
+    finalState = lastState;
+//    FNParse yhat = finalState.decode();
+//    return yhat;
+    return finalState;
+  }
+
+  /**
+   * Make sure the oracle can get 100% accuracy if search is only guided by loss.
+   */
+  public static void checkOracle(FNParse y, Config conf) {
+
+    if (conf.useContRoles && y.numFrameInstances() > 0)
+      addDummyContRefRole(y, conf.rand, RoleType.CONT);
+    if (conf.useRefRoles && y.numFrameInstances() > 0)
+      addDummyContRefRole(y, conf.rand, RoleType.REF);
+
+    Info inf = new Info();
+    inf.beamSize = 1;
+    inf.config = conf;
+    inf.setOracleCoefs();
+    inf.label = new LabelIndex(y);
+    inf.sentence = y.getSentence();
+    inf.setTargetPruningToGoldLabels();
+    boolean addSpansIfMissing = true;   // for train at least
+    inf.setArgPruningUsingSyntax(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+
+    FNParse yhat = runInference2(inf);
+
     SentenceEval se = new SentenceEval(y, yhat);
-    BasicEvaluation.showResults("[eval]", BasicEvaluation.evaluate(Arrays.asList(se)));
-    System.out.println();
+    Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+//    BasicEvaluation.showResults("[eval]", r);
+    assert r.get("ArgumentMicroF1").doubleValue() == 1;
+  }
 
-    System.out.println(FNDiff.diffArgs(y, yhat, true));
-    System.out.println();
+  /**
+   * Make sure you can fit one example.
+   */
+  public static void checkLearning(FNParse y, Config conf) {
 
-    System.out.println("took " + (System.currentTimeMillis() - start) + " ms");
-    System.out.println("all.size: " + all.size());
-    System.out.println("collapseRate: " + all.getCollapseRate());
-    System.out.println("numOffers: " + all.getNumOffers());
+    Info oracleInf = new Info().setOracleCoefs();
+    Info mvInf = new Info().setMostViolatedCoefs();
+    Info decInf = new Info().setDecodeCoefs();
+    for (Info inf : Arrays.asList(oracleInf, mvInf, decInf)) {
+      inf.beamSize = 1;
+      inf.config = conf;
+      inf.label = new LabelIndex(y);
+      inf.sentence = y.getSentence();
+      inf.setTargetPruningToGoldLabels();
+      boolean addSpansIfMissing = true; //inf != decInf;
+      inf.setArgPruningUsingSyntax(
+          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+
+    }
+
+    int successesInARow = 0;
+    double lr = 1;
+    int maxiter = 200;
+    for (int i = 0; i < maxiter; i++) {
+      State oracleState = runInference(oracleInf);
+      State mvState = runInference(mvInf);
+
+      System.out.println("oracleF1: " + f1(y, oracleState.decode()));
+      System.out.println("mvF1: " + f1(y, mvState.decode()));
+      System.out.println("decF1: " + f1(y, runInference2(decInf)));
+//      System.out.println("oracle: " + oracleState.show());
+//      System.out.println("mv: " + mvState.show());
+
+      // Oracle state adjoints only have loss in them, so no features are added!
+      oracleState.score.backwards(-lr);
+      mvState.score.backwards(+lr);
+
+      if (i % 5 == 0) {
+        FNParse yhat = runInference2(decInf);
+        double f1 = f1(y, yhat);
+        Log.info("iter=" + i + " f1=" + f1);
+        if (f1 == 1)
+          successesInARow++;
+        else
+          successesInARow = 0;
+        if (successesInARow > 4)
+          return;
+      }
+    }
+    assert false : "didn't learn in " + maxiter + " iterations";
+  }
+
+  private static double f1(FNParse y, FNParse yhat) {
+    SentenceEval se = new SentenceEval(y, yhat);
+    Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+    double f1 = r.get("ArgumentMicroF1");
+    return f1;
+  }
+
+  public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+    List<FNParse> ys = getParse(config);
+//    Log.info(Describe.fnParse(y));
+
+    DEBUG = false;
+
+    Config conf = new Config();
+    conf.frPacking = new FrameRolePacking(FrameIndex.getFrameNet());
+    conf.primes = new PrimesAdapter(new Primes(config), conf.frPacking);
+
+//    CachedFeatureParamsShim features = new RandomFeatures();
+    CachedFeatureParamsShim features = new CheatingFeatures().add(ys);
+    conf.weights = new GeneralizedWeights(conf, features);
+
+    conf.roleDependsOnFrame = true;
+//    conf.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
+    conf.argMode = ArgActionTransitionSystem.ROLE_FIRST;
+//    conf.argMode = ArgActionTransitionSystem.ONE_STEP;
+    conf.frameByFrame = true;
+
+    conf.useContRoles = true;
+    conf.useRefRoles = true;
+    conf.rand = new Random(9001);
+
+    long start = System.currentTimeMillis();
+    int nParses = 0;
+    for (FNParse y : ys) {
+      nParses++;
+      checkOracle(y, conf);
+      if (DEBUG)
+        break;
+    }
+    long time = System.currentTimeMillis() - start;
+
+    System.out.println("took " + time + " ms, " + (nParses*1000d)/time + " parse/sec");
     System.out.println("numNextEvals: " + NUM_NEXT_EVALS);
+    System.out.println("numParses: " + nParses);
+
+    conf.setNoGlobalFeatures();
+    Collections.sort(ys, new Comparator<FNParse>() {
+      @Override
+      public int compare(FNParse o1, FNParse o2) {
+        return numItems(o1) - numItems(o2);
+      }
+    });
+    for (FNParse y : ys) {
+      int i = numItems(y);
+      if (i == 0)
+        continue;
+      if (i > 10)
+        break;
+      Log.info("checking learning on " + y.getId() + " numItems=" + i);
+      checkLearning(y, conf);
+    }
+  }
+
+  public static int numItems(FNParse y) {
+    int h = 0;
+    for (FrameInstance fi : y.getFrameInstances())
+      h += fi.numRealizedArguments() + 1;
+    return h;
   }
 
   /**
@@ -1640,75 +1905,329 @@ public class State {
       try {
         fis.add(FrameInstance.buildPropbankFrameInstance(fi.f, fi.t, arguments, s));
       } catch (Exception e) {
+        for (Pair<String, Span> a : arguments)
+          System.err.println(a);
         throw new RuntimeException(e);
       }
     }
     return new FNParse(s, fis);
   }
 
+
+
+  /**
+   * In implementing {@link OracleAdjoints} I noticed that you could build such
+   * a thing out of a smaller piece: an Adjoints with a boolean for whether
+   * either the forward or backward pass should be "muted". In the oracle case,
+   * the model score component of the sum should be muted on the forward pass
+   * and unmuted on the backwards.
+   *
+   * @author travis
+   */
+  public static class MutedAdjoints implements Adjoints {
+    private boolean muteForwards;
+    private boolean muteBackwards;
+    private Adjoints wrapped;
+
+    public MutedAdjoints(boolean muteForwards, boolean muteBackwards, Adjoints wrapped) {
+      this.muteBackwards = muteBackwards;
+      this.muteForwards = muteForwards;
+      this.wrapped = wrapped;
+    }
+
+    @Override
+    public String toString() {
+      return "(Muted fw=" + muteForwards + " bw=" + muteBackwards + " " + wrapped + ")";
+    }
+
+    @Override
+    public double forwards() {
+      if (muteForwards)
+        return 0;
+      return wrapped.forwards();
+    }
+
+    @Override
+    public void backwards(double dErr_dForwards) {
+      if (!muteBackwards)
+        wrapped.backwards(dErr_dForwards);
+    }
+
+    /**
+     * In order to get the update
+     *   w += f(oracle,x) - f(mostViolated,x)
+     * with just Adjoints, a game must be played with the oracle adjoints. I'm
+     * presuming that we don't want the oracle to be guided by the model score
+     * (though this can be generalized). Thus the problem is that the thing that
+     * guides search (loss) for the oracle is different than what must be in the
+     * update (model score/features). Put another way: the forward pass must
+     * differ from the backward pass.
+     *
+     * Note: If you have some other adjoints like random noise, add this to
+     * model score before calling this method.
+     */
+    public static Adjoints makeOracleAdjoints(Adjoints deltaLoss, Adjoints modelScore) {
+      return new Adjoints.Sum(deltaLoss, new MutedAdjoints(true, false, modelScore));
+    }
+  }
+
+
+  /* Features *****************************************************************/
+
+  public static interface CachedFeatureParamsShim {
+    public IntDoubleUnsortedVector getFeatures(Sentence s, Span t, Span a);
+  }
+  public static class RandomFeatures implements CachedFeatureParamsShim {
+    private Random rand = new Random(9001);
+    public IntDoubleUnsortedVector getFeatures(Sentence s, Span t, Span a) {
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
+      int k = rand.nextInt(20) + 5;
+      for (int i = 0; i < k; i++)
+        fv.add(rand.nextInt(1024), 1);
+      return fv;
+    }
+  }
+  public static class CheatingFeatures implements CachedFeatureParamsShim {
+    public int numShowLabel = 25;
+    public int numShowNoise = 5;
+    public int numPosFeats = 100;
+    public int numNegFeats = 100;
+
+    private Set<Pair<String, SpanPair>> inGold;
+    private Random rand;
+
+    public CheatingFeatures() {
+      inGold = new HashSet<>();
+      rand = new Random();
+    }
+
+    public CheatingFeatures add(FNParse y) {
+      String sId = y.getSentence().getId();
+      for (FrameInstance fi : y.getFrameInstances()) {
+        Span t = fi.getTarget();
+        int K = fi.getFrame().numRoles();
+        for (int k = 0; k < K; k++) {
+          Span s = fi.getArgument(k);
+          if (s != Span.nullSpan)
+            inGold.add(new Pair<>(sId, new SpanPair(t, s)));
+          for (Span ss : fi.getContinuationRoleSpans(k))
+            inGold.add(new Pair<>(sId, new SpanPair(t, ss)));
+          for (Span ss : fi.getReferenceRoleSpans(k))
+            inGold.add(new Pair<>(sId, new SpanPair(t, ss)));
+        }
+      }
+      return this;
+    }
+
+    public CheatingFeatures add(Collection<FNParse> ys) {
+      for (FNParse y : ys)
+        add(y);
+      return this;
+    }
+
+    private int countY = 0, countN = 0;
+    @Override
+    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
+      boolean y = inGold.contains(new Pair<>(sent.getId(), new SpanPair(t, s)));
+      if (y) countY++; else countN++;
+      if ((countY + countN) % 100 == 0) Log.info("countY=" + countY + " countN=" + countN);
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
+      int a, b;
+      if (y) {
+        a = 0;
+        b = numPosFeats;
+      } else {
+        a = numPosFeats;
+        b = numPosFeats + numNegFeats;
+      }
+      for (int i = 0; i < numShowLabel; i++) {
+        int r = b - a;
+        int x = rand.nextInt(r) + a;
+        fv.add(x, 1);
+      }
+      int r = numPosFeats + numNegFeats;
+      for (int i = 0; i < numShowNoise; i++)
+        fv.add(rand.nextInt(r), 1);
+      return fv;
+    }
+  }
+
   /**
    * Does all feature dispatch.
    */
   public static class GeneralizedWeights {
-    private Info info;
+    private Config config;
     private WeightsPerActionType globalFeatureWeights;
     private WeightsPerActionType stateFeatureWeights;
 
-    private CachedFeatures.Params staticFeatures;
+    private CachedFeatureParamsShim staticFeatures;
+//    private CachedFeatures.Params staticFeatures;
     // Weights for static features are in CachedFeatures.Params
     // (f,t,s) -> at -> k -> score
     // (f,t,s) -> at -> score
     private LazyL2UpdateVector[] at2sfWeights;
-    private LazyL2UpdateVector[][] at2k2sfWeights;
-    private double staticL2Penalty = 1e-7;
+//    private LazyL2UpdateVector[][] at2k2sfWeights;
+    private LazyL2UpdateVector[] at2k2sfWeights;    // indexed by at, then the k*feature dimension is done via hashing
+    private int[] kPrimes;    // k -> prime (starting at 1)
+    private int dim;
+    private int updateInterval;
 
-    public GeneralizedWeights(Info info, boolean kDependsOnF) {
-      this.info = info;
+    private double staticL2Penalty = 1e-7;
+    private double staticLR = 1;  // relative to higher-level learning rate
+
+    public GeneralizedWeights(Config config, CachedFeatureParamsShim staticFeats) {
+      this.config = config;
+      this.staticFeatures = staticFeats;
       this.globalFeatureWeights = new WeightsPerActionType();
       this.stateFeatureWeights = new WeightsPerActionType();
 
-      int updateInterval = 32;
-      int D = 1 << 18;
-      int K = kDependsOnF ? info.frPacking.size() : 100;
-      Log.info("D=" + D + " K=" + K + " AT.size=" + AT.values().length + " all: " + (8d * D * K * AT.values().length)/(1024d * 1024d) + " MB");
+      /*
+       * This is too many params!
+       * D = ~1M      (features)
+       * K = ~1000    (roles)
+       * T = ~6       (action type)
+       *
+       * Ah!
+       * Low-rank tensor thing sounds a little strange, I can't see a 100 dim
+       * embedding of each D and each K working well (plus, thats a lot of params too)...
+       *
+       * Well, it used to work with DxK (at least for propbank)...
+       * The dimension along which I really want to reduce is K
+       *    TxK * r(D)
+       * or r(TxK) * r(D)
+       * Give a 64 dimensional embedding of this and you get:
+       * 64 * (6 * 1000 + 1M) ~= 64 * 1M
+       * If I can get that number of features down, then I can easily reduce the number of features
+       * For propbank:
+       * K=20, so the number of features isn't significantly different
+       *
+       * I can see too many things going wrong with the embeddings model...
+       * probably easier if I just hash into a reasonably sized space.
+       */
+
+      updateInterval = 32;
+      dim = 1 << 18;
+      int K = config.roleDependsOnFrame ? config.frPacking.size() : 100;
+//      Log.info("D=" + D + " K=" + K + " AT.size=" + AT.values().length + " all: " + (8d * D * K * AT.values().length)/(1024d * 1024d) + " MB");
       this.at2sfWeights = new LazyL2UpdateVector[AT.values().length];
-      this.at2k2sfWeights = new LazyL2UpdateVector[AT.values().length][K];
+      this.at2k2sfWeights = new LazyL2UpdateVector[AT.values().length];
       for (int i = 0; i < at2k2sfWeights.length; i++) {
-        this.at2sfWeights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
-        for (int k = 0; k < K; k++)
-          this.at2k2sfWeights[i][k] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+        this.at2sfWeights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dim), updateInterval);
+        this.at2k2sfWeights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(dim), updateInterval);
+      }
+//      this.at2k2sfWeights = new LazyL2UpdateVector[AT.values().length][K];
+//      for (int i = 0; i < at2k2sfWeights.length; i++) {
+//        this.at2sfWeights[i] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+//        for (int k = 0; k < K; k++)
+//          this.at2k2sfWeights[i][k] = new LazyL2UpdateVector(new IntDoubleDenseVector(D), updateInterval);
+//      }
+      Primes p = config.primes.getPrimes();
+      this.kPrimes = new int[K];
+      this.kPrimes[0] = 1;
+      for (int i = 1; i < K; i++) {
+        this.kPrimes[i] = p.get(i - 1);
+        assert this.kPrimes[i-1] < this.kPrimes[i] : this.kPrimes[i-1] + " " + this.kPrimes[i] + " " + i;
+      }
+
+    }
+
+    public void showWeightSummary() {
+      for (int i = 0; i < at2sfWeights.length; i++) {
+        double l2 = at2sfWeights[i].weights.getL2Norm();
+        double inf = at2sfWeights[i].weights.getInfNorm();
+        if (debug) {
+          Log.info("i=" + i + " l2=" + l2 + " inf=" + inf);
+        } else {
+          double kl2 = at2k2sfWeights[i].weights.getL2Norm();
+          double kinf = at2k2sfWeights[i].weights.getInfNorm();
+          Log.info("i=" + i + " l2=" + l2 + " inf=" + inf + " kl2=" + kl2 + " kinf=" + kinf);
+        }
       }
     }
 
+    public static List<ProductIndex> convert(IntDoubleUnsortedVector fv, int dim) {
+      List<ProductIndex> p = new ArrayList<>();
+      Iterator<IntDoubleEntry> itr = fv.iterator();
+      while (itr.hasNext()) {
+        IntDoubleEntry i = itr.next();
+//        assert i.get() == 1 : "non-binary feature: " + i.get();
+        int f = i.index() % dim;
+        p.add(new ProductIndex(f, dim));
+      }
+      return p;
+    }
+
+    private Alphabet<String> dbgAlph = new Alphabet<>();
+    public boolean debug = true;
+    private int fCalls = 0;
     public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
+      assert fi.f != null;
+
+      if (++fCalls % 50000 == 0)
+        showWeightSummary();
+
+      if (debug) {
+//        Log.info("returning early: only static features");
+//        return staticScore;
+
+        String overFeat = fi.f.getName() + "_" + fi.t.shortString() + "_" + ri.k + "_" + ri.q + "_" + Span.safeShortString(ri.s);
+        int overFeatI = dbgAlph.lookupIndex(overFeat, true);
+        List<ProductIndex> overFeats = Arrays.asList(new ProductIndex(overFeatI));
+        LazyL2UpdateVector w = at2k2sfWeights[actionType.ordinal()];
+        Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, w);
+        return score;
+      }
+
+      IntDoubleUnsortedVector f;
+      if (ri.s != null) {
+        f = staticFeatures.getFeatures(s, fi.t, ri.s);
+      } else {
+        int p = 31;
+        f = new IntDoubleUnsortedVector(3);
+        f.add(p, 1);
+        f.add(p * config.frPacking.index(fi.f), 1);
+        f.add(p * config.frPacking.index(fi.f, ri.k), 1);
+      }
+      LazyL2UpdateVector w = at2sfWeights[actionType.ordinal()];
+      List<ProductIndex> f2 = convert(f, dim);
+      Adjoints staticScore = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, f2, w);
+
+      if (ri.k >= 0) {
+        int K = fi.f.numRoles();
+        List<ProductIndex> fk = new ArrayList<>();
+        for (ProductIndex p : f2) {
+          ProductIndex pp;
+          if (config.roleDependsOnFrame)
+            pp = p.prod(config.frPacking.index(fi.f, ri.k), config.frPacking.size());
+          else
+            pp = p.prod(ri.k, K);
+          fk.add(pp);
+        }
+        LazyL2UpdateVector wk = at2k2sfWeights[actionType.ordinal()];
+        Adjoints staticScoreK = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, fk, wk);
+        staticScore = new Adjoints.Sum(staticScore, staticScoreK);
+      }
 
       List<ProductIndex> gf = globalFeatures(actionType, fi, ri);
       Adjoints gfa = globalFeatureWeights.getScore(actionType, gf);
 
       Adjoints sfa = stateFeatureWeights.getScore(actionType, stateFeatures);
 
-      // How to map between t:int and t:span
-      // Depends on the original order that the FrameInstances for the feature precomputation.
-      IntDoubleUnsortedVector f = staticFeatures.getFeatures(s, fi.t, ri.s);
-      LazyL2UpdateVector w = at2sfWeights[actionType.ordinal()];
-      Adjoints staticScore = new edu.jhu.hlt.fnparse.rl.params.Adjoints.Vector(null, null, w, f, staticL2Penalty);
-      if (ri.k >= 0) {
-        // TODO k or (f,k)?
-        staticScore = new Adjoints.Sum(staticScore,
-            new edu.jhu.hlt.fnparse.rl.params.Adjoints.Vector(
-                null, null, at2k2sfWeights[actionType.ordinal()][ri.k], f, staticL2Penalty));
-      }
-
       return new Adjoints.Sum(gfa, sfa, staticScore);
     }
 
-    // TODO take prod of this with each feature you add
-    enum GF {
+    // The type of global feature.
+    // (they can all be put into the same set of weights because the features are
+    //  producted with the global feature type).
+    public static enum GF {
       ARG_LOC,
       NUM_ARG,
       ROLE_COOC;
-      public final ProductIndex index = new ProductIndex(ordinal(), GF.values().length);
     }
+
+    public static final ProductIndex ARG_LOC_I = new ProductIndex(GF.ARG_LOC.ordinal(), GF.values().length);
+    public static final ProductIndex NUM_ARG_I = new ProductIndex(GF.NUM_ARG.ordinal(), GF.values().length);
+    public static final ProductIndex ROLE_COOC_I = new ProductIndex(GF.ROLE_COOC.ordinal(), GF.values().length);
 
     public static void stack(List<ProductIndex> addTo, ProductIndex... features) {
       int n = features.length;
@@ -1722,9 +2241,10 @@ public class State {
     private List<ProductIndex> globalFeatures(AT actionType, FI fi, RI ri) {
       List<ProductIndex> feats = new ArrayList<>();
 
-      ProductIndex f = new ProductIndex(fi.f.getId(), info.numFrames());
+      int F = config.frPacking.getNumFrames();
+      ProductIndex f = new ProductIndex(fi.f.getId(), F);
 
-      // Handles COMMIT vs PRUNE
+     // Handles COMMIT vs PRUNE
       if (ri.s != null)
         f = f.prod(ri.s == Span.nullSpan);
       // This branching is fine as long as s==null is the same for a given AT and the weights are AT specific
@@ -1732,14 +2252,14 @@ public class State {
       ProductIndex fk = null;
 //      ProductIndex fkq = null;
       if (ri.k >= 0) {
-        fk = new ProductIndex(info.frPacking.index(fi.f, ri.k), info.frPacking.size())
+        fk = new ProductIndex(config.frPacking.index(fi.f, ri.k), config.frPacking.size())
             .prod(ri.s == Span.nullSpan);
 //        fkq = fk.prod(ri.q.ordinal(), RoleType.values().length);
       }
 
       // argLoc
-      if (info.config.argLocFeature) {
-        ProductIndex gf = GF.ARG_LOC.index;
+      if (config.argLocFeature) {
+        ProductIndex gf = ARG_LOC_I;
         switch (actionType) {
         case COMPLETE_S:
         case NEW_S:
@@ -1768,14 +2288,14 @@ public class State {
       }
 
       // numArgs
-      if (info.config.numArgsFeature) {
-        ProductIndex gf = GF.NUM_ARG.index;
+      if (config.numArgsFeature) {
+        ProductIndex gf = NUM_ARG_I;
         switch (actionType) {
         case NEW_K:
         case COMPLETE_K:
         case COMPLETE_S:
           int n = 8;
-          int na = Math.min(n, fi.args.getNumRealizedArgs());
+          int na = Math.min(n, fi.getNumRealizedArgs());
           ProductIndex nap = gf.prod(na, n);
           ProductIndex gt0 = gf.prod(na >= 1);
           ProductIndex gt1 = gf.prod(na >= 2);
@@ -1816,15 +2336,15 @@ public class State {
       }
 
       // Role co-occurrence
-      if (info.config.roleCoocFeature) {
-        ProductIndex gf = GF.NUM_ARG.index;
+      if (config.roleCoocFeature) {
+        ProductIndex gf = NUM_ARG_I;
         switch (actionType) {
         case NEW_K:
         case COMPLETE_K:
         case COMPLETE_S:
-          int k1 = info.frPacking.index(fi.f, ri.k);
-          int k0 = info.frPacking.index(fi.f);
-          int n = info.frPacking.size();
+          int k1 = config.frPacking.index(fi.f, ri.k);
+          int k0 = config.frPacking.index(fi.f);
+          int n = config.frPacking.size();
           for (RILL cur = fi.args; cur != null; cur = cur.next) {
             RI ri2 = cur.item;
             if (ri2 == ri)
@@ -1832,7 +2352,7 @@ public class State {
             Span s1 = ri.s;
             if (s1 == Span.nullSpan)    // TODO Build skip-list
               continue;
-            int k2 = info.frPacking.index(fi.f, ri2.k);
+            int k2 = config.frPacking.index(fi.f, ri2.k);
             int p;
             if (k1 < k2) {
               p = k1 * n + k2;
@@ -1853,8 +2373,4 @@ public class State {
     }
   }
 
-  private List<ProductIndex> argLocFeats(AT actionType, FI newFI, RI newRI) {
-    List<ProductIndex> feats = new ArrayList<>();
-    return feats;
-  }
 }

@@ -30,6 +30,11 @@ public class ProductIndexAdjoints implements Adjoints {
   }
 
   @Override
+  public String toString() {
+    return String.format("(ProdIdxAdj numFeat=%d l2Reg=%.1g lr=%1g)", featIdx.length, l2Reg, lr);
+  }
+
+  @Override
   public double forwards() {
     double d = 0;
     for (int i = 0; i < featIdx.length; i++)

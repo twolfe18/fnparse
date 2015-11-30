@@ -16,7 +16,7 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 
-/**
+/*
  * TODO write a test where I replace either v_x and/or v_y with 1 or f(y,x), interchangably
  * I should be able to learn the same weights as OldFeatureParams.
  */

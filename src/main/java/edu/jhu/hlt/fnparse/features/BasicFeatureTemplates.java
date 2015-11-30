@@ -59,7 +59,7 @@ public class BasicFeatureTemplates {
     return "E";
   }
 
-  private static ProductIndex[] sprMemo = new ProductIndex[4 * 5];
+  private static ProductIndex[] sprMemo = new ProductIndex[5 * 5 * 5 * 5];
   static {
     for (int i = 0; i < sprMemo.length; i++)
       sprMemo[i] = new ProductIndex(i, sprMemo.length);

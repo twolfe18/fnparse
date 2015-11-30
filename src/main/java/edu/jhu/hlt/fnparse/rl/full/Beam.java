@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.full;
 
 import java.math.BigInteger;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.TreeSet;
 
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -99,6 +100,19 @@ public interface Beam {
 
     public double getCollapseRate() {
       return ((double) numCollapses) / numOffers;
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append(String.format("(Beam %d/%d collapseRate=%.3f\n", size(), capacity, getCollapseRate()));
+      Iterator<BeamItem> itr = scores.iterator();
+      while (itr.hasNext()) {
+        BeamItem i = itr.next();
+        sb.append(String.format("  %.3f %s\n", i.score, i.state));
+      }
+      sb.append(')');
+      return sb.toString();
     }
 
     /**

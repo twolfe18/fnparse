@@ -40,6 +40,9 @@ public abstract class WeightsMatrix<T> {
   public abstract int row(T t);
 
   public Adjoints getScore(T t, List<ProductIndex> features) {
+    if (features.isEmpty()) {
+      return new Adjoints.OnlyShowScore("NoFeatures[" + t + "]", Adjoints.Constant.ZERO);
+    }
     final LazyL2UpdateVector w = at2w[row(t)];
     return new ProductIndexAdjoints(learningRate, l2Lambda, dimension, features, w);
   }

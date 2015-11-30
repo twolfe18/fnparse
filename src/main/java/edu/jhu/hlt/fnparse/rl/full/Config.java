@@ -1,10 +1,17 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import java.util.Random;
+
+import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+
 public class Config {
 
   /** Label constraints *******************************************************/
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
+
+  public boolean roleDependsOnFrame = false;
 
   /** Structural constraints **************************************************/
 
@@ -57,8 +64,17 @@ public class Config {
   public boolean numArgsFeature = true;
   public boolean roleCoocFeature = true;
 
+  public void setNoGlobalFeatures() {
+    argLocFeature = false;
+    numArgsFeature = false;
+    roleCoocFeature = false;
+  }
 
-
+  /** Data used across many parses ********************************************/
+  public PrimesAdapter primes = null;
+  public FrameRolePacking frPacking = null;
+  public GeneralizedWeights weights = null;
+  public Random rand = null;
 
 
   /*

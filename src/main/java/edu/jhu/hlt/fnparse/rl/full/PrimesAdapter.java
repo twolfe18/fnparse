@@ -80,6 +80,10 @@ public class PrimesAdapter {
     this.hash2dense = new LongIntHashMap(30 * 10 * 5 * 30, MISSING);
   }
 
+  public Primes getPrimes() {
+    return primes;
+  }
+
   private int gp(long h) {
     assert h >= 0;
     int hd = hash2dense.get(h);
