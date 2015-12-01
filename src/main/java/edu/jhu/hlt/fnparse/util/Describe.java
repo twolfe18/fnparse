@@ -102,9 +102,9 @@ public class Describe {
           extent.shortString(),
           span(fi.getArgument(k), s)));
       for (Span cont : fi.getContinuationRoleSpans(k))
-        sb.append(" CONT=\"" + span(cont, s) + "\"");
+        sb.append(" CONT=" + cont.shortString() + "\"" + span(cont, s) + "\"");
       for (Span ref : fi.getReferenceRoleSpans(k))
-        sb.append(" REF=\"" + span(ref, s) + "\"");
+        sb.append(" REF=" + ref.shortString() + "\"" + span(ref, s) + "\"");
     }
     return sb.toString();
   }

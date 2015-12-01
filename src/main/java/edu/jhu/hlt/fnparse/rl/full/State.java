@@ -64,6 +64,7 @@ import fj.Ord;
 public class State {
 
   public static boolean DEBUG = false;
+  public static boolean CHEAT_FEATURES_1 = true;  // if true, use the most obviuos cheating features
   public static int NUM_NEXT_EVALS = 0;
 
   // For prototyping
@@ -1685,6 +1686,10 @@ public class State {
   }
 
   public static State runInference(Info inf) {
+    /*
+     * TODO maximizing loss: start with loss=0 and add in deltaLoss
+     * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
+     */
     State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
         .setFramesToGoldLabels();
 
@@ -1760,6 +1765,7 @@ public class State {
    * Make sure you can fit one example.
    */
   public static void checkLearning(FNParse y, Config conf) {
+    Log.info("starting on " + y.getId() + " numFI=" + y.numFrameInstances());
 
     Info oracleInf = new Info().setOracleCoefs();
     Info mvInf = new Info().setMostViolatedCoefs();
@@ -1770,31 +1776,38 @@ public class State {
       inf.label = new LabelIndex(y);
       inf.sentence = y.getSentence();
       inf.setTargetPruningToGoldLabels();
-      boolean addSpansIfMissing = true; //inf != decInf;
+
+      // Normally we would not allow the decoder to see the gold spans, but for
+      // this test it is easier to check against F1=1 than F1=bestAchievable
+      boolean addSpansIfMissing = true;// inf != decInf;
       inf.setArgPruningUsingSyntax(
           DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
-
+//      System.out.println("addSpansIfMissing=" + addSpansIfMissing
+//          + " prunedSpans=" + inf.prunedSpans.describe());
     }
 
     int successesInARow = 0;
     double lr = 1;
-    int maxiter = 200;
+    int maxiter = 500;
+    FNParse yhat = null;
     for (int i = 0; i < maxiter; i++) {
       State oracleState = runInference(oracleInf);
       State mvState = runInference(mvInf);
 
-      System.out.println("oracleF1: " + f1(y, oracleState.decode()));
-      System.out.println("mvF1: " + f1(y, mvState.decode()));
-      System.out.println("decF1: " + f1(y, runInference2(decInf)));
+//      if (i % 5 == 0) {
+//      System.out.println("oracleF1: " + f1(y, oracleState.decode()));
+//      System.out.println("mvF1: " + f1(y, mvState.decode()));
+//      System.out.println("decF1: " + f1(y, runInference2(decInf)));
 //      System.out.println("oracle: " + oracleState.show());
 //      System.out.println("mv: " + mvState.show());
+//      }
 
       // Oracle state adjoints only have loss in them, so no features are added!
       oracleState.score.backwards(-lr);
       mvState.score.backwards(+lr);
 
       if (i % 5 == 0) {
-        FNParse yhat = runInference2(decInf);
+        yhat = runInference2(decInf);
         double f1 = f1(y, yhat);
         Log.info("iter=" + i + " f1=" + f1);
         if (f1 == 1)
@@ -1805,6 +1818,18 @@ public class State {
           return;
       }
     }
+    DEBUG = true;
+    yhat = runInference2(decInf);
+    System.out.println("y=" + Describe.fnParse(y));
+    System.out.println("yhat=" + Describe.fnParse(yhat));
+    System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
+
+      decInf.setTargetPruningToGoldLabels();
+      boolean addSpansIfMissing = true;// inf != decInf;
+      decInf.setArgPruningUsingSyntax(
+          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+    System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
+
     assert false : "didn't learn in " + maxiter + " iterations";
   }
 
@@ -1900,6 +1925,9 @@ public class State {
           role = "C-" + role;
         else if (ri.q == RoleType.REF)
           role = "R-" + role;
+        else
+          assert ri.q == RoleType.BASE;
+        if (DEBUG) System.out.println("[decode] " + role + " " + ri.s.shortString());
         arguments.add(new Pair<>(role, ri.s));
       }
       try {
@@ -2030,7 +2058,8 @@ public class State {
     public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
       boolean y = inGold.contains(new Pair<>(sent.getId(), new SpanPair(t, s)));
       if (y) countY++; else countN++;
-      if ((countY + countN) % 100 == 0) Log.info("countY=" + countY + " countN=" + countN);
+      if ((countY + countN) % 1000 == 0)
+        Log.info("countY=" + countY + " countN=" + countN);
       IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       int a, b;
       if (y) {
@@ -2163,20 +2192,8 @@ public class State {
     public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
       assert fi.f != null;
 
-      if (++fCalls % 50000 == 0)
+      if (++fCalls % 500000 == 0)
         showWeightSummary();
-
-      if (debug) {
-//        Log.info("returning early: only static features");
-//        return staticScore;
-
-        String overFeat = fi.f.getName() + "_" + fi.t.shortString() + "_" + ri.k + "_" + ri.q + "_" + Span.safeShortString(ri.s);
-        int overFeatI = dbgAlph.lookupIndex(overFeat, true);
-        List<ProductIndex> overFeats = Arrays.asList(new ProductIndex(overFeatI));
-        LazyL2UpdateVector w = at2k2sfWeights[actionType.ordinal()];
-        Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, w);
-        return score;
-      }
 
       IntDoubleUnsortedVector f;
       if (ri.s != null) {
@@ -2206,6 +2223,20 @@ public class State {
         LazyL2UpdateVector wk = at2k2sfWeights[actionType.ordinal()];
         Adjoints staticScoreK = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, fk, wk);
         staticScore = new Adjoints.Sum(staticScore, staticScoreK);
+      }
+
+      if (debug) {
+        if (CHEAT_FEATURES_1) {
+          String overFeat = fi.f.getName() + "_" + fi.t.shortString() + "_" + ri.k + "_" + ri.q + "_" + Span.safeShortString(ri.s);
+          int overFeatI = dbgAlph.lookupIndex(overFeat, true);
+          List<ProductIndex> overFeats = Arrays.asList(new ProductIndex(overFeatI));
+          LazyL2UpdateVector ww = at2k2sfWeights[actionType.ordinal()];
+          Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, ww);
+          return score;
+//        } else {
+//          Log.info("returning early: only static features");
+//          return staticScore;
+        }
       }
 
       List<ProductIndex> gf = globalFeatures(actionType, fi, ri);
