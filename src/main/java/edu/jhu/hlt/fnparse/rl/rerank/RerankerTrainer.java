@@ -60,6 +60,7 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.Fixed;
@@ -307,6 +308,7 @@ public class RerankerTrainer {
   public boolean bailOutOfTrainingASAP = false;
 
 
+
   public RerankerTrainer(Random rand, File workingDir) {
     if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
@@ -356,13 +358,16 @@ public class RerankerTrainer {
 
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
   public static Map<String, Double> eval(
-      Reranker m,
+      ShimModel model,
       Config conf,
       ItemProvider ip,
       File semaforEvalDir,
       String showStr,
       File diffArgsFile,
       File predictionsFile) {
+
+    // FIXME
+    Reranker m = model.getReranker();
 
     // Make predictions
     // +1 is because an extra thread or two is allocated for reading data in,
@@ -481,7 +486,7 @@ public class RerankerTrainer {
     fw.close();
   }
 
-  public static double eval(Reranker m, Config conf, ItemProvider ip, StdEvalFunc objective) {
+  public static double eval(ShimModel m, Config conf, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
     File diffArgsFile = null;
     File predictionsFile = null;
@@ -494,7 +499,7 @@ public class RerankerTrainer {
    * Inserts an extra bias Param.Stateless into the given model and tunes it
    * @return the F1 on the dev set of the selected recall bias.
    */
-  private double tuneModelForF1(Reranker model, Config conf, ItemProvider dev) {
+  private double tuneModelForF1(ShimModel m, Config conf, ItemProvider dev) {
     final ItemProvider devUse;
     if (dev.size() > conf.maxDev) {
       Log.info("[main] cutting down dev set size: " + dev.size() + "  =>  " + conf.maxDev);
@@ -503,6 +508,9 @@ public class RerankerTrainer {
       devUse = dev;
     }
     Log.info("[main] tuning on " + devUse.size() + " examples");
+
+    // FIXME
+    Reranker model = m.getReranker();
 
     // Insert the bias into the model
     Params.PruneThreshold tau = model.getPruningParams();
@@ -522,7 +530,7 @@ public class RerankerTrainer {
         String msg = SHOW_FULL_EVAL_IN_TUNE
               ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
         Map<String, Double> results = eval(
-          model, conf, devUse, semEvalDir, msg, diffArgsFile, predictionsFile);
+          m, conf, devUse, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         Log.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
             bias.getRecallBias(), perf));
@@ -552,11 +560,11 @@ public class RerankerTrainer {
     return best.get2();
   }
 
-  public Reranker instantiate() {
+  public ShimModel instantiate() {
     assert pretrainConf.argPruningMode == trainConf.argPruningMode;
     assert pretrainConf.trainBeamSize == trainConf.trainBeamSize;
     assert pretrainConf.testBeamSize == trainConf.testBeamSize;
-    return new Reranker(
+    return new ShimModel(new Reranker(
         statefulParams,
         statelessParams,
         tauParams,
@@ -564,15 +572,15 @@ public class RerankerTrainer {
         cachedFeatures,
         pretrainConf.trainBeamSize,
         pretrainConf.testBeamSize,
-        rand);
+        rand), trainConf);
   }
 
   /** Trains and tunes a full model */
-  public Reranker train1(ItemProvider train, ItemProvider dev) {
+  public ShimModel train1(ItemProvider train, ItemProvider dev) {
     if (statefulParams == Stateful.NONE && statelessParams == Stateless.NONE)
       throw new IllegalStateException("you need to set the params");
 
-    Reranker m = instantiate();
+    ShimModel m = instantiate();
 
     if (bailOutOfTrainingASAP)
       Log.info("bailing out of training ASAP -- for debugging");
@@ -586,7 +594,8 @@ public class RerankerTrainer {
     }
 
     Log.info("[main] global train");
-    m.setStatefulParams(statefulParams);
+    // I shouldn't need this anymore
+//    m.setStatefulParams(statefulParams);
     if (!bailOutOfTrainingASAP)
       train2(m, train, dev, trainConf);
 
@@ -598,7 +607,7 @@ public class RerankerTrainer {
    * WARNING: Will clobber a learning rate and replace it with Constant. That said
    * it will use the current learning rate as a jumping off point.
    */
-  public void estimateLearningRate(Reranker m, ItemProvider train, ItemProvider dev, Config conf) {
+  public void estimateLearningRate(ShimModel m, ItemProvider train, ItemProvider dev, Config conf) {
     // Set a new learning rate so that we know exactly what we're dealing with.
     LearningRateSchedule lrOld = conf.learningRate;
     double lrOldV = lrOld.learningRate();
@@ -711,11 +720,14 @@ public class RerankerTrainer {
    * no limit is enforced. Otherwise a random slice is genrated.
    */
   private DoubleSupplier modelLossOnData(
-      Reranker m,
+      ShimModel model,
       ItemProvider dev,
       Config conf,
       EvalFunc lossFunc,
       int nExampleLimit) {
+
+    // FIXME
+    Reranker m = model.getReranker();
 
     final ItemProvider devUse;
     if (dev.size() > nExampleLimit) {
@@ -836,7 +848,7 @@ public class RerankerTrainer {
   /**
    * Adds a stopping condition based on the dev set performance.
    */
-  public void train2(Reranker m, ItemProvider train, ItemProvider dev, Config conf) {
+  public void train2(ShimModel m, ItemProvider train, ItemProvider dev, Config conf) {
     Log.info("[main] nTrain=" + train.size() + " nDev=" + dev.size() + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
@@ -859,7 +871,7 @@ public class RerankerTrainer {
 
     // Perform an argmin_{iterations} loss(dev) to choose best params.
     if (conf.conventionalDevSetStopping) {
-      if (m.cachedFeatures == null)
+      if (cachedFeatures == null)
         throw new RuntimeException("only supported for CachedFeatures");
       File paramDir = new File(conf.workingDir, "conventionalStoppingParams");
       Log.info("[main] setting up ArgMinDevLossParamSetter: paramDir=" + paramDir.getPath());
@@ -867,8 +879,8 @@ public class RerankerTrainer {
       StoppingCondition.ArgMinDevLossParamSetter sc =
           new StoppingCondition.ArgMinDevLossParamSetter(
               conf.stopping, paramDir,
-              m.cachedFeatures.params::serializeToFileRTE,
-              m.cachedFeatures.params::deserializeFromFileRTE);
+              cachedFeatures.params::serializeToFileRTE,
+              cachedFeatures.params::deserializeFromFileRTE);
       conf.setStoppingCondition(sc);
     }
 
@@ -876,7 +888,7 @@ public class RerankerTrainer {
       // Train the model
       hammingTrain(m, train, dev, conf);
       Log.info("[main] done hammingTrain, params:");
-      m.showWeights();
+      m.showParams();
 
       // Tune the model
       if (conf.performTuning()) {
@@ -902,7 +914,7 @@ public class RerankerTrainer {
    * Stateful params of the model will not be fit, but updates should be much
    * faster to solve for as they don't require any forwards/backwards pass.
    */
-  public void hammingTrain(Reranker r, ItemProvider train, ItemProvider dev, Config conf)
+  public void hammingTrain(ShimModel r, ItemProvider train, ItemProvider dev, Config conf)
       throws InterruptedException, ExecutionException {
     Log.info("[main] starting, conf=" + conf);
     String timerStr = "hammingTrain." + conf.name;
@@ -912,7 +924,6 @@ public class RerankerTrainer {
 
     ExecutorService es = null;
     if (conf.threads > 1) {
-      assert r.cachedFeatures != null : "regular features are not thread safe";
       Log.info("Using multi-threading threads=" + conf.threads);
       es = Executors.newWorkStealingPool(conf.threads);
     }
@@ -958,7 +969,7 @@ public class RerankerTrainer {
         // Print some data every once in a while.
         // Nothing in this conditional should have side-effects on the learning.
         if (t.enoughTimePassed(secsBetweenShowingWeights)) {
-          r.showWeights();
+          r.showParams();
           if (showTime) {
             Timer bt = timer.get(timerStr + ".batch", false);
             int totalUpdates = conf.stopping.estimatedNumberOfIterations();
@@ -1020,9 +1031,9 @@ public class RerankerTrainer {
           if (conf.debugNetworkParamAveraging) {
             System.out.println();
             System.out.println();
-            Log.info("statelessMatch=" + (statelessParams == r.getStatelessParams()));
-            Log.info("statefulMatch=" + (statefulParams == r.getStatefulParams()));
-            Log.info("tauMatch=" + (tauParams == r.getPruningParams()));
+//            Log.info("statelessMatch=" + (statelessParams == r.getStatelessParams()));
+//            Log.info("statefulMatch=" + (statefulParams == r.getStatefulParams()));
+//            Log.info("tauMatch=" + (tauParams == r.getPruningParams()));
             System.out.println();
             Log.info("paramServerClient.getParams=" + parameterServerClient.getParams());
             NetworkAvg na = (NetworkAvg) parameterServerClient.getParams();
@@ -1038,13 +1049,7 @@ public class RerankerTrainer {
             Log.info("statefulMatchGlue=" + (statefulParams == g.getStateful()));
             Log.info("tauMatchGlue=" + (tauParams == g.getTau()));
             System.out.println();
-            Log.info("model stateful params:");
-            r.getStatefulParams().showWeights();
-            Log.info("model stateless params:");
-            r.getStatelessParams().showWeights();
-            Log.info("model tau params:");
-            r.getPruningParams().showWeights();
-            System.out.println();
+            r.showParams();
             System.out.println();
           }
           parameterServerClient.paramsChanged();
@@ -1059,9 +1064,7 @@ public class RerankerTrainer {
       es.shutdown();
 
     Log.info("[main] telling Params that training is over");
-    r.getStatelessParams().doneTraining();
-    r.getStatefulParams().doneTraining();
-    r.getPruningParams().doneTraining();
+    r.doneTraining();
 
     Log.info("[main] times:\n" + timer);
     timer.stop(timerStr);
@@ -1071,52 +1074,20 @@ public class RerankerTrainer {
    * Returns the average violation over this batch.
    */
   private double hammingTrainBatch(
-      Reranker r,
+      ShimModel r,
       List<Integer> batch,
       ExecutorService es,
       ItemProvider ip,
       Config conf,
       int iter,
       String timerStrPartial) throws InterruptedException, ExecutionException {
-    Timer tmv = timer.get(timerStrPartial + ".mostViolated", true).setPrintInterval(10).ignoreFirstTime();
-    Timer to = timer.get(timerStrPartial + ".oracle", true).setPrintInterval(10).ignoreFirstTime();
     Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
     t.start();
 
     // Compute updates for the batch
     boolean verbose = false;
-    List<Update> finishedUpdates = new ArrayList<>();
-    if (es == null) {
-      if (verbose)
-        Log.info("[hammingTrainBatch] running serial");
-      for (int idx : batch) {
-        if (verbose)
-          Log.info("[hammingTrainBatch] submitting " + idx);
-        FNParse y = ip.label(idx);
-        State init = useSyntaxSpanPruning
-            ? r.getInitialStateWithPruning(y, y)
-            : State.initialState(y, ip.items(idx));
-        Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
-          ? r.getFullUpdate(init, y, conf.oracleMode, rand, to, tmv)
-          : r.getStatelessUpdate(init, y);
-        finishedUpdates.add(u);
-      }
-    } else {
-      List<Future<Update>> futures = new ArrayList<>(batch.size());
-      for (int idx : batch) {
-        futures.add(es.submit( () -> {
-          FNParse y = ip.label(idx);
-          State init = useSyntaxSpanPruning
-            ? r.getInitialStateWithPruning(y, y)
-            : State.initialState(y, ip.items(idx));
-          return r.hasStatefulFeatures() || conf.forceGlobalTrain
-            ? r.getFullUpdate(init, y, conf.oracleMode, rand, to, tmv)
-            : r.getStatelessUpdate(init, y);
-        } ));
-      }
-      for (Future<Update> f : futures)
-        finishedUpdates.add(f.get());
-    }
+    List<Update> finishedUpdates = r.getUpdate(batch, ip, es, verbose);
+
     if (verbose)
       Log.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batch.size();
@@ -1317,37 +1288,53 @@ public class RerankerTrainer {
     // Enable the CachedFeatures module
     if (config.getBoolean("useCachedFeatures", false)) {
       Log.info("[main] using cached features!");
+      MultiTimer mt = new MultiTimer();
 
       // stringTemplate <-> intTemplate and other stuff like template cardinality
+      mt.start("alph");
       BiAlph bialph = new BiAlph(
           config.getExistingFile("cachedFeatures.bialph"),
           LineMode.valueOf(config.getString("cachedFeatures.bialph.lineMode")));
+      mt.stop("alph");
 
       // Convert string feature set to ints for CachedFeatures (using BiAlph)
+      mt.start("features");
+      boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
       List<int[]> features = new ArrayList<>();
       for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
         List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
         int n = strTemplates.size();
         int[] intTemplates = new int[n];
         for (int i = 0; i < n; i++) {
-          Log.info("looking up template: " + strTemplates.get(i));
-          int t = bialph.mapTemplate(strTemplates.get(i));
+          String tn = strTemplates.get(i);
+          Log.info("looking up template: " + tn);
+          int t = bialph.mapTemplate(tn);
+          if (t < 0 && allowLossyAlphForFS) {
+            Log.info("skipping because " + tn + " was not in the alphabet");
+            continue;
+          }
           assert t >= 0;
           intTemplates[i] = t;
         }
         features.add(intTemplates);
       }
+      mt.stop("features");
 
       // Instantiate the module (holder of the data)
+      mt.start("cache");
       trainer.cachedFeatures = new CachedFeatures(bialph, features);
+      mt.stop("cache");
 
       // Load the sentId -> FNParse mapping (cached features only gives you sentId and features)
+      mt.start("parses");
       trainer.cachedFeatures.sentIdsAndFNParses = new PropbankFNParses(config);
       Log.info("[main] train.size=" + trainer.cachedFeatures.sentIdsAndFNParses.trainSize()
           + " dev.size=" + trainer.cachedFeatures.sentIdsAndFNParses.devSize()
           + " test.size=" + trainer.cachedFeatures.sentIdsAndFNParses.testSize());
+      mt.stop("parses");
 
       // Start loading the data in the background
+      mt.start("load");
       int numDataLoadThreads = config.getInt("cachedFeatures.numDataLoadThreads", 1);
       Log.info("[main] loading data in the background with "
           + numDataLoadThreads + " extra threads");
@@ -1362,8 +1349,10 @@ public class RerankerTrainer {
         Thread t = new Thread(trainer.cachedFeatures.new Inserter(rel, readForever, skipEntriesNotInSentId2ParseMap));
         t.start();
       }
+      mt.stop("load");
 
       // Setup the params
+      mt.start("params");
       int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
@@ -1372,10 +1361,13 @@ public class RerankerTrainer {
       CachedFeatures.Params params = trainer.cachedFeatures.new Params(globalL2Penalty, dimension, numRoles, rand, updateL2Every);
       trainer.cachedFeatures.params = params;
       trainer.statelessParams = params;
+      mt.stop("params");
 
       // Make sure that DeterministicRolePruning knows about CachedFeatures
       trainer.pretrainConf.argPruningMode = Mode.CACHED_FEATURES;
       trainer.trainConf.argPruningMode = Mode.CACHED_FEATURES;
+
+      Log.info("times: " + mt);
 
     } else if (useEmbeddingParams) {
       // This is the path that will be executed when not debugging
@@ -1791,7 +1783,7 @@ public class RerankerTrainer {
     }
 
     final boolean dropout = config.getBoolean("dropout", false);
-    Reranker model = null;
+    ShimModel model = null;
     if (config.containsKey(modelFileKey)) {
       // Load a model from file
       File modelFile = config.getExistingFile(modelFileKey);
@@ -1799,8 +1791,14 @@ public class RerankerTrainer {
 //      model = trainer.instantiate();
 //      model.deserializeParams(modelFile);
       ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
-      model = (Reranker) ois.readObject();
+      model = (ShimModel) ois.readObject();
       ois.close();
+    } else if (config.getBoolean("useFModel", true)) {
+      Log.info("[main] using fmodel");
+
+      FModel fm = new FModel();
+      model = new ShimModel(fm);
+
     } else if (config.containsKey(paramsFileKey)) {
       // Load just the params (instead of the entire Reranker).
       // This is useful for distributed training, which only uses the Params.
@@ -1813,7 +1811,7 @@ public class RerankerTrainer {
         Log.info("[main] deser1 p=" + p);
         Params.Glue glue = (Params.Glue) p.getAverage();
         Log.info("[main] deser1 glue=" + glue);
-        model = new Reranker(
+        model = new ShimModel(new Reranker(
             glue.getStateful(),
             glue.getStateless(),
             glue.getTau(),
@@ -1821,7 +1819,7 @@ public class RerankerTrainer {
             trainer.cachedFeatures,
             trainer.trainConf.trainBeamSize,
             trainer.trainConf.testBeamSize,
-            trainer.rand);
+            trainer.rand), trainer.trainConf);
       } catch (Exception e) {
         e.printStackTrace();
       }
@@ -1859,7 +1857,7 @@ public class RerankerTrainer {
     Log.info("[main] done training, evaluating");
     if (dropout) {
       Log.info("[main] turning off dropout");
-      model.cachedFeatures.params.setDropoutMode(DropoutMode.TEST);
+      trainer.cachedFeatures.params.setDropoutMode(DropoutMode.TEST);
     }
     File diffArgsFileTest = new File(workingDir, "diffArgs.test.txt");
     File predictionsFileTest = new File(workingDir, "predictions.test.txt");

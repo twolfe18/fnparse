@@ -19,7 +19,6 @@ import java.util.zip.GZIPOutputStream;
 
 import org.apache.log4j.Logger;
 
-import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
