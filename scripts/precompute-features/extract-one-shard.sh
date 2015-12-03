@@ -1,4 +1,3 @@
-#$ -cwd
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
@@ -22,6 +21,8 @@ if [[ $# != 7 ]]; then
   echo "5) a redis parse server"
   echo "6) a dataset, e.g. \"propbank\" or \"framenet\""
   echo "7) a file suffix to control compression, e.g. \".gz\" or \".bz2\""
+  echo "   script: $0"
+  echo "   args: $@"
   exit 1
 fi
 

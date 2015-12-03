@@ -11,7 +11,8 @@ NUM_ROLES=30
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 ############################################################################################
@@ -22,14 +23,17 @@ JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 # 1) I didn't originally serialize the parses with the Propbank data
 # 2) I wanted a way to cache parses across machines
 # 3) I can fit all of the FNParses in memory, but not with the parses as well
-qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
-qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh
+#REDIS_CONF=scripts/propbank-train-redis-parse-server.redisconf
+REDIS_CONF=/export/projects/twolfe/fnparse-data/cache/parses/propbank/redis/propbank-train-redis-parse-server.redisconf
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
+qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
-NUM_SHARDS=500
-PARSE_REDIS_SERVERS=(r5n28 r6n23 r5n09 r6n31)
+NUM_SHARDS=256
+#PARSE_REDIS_SERVERS=(r5n07 r5n20 r5n34 r6n28)
+PARSE_REDIS_SERVERS=(r6n27)
 
 mkdir -p $WORKING_DIR/raw-shards/sge-logs
 
@@ -42,7 +46,8 @@ cp $JAR $JAR_STABLE
 echo "starting at `date`" >>$WORKING_DIR/raw-shards/commands.txt
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   WD=$WORKING_DIR/raw-shards/job-$i-of-$NUM_SHARDS
-  J=`echo $i | awk '{print $1 % 4}'`
+  #J=`echo $i | awk '{print $1 % 4}'`
+  J=0
   PS=${PARSE_REDIS_SERVERS[$J]}
   echo "dispatching to $PS"
   mkdir -p $WD
