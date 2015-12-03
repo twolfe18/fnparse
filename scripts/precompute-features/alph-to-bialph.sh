@@ -1,4 +1,3 @@
-#$ -cwd
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
@@ -32,15 +31,25 @@ OUTPUT=$2 #/tmp/merged-0/template-feat-indices.bialph.txt
 TEMP=`mktemp`
 if [[ `echo $INPUT | grep -cP 'gz$'` == 1 ]]; then
   zcat $INPUT | tail -n+2 >$TEMP
+elif [[ `echo $INPUT | grep -cP 'bz2$'` == 1 ]]; then
+  bzcat $INPUT | tail -n+2 >$TEMP
 else
   tail -n+2 <$INPUT >$TEMP
 fi
+
+#echo "TEMP=$TEMP"
 
 if [[ `echo $OUTPUT | grep -cP 'gz$'` == 1 ]]; then
   echo "using gzip"
   LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
     | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
     | gzip -c \
+    >$OUTPUT
+elif [[ `echo $OUTPUT | grep -cP 'bz2$'` == 1 ]]; then
+  echo "using bzip2"
+  LC_ALL=C sort -t '	' -k 3,4 <$TEMP \
+    | awk -F"\t" 'BEGIN{OFS="\t"}{$5=$1; $6=$2; print}' \
+    | bzip2 -c \
     >$OUTPUT
 else
   echo "using raw txt"

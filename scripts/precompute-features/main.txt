@@ -72,6 +72,7 @@ done
 python -u scripts/precompute-features/bialph-merge-pipeline.py \
   $WORKING_DIR \
   $NUM_SHARDS \
+  $SUF \
   | tee /tmp/merge-job-launch-log.txt
 
 
@@ -94,7 +95,7 @@ echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
 qsub -N featCounts-full \
-  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -b y -j y -V -o $WORKING_DIR/feature-counts/sge-logs \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx24G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
@@ -102,7 +103,7 @@ qsub -N featCounts-full \
     -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
 qsub -N featCounts-tenth \
-  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -b y -j y -V -o $WORKING_DIR/feature-counts/sge-logs \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
@@ -111,7 +112,7 @@ qsub -N featCounts-tenth \
     -DfeaturesParent=$FEATS_BEFORE_FILTERS \
     edu.jhu.hlt.fnparse.features.precompute.FeatureCounts
 qsub -N featCounts-hundreth \
-  -b y -j y -cwd -V -o $WORKING_DIR/feature-counts/sge-logs \
+  -b y -j y -V -o $WORKING_DIR/feature-counts/sge-logs \
   -l 'mem_free=25G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx15G -ea -server \
     -Dbialph=$BIALPH_BEFORE_FILTERS \
@@ -139,7 +140,7 @@ cp $JAR $JAR_STABLE
 
 # Takes shard 0 and builds output bialph
 qsub -N genFiltered-alph \
-  -b y -j y -cwd -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
+  -b y -j y -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
   -l 'mem_free=20G,num_proc=1,h_rt=12:00:00' \
   java -cp $JAR_STABLE -Xmx19G -ea -server \
     -Dshard=0 \
@@ -153,7 +154,7 @@ qsub -N genFiltered-alph \
     edu.jhu.hlt.fnparse.features.precompute.TemplateTransformer
 for SHARD in `echo "$NUM_SHARDS-1" | bc | xargs seq`; do    # takes shards 1..
   qsub -N genFiltered \
-    -b y -j y -cwd -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
+    -b y -j y -V -o $WORKING_DIR/coherent-shards-filtered/sge-logs \
     -l 'mem_free=20G,num_proc=1,h_rt=12:00:00' \
     java -cp $JAR_STABLE -Xmx19G -ea -server \
       -Dshard=$SHARD \
