@@ -20,6 +20,8 @@ import edu.jhu.hlt.tutils.Span;
  * @author travis
  */
 public class DependencyParse implements Serializable {
+  public static final long serialVersionUID = -5371460624361636628L;
+
   public static final int ROOT = -1;
   public static final int PUNC = -2;
 

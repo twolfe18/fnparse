@@ -1,4 +1,3 @@
-#$ -cwd
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
@@ -20,23 +19,28 @@ if [[ $# != 2 ]]; then
   exit 1
 fi
 
-if [[ `echo $2 | grep -cP 'gz$'` == 1 ]]; then
-  if [[ `echo $1 | grep -cP 'gz$'` == 1 ]]; then
-    echo "using gzip to read and write"
-    zcat $1 | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' | gzip -c >$2
-  else
-    echo "using txt to read and gzip to write"
-    awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 | gzip -c >$2
-  fi
+CAT=""
+if [[ `echo $1 | grep -cP 'gz$'` == 1 ]]; then
+  CAT="zcat"
+elif [[ `echo $1 | grep -cP 'bz2$'` == 1 ]]; then
+  CAT="bzcat"
 else
-  if [[ `echo $1 | grep -cP 'gz$'` == 1 ]]; then
-    echo "using gzip to read and txt to write"
-    zcat $f | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' >$2
-  else
-    echo "using txt to read and gzip write"
-    awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' <$1 >$2
-  fi
+  CAT="cat"
 fi
+
+ZIP=""
+if [[ `echo $2 | grep -cP 'gz$'` == 1 ]]; then
+  ZIP="gzip -c"
+elif [[ `echo $2 | grep -cP 'bz2$'` == 1 ]]; then
+  ZIP="bzip2 -c"
+else
+  ZIP="cat"
+fi
+
+echo "CAT=\"$CAT\""
+echo "ZIP=\"$ZIP\""
+
+$CAT $1 | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' | $ZIP >$2
 
 echo "ret code: $?"
 echo "done at `date`"
