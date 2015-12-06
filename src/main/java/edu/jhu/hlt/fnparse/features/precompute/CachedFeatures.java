@@ -802,7 +802,8 @@ public class CachedFeatures {
     Log.info("loading bialph in serial...");
     BiAlph bialph = new BiAlph(config.getExistingFile("alphabet"), LineMode.ALPH);
     Random rand = new Random();
-    int numTemplates = config.getInt("numTemplates", 993);
+//    int numTemplates = config.getInt("numTemplates", 993);
+    int numTemplates = bialph.getUpperBoundOnNumTemplates();
     int numFeats = config.getInt("numFeats", 50);
     List<int[]> features = new ArrayList<>();
     for (int i = 0; i < numFeats; i++) {

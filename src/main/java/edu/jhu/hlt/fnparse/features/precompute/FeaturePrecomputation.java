@@ -75,6 +75,8 @@ import edu.jhu.prim.bimap.IntObjectBimap;
  * values are stable across shards (so they do not need to be merged) and the
  * values are written out to WD/role-names.txt.gz.
  *
+ * TODO t is represented as Span.shortString and s is represented as "start,end"
+ *
  * @author travis
  */
 public class FeaturePrecomputation {

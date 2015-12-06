@@ -250,8 +250,9 @@ public class InformationGainProducts {
         relevantTemplates.set(i);
 
     // Setup template cardinalities
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    template2cardinality = new int[config.getInt("numTemplates", 30000)];   // TODO resizing code
+//    ExperimentProperties config = ExperimentProperties.getInstance();
+//    template2cardinality = new int[config.getInt("numTemplates", 30000)];   // TODO resizing code
+    template2cardinality = new int[bialph.getUpperBoundOnNumTemplates()];
     Arrays.fill(template2cardinality, -1);
     for (int t = relevantTemplates.nextSetBit(0); t >= 0; t = relevantTemplates.nextSetBit(t + 1)) {
       // Lookup cardinality for template[relevantTemplates[i]] (comes from a file)

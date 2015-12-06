@@ -492,11 +492,12 @@ public class InformationGain implements Serializable, LineByLine {
   /** You need to provide numRoles to get the proper OOV counting */
   public InformationGain(int numRoles, BubEntropyEstimatorAdapter bubEst) {
     ExperimentProperties config = ExperimentProperties.getInstance();
-    templates = new TemplateIG[config.getInt("numTemplates", 3000)];  // TODO resize code
-    for (int i = 0; i < templates.length; i++) {
-      templates[i] = new TemplateIG(i, numRoles);
-      templates[i].useBubEntropyEstimation(bubEst);
-    }
+//    templates = new TemplateIG[config.getInt("numTemplates", 3000)];  // TODO resize code
+//    for (int i = 0; i < templates.length; i++) {
+//      templates[i] = new TemplateIG(i, numRoles);
+//      templates[i].useBubEntropyEstimation(bubEst);
+//    }
+    templates = new TemplateIG[0];
 
     this.numRoles = numRoles;
     this.bubEst = bubEst;
@@ -513,6 +514,19 @@ public class InformationGain implements Serializable, LineByLine {
     }
   }
 
+  private TemplateIG getTemplate(int t) {
+    if (t >= templates.length) {
+      int n = Math.max(t + 1, (int) (templates.length * 1.6 + 1));
+      templates = Arrays.copyOf(templates, n);
+    }
+    TemplateIG ut = templates[t];
+    if (ut == null) {
+      ut = new TemplateIG(t, numRoles);
+      templates[t] = ut;
+    }
+    return ut;
+  }
+
   @Override
   public void observeLine(String line) {
     FeatureFile.Line l = new FeatureFile.Line(line, true);
@@ -520,15 +534,16 @@ public class InformationGain implements Serializable, LineByLine {
     if (ignoreSentenceIds.contains(sentenceId)) {
       if (numRoles < 1)
         return;
-      for (TemplateExtraction te : l.groupByTemplate())
-        templates[te.template].update(null, te.featureToProductIndex());
+      for (TemplateExtraction te : l.groupByTemplate()) {
+        getTemplate(te.template).update(null, te.featureToProductIndex());
+      }
     } else {
       // y = vector of roles (probably just one, but FN may have >1)
       // x_t = vector of extracted values for template t
       int[] ksi = l.getRoles(true);
 
       for (TemplateExtraction te : l.groupByTemplate())
-        templates[te.template].update(ksi, te.featureToProductIndex());
+        getTemplate(te.template).update(ksi, te.featureToProductIndex());
     }
   }
 
