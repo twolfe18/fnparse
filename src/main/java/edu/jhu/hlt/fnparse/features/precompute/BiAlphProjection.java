@@ -4,6 +4,13 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.PathMatcher;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -82,13 +89,46 @@ public class BiAlphProjection {
 
   public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
+
     BiAlphIntMapper m = new BiAlphIntMapper(
         config.getExistingFile("inputBialph"),
         LineMode.valueOf(config.getString("lineMode")));
-    m.replace(
-        config.getExistingFile("inputFeatures"),
-        config.getFile("outputFeatures"),
-        config.getBoolean("append", false));
+
+    // Two modes (wrt features, both take an alphabet):
+    // 1) file -> file
+    // 2) dir -> dir
+    boolean append = config.getBoolean("append", false);
+    String inFileKey = "inputFeatures";
+    if (config.containsKey(inFileKey)) {
+      Log.info("file->file mode");
+      File in = config.getExistingFile(inFileKey);
+      File out = config.getFile("outputFeatures");
+      assert !out.isDirectory();
+      m.replace(in, out, append);
+    } else {
+      Log.info("dir->dir mode");
+      String featuresGlob = config.getString("featuresGlob", "glob:**/*");
+      File out = config.getExistingDir("outputFeatures");
+      if (!featuresGlob.isEmpty()) {
+        File featuresParent = config.getExistingDir("featuresParent");
+        PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+        Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+          @Override
+          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+            if (pm.matches(path)) {
+              File of = new File(out, path.getFileName().toString());
+              Log.info("mapping features: " + path.toFile().getPath() + "  ==>  " + of.getPath() + "\t" + Describe.memoryUsage());
+              m.replace(path.toFile(), of, append);
+            }
+            return FileVisitResult.CONTINUE;
+          }
+          @Override
+          public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+            return FileVisitResult.CONTINUE;
+          }
+        });
+      }
+    }
     Log.info("done");
   }
 }
