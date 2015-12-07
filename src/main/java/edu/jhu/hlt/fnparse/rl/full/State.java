@@ -530,6 +530,7 @@ public class State {
   // This is the objective being optimized, which is some combination of model score and loss.
   // Note: This will include the scores of states that lead up to this state (sum over actions).
   public Adjoints score;
+  public StepScores stepScores;
 
   // Everything that is annoying to copy in State
   public final Info info;
@@ -572,6 +573,67 @@ public class State {
     }
   }
 
+  /**
+   * Keeps track of model score, loss, and randomness thoughout search. Implements
+   * Adjoints for easy interface with search. The separation is useful for things
+   * like computing the margin and debugging.
+   * 
+   * This is basically the same as {@link MutedAdjoints}, but allows well-structured
+   * introspection.
+   */
+  public static class StepScores implements Adjoints {
+
+    public final Info info;
+    public final Adjoints model;
+    public final double lossFP, lossFN;
+    public final double rand;
+    public final StepScores prev;
+
+    public StepScores(Info info, Adjoints model, double lossFP, double lossFN, double rand) {
+      this(info, model, lossFP, lossFN, rand, null);
+    }
+
+    public StepScores(Info info, Adjoints model, double lossFP, double lossFN, double rand, StepScores prev) {
+      this.info = info;
+      this.model = model;
+      this.lossFP = lossFP;
+      this.lossFN = lossFN;
+      this.rand = rand;
+      this.prev = prev;
+    }
+
+    public double getHammingLoss() {
+      return lossFN + lossFP;
+    }
+
+    private double __forwardsMemo = Double.NaN;
+    @Override
+    public double forwards() {
+      if (Double.isNaN(__forwardsMemo)) {
+        double s = 0;
+        if (info.coefModel.iszero() && !info.coefModel.muteForwards)
+          s += info.coefModel.coef * model.forwards();
+        if (info.coefLoss.iszero() && !info.coefLoss.muteForwards)
+          s += info.coefLoss.coef * (lossFP + lossFN);
+        if (info.coefLoss.iszero() && !info.coefLoss.muteForwards)
+          s += info.coefLoss.coef * rand;
+        if (prev != null)
+          s += prev.forwards();
+        __forwardsMemo = s;
+      }
+      return __forwardsMemo;
+    }
+
+    @Override
+    public void backwards(double dErr_dForwards) {
+      if (!info.coefModel.iszero())
+        model.backwards(info.coefModel.coef * dErr_dForwards);
+      if (prev != null)
+        prev.backwards(dErr_dForwards);
+    }
+  }
+
+
   /** Everything that is annoying to copy in State */
   public static class Info implements Serializable {
     private static final long serialVersionUID = -4529781834599237479L;
@@ -593,9 +655,6 @@ public class State {
      *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
      *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
      */
-//    public double coefModelScore = 1;
-//    public double coefLoss = 0;
-//    public double coefRand = 0;
     public GeneralizedCoef coefLoss;
     public GeneralizedCoef coefModel;
     public GeneralizedCoef coefRand;
@@ -640,28 +699,6 @@ public class State {
       }
       return m;
     }
-
-    // NOTE: These come from Config now!
-    // Houses dynamic and static features
-    /*
-     * TODO This is the wrong interface!
-     * This takes AT -> stateFeatures -> Adjoints
-     * What I need is something like:
-     *   AT -> FI -> RI -> Adjoints
-     * The stateFeatures discussed above are not-action specific, and thus may not be of high value for the truely discriminative stuff
-     * I need a hook to hang things like ArgLoc/NumArgs/ArgCooc on!
-     * 
-     */
-//    public WeightsPerActionType weights;
-//    public GeneralizedWeights weights;
-//    public FrameRolePacking frPacking;
-
-    // Map (t,f,k,s) -> P, where P is the set primes (though any given
-    // implementation may use P_n, the first n primes, and map multiple (t,f,k,s)
-    // to the same prime via hashing).
-//    public PrimesAdapter primes;
-
-//    public Random rand;
 
     public Info setLike(RTConfig config) {
       this.likeConf = config;
@@ -762,11 +799,9 @@ public class State {
       }
     }
 
-//    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing) {
     public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
       setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
     }
-//    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing, Info alsoSet) {
     public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
       assert sentenceAndLabelMatch();
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);

@@ -14,6 +14,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
@@ -89,9 +90,6 @@ public class FModel implements Serializable {
     oracleInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, mvInf);
     timer.stop("update.setup.argPrune");
 
-    // TODO Compute loss
-    final double loss = 1;
-
     timer.start("update.oracle");
     final State oracleState = State.runInference(oracleInf);
     timer.stop("update.oracle");
@@ -100,7 +98,14 @@ public class FModel implements Serializable {
     final State mvState = State.runInference(mvInf);
     timer.stop("update.mv");
 
-    final double hinge = Math.max(0, mvState.score.forwards() + loss - oracleState.score.forwards());
+    // Pull loss out of state/trajectory
+    double orL = oracleState.stepScores.getHammingLoss();
+    double mvL = mvState.stepScores.getHammingLoss();
+    double margin = mvL - orL;
+    if (margin < 0)
+      Log.warn("oracleLoss=" + orL + " > mvLoss=" + mvL);
+
+    final double hinge = Math.max(0, mvState.score.forwards() + margin - oracleState.score.forwards());
     return new Update() {
       @Override
       public double apply(double learningRate) {
