@@ -841,7 +841,7 @@ public class BasicFeatureTemplates {
           }
           assert min <= s.size();
           int toksLeft = t.start - min;
-          return discretizeWidth(name, coarse, 5, toksLeft);
+          return discretizeWidth(name, coarse, 6, toksLeft);
         }
       });
       String name2 = "Span2-LeftProjCol-" + coarse;
