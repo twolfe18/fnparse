@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -20,7 +21,8 @@ import edu.jhu.hlt.tutils.TimeMarker;
  *
  * @author travis
  */
-public class BiAlph {
+public class BiAlph implements Serializable {
+  private static final long serialVersionUID = -1785815794281505707L;
 
   public enum LineMode {
     BIALPH,       // 6 col tsv

@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -60,7 +61,9 @@ public class InformationGainProducts {
   public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
 
   /** Extracts just the features needed (given a subset of templates of interet) */
-  public static class BaseTemplates {
+  public static class BaseTemplates implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private String line;                      // debug, be careful with memory usage
     private int[] roles;
     private int[] templates;

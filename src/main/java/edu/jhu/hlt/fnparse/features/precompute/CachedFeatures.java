@@ -5,6 +5,7 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -28,16 +29,20 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Inserter;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Params;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
-import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
+import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
@@ -50,6 +55,7 @@ import edu.jhu.hlt.fnparse.util.ModelIO;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
@@ -70,7 +76,8 @@ import edu.jhu.prim.vector.IntDoubleVector;
  *
  * @author travis
  */
-public class CachedFeatures {
+public class CachedFeatures implements Serializable {
+  private static final long serialVersionUID = 1063789546828258765L;
 
   private int[][] featureSet;   // each int[] is a feature, each of those values is a template
   private BitSet templateSet;
@@ -101,7 +108,9 @@ public class CachedFeatures {
   public Params params;
 
   /** A parse and its features */
-  public static final class Item {
+  public static final class Item implements Serializable {
+    private static final long serialVersionUID = 5176130085247467601L;
+
     public final FNParse parse;
 //    private Map<IntPair, BaseTemplates>[] features;   // t -> (i,j) -> BaseTemplates
 //    private Map<SpanPair, BaseTemplates> features2;
@@ -224,7 +233,9 @@ public class CachedFeatures {
     }
   }
 
-  public static class PropbankFNParses {
+  public static class PropbankFNParses implements Serializable {
+    private static final long serialVersionUID = -8859010506985261169L;
+
     public Map<String, FNParse> sentId2parse;
     public Set<String> testSetSentIds;
     public Set<String> devSetSentIds;
@@ -399,7 +410,8 @@ public class CachedFeatures {
    * Throws a RuntimeException if you ask for features for some FNParse other
    * than the one last served up by this module's ItemProvider.
    */
-  public class Params implements edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
+  public class Params implements Serializable,
+      edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
       edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold {
     private static final long serialVersionUID = -5359275348868455837L;
 
@@ -963,4 +975,93 @@ public class CachedFeatures {
     return tf2feat;
   }
 
+  /**
+   * TODO Need to do coordination betweeen what the CachedFeatures module has
+   * loaded and what you ask for features for!
+   */
+  public static CachedFeatures buildCachedFeaturesForTesting(ExperimentProperties config) throws TemplateDescriptionParsingException {
+    MultiTimer mt = new MultiTimer();
+//    String fs = "Word3-3-grams-between-Head1-and-Head2-Top25*head1head2Path-Basic-NONE-DEP-t-Top25"
+//        + " + Dist-Direction-<S>-Span1.Last"
+//        + " + Lemma-2-grams-between-<S>-and-Span1.Last";
+    String fs = "Bc256/99-1-grams-between-Head2-and-Span1.Last"
+        + " + WordWnSynset-2-grams-between-<S>-and-Span1.First"
+        + " + Dist-discLen2-Span1.Last-Span2.First";
+    Random rand = new Random(9001);
+
+    // stringTemplate <-> intTemplate and other stuff like template cardinality
+    mt.start("alph");
+    BiAlph bialph = new BiAlph(
+        config.getExistingFile("cachedFeatures.bialph"),
+        LineMode.valueOf(config.getString("cachedFeatures.bialph.lineMode")));
+    mt.stop("alph");
+
+    // Convert string feature set to ints for CachedFeatures (using BiAlph)
+    mt.start("features");
+    boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
+    List<int[]> features = new ArrayList<>();
+    for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
+      List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
+      int n = strTemplates.size();
+      int[] intTemplates = new int[n];
+      for (int i = 0; i < n; i++) {
+        String tn = strTemplates.get(i);
+        Log.info("looking up template: " + tn);
+        int t = bialph.mapTemplate(tn);
+        if (t < 0 && allowLossyAlphForFS) {
+          Log.info("skipping because " + tn + " was not in the alphabet");
+          continue;
+        }
+        assert t >= 0;
+        intTemplates[i] = t;
+      }
+      features.add(intTemplates);
+    }
+    mt.stop("features");
+
+    // Instantiate the module (holder of the data)
+    mt.start("cache");
+    CachedFeatures cachedFeatures = new CachedFeatures(bialph, features);
+    mt.stop("cache");
+
+    // Load the sentId -> FNParse mapping (cached features only gives you sentId and features)
+    mt.start("parses");
+    cachedFeatures.sentIdsAndFNParses = new PropbankFNParses(config);
+    Log.info("[main] train.size=" + cachedFeatures.sentIdsAndFNParses.trainSize()
+    + " dev.size=" + cachedFeatures.sentIdsAndFNParses.devSize()
+    + " test.size=" + cachedFeatures.sentIdsAndFNParses.testSize());
+    mt.stop("parses");
+
+    // Start loading the data in the background
+    mt.start("load");
+    int numDataLoadThreads = config.getInt("cachedFeatures.numDataLoadThreads", 1);
+    Log.info("[main] loading data in the background with "
+        + numDataLoadThreads + " extra threads");
+    List<File> featureFiles = FileUtil.find(
+        config.getExistingDir("cachedFeatures.featuresParent"),
+        config.getString("cachedFeatures.featuresGlob", "glob:**/*"));
+    assert numDataLoadThreads > 0;
+    boolean readForever = false;  // only useful with reservoir sampling, not doing that
+    boolean skipEntriesNotInSentId2ParseMap = false;
+    for (int i = 0; i < numDataLoadThreads; i++) {
+      List<File> rel = ShardUtils.shard(featureFiles, f -> f.getPath().hashCode(), i, numDataLoadThreads);
+      Thread t = new Thread(cachedFeatures.new Inserter(rel, readForever, skipEntriesNotInSentId2ParseMap));
+      t.start();
+    }
+    mt.stop("load");
+
+    // Setup the params
+    mt.start("params");
+    int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
+    int numRoles = config.getInt("cachedFeatures.numRoles",
+        cachedFeatures.sentIdsAndFNParses.getMaxRole());
+    int updateL2Every = config.getInt("cachedFeatures.updateL2Every", 32);
+    double globalL2Penalty = config.getDouble("globalL2Penalty", 1e-7);
+    CachedFeatures.Params params = cachedFeatures.new Params(globalL2Penalty, dimension, numRoles, rand, updateL2Every);
+    cachedFeatures.params = params;
+    mt.stop("params");
+
+    Log.info("times: " + mt);
+    return cachedFeatures;
+  }
 }

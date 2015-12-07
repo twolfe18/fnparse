@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.File;
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +34,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
@@ -44,6 +47,8 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -538,9 +543,12 @@ public class State {
     this.info = everythingElse;
   }
 
-  public static class GeneralizedCoef {
+  public static class GeneralizedCoef implements Serializable {
+    private static final long serialVersionUID = -8325375378258659099L;
+
     public final double coef;
     public final boolean muteForwards;
+
     public GeneralizedCoef(double coef, boolean muteForwards) {
       if (Double.isNaN(coef))
         throw new IllegalArgumentException();
@@ -549,12 +557,15 @@ public class State {
       this.coef = coef;
       this.muteForwards = muteForwards;
     }
+
     public boolean iszero() {
       return coef == 0;
     }
+
     public boolean nonzero() {
       return coef != 0;
     }
+
     @Override
     public String toString() {
       return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
@@ -562,9 +573,11 @@ public class State {
   }
 
   /** Everything that is annoying to copy in State */
-  public static class Info {
-    public Sentence sentence;
-    public LabelIndex label;     // may be null
+  public static class Info implements Serializable {
+    private static final long serialVersionUID = -4529781834599237479L;
+
+    private Sentence sentence;
+    private LabelIndex label;     // may be null
 
     // State space pruning
     private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
@@ -588,6 +601,45 @@ public class State {
 
     public int beamSize = 1;
 
+    public Info(Config config) {
+      this.config = config;
+      // coefs remain null
+    }
+
+    public void copyLabel(Info from) {
+      sentence = from.sentence;
+      label = from.label;
+      prunedFIs = null;
+      prunedSpans = null;
+    }
+
+    public void setLabel(FNParse y) {
+      sentence = y.getSentence();
+      label = new LabelIndex(y);
+      prunedFIs = null;
+      prunedSpans = null;
+    }
+
+    public void setSentence(Sentence s) {
+      sentence = s;
+      label = null;
+      prunedFIs = null;
+      prunedSpans = null;
+    }
+
+    public boolean sentenceAndLabelMatch() {
+      if (sentence == null)
+        throw new RuntimeException("this should never happen!");
+      if (label == null)
+        return true;
+      boolean m = label.getParse().getSentence() == sentence;
+      if (!m) {
+        System.err.println("label: " + label.getParse().getSentence().getId());
+        System.err.println("sentence: " + sentence.getId());
+      }
+      return m;
+    }
+
     // NOTE: These come from Config now!
     // Houses dynamic and static features
     /*
@@ -609,6 +661,17 @@ public class State {
 //    public PrimesAdapter primes;
 
 //    public Random rand;
+
+    public Info setLike(RTConfig config) {
+      if (config == null) {
+        Log.warn("null config! no-op!");
+      } else {
+        assert config.trainBeamSize == config.testBeamSize;
+        beamSize = config.trainBeamSize;
+        this.config.rand = config.rand;
+      }
+      return this;
+    }
 
     @Override
     public String toString() {
@@ -664,6 +727,8 @@ public class State {
     public void setTargetPruningToGoldLabels(Info alsoSetThisInstance) {
       if (label == null)
         throw new IllegalStateException("need a label for this operation");
+      assert sentenceAndLabelMatch();
+      prunedSpans = null;
       prunedFIs = new HashMap<>();
       for (FrameInstance fi : label.getParse().getFrameInstances()) {
         Span t = fi.getTarget();
@@ -671,16 +736,21 @@ public class State {
         List<Frame> other = prunedFIs.put(t, Arrays.asList(f));
         assert other == null;
       }
-      if (alsoSetThisInstance != null)
+      if (alsoSetThisInstance != null) {
+        assert alsoSetThisInstance.sentenceAndLabelMatch();
+        assert sentence == alsoSetThisInstance.sentence;
+        alsoSetThisInstance.prunedSpans = null;
         alsoSetThisInstance.prunedFIs = prunedFIs;
+      }
     }
 
-    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing) {
-      setArgPruningUsingSyntax(mode, includeGoldSpansIfMissing, null);
+//    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing) {
+    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
+      setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
     }
-    /** Assumes that the given sentence has parses already */
-    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing, Info alsoSet) {
-      DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
+//    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing, Info alsoSet) {
+    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
+      assert sentenceAndLabelMatch();
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
       if (includeGoldSpansIfMissing) {
@@ -689,10 +759,23 @@ public class State {
         int adds = 0;
         int realized = 0;
         int present = 0;
+
+        // Is it possible to not emit any possible Span args for a given frame/target?
+
         List<FrameInstance> fis = label.getParse().getFrameInstances();
         for (FrameInstance fi : fis) {
           FrameInstance key = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
-          present += prunedSpans.getPossibleArgs(key).size();
+          List<Span> possible = prunedSpans.getPossibleArgs(key);
+          if (possible == null) {
+            System.out.println(label.getParse().getId());
+            System.out.println(label.getParse().getSentence().getId());
+            for (FrameInstance fi2 : fis)
+              System.out.println("label: " + Describe.frameInstance(fi2));
+            for (FrameInstance fi2 : prunedSpans.getFrameInstances())
+              System.out.println("prune: " + Describe.frameInstance(fi2));
+            throw new RuntimeException();
+          }
+          present += possible.size();
           int K = fi.getFrame().numRoles();
           for (int k = 0; k < K; k++) {
             Span s = fi.getArgument(k);
@@ -713,6 +796,7 @@ public class State {
         }
       }
       if (alsoSet != null) {
+        assert alsoSet.sentenceAndLabelMatch();
         assert alsoSet.sentence == sentence;
         alsoSet.prunedSpans = prunedSpans;
       }
@@ -1756,16 +1840,17 @@ public class State {
     if (conf.useRefRoles && y.numFrameInstances() > 0)
       addDummyContRefRole(y, conf.rand, RoleType.REF);
 
-    Info inf = new Info();
+    Info inf = new Info(conf);
     inf.beamSize = 1;
     inf.config = conf;
     inf.setOracleCoefs();
-    inf.label = new LabelIndex(y);
-    inf.sentence = y.getSentence();
+    inf.setLabel(y);
     inf.setTargetPruningToGoldLabels();
+    // We're assuming the FNParses already have the parses in them
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
     boolean addSpansIfMissing = true;   // for train at least
-    inf.setArgPruningUsingSyntax(
-        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+    inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
 
     FNParse yhat = runInference2(inf);
 
@@ -1781,21 +1866,23 @@ public class State {
   public static void checkLearning(FNParse y, Config conf) {
     Log.info("starting on " + y.getId() + " numFI=" + y.numFrameInstances());
 
-    Info oracleInf = new Info().setOracleCoefs();
-    Info mvInf = new Info().setMostViolatedCoefs();
-    Info decInf = new Info().setDecodeCoefs();
+    Info oracleInf = new Info(conf).setOracleCoefs();
+    Info mvInf = new Info(conf).setMostViolatedCoefs();
+    Info decInf = new Info(conf).setDecodeCoefs();
     for (Info inf : Arrays.asList(oracleInf, mvInf, decInf)) {
       inf.beamSize = 1;
       inf.config = conf;
-      inf.label = new LabelIndex(y);
-      inf.sentence = y.getSentence();
+      inf.setLabel(y);
       inf.setTargetPruningToGoldLabels();
+
+      // We're assuming the FNParses already have the parses in them
+      DeterministicRolePruning drp = new DeterministicRolePruning(
+          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
 
       // Normally we would not allow the decoder to see the gold spans, but for
       // this test it is easier to check against F1=1 than F1=bestAchievable
       boolean addSpansIfMissing = true;// inf != decInf;
-      inf.setArgPruningUsingSyntax(
-          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+      inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
 //      System.out.println("addSpansIfMissing=" + addSpansIfMissing
 //          + " prunedSpans=" + inf.prunedSpans.describe());
     }
@@ -1840,8 +1927,10 @@ public class State {
 
       decInf.setTargetPruningToGoldLabels();
       boolean addSpansIfMissing = true;// inf != decInf;
-      decInf.setArgPruningUsingSyntax(
-          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+      // We're assuming the FNParses already have the parses in them
+      DeterministicRolePruning drp = new DeterministicRolePruning(
+          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+      decInf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
     System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
 
     assert false : "didn't learn in " + maxiter + " iterations";
@@ -1854,7 +1943,7 @@ public class State {
     return f1;
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws TemplateDescriptionParsingException {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     List<FNParse> ys = getParse(config);
@@ -1880,36 +1969,61 @@ public class State {
     conf.useRefRoles = true;
     conf.rand = new Random(9001);
 
-    long start = System.currentTimeMillis();
-    int nParses = 0;
-    for (FNParse y : ys) {
-      nParses++;
-      checkOracle(y, conf);
-      if (DEBUG)
-        break;
-    }
-    long time = System.currentTimeMillis() - start;
 
-    System.out.println("took " + time + " ms, " + (nParses*1000d)/time + " parse/sec");
-    System.out.println("numNextEvals: " + NUM_NEXT_EVALS);
-    System.out.println("numParses: " + nParses);
+    Log.info("loading some parses in the background while we run other tests...");
+    CachedFeatures cf = CachedFeatures.buildCachedFeaturesForTesting(config);
+    System.out.println("done loading CachedFeatures");
 
-    conf.setNoGlobalFeatures();
-    Collections.sort(ys, new Comparator<FNParse>() {
-      @Override
-      public int compare(FNParse o1, FNParse o2) {
-        return numItems(o1) - numItems(o2);
-      }
-    });
-    for (FNParse y : ys) {
-      int i = numItems(y);
-      if (i == 0)
-        continue;
-      if (i > 10)
-        break;
-      Log.info("checking learning on " + y.getId() + " numItems=" + i);
-      checkLearning(y, conf);
+//    // Call checkOracle
+//    Log.info("testing the oracle performance is perfect");
+//    long start = System.currentTimeMillis();
+//    int nParses = 0;
+//    for (FNParse y : ys) {
+//      nParses++;
+//      checkOracle(y, conf);
+//      if (DEBUG)
+//        break;
+//    }
+//    long time = System.currentTimeMillis() - start;
+//
+//    System.out.println("took " + time + " ms, " + (nParses*1000d)/time + " parse/sec");
+//    System.out.println("numNextEvals: " + NUM_NEXT_EVALS);
+//    System.out.println("numParses: " + nParses);
+//
+//    // Call checkLearning
+//    Log.info("checking that we can learn to mimic the oracle");
+//    conf.setNoGlobalFeatures();
+//    Collections.sort(ys, new Comparator<FNParse>() {
+//      @Override
+//      public int compare(FNParse o1, FNParse o2) {
+//        return numItems(o1) - numItems(o2);
+//      }
+//    });
+//    for (FNParse y : ys) {
+//      int i = numItems(y);
+//      if (i == 0)
+//        continue;
+//      if (i > 10)
+//        break;
+//      Log.info("checking learning on " + y.getId() + " numItems=" + i);
+//      checkLearning(y, conf);
+//    }
+
+    // Try to get some updates using the FNParses in CachedFeatures
+    Log.info("trying out some updates when using CachedFeatures.ItemProvider");
+    FModel m = new FModel(null, DeterministicRolePruning.Mode.CACHED_FEATURES);
+    m.setCachedFeatures(cf);
+    CachedFeatures.ItemProvider ip = cf.new ItemProvider(100, false, false);
+    Log.info("ip.loaded=" + ip.getNumActuallyLoaded());
+    for (int i = 0; i < ip.size(); i++) {
+      System.out.println("starting on parse " + (i+1));
+      FNParse y = ip.label(i);
+      System.out.println("getting update for " + y.getId());
+      Update u = m.getUpdate(y);
+      System.out.println("applying update for " + y.getId());
+      u.apply(1);
     }
+    System.out.println("fully done");
   }
 
   public static int numItems(FNParse y) {
