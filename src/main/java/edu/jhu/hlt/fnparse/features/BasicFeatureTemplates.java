@@ -86,21 +86,21 @@ public class BasicFeatureTemplates {
     return PI_E;
   }
 
+  private static int bound(int i, int width) {
+    assert width >= 0;
+    if (i >=  width) return  width;
+    if (i <= -width) return -width;
+    return i;
+  }
+
   private static String discretizeWidth(String name, int divisor, int maxCardinality, int width) {
-    int w = width / divisor;
-    if (w >= maxCardinality-1)
-      return name + ">" + (maxCardinality-1);
-      //return String.format("%s>%d", name, maxCardinality-1);
-    else
-      return name + "=" + w;
-      //return String.format("%s=%d", name, w);
+    int w = bound(width / divisor, maxCardinality/2);
+    return name + "~" + w;
   }
 
   public static ProductIndex discretizeWidth2(int divisor, int maxCardinality, int width) {
-    int w = width / divisor;
-    if (w >= maxCardinality-1)
-      return new ProductIndex(maxCardinality-1, maxCardinality);
-    return new ProductIndex(w, maxCardinality);
+    int w = bound(width / divisor, maxCardinality/2);
+    return new ProductIndex(w, maxCardinality+1);
   }
 
   /**
