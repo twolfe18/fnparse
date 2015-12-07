@@ -18,6 +18,7 @@ import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -60,7 +61,6 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
@@ -585,6 +585,9 @@ public class RerankerTrainer {
       sm.setCachedFeatures(cachedFeatures);
     else
       Log.warn("cachedFeatures is null!");
+
+    sm.observeConfiguration(config);
+
     return sm;
   }
 
@@ -738,13 +741,6 @@ public class RerankerTrainer {
       RTConfig conf,
       EvalFunc lossFunc,
       int nExampleLimit) {
-
-    // FIXME
-    try {
-      Reranker m = model.getReranker();
-      assert false;
-    } catch (Exception e) {}
-//    Reranker m = model.getReranker();
 
     final ItemProvider devUse;
     if (dev.size() > nExampleLimit) {
@@ -1313,6 +1309,7 @@ public class RerankerTrainer {
       mt.start("features");
       boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
       List<int[]> features = new ArrayList<>();
+      BitSet templates = new BitSet();
       for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
         List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
         int n = strTemplates.size();
@@ -1327,9 +1324,11 @@ public class RerankerTrainer {
           }
           assert t >= 0;
           intTemplates[i] = t;
+          templates.set(t);
         }
         features.add(intTemplates);
       }
+      Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
       mt.stop("features");
 
       // Instantiate the module (holder of the data)

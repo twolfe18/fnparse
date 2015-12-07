@@ -585,6 +585,7 @@ public class State {
 
     // Parameters of transition system
     private Config config;
+    private RTConfig likeConf;  // legacy support :(
 
     /* Parameters of search.
      * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
@@ -663,6 +664,7 @@ public class State {
 //    public Random rand;
 
     public Info setLike(RTConfig config) {
+      this.likeConf = config;
       if (config == null) {
         Log.warn("null config! no-op!");
       } else {
@@ -681,8 +683,24 @@ public class State {
     /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
     public Info setOracleCoefs() {
       coefLoss = new GeneralizedCoef(1, false);
-      coefModel = new GeneralizedCoef(1, true);
-      coefRand = new GeneralizedCoef(0, false);
+      switch (likeConf.oracleMode) {
+      case RAND_MIN:
+        coefModel = new GeneralizedCoef(-1, true);
+        coefRand = new GeneralizedCoef(1, false);
+        break;
+      case RAND_MAX:
+        coefModel = new GeneralizedCoef(1, true);
+        coefRand = new GeneralizedCoef(1, false);
+        break;
+      case MIN:
+        coefModel = new GeneralizedCoef(-1, true);
+        coefRand = new GeneralizedCoef(0, false);
+        break;
+      case MAX:
+        coefModel = new GeneralizedCoef(1, true);
+        coefRand = new GeneralizedCoef(0, false);
+        break;
+      }
       return this;
     }
     public Info setMostViolatedCoefs() {
@@ -2280,14 +2298,17 @@ public class State {
       Adjoints staticScore = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, f2, w);
 
       if (ri.k >= 0) {
-        int K = fi.f.numRoles();
-        List<ProductIndex> fk = new ArrayList<>();
+        int prodF, prodC;
+        if (config.roleDependsOnFrame) {
+          prodF = config.frPacking.index(fi.f, ri.k);
+          prodC = config.frPacking.size();
+        } else {
+          prodF = ri.k;
+          prodC = fi.f.numRoles();
+        }
+        List<ProductIndex> fk = new ArrayList<>(f2.size());
         for (ProductIndex p : f2) {
-          ProductIndex pp;
-          if (config.roleDependsOnFrame)
-            pp = p.prod(config.frPacking.index(fi.f, ri.k), config.frPacking.size());
-          else
-            pp = p.prod(ri.k, K);
+          ProductIndex pp = p.prod(prodF, prodC);
           fk.add(pp);
         }
         LazyL2UpdateVector wk = at2k2sfWeights[actionType.ordinal()];

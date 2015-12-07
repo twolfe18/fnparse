@@ -28,9 +28,6 @@ import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
-//  private Info oracleInf;
-//  private Info mvInf;
-//  private Info decInf;
   private Config conf;
   private RTConfig rtConf;
   private DeterministicRolePruning drp;
@@ -63,17 +60,13 @@ public class FModel implements Serializable {
       }
     });
     rtConf = config;
-//    oracleInf = new Info(conf).setLike(config).setOracleCoefs();
-//    mvInf = new Info(conf).setLike(config).setMostViolatedCoefs();
-//    decInf = new Info(conf).setLike(config).setDecodeCoefs();
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
   }
 
-//  /** Defaults to DeterministicRolePruning.Mode.CACHED_FEATURES */
-//  public FModel(edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig config) {
-//    this(config, DeterministicRolePruning.Mode.CACHED_FEATURES);
-//  }
+  public Config getConfig() {
+    return conf;
+  }
 
   // Needed unless you setup syntactic parsers
   public void setCachedFeatures(CachedFeatures cf) {
@@ -83,24 +76,21 @@ public class FModel implements Serializable {
 
   public Update getUpdate(FNParse y) {
 
-    timer.start("update.setup");
-
+    timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
-
     oracleInf.setLabel(y);
-
     mvInf.copyLabel(oracleInf);
-
     oracleInf.setTargetPruningToGoldLabels(mvInf);
+    timer.stop("update.setup.other");
 
+    timer.start("update.setup.argPrune");
     boolean includeGoldSpansIfMissing = true;
     oracleInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, mvInf);
-
-    timer.stop("update.setup");
+    timer.stop("update.setup.argPrune");
 
     // TODO Compute loss
-    final double loss = 0;
+    final double loss = 1;
 
     timer.start("update.oracle");
     final State oracleState = State.runInference(oracleInf);

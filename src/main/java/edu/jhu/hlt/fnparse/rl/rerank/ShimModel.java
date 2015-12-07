@@ -12,9 +12,11 @@ import java.util.concurrent.Future;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Timer;
 
@@ -42,6 +44,13 @@ public class ShimModel {
     fmodel = m;
   }
 
+  public boolean isFModel() {
+    return fmodel != null;
+  }
+  public boolean isRerankerModel() {
+    return reranker != null;
+  }
+
   public Reranker getReranker() {
     if (reranker == null)
       throw new RuntimeException("no reranker here!");
@@ -52,6 +61,17 @@ public class ShimModel {
     if (fmodel == null)
       throw new RuntimeException("no fmodel here!");
     return fmodel;
+  }
+
+  public void observeConfiguration(ExperimentProperties config) {
+    Log.info("[main] isFModel=" + isFModel());
+    if (fmodel != null) {
+      Config c = fmodel.getConfig();
+      c.argLocFeature = config.getBoolean("globalFeatArgLocSimple", false);
+      c.numArgsFeature = config.getBoolean("globalFeatNumArgs", false);
+      c.roleCoocFeature = config.getBoolean("globalFeatRoleCoocSimple", false);
+      Log.info("[main] argLoc=" + c.argLocFeature + " numArgs=" + c.numArgsFeature + " roleCooc=" + c.roleCoocFeature);
+    }
   }
 
   public void setCachedFeatures(CachedFeatures cf) {
