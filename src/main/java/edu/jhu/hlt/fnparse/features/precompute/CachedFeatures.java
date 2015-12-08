@@ -33,8 +33,6 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
-import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Inserter;
-import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Params;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
@@ -47,6 +45,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.State.CachedFeatureParamsShim;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
@@ -412,7 +411,8 @@ public class CachedFeatures implements Serializable {
    */
   public class Params implements Serializable,
       edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
-      edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold {
+      edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold,
+      CachedFeatureParamsShim {
     private static final long serialVersionUID = -5359275348868455837L;
 
     /*
@@ -528,6 +528,8 @@ public class CachedFeatures implements Serializable {
     public IntDoubleUnsortedVector getFeatures(FNTagging f, Span t, Span s) {
       return getFeatures(f.getSentence(), t, s);
     }
+
+    @Override
     public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
       if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
         throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);

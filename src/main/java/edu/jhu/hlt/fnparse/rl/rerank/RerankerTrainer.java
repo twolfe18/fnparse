@@ -508,13 +508,8 @@ public class RerankerTrainer {
     }
     Log.info("[main] tuning on " + devUse.size() + " examples");
 
-    // FIXME
-    Reranker model = m.getReranker();
-
     // Insert the bias into the model
-    Params.PruneThreshold tau = model.getPruningParams();
-    DecoderBias bias = new DecoderBias();
-    model.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
+    Consumer<Double> bias = m.getPruningBias();
 
     // Make a function which computes the dev set loss given a threshold
     Function<Double, Double> thresholdPerf = new Function<Double, Double>() {
@@ -522,17 +517,17 @@ public class RerankerTrainer {
       public Double apply(Double threshold) {
         timer.start("tuneModelForF1.eval");
         Log.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
-        bias.setRecallBias(threshold);
+        bias.accept(threshold);
         File diffArgsFile = null;
         File predictionsFile = null;
         File semEvalDir = null;
         String msg = SHOW_FULL_EVAL_IN_TUNE
-              ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
+              ? String.format("[tune recallBias=%.2f]", threshold) : null;
         Map<String, Double> results = eval(
           m, conf, devUse, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         Log.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
-            bias.getRecallBias(), perf));
+            threshold, perf));
         timer.stop("tuneModelForF1.eval");
         return perf;
       }
@@ -555,7 +550,7 @@ public class RerankerTrainer {
     // Log and set the best value
     Log.info("[main] chose recallBias=" + best.get1()
         + " with " + conf.objective.getName() + "=" + best.get2());
-    bias.setRecallBias(best.get1());
+    bias.accept(best.get1());
     return best.get2();
   }
 
@@ -1089,17 +1084,20 @@ public class RerankerTrainer {
       RTConfig conf,
       int iter,
       String timerStrPartial) throws InterruptedException, ExecutionException {
-    Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
-    t.start();
 
     // Compute updates for the batch
+    Timer t = timer.get(timerStrPartial + ".batch.compute", true).setPrintInterval(50).ignoreFirstTime();
+    t.start();
     boolean verbose = false;
     List<Update> finishedUpdates = r.getUpdate(batch, ip, es, verbose);
+    t.stop();
 
     if (verbose)
       Log.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batch.size();
 
+    t = timer.get(timerStrPartial + ".batch.apply", true).setPrintInterval(50).ignoreFirstTime();
+    t.start();
     // Apply the updates
     double learningRate = conf.learningRate.learningRate();
     double violation = new Update.Batch<>(finishedUpdates).apply(learningRate);
@@ -1597,7 +1595,10 @@ public class RerankerTrainer {
         PropbankFNParses p = trainer.cachedFeatures.sentIdsAndFNParses;
         train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), false, false);
         dev = trainer.cachedFeatures.new ItemProvider(p.devSize(), true, false);
-        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false, true);
+        if (testOnTrain)
+          test = train;
+        else
+          test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false, true);
       } else {
         if (propbank) {
           Log.info("[main] running on propbank data");

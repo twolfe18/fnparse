@@ -8,12 +8,15 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
+import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
+import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -61,6 +64,21 @@ public class ShimModel {
     if (fmodel == null)
       throw new RuntimeException("no fmodel here!");
     return fmodel;
+  }
+
+  /**
+   * Returns a function which allows you to set a bias feature for all
+   * prune features.
+   */
+  public Consumer<Double> getPruningBias() {
+    if (reranker != null) {
+      Params.PruneThreshold tau = reranker.getPruningParams();
+      DecoderBias bias = new DecoderBias();
+      reranker.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
+      return bias::setRecallBias;
+    } else {
+      return d -> { fmodel.getConfig().recallBias = d; };
+    }
   }
 
   public void observeConfiguration(ExperimentProperties config) {

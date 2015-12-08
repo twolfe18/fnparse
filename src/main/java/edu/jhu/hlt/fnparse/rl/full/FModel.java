@@ -18,6 +18,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
+import edu.stanford.nlp.optimization.ScaledSGDMinimizer.Weights;
 
 /**
  * Don't ask me why its called FModel. This is is a wrapper around {@link State}.
@@ -50,16 +51,19 @@ public class FModel implements Serializable {
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
-    conf.weights = new GeneralizedWeights(conf, new CachedFeatureParamsShim() {
-      @Override
-      public IntDoubleUnsortedVector getFeatures(Sentence s, Span t, Span a) {
-        if (cachedFeatures == null)
-          throw new RuntimeException("cachedFeatures was never set!");
-        if (cachedFeatures.params == null)
-          throw new RuntimeException("CachedFeatures.Params was never instantiated?");
-        return cachedFeatures.params.getFeatures(s, t, a);
-      }
-    });
+    int l2UpdateInterval = 32;
+    // Params is set later in setCachedFeatures
+//    conf.weights = new GeneralizedWeights(conf, new CachedFeatureParamsShim() {
+//      @Override
+//      public IntDoubleUnsortedVector getFeatures(Sentence s, Span t, Span a) {
+//        if (cachedFeatures == null)
+//          throw new RuntimeException("cachedFeatures was never set!");
+//        if (cachedFeatures.params == null)
+//          throw new RuntimeException("CachedFeatures.Params was never instantiated?");
+//        return cachedFeatures.params.getFeatures(s, t, a);
+//      }
+//    }, l2UpdateInterval);
+    conf.weights = new GeneralizedWeights(conf, null, l2UpdateInterval);
     rtConf = config;
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
@@ -73,6 +77,7 @@ public class FModel implements Serializable {
   public void setCachedFeatures(CachedFeatures cf) {
     cachedFeatures = cf;
     drp.cachedFeatures = cf;
+    conf.weights.setStaticFeatures(cf.params);
   }
 
   public Update getUpdate(FNParse y) {
@@ -99,8 +104,8 @@ public class FModel implements Serializable {
     timer.stop("update.mv");
 
     // Pull loss out of state/trajectory
-    double orL = oracleState.stepScores.getHammingLoss();
-    double mvL = mvState.stepScores.getHammingLoss();
+    double orL = oracleState.score.getHammingLoss();
+    double mvL = mvState.score.getHammingLoss();
     double margin = mvL - orL;
     if (margin < 0)
       Log.warn("oracleLoss=" + orL + " > mvLoss=" + mvL);
@@ -111,8 +116,14 @@ public class FModel implements Serializable {
       public double apply(double learningRate) {
         if (hinge > 0) {
           timer.start("update.apply");
-          oracleState.score.backwards(-learningRate);
-          mvState.score.backwards(+learningRate);
+          // NOTE: The reason that I've switched to same sign in back-prop
+          // is primarily StepScore. That is oracle has a *muteForwards* model
+          // coef of 1 and MV has an *unmuted* model coef of -1, leading to the
+          // += behavior for oracle and -= for MV.
+//          oracleState.score.backwards(-learningRate);
+//          mvState.score.backwards(+learningRate);
+          oracleState.score.backwards(learningRate);
+          mvState.score.backwards(learningRate);
           timer.stop("update.apply");
         }
         return hinge;

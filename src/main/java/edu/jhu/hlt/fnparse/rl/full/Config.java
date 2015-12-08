@@ -72,6 +72,11 @@ public class Config implements Serializable {
     roleCoocFeature = false;
   }
 
+
+  /** Misc ********************************************************************/
+  public double recallBias = 0;
+
+
   /** Data used across many parses ********************************************/
   // Should be set from above
   public PrimesAdapter primes = null;
