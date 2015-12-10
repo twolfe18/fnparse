@@ -517,11 +517,13 @@ public class InformationGain implements Serializable, LineByLine {
   private TemplateIG getTemplate(int t) {
     if (t >= templates.length) {
       int n = Math.max(t + 1, (int) (templates.length * 1.6 + 1));
+      Log.info("making templates larger: templates.length=" + templates.length + " curTemplate=" + t + " newSize=" + n);
       templates = Arrays.copyOf(templates, n);
     }
     TemplateIG ut = templates[t];
     if (ut == null) {
       ut = new TemplateIG(t, numRoles);
+      ut.useBubEntropyEstimation(bubEst);
       templates[t] = ut;
     }
     return ut;
