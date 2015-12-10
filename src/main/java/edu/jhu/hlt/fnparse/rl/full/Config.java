@@ -1,11 +1,13 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import java.io.Serializable;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 
-public class Config {
+public class Config implements Serializable {
+  private static final long serialVersionUID = -2729392009360402182L;
 
   /** Label constraints *******************************************************/
   public boolean useContRoles = false;
@@ -70,12 +72,17 @@ public class Config {
     roleCoocFeature = false;
   }
 
+
+  /** Misc ********************************************************************/
+  public double recallBias = 0;
+
+
   /** Data used across many parses ********************************************/
+  // Should be set from above
   public PrimesAdapter primes = null;
   public FrameRolePacking frPacking = null;
   public GeneralizedWeights weights = null;
   public Random rand = null;
-
 
   /*
    * SPRL settings:

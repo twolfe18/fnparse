@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.File;
+import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -33,6 +34,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
@@ -44,6 +47,8 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -65,6 +70,7 @@ import fj.Ord;
 public class State {
 
   public static boolean DEBUG = false;
+  public static boolean DEBUG_F = false;
   public static boolean CHEAT_FEATURES_1 = true;  // if true, use the most obviuos cheating features
   public static int NUM_NEXT_EVALS = 0;
 
@@ -242,7 +248,7 @@ public class State {
           + " nmaSpans=" + noMoreArgSpans
           + " nmaRoles=" + noMoreArgRoles
           + " numRoles=" + f.numRoles()
-          + (goldFI == null ? "" : " " + Describe.frameInstaceJustArgsTerse(goldFI))
+          + (goldFI == null ? "" : " gold=" + Describe.frameInstaceJustArgsTerse(goldFI))
           + ")";
     }
 
@@ -524,12 +530,13 @@ public class State {
 
   // This is the objective being optimized, which is some combination of model score and loss.
   // Note: This will include the scores of states that lead up to this state (sum over actions).
-  public Adjoints score;
+//  public Adjoints score;
+  public StepScores score;
 
   // Everything that is annoying to copy in State
   public final Info info;
 
-  public State(FILL frames, boolean noMoreFrames, boolean noMoreTargets, Incomplete incomplete, Adjoints score, Info everythingElse) {
+  public State(FILL frames, boolean noMoreFrames, boolean noMoreTargets, Incomplete incomplete, StepScores score, Info everythingElse) {
     this.frames = frames;
     this.noMoreFrames = noMoreFrames;
     this.noMoreTargets = noMoreTargets;
@@ -538,9 +545,12 @@ public class State {
     this.info = everythingElse;
   }
 
-  public static class GeneralizedCoef {
+  public static class GeneralizedCoef implements Serializable {
+    private static final long serialVersionUID = -8325375378258659099L;
+
     public final double coef;
     public final boolean muteForwards;
+
     public GeneralizedCoef(double coef, boolean muteForwards) {
       if (Double.isNaN(coef))
         throw new IllegalArgumentException();
@@ -549,22 +559,99 @@ public class State {
       this.coef = coef;
       this.muteForwards = muteForwards;
     }
+
     public boolean iszero() {
       return coef == 0;
     }
+
     public boolean nonzero() {
       return coef != 0;
     }
+
     @Override
     public String toString() {
       return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
     }
   }
 
+  /**
+   * Keeps track of model score, loss, and randomness thoughout search. Implements
+   * Adjoints for easy interface with search. The separation is useful for things
+   * like computing the margin and debugging.
+   * 
+   * This is basically the same as {@link MutedAdjoints}, but allows well-structured
+   * introspection.
+   */
+  public static class StepScores implements Adjoints {
+
+    public final Info info;
+    public final Adjoints model;
+    public final double lossFP, lossFN;
+    public final double rand;
+    public final StepScores prev;
+
+    @Override
+    public String toString() {
+      return String.format("(SS rand=%.1f fp=%.1f fn=%.1f model=%s) -> %s",
+          rand, lossFP, lossFN, model, prev);
+    }
+
+    public StepScores(Info info, Adjoints model, double lossFP, double lossFN, double rand, StepScores prev) {
+      if (lossFP < 0 || lossFN < 0)
+        throw new IllegalArgumentException();
+      this.info = info;
+      this.model = model;
+      this.lossFP = lossFP;
+      this.lossFN = lossFN;
+      this.rand = rand;
+      this.prev = prev;
+    }
+
+    public double getHammingLoss() {
+      return lossFN + lossFP;
+    }
+
+    private double __forwardsMemo = Double.NaN;
+    @Override
+    public double forwards() {
+      if (Double.isNaN(__forwardsMemo)) {
+        double s = 0;
+        if (!info.coefModel.iszero() && !info.coefModel.muteForwards)
+          s += info.coefModel.coef * model.forwards();
+        if (!info.coefLoss.iszero() && !info.coefLoss.muteForwards)
+          s += info.coefLoss.coef * -(lossFP + lossFN);
+        if (!info.coefLoss.iszero() && !info.coefLoss.muteForwards)
+          s += info.coefLoss.coef * rand;
+        if (prev != null)
+          s += prev.forwards();
+        __forwardsMemo = s;
+      }
+      return __forwardsMemo;
+    }
+
+    @Override
+    public void backwards(double dErr_dForwards) {
+      if (!info.coefModel.iszero()) {
+        /*
+         * We are double parameterized with:
+         * 1) the sign on the model score coefficient in search
+         * 2) the fact that we do backwards(+/-hinge)
+         */
+        model.backwards(info.coefModel.coef * dErr_dForwards);
+//        model.backwards(dErr_dForwards);
+      }
+      if (prev != null)
+        prev.backwards(dErr_dForwards);
+    }
+  }
+
+
   /** Everything that is annoying to copy in State */
-  public static class Info {
-    public Sentence sentence;
-    public LabelIndex label;     // may be null
+  public static class Info implements Serializable {
+    private static final long serialVersionUID = -4529781834599237479L;
+
+    private Sentence sentence;
+    private LabelIndex label;     // may be null
 
     // State space pruning
     private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
@@ -572,6 +659,7 @@ public class State {
 
     // Parameters of transition system
     private Config config;
+    private RTConfig likeConf;  // legacy support :(
 
     /* Parameters of search.
      * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
@@ -579,36 +667,62 @@ public class State {
      *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
      *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
      */
-//    public double coefModelScore = 1;
-//    public double coefLoss = 0;
-//    public double coefRand = 0;
     public GeneralizedCoef coefLoss;
     public GeneralizedCoef coefModel;
     public GeneralizedCoef coefRand;
 
     public int beamSize = 1;
 
-    // NOTE: These come from Config now!
-    // Houses dynamic and static features
-    /*
-     * TODO This is the wrong interface!
-     * This takes AT -> stateFeatures -> Adjoints
-     * What I need is something like:
-     *   AT -> FI -> RI -> Adjoints
-     * The stateFeatures discussed above are not-action specific, and thus may not be of high value for the truely discriminative stuff
-     * I need a hook to hang things like ArgLoc/NumArgs/ArgCooc on!
-     * 
-     */
-//    public WeightsPerActionType weights;
-//    public GeneralizedWeights weights;
-//    public FrameRolePacking frPacking;
+    public Info(Config config) {
+      this.config = config;
+      // coefs remain null
+    }
 
-    // Map (t,f,k,s) -> P, where P is the set primes (though any given
-    // implementation may use P_n, the first n primes, and map multiple (t,f,k,s)
-    // to the same prime via hashing).
-//    public PrimesAdapter primes;
+    public void copyLabel(Info from) {
+      sentence = from.sentence;
+      label = from.label;
+      prunedFIs = null;
+      prunedSpans = null;
+    }
 
-//    public Random rand;
+    public void setLabel(FNParse y) {
+      sentence = y.getSentence();
+      label = new LabelIndex(y);
+      prunedFIs = null;
+      prunedSpans = null;
+    }
+
+    public void setSentence(Sentence s) {
+      sentence = s;
+      label = null;
+      prunedFIs = null;
+      prunedSpans = null;
+    }
+
+    public boolean sentenceAndLabelMatch() {
+      if (sentence == null)
+        throw new RuntimeException("this should never happen!");
+      if (label == null)
+        return true;
+      boolean m = label.getParse().getSentence() == sentence;
+      if (!m) {
+        System.err.println("label: " + label.getParse().getSentence().getId());
+        System.err.println("sentence: " + sentence.getId());
+      }
+      return m;
+    }
+
+    public Info setLike(RTConfig config) {
+      this.likeConf = config;
+      if (config == null) {
+        Log.warn("null config! no-op!");
+      } else {
+        assert config.trainBeamSize == config.testBeamSize;
+        beamSize = config.trainBeamSize;
+        this.config.rand = config.rand;
+      }
+      return this;
+    }
 
     @Override
     public String toString() {
@@ -618,8 +732,30 @@ public class State {
     /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
     public Info setOracleCoefs() {
       coefLoss = new GeneralizedCoef(1, false);
-      coefModel = new GeneralizedCoef(1, true);
-      coefRand = new GeneralizedCoef(0, false);
+      if (likeConf == null) {
+        Log.warn("likeConf is null, defaulting to MIN");
+        coefModel = new GeneralizedCoef(-1, true);
+        coefRand = new GeneralizedCoef(0, false);
+      } else {
+        switch (likeConf.oracleMode) {
+        case RAND_MIN:
+          coefModel = new GeneralizedCoef(-1, true);
+          coefRand = new GeneralizedCoef(1, false);
+          break;
+        case RAND_MAX:
+          coefModel = new GeneralizedCoef(1, true);
+          coefRand = new GeneralizedCoef(1, false);
+          break;
+        case MIN:
+          coefModel = new GeneralizedCoef(-1, true);
+          coefRand = new GeneralizedCoef(0, false);
+          break;
+        case MAX:
+          coefModel = new GeneralizedCoef(1, true);
+          coefRand = new GeneralizedCoef(0, false);
+          break;
+        }
+      }
       return this;
     }
     public Info setMostViolatedCoefs() {
@@ -664,6 +800,8 @@ public class State {
     public void setTargetPruningToGoldLabels(Info alsoSetThisInstance) {
       if (label == null)
         throw new IllegalStateException("need a label for this operation");
+      assert sentenceAndLabelMatch();
+      prunedSpans = null;
       prunedFIs = new HashMap<>();
       for (FrameInstance fi : label.getParse().getFrameInstances()) {
         Span t = fi.getTarget();
@@ -671,16 +809,19 @@ public class State {
         List<Frame> other = prunedFIs.put(t, Arrays.asList(f));
         assert other == null;
       }
-      if (alsoSetThisInstance != null)
+      if (alsoSetThisInstance != null) {
+        assert alsoSetThisInstance.sentenceAndLabelMatch();
+        assert sentence == alsoSetThisInstance.sentence;
+        alsoSetThisInstance.prunedSpans = null;
         alsoSetThisInstance.prunedFIs = prunedFIs;
+      }
     }
 
-    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing) {
-      setArgPruningUsingSyntax(mode, includeGoldSpansIfMissing, null);
+    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
+      setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
     }
-    /** Assumes that the given sentence has parses already */
-    public void setArgPruningUsingSyntax(DeterministicRolePruning.Mode mode, boolean includeGoldSpansIfMissing, Info alsoSet) {
-      DeterministicRolePruning drp = new DeterministicRolePruning(mode, null, null);
+    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
+      assert sentenceAndLabelMatch();
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
       if (includeGoldSpansIfMissing) {
@@ -689,10 +830,23 @@ public class State {
         int adds = 0;
         int realized = 0;
         int present = 0;
+
+        // Is it possible to not emit any possible Span args for a given frame/target?
+
         List<FrameInstance> fis = label.getParse().getFrameInstances();
         for (FrameInstance fi : fis) {
           FrameInstance key = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
-          present += prunedSpans.getPossibleArgs(key).size();
+          List<Span> possible = prunedSpans.getPossibleArgs(key);
+          if (possible == null) {
+            System.out.println(label.getParse().getId());
+            System.out.println(label.getParse().getSentence().getId());
+            for (FrameInstance fi2 : fis)
+              System.out.println("label: " + Describe.frameInstance(fi2));
+            for (FrameInstance fi2 : prunedSpans.getFrameInstances())
+              System.out.println("prune: " + Describe.frameInstance(fi2));
+            throw new RuntimeException();
+          }
+          present += possible.size();
           int K = fi.getFrame().numRoles();
           for (int k = 0; k < K; k++) {
             Span s = fi.getArgument(k);
@@ -713,6 +867,7 @@ public class State {
         }
       }
       if (alsoSet != null) {
+        assert alsoSet.sentenceAndLabelMatch();
         assert alsoSet.sentence == sentence;
         alsoSet.prunedSpans = prunedSpans;
       }
@@ -722,12 +877,16 @@ public class State {
 
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
-    return new State(frames, true, true, incomplete, sum1(partialScore, score), info);
+    double rand = info.config.rand.nextGaussian();
+    StepScores ss = new StepScores(info, partialScore, 0, 0, rand, score);
+    return new State(frames, true, true, incomplete, ss, info);
   }
 
   public State noMoreTargets(Adjoints partialScore) {
     assert !noMoreTargets;
-    return new State(frames, noMoreFrames, true, incomplete, sum1(partialScore, score), info);
+    double rand = info.config.rand.nextGaussian();
+    StepScores ss = new StepScores(info, partialScore, 0, 0, rand, score);
+    return new State(frames, noMoreFrames, true, incomplete, ss, info);
   }
 
   public String show() {
@@ -841,7 +1000,7 @@ public class State {
    * Search (for tail) and replace (with newFrame) in this.frames.
    * O(1) if always tail == this.frames and O(T) otherwise.
    */
-  public State surgery(FILL tail, FI newFrame, Incomplete newIncomplete, Adjoints newStateScore) {
+  public State surgery(FILL tail, FI newFrame, Incomplete newIncomplete, StepScores newStateScore) {
     assert !noMoreFrames;
 
     // Pick off the states between this.frames and tail
@@ -863,8 +1022,8 @@ public class State {
 
   // Sugar
   public static void push(Beam next, Beam overallBestStates, State s) {
-    assert !(s.score instanceof Adjoints.Caching);
-    s.score = new Adjoints.Caching(s.score);
+//    assert !(s.score instanceof Adjoints.Caching);
+//    s.score = new Adjoints.Caching(s.score);
     if (DEBUG) {
       Log.debug("score: " + s.score.forwards());
       Log.debug("because: " + s.score);
@@ -874,15 +1033,12 @@ public class State {
     overallBestStates.offer(s);
   }
 
-  public Adjoints f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
+  public StepScores f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
 
-    Adjoints mutedScore = null;
-    Adjoints unmutedScore = null;
-
+    double fp = 0;
+    double fn = 0;
     if (info.coefLoss.nonzero()) {
 
-      double fp = 0;
-      double fn = 0;
       int possibleFN;
       boolean hit;
 
@@ -900,6 +1056,7 @@ public class State {
         assert newFI.t != null;
         if (!info.label.containsTarget(newFI.t))
           fp += 1;
+        if (DEBUG_F) Log.info("after new/complete F/TF fp=" + fp);
         break;
 
       // NOTE: Fall-through!
@@ -924,7 +1081,12 @@ public class State {
           if (tfi != null)
             possibleFN--;
         }
-        fn +=  possibleFN;
+        fn += possibleFN;
+        if (DEBUG_F) {
+          Log.info("after STOP_TF possibleFN_before=" + tf.size()
+            + " possibleFN_after=" + possibleFN
+            + " fn=" + fn);
+        }
       case STOP_T:
 
         assert false: "properly implement FN counting for args";
@@ -958,22 +1120,33 @@ public class State {
           }
         }
         fn += possibleFN;
+        if (DEBUG_F) {
+          Log.info("after STOP_T possibleFN_before=" + t.size()
+            + " possibleFN_after=" + possibleFN
+            + " fn=" + fn);
+        }
         break;
 
       /* (k,s) STUFF **********************************************************/
       case NEW_KS:
         assert newRI.k >= 0;
         assert newRI.s != null && newRI.s != Span.nullSpan;
+
+        // Count FPs
         hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
         if (!hit)
           fp += 1;
+        if (DEBUG_F) Log.info("NEW_KS hit=" + hit + "\t" + newRI);
+
+        // Count FNs
         if (info.config.oneKperS) {
           Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
           fn += purview.size();
           if (hit) {
             assert purview.size() > 0;
-            fn--;
+            fn -= 1;
           }
+          if (DEBUG_F) Log.info("NEW_KS && oneKperS purview.size=" + purview.size());
         }
         if (info.config.oneSperK) {
           /*
@@ -995,9 +1168,22 @@ public class State {
           fn += purview.size();
           if (hit) {
             assert purview.size() > 0;
-            fn--;
+            fn -= 1;
           }
+          if (DEBUG_F) Log.info("NEW_KS && oneSperK purview.size=" + purview.size());
         }
+        if (info.config.oneKperS && info.config.oneSperK && hit) {
+          /*
+           * On double-counting (note the two oneXperYs are not mutually exclusive):
+           * I am counting points which like in either a row or a column.
+           * There is exactly one point which can lie in the row and column,
+           * which must be this (t,f,k/q,s)
+           */
+          assert fn > 0;
+          fn -= 1;
+          if (DEBUG_F) Log.info("NEW_KS && oneSperK && oneKperS accounting for double count");
+        }
+
 
         break;
       case NEW_S:
@@ -1005,6 +1191,7 @@ public class State {
         hit = info.label.contains(newFI.t, newFI.f, newRI.s);
         if (!hit)
           fp += 1;
+        if (DEBUG_F) Log.info("NEW_S hit=" + hit + "\t" + newRI);
         if (info.config.oneKperS) {
           // Account for FNs: even if we're right, we can get at most one right
           Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
@@ -1013,12 +1200,14 @@ public class State {
             assert purview.size() > 0;
             fn--;
           }
+          if (DEBUG_F) Log.info("NEW_S && oneKperS purview=" + purview.size());
         }
         break;
       case NEW_K:
         hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q);
         if (!hit)
           fp += 1;
+        if (DEBUG_F) Log.info("NEW_K hit=" + hit + "\t" + newRI);
         if (info.config.oneSperK) {
           // Account for FNs: even if we're right, we can get at most one right
           // Does this matter?
@@ -1040,6 +1229,7 @@ public class State {
             assert purview.size() > 0;
             fn--;
           }
+          if (DEBUG_F) Log.info("NEW_K && oneSperK purview=" + purview.size());
         }
         break;
 
@@ -1047,6 +1237,7 @@ public class State {
         assert newRI.k >= 0;
         assert newRI.s != null && newRI.s != Span.nullSpan;
         hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+        if (DEBUG_F) Log.info("COMPLETE_K hit=" + hit + "\t" + newRI);
         if (!hit)
           fp += 1;
         // Any FN penalty due to oneKperS has been paid for in the NEW_S action
@@ -1055,6 +1246,7 @@ public class State {
         assert newRI.k >= 0;
         assert newRI.s != null && newRI.s != Span.nullSpan;
         hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+        if (DEBUG_F) Log.info("COMPLETE_S hit=" + hit + "\t" + newRI);
         if (!hit)
           fp += 1;
         // Any FN penalty due to oneSperK has been paid for in the NEW_K action
@@ -1073,26 +1265,26 @@ public class State {
          * b) match this STOP action
          * I need to build an index for (b) and then filter (a) by brute force.
          */
-        SetOfSets<FrameArgInstance> goldItems2;
+        SetOfSets<FrameArgInstance> goldItems;
         if (actionType == AT.STOP_KS) {
-          goldItems2 = new SetOfSets<>(
+          goldItems = new SetOfSets<>(
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE, newRI.s),
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF, newRI.s),
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT, newRI.s));
         } else if (actionType == AT.STOP_K) {
-          goldItems2 = new SetOfSets<>(
+          goldItems = new SetOfSets<>(
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE),
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF),
               info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT));
         } else if (actionType == AT.STOP_S) {
-          goldItems2 = new SetOfSets<>(
+          goldItems = new SetOfSets<>(
               info.label.get(newFI.t, newFI.f, newRI.s));
         } else {
           throw new RuntimeException();
         }
 
         Set<IntTrip> foo = new HashSet<>();
-        possibleFN = goldItems2.size();
+        possibleFN = goldItems.size();
         for (RILL cur = newFI.args; cur != null; cur = cur.next) {
           int k = cur.item.k;
           RoleType q = cur.item.q;
@@ -1103,9 +1295,14 @@ public class State {
           if (k >= 0 && s != null) {
             assert q != null;
             int kk = LabelIndex.k(newFI.f, k, q);
-            if (goldItems2.contains(new FrameArgInstance(newFI.f, newFI.t, kk, s)))
+            if (goldItems.contains(new FrameArgInstance(newFI.f, newFI.t, kk, s)))
               possibleFN--;
           }
+        }
+        if (DEBUG_F) {
+          Log.info(actionType + " goldItems.size=" + goldItems.size()
+              + " possibleFN=" + possibleFN
+              + "\t" + newRI);
         }
         fn += possibleFN;
         break;
@@ -1113,44 +1310,45 @@ public class State {
       default:
         throw new RuntimeException("implement this type: " + actionType);
       }
-
-      Adjoints a = new Adjoints.Scale(info.coefLoss.coef, new LossA(fp, fn));
-      if (info.coefLoss.muteForwards)
-        mutedScore = sum2(mutedScore, a);
-      else
-        unmutedScore = sum2(unmutedScore, a);
     }
+    if (DEBUG_F)
+      Log.info("done with loss: fp=" + fp + " fn=" + fn + " at=" + actionType);
 
+    Adjoints model = Adjoints.Constant.ZERO;
     if (info.coefModel.nonzero()) {
-      Adjoints a = info.config.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
-      a = new Adjoints.Scale(info.coefModel.coef, a);
-      if (info.coefModel.muteForwards)
-        mutedScore = sum2(mutedScore, a);
-      else
-        unmutedScore = sum2(unmutedScore, a);
+      model = info.config.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
+      if (info.config.recallBias != 0) {
+        switch (actionType) {
+        case STOP_K:
+        case STOP_KS:
+        case STOP_S:
+          model = new Adjoints.Sum(model, new Adjoints.NamedConstant("recallBias", info.config.recallBias));
+          break;
+        default:
+          break;
+        }
+      }
     }
 
+    double rr = 0;
     if (info.coefRand.nonzero()) {
-      double rr = 2 * (info.config.rand.nextDouble() - 0.5);
-      Adjoints a = new Adjoints.Constant(rr);
-      a = new Adjoints.Scale(info.coefRand.coef, a);
-      if (info.coefModel.muteForwards)
-        mutedScore = sum2(mutedScore, a);
-      else
-        unmutedScore = sum2(unmutedScore, a);
+      rr = 2 * (info.config.rand.nextDouble() - 0.5);
     }
 
-    if (mutedScore != null)
-      mutedScore = new MutedAdjoints(true, false, mutedScore);
-    return sum3(mutedScore, unmutedScore);
+    if (fp + fn > 0) {
+      @SuppressWarnings("unused")
+      double z = fp + fn;
+    }
+
+    return new StepScores(info, model, fp, fn, rr, score);
   }
 
-  public Adjoints f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
+  public StepScores f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
     return f(actionType, newFI, null, stateFeats);
   }
 
   // Only used for noMoreTargets and noMoreFrames
-  public Adjoints f(AT actionType, List<ProductIndex> stateFeats) {
+  public StepScores f(AT actionType, List<ProductIndex> stateFeats) {
     return f(actionType, null, null, stateFeats);
   }
 
@@ -1235,7 +1433,7 @@ public class State {
           RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
           if (DEBUG) Log.debug("incomplete RI - span " + newArg);
 
-          Adjoints feats = sum1(f(AT.COMPLETE_S, fi, newArg, sf), score);
+          StepScores feats = f(AT.COMPLETE_S, fi, newArg, sf);
           FI newFI = fi.prependArg(newArg);
           push(beam, overall, this.surgery(fill, newFI, null, feats));
         }
@@ -1268,7 +1466,7 @@ public class State {
     // NEW
     RI newRI = new RI(k, q, null, null);
     if (DEBUG) Log.debug("adding new (k,?) k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
-    Adjoints featsN = sum1(f(AT.NEW_K, fi, newRI, sf), score);
+    StepScores featsN = f(AT.NEW_K, fi, newRI, sf);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
     // TODO Check that this is correct and meaure speedup
 //    st.firstNotDone = this.firstNotDone;
@@ -1278,11 +1476,21 @@ public class State {
     if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
     int p = info.config.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
     RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
-    Adjoints featsS = sum1(f(AT.STOP_K, fi, newRI, sf), score);
+    StepScores featsS = f(AT.STOP_K, fi, riStop, sf);
     Incomplete incS = null;   // Stop doesn't need a completion
     State ss = this.surgery(cur, fi.prependArg(riStop), incS, featsS);
     // TODO How to update firstNotDone with surgery?
     push(beam, overall, ss);
+
+    if (!info.coefLoss.iszero()) {
+      if (featsN.getHammingLoss() == 0 && featsS.getHammingLoss() == 0) {
+        // Re-run f() so that you can see what loss it picked up
+        DEBUG_F = true;
+        f(AT.NEW_K, fi, newRI, sf);
+        f(AT.STOP_K, fi, riStop, sf);
+      }
+      assert featsN.getHammingLoss() > 0 || featsS.getHammingLoss() > 0;
+    }
 
     return 2;
   }
@@ -1346,7 +1554,7 @@ public class State {
           if (!noMoreTargets) {
             if (DEBUG) Log.debug("adding new (t,) at " + t.shortString());
             FI fi = new FI(null, t, null).withGold(null);
-            Adjoints feats = sum1(this.score, f(AT.NEW_T, fi, sf));
+            StepScores feats = f(AT.NEW_T, fi, sf);
             Incomplete inc = new Incomplete(frames);
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -1357,7 +1565,7 @@ public class State {
           for (Frame f : info.prunedFIs.get(t)) {
             if (DEBUG) Log.debug("adding new (t,f) at " + t.shortString() + "\t" + f.getName());
             FI fi = new FI(f, t, null).withGold(null);
-            Adjoints feats = sum1(this.score, f(AT.NEW_TF, fi, sf));
+            StepScores feats = f(AT.NEW_TF, fi, sf);
             Incomplete inc = null;
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -1476,13 +1684,13 @@ public class State {
 
           // NEW
           if (DEBUG) Log.debug("adding new (?,s) s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          Adjoints featsN = sum1(f(AT.NEW_S, fi, newRI, sf), score);
+          StepScores featsN = f(AT.NEW_S, fi, newRI, sf);
           State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
           push(beam, overall, st);
 
           // STOP
           if (DEBUG) Log.debug("adding noMoreArgRoles for s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          Adjoints featsS = sum1(f(AT.STOP_S, fi, newRI, sf), score);
+          StepScores featsS = f(AT.STOP_S, fi, newRI, sf);
           Incomplete incS = null;   // Stop doesn't need a completion
           push(beam, overall, this.surgery(cur, fi.noMoreArgSpans(), incS, featsS));
 
@@ -1525,10 +1733,10 @@ public class State {
 
             // NEW
             if (DEBUG) Log.debug("adding new (k,s) k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-            Adjoints featsN = sum1(f(AT.NEW_KS, fi, newRI, sf), score);
+            StepScores featsN = f(AT.NEW_KS, fi, newRI, sf);
             push(beam, overall, this.surgery(cur, fi.prependArg(newRI), inc, featsN));
             step1Pushed++;
-            
+
 
             // STOP
 //            if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
@@ -1537,7 +1745,7 @@ public class State {
 //            step1Pushed++;
           }
         }
-        Adjoints featsS = sum1(f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf), score);
+        StepScores featsS = f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf);
         push(beam, overall, this.surgery(cur, fi.noMoreArgs(), null, featsS));
 
         if (true)
@@ -1700,11 +1908,14 @@ public class State {
   }
 
   public static State runInference(Info inf) {
+    if (DEBUG)
+      Log.info("starting: " + inf.showCoefs());
     /*
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
      */
-    State s0 = new State(null, false, false, null, Adjoints.Constant.ZERO, inf)
+    StepScores zero = new StepScores(inf, Adjoints.Constant.ZERO, 0, 0, 0, null);
+    State s0 = new State(null, false, false, null, zero, inf)
         .setFramesToGoldLabels();
 
     Beam.DoubleBeam cur = new Beam.DoubleBeam(inf.beamSize);
@@ -1756,23 +1967,29 @@ public class State {
     if (conf.useRefRoles && y.numFrameInstances() > 0)
       addDummyContRefRole(y, conf.rand, RoleType.REF);
 
-    Info inf = new Info();
+    Info inf = new Info(conf);
     inf.beamSize = 1;
     inf.config = conf;
     inf.setOracleCoefs();
-    inf.label = new LabelIndex(y);
-    inf.sentence = y.getSentence();
+    inf.setLabel(y);
     inf.setTargetPruningToGoldLabels();
+    // We're assuming the FNParses already have the parses in them
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
     boolean addSpansIfMissing = true;   // for train at least
-    inf.setArgPruningUsingSyntax(
-        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+    inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
 
     FNParse yhat = runInference2(inf);
 
     SentenceEval se = new SentenceEval(y, yhat);
     Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
-//    BasicEvaluation.showResults("[eval]", r);
-    assert r.get("ArgumentMicroF1").doubleValue() == 1;
+    double f1 = r.get("ArgumentMicroF1");
+    if (f1 != 1) {
+      DEBUG = true;
+      runInference2(inf);
+      BasicEvaluation.showResults("oracle", r);
+    }
+    assert f1 == 1 : "f1=" + f1;
   }
 
   /**
@@ -1781,21 +1998,23 @@ public class State {
   public static void checkLearning(FNParse y, Config conf) {
     Log.info("starting on " + y.getId() + " numFI=" + y.numFrameInstances());
 
-    Info oracleInf = new Info().setOracleCoefs();
-    Info mvInf = new Info().setMostViolatedCoefs();
-    Info decInf = new Info().setDecodeCoefs();
+    Info oracleInf = new Info(conf).setOracleCoefs();
+    Info mvInf = new Info(conf).setMostViolatedCoefs();
+    Info decInf = new Info(conf).setDecodeCoefs();
     for (Info inf : Arrays.asList(oracleInf, mvInf, decInf)) {
       inf.beamSize = 1;
       inf.config = conf;
-      inf.label = new LabelIndex(y);
-      inf.sentence = y.getSentence();
+      inf.setLabel(y);
       inf.setTargetPruningToGoldLabels();
+
+      // We're assuming the FNParses already have the parses in them
+      DeterministicRolePruning drp = new DeterministicRolePruning(
+          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
 
       // Normally we would not allow the decoder to see the gold spans, but for
       // this test it is easier to check against F1=1 than F1=bestAchievable
       boolean addSpansIfMissing = true;// inf != decInf;
-      inf.setArgPruningUsingSyntax(
-          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+      inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
 //      System.out.println("addSpansIfMissing=" + addSpansIfMissing
 //          + " prunedSpans=" + inf.prunedSpans.describe());
     }
@@ -1817,8 +2036,10 @@ public class State {
 //      }
 
       // Oracle state adjoints only have loss in them, so no features are added!
-      oracleState.score.backwards(-lr);
-      mvState.score.backwards(+lr);
+//      oracleState.score.backwards(-lr);
+//      mvState.score.backwards(+lr);
+      oracleState.score.backwards(lr);
+      mvState.score.backwards(lr);
 
       if (i % 5 == 0) {
         yhat = runInference2(decInf);
@@ -1833,15 +2054,27 @@ public class State {
       }
     }
     DEBUG = true;
+    System.out.println("re-playing update for debugging:");
+    System.out.println("searching for oracle update:");
+    State oracleState = runInference(oracleInf);
+    System.out.println("searching for mv update:");
+    State mvState = runInference(mvInf);
+    System.out.println("applying updates:");
+    oracleState.score.backwards(-lr);
+    mvState.score.backwards(+lr);
+
+    System.out.println("re-playing inference for debugging:");
     yhat = runInference2(decInf);
     System.out.println("y=" + Describe.fnParse(y));
     System.out.println("yhat=" + Describe.fnParse(yhat));
     System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
 
-      decInf.setTargetPruningToGoldLabels();
-      boolean addSpansIfMissing = true;// inf != decInf;
-      decInf.setArgPruningUsingSyntax(
-          DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, addSpansIfMissing);
+    decInf.setTargetPruningToGoldLabels();
+    boolean addSpansIfMissing = true;// inf != decInf;
+    // We're assuming the FNParses already have the parses in them
+    DeterministicRolePruning drp = new DeterministicRolePruning(
+        DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
+    decInf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
     System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
 
     assert false : "didn't learn in " + maxiter + " iterations";
@@ -1854,7 +2087,7 @@ public class State {
     return f1;
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws TemplateDescriptionParsingException {
     ExperimentProperties config = ExperimentProperties.init(args);
 
     List<FNParse> ys = getParse(config);
@@ -1868,7 +2101,9 @@ public class State {
 
 //    CachedFeatureParamsShim features = new RandomFeatures();
     CachedFeatureParamsShim features = new CheatingFeatures().add(ys);
-    conf.weights = new GeneralizedWeights(conf, features);
+    int updateInterval = 1;
+    conf.weights = new GeneralizedWeights(conf, features, updateInterval);
+    conf.weights.staticL2Penalty = 1e-3;
 
     conf.roleDependsOnFrame = true;
 //    conf.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
@@ -1880,6 +2115,17 @@ public class State {
     conf.useRefRoles = true;
     conf.rand = new Random(9001);
 
+    boolean testCachedFeatures = false;
+
+    Log.info("loading some parses in the background while we run other tests...");
+    CachedFeatures cf = null;
+    if (testCachedFeatures) {
+      cf = CachedFeatures.buildCachedFeaturesForTesting(config);
+      System.out.println("done loading CachedFeatures");
+    }
+
+    // Call checkOracle
+    Log.info("testing the oracle performance is perfect");
     long start = System.currentTimeMillis();
     int nParses = 0;
     for (FNParse y : ys) {
@@ -1894,6 +2140,8 @@ public class State {
     System.out.println("numNextEvals: " + NUM_NEXT_EVALS);
     System.out.println("numParses: " + nParses);
 
+    // Call checkLearning
+    Log.info("checking that we can learn to mimic the oracle");
     conf.setNoGlobalFeatures();
     Collections.sort(ys, new Comparator<FNParse>() {
       @Override
@@ -1910,6 +2158,24 @@ public class State {
       Log.info("checking learning on " + y.getId() + " numItems=" + i);
       checkLearning(y, conf);
     }
+
+    // Try to get some updates using the FNParses in CachedFeatures
+    if (testCachedFeatures) {
+      Log.info("trying out some updates when using CachedFeatures.ItemProvider");
+      FModel m = new FModel(null, DeterministicRolePruning.Mode.CACHED_FEATURES);
+      m.setCachedFeatures(cf);
+      CachedFeatures.ItemProvider ip = cf.new ItemProvider(100, false, false);
+      Log.info("ip.loaded=" + ip.getNumActuallyLoaded());
+      for (int i = 0; i < ip.size(); i++) {
+        System.out.println("starting on parse " + (i+1));
+        FNParse y = ip.label(i);
+        System.out.println("getting update for " + y.getId());
+        Update u = m.getUpdate(y);
+        System.out.println("applying update for " + y.getId());
+        u.apply(1);
+      }
+    }
+    System.out.println("fully done");
   }
 
   public static int numItems(FNParse y) {
@@ -2014,7 +2280,7 @@ public class State {
     public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
       boolean y = inGold.contains(new Pair<>(sent.getId(), new SpanPair(t, s)));
       if (y) countY++; else countN++;
-      if ((countY + countN) % 1000 == 0)
+      if ((countY + countN) % 10000 == 0)
         Log.info("countY=" + countY + " countN=" + countN);
       IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector();
       int a, b;
@@ -2057,10 +2323,14 @@ public class State {
     private int dim;
     private int updateInterval;
 
-    private double staticL2Penalty = 1e-7;
-    private double staticLR = 1;  // relative to higher-level learning rate
+    public double staticL2Penalty = 1e-7;
+    public double staticLR = 1;  // relative to higher-level learning rate
 
-    public GeneralizedWeights(Config config, CachedFeatureParamsShim staticFeats) {
+    public void setStaticFeatures(CachedFeatureParamsShim f) {
+      this.staticFeatures = f;
+    }
+
+    public GeneralizedWeights(Config config, CachedFeatureParamsShim staticFeats, int updateInterval) {
       this.config = config;
       this.staticFeatures = staticFeats;
       this.globalFeatureWeights = new WeightsPerActionType();
@@ -2090,7 +2360,7 @@ public class State {
        * probably easier if I just hash into a reasonably sized space.
        */
 
-      updateInterval = 32;
+      this.updateInterval = updateInterval;
       dim = 1 << 18;
       int K = config.roleDependsOnFrame ? config.frPacking.size() : 100;
 //      Log.info("D=" + D + " K=" + K + " AT.size=" + AT.values().length + " all: " + (8d * D * K * AT.values().length)/(1024d * 1024d) + " MB");
@@ -2166,14 +2436,17 @@ public class State {
       Adjoints staticScore = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, f2, w);
 
       if (ri.k >= 0) {
-        int K = fi.f.numRoles();
-        List<ProductIndex> fk = new ArrayList<>();
+        int prodF, prodC;
+        if (config.roleDependsOnFrame) {
+          prodF = config.frPacking.index(fi.f, ri.k);
+          prodC = config.frPacking.size();
+        } else {
+          prodF = ri.k;
+          prodC = fi.f.numRoles();
+        }
+        List<ProductIndex> fk = new ArrayList<>(f2.size());
         for (ProductIndex p : f2) {
-          ProductIndex pp;
-          if (config.roleDependsOnFrame)
-            pp = p.prod(config.frPacking.index(fi.f, ri.k), config.frPacking.size());
-          else
-            pp = p.prod(ri.k, K);
+          ProductIndex pp = p.prod(prodF, prodC);
           fk.add(pp);
         }
         LazyL2UpdateVector wk = at2k2sfWeights[actionType.ordinal()];
@@ -2187,11 +2460,12 @@ public class State {
           int overFeatI = dbgAlph.lookupIndex(overFeat, true);
           List<ProductIndex> overFeats = Arrays.asList(new ProductIndex(overFeatI));
           LazyL2UpdateVector ww = at2k2sfWeights[actionType.ordinal()];
+          if (DEBUG)
+            Log.info("overFeat=" + overFeatI + " weight=" + ww.weights.get(overFeatI) + "\t" + overFeat);
           Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, ww);
           return score;
-//        } else {
-//          Log.info("returning early: only static features");
-//          return staticScore;
+        } else {
+          throw new RuntimeException("implement me");
         }
       }
 

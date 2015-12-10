@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
+import java.io.Serializable;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -78,7 +79,9 @@ public interface Adjoints {
   }
 
   // TODO move to tutils
-  public static class LazyL2UpdateVector {
+  public static class LazyL2UpdateVector implements Serializable {
+    private static final long serialVersionUID = 8614960372932452343L;
+
     public final IntDoubleDenseVector weights;
     private int numUpdatesDeferred;
     private int updateInterval;

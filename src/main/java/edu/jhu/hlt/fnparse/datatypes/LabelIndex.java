@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.datatypes;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -18,13 +19,13 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public class LabelIndex {
+public class LabelIndex implements Serializable {
+  private static final long serialVersionUID = -3723865423922884724L;
 
   private final FNParse y;
   private Map<Span, List<FrameInstance>> byTarget;
   private Set<Pair<Span, Frame>> fis;
 
-  private Map<int[], Set<int[]>> all;
   private Map<FrameArgInstance, Set<FrameArgInstance>> all2;
 
   public LabelIndex(FNParse y) {
@@ -32,7 +33,6 @@ public class LabelIndex {
     this.byTarget = new HashMap<>();
     this.fis = new HashSet<>();
 
-    this.all = new HashMap<>();
     this.all2 = new HashMap<>();
 
     for (FrameInstance fi : y.getFrameInstances()) {

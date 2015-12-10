@@ -168,8 +168,10 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
 
   public List<Span> getPossibleArgs(FrameInstance key) {
     List<Span> args = possibleArgs.get(key);
-    if (args == null)
-      throw new IllegalStateException();
+    if (args == null) {
+      return null;
+//      throw new IllegalStateException();
+    }
     return args;
   }
 

@@ -14,9 +14,11 @@ import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
+import java.io.Serializable;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -59,7 +61,6 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
-import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
@@ -114,7 +115,9 @@ public class RerankerTrainer {
   }
 
   // may differ across pretrain/train
-  public class Config {
+  public class RTConfig implements Serializable {
+    private static final long serialVersionUID = 2229792069360002582L;
+
     // Meta
     public final String name;
 
@@ -189,7 +192,7 @@ public class RerankerTrainer {
     public Timer tLearningRateEstimation = new Timer("learningRateEstimation", 1, false);
     public Timer tStoppingCondition = new Timer("stoppingCondition", 1, false);
 
-    public Config(String name, File workingDir, Random rand) {
+    public RTConfig(String name, File workingDir, Random rand) {
       if (!workingDir.isDirectory())
         throw new IllegalArgumentException();
       this.name = name;
@@ -266,8 +269,8 @@ public class RerankerTrainer {
   private MultiTimer timer = new MultiTimer();
   public final Random rand;
   public List<ResultReporter> reporters;
-  public Config pretrainConf; // for training statelessParams
-  public Config trainConf;    // for training statelessParams + statefulParams
+  public RTConfig pretrainConf; // for training statelessParams
+  public RTConfig trainConf;    // for training statelessParams + statefulParams
   public boolean performPretrain = false;
 
   // If true, use DeterministicRolePruning to cut down the set of (t,k,spans)
@@ -316,13 +319,13 @@ public class RerankerTrainer {
     File pwd = new File(workingDir, "wd-pretrain");
     if (!pwd.isDirectory())
       pwd.mkdir();
-    this.pretrainConf = new Config("pretrain", pwd, rand);
+    this.pretrainConf = new RTConfig("pretrain", pwd, rand);
     this.pretrainConf.trainBeamSize = 1;
     this.pretrainConf.testBeamSize = 1;
     File twd = new File(workingDir, "wd-train");
     if (!twd.isDirectory())
       twd.mkdir();
-    this.trainConf = new Config("train", twd, rand);
+    this.trainConf = new RTConfig("train", twd, rand);
     this.performPretrain = false;
   }
 
@@ -359,15 +362,12 @@ public class RerankerTrainer {
   /** If you don't want anything to print, just provide showStr=null,diffArgsFile=null */
   public static Map<String, Double> eval(
       ShimModel model,
-      Config conf,
+      RTConfig conf,
       ItemProvider ip,
       File semaforEvalDir,
       String showStr,
       File diffArgsFile,
       File predictionsFile) {
-
-    // FIXME
-    Reranker m = model.getReranker();
 
     // Make predictions
     // +1 is because an extra thread or two is allocated for reading data in,
@@ -383,8 +383,7 @@ public class RerankerTrainer {
       final int ii = i;
       futures.add(es.submit(() -> {
         FNParse y = ip.label(ii);
-        State init = m.getInitialStateWithPruning(y, y);
-        FNParse yhat = m.predict(init);
+        FNParse yhat = model.predict(y);
         return new Pair<>(y, yhat);
       }));
     }
@@ -486,7 +485,7 @@ public class RerankerTrainer {
     fw.close();
   }
 
-  public static double eval(ShimModel m, Config conf, ItemProvider ip, StdEvalFunc objective) {
+  public static double eval(ShimModel m, RTConfig conf, ItemProvider ip, StdEvalFunc objective) {
     String showStr = null;
     File diffArgsFile = null;
     File predictionsFile = null;
@@ -499,7 +498,7 @@ public class RerankerTrainer {
    * Inserts an extra bias Param.Stateless into the given model and tunes it
    * @return the F1 on the dev set of the selected recall bias.
    */
-  private double tuneModelForF1(ShimModel m, Config conf, ItemProvider dev) {
+  private double tuneModelForF1(ShimModel m, RTConfig conf, ItemProvider dev) {
     final ItemProvider devUse;
     if (dev.size() > conf.maxDev) {
       Log.info("[main] cutting down dev set size: " + dev.size() + "  =>  " + conf.maxDev);
@@ -509,13 +508,8 @@ public class RerankerTrainer {
     }
     Log.info("[main] tuning on " + devUse.size() + " examples");
 
-    // FIXME
-    Reranker model = m.getReranker();
-
     // Insert the bias into the model
-    Params.PruneThreshold tau = model.getPruningParams();
-    DecoderBias bias = new DecoderBias();
-    model.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
+    Consumer<Double> bias = m.getPruningBias();
 
     // Make a function which computes the dev set loss given a threshold
     Function<Double, Double> thresholdPerf = new Function<Double, Double>() {
@@ -523,17 +517,17 @@ public class RerankerTrainer {
       public Double apply(Double threshold) {
         timer.start("tuneModelForF1.eval");
         Log.info(String.format("[tuneModelForF1] trying out recallBias=%+5.2f", threshold));
-        bias.setRecallBias(threshold);
+        bias.accept(threshold);
         File diffArgsFile = null;
         File predictionsFile = null;
         File semEvalDir = null;
         String msg = SHOW_FULL_EVAL_IN_TUNE
-              ? String.format("[tune recallBias=%.2f]", bias.getRecallBias()) : null;
+              ? String.format("[tune recallBias=%.2f]", threshold) : null;
         Map<String, Double> results = eval(
           m, conf, devUse, semEvalDir, msg, diffArgsFile, predictionsFile);
         double perf = results.get(conf.objective.getName());
         Log.info(String.format("[tuneModelForF1] recallBias=%+5.2f perf=%.3f",
-            bias.getRecallBias(), perf));
+            threshold, perf));
         timer.stop("tuneModelForF1.eval");
         return perf;
       }
@@ -556,7 +550,7 @@ public class RerankerTrainer {
     // Log and set the best value
     Log.info("[main] chose recallBias=" + best.get1()
         + " with " + conf.objective.getName() + "=" + best.get2());
-    bias.setRecallBias(best.get1());
+    bias.accept(best.get1());
     return best.get2();
   }
 
@@ -564,15 +558,32 @@ public class RerankerTrainer {
     assert pretrainConf.argPruningMode == trainConf.argPruningMode;
     assert pretrainConf.trainBeamSize == trainConf.trainBeamSize;
     assert pretrainConf.testBeamSize == trainConf.testBeamSize;
-    return new ShimModel(new Reranker(
-        statefulParams,
-        statelessParams,
-        tauParams,
-        trainConf.argPruningMode,
-        cachedFeatures,
-        pretrainConf.trainBeamSize,
-        pretrainConf.testBeamSize,
-        rand), trainConf);
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    ShimModel sm;
+    if (config.getBoolean("useFModel")) {
+      Log.info("transitionSystem=fmodel");
+      assert cachedFeatures != null;
+      sm = new ShimModel(new FModel(trainConf, DeterministicRolePruning.Mode.CACHED_FEATURES));
+    } else {
+      Log.info("transitionSystem=old");
+      sm = new ShimModel(new Reranker(
+          statefulParams,
+          statelessParams,
+          tauParams,
+          trainConf.argPruningMode,
+          cachedFeatures,
+          pretrainConf.trainBeamSize,
+          pretrainConf.testBeamSize,
+          rand), trainConf);
+    }
+    if (cachedFeatures != null)
+      sm.setCachedFeatures(cachedFeatures);
+    else
+      Log.warn("cachedFeatures is null!");
+
+    sm.observeConfiguration(config);
+
+    return sm;
   }
 
   /** Trains and tunes a full model */
@@ -607,7 +618,7 @@ public class RerankerTrainer {
    * WARNING: Will clobber a learning rate and replace it with Constant. That said
    * it will use the current learning rate as a jumping off point.
    */
-  public void estimateLearningRate(ShimModel m, ItemProvider train, ItemProvider dev, Config conf) {
+  public void estimateLearningRate(ShimModel m, ItemProvider train, ItemProvider dev, RTConfig conf) {
     // Set a new learning rate so that we know exactly what we're dealing with.
     LearningRateSchedule lrOld = conf.learningRate;
     double lrOldV = lrOld.learningRate();
@@ -722,12 +733,9 @@ public class RerankerTrainer {
   private DoubleSupplier modelLossOnData(
       ShimModel model,
       ItemProvider dev,
-      Config conf,
+      RTConfig conf,
       EvalFunc lossFunc,
       int nExampleLimit) {
-
-    // FIXME
-    Reranker m = model.getReranker();
 
     final ItemProvider devUse;
     if (dev.size() > nExampleLimit) {
@@ -746,7 +754,7 @@ public class RerankerTrainer {
         Log.info("[devLossFunc] computing dev set loss on " + devUse.size() + " examples");
 
         // Turn off dropout when you make predictions
-        CachedFeatures.Params w = m.cachedFeatures.params;
+        CachedFeatures.Params w = model.getCachedFeatures().params;
         boolean resetDropoutModeToTrain = false;
         if (w.getDropoutMode() == DropoutMode.TRAIN) {
           Log.info("[devLossFunc] about to toggle dropout mode for predictions");
@@ -764,18 +772,13 @@ public class RerankerTrainer {
           final int ii = i;
           futures.add(es.submit(() -> {
             FNParse y = devUse.label(ii);
-            State init = useSyntaxSpanPruning
-              ? m.getInitialStateWithPruning(y, y)
-              : State.initialState(y, devUse.items(ii));
-            Update u = m.hasStatefulFeatures() || conf.forceGlobalTrain
-              ? m.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
-              : m.getStatelessUpdate(init, y);
+            Update u = model.getUpdate(y);
             double loss = u.violation();
             assert Double.isFinite(loss) && !Double.isNaN(loss);
 
             // Requires me to do prediction (slower) => optional
             if (showAllLosses) {
-              FNParse yhat = m.predict(init);
+              FNParse yhat = model.predict(y);
               return new DSResult(loss, y, yhat);
             } else {
               return new DSResult(loss, y, null);
@@ -848,7 +851,7 @@ public class RerankerTrainer {
   /**
    * Adds a stopping condition based on the dev set performance.
    */
-  public void train2(ShimModel m, ItemProvider train, ItemProvider dev, Config conf) {
+  public void train2(ShimModel m, ItemProvider train, ItemProvider dev, RTConfig conf) {
     Log.info("[main] nTrain=" + train.size() + " nDev=" + dev.size() + " for conf=" + conf.name);
 
     // Use dev data for stopping condition
@@ -914,7 +917,7 @@ public class RerankerTrainer {
    * Stateful params of the model will not be fit, but updates should be much
    * faster to solve for as they don't require any forwards/backwards pass.
    */
-  public void hammingTrain(ShimModel r, ItemProvider train, ItemProvider dev, Config conf)
+  public void hammingTrain(ShimModel r, ItemProvider train, ItemProvider dev, RTConfig conf)
       throws InterruptedException, ExecutionException {
     Log.info("[main] starting, conf=" + conf);
     String timerStr = "hammingTrain." + conf.name;
@@ -1078,20 +1081,23 @@ public class RerankerTrainer {
       List<Integer> batch,
       ExecutorService es,
       ItemProvider ip,
-      Config conf,
+      RTConfig conf,
       int iter,
       String timerStrPartial) throws InterruptedException, ExecutionException {
-    Timer t = timer.get(timerStrPartial + ".batch", true).setPrintInterval(10).ignoreFirstTime();
-    t.start();
 
     // Compute updates for the batch
+    Timer t = timer.get(timerStrPartial + ".batch.compute", true).setPrintInterval(50).ignoreFirstTime();
+    t.start();
     boolean verbose = false;
     List<Update> finishedUpdates = r.getUpdate(batch, ip, es, verbose);
+    t.stop();
 
     if (verbose)
       Log.info("[hammingTrainBatch] applying updates");
     assert finishedUpdates.size() == batch.size();
 
+    t = timer.get(timerStrPartial + ".batch.apply", true).setPrintInterval(50).ignoreFirstTime();
+    t.start();
     // Apply the updates
     double learningRate = conf.learningRate.learningRate();
     double violation = new Update.Batch<>(finishedUpdates).apply(learningRate);
@@ -1301,6 +1307,7 @@ public class RerankerTrainer {
       mt.start("features");
       boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
       List<int[]> features = new ArrayList<>();
+      BitSet templates = new BitSet();
       for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
         List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
         int n = strTemplates.size();
@@ -1315,9 +1322,11 @@ public class RerankerTrainer {
           }
           assert t >= 0;
           intTemplates[i] = t;
+          templates.set(t);
         }
         features.add(intTemplates);
       }
+      Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
       mt.stop("features");
 
       // Instantiate the module (holder of the data)
@@ -1586,7 +1595,10 @@ public class RerankerTrainer {
         PropbankFNParses p = trainer.cachedFeatures.sentIdsAndFNParses;
         train = trainer.cachedFeatures.new ItemProvider(p.trainSize(), false, false);
         dev = trainer.cachedFeatures.new ItemProvider(p.devSize(), true, false);
-        test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false, true);
+        if (testOnTrain)
+          test = train;
+        else
+          test = trainer.cachedFeatures.new ItemProvider(p.testSize(), false, true);
       } else {
         if (propbank) {
           Log.info("[main] running on propbank data");
@@ -1793,12 +1805,6 @@ public class RerankerTrainer {
       ObjectInputStream ois = new ObjectInputStream(new FileInputStream(modelFile));
       model = (ShimModel) ois.readObject();
       ois.close();
-    } else if (config.getBoolean("useFModel", true)) {
-      Log.info("[main] using fmodel");
-
-      FModel fm = new FModel();
-      model = new ShimModel(fm);
-
     } else if (config.containsKey(paramsFileKey)) {
       // Load just the params (instead of the entire Reranker).
       // This is useful for distributed training, which only uses the Params.
