@@ -51,6 +51,10 @@ TEMPLATE_PROD_IG_OUTPUT=$5
 NUM_ROLES=$6
 XMX=$7
 
+# Can't use relative paths when you have a checkout in a temporary directory
+# and don't use -cwd!
+#-DbubFuncParentDir=scripts/precompute-features
+
 java -Xmx${XMX}G -cp $JAR \
   -DfeaturesParent=$FEATS_PARENT \
   -DfeaturesGlob=$FEATS_GLOB \
@@ -58,8 +62,7 @@ java -Xmx${XMX}G -cp $JAR \
   -DnumRoles=$NUM_ROLES \
   -DoutputFeatures=$OUTPUT_IG_FILE \
   -DignoreSentenceIds=$TEMPLATE_PROD_IG_OUTPUT \
-  -DbubFuncParentDir=scripts/precompute-features \
-  -DnumTemplates=30000 \
+  -DbubFuncParentDir=/export/projects/twolfe/fnparse-data/matlab-code \
   edu.jhu.hlt.fnparse.features.precompute.InformationGain
 
 echo "ret code: $?"

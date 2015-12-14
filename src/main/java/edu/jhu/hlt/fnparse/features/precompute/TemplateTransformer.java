@@ -99,6 +99,7 @@ public class TemplateTransformer {
       assert shard >= 0;
       this.shard = shard;
       this.numShards = numShards;
+      Log.info("shard=" + shard + " numShards=" + numShards);
       // Read in feature counts
       FeatureCounts.FromFile fc;
       try {
@@ -225,7 +226,11 @@ public class TemplateTransformer {
      */
     @Override
     public void run(File features) throws IOException {
-      if (Math.floorMod(features.getPath().hashCode(), numShards) != shard) {
+      int hc = features.getPath().hashCode();
+      int fm = Math.floorMod(hc, numShards);
+      Log.info("hc=" + hc + " fm=" + fm + " shard=" + shard + " numShards=" + numShards);
+      assert fm >= 0 && fm < numShards;
+      if (fm != shard) {
         Log.info("skipping " + features.getPath() + " b/c not in shard " + shard + "/" + numShards);
         return;
       }
