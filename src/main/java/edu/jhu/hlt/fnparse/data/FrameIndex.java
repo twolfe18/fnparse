@@ -206,7 +206,8 @@ public class FrameIndex implements FrameIndexInterface {
       }
 
       // Read in information about what the core roles are
-      File coreFile = new File("toydata/core-roles.txt");
+      File fnDataDir = UsefulConstants.getDataPath();
+      File coreFile = new File(fnDataDir, "core-roles.txt");
       LOG.info("reading role core types from " + coreFile.getPath());
       try (BufferedReader r = FileUtil.getReader(coreFile)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {

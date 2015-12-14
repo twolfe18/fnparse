@@ -47,6 +47,7 @@ java -Xmx14G -ea -server -cp $JAR \
   -DnumShards=$NUM_SHARDS \
   -Ddataset=$DATASET \
   -Dsuffix=$SUF \
+  -Ddata.framenet.root=$FNPARSE_DATA \
   -Ddata.wordnet=$FNPARSE_DATA/wordnet/dict \
   -Ddata.embeddings=$FNPARSE_DATA/embeddings \
   -Ddata.ontonotes5=/export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \

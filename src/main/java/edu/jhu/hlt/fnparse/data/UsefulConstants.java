@@ -9,7 +9,7 @@ public class UsefulConstants {
   private static ExperimentProperties conf = ExperimentProperties.getInstance();
 
   public static File getDataPath() {
-    return conf.getExistingFile("data.framenet.root", new File("toydata"));
+    return conf.getExistingDir("data.framenet.root", new File("toydata"));
   }
 
   public static File getFrameIndexPath() {
