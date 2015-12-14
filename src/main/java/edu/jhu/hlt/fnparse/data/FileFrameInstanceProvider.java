@@ -226,23 +226,26 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
     public void remove() { throw new UnsupportedOperationException(); }
   }
 
+  // TODO These should be methods allowing them to load as lazily as possible
+  // to ensure that ExperimentalProperties.init has been run.
+
   public static final FileFrameInstanceProvider fn15trainFIP =
-      new FileFrameInstanceProvider(UsefulConstants.TrainFN15FullTextFramesPath, UsefulConstants.TrainFN15FullTextConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getTrainFN15FullTextFramesPath(), UsefulConstants.getTrainFN15FullTextConllPath());
 
   public static final FileFrameInstanceProvider fn15testFIP =
-      new FileFrameInstanceProvider(UsefulConstants.TestFN15FullTextFramesPath, UsefulConstants.TestFN15FullTextConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getTestFN15FullTextFramesPath(), UsefulConstants.getTestFN15FullTextConllPath());
 
   public static final FileFrameInstanceProvider fn15lexFIP =
-      new FileFrameInstanceProvider(UsefulConstants.FN15LexicographicFramesPath, UsefulConstants.FN15LexicographicConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getFN15LexicographicFramesPath(), UsefulConstants.getFN15LexicographicConllPath());
 
   public static final FileFrameInstanceProvider debugFIP =
-      new FileFrameInstanceProvider(UsefulConstants.DebugFramesPath, UsefulConstants.DebugConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getDebugFramesPath(), UsefulConstants.getDebugConllPath());
 
   public static final FileFrameInstanceProvider dipanjantrainFIP =
-      new FileFrameInstanceProvider(UsefulConstants.TrainDipanjanFramesPath, UsefulConstants.TrainDipanjanConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getTrainDipanjanFramesPath(), UsefulConstants.getTrainDipanjanConllPath());
 
   public static final FileFrameInstanceProvider dipanjantestFIP =
-      new FileFrameInstanceProvider(UsefulConstants.TestDipanjanFramesPath, UsefulConstants.TestDipanjanConllPath);
+      new FileFrameInstanceProvider(UsefulConstants.getTestDipanjanFramesPath(), UsefulConstants.getTestDipanjanConllPath());
 
   //	public static final FileFrameInstanceProvider semlinkFIP =
   //			new FileFrameInstanceProvider(UsefulConstants.SemLinkFramesPath, UsefulConstants.SemLinkConllPath);

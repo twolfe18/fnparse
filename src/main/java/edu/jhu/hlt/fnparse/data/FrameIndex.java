@@ -52,8 +52,8 @@ public class FrameIndex implements FrameIndexInterface {
     private String prevFrameName = null;
     public FrameNetIterator(){
       try {
-        litFE = FileUtils.lineIterator(UsefulConstants.frameIndexPath, "UTF-8");
-        litLU = FileUtils.lineIterator(UsefulConstants.frameIndexLUPath, "UTF-8");
+        litFE = FileUtils.lineIterator(UsefulConstants.getFrameIndexPath(), "UTF-8");
+        litLU = FileUtils.lineIterator(UsefulConstants.getFrameIndexLUPath(), "UTF-8");
         // Do not remove this line. It goes past the preamble
         @SuppressWarnings("unused")
         String _preambleRow1 = litFE.nextLine();
