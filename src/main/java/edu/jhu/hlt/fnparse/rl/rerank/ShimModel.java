@@ -146,42 +146,7 @@ public class ShimModel {
       throw new RuntimeException("implement me");
   }
 
-  private List<Update> getUpdateReranker(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) throws InterruptedException, ExecutionException {
-    List<Update> finishedUpdates = new ArrayList<>();
-    Reranker r = reranker;
-    Timer tmv = null; // TODO
-    Timer to = null;  // TODO
-    if (es == null) {
-      if (verbose)
-        Log.info("[hammingTrainBatch] running serial");
-      for (int idx : batch) {
-        if (verbose)
-          Log.info("[hammingTrainBatch] submitting " + idx);
-        FNParse y = ip.label(idx);
-        State init = r.getInitialStateWithPruning(y, y);
-        Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
-            ? r.getFullUpdate(init, y, conf.oracleMode, conf.rand, to, tmv)
-                : r.getStatelessUpdate(init, y);
-        finishedUpdates.add(u);
-      }
-    } else {
-      List<Future<Update>> futures = new ArrayList<>(batch.size());
-      for (int idx : batch) {
-        futures.add(es.submit( () -> {
-          FNParse y = ip.label(idx);
-          State init = r.getInitialStateWithPruning(y, y);
-          return r.hasStatefulFeatures() || conf.forceGlobalTrain
-              ? r.getFullUpdate(init, y, conf.oracleMode, conf.rand, to, tmv)
-                  : r.getStatelessUpdate(init, y);
-        } ));
-      }
-      for (Future<Update> f : futures)
-        finishedUpdates.add(f.get());
-    }
-    return finishedUpdates;
-  }
-
-  private List<Update> getUpdateFModel(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) throws InterruptedException, ExecutionException {
+  public List<Update> getUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
     List<Update> finishedUpdates = new ArrayList<>(batch.size());
     if (es == null) {
       for (int idx : batch) {
@@ -193,25 +158,17 @@ public class ShimModel {
       for (int idx : batch) {
         futures.add(es.submit( () -> {
           FNParse y = ip.label(idx);
-          return fmodel.getUpdate(y);
+          return getUpdate(y);
         } ));
       }
-      for (Future<Update> f : futures)
-        finishedUpdates.add(f.get());
+      try {
+        for (Future<Update> f : futures)
+          finishedUpdates.add(f.get());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     }
     return finishedUpdates;
-  }
-
-  public List<Update> getUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
-    try {
-      if (reranker != null) {
-        return getUpdateReranker(batch, ip, es, verbose);
-      } else {
-        return getUpdateFModel(batch, ip, es, verbose);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   public Update getUpdate(FNParse y) {

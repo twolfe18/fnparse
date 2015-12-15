@@ -71,6 +71,9 @@ public class Config implements Serializable {
     numArgsFeature = false;
     roleCoocFeature = false;
   }
+  public boolean anyGlobalFeatures() {
+    return argLocFeature || numArgsFeature || roleCoocFeature;
+  }
 
 
   /** Misc ********************************************************************/

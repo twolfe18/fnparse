@@ -65,6 +65,11 @@ public interface Beam {
     }
   }
 
+  public enum Mode {
+    CONSTRAINT_OBJ,     // f(z) = s(z) + max_{y \in Proj(z)} loss(y) -- where s(z) may include randomness
+    BEAM_SEARCH_OBJ,    // f(z) = searchCoefs \cdot [accumLoss, accumModel, accumRand]
+  }
+
   /**
    * Differs from tutils Beam in that it checks for State equality first (taking
    * the higher scoring of two items) before resorting to beam pruning.
@@ -74,17 +79,22 @@ public interface Beam {
    * to add a little jitter to the scores.
    */
   public static class DoubleBeam implements Beam {
+    // This is sort of like a bijection because:
+    // scores: BeamItem -> State + ...
+    // table: State -> BeamItem
     private TreeSet<BeamItem> scores;
     private HashMap<State, BeamItem> table;   // ensures that entries in scores are unique up to State
     private int capacity;
     private int numCollapses, numOffers;
+    private Mode mode;
 
-    public DoubleBeam(int capacity) {
+    public DoubleBeam(int capacity, Mode mode) {
       this.capacity = capacity;
       this.table = new HashMap<>((int) (capacity * 1.5 + 1));
       this.scores = new TreeSet<>();
       this.numCollapses = 0;
       this.numOffers = 0;
+      this.mode = mode;
     }
 
     public void clear() {
@@ -115,13 +125,24 @@ public interface Beam {
       return sb.toString();
     }
 
+    public double value(State s) {
+      switch (mode) {
+      case BEAM_SEARCH_OBJ:
+        return s.score.forwards();
+      case CONSTRAINT_OBJ:
+        return s.score.constraintObjectivePlusConstant();
+      default:
+        throw new RuntimeException("unknown mode: " + mode);
+      }
+    }
+
     /**
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
      */
     @Override
     public void offer(State s) {
       numOffers++;
-      double sc = s.score.forwards();
+      double sc = value(s);
       BeamItem old = table.get(s);
       if (old != null) {
         numCollapses++;

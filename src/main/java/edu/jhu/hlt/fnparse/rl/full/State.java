@@ -51,9 +51,11 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -586,32 +588,71 @@ public class State {
 
     public final Info info;
     public final Adjoints model;
-    public final double lossFP, lossFN;
+    public final int lossFP, lossFN;
+    public final int trueP, trueN;
     public final double rand;
     public final StepScores prev;
 
-    @Override
-    public String toString() {
-      return String.format("(SS rand=%.1f fp=%.1f fn=%.1f model=%s) -> %s",
-          rand, lossFP, lossFN, model, prev);
+    public static StepScores zero(Info info) {
+      return new StepScores(info, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
     }
 
-    public StepScores(Info info, Adjoints model, double lossFP, double lossFN, double rand, StepScores prev) {
+    @Override
+    public String toString() {
+      return String.format("(SS rand=%.1f fp=%d fn=%d tp=%d tn=%d model=%s consObj=%.1f) -> %s",
+          rand, lossFP, lossFN, trueP, trueN, model, constraintObjectivePlusConstant(), prev);
+    }
+
+    public StepScores(Info info, Adjoints model,
+        int lossFP, int lossFN,
+        int trueP, int trueN,
+        double rand, StepScores prev) {
       if (lossFP < 0 || lossFN < 0)
         throw new IllegalArgumentException();
       this.info = info;
       this.model = model;
       this.lossFP = lossFP;
       this.lossFN = lossFN;
+      this.trueP = trueP;
+      this.trueN = trueN;
       this.rand = rand;
       this.prev = prev;
     }
 
+    /** Cumulative */
     public double getHammingLoss() {
       return lossFN + lossFP;
     }
 
-    private double __forwardsMemo = Double.NaN;
+    /** Cumulative */
+    public double getModelScore() {
+      if (Double.isNaN(__msMemo)) {
+        __msMemo = model.forwards();
+        if (prev != null)
+          __msMemo += prev.getModelScore();
+      }
+      return __msMemo;
+    }
+    private double __msMemo = Double.NaN;
+
+    /**
+     * Margin constraints are formed by:
+     *   oracle.constraintObjectivePlusConstant() >= mostViolated.constraintObjectivePlusConstant()
+     *
+     * Note: max_{y \in Proj(z)} loss(y) = max_y loss(y) - \sum_i deltaLoss(i)
+     *       or "maxProjLoss = maxLossConstant - accumLoss"
+     *
+     * Note: Since we will be doing `Objective(MV) - Objective(oracle)`,
+     * which will both contain a manProjLoss value, and thus a maxLoss constant
+     * (by the identity above), we can use accumLoss to compute differences of
+     * Objective as: accumModel - accumLoss
+     * (This is true of oracle/mv and regardless of search heuristic)
+     */
+    public double constraintObjectivePlusConstant() {
+      return getModelScore() + trueP + trueN - (lossFN + lossFP);
+    }
+
+    /** Search objectve, Cumulative */
     @Override
     public double forwards() {
       if (Double.isNaN(__forwardsMemo)) {
@@ -620,14 +661,15 @@ public class State {
           s += info.coefModel.coef * model.forwards();
         if (!info.coefLoss.iszero() && !info.coefLoss.muteForwards)
           s += info.coefLoss.coef * -(lossFP + lossFN);
-        if (!info.coefLoss.iszero() && !info.coefLoss.muteForwards)
-          s += info.coefLoss.coef * rand;
+        if (!info.coefRand.iszero() && !info.coefRand.muteForwards)
+          s += info.coefRand.coef * rand;
         if (prev != null)
           s += prev.forwards();
         __forwardsMemo = s;
       }
       return __forwardsMemo;
     }
+    private double __forwardsMemo = Double.NaN;
 
     @Override
     public void backwards(double dErr_dForwards) {
@@ -671,7 +713,8 @@ public class State {
     public GeneralizedCoef coefModel;
     public GeneralizedCoef coefRand;
 
-    public int beamSize = 1;
+    public int beamSize = 1;          // How many states to keep at every step
+    public int numConstraints = 1;    // How many states to keep for forming margin constraints (a la k-best MIRA)
 
     public Info(Config config) {
       this.config = config;
@@ -731,6 +774,7 @@ public class State {
 
     /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
     public Info setOracleCoefs() {
+      // TODO This should be bigger so that it doesn't get overwhelmed by model score!
       coefLoss = new GeneralizedCoef(1, false);
       if (likeConf == null) {
         Log.warn("likeConf is null, defaulting to MIN");
@@ -824,6 +868,8 @@ public class State {
       assert sentenceAndLabelMatch();
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
+
+      // Add any spans that appear in the gold label to the pruning mask if they do not appear already
       if (includeGoldSpansIfMissing) {
         if (label == null)
           throw new RuntimeException("you need a label to perform this operation");
@@ -849,6 +895,7 @@ public class State {
           present += possible.size();
           int K = fi.getFrame().numRoles();
           for (int k = 0; k < K; k++) {
+
             Span s = fi.getArgument(k);
             if (s != Span.nullSpan) {
               realized++;
@@ -857,6 +904,31 @@ public class State {
                 prunedSpans.addSpan(key, s);
               }
             }
+
+            if (config.useContRoles) {
+              for (Span ss : fi.getContinuationRoleSpans(k)) {
+                if (ss != Span.nullSpan) {
+                  realized++;
+                  if (!prunedSpans.getPossibleArgs(key).contains(ss)) {
+                    adds++;
+                    prunedSpans.addSpan(key, ss);
+                  }
+                }
+              }
+            }
+
+            if (config.useRefRoles) {
+              for (Span ss : fi.getReferenceRoleSpans(k)) {
+                if (ss != Span.nullSpan) {
+                  realized++;
+                  if (!prunedSpans.getPossibleArgs(key).contains(ss)) {
+                    adds++;
+                    prunedSpans.addSpan(key, ss);
+                  }
+                }
+              }
+            }
+
           }
         }
         if (DEBUG) {
@@ -878,14 +950,14 @@ public class State {
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
     double rand = info.config.rand.nextGaussian();
-    StepScores ss = new StepScores(info, partialScore, 0, 0, rand, score);
+    StepScores ss = new StepScores(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
     return new State(frames, true, true, incomplete, ss, info);
   }
 
   public State noMoreTargets(Adjoints partialScore) {
     assert !noMoreTargets;
     double rand = info.config.rand.nextGaussian();
-    StepScores ss = new StepScores(info, partialScore, 0, 0, rand, score);
+    StepScores ss = new StepScores(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
     return new State(frames, noMoreFrames, true, incomplete, ss, info);
   }
 
@@ -896,7 +968,7 @@ public class State {
     sb.append("  nmF=" + noMoreFrames + "\n");
     sb.append("  sig=" + getSig() + "\n");
     sb.append("  inc=" + incomplete + "\n");
-    sb.append("  score=" + score.forwards() + "\n");
+    sb.append("  score=" + score + "\n");
     for (FILL cur = frames; cur != null; cur = cur.next) {
       FI fi = cur.item;
       sb.append("    " + fi + "\n");
@@ -1033,314 +1105,551 @@ public class State {
     overallBestStates.offer(s);
   }
 
+  private int numPossibleKfor(FI newFI) {
+    int K = newFI.f.numRoles();
+    if (info.config.useContRoles)
+      K += newFI.f.numRoles();
+    if (info.config.useRefRoles)
+      K += newFI.f.numRoles();
+    return K;
+  }
+
+  /** How many ? -> 0 are we adding with this action? */
+  private int deltaTrueNegatives(AT actionType, FI newFI, RI newRI) {
+    if (actionType != AT.COMPLETE_K && actionType != AT.COMPLETE_S)
+      throw new RuntimeException("this code only hanldes these cases");
+    boolean hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+    int tn = 0;
+    if (info.config.oneKperS) {
+      tn += numPossibleKfor(newFI);
+      if (!hit) {
+        tn -= 2;    // 1 for the gold k and 1 for hyp (which are different since !hit)
+        assert tn >= 0;
+      }
+    }
+    if (info.config.oneSperK) {
+      tn += info.getPossibleArgs(newFI).size();
+      if (!hit) {
+        tn -= 2;    // 1 for the gold s and 1 for hyp (which are different since !hit)
+        assert tn >= 0;
+      }
+    }
+    if (info.config.oneKperS && info.config.oneSperK) {
+      // Correct double counts
+      tn--;
+      assert tn >= 0;
+    }
+    return tn;
+  }
+
+  /** Relevant to STOP actions. Doesn't contain nullSpan */
+  public List<Span> getRelevantSpans(AT actionType, FI newFI, RI newRI) {
+    switch (actionType) {
+    case STOP_KS:
+    case STOP_K:
+      return info.getPossibleArgs(newFI);
+    case STOP_S:
+      assert newRI.s != null;
+      return Arrays.asList(newRI.s);
+    default:
+      throw new RuntimeException("not relevant: " + actionType);
+    }
+  }
+
+  /** Relevant to STOP actions */
+  public List<IntPair> getRelevantRoles(AT actionType, FI newFI, RI newRI) {
+    switch (actionType) {
+    case STOP_KS:
+    case STOP_S:
+      List<IntPair> roles = new ArrayList<>();
+      int K = newFI.f.numRoles();
+      for (int k = 0; k < K; k++)
+        roles.add(new IntPair(k, RoleType.BASE.ordinal()));
+      if (info.config.useContRoles)
+        for (int k = 0; k < K; k++)
+          roles.add(new IntPair(k, RoleType.CONT.ordinal()));
+      if (info.config.useRefRoles)
+        for (int k = 0; k < K; k++)
+          roles.add(new IntPair(k, RoleType.REF.ordinal()));
+      return roles;
+    case STOP_K:
+      assert newRI.k >= 0 && newRI.q != null;
+      return Arrays.asList(new IntPair(newRI.k, newRI.q.ordinal()));
+    default:
+      throw new RuntimeException("not relevant: " + actionType);
+    }
+  }
+
   public StepScores f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
 
-    double fp = 0;
-    double fn = 0;
-    if (info.coefLoss.nonzero()) {
+    int fp = 0, fn = 0;
+    int tp = 0, tn = 0;
+    int possibleFN;
+    boolean hit;
 
-      int possibleFN;
-      boolean hit;
+    switch (actionType) {
 
-      switch (actionType) {
+    /* (t,f) STUFF **********************************************************/
+    // NOTE: Fall-through!
+    case COMPLETE_F:
+      assert false : "implement oneFperT and count TNs added here";
+    case NEW_TF:
+      assert false : "implement oneFperT and count TNs added here";
+      assert newFI.t != null;
+      assert newFI.f != null;
+      if (info.label.contains(newFI.t, newFI.f))
+        tp++;
+      else
+        fp++;
+    case NEW_T:
+      assert false : "implement oneFperT and count TNs added here";
+      assert newFI.t != null;
+      if (info.label.containsTarget(newFI.t))
+        tp++;
+      else
+        fp++;
+      if (DEBUG_F) Log.info("after new/complete F/TF fp=" + fp);
+      break;
 
-      /* (t,f) STUFF **********************************************************/
       // NOTE: Fall-through!
-      case COMPLETE_F:
-      case NEW_TF:
-        assert newFI.t != null;
-        assert newFI.f != null;
-        if (!info.label.contains(newFI.t, newFI.f));
-          fp += 1;
-      case NEW_T:
-        assert newFI.t != null;
-        if (!info.label.containsTarget(newFI.t))
-          fp += 1;
-        if (DEBUG_F) Log.info("after new/complete F/TF fp=" + fp);
-        break;
+    case STOP_TF:
 
-      // NOTE: Fall-through!
-      case STOP_TF:
+      assert false: "properly implement FN counting for args";
+      assert false : "implement oneFperT and count TNs added here";
 
-        assert false: "properly implement FN counting for args";
+      // TODO STOP_T and STOP_TF stop new FI from being created, thus any roles
+      // for FI not yet realized should be counted.
 
-        // TODO STOP_T and STOP_TF stop new FI from being created, thus any roles
-        // for FI not yet realized should be counted.
+      // Map<TF, List<FrameArgInstance>> gold: lets you find all the args which
+      // correspond to a missing TF.
 
-        // Map<TF, List<FrameArgInstance>> gold: lets you find all the args which
-        // correspond to a missing TF.
+      // Cheap hack instead: 
+      // Don't allow STOP_TF and STOP_T actions if we're not doing frame prediction.
 
-        // Cheap hack instead: 
-        // Don't allow STOP_TF and STOP_T actions if we're not doing frame prediction.
+      // Gold(t,f) - History(t,f)
+      Set<Pair<Span, Frame>> tf = info.label.borrowTargetFrameSet();
+      possibleFN = tf.size();
+      for (FILL cur = frames; cur != null; cur = cur.next) {
+        Pair<Span, Frame> tfi = cur.item.getTF();
+        if (tfi != null)
+          possibleFN--;
+      }
+      fn += possibleFN;
+      if (DEBUG_F) {
+        Log.info("after STOP_TF possibleFN_before=" + tf.size()
+        + " possibleFN_after=" + possibleFN
+        + " fn=" + fn);
+      }
+    case STOP_T:
 
-        // Gold(t,f) - History(t,f)
-        Set<Pair<Span, Frame>> tf = info.label.borrowTargetFrameSet();
-        possibleFN = tf.size();
-        for (FILL cur = frames; cur != null; cur = cur.next) {
-          Pair<Span, Frame> tfi = cur.item.getTF();
-          if (tfi != null)
+      assert false: "properly implement FN counting for args";
+      assert false : "implement oneFperT and count TNs added here";
+
+      assert false : "handle cont/ref roles!";
+      assert false : "implement oneFperT and count TNs added here";
+
+      // Gold(t,f) - History(t,f)
+      // Since I only want the size of that set, I don't need to construct it,
+      // just iterate through History, decrement a count if !inGold
+      Set<Span> t = info.label.borrowTargetSet();
+      Set<Span> check1 = new HashSet<>(), check2 = new HashSet<>();
+      possibleFN = t.size();
+      for (FILL cur = frames; cur != null; cur = cur.next) {
+        Span tt = cur.item.t;
+        if (tt != null) {
+          /*
+           * (t,?) can show up more than once if !config.oneFramePerSpan
+           * I believe this means that we must change step 2:
+           * Instead of doing an argmax (oneFramePerSpan)
+           * We must do a threshold (take all (t,f) s.t. score > 0)
+           * Can we have different thresholds for different fertilities?
+           *   a) take max(score) if score > t0
+           *   b) take secondMax(score) if score > t1 and (a)
+           *   etc
+           * I think this is a better idea, but for now I will require oneFramePerSpan
+           */
+          assert check1.add(tt) || check2.add(tt) : "you can have (t,?) then "
+          + "(t,f), but there shouldn't be more than two targets activated";
+          if (t.contains(cur.item.t))
             possibleFN--;
         }
-        fn += possibleFN;
-        if (DEBUG_F) {
-          Log.info("after STOP_TF possibleFN_before=" + tf.size()
-            + " possibleFN_after=" + possibleFN
-            + " fn=" + fn);
+      }
+      fn += possibleFN;
+      if (DEBUG_F) {
+        Log.info("after STOP_T possibleFN_before=" + t.size()
+        + " possibleFN_after=" + possibleFN
+        + " fn=" + fn);
+      }
+      break;
+
+    /* (k,s) STUFF **********************************************************/
+    case NEW_KS:
+      assert newRI.k >= 0;
+      assert newRI.s != null && newRI.s != Span.nullSpan;
+
+      // Count FPs
+      hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+      if (hit) tp += 1; else fp += 1;
+      if (DEBUG_F) Log.info("NEW_KS hit=" + hit + "\t" + newRI);
+
+      // Count FNs
+      if (info.config.oneKperS) {
+        Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
+        fn += purview.size();
+        if (hit) {
+          assert purview.size() > 0;
+          fn--;
         }
-      case STOP_T:
+        if (DEBUG_F) Log.info("NEW_KS && oneKperS purview.size=" + purview.size());
 
-        assert false: "properly implement FN counting for args";
 
-        assert false : "handle cont/ref roles!";
+        // Count TN
+        // How many ? -> 0 are we adding with this action?
 
-        // Gold(t,f) - History(t,f)
-        // Since I only want the size of that set, I don't need to construct it,
-        // just iterate through History, decrement a count if !inGold
-        Set<Span> t = info.label.borrowTargetSet();
-        Set<Span> check1 = new HashSet<>(), check2 = new HashSet<>();
-        possibleFN = t.size();
-        for (FILL cur = frames; cur != null; cur = cur.next) {
-          Span tt = cur.item.t;
-          if (tt != null) {
-            /*
-             * (t,?) can show up more than once if !config.oneFramePerSpan
-             * I believe this means that we must change step 2:
-             * Instead of doing an argmax (oneFramePerSpan)
-             * We must do a threshold (take all (t,f) s.t. score > 0)
-             * Can we have different thresholds for different fertilities?
-             *   a) take max(score) if score > t0
-             *   b) take secondMax(score) if score > t1 and (a)
-             *   etc
-             * I think this is a better idea, but for now I will require oneFramePerSpan
-             */
-            assert check1.add(tt) || check2.add(tt) : "you can have (t,?) then "
-                + "(t,f), but there shouldn't be more than two targets activated";
-            if (t.contains(cur.item.t))
-              possibleFN--;
-          }
+        // if NEW_KS and oneKperS, then we know that there are no other 1s in the K (row)
+        // but there could be 0s...
+        // but not if:
+        assert info.config.argMode == ArgActionTransitionSystem.ONE_STEP : "other argModes do not have TN counting implemented";
+        tn += numPossibleKfor(newFI);
+        if (!hit) {
+          tn -= 2;    // 1 for the gold k and 1 for hyp (which are different since !hit)
+          assert tn >= 0;
         }
-        fn += possibleFN;
-        if (DEBUG_F) {
-          Log.info("after STOP_T possibleFN_before=" + t.size()
-            + " possibleFN_after=" + possibleFN
-            + " fn=" + fn);
-        }
-        break;
-
-      /* (k,s) STUFF **********************************************************/
-      case NEW_KS:
-        assert newRI.k >= 0;
-        assert newRI.s != null && newRI.s != Span.nullSpan;
-
-        // Count FPs
-        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
-        if (!hit)
-          fp += 1;
-        if (DEBUG_F) Log.info("NEW_KS hit=" + hit + "\t" + newRI);
-
-        // Count FNs
-        if (info.config.oneKperS) {
-          Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
-          fn += purview.size();
-          if (hit) {
-            assert purview.size() > 0;
-            fn -= 1;
-          }
-          if (DEBUG_F) Log.info("NEW_KS && oneKperS purview.size=" + purview.size());
-        }
-        if (info.config.oneSperK) {
-          /*
-           * Then any (k,s') are not reachable!
-           * By induction, we know that we haven't added any s' already, so we
-           * can just find all items matching on k and assume they're set to 0.
-           */
-          // Account for FNs
-          SetOfSets<FrameArgInstance> purview;
-          if (newRI.q == RoleType.BASE) {
-            // Then you're also prohibiting any non-base args
-            purview = new SetOfSets<>(
-                info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
-                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
-                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
-          } else {
-            purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
-          }
-          fn += purview.size();
-          if (hit) {
-            assert purview.size() > 0;
-            fn -= 1;
-          }
-          if (DEBUG_F) Log.info("NEW_KS && oneSperK purview.size=" + purview.size());
-        }
-        if (info.config.oneKperS && info.config.oneSperK && hit) {
-          /*
-           * On double-counting (note the two oneXperYs are not mutually exclusive):
-           * I am counting points which like in either a row or a column.
-           * There is exactly one point which can lie in the row and column,
-           * which must be this (t,f,k/q,s)
-           */
-          assert fn > 0;
-          fn -= 1;
-          if (DEBUG_F) Log.info("NEW_KS && oneSperK && oneKperS accounting for double count");
-        }
-
-
-        break;
-      case NEW_S:
-        assert newRI.s != null && newRI.s != Span.nullSpan;
-        hit = info.label.contains(newFI.t, newFI.f, newRI.s);
-        if (!hit)
-          fp += 1;
-        if (DEBUG_F) Log.info("NEW_S hit=" + hit + "\t" + newRI);
-        if (info.config.oneKperS) {
-          // Account for FNs: even if we're right, we can get at most one right
-          Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
-          fn += purview.size();
-          if (hit) {
-            assert purview.size() > 0;
-            fn--;
-          }
-          if (DEBUG_F) Log.info("NEW_S && oneKperS purview=" + purview.size());
-        }
-        break;
-      case NEW_K:
-        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q);
-        if (!hit)
-          fp += 1;
-        if (DEBUG_F) Log.info("NEW_K hit=" + hit + "\t" + newRI);
-        if (info.config.oneSperK) {
-          // Account for FNs: even if we're right, we can get at most one right
-          // Does this matter?
-          // If we set set this constraint, then we can get at best one of the N items...
-          // The place where it makes a difference is if we could mix transition
-          // systems...
-          SetOfSets<FrameArgInstance> purview;
-          if (newRI.q == RoleType.BASE) {
-            // Then you're also prohibiting any non-base args
-            purview = new SetOfSets<>(
-                info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
-                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
-                info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
-          } else {
-            purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
-          }
-          fn += purview.size();
-          if (hit) {
-            assert purview.size() > 0;
-            fn--;
-          }
-          if (DEBUG_F) Log.info("NEW_K && oneSperK purview=" + purview.size());
-        }
-        break;
-
-      case COMPLETE_K:
-        assert newRI.k >= 0;
-        assert newRI.s != null && newRI.s != Span.nullSpan;
-        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
-        if (DEBUG_F) Log.info("COMPLETE_K hit=" + hit + "\t" + newRI);
-        if (!hit)
-          fp += 1;
-        // Any FN penalty due to oneKperS has been paid for in the NEW_S action
-        break;
-      case COMPLETE_S:
-        assert newRI.k >= 0;
-        assert newRI.s != null && newRI.s != Span.nullSpan;
-        hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
-        if (DEBUG_F) Log.info("COMPLETE_S hit=" + hit + "\t" + newRI);
-        if (!hit)
-          fp += 1;
-        // Any FN penalty due to oneSperK has been paid for in the NEW_K action
-        break;
-
-      case STOP_KS:     // given (t,f): z_{t,f,k,s}=0
-        assert info.config.argMode == ArgActionTransitionSystem.ONE_STEP;
-      case STOP_S:      // forall k, given (t,f): z_{t,f,k,s}=0
-      case STOP_K:      // forall s, given (t,f): z_{t,f,k,s}=0
-
-        // Find all (k,s) present in the label but not yet the history
-        assert newFI.t != null && newFI.f != null;
+      }
+      if (info.config.oneSperK) {
         /*
-         * I want to count the Gold (t,f,k,s) which are
-         * a) not in history already
-         * b) match this STOP action
-         * I need to build an index for (b) and then filter (a) by brute force.
+         * Then any (k,s') are not reachable!
+         * By induction, we know that we haven't added any s' already, so we
+         * can just find all items matching on k and assume they're set to 0.
          */
-        SetOfSets<FrameArgInstance> goldItems;
-        if (actionType == AT.STOP_KS) {
-          goldItems = new SetOfSets<>(
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE, newRI.s),
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF, newRI.s),
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT, newRI.s));
-        } else if (actionType == AT.STOP_K) {
-          goldItems = new SetOfSets<>(
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE),
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF),
-              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT));
-        } else if (actionType == AT.STOP_S) {
-          goldItems = new SetOfSets<>(
-              info.label.get(newFI.t, newFI.f, newRI.s));
+        // Account for FNs
+        SetOfSets<FrameArgInstance> purview;
+        if (newRI.q == RoleType.BASE) {
+          // Then you're also prohibiting any non-base args
+          purview = new SetOfSets<>(
+              info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
         } else {
-          throw new RuntimeException();
+          purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
         }
+        fn += purview.size();
+        if (hit) {
+          assert purview.size() > 0;
+          fn--;
+        }
+        if (DEBUG_F) Log.info("NEW_KS && oneSperK purview.size=" + purview.size());
 
-        Set<IntTrip> foo = new HashSet<>();
-        possibleFN = goldItems.size();
-        for (RILL cur = newFI.args; cur != null; cur = cur.next) {
-          int k = cur.item.k;
-          RoleType q = cur.item.q;
-          Span s = cur.item.s;
-          assert foo.add(new IntTrip(k, q.ordinal(), Span.indexMaybeNullSpan(s)))
+        assert false : "implement TN counting for NEW_KS";
+      }
+      if (info.config.oneKperS && info.config.oneSperK && hit) {
+        /*
+         * On double-counting (note the two oneXperYs are not mutually exclusive):
+         * I am counting points which like in either a row or a column.
+         * There is exactly one point which can lie in the row and column,
+         * which must be this (t,f,k/q,s)
+         */
+        assert fn > 0;
+        fn--;
+        if (DEBUG_F) Log.info("NEW_KS && oneSperK && oneKperS accounting for double count");
+
+        assert false : "implement TN counting for NEW_KS";
+      }
+
+      break;
+    case NEW_S:
+      assert newRI.s != null && newRI.s != Span.nullSpan;
+      hit = info.label.contains(newFI.t, newFI.f, newRI.s);
+      /*
+       * Given (?,s) we may be able to prove fp++
+       * But then we must discount our fp assessment in COMPLETE_K.
+       *
+       * NEW_S +hit => {nothing}  |||  COMPLETE_K +hit => {tp++, tn+=K-1}
+       * NEW_S +hit => {nothing}  |||  COMPLETE_K -hit => {fp++, tn+=K-1}
+       *
+       * I really can't have confusion like this!
+       * Either I need
+       * 1) to give up on variation in code paths (require oneXperY all over the place)
+       * 2) FORMALLY define what nodes mean.
+       *
+       * Lets take a stab at 2 before giving up and doing 1.
+       * NEW_UNIQ means there exists a value for which z[...,thisVal,...] = 1
+       * NEW_MANY means the same as NEW_UNIQ
+       * COMPLETE_
+       * => I can't have semantics in the actions, or at least *only* in the actions
+       *  I need to be able to read off a tree + config and know what the current and future losses will be
+       *  So, e.g., Don't have NEW_UNIQ, have NEW(c:uniq) or NEW(c:many)
+       *  that is, represent the exclusion properties in the node rather than just the action.
+       *
+       * node {
+       *   prefix : [value:type]
+       *   value : parent.type      -- parent pointer is not allowed!
+       *   type : int               -- could be represented as first child, but why not push it up here
+       *   childMaybeLL : LL node   -- subtrees which contain yeses
+       *   childNoLL : LL node      -- frozen/done nodes, certain z[...]=0
+       *   possibleChildValues : LL this.type     -- sorted by static score, dynamic features penalize things late in this list
+       *   accumulators : user defined, for features
+       *   sig : BigInt
+       *
+       *   def rankingScore(v:this.type): Adjoints -- how to sort possibleChildValues
+       *
+       *   # Better to use Adjoints + a thunk for a State than do surgery every time
+       *   # you want to push onto the beam (even if apply(action) is a persistent/fast operation!).
+       *   def stop(): Adjoints     -- pop everything from possibleValues, push onto childNoLL
+       *   def prune(): Adjoints    -- pop from possibleChildValues, push onto childNoLL
+       *   def commit(): Adjoints   -- pop from possibleChildValues, push onto childMaybeLL (create new node)
+       *
+       *   # Note: leave nodes will be done upon construction since there are no remaining types to instantiate.
+       *   # The leave's existence is valued only for its value.
+       *   def done(): Boolean    -- returns true if possibleChildValues is empty, no more actions from this node
+       * }
+       * => So now you have this tree, where off of each node hangs 3 options (stop/prune/commit)
+       *  How can you make pruning work such that you don't have to visit the whole tree?
+       *  Could I make a PQ of parents of the nodes I'd like to expand, and when I pop a node and an upper bound on any action generated from a sub-node < next.worstState - cur.score => STOP
+       *
+       * Interaction between maxChildren/oneXperY and deltaLoss computation (particularly FNs)
+       * I have the intuition that global features (soft constraint) can mimic AtMostK (hard constraints).
+       * But the stark difference is that with global features, you don't need to worry about computing loss early.
+       * When I was talking about why this is something worth doing over Q-learning, one of the things I said was that "pushing back loss", closer to it source, was a good thing.
+       * Does AtMostK push back loss?
+       * Oracle: probably not affected.
+       * MostViolated: perhaps would focus more on static score over dynamic score (since AtMostK handles most of what the dynamic scoring is giving you?)
+       *
+       * => I think I found a practical concern for using AtMostK:
+       * If you didn't have this constraint, then MostViolated would run amok!
+       * It would fill out every cell in the tree/grid, which would take a long time!
+       * Maybe not though, remember that MV also considers model score.
+       * As soon as the model can push the score of these actions below deltaLoss, then there would be no reason for MV to choose them.
+       *
+       * The paper on shift-reduce coref taught me something important:
+       * if you don't have to worry about loss(oracle)>0, then your life is much easier!
+       *
+       * I was thinking that NEW forcing an incomplete node should happen at the parent of the new node level, not the root node
+       * The trouble is that having parallel outstanding NEWs probably isn't worth it on account of the fact that that doesn't update the global features which would change the scores (as opposed to doing these operations in serial)
+       */
+//      if (hit) tp += 1; else fp += 1;
+      if (!hit) fp++;
+      if (DEBUG_F) Log.info("NEW_S hit=" + hit + "\t" + newRI);
+      if (info.config.oneKperS) {
+        // Account for FNs: even if we're right, we can get at most one right
+        Set<FrameArgInstance> purview = info.label.get(newFI.t, newFI.f, newRI.s);
+        fn += purview.size();
+        if (hit) {
+          assert purview.size() > 0;
+          fn--;
+        }
+        if (DEBUG_F) Log.info("NEW_S && oneKperS purview=" + purview.size());
+      }
+      break;
+    case NEW_K:
+      hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q);
+//      if (hit) tp += 1; else fp += 1;
+      if (!hit) fp++;
+      if (DEBUG_F) Log.info("NEW_K hit=" + hit + "\t" + newRI);
+      if (info.config.oneSperK) {
+        // Account for FNs: even if we're right, we can get at most one right
+        // Does this matter?
+        // If we set set this constraint, then we can get at best one of the N items...
+        // The place where it makes a difference is if we could mix transition
+        // systems...
+        SetOfSets<FrameArgInstance> purview;
+        if (newRI.q == RoleType.BASE) {
+          // Then you're also prohibiting any non-base args
+          purview = new SetOfSets<>(
+              info.label.get(newFI.t, newFI.f, newRI.k, newRI.q),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT),
+              info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF));
+        } else {
+          purview = new SetOfSets<>(info.label.get(newFI.t, newFI.f, newRI.k, newRI.q));
+        }
+        fn += purview.size();
+        if (hit) {
+          assert purview.size() > 0;
+          fn--;
+        }
+        if (DEBUG_F) Log.info("NEW_K && oneSperK purview=" + purview.size());
+      }
+      break;
+
+    case COMPLETE_K:
+      assert newRI.k >= 0;
+      assert newRI.s != null && newRI.s != Span.nullSpan;
+      hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+      if (DEBUG_F) Log.info("COMPLETE_K hit=" + hit + "\t" + newRI);
+      if (hit) tp++; else fp++;
+      // Any FN penalty due to oneKperS has been paid for in the NEW_S action
+      tn += deltaTrueNegatives(actionType, newFI, newRI);
+      break;
+    case COMPLETE_S:
+      assert newRI.k >= 0;
+      assert newRI.s != null && newRI.s != Span.nullSpan;
+      hit = info.label.contains(newFI.t, newFI.f, newRI.k, newRI.q, newRI.s);
+      if (hit) tp += 1; else fp += 1;
+      if (DEBUG_F) Log.info("COMPLETE_S hit=" + hit + "\t" + newRI);
+      // Any FN penalty due to oneSperK has been paid for in the NEW_K action
+      tn += deltaTrueNegatives(actionType, newFI, newRI);
+      break;
+
+    case STOP_KS:     // given (t,f): z_{t,f,k,s}=0
+      assert info.config.argMode == ArgActionTransitionSystem.ONE_STEP;
+    case STOP_S:      // forall k, given (t,f): z_{t,f,k,s}=0
+    case STOP_K:      // forall s, given (t,f): z_{t,f,k,s}=0
+
+      // a : z -> z' -- an action
+      // deltaTN = | z.? & a(z).0 & y.0 |
+      // deltaFN = | z.? & a(z).0 & y.1 |
+      // deltaFP = | z.? & a(z).1 & y.0 |
+      // deltaTP = | z.? & a(z).1 & y.1 |
+
+      // z.? & a(z).0 for STOP_* actions is:
+      // (t,f,?,?) \setminus z.1    -- NOTE: z.1 == a(z).1 for STOP_* actions
+      // i.e. (K \times S) \setminus z.1
+      // I go over this set when I do action generation anyway...
+
+      assert incomplete == null;
+      assert newFI.t != null && newFI.f != null;
+
+      List<Span> relSpans = getRelevantSpans(actionType, newFI, newRI);
+
+      Set<Pair<Span, IntPair>> sk1or0 = new HashSet<>();
+      Set<Pair<Span, IntPair>> sk1 = new HashSet<>();
+      for (RILL cur = newFI.args; cur != null; cur = cur.next) {
+        RI r = cur.item;
+        assert r.s != null && r.k >= 0 && r.q != null;
+        IntPair kq = new IntPair(r.k, r.q.ordinal());
+        Pair<Span, IntPair> skq = new Pair<>(r.s, kq);
+        if (r.s == Span.nullSpan) {
+          if (info.config.oneKperS) {
+            // add all non-null spans with this kq to 1or0
+            // All spans or relevant spans?
+            // We can only check contains on relSpans, so it is a sound optimization to use relSpans
+            for (Span s2 : relSpans)
+              sk1or0.add(new Pair<>(s2, kq));
+          }
+          sk1or0.add(skq);    // shouldn't matter since s == nullSpan
+        } else {
+          sk1.add(skq);
+        }
+      }
+
+      List<IntPair> relRoles = getRelevantRoles(actionType, newFI, newRI);
+      int dfn = 0, dtn = 0;
+      for (Span s : relSpans) {
+        for (IntPair kq : relRoles) {
+          Pair<Span, IntPair> sk = new Pair<>(s, kq);
+          RoleType q = RoleType.values()[kq.second];
+          boolean y_tfks = info.label.contains(newFI.t, newFI.f, kq.first, q, s);
+          if (DEBUG_F) Log.info("y[" + s.shortString() + "," + kq.first + "," + q + "]=" + y_tfks);
+          assert RoleType.BASE == RoleType.values()[RoleType.BASE.ordinal()];
+          if (!sk1or0.contains(sk)) {
+            // ? -> 0
+            if (y_tfks)
+              dfn++;
+            else
+              dtn++;
+          }
+        }
+      }
+      fn += dfn;
+      tn += dtn;
+      if (DEBUG_F) {
+        Log.info(actionType + "\t" + newRI);
+        Log.info("relSpans=" + relSpans);
+        Log.info("relRoles=" + relRoles);
+        Log.info("dfn=" + dfn + " dtn=" + dtn);
+      }
+
+
+      /*
+       * TODO
+       * I interleve the (k,?) and (k,s) actions.
+       * You could fix the order over k ahead of time, then action generation would be faster.
+       * You would loose the ability to use dynamic features to re-order k.
+       * But maybe thats not such a bad thing...
+       * [btw you could use dynamic features at the time of construction, which doesn't have to be at the start of all inference]
+       *
+       * This is the same trick that I do with (?,s) actions: I statically know
+       * the set of s to loop over. That static list is determined independently
+       * of model params, but we could imagine coming up with a list parametrically.
+       *
+       * If it did go that way, how would you represent this as an action?
+       * What would the oracle do?
+       * The best sort order would be [realized args] ++ [pruned/non-realized args]
+       * The model sort order can be determined by s(k,?)
+       * The oracle would interpolate between these I guess.
+       */
+
+      // Find all (k,s) present in the label but not yet the history
+      /*
+       * I want to count the Gold (t,f,k,s) which are
+       * a) not in history already
+       * b) match this STOP action
+       * I need to build an index for (b) and then filter (a) by brute force.
+      SetOfSets<FrameArgInstance> goldItems;
+      if (actionType == AT.STOP_KS) {
+        goldItems = new SetOfSets<>(
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE, newRI.s),
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF, newRI.s),
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT, newRI.s));
+      } else if (actionType == AT.STOP_K) {
+        goldItems = new SetOfSets<>(
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.BASE),
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.REF),
+            info.label.get(newFI.t, newFI.f, newRI.k, RoleType.CONT));
+      } else if (actionType == AT.STOP_S) {
+        goldItems = new SetOfSets<>(
+            info.label.get(newFI.t, newFI.f, newRI.s));
+      } else {
+        throw new RuntimeException();
+      }
+
+      Set<IntTrip> foo = new HashSet<>();
+      possibleFN = goldItems.size();
+      for (RILL cur = newFI.args; cur != null; cur = cur.next) {
+        int k = cur.item.k;
+        RoleType q = cur.item.q;
+        Span s = cur.item.s;
+        assert foo.add(new IntTrip(k, q.ordinal(), Span.indexMaybeNullSpan(s)))
             : "these should be unique! k=" + k + " q=" + q + " s=" + s.shortString()
             + "\n" + foo;
-          if (k >= 0 && s != null) {
-            assert q != null;
-            int kk = LabelIndex.k(newFI.f, k, q);
-            if (goldItems.contains(new FrameArgInstance(newFI.f, newFI.t, kk, s)))
-              possibleFN--;
-          }
+        if (k >= 0 && s != null) {
+          assert q != null;
+          int kk = LabelIndex.k(newFI.f, k, q);
+          if (goldItems.contains(new FrameArgInstance(newFI.f, newFI.t, kk, s)))
+            possibleFN--;
         }
-        if (DEBUG_F) {
-          Log.info(actionType + " goldItems.size=" + goldItems.size()
-              + " possibleFN=" + possibleFN
-              + "\t" + newRI);
-        }
-        fn += possibleFN;
-        break;
-
-      default:
-        throw new RuntimeException("implement this type: " + actionType);
       }
+      if (DEBUG_F) {
+        Log.info(actionType + " goldItems.size=" + goldItems.size()
+        + " possibleFN=" + possibleFN
+        + "\t" + newRI);
+      }
+      fn += possibleFN;
+       */
+      break;
+
+    default:
+      throw new RuntimeException("implement this type: " + actionType);
     }
     if (DEBUG_F)
       Log.info("done with loss: fp=" + fp + " fn=" + fn + " at=" + actionType);
 
-    Adjoints model = Adjoints.Constant.ZERO;
-    if (info.coefModel.nonzero()) {
-      model = info.config.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
-      if (info.config.recallBias != 0) {
-        switch (actionType) {
-        case STOP_K:
-        case STOP_KS:
-        case STOP_S:
-          model = new Adjoints.Sum(model, new Adjoints.NamedConstant("recallBias", info.config.recallBias));
-          break;
-        default:
-          break;
-        }
+    Adjoints model = info.config.weights.allFeatures(actionType, newFI, newRI, info.sentence, stateFeats);
+    if (info.config.recallBias != 0) {
+      switch (actionType) {
+      case STOP_K:
+      case STOP_KS:
+      case STOP_S:
+        model = new Adjoints.Sum(model, new Adjoints.NamedConstant("recallBias", info.config.recallBias));
+        break;
+      default:
+        break;
       }
     }
 
-    double rr = 0;
-    if (info.coefRand.nonzero()) {
-      rr = 2 * (info.config.rand.nextDouble() - 0.5);
-    }
+    double rr = 2 * (info.config.rand.nextDouble() - 0.5);
 
-    if (fp + fn > 0) {
-      @SuppressWarnings("unused")
-      double z = fp + fn;
-    }
-
-    return new StepScores(info, model, fp, fn, rr, score);
+    return new StepScores(info, model, fp, fn, tp, tn, rr, score);
   }
 
   public StepScores f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
@@ -1488,6 +1797,7 @@ public class State {
         DEBUG_F = true;
         f(AT.NEW_K, fi, newRI, sf);
         f(AT.STOP_K, fi, riStop, sf);
+        Log.info(fi);
       }
       assert featsN.getHammingLoss() > 0 || featsS.getHammingLoss() > 0;
     }
@@ -1902,59 +2212,59 @@ public class State {
   }
 
   public static FNParse runInference2(Info inf) {
-    State s = runInference(inf);
+    Pair<State, Beam.DoubleBeam> p = runInference(inf);
+    State s = p.get1();
     FNParse y = s.decode();
     return y;
   }
 
-  public static State runInference(Info inf) {
+  /**
+   * @return 1) the state which has the highest beam search objective (e.g. use
+   * this for decoding) and 2) a PQ of States which are a part of the margin
+   * constraints optimization problem, i.e. ordered by
+   *   f(z) = modelScore(z) + max_{y \in Proj(z)} loss(y)
+   */
+  public static Pair<State, Beam.DoubleBeam> runInference(Info inf) {
     if (DEBUG)
       Log.info("starting: " + inf.showCoefs());
     /*
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
      */
-    StepScores zero = new StepScores(inf, Adjoints.Constant.ZERO, 0, 0, 0, null);
+    StepScores zero = new StepScores(inf, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
     State s0 = new State(null, false, false, null, zero, inf)
         .setFramesToGoldLabels();
 
-    Beam.DoubleBeam cur = new Beam.DoubleBeam(inf.beamSize);
-    Beam.DoubleBeam next = new Beam.DoubleBeam(inf.beamSize);
-    Beam.DoubleBeam all = new Beam.DoubleBeam(inf.beamSize * 16);
+    // Objective: s(z) + max_{y \in Proj(z)} loss(y)
+    // [where s(z) may contain random scores]
+    Beam.DoubleBeam all = new Beam.DoubleBeam(inf.beamSize * 16, Beam.Mode.CONSTRAINT_OBJ);
+
+    // Objective: search objective, that is,
+    // coef:      accumLoss    accumModel      accumRand
+    // oracle:    -1             0              0
+    // mv:        +1            +1              0
+    Beam.DoubleBeam cur = new Beam.DoubleBeam(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
+    Beam.DoubleBeam next = new Beam.DoubleBeam(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
+
     State lastState = null;
     push(next, all, s0);
     for (int i = 0; true; i++) {
       if (DEBUG) Log.debug("starting iter=" + i);
       Beam.DoubleBeam t = cur; cur = next; next = t;
       assert next.size() == 0;
-      while (cur.size() > 0) {
+      for (int b = 0; cur.size() > 0; b++) {
         State s = cur.pop();
-        lastState = s;
+        if (b == 0) // best item in cur
+          lastState = s;
         s.next(next, all);
       }
       if (DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
-      if (next.size() == 0) {
-        // How to keep track of best overall?
+      if (next.size() == 0)
         break;
-      }
     }
 
-    State finalState = all.pop();
-    // NOTE: coefLoss sign flip: >0 means avoid loss (counter to intuition)
-    if (inf.coefLoss.coef > 0 && inf.coefModel.iszero() && inf.coefRand.iszero()) {
-//      assert finalState == lastState;
-      if (finalState != lastState) {
-        System.out.println("coefs: " + inf.showCoefs());
-        System.out.println("\nfinal: " + finalState.show());
-        System.out.println("\nlast: " + lastState.show());
-        assert false;
-      }
-    }
-
-    finalState = lastState;
-//    FNParse yhat = finalState.decode();
-//    return yhat;
-    return finalState;
+    assert lastState != null;
+    return new Pair<>(lastState, all);
   }
 
   /**
@@ -1986,8 +2296,11 @@ public class State {
     double f1 = r.get("ArgumentMicroF1");
     if (f1 != 1) {
       DEBUG = true;
+      DEBUG_F = true;
+      System.out.println("re-playing oracle:");
       runInference2(inf);
       BasicEvaluation.showResults("oracle", r);
+      System.out.println("\ndiffArgs:\n" + FNDiff.diffArgs(y, yhat, true));
     }
     assert f1 == 1 : "f1=" + f1;
   }
@@ -2019,30 +2332,20 @@ public class State {
 //          + " prunedSpans=" + inf.prunedSpans.describe());
     }
 
+    FModel fmodel = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN);
+    fmodel.setConfig(conf);
+
     int successesInARow = 0;
     double lr = 1;
     int maxiter = 500;
     FNParse yhat = null;
     for (int i = 0; i < maxiter; i++) {
-      State oracleState = runInference(oracleInf);
-      State mvState = runInference(mvInf);
 
-//      if (i % 5 == 0) {
-//      System.out.println("oracleF1: " + f1(y, oracleState.decode()));
-//      System.out.println("mvF1: " + f1(y, mvState.decode()));
-//      System.out.println("decF1: " + f1(y, runInference2(decInf)));
-//      System.out.println("oracle: " + oracleState.show());
-//      System.out.println("mv: " + mvState.show());
-//      }
-
-      // Oracle state adjoints only have loss in them, so no features are added!
-//      oracleState.score.backwards(-lr);
-//      mvState.score.backwards(+lr);
-      oracleState.score.backwards(lr);
-      mvState.score.backwards(lr);
+      Update u = fmodel.getUpdate(y);
+      u.apply(1);
 
       if (i % 5 == 0) {
-        yhat = runInference2(decInf);
+        yhat = fmodel.predict(y);
         double f1 = f1(y, yhat);
         Log.info("iter=" + i + " f1=" + f1);
         if (f1 == 1)
@@ -2055,13 +2358,20 @@ public class State {
     }
     DEBUG = true;
     System.out.println("re-playing update for debugging:");
+
     System.out.println("searching for oracle update:");
-    State oracleState = runInference(oracleInf);
+    Pair<State, Beam.DoubleBeam> oracleStateColl = runInference(oracleInf);
+    State oracleState = oracleStateColl.get2().pop();
+    System.out.println("oracleState=" + oracleState.show());
+
     System.out.println("searching for mv update:");
-    State mvState = runInference(mvInf);
+    Pair<State, Beam.DoubleBeam> mvStateColl = runInference(mvInf);
+    State mvState = mvStateColl.get2().pop();
+    System.out.println("mvState=" + mvState.show());
+
     System.out.println("applying updates:");
-    oracleState.score.backwards(-lr);
-    mvState.score.backwards(+lr);
+    oracleState.score.backwards(lr);
+    mvState.score.backwards(lr);
 
     System.out.println("re-playing inference for debugging:");
     yhat = runInference2(decInf);
@@ -2104,6 +2414,7 @@ public class State {
     int updateInterval = 1;
     conf.weights = new GeneralizedWeights(conf, features, updateInterval);
     conf.weights.staticL2Penalty = 1e-3;
+    conf.weights.debug = true;
 
     conf.roleDependsOnFrame = true;
 //    conf.argMode = ArgActionTransitionSystem.ROLE_BY_ROLE;
@@ -2124,6 +2435,14 @@ public class State {
       System.out.println("done loading CachedFeatures");
     }
 
+    // Sort parses by number of frames so that small (easy to debug/see) examples come first
+    Collections.sort(ys, new Comparator<FNParse>() {
+      @Override
+      public int compare(FNParse o1, FNParse o2) {
+        return numItems(o1) - numItems(o2);
+      }
+    });
+
     // Call checkOracle
     Log.info("testing the oracle performance is perfect");
     long start = System.currentTimeMillis();
@@ -2143,12 +2462,6 @@ public class State {
     // Call checkLearning
     Log.info("checking that we can learn to mimic the oracle");
     conf.setNoGlobalFeatures();
-    Collections.sort(ys, new Comparator<FNParse>() {
-      @Override
-      public int compare(FNParse o1, FNParse o2) {
-        return numItems(o1) - numItems(o2);
-      }
-    });
     for (FNParse y : ys) {
       int i = numItems(y);
       if (i == 0)
@@ -2413,13 +2726,16 @@ public class State {
     }
 
     private Alphabet<String> dbgAlph = new Alphabet<>();
-    public boolean debug = true;
+    public boolean debug = false;
     private int fCalls = 0;
+
     public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
       assert fi.f != null;
 
-      if (++fCalls % 500000 == 0)
+      if (++fCalls % 500000 == 0) {
+        Log.info("debug=true, fCalls=" + fCalls + " anyGlobalFeatures=" + config.anyGlobalFeatures());
         showWeightSummary();
+      }
 
       IntDoubleUnsortedVector f;
       if (ri.s != null) {

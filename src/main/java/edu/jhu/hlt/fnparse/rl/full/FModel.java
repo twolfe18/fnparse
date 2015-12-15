@@ -4,21 +4,19 @@ import java.io.Serializable;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
-import edu.jhu.hlt.fnparse.rl.full.State.CachedFeatureParamsShim;
+import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
+import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
-import edu.jhu.hlt.tutils.Span;
-import edu.jhu.prim.vector.IntDoubleUnsortedVector;
-import edu.stanford.nlp.optimization.ScaledSGDMinimizer.Weights;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * Don't ask me why its called FModel. This is is a wrapper around {@link State}.
@@ -69,6 +67,10 @@ public class FModel implements Serializable {
     timer = new MultiTimer.ShowPeriodically(15);
   }
 
+  public void setConfig(Config c) {
+    this.conf = c;
+  }
+
   public Config getConfig() {
     return conf;
   }
@@ -96,21 +98,40 @@ public class FModel implements Serializable {
     timer.stop("update.setup.argPrune");
 
     timer.start("update.oracle");
-    final State oracleState = State.runInference(oracleInf);
+    Pair<State, DoubleBeam> oracleStateColl = State.runInference(oracleInf);
+    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
     timer.stop("update.oracle");
 
     timer.start("update.mv");
-    final State mvState = State.runInference(mvInf);
+    Pair<State, DoubleBeam> mvStateColl = State.runInference(mvInf);
+    State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
     timer.stop("update.mv");
 
     // Pull loss out of state/trajectory
-    double orL = oracleState.score.getHammingLoss();
-    double mvL = mvState.score.getHammingLoss();
-    double margin = mvL - orL;
-    if (margin < 0)
-      Log.warn("oracleLoss=" + orL + " > mvLoss=" + mvL);
+//    double orL = oracleState.score.getHammingLoss();
+//    double mvL = mvState.score.getHammingLoss();
+//    double margin = mvL - orL;
+//    if (margin < 0)
+//      Log.warn("oracleLoss=" + orL + " > mvLoss=" + mvL);
 
-    final double hinge = Math.max(0, mvState.score.forwards() + margin - oracleState.score.forwards());
+    // mv.forwards() contains loss, oracle doesn't due to muting
+//    final double hinge = Math.max(0, mvState.score.forwards() + margin - oracleState.score.forwards());
+    // Shit! oracle.forwards = loss(y,y_oracle) -- which should be basically 0
+    // It should be score(y_oracle)!
+//    final double hinge = Math.max(0, mvState.score.forwards() - oracleState.score.forwards());
+    StepScores mvss = mvState.score;
+    StepScores oss = oracleState.score;
+    final double hinge = Math.max(0,
+        mvss.getModelScore() + mvss.getHammingLoss()
+      - (oss.getModelScore() + oss.getHammingLoss()));
+    Log.info("mv.score=" + mvss.getModelScore()
+        + " mv.loss=" + mvss.getModelScore()
+        + " oracle.score=" + oss.getModelScore()
+        + " oracle.loss=" + oss.getHammingLoss()
+        + " hinge=" + hinge);
+    assert mvss.getHammingLoss() >= 0 : "mvss=" + mvss;
+    assert oss.getHammingLoss() >= 0 : "oss=" + oss;
+
     return new Update() {
       @Override
       public double apply(double learningRate) {
