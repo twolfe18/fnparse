@@ -147,7 +147,7 @@ public class CachedFeatures implements Serializable {
 //      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
 //      BaseTemplates feats = this.features2.get(new SpanPair(t, arg));
       BaseTemplates feats = this.features3.get(t).get(arg);
-      assert feats != null;
+      assert feats != null : "t=" + t.shortString() + " arg=" + arg.shortString() + " y=" + parse.getId();
       return feats;
     }
 
@@ -534,13 +534,17 @@ public class CachedFeatures implements Serializable {
       if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
         throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
 
-      // Get the templates needed for all the features.
-      Item cur = loadedSentId2Item.get(sent.getId());
-      BaseTemplates data = cur.getFeatures(t, s);
-
       // I should be able to use the same code as in InformationGainProducts.
       IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
       features.add(0, 2);   // intercept
+
+      // pre-computed features don't include nullSpan
+      if (s == Span.nullSpan)
+        return features;
+
+      // Get the templates needed for all the features.
+      Item cur = loadedSentId2Item.get(sent.getId());
+      BaseTemplates data = cur.getFeatures(t, s);
 
       List<ProductIndex> buf = new ArrayList<>();
       final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
