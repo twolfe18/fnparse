@@ -2,6 +2,13 @@ package edu.jhu.hlt.fnparse.rl.full2;
 
 public final class HammingLoss {
 
+  public static final HammingLoss TP = new HammingLoss(1, 0, 0, 0);
+  public static final HammingLoss FP = new HammingLoss(0, 1, 0, 0);
+  public static final HammingLoss FN = new HammingLoss(0, 0, 1, 0);
+  public static final HammingLoss TN = new HammingLoss(0, 0, 0, 1);
+
+  public static final HammingLoss ZERO = new HammingLoss(0, 0, 0, 0);
+
   private int tp, fp, fn, tn;
 
   public HammingLoss() {

@@ -41,10 +41,13 @@ import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.ActionType;
+import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
 import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
+import edu.jhu.hlt.fnparse.rl.full2.HammingLoss;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -56,7 +59,6 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
-import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
@@ -69,7 +71,7 @@ import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 import fj.Ord;
 
-public class State {
+public class State implements StateLike {
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_F = false;
@@ -599,8 +601,13 @@ public class State {
 
     @Override
     public String toString() {
-      return String.format("(SS rand=%.1f fp=%d fn=%d tp=%d tn=%d model=%s consObj=%.1f) -> %s",
+      return String.format("(Score rand=%.1f fp=%d fn=%d tp=%d tn=%d model=%s consObj=%.1f) -> %s",
           rand, lossFP, lossFN, trueP, trueN, model, constraintObjectivePlusConstant(), prev);
+    }
+
+    public StepScores(Info info, Adjoints model,
+        HammingLoss loss, double rand, StepScores prev) {
+      this(info, model, loss.getFP(), loss.getFN(), loss.getTP(), loss.getTN(), rand, prev);
     }
 
     public StepScores(Info info, Adjoints model,
@@ -719,6 +726,10 @@ public class State {
     public Info(Config config) {
       this.config = config;
       // coefs remain null
+    }
+
+    public Random getRand() {
+      return config.rand;
     }
 
     public void copyLabel(Info from) {
@@ -1054,6 +1065,15 @@ public class State {
     return p;
   }
 
+  @Override   // for StateLike
+  public BigInteger getSignature() {
+    return getSig();
+  }
+  @Override   // for StateLike
+  public StepScores getStepScores() {
+    return score;
+  }
+
   @Override
   public int hashCode() {
     return getSig().hashCode();
@@ -1093,7 +1113,7 @@ public class State {
   }
 
   // Sugar
-  public static void push(Beam next, Beam overallBestStates, State s) {
+  public static void push(Beam<State> next, Beam<State> overallBestStates, State s) {
 //    assert !(s.score instanceof Adjoints.Caching);
 //    s.score = new Adjoints.Caching(s.score);
     if (DEBUG) {
@@ -1720,7 +1740,7 @@ public class State {
     COMPLETE_S, // step 2 of (k,?)
   }
 
-  private void nextComplete(Beam beam, Beam overall, List<ProductIndex> sf) {
+  private void nextComplete(Beam<State> beam, Beam<State> overall, List<ProductIndex> sf) {
     assert incomplete.isArg() : "frame incomplete not implemented yet";
     if (incomplete.isFrame()) {
       if (DEBUG) Log.debug("incomplete FI");
@@ -1769,7 +1789,7 @@ public class State {
   }
 
   /** Returns the number of items pushed onto the beam */
-  private int nextK(Beam beam, Beam overall, FILL cur, int k, RoleType q, List<ProductIndex> sf) {
+  private int nextK(Beam<State> beam, Beam<State> overall, FILL cur, int k, RoleType q, List<ProductIndex> sf) {
     FI fi = cur.item;
 
     // NEW
@@ -1810,7 +1830,7 @@ public class State {
    * @param beam is the beam which stores States to expand at the next iteration.
    * @param overall is the beam which stores the argmax over *all* values throughout search.
    */
-  public void next(Beam beam, Beam overall) {
+  public void next(Beam<State> beam, Beam<State> overall) {
     NUM_NEXT_EVALS++;
 
     if (DEBUG) {
@@ -2143,7 +2163,7 @@ public class State {
   };
 
   @SuppressWarnings("unchecked")
-  public static List<FNParse> getParse(ExperimentProperties config) {
+  public static List<FNParse> getParse() {
     File cache = new File("/tmp/fnparse.example");
     List<FNParse> ys;
     if (cache.isFile()) {
@@ -2212,7 +2232,7 @@ public class State {
   }
 
   public static FNParse runInference2(Info inf) {
-    Pair<State, Beam.DoubleBeam> p = runInference(inf);
+    Pair<State, DoubleBeam<State>> p = runInference(inf);
     State s = p.get1();
     FNParse y = s.decode();
     return y;
@@ -2224,7 +2244,7 @@ public class State {
    * constraints optimization problem, i.e. ordered by
    *   f(z) = modelScore(z) + max_{y \in Proj(z)} loss(y)
    */
-  public static Pair<State, Beam.DoubleBeam> runInference(Info inf) {
+  public static Pair<State, DoubleBeam<State>> runInference(Info inf) {
     if (DEBUG)
       Log.info("starting: " + inf.showCoefs());
     /*
@@ -2237,20 +2257,20 @@ public class State {
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-    Beam.DoubleBeam all = new Beam.DoubleBeam(inf.beamSize * 16, Beam.Mode.CONSTRAINT_OBJ);
+    DoubleBeam<State> all = new DoubleBeam<>(inf.beamSize * 16, Beam.Mode.CONSTRAINT_OBJ);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-    Beam.DoubleBeam cur = new Beam.DoubleBeam(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
-    Beam.DoubleBeam next = new Beam.DoubleBeam(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
+    DoubleBeam<State> cur = new DoubleBeam<>(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
+    DoubleBeam<State> next = new DoubleBeam<>(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
 
     State lastState = null;
     push(next, all, s0);
     for (int i = 0; true; i++) {
       if (DEBUG) Log.debug("starting iter=" + i);
-      Beam.DoubleBeam t = cur; cur = next; next = t;
+      DoubleBeam<State> t = cur; cur = next; next = t;
       assert next.size() == 0;
       for (int b = 0; cur.size() > 0; b++) {
         State s = cur.pop();
@@ -2360,12 +2380,12 @@ public class State {
     System.out.println("re-playing update for debugging:");
 
     System.out.println("searching for oracle update:");
-    Pair<State, Beam.DoubleBeam> oracleStateColl = runInference(oracleInf);
+    Pair<State, DoubleBeam<State>> oracleStateColl = runInference(oracleInf);
     State oracleState = oracleStateColl.get2().pop();
     System.out.println("oracleState=" + oracleState.show());
 
     System.out.println("searching for mv update:");
-    Pair<State, Beam.DoubleBeam> mvStateColl = runInference(mvInf);
+    Pair<State, DoubleBeam<State>> mvStateColl = runInference(mvInf);
     State mvState = mvStateColl.get2().pop();
     System.out.println("mvState=" + mvState.show());
 
@@ -2400,7 +2420,7 @@ public class State {
   public static void main(String[] args) throws TemplateDescriptionParsingException {
     ExperimentProperties config = ExperimentProperties.init(args);
 
-    List<FNParse> ys = getParse(config);
+    List<FNParse> ys = getParse();
 //    Log.info(Describe.fnParse(y));
 
     DEBUG = false;

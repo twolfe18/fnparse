@@ -34,6 +34,8 @@ public class FModel implements Serializable {
   private MultiTimer.ShowPeriodically timer;
   private CachedFeatures cachedFeatures;
 
+  // TODO Switch over to state2!
+
   public FModel(
       RTConfig config,
       DeterministicRolePruning.Mode pruningMode) {
@@ -98,12 +100,12 @@ public class FModel implements Serializable {
     timer.stop("update.setup.argPrune");
 
     timer.start("update.oracle");
-    Pair<State, DoubleBeam> oracleStateColl = State.runInference(oracleInf);
+    Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
     State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
     timer.stop("update.oracle");
 
     timer.start("update.mv");
-    Pair<State, DoubleBeam> mvStateColl = State.runInference(mvInf);
+    Pair<State, DoubleBeam<State>> mvStateColl = State.runInference(mvInf);
     State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
     timer.stop("update.mv");
 

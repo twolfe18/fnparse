@@ -85,7 +85,7 @@ public class Config implements Serializable {
   public PrimesAdapter primes = null;
   public FrameRolePacking frPacking = null;
   public GeneralizedWeights weights = null;
-  public Random rand = null;
+  public Random rand = new Random(9001);
 
   /*
    * SPRL settings:

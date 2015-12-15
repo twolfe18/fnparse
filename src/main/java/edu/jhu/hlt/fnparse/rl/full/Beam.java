@@ -5,11 +5,13 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
 
+import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
+import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
-public interface Beam {
+public interface Beam<T extends StateLike> {
 
-  public void offer(State next);
+  public void offer(T next);
 
   /*
    * tutils' Beam uses TreeSet.add which uses Beam.Item.compareTo
@@ -31,33 +33,46 @@ public interface Beam {
    */
   public Double lowerBound();
 
-  public State pop();
+  public T pop();
+
+
+
+
+  public interface StateLike {
+    public StepScores getStepScores();
+    public BigInteger getSignature();
+    // StateLike should be hashable
+    public int hashCode();
+    public boolean equals(Object other);
+  }
+
+
 
   /**
    * Compares first on score, then on State.sig.
    * Will never return compareTo == 0,
    * thus you should only ever construct pairs of instances s.t. (score,sig) are unique!
    */
-  public static class BeamItem implements Comparable<BeamItem> {
-    public final State state;
+  public static class BeamItem<R extends StateLike> implements Comparable<BeamItem<R>> {
+    public final R state;
     public final double score;
-    public BeamItem(State state, double score) {
+    public BeamItem(R state, double score) {
       this.state = state;
       this.score = score;
     }
     @Override
-    public int compareTo(BeamItem o) {
+    public int compareTo(BeamItem<R> o) {
       if (score < o.score)
         return +1;
       if (score > o.score)
         return -1;
-      BigInteger s1 = state.getSig();
-      BigInteger s2 = o.state.getSig();
+      BigInteger s1 = state.getSignature();
+      BigInteger s2 = o.state.getSignature();
       int c = s1.compareTo(s2);
       if (c == 0) {
         if (this != o) {  // TreeSet/Map calls compare(key,key) for some stupid reason...
-          System.err.println("state=" + state.show());
-          System.err.println("other=" + o.state.show());
+          System.err.println("state=" + state);
+          System.err.println("other=" + o.state);
           throw new RuntimeException("should not have duplicates!");
         }
       }
@@ -78,12 +93,12 @@ public interface Beam {
    * tie-breaker (e.g. first/last to be added) is a good idea, so you may want
    * to add a little jitter to the scores.
    */
-  public static class DoubleBeam implements Beam {
+  public static class DoubleBeam<T extends StateLike> implements Beam<T> {
     // This is sort of like a bijection because:
     // scores: BeamItem -> State + ...
     // table: State -> BeamItem
-    private TreeSet<BeamItem> scores;
-    private HashMap<State, BeamItem> table;   // ensures that entries in scores are unique up to State
+    private TreeSet<BeamItem<T>> scores;
+    private HashMap<T, BeamItem<T>> table;   // ensures that entries in scores are unique up to State
     private int capacity;
     private int numCollapses, numOffers;
     private Mode mode;
@@ -116,21 +131,21 @@ public interface Beam {
     public String toString() {
       StringBuilder sb = new StringBuilder();
       sb.append(String.format("(Beam %d/%d collapseRate=%.3f\n", size(), capacity, getCollapseRate()));
-      Iterator<BeamItem> itr = scores.iterator();
+      Iterator<BeamItem<T>> itr = scores.iterator();
       while (itr.hasNext()) {
-        BeamItem i = itr.next();
+        BeamItem<T> i = itr.next();
         sb.append(String.format("  %.3f %s\n", i.score, i.state));
       }
       sb.append(')');
       return sb.toString();
     }
 
-    public double value(State s) {
+    public double value(T s) {
       switch (mode) {
       case BEAM_SEARCH_OBJ:
-        return s.score.forwards();
+        return s.getStepScores().forwards();
       case CONSTRAINT_OBJ:
-        return s.score.constraintObjectivePlusConstant();
+        return s.getStepScores().constraintObjectivePlusConstant();
       default:
         throw new RuntimeException("unknown mode: " + mode);
       }
@@ -140,17 +155,17 @@ public interface Beam {
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
      */
     @Override
-    public void offer(State s) {
+    public void offer(T s) {
       numOffers++;
       double sc = value(s);
-      BeamItem old = table.get(s);
+      BeamItem<T> old = table.get(s);
       if (old != null) {
         numCollapses++;
         if (old.score < sc) {
           // If this state is the same as something on our beam,
           // then choose the higher scoring of the two.
           scores.remove(old);
-          BeamItem si = new BeamItem(s, sc);
+          BeamItem<T> si = new BeamItem<>(s, sc);
           boolean added = scores.add(si);
           assert added;
           table.put(s, si);
@@ -158,17 +173,17 @@ public interface Beam {
         // else no op: we've proven this state is equivalent and lower-scoring than something we know about
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
-        BeamItem si = new BeamItem(s, sc);
+        BeamItem<T> si = new BeamItem<>(s, sc);
         scores.add(si);
         table.put(s, si);
       } else if (sc > lowerBound()) {
         // Remove the worst item on the beam.
-        BeamItem worst = scores.pollLast();
+        BeamItem<T> worst = scores.pollLast();
         table.remove(worst.state);
         // Add this item
-        BeamItem si = new BeamItem(s, sc);
+        BeamItem<T> si = new BeamItem<>(s, sc);
         scores.add(si);
-        BeamItem old2 = table.put(s, si);
+        BeamItem<T> old2 = table.put(s, si);
         assert old2 == null;
       }
     }
@@ -181,9 +196,9 @@ public interface Beam {
     }
 
     @Override
-    public State pop() {
-      BeamItem bi = scores.pollFirst();
-      BeamItem r = table.remove(bi.state);
+    public T pop() {
+      BeamItem<T> bi = scores.pollFirst();
+      BeamItem<T> r = table.remove(bi.state);
       assert r != null;
       return bi.state;
     }
