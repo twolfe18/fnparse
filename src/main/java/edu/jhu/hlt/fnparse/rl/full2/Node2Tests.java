@@ -10,19 +10,17 @@ import org.junit.Test;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State;
-import edu.jhu.hlt.fnparse.rl.full2.Node2.DebugTS;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
-import edu.jhu.hlt.fnparse.rl.full2.Node2.State2;
 import edu.jhu.prim.tuple.Pair;
 
 public class Node2Tests {
 
-  private DebugTS mod;
+  private DebugTransitionSystem mod;
   private List<FNParse> examples;
 
   @Before
   public void setupModule() {
-    mod = new DebugTS();
+    mod = new DebugTransitionSystem();
   }
 
   @Before

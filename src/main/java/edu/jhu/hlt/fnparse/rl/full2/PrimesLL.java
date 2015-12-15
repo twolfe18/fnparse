@@ -1,11 +1,7 @@
-package edu.jhu.hlt.fnparse.rl.full3;
+package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.math.BigInteger;
 import java.util.function.ToLongFunction;
-
-import edu.jhu.hlt.fnparse.rl.full2.LL;
-import edu.jhu.hlt.fnparse.rl.full2.Node2;
-import edu.jhu.hlt.fnparse.rl.full2.TV;
 
 /**
  * 

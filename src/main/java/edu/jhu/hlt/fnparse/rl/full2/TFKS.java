@@ -1,5 +1,14 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+/**
+ * A special linked list which keeps track of TVs (basically an index), allowing
+ * you to ask for a specific value in contant time. Has the same append
+ * complexity as a LL with a slightly worse constant. Also implements a little
+ * algebra which will let you automatically tell if you've seen conflicting
+ * values for a given type/field.
+ *
+ * @author travis
+ */
 public class TFKS extends LL<TV> {
 
   public static final int UNSET = -2;
