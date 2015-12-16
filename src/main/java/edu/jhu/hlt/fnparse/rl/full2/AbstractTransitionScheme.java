@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
@@ -22,6 +22,9 @@ import edu.jhu.prim.tuple.Pair;
  *
  * NOTE: Generally cons should be compliant with taking a null second argument
  * indicating NIL/empty list.
+ *
+ * NOTE: The way I've implemented this, you're going to need on instance per
+ * {@link Sentence}.
  *
  * @param Y is the type this transistion system will predict/derive
  *
@@ -64,6 +67,14 @@ public abstract class AbstractTransitionScheme<Y> {
 
   /** Guides search (contains coefficients) and other misc configuration info */
   abstract Info getInfo();
+  /*
+   * Info =
+   * coefs
+   * sentence
+   * LabelIndex
+   * *Config
+   * pruning (t,f,s)
+   */
 
 
   /**
@@ -309,13 +320,13 @@ public abstract class AbstractTransitionScheme<Y> {
   }
 
   /** Takes Info/Config from the state of this instance, see getInfo */
-  public Pair<State2, DoubleBeam<State2>> runInference(FNParse y) {
+  public Pair<State2, DoubleBeam<State2>> runInference() {
     Info inf = getInfo();
     State2 s0 = genRootState();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-    DoubleBeam<State2> all = new DoubleBeam<>(inf.beamSize * 16, Beam.Mode.CONSTRAINT_OBJ);
+    DoubleBeam<State2> all = new DoubleBeam<>(inf.numConstraints, Beam.Mode.CONSTRAINT_OBJ);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand

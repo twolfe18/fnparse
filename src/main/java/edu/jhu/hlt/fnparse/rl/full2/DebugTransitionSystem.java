@@ -1,18 +1,12 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 import java.util.function.ToLongFunction;
 
-import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
-import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 /**
@@ -22,7 +16,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  *
  * @author travis
  */
-public class DebugTransitionSystem extends AbstractTransitionScheme<FNParse> {
+public class DebugTransitionSystem extends AbstractTransitionScheme<int[]> {
 
   private ToLongFunction<LL<TV>> getPrimes;
   private Random rand;
@@ -86,34 +80,12 @@ public class DebugTransitionSystem extends AbstractTransitionScheme<FNParse> {
   }
 
   @Override
-  public Iterable<LL<TV>> encode(FNParse y) {
-    List<LL<TV>> yy = new ArrayList<>();
-    for (FrameInstance fi : y.getFrameInstances()) {
-      Frame fr = fi.getFrame();
-      int f = fr.getId();
-      int t = Span.index(fi.getTarget());
-      int K = fr.numRoles();
-      for (int k = 0; k < K; k++) {
-        Span a = fi.getArgument(k);
-        if (a != Span.nullSpan) {
-          int s = Span.index(a);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+0*K, TFKS.F, f, TFKS.T, t));
-        }
-        for (Span ca : fi.getContinuationRoleSpans(k)) {
-          int s = Span.index(ca);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+1*K, TFKS.F, f, TFKS.T, t));
-        }
-        for (Span ra : fi.getReferenceRoleSpans(k)) {
-          int s = Span.index(ra);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+2*K, TFKS.F, f, TFKS.T, t));
-        }
-      }
-    }
-    return yy;
+  public Iterable<LL<TV>> encode(int[] y) {
+    throw new RuntimeException("implement me");
   }
 
   @Override
-  public FNParse decode(Iterable<LL<TV>> z) {
+  public int[] decode(Iterable<LL<TV>> z) {
     throw new RuntimeException("implement me");
   }
 }

@@ -732,6 +732,14 @@ public class State implements StateLike {
       return config.rand;
     }
 
+    public FrameIndex getFrameIndex() {
+      return config.frPacking.getFrameIndex();
+    }
+
+    public Sentence getSentence() {
+      return sentence;
+    }
+
     public void copyLabel(Info from) {
       sentence = from.sentence;
       label = from.label;
@@ -836,11 +844,23 @@ public class State implements StateLike {
       return config.frPacking.getNumFrames();
     }
 
+    public Collection<Span> getPossibleTargets() {
+      return prunedFIs.keySet();
+    }
+
+    public Collection<Frame> getPossibleFrames(Span t) {
+      return prunedFIs.get(t);
+    }
+
     /** Does not include nullSpan */
     public List<Span> getPossibleArgs(FI fi) {
       assert fi.t != null;
       assert fi.f != null;
-      FrameInstance key = FrameInstance.frameMention(fi.f, fi.t, sentence);
+      return getPossibleArgs(fi.f, fi.t);
+    }
+
+    public List<Span> getPossibleArgs(Frame f, Span t) {
+      FrameInstance key = FrameInstance.frameMention(f, t, sentence);
       List<Span> all = prunedSpans.getPossibleArgs(key);
       List<Span> nn = new ArrayList<>(all.size() - 1);
       for (Span s : all)

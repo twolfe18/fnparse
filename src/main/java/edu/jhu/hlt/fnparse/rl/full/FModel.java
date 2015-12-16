@@ -10,6 +10,9 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -35,6 +38,7 @@ public class FModel implements Serializable {
   private CachedFeatures cachedFeatures;
 
   // TODO Switch over to state2!
+  private FNParseTransitionScheme ts;
 
   public FModel(
       RTConfig config,
@@ -82,6 +86,10 @@ public class FModel implements Serializable {
     cachedFeatures = cf;
     drp.cachedFeatures = cf;
     conf.weights.setStaticFeatures(cf.params);
+  }
+
+  public Update getUpdate2(FNParse y) {
+    
   }
 
   public Update getUpdate(FNParse y) {
@@ -156,6 +164,18 @@ public class FModel implements Serializable {
         return hinge;
       }
     };
+  }
+
+  public FNParse predict2(FNParse y) {
+    
+    // TODO Fix this
+    ts.getInfo().setSentence(y.getSentence());
+    ts.set(ts.getInfo());
+
+//    State2 s0 = ts.genRootState();
+    Pair<State2, DoubleBeam<State2>> r = ts.runInference();
+    State2 sN = r.get1();
+    return ts.decode(sN.getNode());
   }
 
   public FNParse predict(FNParse y) {

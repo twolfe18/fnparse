@@ -145,7 +145,7 @@ public class Node2Tests {
 //      System.out.println("all[" + i + "] " + all.pop());
     FNParse y = examples.get(0);
     assert y.numFrameInstances() > 0;
-    Pair<State2, DoubleBeam<State2>> oracle = mod.runInference(y);
+    Pair<State2, DoubleBeam<State2>> oracle = mod.runInference();
     System.out.println("oracle state (beam): " + oracle.get1());
     System.out.println("max violation: " + oracle.get2().pop());
   }
