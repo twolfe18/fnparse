@@ -39,6 +39,7 @@ public class FModel implements Serializable {
 
   // TODO Switch over to state2!
   private FNParseTransitionScheme ts;
+  boolean useNewTS = true;
 
   public FModel(
       RTConfig config,
@@ -56,21 +57,16 @@ public class FModel implements Serializable {
     conf.frPacking = new FrameRolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
     int l2UpdateInterval = 32;
-    // Params is set later in setCachedFeatures
-//    conf.weights = new GeneralizedWeights(conf, new CachedFeatureParamsShim() {
-//      @Override
-//      public IntDoubleUnsortedVector getFeatures(Sentence s, Span t, Span a) {
-//        if (cachedFeatures == null)
-//          throw new RuntimeException("cachedFeatures was never set!");
-//        if (cachedFeatures.params == null)
-//          throw new RuntimeException("CachedFeatures.Params was never instantiated?");
-//        return cachedFeatures.params.getFeatures(s, t, a);
-//      }
-//    }, l2UpdateInterval);
     conf.weights = new GeneralizedWeights(conf, null, l2UpdateInterval);
     rtConf = config;
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
+
+    if (useNewTS) {
+      Primes primes = new Primes(ExperimentProperties.getInstance());
+      CachedFeatures params = null;
+      ts = new FNParseTransitionScheme(params, primes);
+    }
   }
 
   public void setConfig(Config c) {
@@ -86,14 +82,11 @@ public class FModel implements Serializable {
     cachedFeatures = cf;
     drp.cachedFeatures = cf;
     conf.weights.setStaticFeatures(cf.params);
+    if (useNewTS)
+      ts.setCachedFeatures(cf);
   }
 
-  public Update getUpdate2(FNParse y) {
-    
-  }
-
-  public Update getUpdate(FNParse y) {
-
+  private Pair<Info, Info> getOracleAndMvInfo(FNParse y) {
     timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
@@ -106,6 +99,42 @@ public class FModel implements Serializable {
     boolean includeGoldSpansIfMissing = true;
     oracleInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, mvInf);
     timer.stop("update.setup.argPrune");
+
+    return new Pair<>(oracleInf, mvInf);
+  }
+
+  public Update getUpdate(FNParse y) {
+    if (useNewTS)
+      return getUpdateNew(y);
+    else
+      return getUpdateOld(y);
+  }
+
+  public Update getUpdateNew(FNParse y) {
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Info oracleInf = ormv.get1();
+    Info mvInf = ormv.get2();
+
+    timer.start("update.oracle");
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
+        ts.runInference(ts.genRootState(oracleInf));
+    timer.stop("update.oracle");
+
+    timer.start("update.mv");
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> mvS =
+        ts.runInference(ts.genRootState(mvInf));
+    timer.stop("update.mv");
+
+    StepScores<Info> oracleSc = oracleS.get2().pop().getStepScores();
+    StepScores<Info> mvSc = mvS.get2().pop().getStepScores();
+
+    return buildUpdate(oracleSc, mvSc);
+  }
+
+  public Update getUpdateOld(FNParse y) {
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Info oracleInf = ormv.get1();
+    Info mvInf = ormv.get2();
 
     timer.start("update.oracle");
     Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
@@ -129,11 +158,17 @@ public class FModel implements Serializable {
     // Shit! oracle.forwards = loss(y,y_oracle) -- which should be basically 0
     // It should be score(y_oracle)!
 //    final double hinge = Math.max(0, mvState.score.forwards() - oracleState.score.forwards());
-    StepScores mvss = mvState.score;
-    StepScores oss = oracleState.score;
+    StepScores<Info> mvss = mvState.score;
+    StepScores<Info> oss = oracleState.getStepScores();
+    return buildUpdate(oss, mvss);
+  }
+
+  private Update buildUpdate(StepScores<Info> oss, StepScores<Info> mvss) {
+//    final double hinge = Math.max(0,
+//        mvss.getModelScore() + mvss.getHammingLoss()
+//      - (oss.getModelScore() + oss.getHammingLoss()));
     final double hinge = Math.max(0,
-        mvss.getModelScore() + mvss.getHammingLoss()
-      - (oss.getModelScore() + oss.getHammingLoss()));
+        oss.constraintObjectivePlusConstant() - mvss.constraintObjectivePlusConstant());
     Log.info("mv.score=" + mvss.getModelScore()
         + " mv.loss=" + mvss.getModelScore()
         + " oracle.score=" + oss.getModelScore()
@@ -151,10 +186,10 @@ public class FModel implements Serializable {
           // is primarily StepScore. That is oracle has a *muteForwards* model
           // coef of 1 and MV has an *unmuted* model coef of -1, leading to the
           // += behavior for oracle and -= for MV.
-//          oracleState.score.backwards(-learningRate);
-//          mvState.score.backwards(+learningRate);
-          oracleState.score.backwards(learningRate);
-          mvState.score.backwards(learningRate);
+//          oss.backwards(-learningRate);
+//          mvss.backwards(+learningRate);
+          oss.backwards(learningRate);
+          mvss.backwards(learningRate);
           timer.stop("update.apply");
         }
         return hinge;
@@ -166,25 +201,33 @@ public class FModel implements Serializable {
     };
   }
 
-  public FNParse predict2(FNParse y) {
-    
-    // TODO Fix this
-    ts.getInfo().setSentence(y.getSentence());
-    ts.set(ts.getInfo());
-
-//    State2 s0 = ts.genRootState();
-    Pair<State2, DoubleBeam<State2>> r = ts.runInference();
-    State2 sN = r.get1();
-    return ts.decode(sN.getNode());
-  }
-
-  public FNParse predict(FNParse y) {
-    timer.start("predict");
+  private Info getPredictInfo(FNParse y) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
     decInf.setLabel(y);
     decInf.setTargetPruningToGoldLabels();
     boolean includeGoldSpansIfMissing = true;
     decInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing);
+    return decInf;
+  }
+
+  public FNParse predict(FNParse y) {
+    if (useNewTS)
+      return predictNew(y);
+    else
+      return predictOld(y);
+  }
+
+  public FNParse predictNew(FNParse y) {
+    Info inf = getPredictInfo(y);
+    State2<Info> s0 = ts.genRootState(inf);
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0);
+    State2<Info> beamLast = i.get1();
+    return ts.decode(beamLast.getNode());
+  }
+
+  public FNParse predictOld(FNParse y) {
+    timer.start("predict");
+    Info decInf = getPredictInfo(y);
     FNParse yhat = State.runInference2(decInf);
     timer.stop("predict");
     return yhat;

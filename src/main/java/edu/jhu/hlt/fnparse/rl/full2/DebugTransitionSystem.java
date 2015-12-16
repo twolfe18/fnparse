@@ -4,8 +4,6 @@ import java.math.BigInteger;
 import java.util.Random;
 import java.util.function.ToLongFunction;
 
-import edu.jhu.hlt.fnparse.rl.full.Config;
-import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
@@ -20,7 +18,6 @@ public class DebugTransitionSystem extends AbstractTransitionScheme<int[]> {
 
   private ToLongFunction<LL<TV>> getPrimes;
   private Random rand;
-  private Info info;
 
   public DebugTransitionSystem() {
     rand = new Random(9001);
@@ -31,7 +28,6 @@ public class DebugTransitionSystem extends AbstractTransitionScheme<int[]> {
         return BigInteger.probablePrime(20, rand).longValue();
       }
     };
-    info = new Info(Config.FAST_SETTINGS).setOracleCoefs();
   }
 
   @Override
@@ -60,11 +56,6 @@ public class DebugTransitionSystem extends AbstractTransitionScheme<int[]> {
     for (int i = 0; i < 5; i++)
       eggs = consPrefix(new TV(newType, rand.nextInt(100)), eggs);
     return eggs;
-  }
-
-  @Override
-  public Info getInfo() {
-    return info;
   }
 
   @Override

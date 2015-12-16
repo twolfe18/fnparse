@@ -16,7 +16,7 @@ public class Node2 {
   public static class NodeWithSignature extends Node2 {
     public NodeWithSignature(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
       super(prefix, eggs, pruned, children);
-      assert children instanceof PrimesLL;
+      assert children == null || children instanceof PrimesLL;
     }
     public BigInteger getSignature() {
       if (children == null)

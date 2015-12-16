@@ -3,7 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.math.BigInteger;
 
 import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
-import edu.jhu.hlt.fnparse.rl.full.State.Info;
+import edu.jhu.hlt.fnparse.rl.full.State.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 
@@ -12,11 +12,11 @@ import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
  *
  * @author travis
  */
-public class State2 implements StateLike {
+public class State2<T extends HowToSearch> implements StateLike {
   private Node2 root;
-  private StepScores scores;
+  private StepScores<T> scores;
 
-  public State2(Node2 root, StepScores scores) {
+  public State2(Node2 root, StepScores<T> scores) {
     this.root = root;
     this.scores = scores;
   }
@@ -25,12 +25,8 @@ public class State2 implements StateLike {
     return root;
   }
 
-  public StepScores getStepScores() {
+  public StepScores<T> getStepScores() {
     return scores;
-  }
-
-  public Info getInfo() {
-    return scores.getInfo();
   }
 
   @Override
@@ -43,7 +39,7 @@ public class State2 implements StateLike {
     return String.format("(State\n\t%s\n\t%s\n)", scores.toString(), root.toString());
   }
 
-  public static StepScores safeScores(State2 s) {
+  public static <T extends HowToSearch> StepScores<T> safeScores(State2<T> s) {
     if (s == null)
       return null;
     return s.scores;

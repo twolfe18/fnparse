@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+import edu.jhu.hlt.tutils.hash.Hash;
+
 /**
  * A special linked list which keeps track of TVs (basically an index), allowing
  * you to ask for a specific value in contant time. Has the same append
@@ -63,6 +65,16 @@ public class TFKS extends LL<TV> {
     default:
       throw new RuntimeException();
     }
+  }
+
+  public boolean isFull() {
+    if (s >= 0) {
+      assert t >= 0;
+      assert f >= 0;
+      assert k >= 0;
+      return true;
+    }
+    return false;
   }
 
   // Use super.toString to actually see the LL
@@ -137,4 +149,20 @@ public class TFKS extends LL<TV> {
   // value + value' = MANY_VALS
   }
 
+  @Override
+  public int hashCode() {
+    return Hash.mix(t, f, k, s);
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof TFKS) {
+      TFKS a = (TFKS) other;
+      return t == a.t
+          && f == a.f
+          && k == a.k
+          && s == a.s;
+    }
+    return false;
+  }
 }

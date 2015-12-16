@@ -10,6 +10,11 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.LL;
+import edu.jhu.hlt.fnparse.rl.full2.TV;
+import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 
@@ -28,11 +33,56 @@ public class LabelIndex implements Serializable {
 
   private Map<FrameArgInstance, Set<FrameArgInstance>> all2;
 
+
+  // New stuff from AbstractTransitionSystem
+  public Counts<HashableIntArray> getCounts2() {
+    if (counts == null)
+      throw new RuntimeException();
+    return counts;
+  }
+  private Counts<HashableIntArray> counts;
+  /**
+   * @param goldYeses is a collection of relation indices s.t. y_i=1, all
+   * other indices are assumed to be 0.
+   *
+   * We assume that the finest grain types come first in the label, e.g.
+   *   s -> k -> f -> k -> null
+   * for the transition system [T,F,K,S]
+   */
+  private void provideLabel(Iterable<LL<TV>> goldYeses) {
+    if (counts == null)
+      counts = new Counts<>();
+    else
+      counts.clear();
+    int prevLen = -1;
+    for (LL<TV> x : goldYeses) {
+      HashableIntArray xx = AbstractTransitionScheme.prefixValues2ar(x);
+      if (prevLen < 0)
+        prevLen = xx.length();
+      else
+        assert prevLen == xx.length();
+
+      counts.increment(xx);
+
+      // prefix counts (e.g. [t,f,k] counts)
+      for (LL<TV> cur = x.cdr(); cur != null; cur = cur.cdr())
+        counts.increment(AbstractTransitionScheme.prefixValues2ar(cur));
+    }
+  }
   public LabelIndex(FNParse y) {
+    this(y, null);
+  }
+
+  public LabelIndex(FNParse y, AbstractTransitionScheme<FNParse, ?> ts) {
     this.y = y;
+
+    if (ts != null) {
+      Iterable<LL<TV>> conv = ts.encode(y);
+      this.provideLabel(conv);
+    }
+
     this.byTarget = new HashMap<>();
     this.fis = new HashSet<>();
-
     this.all2 = new HashMap<>();
 
     for (FrameInstance fi : y.getFrameInstances()) {

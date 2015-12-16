@@ -47,7 +47,10 @@ import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HammingLoss;
+import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
+import edu.jhu.hlt.fnparse.rl.full2.HasRandom;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -56,8 +59,10 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -535,12 +540,12 @@ public class State implements StateLike {
   // This is the objective being optimized, which is some combination of model score and loss.
   // Note: This will include the scores of states that lead up to this state (sum over actions).
 //  public Adjoints score;
-  public StepScores score;
+  public StepScores<Info> score;
 
   // Everything that is annoying to copy in State
   public final Info info;
 
-  public State(FILL frames, boolean noMoreFrames, boolean noMoreTargets, Incomplete incomplete, StepScores score, Info everythingElse) {
+  public State(FILL frames, boolean noMoreFrames, boolean noMoreTargets, Incomplete incomplete, StepScores<Info> score, Info everythingElse) {
     this.frames = frames;
     this.noMoreFrames = noMoreFrames;
     this.noMoreTargets = noMoreTargets;
@@ -586,17 +591,21 @@ public class State implements StateLike {
    * This is basically the same as {@link MutedAdjoints}, but allows well-structured
    * introspection.
    */
-  public static class StepScores implements Adjoints {
+  public static class StepScores<T extends HowToSearch> implements Adjoints {
 
-    public final Info info;
+    // TODO Either remove StepScores<Info> (fn-specific) from State2 (general) or
+    // remove Info (fn-specific) from StepScores<Info> [probably the latter].
+//    public final Info info;
+    public final T info;
+
     public final Adjoints model;
     public final int lossFP, lossFN;
     public final int trueP, trueN;
     public final double rand;
-    public final StepScores prev;
+    public final StepScores<T> prev;
 
-    public static StepScores zero(Info info) {
-      return new StepScores(info, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
+    public static <T extends HowToSearch> StepScores<T> zero(T info) {
+      return new StepScores<>(info, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
     }
 
     @Override
@@ -605,15 +614,15 @@ public class State implements StateLike {
           rand, lossFP, lossFN, trueP, trueN, model, constraintObjectivePlusConstant(), prev);
     }
 
-    public StepScores(Info info, Adjoints model,
-        HammingLoss loss, double rand, StepScores prev) {
+    public StepScores(T info, Adjoints model,
+        HammingLoss loss, double rand, StepScores<T> prev) {
       this(info, model, loss.getFP(), loss.getFN(), loss.getTP(), loss.getTN(), rand, prev);
     }
 
-    public StepScores(Info info, Adjoints model,
+    public StepScores(T info, Adjoints model,
         int lossFP, int lossFN,
         int trueP, int trueN,
-        double rand, StepScores prev) {
+        double rand, StepScores<T> prev) {
       if (lossFP < 0 || lossFN < 0)
         throw new IllegalArgumentException();
       this.info = info;
@@ -626,7 +635,7 @@ public class State implements StateLike {
       this.prev = prev;
     }
 
-    public Info getInfo() {
+    public T getInfo() {
       return info;
     }
 
@@ -668,12 +677,12 @@ public class State implements StateLike {
     public double forwards() {
       if (Double.isNaN(__forwardsMemo)) {
         double s = 0;
-        if (!info.coefModel.iszero() && !info.coefModel.muteForwards)
-          s += info.coefModel.coef * model.forwards();
-        if (!info.coefLoss.iszero() && !info.coefLoss.muteForwards)
-          s += info.coefLoss.coef * -(lossFP + lossFN);
-        if (!info.coefRand.iszero() && !info.coefRand.muteForwards)
-          s += info.coefRand.coef * rand;
+        if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+          s += info.coefModel().coef * model.forwards();
+        if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+          s += info.coefLoss().coef * -(lossFP + lossFN);
+        if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+          s += info.coefRand().coef * rand;
         if (prev != null)
           s += prev.forwards();
         __forwardsMemo = s;
@@ -684,13 +693,13 @@ public class State implements StateLike {
 
     @Override
     public void backwards(double dErr_dForwards) {
-      if (!info.coefModel.iszero()) {
+      if (!info.coefModel().iszero()) {
         /*
          * We are double parameterized with:
          * 1) the sign on the model score coefficient in search
          * 2) the fact that we do backwards(+/-hinge)
          */
-        model.backwards(info.coefModel.coef * dErr_dForwards);
+        model.backwards(info.coefModel().coef * dErr_dForwards);
 //        model.backwards(dErr_dForwards);
       }
       if (prev != null)
@@ -698,9 +707,16 @@ public class State implements StateLike {
     }
   }
 
+  public interface HowToSearch {
+    public GeneralizedCoef coefLoss();
+    public GeneralizedCoef coefModel();
+    public GeneralizedCoef coefRand();
+    public int beamSize();        // How many states to keep at every step
+    public int numConstraints();  // How many states to keep for forming margin constraints (a la k-best MIRA)
+  }
 
   /** Everything that is annoying to copy in State */
-  public static class Info implements Serializable {
+  public static class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
     private static final long serialVersionUID = -4529781834599237479L;
 
     private Sentence sentence;
@@ -732,7 +748,12 @@ public class State implements StateLike {
       // coefs remain null
     }
 
-    public Random getRand() {
+    public Config getConfig() {
+      return config;
+    }
+
+    @Override
+    public Random getRandom() {
       return config.rand;
     }
 
@@ -763,8 +784,14 @@ public class State implements StateLike {
 
     /** Mutates! returns this */
     public Info setLabel(FNParse y) {
+      return setLabel(y, null);
+    }
+    public Info setLabel(FNParse y, AbstractTransitionScheme<FNParse, ?> ts) {
       sentence = y.getSentence();
-      label = new LabelIndex(y);
+      if (ts == null)
+        label = new LabelIndex(y);
+      else
+        label = new LabelIndex(y, ts);
       prunedFIs = null;
       prunedSpans = null;
       return this;
@@ -880,6 +907,12 @@ public class State implements StateLike {
     public List<Span> getPossibleArgs(Frame f, Span t) {
       FrameInstance key = FrameInstance.frameMention(f, t, sentence);
       List<Span> all = prunedSpans.getPossibleArgs(key);
+      if (all == null) {
+        System.out.println("f=" + f.getName() + " t=" + t.shortString());
+        System.out.println("s1.id=" + sentence.getId());
+        System.out.println("s2.id=" + prunedSpans.getSentence().getId());
+        System.out.println("s.size=" + sentence.size());
+      }
       List<Span> nn = new ArrayList<>(all.size() - 1);
       for (Span s : all)
         if (s != Span.nullSpan)
@@ -994,19 +1027,51 @@ public class State implements StateLike {
       }
     }
 
+    @Override
+    public GeneralizedCoef coefLoss() {
+      return coefLoss;
+    }
+
+    @Override
+    public GeneralizedCoef coefModel() {
+      return coefModel;
+    }
+
+    @Override
+    public GeneralizedCoef coefRand() {
+      return coefRand;
+    }
+
+    @Override
+    public int beamSize() {
+      return beamSize;
+    }
+
+    @Override
+    public int numConstraints() {
+      return numConstraints;
+    }
+
+    @Override
+    public Counts<HashableIntArray> getCounts() {
+      if (label == null)
+        throw new IllegalStateException("can't call this on unlabelled Infos");
+      return label.getCounts2();
+    }
+
   }
 
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
     double rand = info.config.rand.nextGaussian();
-    StepScores ss = new StepScores(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
+    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
     return new State(frames, true, true, incomplete, ss, info);
   }
 
   public State noMoreTargets(Adjoints partialScore) {
     assert !noMoreTargets;
     double rand = info.config.rand.nextGaussian();
-    StepScores ss = new StepScores(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
+    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
     return new State(frames, noMoreFrames, true, incomplete, ss, info);
   }
 
@@ -1108,7 +1173,7 @@ public class State implements StateLike {
     return getSig();
   }
   @Override   // for StateLike
-  public StepScores getStepScores() {
+  public StepScores<Info> getStepScores() {
     return score;
   }
 
@@ -1130,7 +1195,7 @@ public class State implements StateLike {
    * Search (for tail) and replace (with newFrame) in this.frames.
    * O(1) if always tail == this.frames and O(T) otherwise.
    */
-  public State surgery(FILL tail, FI newFrame, Incomplete newIncomplete, StepScores newStateScore) {
+  public State surgery(FILL tail, FI newFrame, Incomplete newIncomplete, StepScores<Info> newStateScore) {
     assert !noMoreFrames;
 
     // Pick off the states between this.frames and tail
@@ -1238,7 +1303,7 @@ public class State implements StateLike {
     }
   }
 
-  public StepScores f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
+  public StepScores<Info> f(AT actionType, FI newFI, RI newRI, List<ProductIndex> stateFeats) {
 
     int fp = 0, fn = 0;
     int tp = 0, tn = 0;
@@ -1707,15 +1772,15 @@ public class State implements StateLike {
 
     double rr = 2 * (info.config.rand.nextDouble() - 0.5);
 
-    return new StepScores(info, model, fp, fn, tp, tn, rr, score);
+    return new StepScores<>(info, model, fp, fn, tp, tn, rr, score);
   }
 
-  public StepScores f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
+  public StepScores<Info> f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
     return f(actionType, newFI, null, stateFeats);
   }
 
   // Only used for noMoreTargets and noMoreFrames
-  public StepScores f(AT actionType, List<ProductIndex> stateFeats) {
+  public StepScores<Info> f(AT actionType, List<ProductIndex> stateFeats) {
     return f(actionType, null, null, stateFeats);
   }
 
@@ -1800,7 +1865,7 @@ public class State implements StateLike {
           RI newArg = new RI(incomplete.ri.k, incomplete.ri.q, s, sig);
           if (DEBUG) Log.debug("incomplete RI - span " + newArg);
 
-          StepScores feats = f(AT.COMPLETE_S, fi, newArg, sf);
+          StepScores<Info> feats = f(AT.COMPLETE_S, fi, newArg, sf);
           FI newFI = fi.prependArg(newArg);
           push(beam, overall, this.surgery(fill, newFI, null, feats));
         }
@@ -1833,7 +1898,7 @@ public class State implements StateLike {
     // NEW
     RI newRI = new RI(k, q, null, null);
     if (DEBUG) Log.debug("adding new (k,?) k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
-    StepScores featsN = f(AT.NEW_K, fi, newRI, sf);
+    StepScores<Info> featsN = f(AT.NEW_K, fi, newRI, sf);
     State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
     // TODO Check that this is correct and meaure speedup
 //    st.firstNotDone = this.firstNotDone;
@@ -1843,7 +1908,7 @@ public class State implements StateLike {
     if (DEBUG) Log.debug("adding noMoreArgRoles for k=" + k + " (" + fi.f.getRole(k) + ") q=" + q + "\t" + fi + "\t" + newRI);
     int p = info.config.primes.get(fi.t, fi.f, k, q, Span.nullSpan);
     RI riStop = new RI(k, q, Span.nullSpan, BigInteger.valueOf(p));
-    StepScores featsS = f(AT.STOP_K, fi, riStop, sf);
+    StepScores<Info> featsS = f(AT.STOP_K, fi, riStop, sf);
     Incomplete incS = null;   // Stop doesn't need a completion
     State ss = this.surgery(cur, fi.prependArg(riStop), incS, featsS);
     // TODO How to update firstNotDone with surgery?
@@ -1922,7 +1987,7 @@ public class State implements StateLike {
           if (!noMoreTargets) {
             if (DEBUG) Log.debug("adding new (t,) at " + t.shortString());
             FI fi = new FI(null, t, null).withGold(null);
-            StepScores feats = f(AT.NEW_T, fi, sf);
+            StepScores<Info> feats = f(AT.NEW_T, fi, sf);
             Incomplete inc = new Incomplete(frames);
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -1933,7 +1998,7 @@ public class State implements StateLike {
           for (Frame f : info.prunedFIs.get(t)) {
             if (DEBUG) Log.debug("adding new (t,f) at " + t.shortString() + "\t" + f.getName());
             FI fi = new FI(f, t, null).withGold(null);
-            StepScores feats = f(AT.NEW_TF, fi, sf);
+            StepScores<Info> feats = f(AT.NEW_TF, fi, sf);
             Incomplete inc = null;
             push(beam, overall, new State(new FILL(fi, frames), noMoreFrames, noMoreTargets, inc, feats, info));
           }
@@ -2052,13 +2117,13 @@ public class State implements StateLike {
 
           // NEW
           if (DEBUG) Log.debug("adding new (?,s) s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          StepScores featsN = f(AT.NEW_S, fi, newRI, sf);
+          StepScores<Info> featsN = f(AT.NEW_S, fi, newRI, sf);
           State st = new State(frames, noMoreFrames, noMoreTargets, new Incomplete(cur, newRI), featsN, info);
           push(beam, overall, st);
 
           // STOP
           if (DEBUG) Log.debug("adding noMoreArgRoles for s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-          StepScores featsS = f(AT.STOP_S, fi, newRI, sf);
+          StepScores<Info> featsS = f(AT.STOP_S, fi, newRI, sf);
           Incomplete incS = null;   // Stop doesn't need a completion
           push(beam, overall, this.surgery(cur, fi.noMoreArgSpans(), incS, featsS));
 
@@ -2101,7 +2166,7 @@ public class State implements StateLike {
 
             // NEW
             if (DEBUG) Log.debug("adding new (k,s) k=" + k + " s=" + s.shortString() + "\t" + fi + "\t" + newRI);
-            StepScores featsN = f(AT.NEW_KS, fi, newRI, sf);
+            StepScores<Info> featsN = f(AT.NEW_KS, fi, newRI, sf);
             push(beam, overall, this.surgery(cur, fi.prependArg(newRI), inc, featsN));
             step1Pushed++;
 
@@ -2113,7 +2178,7 @@ public class State implements StateLike {
 //            step1Pushed++;
           }
         }
-        StepScores featsS = f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf);
+        StepScores<Info> featsS = f(AT.STOP_KS, fi, new RI(-1, null, null, null), sf);
         push(beam, overall, this.surgery(cur, fi.noMoreArgs(), null, featsS));
 
         if (true)
@@ -2200,6 +2265,7 @@ public class State implements StateLike {
     }
   };
 
+  /** Returns some FRAMENET parses, caches to disk */
   @SuppressWarnings("unchecked")
   public static List<FNParse> getParse() {
     File cache = new File("/tmp/fnparse.example");
@@ -2289,7 +2355,7 @@ public class State implements StateLike {
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
      */
-    StepScores zero = new StepScores(inf, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
+    StepScores<Info> zero = new StepScores<>(inf, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
     State s0 = new State(null, false, false, null, zero, inf)
         .setFramesToGoldLabels();
 

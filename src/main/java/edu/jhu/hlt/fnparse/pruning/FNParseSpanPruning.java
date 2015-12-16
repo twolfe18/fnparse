@@ -37,6 +37,13 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   // Every key should be a FrameInstance.frameMention
   private Map<FrameInstance, List<Span>> possibleArgs;
 
+  /** May return null if no args, should only be used for debugging */
+  public Sentence dbgGetSentence() {
+    if (possibleArgs.isEmpty())
+      return null;
+    return possibleArgs.keySet().iterator().next().getSentence();
+  }
+
   public void addSpan(FrameInstance key, Span value) {
     possibleArgs.get(key).add(value);
   }
@@ -169,6 +176,12 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   public List<Span> getPossibleArgs(FrameInstance key) {
     List<Span> args = possibleArgs.get(key);
     if (args == null) {
+      System.out.println("entries in possibleArgs:");
+      for (Map.Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+        System.out.println(x.getKey());
+        System.out.println(x.getValue());
+        System.out.println();
+      }
       return null;
 //      throw new IllegalStateException();
     }
