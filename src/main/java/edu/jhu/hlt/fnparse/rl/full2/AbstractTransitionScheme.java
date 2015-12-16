@@ -65,8 +65,9 @@ public abstract class AbstractTransitionScheme<Y> {
    */
   abstract LL<TV> genEggs(LL<TV> prefix);
 
+  // NOTE: Info is not in State2->StepScores->Info
   /** Guides search (contains coefficients) and other misc configuration info */
-  abstract Info getInfo();
+//  abstract Info getInfo();
   /*
    * Info =
    * coefs
@@ -87,16 +88,17 @@ public abstract class AbstractTransitionScheme<Y> {
 
 
   /* NON-ABSTRACT STUFF *******************************************************/
-  protected Counts<HashableIntArray> counts;
-
-  public Random getRand() {
-    return getInfo().getRand();
-  }
 
   public Y decode(Node2 root) {
     throw new RuntimeException("implement me");
   }
 
+  
+  
+  
+  
+  
+  protected Counts<HashableIntArray> counts;
   public void provideLabel(Y y) {
     provideLabel(encode(y));
   }
@@ -143,6 +145,10 @@ public abstract class AbstractTransitionScheme<Y> {
       ar[i++] = cur.car().getValue();
     return new HashableIntArray(ar);
   }
+  
+  
+  
+  
 
   /**
    * Hatch takes a node parent = z_{v_1, v_2, ... v_k} and creates a new node
@@ -234,11 +240,10 @@ public abstract class AbstractTransitionScheme<Y> {
 
   /* NEXT-RELATED *************************************************************/
 
-  /** prev may be null, root may not */
-  public List<State2> nextStatesL(State2 prev, Node2 root) {
+  public List<State2> nextStatesL(State2 state) {
     int n = 64;
     DoubleBeam<State2> b = new DoubleBeam<>(n, Mode.CONSTRAINT_OBJ);
-    nextStates(prev, consChild(root, null), b);
+    nextStates(state, consChild(state.getNode(), null), b);
     if (b.size() == b.capacity())
       throw new RuntimeException("fixme");
     List<State2> l = new ArrayList<>();
@@ -275,13 +280,17 @@ public abstract class AbstractTransitionScheme<Y> {
    * @param addTo is a collection of subsequent root nodes.
    */
   public void nextStates(State2 prev, LL<Node2> spine, Beam<State2> addTo) {
+    if (prev == null) {
+      throw new IllegalArgumentException("prev may not be null, needed at "
+          + "least for Info (e.g. search coefs)");
+    }
 
     // Generate new nodes
     Node2 wife = spine.car();
     if (wife.eggs != null) {
-      Info i = getInfo();
+      StepScores prevScores = prev.getStepScores();
+      Info i = prevScores.getInfo();
       Random r = i.getRand();
-      StepScores prevScores = State2.safeScores(prev);
 
       // TODO check oneXperY with egg.getType() and wife.getType(), and if
       // true, after `mother = hatch(wife)`
@@ -320,9 +329,8 @@ public abstract class AbstractTransitionScheme<Y> {
   }
 
   /** Takes Info/Config from the state of this instance, see getInfo */
-  public Pair<State2, DoubleBeam<State2>> runInference() {
-    Info inf = getInfo();
-    State2 s0 = genRootState();
+  public Pair<State2, DoubleBeam<State2>> runInference(State2 s0) {
+    Info inf = s0.getInfo();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
@@ -363,8 +371,7 @@ public abstract class AbstractTransitionScheme<Y> {
     return newNode(null, eggs, null, null);
   }
 
-  public State2 genRootState() {
-    Info info = getInfo();
+  public State2 genRootState(Info info) {
     return new State2(genRootNode(), StepScores.zero(info));
   }
 }

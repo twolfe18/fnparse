@@ -9,7 +9,9 @@ import org.junit.Test;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.State;
+import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.prim.tuple.Pair;
 
@@ -17,6 +19,7 @@ public class Node2Tests {
 
   private DebugTransitionSystem mod;
   private List<FNParse> examples;
+  private Config conf = Config.FAST_SETTINGS;
 
   @Before
   public void setupModule() {
@@ -26,6 +29,14 @@ public class Node2Tests {
   @Before
   public void getParses() {
     examples = State.getParse();
+  }
+
+  private Info getOracleInfo(int i) {
+    FNParse y = examples.get(i);
+    Info inf = new Info(conf)
+        .setOracleCoefs()
+        .setLabel(y);
+    return inf;
   }
 
   @Test
@@ -52,10 +63,10 @@ public class Node2Tests {
   public void test1() {
     // Lets see if we can get action generation working
     System.out.println("  <<<<<<<<<<<<<<< TEST 1 >>>>>>>>>>>>>>>  ");
-    addSomeLabels();
-    State2 prev = null;
-    Node2 root = mod.genRootNode();
-    List<State2> next = mod.nextStatesL(prev, root);
+//    addSomeLabels();
+    Info info = getOracleInfo(0);
+    State2 root = mod.genRootState(info);
+    List<State2> next = mod.nextStatesL(root);
     for (int i = 0; i < next.size(); i++) {
       System.out.println("next after root " + i + ": " + next.get(i));
     }
@@ -91,10 +102,10 @@ public class Node2Tests {
   @Test
   public void test2() {
     // Actions should have losses
+    Info inf = getOracleInfo(0);
     for (boolean hatchIsLossy : Arrays.asList(true, false)) {
       System.out.println("hatchIsLossy=" + hatchIsLossy);
-      State2 prev = null;
-      State2 root = mod.genRootState();
+      State2 root = mod.genRootState(inf);
 
       // Get the first egg from root and then ensure this is either in y or not
       // based on hatchIsLossy
@@ -105,7 +116,7 @@ public class Node2Tests {
       else
         addALabel(TFKS.S, 4, TFKS.K, 2, TFKS.F, 2, TFKS.T, t.getValue());
 
-      List<State2> next = mod.nextStatesL(prev, root.getNode());
+      List<State2> next = mod.nextStatesL(root);
       for (int i = 0; i < next.size(); i++) {
         State2 n = next.get(i);
         double l = n.getStepScores().constraintObjectivePlusConstant();
@@ -130,22 +141,14 @@ public class Node2Tests {
   @Test
   public void test5() {
     // Make a full update (two beams, beam search)
-    State2 root = mod.genRootState();
+    Info inf = getOracleInfo(0);
+    State2 root = mod.genRootState(inf);
     TV t = root.getNode().eggs.car();
     assert t.getType() == TFKS.T;
     addALabel(TFKS.S, 4, TFKS.K, 2, TFKS.F, 2, TFKS.T, t.getValue());
 
-//    DoubleBeam<State2> next = new DoubleBeam<>(4, Mode.BEAM_SEARCH_OBJ);
-//    DoubleBeam<State2> all = new DoubleBeam<>(128, Mode.CONSTRAINT_OBJ);
-//    mod.nextStatesB(root, next, all);
-//
-//    for (int i = 0; next.size() > 0; i++)
-//      System.out.println("next[" + i + "] " + next.pop());
-//    for (int i = 0; all.size() > 0; i++)
-//      System.out.println("all[" + i + "] " + all.pop());
-    FNParse y = examples.get(0);
-    assert y.numFrameInstances() > 0;
-    Pair<State2, DoubleBeam<State2>> oracle = mod.runInference();
+    assert inf.getLabelParse().numFrameInstances() > 0;
+    Pair<State2, DoubleBeam<State2>> oracle = mod.runInference(root);
     System.out.println("oracle state (beam): " + oracle.get1());
     System.out.println("max violation: " + oracle.get2().pop());
   }

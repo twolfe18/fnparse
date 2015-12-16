@@ -626,6 +626,10 @@ public class State implements StateLike {
       this.prev = prev;
     }
 
+    public Info getInfo() {
+      return info;
+    }
+
     /** Cumulative */
     public double getHammingLoss() {
       return lossFN + lossFP;
@@ -736,29 +740,43 @@ public class State implements StateLike {
       return config.frPacking.getFrameIndex();
     }
 
+    public LabelIndex getLabel() {
+      return label;
+    }
+
+    public FNParse getLabelParse() {
+      return label.getParse();
+    }
+
     public Sentence getSentence() {
       return sentence;
     }
 
-    public void copyLabel(Info from) {
+    /** Mutates! returns this */
+    public Info copyLabel(Info from) {
       sentence = from.sentence;
       label = from.label;
       prunedFIs = null;
       prunedSpans = null;
+      return this;
     }
 
-    public void setLabel(FNParse y) {
+    /** Mutates! returns this */
+    public Info setLabel(FNParse y) {
       sentence = y.getSentence();
       label = new LabelIndex(y);
       prunedFIs = null;
       prunedSpans = null;
+      return this;
     }
 
-    public void setSentence(Sentence s) {
+    /** Mutates! returns this */
+    public Info setSentence(Sentence s) {
       sentence = s;
       label = null;
       prunedFIs = null;
       prunedSpans = null;
+      return this;
     }
 
     public boolean sentenceAndLabelMatch() {

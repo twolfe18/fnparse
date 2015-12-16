@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.math.BigInteger;
 
 import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
+import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 
@@ -26,6 +27,10 @@ public class State2 implements StateLike {
 
   public StepScores getStepScores() {
     return scores;
+  }
+
+  public Info getInfo() {
+    return scores.getInfo();
   }
 
   @Override
