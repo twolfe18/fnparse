@@ -9,7 +9,7 @@ SUF=".bz2"
 CAT="bzcat"
 ZIP="bzip2 -c"
 
-DATASET=propbank
+DATASET=framenet
 #WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
 #WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
@@ -34,9 +34,10 @@ qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CON
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
-NUM_SHARDS=256
+#NUM_SHARDS=256   # propbank
+NUM_SHARDS=32    # framenet
 #PARSE_REDIS_SERVERS=(r5n07 r5n20 r5n34 r6n28)
-PARSE_REDIS_SERVERS=(r6n27)
+PARSE_REDIS_SERVERS=(r6n27 r6n35 r6n24 r6n03)
 
 mkdir -p $WORKING_DIR/raw-shards/sge-logs
 
@@ -132,8 +133,8 @@ mkdir -p $WORKING_DIR/coherent-shards-filtered/features
 BIALPH_AFTER_FILTERS=$WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF
 
 # Make sure this is done!
-COUNT_FILE=$WORKING_DIR/feature-counts/one-tenth.txt$SUF
-#COUNT_FILE=$WORKING_DIR/feature-counts/all.txt$SUF
+#COUNT_FILE=$WORKING_DIR/feature-counts/one-tenth.txt$SUF
+COUNT_FILE=$WORKING_DIR/feature-counts/all.txt$SUF
 
 echo "copyinig jar to a safe place..."
 JAR_STABLE=$WORKING_DIR/coherent-shards-filtered/fnparse.jar
@@ -182,12 +183,15 @@ $CAT $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF | awk -F"\t" 'BEGIN{
 ### COMPUTE INFORMATION GAIN
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
+FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
 
 # 0) Find the sentence ids of the test set and don't use these for computing information gain
 TEST_SET_SENT_IDS="$WORKING_DIR/test-set-sentence-ids.txt"
 DP=/export/projects/twolfe/fnparse-data/
 mvn exec:java \
   -Dexec.mainClass=edu.jhu.hlt.fnparse.features.precompute.DumpSentenceIds \
+  -Ddata.framenet.root=$FNPARSE_DATA \
+  -Ddata.wordnet=$FNPARSE_DATA/wordnet/dict \
   -Ddata.ontonotes5=/export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \
   -Ddata.propbank.conll=$DP/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   -Ddata.propbank.frames=$DP/ontonotes-release-5.0-fixed-frames/frames \
@@ -276,8 +280,8 @@ python scripts/precompute-features/average-ig.py \
 
 # 2) For prodcuts of templates, filtered by top K products ranked by product of template IG
 # NOTE: The more shards the more products we compute on
-TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/split-$N/average.txt
-#TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
+#TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/split-$N/average.txt
+TEMPLATE_IG_FILE=$WORKING_DIR/ig/templates/full-ig.txt
 PROD_IG_WD=$WORKING_DIR/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
