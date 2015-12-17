@@ -42,4 +42,10 @@ public class LL<T> {
   public LL<T> prepend(T item) {
     return new LL<>(item, this);
   }
+
+  public static int length(LL<?> ll) {
+    if (ll == null)
+      return 0;
+    return 1 + length(ll.cdr());
+  }
 }

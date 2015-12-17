@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.rl.full2.LL;
 import edu.jhu.hlt.fnparse.rl.full2.TV;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.tuple.Pair;
 
@@ -50,6 +51,8 @@ public class LabelIndex implements Serializable {
    * for the transition system [T,F,K,S]
    */
   private void provideLabel(Iterable<LL<TV>> goldYeses) {
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("filling in counts");
     if (counts == null)
       counts = new Counts<>();
     else
@@ -62,11 +65,22 @@ public class LabelIndex implements Serializable {
       else
         assert prevLen == xx.length();
 
-      counts.increment(xx);
-
-      // prefix counts (e.g. [t,f,k] counts)
-      for (LL<TV> cur = x.cdr(); cur != null; cur = cur.cdr())
-        counts.increment(AbstractTransitionScheme.prefixValues2ar(cur));
+//      counts.increment(xx);
+//
+//      // prefix counts (e.g. [t,f,k] counts)
+//      for (LL<TV> cur = x.cdr(); cur != null; cur = cur.cdr()) {
+//        HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
+//        counts.increment(i);
+//      }
+      for (LL<TV> cur = x; cur != null; cur = cur.cdr()) {
+        HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
+        counts.increment(i);
+      }
+    }
+    if (AbstractTransitionScheme.DEBUG) {
+      for (HashableIntArray prefix : counts.getKeysSortedByCount(true)) {
+        Log.info("count=" + counts.getCount(prefix) + " prefix=" + prefix);
+      }
     }
   }
   public LabelIndex(FNParse y) {

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+import java.io.PrintStream;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -53,15 +54,67 @@ public class Node2 {
 
   @Override
   public String toString() {
-    StringBuilder sb = new StringBuilder("(Node\n");
-    sb.append(" prefix=" + prefix + "\n");
-    sb.append(" eggs=" + eggs + "\n");
-    sb.append(" pruned=" + pruned + "\n");
-    sb.append(" children=" + children + "\n");
-    sb.append(')');
-    return sb.toString();
+//    StringBuilder sb = new StringBuilder("(Node\n");
+//    sb.append(" prefix=" + prefix + "\n");
+//    sb.append(" eggs=" + eggs + "\n");
+//    sb.append(" pruned=" + pruned + "\n");
+//    sb.append(" children=" + children + "\n");
+//    sb.append(')');
+//    return sb.toString();
+    String p = prefix == null ? "null" : ((TFKS) prefix).str();
+    return "(Node2 " + p
+        + " nEgg=" + LL.length(eggs)
+        + " nPrune=" + LL.length(pruned)
+        + " nChild=" + LL.length(children)
+        + ")";
   }
 
+  public void show(PrintStream ps) { show(ps, ""); }
+  public void show(PrintStream ps, String indent) {
+//    ps.printf("%sNode %s  %s\n", indent, getTypeStr(), dbgGetTVStr());
+    ps.printf("%sNode %s\n", indent, dbgGetTVStr());
+    indent = "  " + indent;
+    int i;
+    if (eggs == null) {
+      ps.printf("%seggs == NIL\n", indent);
+    } else {
+      i = 0;
+      for (LL<TV> cur = eggs; cur != null; cur = cur.cdr(), i++)
+        ps.printf("%segg[%d] %s\n", indent, i, cur.car());
+    }
+
+    if (pruned == null) {
+      ps.printf("%sprune == NIL\n", indent);
+    } else {
+      i = 0;
+      for (LL<TV> cur = pruned; cur != null; cur = cur.cdr(), i++)
+        ps.printf("%sprune[%d] %s\n", indent, i, cur.car());
+    }
+
+    if (children == null) {
+      ps.printf("%schildren == NIL\n", indent);
+    } else {
+      i = 0;
+      for (LL<Node2> cur = children; cur != null; cur = cur.cdr(), i++)
+        cur.car().show(ps, indent);
+    }
+  }
+
+  // TODO Remove after debugging (fn-specific)
+  public static String typeName(int type) {
+    switch (type) {
+    case -1: return "ROOT";
+    case 0: return "T";
+    case 1: return "F";
+    case 2: return "K";
+    case 3: return "S";
+    default:
+      throw new RuntimeException();
+    }
+  }
+  public String getTypeStr() {
+    return typeName(getType());
+  }
   public int getType() {
     if (prefix == null)
       return -1;
@@ -71,6 +124,20 @@ public class Node2 {
     if (prefix == null)
       return -1;
     return prefix.item.getValue();
+  }
+
+  public String dbgGetTVStr() {
+    StringBuilder sb = null;
+    for (LL<TV> cur = prefix; cur != null; cur = cur.cdr()) {
+      if (sb == null)
+        sb = new StringBuilder();
+      else
+        sb.append(" -> ");
+      sb.append(typeName(cur.car().getType()));
+      sb.append(':');
+      sb.append(String.valueOf(cur.car().getValue()));
+    }
+    return sb == null ? "ROOT" : sb.toString();
   }
 
   /** Returns a list of error messages (empty implies everything is good) */

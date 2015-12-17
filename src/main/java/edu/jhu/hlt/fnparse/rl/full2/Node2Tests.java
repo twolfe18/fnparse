@@ -94,7 +94,7 @@ public class Node2Tests {
 //    addSomeLabels();
     Info info = getOracleInfo(0);
     State2<Info> root = mod.genRootState(info);
-    List<State2<Info>> next = mod.nextStatesL(root);
+    List<State2<Info>> next = mod.dbgNextStatesL(root);
     for (int i = 0; i < next.size(); i++) {
       System.out.println("next after root " + i + ": " + next.get(i));
     }
@@ -145,7 +145,7 @@ public class Node2Tests {
 ////        addALabel(TFKS.S, 4, TFKS.K, 2, TFKS.F, 2, TFKS.T, t.getValue());
 //      assert false : "this test is broken since its not as easy to monkey-wrench in Counts<HashableIntArray> any more";
 
-      List<State2<Info>> next = mod.nextStatesL(root);
+      List<State2<Info>> next = mod.dbgNextStatesL(root);
       for (int i = 0; i < next.size(); i++) {
         State2<Info> n = next.get(i);
         double l = n.getStepScores().constraintObjectivePlusConstant();
@@ -172,7 +172,7 @@ public class Node2Tests {
     // Make a full update (two beams, beam search)
     Info inf = getOracleInfo(0);
     State2<Info> root = mod.genRootState(inf);
-    TV t = root.getNode().eggs.car();
+    TV t = root.getRoot().eggs.car();
     assert t.getType() == TFKS.T;
 //    addALabel(TFKS.S, 4, TFKS.K, 2, TFKS.F, 2, TFKS.T, t.getValue());
 

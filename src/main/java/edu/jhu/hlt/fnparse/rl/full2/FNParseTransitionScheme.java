@@ -1,8 +1,10 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -16,14 +18,19 @@ import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.map.IntDoubleEntry;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
+
+  public static boolean DEBUG_ENCODE = true;
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -34,13 +41,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   // Features
   private CachedFeatures cachedFeatures;
-  private boolean useOverfitFeatures = false;
+  public boolean useOverfitFeatures = false;
 
   // Weights
   private int dimension = 1 << 20;    // for each weight vector
   private LazyL2UpdateVector wHatch, wSquash;
   private Alphabet<String> alph;
-  private double learningRate = 0.01;
+  private double learningRate = 1;
   private double l2Reg = 1e-7;
 
 
@@ -58,10 +65,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.cachedFeatures = cf;
   }
 
-  public long primeFor(LL<TV> prefix) {
-    TFKS p = (TFKS) prefix;
-    int i = prefix2primeIdx.lookupIndex(p, true);
-    return primes.get(i);
+  public void flushAlphabet() {
+    alph = new Alphabet<>();
+  }
+
+  public void zeroWeights() {
+    wHatch.weights.scale(0);
+    wSquash.weights.scale(0);
   }
 
   /**
@@ -80,6 +90,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    */
   public void flushPrimes() {
     prefix2primeIdx = new Alphabet<>();
+  }
+
+  public long primeFor(LL<TV> prefix) {
+    TFKS p = (TFKS) prefix;
+    int i = prefix2primeIdx.lookupIndex(p, true);
+    return primes.get(i);
   }
 
   @Override
@@ -101,6 +117,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public Iterable<LL<TV>> encode(FNParse y) {
+    if (DEBUG_ENCODE)
+      Log.info("encoding y=" + Describe.fnParse(y));
     List<LL<TV>> yy = new ArrayList<>();
     int n = y.getSentence().size();
     for (FrameInstance fi : y.getFrameInstances()) {
@@ -124,13 +142,88 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         }
       }
     }
+    if (DEBUG_ENCODE) {
+      Log.info("yy.size=" + yy.size());
+    }
     return yy;
   }
 
+  // NOTE: Needs to match genEggs
+  public static String roleName(int k, Frame f) {
+    assert k >= 0;
+    int K = f.numRoles();
+    int q = k / K;
+    String r = f.getRole(k % K);
+    if (q == 1)
+      r = "C-" + r;
+    else if (q == 2)
+      r = "R-" + r;
+    else
+      assert q == 0;
+    return r;
+  }
+
+  public Map<FrameInstance, List<Pair<String, Span>>> groupByFrame(
+      Iterable<LL<TV>> z,
+      Info info) {
+    Sentence sent = info.getSentence();
+    int sentLen = sent.size();
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("z=" + z);
+    FrameIndex fi = info.getFrameIndex();
+    Map<FrameInstance, List<Pair<String, Span>>> m = new HashMap<>();
+    for (LL<TV> prefix : z) {
+      TFKS p = (TFKS) prefix;
+      if (p == null) {
+        if (AbstractTransitionScheme.DEBUG)
+          Log.info("skipping b/c null");
+        continue;
+      }
+      if (!p.isFull()) {
+        if (AbstractTransitionScheme.DEBUG)
+          Log.info("skipping not full: " + p);
+        continue;
+      }
+      Span t = Span.decodeSpan(p.t, sentLen);
+      Frame f = fi.getFrame(p.f);
+      FrameInstance key = FrameInstance.frameMention(f, t, sent);
+      List<Pair<String, Span>> args = m.get(key);
+      if (args == null) {
+        args = new ArrayList<>();
+        m.put(key, args);
+      }
+      if (!useContRoles && !useRefRoles)
+        assert p.k < f.numRoles();
+      String k = roleName(p.k, f);
+      Span s = Span.decodeSpan(p.s, sentLen);
+      args.add(new Pair<>(k, s));
+      if (AbstractTransitionScheme.DEBUG)
+        Log.info("adding t=" + t.shortString() + " f=" + f.getName() + " k=" + k + " s=" + s.shortString());
+    }
+    return m;
+  }
 
   @Override
-  public FNParse decode(Iterable<LL<TV>> z) {
-    throw new RuntimeException("implement me");
+  public FNParse decode(Iterable<LL<TV>> z, Info info) {
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("starting...");
+    Sentence sent = info.getSentence();
+    List<FrameInstance> fis = new ArrayList<>();
+    for (Map.Entry<FrameInstance, List<Pair<String, Span>>> tf2ks : groupByFrame(z, info).entrySet()) {
+      Span t = tf2ks.getKey().getTarget();
+      Frame f = tf2ks.getKey().getFrame();
+      if (AbstractTransitionScheme.DEBUG)
+        Log.info("t=" + t.shortString() + " f=" + f.getName());
+      try {
+        fis.add(FrameInstance.buildPropbankFrameInstance(f, t, tf2ks.getValue(), sent));
+      } catch (Exception e) {
+        Log.info("t=" + t.shortString() + " f=" + f.getName());
+        for (Pair<String, Span> x : tf2ks.getValue())
+          Log.info(x);
+        throw new RuntimeException(e);
+      }
+    }
+    return new FNParse(sent, fis);
   }
 
   @Override
@@ -181,7 +274,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       fi = info.getFrameIndex();
       t = Span.decodeSpan(p.t, n);
       f = fi.getFrame(p.f);
-      for (Span ss : info.getPossibleArgs(f, t)) {
+      List<Span> poss = info.getPossibleArgs(f, t);
+      if (poss.size() == 0)
+        throw new RuntimeException("check this!");
+      assert !poss.contains(Span.nullSpan);
+      for (Span ss : poss) {
         int s = Span.encodeSpan(ss, n);
         l = new LL<>(new TV(TFKS.S, s), l);
       }
@@ -194,69 +291,81 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   private List<String> dynFeats1(Node2 n, Info info) {
-    TFKS p = (TFKS) n.prefix;
-    List<String> feats = new ArrayList<>();
+    assert n.eggs != null : "hatch/squash both require an egg!";
     TV egg = n.eggs.car();
-    feats.add("intercept_" + egg.getType());
-    Frame f;
-    switch (egg.getType()) {
-    case TFKS.S:
-      assert p.t >= 0;
-      assert p.f >= 0;
-      assert p.k >= 0;
-      f = info.getFrameIndex().getFrame(p.f);
-      feats.add("K * f=" + f.getName());
-      String role = f.getRole(p.k);
-      feats.add("K * f=" + f.getName() + " * k=" + role);
-      break;
-    case TFKS.K:
-      assert p.f >= 0;
-      f = info.getFrameIndex().getFrame(p.f);
-      feats.add("F * f=" + f.getName());
-      break;
+    TFKS p = (TFKS) consPrefix(egg, n.prefix);   // of the child!
+    List<String> feats = new ArrayList<>();
+    if (useOverfitFeatures) {
+      feats.add(p.toString());
+    } else {
+      feats.add("intercept_" + egg.getType());
+      Frame f;
+      switch (egg.getType()) {
+      case TFKS.S:
+        assert p.t >= 0;
+        assert p.f >= 0;
+        assert p.k >= 0;
+        f = info.getFrameIndex().getFrame(p.f);
+        feats.add("K * f=" + f.getName());
+        String role = f.getRole(p.k);
+        feats.add("K * f=" + f.getName() + " * k=" + role);
+        break;
+      case TFKS.K:
+        assert p.f >= 0;
+        f = info.getFrameIndex().getFrame(p.f);
+        feats.add("F * f=" + f.getName());
+        break;
+      }
     }
     return feats;
   }
 
   private void dynFeats2(Node2 n, Info info, List<ProductIndex> addTo) {
     ProductIndex base = ProductIndex.FALSE;
-    if (useOverfitFeatures) {
-      int i = ((TFKS) n.prefix).hashCode() % dimension;
+    for (String fs : dynFeats1(n, info)) {
+      int i = alph.lookupIndex(fs, true);
+      if (AbstractTransitionScheme.DEBUG)
+        Log.info("fs=" + fs + " wHatch[this]=" + wHatch.weights.get(i) + " wSquash[this]=" + wSquash.weights.get(i));
       addTo.add(base.prod(i, dimension));
-    } else {
-      for (String fs : dynFeats1(n, info)) {
-        int i = alph.lookupIndex(fs, true) % dimension;
-        addTo.add(base.prod(i, dimension));
-      }
     }
   }
 
   /** Features from {@link CachedFeatures.Params} */
   private void staticFeats1(Node2 n, Info info, List<ProductIndex> addTo) {
+    assert n.eggs != null : "hatch/squash both require an egg!";
     ProductIndex base = ProductIndex.TRUE;
-    TFKS prefix = (TFKS) n.prefix;
-    if (prefix != null && prefix.isFull()) {
-      Sentence sent = info.getSentence();
-      int sentLen = sent.size();
-      Span t = Span.decodeSpan(prefix.t, sentLen);
-      Span s = Span.decodeSpan(prefix.s, sentLen);
-      FrameIndex fi = info.getFrameIndex();
-      Frame f = fi.getFrame(prefix.f);
-      int k = prefix.k;
-      int K = f.numRoles() * 3;
-      boolean roleDepsOnFrame = info.getConfig().roleDependsOnFrame;
-      IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
-      Iterator<IntDoubleEntry> itr = fv.iterator();
-      while (itr.hasNext()) {
-        IntDoubleEntry ide = itr.next();
-        assert ide.get() > 0; // but you lose magnitude either way
-        int i = ide.index() % dimension;
-        ProductIndex p = base.prod(i, dimension);
-        ProductIndex pp = p.prod(k, K);
-        if (roleDepsOnFrame)
-          pp = pp.prod(f.getId(), fi.getNumFrames());
-        addTo.add(p);
-        addTo.add(pp);
+    TFKS prefix = (TFKS) consPrefix(n.eggs.car(), n.prefix);   // of the child!
+    if (prefix.isFull()) {
+      if (useOverfitFeatures) {
+        String fs = prefix.toString();
+        int i = alph.lookupIndex(fs, true);
+//        if (AbstractTransitionScheme.DEBUG)
+//          Log.info("i=" + i + " dimension=" + dimension + " fs=" + fs);
+        addTo.add(base.prod(i, dimension));
+      } else {
+        assert cachedFeatures != null : "forget to set CachedFeatures?";
+        Sentence sent = info.getSentence();
+        int sentLen = sent.size();
+        Span t = Span.decodeSpan(prefix.t, sentLen);
+        Span s = Span.decodeSpan(prefix.s, sentLen);
+        FrameIndex fi = info.getFrameIndex();
+        Frame f = fi.getFrame(prefix.f);
+        int k = prefix.k;
+        int K = f.numRoles() * 3;
+        boolean roleDepsOnFrame = info.getConfig().roleDependsOnFrame;
+        IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
+        Iterator<IntDoubleEntry> itr = fv.iterator();
+        while (itr.hasNext()) {
+          IntDoubleEntry ide = itr.next();
+          assert ide.get() > 0; // but you lose magnitude either way
+          int i = ide.index();
+          ProductIndex p = base.prod(i, dimension);
+          ProductIndex pp = p.prod(k, K);
+          if (roleDepsOnFrame)
+            pp = pp.prod(f.getId(), fi.getNumFrames());
+          addTo.add(p);
+          addTo.add(pp);
+        }
       }
     }
   }
@@ -265,22 +374,44 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public Adjoints featsHatch(Node2 n, Info info) {
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
-    staticFeats1(n, info, allFeats);
-    return new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wHatch);
-//    double r = info.getRandom().nextGaussian();
-//    return new Adjoints.NamedConstant("FNTS-hatch-rand", r);
-////    throw new RuntimeException("finish this");
+//    staticFeats1(n, info, allFeats);
+    if (AbstractTransitionScheme.DEBUG) {
+      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.weights.getL2Norm(), System.identityHashCode(wHatch.weights)));
+      for (ProductIndex p : allFeats) {
+        int i = p.getProdFeatureModulo(dimension);
+        double d = wHatch.weights.get(i);
+        Log.info("hatch weight=" + d + " feature=" + p);
+      }
+    }
+    ProductIndexAdjoints pi = new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wHatch);
+    if (AbstractTransitionScheme.DEBUG) {
+      pi.nameOfWeights = "hatch";
+      pi.showUpdatesWith = alph;
+      Log.info("featHatchEarlyAdjoints: " + pi);
+    }
+    return pi;
   }
 
   @Override
   public Adjoints featsSquash(Node2 n, Info info) {
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
-    staticFeats1(n, info, allFeats);
-    return new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wSquash);
-//    double r = info.getRandom().nextGaussian();
-//    return new Adjoints.NamedConstant("FNTS-squash-rand", r);
-////    throw new RuntimeException("finish this");
+//    staticFeats1(n, info, allFeats);
+    if (AbstractTransitionScheme.DEBUG) {
+      Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.weights.getL2Norm(), System.identityHashCode(wSquash.weights)));
+      for (ProductIndex p : allFeats) {
+        int i = p.getProdFeatureModulo(dimension);
+        double d = wSquash.weights.get(i);
+        Log.info("squash weight=" + d + " feature=" + p);
+      }
+    }
+    ProductIndexAdjoints pi = new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wSquash);
+    if (AbstractTransitionScheme.DEBUG) {
+      pi.nameOfWeights = "squash";
+      pi.showUpdatesWith = alph;
+      Log.info("featSquashEarlyAdjoints: " + pi);
+    }
+    return pi;
   }
 
 }

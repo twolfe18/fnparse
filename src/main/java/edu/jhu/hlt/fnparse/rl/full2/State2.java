@@ -17,11 +17,13 @@ public class State2<T extends HowToSearch> implements StateLike {
   private StepScores<T> scores;
 
   public State2(Node2 root, StepScores<T> scores) {
+    if (root.prefix != null)
+      throw new IllegalArgumentException("must be a root!");
     this.root = root;
     this.scores = scores;
   }
 
-  public Node2 getNode() {
+  public Node2 getRoot() {
     return root;
   }
 

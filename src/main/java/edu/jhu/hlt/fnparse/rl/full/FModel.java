@@ -1,11 +1,19 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
+import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
@@ -90,7 +98,10 @@ public class FModel implements Serializable {
     timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
-    oracleInf.setLabel(y);
+    if (useNewTS)
+      oracleInf.setLabel(y, ts);
+    else
+      oracleInf.setLabel(y);
     mvInf.copyLabel(oracleInf);
     oracleInf.setTargetPruningToGoldLabels(mvInf);
     timer.stop("update.setup.other");
@@ -116,11 +127,17 @@ public class FModel implements Serializable {
     Info mvInf = ormv.get2();
 
     timer.start("update.oracle");
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("doing oracle search...");
+    ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
         ts.runInference(ts.genRootState(oracleInf));
     timer.stop("update.oracle");
 
     timer.start("update.mv");
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("doing most violated search...");
+    ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> mvS =
         ts.runInference(ts.genRootState(mvInf));
     timer.stop("update.mv");
@@ -171,8 +188,10 @@ public class FModel implements Serializable {
         oss.constraintObjectivePlusConstant() - mvss.constraintObjectivePlusConstant());
     Log.info("mv.score=" + mvss.getModelScore()
         + " mv.loss=" + mvss.getModelScore()
+        + " mv.constraintObj=" + mvss.constraintObjectivePlusConstant()
         + " oracle.score=" + oss.getModelScore()
         + " oracle.loss=" + oss.getHammingLoss()
+        + " oracle.constraintObj=" + oss.constraintObjectivePlusConstant()
         + " hinge=" + hinge);
     assert mvss.getHammingLoss() >= 0 : "mvss=" + mvss;
     assert oss.getHammingLoss() >= 0 : "oss=" + oss;
@@ -203,7 +222,10 @@ public class FModel implements Serializable {
 
   private Info getPredictInfo(FNParse y) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
-    decInf.setLabel(y);
+    if (useNewTS)
+      decInf.setLabel(y, ts);
+    else
+      decInf.setLabel(y);
     decInf.setTargetPruningToGoldLabels();
     boolean includeGoldSpansIfMissing = true;
     decInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing);
@@ -218,11 +240,14 @@ public class FModel implements Serializable {
   }
 
   public FNParse predictNew(FNParse y) {
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("starting prediction");
     Info inf = getPredictInfo(y);
     State2<Info> s0 = ts.genRootState(inf);
+    ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0);
     State2<Info> beamLast = i.get1();
-    return ts.decode(beamLast.getNode());
+    return ts.decode(beamLast);
   }
 
   public FNParse predictOld(FNParse y) {
@@ -232,4 +257,69 @@ public class FModel implements Serializable {
     timer.stop("predict");
     return yhat;
   }
+
+
+  public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+//    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-dgb"));
+//    RTConfig rtc = new RTConfig("fmodel-dbg", workingDir, new Random(9001));
+
+    AbstractTransitionScheme.DEBUG = true;
+
+    // Sort parses by number of frames so that small (easy to debug/see) examples come first
+    List<FNParse> ys = State.getParse();
+    Collections.sort(ys, new Comparator<FNParse>() {
+      @Override
+      public int compare(FNParse o1, FNParse o2) {
+        return State.numItems(o1) - State.numItems(o2);
+      }
+    });
+
+    FModel m = new FModel(null, Mode.XUE_PALMER_HERMANN);
+    m.ts.useOverfitFeatures = true;
+    for (FNParse y : ys) {
+      if (y.numFrameInstances() == 0)
+        continue;
+      if (State.numItems(y) < 2)
+        continue;
+
+//      // skipping to interesting example...
+//      if (!y.getSentence().getId().equals("FNFUTXT1277682"))
+//        continue;
+
+      // Its not the weights being initialized wrong (...it shouldn't be anyway...)
+      m.ts.zeroWeights();
+      m.ts.flushAlphabet();
+      m.ts.flushPrimes();
+
+      Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles());
+
+//      FNParse yhat = m.predict(y) ;
+//      m.getUpdate(y);
+
+      // Check learning
+      int c = 0, clim = 10;
+      double maxF1 = 0;
+      for (int i = 0; i < 20; i++) {
+        Update u = m.getUpdate(y);
+        u.apply(0.1);
+
+        FNParse yhat = m.predict(y);
+        SentenceEval se = new SentenceEval(y, yhat);
+        Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+        double f1 = r.get("ArgumentMicroF1");
+        Log.info("result: " + y.getSentence().getId() + " " + i + " " + f1);
+        maxF1 = Math.max(f1, maxF1);
+        if (f1 == 1) {
+          c++;
+          if (c == clim) break;
+        } else {
+          c = 0;
+        }
+      }
+      if (c < clim)
+        throw new RuntimeException();
+    }
+  }
+
 }

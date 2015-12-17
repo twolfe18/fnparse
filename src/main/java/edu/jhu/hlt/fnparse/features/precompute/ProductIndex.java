@@ -130,7 +130,7 @@ public class ProductIndex {
   }
 
   public ProductIndex prod(int feat, int card) {
-    assert feat < card && feat >= 0;
+    assert feat < card && feat >= 0 : "feat=" + feat + " card=" + card;
     return new ProductIndex(feat, card, this);
   }
 

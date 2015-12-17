@@ -71,4 +71,18 @@ public class FNParse extends FNTagging implements Serializable {
     }
     return l;
   }
+
+  public boolean hasContOrRefRoles() {
+    for (FrameInstance fi : getFrameInstances()) {
+      Frame f = fi.getFrame();
+      int K = f.numRoles();
+      for (int k = 0; k < K; k++) {
+        if (!fi.getContinuationRoleSpans(k).isEmpty())
+          return true;
+        if (!fi.getReferenceRoleSpans(k).isEmpty())
+          return true;
+      }
+    }
+    return false;
+  }
 }

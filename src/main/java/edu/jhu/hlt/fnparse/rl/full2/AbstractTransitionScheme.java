@@ -11,6 +11,7 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
 import edu.jhu.hlt.fnparse.rl.full.State.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
+import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -41,6 +42,8 @@ import edu.jhu.prim.tuple.Pair;
  */
 public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCounts & HasRandom> {
 
+  public static boolean DEBUG = false;
+
   /**
    * See {@link TFKS}, maybe the only reason not to use LL<TV>.init
    */
@@ -69,7 +72,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * Must be able to ignore prefixes. E.g. if an element of z only specifies
    * [t,f,k] (but not s), then it should not be added to y.
    */
-  public abstract Y decode(Iterable<LL<TV>> z);
+  public abstract Y decode(Iterable<LL<TV>> z, Z info);
 
 
   /**
@@ -82,6 +85,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
   /**
    * Global/dynamic features.
+   *
+   * NOTE: Pay attention to the corresponding methods of hatch and squash;
+   * they both involve taking the first egg (don't just look at prefix!)
    *
    * NOTE: static features should be wrapped in this.
    */
@@ -96,10 +102,16 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     for (LL<Node2> cur = node.children; cur != null; cur = cur.cdr())
       collectChildrensSpines(cur.car(), addTo);
   }
-  public Y decode(Node2 root) {
+  public Y decode(State2<Z> root) {
+    if (DEBUG) {
+      Log.info("running on:");
+      root.getRoot().show(System.out);
+    }
     List<LL<TV>> childrensSpines = new ArrayList<>();
-    collectChildrensSpines(root, childrensSpines);
-    return decode(childrensSpines);
+    collectChildrensSpines(root.getRoot(), childrensSpines);
+    if (DEBUG)
+      Log.info("numSpines=" + childrensSpines.size());
+    return decode(childrensSpines, root.getStepScores().getInfo());
   }
 
   /**
@@ -130,21 +142,29 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   public HammingLoss lossHatch(Node2 n, Z info) {
     Counts<HashableIntArray> counts = info.getCounts();
     TV e = n.eggs.car();
-    HashableIntArray x = prefixValues2ar(consPrefix(e, n.prefix));
-    if (counts.getCount(x) == 0)
+    LL<TV> childPrefix = consPrefix(e, n.prefix);
+    HashableIntArray x = prefixValues2ar(childPrefix);
+    if (counts.getCount(x) == 0) {
+      if (DEBUG) Log.info(" FP " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
       return HammingLoss.FP;
-    else
+    } else {
+      if (DEBUG) Log.info(" TP " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
       return HammingLoss.TP;
+    }
   }
 
   public HammingLoss lossSquash(Node2 n, Z info) {
     Counts<HashableIntArray> counts = info.getCounts();
     TV e = n.eggs.car();
-    HashableIntArray x = prefixValues2ar(consPrefix(e, n.prefix));
-    if (counts.getCount(x) == 0)
+    LL<TV> childPrefix = consPrefix(e, n.prefix);
+    HashableIntArray x = prefixValues2ar(childPrefix);
+    if (counts.getCount(x) == 0) {
+      if (DEBUG) Log.info("TN " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
       return HammingLoss.TN;
-    else
+    } else {
+      if (DEBUG) Log.info("FN " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
       return HammingLoss.FN;
+    }
   }
 
   /* COHERENCE RULES ********************************************************/
@@ -187,13 +207,41 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     return newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
   }
 
+  /**
+   * Looks for searchChild in the first node in the spine's children, replaces it,
+   * and returns a node representing the modified parent (first in spine).
+   */
+  public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild) {
+    if (spine == null)
+      return replaceChild;
+    Node2 parent = spine.car();
+    // Search and store prefix
+    ArrayDeque<Node2> stack = new ArrayDeque<>();
+    LL<Node2> newChildren = parent.children;
+    while (newChildren != null && newChildren.car() != searchChild) {
+      stack.push(newChildren.car());
+      newChildren = newChildren.cdr();
+    }
+    // Replace or delete searchChild
+    if (replaceChild == null)
+      newChildren = newChildren.cdr();
+    else
+      newChildren = consChild(replaceChild, newChildren.cdr());
+    // Pre-pend the prefix appearing before searchChild
+    while (!stack.isEmpty())
+      newChildren = consChild(stack.pop(), newChildren);
+    // Reconstruct the parent node
+    Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
+    return replaceNode(spine.cdr(), parent, newParent);
+  }
+
 
   /* NEXT-RELATED *************************************************************/
 
-  public List<State2<Z>> nextStatesL(State2<Z> state) {
+  public List<State2<Z>> dbgNextStatesL(State2<Z> state) {
     int n = 64;
     DoubleBeam<State2<Z>> b = new DoubleBeam<>(n, Mode.CONSTRAINT_OBJ);
-    nextStates(state, consChild(state.getNode(), null), b);
+    nextStates(state, consChild(state.getRoot(), null), b);
     if (b.size() == b.capacity())
       throw new RuntimeException("fixme");
     List<State2<Z>> l = new ArrayList<>();
@@ -221,9 +269,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       }
     };
 //    LL<Node2> spine = consChild(cur.getNode(), null);
-    LL<Node2> spine = new LL<>(cur.getNode(), null);
+    LL<Node2> spine = new LL<>(cur.getRoot(), null);
     nextStates(cur, spine, composite);
   }
+
 
   /**
    * TODO Add ability to bound new-node scores and bail out early (don't recurse).
@@ -231,16 +280,28 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * @param spine is the path from the current node (first element) to root (last element).
    * @param addTo is a collection of subsequent root nodes.
    */
-  public void nextStates(State2<Z> prev, LL<Node2> spine, Beam<State2<Z>> addTo) {
-    if (prev == null) {
+  public void nextStates(State2<Z> root, LL<Node2> spine, Beam<State2<Z>> addTo) {
+    if (root == null) {
       throw new IllegalArgumentException("prev may not be null, needed at "
           + "least for Info (e.g. search coefs)");
     }
 
-    // Generate new nodes
     Node2 wife = spine.car();
-    if (wife.eggs != null) {
-      StepScores<Z> prevScores = prev.getStepScores();
+    if (DEBUG) {
+      Log.info("expanding a state:");
+      System.out.println("score: " + root.getStepScores());
+//      System.out.println("node: " + prev.getNode());
+//      System.out.print("root: ");
+//      root.getNode().show(System.out);
+      System.out.print("wife: ");
+      wife.show(System.out);
+    }
+
+    // Generate new nodes
+    if (wife.eggs == null) {
+      if (DEBUG) Log.info("wife.eggs is null");
+    } else {
+      StepScores<Z> prevScores = root.getStepScores();
       Z info = prevScores.getInfo();
       Random r = info.getRandom();
 
@@ -267,22 +328,35 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
         addTo.offer(new State2<Z>(mother, hatchScore));
         addTo.offer(new State2<Z>(wife2, squashScore));
       } else {
-        Node2 momInLaw = spine.cdr().car();
-        addTo.offer(new State2<Z>(replaceChild(momInLaw, wife, mother), hatchScore));
-        addTo.offer(new State2<Z>(replaceChild(momInLaw, wife, wife2), squashScore));
+//        Node2 momInLaw = spine.cdr().car();
+//        Node2 rootHatch = replaceChild(momInLaw, wife, mother);
+//        Node2 rootSquash = replaceChild(momInLaw, wife, wife2);
+        LL<Node2> momInLaw = spine.cdr();
+        Node2 rootHatch = replaceNode(momInLaw, wife, mother);
+        Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
+        addTo.offer(new State2<Z>(rootHatch, hatchScore));
+        addTo.offer(new State2<Z>(rootSquash, squashScore));
       }
     }
 
     // Recurse
-    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr()) {
+    int i = 0;
+    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
 //      LL<Node2> spine2 = consChild(cur.car(), spine);
+      if (DEBUG) Log.info("recursing on child " + i);
       LL<Node2> spine2 = new LL<>(cur.car(), spine);
-      nextStates(prev, spine2, addTo);
+      nextStates(root, spine2, addTo);
     }
   }
 
   /** Takes Info/Config from the state of this instance, see getInfo */
   public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0) {
+    if (DEBUG) {
+      Log.info("starting inference from state:");
+//      assert s0.getStepScores().forwards() == 0;
+////      System.out.println(s0.getNode());
+//      s0.getRoot().show(System.out);
+    }
     Z inf = s0.getStepScores().getInfo();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
@@ -300,7 +374,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     //      push(next, all, s0);
     next.offer(s0); all.offer(s0);
     for (int i = 0; true; i++) {
-      if (Node2.DEBUG) Log.debug("starting iter=" + i);
+      if (DEBUG) Log.debug("starting iter=" + i);
       DoubleBeam<State2<Z>> t = cur; cur = next; next = t;
       assert next.size() == 0;
       for (int b = 0; cur.size() > 0; b++) {
@@ -310,12 +384,22 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
         //          s.next(next, all);
         nextStatesB(s, next, all);
       }
-      if (Node2.DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
-      if (next.size() == 0)
+      if (DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
+      if (next.size() == 0) {
+        if (DEBUG) Log.info("returning because next.size==0");
         break;
+      }
     }
 
     assert lastState != null;
+    if (DEBUG) {
+      Log.info("lastState:");
+      System.out.println(lastState.getStepScores());
+      lastState.getRoot().show(System.out);
+      Log.info("bestState:");
+      System.out.println(all.peek().getStepScores());
+      all.peek().getRoot().show(System.out);
+    }
     return new Pair<>(lastState, all);
   }
 

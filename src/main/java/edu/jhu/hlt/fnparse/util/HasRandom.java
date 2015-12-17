@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl.full2;
+package edu.jhu.hlt.fnparse.util;
 
 import java.util.Random;
 

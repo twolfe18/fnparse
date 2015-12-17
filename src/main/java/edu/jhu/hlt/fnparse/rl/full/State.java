@@ -48,9 +48,10 @@ import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HammingLoss;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
-import edu.jhu.hlt.fnparse.rl.full2.HasRandom;
+import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -59,6 +60,7 @@ import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
@@ -577,6 +579,10 @@ public class State implements StateLike {
       return coef != 0;
     }
 
+    public String shortString() {
+      return String.format("(%.1f mute=%s)", coef, muteForwards);
+    }
+
     @Override
     public String toString() {
       return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
@@ -610,8 +616,17 @@ public class State implements StateLike {
 
     @Override
     public String toString() {
-      return String.format("(Score rand=%.1f fp=%d fn=%d tp=%d tn=%d model=%s consObj=%.1f) -> %s",
-          rand, lossFP, lossFN, trueP, trueN, model, constraintObjectivePlusConstant(), prev);
+      return String.format(
+          "(Score forwards=%.1f consObj=%.1f"
+          + " model=%s*%s"
+          + " loss=%s*(fp=%d fn=%d tp=%d tn=%d)"
+          + " rand=%s*%.1f"
+          + ") -> %s",
+          forwards(), constraintObjectivePlusConstant(),
+          info.coefModel().shortString(), model,
+          info.coefLoss().shortString(), lossFP, lossFN, trueP, trueN,
+          info.coefRand().shortString(), rand,
+          prev);
     }
 
     public StepScores(T info, Adjoints model,
@@ -669,7 +684,12 @@ public class State implements StateLike {
      * (This is true of oracle/mv and regardless of search heuristic)
      */
     public double constraintObjectivePlusConstant() {
-      return getModelScore() + trueP + trueN - (lossFN + lossFP);
+//      return getModelScore() + trueP + trueN - (lossFN + lossFP);
+      double c = model.forwards() + trueP + trueN - (lossFN + lossFP);
+//      double c = model.forwards() + trueP - (lossFN + lossFP);
+      if (prev != null)
+        c += prev.constraintObjectivePlusConstant();
+      return c;
     }
 
     /** Search objectve, Cumulative */

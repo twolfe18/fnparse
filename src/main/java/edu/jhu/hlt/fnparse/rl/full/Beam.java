@@ -195,6 +195,12 @@ public interface Beam<T extends StateLike> {
       return scores.last().score;
     }
 
+    public T peek() {
+      if (scores.isEmpty())
+        throw new IllegalStateException();
+      return scores.first().state;
+    }
+
     @Override
     public T pop() {
       BeamItem<T> bi = scores.pollFirst();
