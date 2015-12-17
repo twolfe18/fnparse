@@ -260,7 +260,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     case TFKS.F:
       fi = info.getFrameIndex();
       f = fi.getFrame(p.f);
-      int k = f.numRoles();
+      int k = f.numRoles() - 1;
       while (k >= 0) {
         l = new LL<>(new TV(TFKS.K, k), l);
         k--;

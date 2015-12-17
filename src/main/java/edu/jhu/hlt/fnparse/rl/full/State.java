@@ -685,11 +685,24 @@ public class State implements StateLike {
      */
     public double constraintObjectivePlusConstant() {
 //      return getModelScore() + trueP + trueN - (lossFN + lossFP);
-      double c = model.forwards() + trueP + trueN - (lossFN + lossFP);
-//      double c = model.forwards() + trueP - (lossFN + lossFP);
+
+//      double s = model.forwards() + trueP + trueN - (lossFN + lossFP);
+////      double s = model.forwards() + trueP - (lossFN + lossFP);
+
+      // Only different from forwards() is that this counts TP+TN
+      double s = 0;
+      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+        s += info.coefModel().coef * model.forwards();
+      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+        s += info.coefLoss().coef * -(lossFP + lossFN - (trueN + trueP));
+      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+        s += info.coefRand().coef * rand;
       if (prev != null)
-        c += prev.constraintObjectivePlusConstant();
-      return c;
+        s += prev.forwards();
+
+      if (prev != null)
+        s += prev.constraintObjectivePlusConstant();
+      return s;
     }
 
     /** Search objectve, Cumulative */

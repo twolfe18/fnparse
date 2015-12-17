@@ -21,6 +21,7 @@ import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
+import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -185,7 +186,7 @@ public class FModel implements Serializable {
 //        mvss.getModelScore() + mvss.getHammingLoss()
 //      - (oss.getModelScore() + oss.getHammingLoss()));
     final double hinge = Math.max(0,
-        oss.constraintObjectivePlusConstant() - mvss.constraintObjectivePlusConstant());
+        mvss.constraintObjectivePlusConstant() - oss.constraintObjectivePlusConstant());
     Log.info("mv.score=" + mvss.getModelScore()
         + " mv.loss=" + mvss.getModelScore()
         + " mv.constraintObj=" + mvss.constraintObjectivePlusConstant()
@@ -260,7 +261,8 @@ public class FModel implements Serializable {
 
 
   public static void main(String[] args) {
-    ExperimentProperties config = ExperimentProperties.init(args);
+//    ExperimentProperties config = ExperimentProperties.init(args);
+    ExperimentProperties.init(args);
 //    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-dgb"));
 //    RTConfig rtc = new RTConfig("fmodel-dbg", workingDir, new Random(9001));
 
@@ -284,25 +286,23 @@ public class FModel implements Serializable {
         continue;
 
 //      // skipping to interesting example...
-//      if (!y.getSentence().getId().equals("FNFUTXT1277682"))
+//      if (!y.getSentence().getId().equals("FNFUTXT1271864"))
 //        continue;
 
-      // Its not the weights being initialized wrong (...it shouldn't be anyway...)
-      m.ts.zeroWeights();
-      m.ts.flushAlphabet();
-      m.ts.flushPrimes();
-
-      Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles());
+      Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles() + " numFI=" + y.numFrameInstances());
 
 //      FNParse yhat = m.predict(y) ;
 //      m.getUpdate(y);
 
       // Check learning
-      int c = 0, clim = 10;
+      int c = 0, clim = 3;
       double maxF1 = 0;
       for (int i = 0; i < 20; i++) {
         Update u = m.getUpdate(y);
         u.apply(0.1);
+
+        // Check k upon creation of TFKS
+        TFKS.dbgFrameIndex = m.getPredictInfo(y).getConfig().frPacking.getFrameIndex();
 
         FNParse yhat = m.predict(y);
         SentenceEval se = new SentenceEval(y, yhat);

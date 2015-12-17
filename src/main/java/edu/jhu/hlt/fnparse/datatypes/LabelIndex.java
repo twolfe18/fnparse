@@ -72,6 +72,12 @@ public class LabelIndex implements Serializable {
 //        HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
 //        counts.increment(i);
 //      }
+
+      // if x = [a,b,c]
+      // this will do:
+      // [a,b,c]++
+      // [b,c]++
+      // [c]++
       for (LL<TV> cur = x; cur != null; cur = cur.cdr()) {
         HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
         counts.increment(i);

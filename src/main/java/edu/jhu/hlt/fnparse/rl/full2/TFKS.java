@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
@@ -12,6 +14,8 @@ import edu.jhu.hlt.tutils.hash.Hash;
  * @author travis
  */
 public class TFKS extends LL<TV> {
+
+  public static FrameIndex dbgFrameIndex = null;
 
   public static final int UNSET = -2;
   public static final int MANY_VALS = -1;
@@ -64,6 +68,10 @@ public class TFKS extends LL<TV> {
       break;
     default:
       throw new RuntimeException();
+    }
+    if (dbgFrameIndex != null && f >= 0 && k >= 0) {
+      Frame ff = dbgFrameIndex.getFrame(f);
+      assert k < ff.numRoles() : "k=" + k + " but " + ff.getName() + " only has " + ff.numRoles() + " roles";
     }
   }
 

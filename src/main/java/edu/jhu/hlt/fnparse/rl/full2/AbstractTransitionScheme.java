@@ -144,11 +144,12 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     TV e = n.eggs.car();
     LL<TV> childPrefix = consPrefix(e, n.prefix);
     HashableIntArray x = prefixValues2ar(childPrefix);
-    if (counts.getCount(x) == 0) {
-      if (DEBUG) Log.info(" FP " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
+    int c = counts.getCount(x);
+    if (c == 0) {
+      if (DEBUG) Log.info(" FP " + x + " c=" + c + " childPrefix=" + childPrefix);
       return HammingLoss.FP;
     } else {
-      if (DEBUG) Log.info(" TP " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
+      if (DEBUG) Log.info(" TP " + x + " c=" + c + " childPrefix=" + childPrefix);
       return HammingLoss.TP;
     }
   }
@@ -158,12 +159,14 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     TV e = n.eggs.car();
     LL<TV> childPrefix = consPrefix(e, n.prefix);
     HashableIntArray x = prefixValues2ar(childPrefix);
-    if (counts.getCount(x) == 0) {
-      if (DEBUG) Log.info("TN " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
+    int c = counts.getCount(x);
+    if (c == 0) {
+      if (DEBUG) Log.info("TN " + x + " c=" + c + " childPrefix=" + childPrefix);
       return HammingLoss.TN;
     } else {
-      if (DEBUG) Log.info("FN " + x + " counts.size=" + counts.numNonZero() + " childPrefix=" + childPrefix);
-      return HammingLoss.FN;
+      if (DEBUG) Log.info("FN " + x + " c=" + c + " childPrefix=" + childPrefix);
+//      return HammingLoss.FN;
+      return new HammingLoss(0, 0, c, 0);
     }
   }
 
