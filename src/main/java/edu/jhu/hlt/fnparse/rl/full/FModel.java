@@ -17,7 +17,6 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
-import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;

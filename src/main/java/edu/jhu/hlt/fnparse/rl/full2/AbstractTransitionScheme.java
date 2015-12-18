@@ -9,8 +9,9 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
-import edu.jhu.hlt.fnparse.rl.full.State.HowToSearch;
-import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
+import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
+import edu.jhu.hlt.fnparse.rl.full.StepScores;
+import edu.jhu.hlt.fnparse.rl.full.StepScores.MaxLoss;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
@@ -43,6 +44,54 @@ import edu.jhu.prim.tuple.Pair;
 public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
+
+
+
+  /*
+   * Am I sure this shouldn't just all go into Node2?
+   * Note that the SUM does not live in Node2!
+   * Ah, this is the tricky bit.
+   * You could have Node2->MaxLoss and not have SUM in the LL.
+   * When you do hatch/squash you have to construct a new Node2 anyway...
+   * Ah crap (nice?), does this mean that I can scrap my "subclass LL" way of doing things?
+   * Node2 just has a field which is a monad composed of all the aggregates we need to keep (MaxLoss being one of them)
+   * Lets do a stress test: subclass Node2 with Node2Loss and override newNode...
+   *
+   * => I believe that I actually need to both:
+   * 1) have a MaxLoss field in Node2 since (fp,fn) come from pruned and determined comes from (pruned,children)
+   * 2) subclass LL<Node2Loss> in order to get cheap access to sum:MaxLoss for hatch/squash (e.g. computing determined in 1)
+   *
+   * Lets make sure I understand this:
+   * - its clear how to aggregate MaxLoss from everything under a node (supping fn,fp and determined)
+   * - how are MaxLoss allocated upon hatch?
+   *   there will be a new child, which will have a MaxLoss[fn=fp=0] from eggs
+   *   genEggs needs to know about how many sub-nodes there are in each egg
+   */
+
+  public static class TVML extends TV {
+    private static final long serialVersionUID = -4838453081797752817L;
+    public final MaxLoss loss;
+    public TVML(int type, int value, int numPossible) {
+      super(type, value);
+      loss = new MaxLoss(numPossible);
+    }
+  }
+
+  public static class LLTVML extends LL<TV> {
+    public final MaxLoss sumLoss;
+    public LLTVML(TV item, LL<TV> next) {
+      super(item, next);
+      TVML tvml = (TVML) item;
+      if (next == null) {
+        sumLoss = tvml.loss;
+      } else {
+        sumLoss = MaxLoss.sum(tvml.loss, ((TVML) next.item).loss);
+      }
+    }
+  }
+
+
+
 
   /**
    * See {@link TFKS}, maybe the only reason not to use LL<TV>.init
@@ -82,6 +131,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    */
   abstract LL<TV> genEggs(LL<TV> prefix, Z z);
 
+  /**
+   * How many nodes would appear in this subtree if a node with this prefix
+   * were created?
+   * TODO Implement naive version which just calls genEggs a whole bunch? Would
+   * make for a good test at the least.
+   */
+  abstract int subtreeSize(LL<TV> prefix);
 
   /**
    * Global/dynamic features.
@@ -185,6 +241,28 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
   /** Returns a copy of n with the next egg moved to pruned */
   public Node2 squash(Node2 n) {
+    /*
+     * How would I do this to efficiently preserve MaxLoss?
+     * eggs = LL<TVML>
+     * pruned = LL<TVML>
+     * children = LL<Node2Loss>
+     *
+     * I'm missing some function like:
+     * squashEgg :: egg:TVML[fp=fn=0] -> info:Counts -> pruned:MaxLoss[fn,fp populated]
+     *
+     * def squashLoss(n):
+     *   MaxLoss eggLoss = squashEgg(n.egg)
+     *   LL<TVML> newPruned = consPruned(new TVML(n.egg, eggLoss), n.pruned)
+     *   LL<TV> newEggs = n.eggs.cdr()
+     *   return newNode(n.prefix, newEggs, newPruned, n.children)
+     *
+     * => MaxLoss only needs to live in pruned:LL<TVML>
+     *  NOT QUITE!
+     *  MaxLoss has both numDetermined (which can come from children) and fn,fp (which comes from pruned)
+     *  This seems to indicate that MaxLoss needs to live in Node2 (above pruned and children) to be coherent
+     *  Node2.MaxLoss.fn,fp comes from pruned:LLTVML
+     *  Node2.MaxLoss.determined comes from pruned:LLTVML + children:LLNode2Loss
+     */
     LL<TV> newPruned = consPrefix(n.eggs.car(), n.pruned);
     return newNode(n.prefix, n.eggs.cdr(), newPruned, n.children);
   }
@@ -320,6 +398,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       Adjoints hatchFeats = featsHatch(wife, info);
       double hatchRand = r.nextGaussian();
       StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, hatchLoss, hatchRand, prevScores);
+
+      /*
+       * MaxLosses need to be added up!
+       * Currently, only States have StepScores
+       * MaxLoss seems to indicate that they way this needs to happen is every node needs to have a MaxLoss (maybe StepScores too?)
+       *
+       * Where does MaxLoss live:
+       * 1) in Node2: consider the implications, likely large
+       * 2) in StepScores
+       *    if this were the case, then how would I construct a new MaxLoss in nextStates?
+       *    hatch => 
+       */
 
       Node2 wife2 = squash(wife);
       HammingLoss squashLoss = lossSquash(wife, info);

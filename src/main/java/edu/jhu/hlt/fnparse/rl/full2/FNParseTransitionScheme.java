@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
+import edu.jhu.hlt.fnparse.rl.full.StepScores.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
@@ -31,6 +32,30 @@ import edu.jhu.util.Alphabet;
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
+  
+  
+  
+  public static class Node2Loss extends Node2 {
+    private MaxLoss maxLoss;    // represents union of all children/eggs/pruned
+    public Node2Loss(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children, MaxLoss loss) {
+      super(prefix, eggs, pruned, children);
+      maxLoss = loss;
+    }
+  }
+  Node2 newNode2(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
+    // I still want children:LL<Node2> to be a LLTVML (actually a LLNode2ML)
+    
+    // Maybe this should only really be called with children==null
+    // How is newNode used in AbstractTransitionScheme?
+    
+    // Maybe I just need to derive MaxLoss from prefix HERE instead of having a separate function in AbstractTransitionSystem
+
+  }
+  
+  
+  
+  
+  
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;

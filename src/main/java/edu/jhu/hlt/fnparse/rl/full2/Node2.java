@@ -38,6 +38,18 @@ public class Node2 {
   public final LL<TV> pruned;
   public final LL<Node2> children;
 
+  /*
+   * Previously, Scores were a LL in State2.
+   * Now that I need to have tree-structured MaxLosses living in Node2,
+   * I wonder if I might have tree-structured Scores living in Node2?
+   * The scores would be the scores of every hatch/squash of each of the children/pruned respectively.
+   * => Yes, this works
+   *
+   * Can I just sub-class LL<TV> or LL<Node2> to include MaxLoss and Adjoints?
+   * TV would have to change to something like (TV,MaxLoss)
+   * Perhaps then I don't need anything special...
+   */
+
   public Node2(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
     super();
     this.prefix = prefix;

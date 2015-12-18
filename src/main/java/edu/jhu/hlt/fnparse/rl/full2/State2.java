@@ -3,8 +3,8 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.math.BigInteger;
 
 import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
-import edu.jhu.hlt.fnparse.rl.full.State.HowToSearch;
-import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
+import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
+import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 
 /**

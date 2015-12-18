@@ -6,7 +6,6 @@ import java.util.Iterator;
 import java.util.TreeSet;
 
 import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
-import edu.jhu.hlt.fnparse.rl.full.State.StepScores;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {

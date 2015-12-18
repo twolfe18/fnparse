@@ -9,7 +9,7 @@ import edu.jhu.hlt.tutils.IntPair;
  *
  * @author travis
  */
-public final class TV extends IntPair {
+public class TV extends IntPair {
   private static final long serialVersionUID = -6816158440933474245L;
 
   public TV(int type, int value) {
