@@ -181,20 +181,17 @@ public class FModel implements Serializable {
   }
 
   private Update buildUpdate(StepScores<Info> oss, StepScores<Info> mvss) {
-//    final double hinge = Math.max(0,
-//        mvss.getModelScore() + mvss.getHammingLoss()
-//      - (oss.getModelScore() + oss.getHammingLoss()));
+
     final double hinge = Math.max(0,
-        mvss.constraintObjectivePlusConstant() - oss.constraintObjectivePlusConstant());
-    Log.info("mv.score=" + mvss.getModelScore()
-        + " mv.loss=" + mvss.getModelScore()
-        + " mv.constraintObj=" + mvss.constraintObjectivePlusConstant()
-        + " oracle.score=" + oss.getModelScore()
-        + " oracle.loss=" + oss.getHammingLoss()
-        + " oracle.constraintObj=" + oss.constraintObjectivePlusConstant()
+        (mvss.getCumulativeModelScore() + mvss.getLoss().maxLoss()) - oss.getCumulativeModelScore());
+
+    Log.info("mv.score=" + mvss.getCumulativeModelScore()
+        + " mv.loss=" + mvss.getLoss()
+        + " oracle.score=" + oss.getCumulativeModelScore()
+        + " oracle.loss=" + oss.getLoss()
         + " hinge=" + hinge);
-    assert mvss.getHammingLoss() >= 0 : "mvss=" + mvss;
-    assert oss.getHammingLoss() >= 0 : "oss=" + oss;
+
+    assert oss.getLoss().noLoss() : "oracle has loss: " + oss.getLoss();
 
     return new Update() {
       @Override

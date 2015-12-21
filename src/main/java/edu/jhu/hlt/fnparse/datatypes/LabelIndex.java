@@ -12,7 +12,9 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.LL;
-import edu.jhu.hlt.fnparse.rl.full2.TV;
+import edu.jhu.hlt.fnparse.rl.full2.LLML;
+import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.full2.TVN;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -35,6 +37,12 @@ public class LabelIndex implements Serializable {
   private Map<FrameArgInstance, Set<FrameArgInstance>> all2;
 
 
+  public int getCounts2(int type, int value, TFKS prefix) {
+    LL<TVN> l = new LL<>(new TVN(type, value, null), prefix);
+    HashableIntArray a = AbstractTransitionScheme.prefixValues2ar(l);
+    return getCounts2().getCount(a);
+  }
+
   // New stuff from AbstractTransitionSystem
   public Counts<HashableIntArray> getCounts2() {
     if (counts == null)
@@ -50,7 +58,7 @@ public class LabelIndex implements Serializable {
    *   s -> k -> f -> k -> null
    * for the transition system [T,F,K,S]
    */
-  private void provideLabel(Iterable<LL<TV>> goldYeses) {
+  private void provideLabel(Iterable<LLML<TVN>> goldYeses) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("filling in counts");
     if (counts == null)
@@ -58,7 +66,7 @@ public class LabelIndex implements Serializable {
     else
       counts.clear();
     int prevLen = -1;
-    for (LL<TV> x : goldYeses) {
+    for (LL<TVN> x : goldYeses) {
       HashableIntArray xx = AbstractTransitionScheme.prefixValues2ar(x);
       if (prevLen < 0)
         prevLen = xx.length();
@@ -78,7 +86,7 @@ public class LabelIndex implements Serializable {
       // [a,b,c]++
       // [b,c]++
       // [c]++
-      for (LL<TV> cur = x; cur != null; cur = cur.cdr()) {
+      for (LL<TVN> cur = x; cur != null; cur = cur.cdr()) {
         HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
         counts.increment(i);
       }
@@ -97,7 +105,7 @@ public class LabelIndex implements Serializable {
     this.y = y;
 
     if (ts != null) {
-      Iterable<LL<TV>> conv = ts.encode(y);
+      Iterable<LLML<TVN>> conv = ts.encode(y);
       this.provideLabel(conv);
     }
 

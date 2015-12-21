@@ -778,13 +778,16 @@ public class State implements StateLike {
     }
 
     public List<Span> getPossibleArgs(Frame f, Span t) {
+      
       FrameInstance key = FrameInstance.frameMention(f, t, sentence);
       List<Span> all = prunedSpans.getPossibleArgs(key);
       if (all == null) {
-        System.out.println("f=" + f.getName() + " t=" + t.shortString());
-        System.out.println("s1.id=" + sentence.getId());
-        System.out.println("s2.id=" + prunedSpans.getSentence().getId());
-        System.out.println("s.size=" + sentence.size());
+//        System.out.println("f=" + f.getName() + " t=" + t.shortString());
+//        System.out.println("s1.id=" + sentence.getId());
+//        System.out.println("s2.id=" + prunedSpans.getSentence().getId());
+//        System.out.println("s.size=" + sentence.size());
+
+        return Arrays.asList(Span.nullSpan);
       }
       List<Span> nn = new ArrayList<>(all.size() - 1);
       for (Span s : all)
@@ -937,15 +940,17 @@ public class State implements StateLike {
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
     double rand = info.config.rand.nextGaussian();
-    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
-    return new State(frames, true, true, incomplete, ss, info);
+//    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
+//    return new State(frames, true, true, incomplete, ss, info);
+    throw new RuntimeException("fixme");
   }
 
   public State noMoreTargets(Adjoints partialScore) {
     assert !noMoreTargets;
     double rand = info.config.rand.nextGaussian();
-    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
-    return new State(frames, noMoreFrames, true, incomplete, ss, info);
+//    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
+//    return new State(frames, noMoreFrames, true, incomplete, ss, info);
+    throw new RuntimeException("fixme");
   }
 
   public String show() {
@@ -1645,7 +1650,8 @@ public class State implements StateLike {
 
     double rr = 2 * (info.config.rand.nextDouble() - 0.5);
 
-    return new StepScores<>(info, model, fp, fn, tp, tn, rr, score);
+//    return new StepScores<>(info, model, fp, fn, tp, tn, rr, score);
+    throw new RuntimeException("fixme");
   }
 
   public StepScores<Info> f(AT actionType, FI newFI, List<ProductIndex> stateFeats) {
@@ -1788,14 +1794,16 @@ public class State implements StateLike {
     push(beam, overall, ss);
 
     if (!info.coefLoss.iszero()) {
-      if (featsN.getHammingLoss() == 0 && featsS.getHammingLoss() == 0) {
+      double nl = featsN.getLoss().maxLoss();
+      double sl = featsS.getLoss().maxLoss();
+      if (nl == 0 && sl == 0) {
         // Re-run f() so that you can see what loss it picked up
         DEBUG_F = true;
         f(AT.NEW_K, fi, newRI, sf);
         f(AT.STOP_K, fi, riStop, sf);
         Log.info(fi);
       }
-      assert featsN.getHammingLoss() > 0 || featsS.getHammingLoss() > 0;
+      assert nl > 0 || sl > 0;
     }
 
     return 2;
@@ -2228,7 +2236,7 @@ public class State implements StateLike {
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
      */
-    StepScores<Info> zero = new StepScores<>(inf, Adjoints.Constant.ZERO, 0, 0, 0, 0, 0, null);
+    StepScores<Info> zero = new StepScores<>(inf, Adjoints.Constant.ZERO, MaxLoss.ZERO, 0, null);
     State s0 = new State(null, false, false, null, zero, inf)
         .setFramesToGoldLabels();
 

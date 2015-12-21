@@ -16,7 +16,7 @@ public class RoleLL extends PrimesLL {
    */
   protected final long realizedMask;
 
-  public RoleLL(Node2 item, LL<Node2> next, ToLongFunction<LL<TV>> getPrimes) {
+  public RoleLL(Node2 item, LLML<Node2> next, ToLongFunction<LL<TVN>> getPrimes) {
     super(item, next, getPrimes);
     if (item.getType() != TFKS.K)
       throw new IllegalArgumentException();

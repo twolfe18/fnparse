@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 
-public class Node2 {
+import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
+
+public class Node2 implements HasMaxLoss {
 
   public static boolean DEBUG = false;
 
@@ -15,7 +17,7 @@ public class Node2 {
    * signature
    */
   public static class NodeWithSignature extends Node2 {
-    public NodeWithSignature(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
+    public NodeWithSignature(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children) {
       super(prefix, eggs, pruned, children);
       assert children == null || children instanceof PrimesLL;
     }
@@ -33,29 +35,33 @@ public class Node2 {
     }
   }
 
-  public final LL<TV> prefix;        // path from root, including teis nodes (type,value)
-  public final LL<TV> eggs;
-  public final LL<TV> pruned;
-  public final LL<Node2> children;
+  // Conceptual note: each of these is a sub-class of either LL<TVN> or LL<Node2>
+  public final TFKS prefix;        // path from root, including teis nodes (type,value)
+  public final LLML<TVN> eggs;
+  public final LLML<TVN> pruned;
+  public final LLML<Node2> children;
+  public final MaxLoss loss;
 
-  /*
-   * Previously, Scores were a LL in State2.
-   * Now that I need to have tree-structured MaxLosses living in Node2,
-   * I wonder if I might have tree-structured Scores living in Node2?
-   * The scores would be the scores of every hatch/squash of each of the children/pruned respectively.
-   * => Yes, this works
-   *
-   * Can I just sub-class LL<TV> or LL<Node2> to include MaxLoss and Adjoints?
-   * TV would have to change to something like (TV,MaxLoss)
-   * Perhaps then I don't need anything special...
-   */
-
-  public Node2(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
+  public Node2(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children) {
     super();
     this.prefix = prefix;
     this.eggs = eggs;
     this.pruned = pruned;
     this.children = children;
+    MaxLoss eL = eggs == null ? MaxLoss.ZERO : eggs.getLoss();
+    MaxLoss pL = pruned == null ? MaxLoss.ZERO : pruned.getLoss();
+    MaxLoss cL = children == null ? MaxLoss.ZERO : children.getLoss();
+    this.loss = new MaxLoss(
+        eL.numPossible + pL.numPossible + cL.numPossible,
+        pL.numDetermined + cL.numDetermined,
+        pL.fp,
+        cL.fp);
+    assert eL.noneDetermined();
+  }
+
+  @Override
+  public MaxLoss getLoss() {
+    return loss;
   }
 
   public boolean isLeaf() {
@@ -66,15 +72,9 @@ public class Node2 {
 
   @Override
   public String toString() {
-//    StringBuilder sb = new StringBuilder("(Node\n");
-//    sb.append(" prefix=" + prefix + "\n");
-//    sb.append(" eggs=" + eggs + "\n");
-//    sb.append(" pruned=" + pruned + "\n");
-//    sb.append(" children=" + children + "\n");
-//    sb.append(')');
-//    return sb.toString();
     String p = prefix == null ? "null" : ((TFKS) prefix).str();
     return "(Node2 " + p
+        + " loss=" + loss
         + " nEgg=" + LL.length(eggs)
         + " nPrune=" + LL.length(pruned)
         + " nChild=" + LL.length(children)
@@ -83,15 +83,14 @@ public class Node2 {
 
   public void show(PrintStream ps) { show(ps, ""); }
   public void show(PrintStream ps, String indent) {
-//    ps.printf("%sNode %s  %s\n", indent, getTypeStr(), dbgGetTVStr());
-    ps.printf("%sNode %s\n", indent, dbgGetTVStr());
+    ps.printf("%sNode %s  %s\n", indent, dbgGetTVStr(), loss);
     indent = "  " + indent;
     int i;
     if (eggs == null) {
       ps.printf("%seggs == NIL\n", indent);
     } else {
       i = 0;
-      for (LL<TV> cur = eggs; cur != null; cur = cur.cdr(), i++)
+      for (LL<TVN> cur = eggs; cur != null; cur = cur.cdr(), i++)
         ps.printf("%segg[%d] %s\n", indent, i, cur.car());
     }
 
@@ -99,7 +98,7 @@ public class Node2 {
       ps.printf("%sprune == NIL\n", indent);
     } else {
       i = 0;
-      for (LL<TV> cur = pruned; cur != null; cur = cur.cdr(), i++)
+      for (LL<TVN> cur = pruned; cur != null; cur = cur.cdr(), i++)
         ps.printf("%sprune[%d] %s\n", indent, i, cur.car());
     }
 
@@ -140,7 +139,7 @@ public class Node2 {
 
   public String dbgGetTVStr() {
     StringBuilder sb = null;
-    for (LL<TV> cur = prefix; cur != null; cur = cur.cdr()) {
+    for (LL<TVN> cur = prefix; cur != null; cur = cur.cdr()) {
       if (sb == null)
         sb = new StringBuilder();
       else
@@ -177,9 +176,9 @@ public class Node2 {
       throw new RuntimeException(errs.toString());
   }
 
-  public static BitSet getTypes(LL<TV> items) {
+  public static BitSet getTypes(LL<TVN> items) {
     BitSet bs = new BitSet();
-    for (LL<TV> cur = items; cur != null; cur = cur.next)
+    for (LL<TVN> cur = items; cur != null; cur = cur.next)
       bs.set(cur.item.getType());
     return bs;
   }

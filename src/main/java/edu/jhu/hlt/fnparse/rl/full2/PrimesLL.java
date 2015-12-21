@@ -7,11 +7,11 @@ import java.util.function.ToLongFunction;
  * 
  * @author travis
  */
-public class PrimesLL extends LL<Node2> {
+public class PrimesLL extends LLML<Node2> {
 
   protected BigInteger primesProduct;
 
-  public PrimesLL(Node2 item, LL<Node2> next, ToLongFunction<LL<TV>> getPrimes) {
+  public PrimesLL(Node2 item, LLML<Node2> next, ToLongFunction<LL<TVN>> getPrimes) {
     super(item, next);
     long p = getPrimes.applyAsLong(item.prefix);
     primesProduct = BigInteger.valueOf(p);

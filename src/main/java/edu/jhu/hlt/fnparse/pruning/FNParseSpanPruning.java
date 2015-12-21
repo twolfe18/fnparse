@@ -176,12 +176,12 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   public List<Span> getPossibleArgs(FrameInstance key) {
     List<Span> args = possibleArgs.get(key);
     if (args == null) {
-      System.out.println("entries in possibleArgs:");
-      for (Map.Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
-        System.out.println(x.getKey());
-        System.out.println(x.getValue());
-        System.out.println();
-      }
+//      System.out.println("entries in possibleArgs:");
+//      for (Map.Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+//        System.out.println(x.getKey());
+//        System.out.println(x.getValue());
+//        System.out.println();
+//      }
       return null;
 //      throw new IllegalStateException();
     }

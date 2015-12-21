@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.hash.Hash;
  *
  * @author travis
  */
-public class TFKS extends LL<TV> {
+public class TFKS extends LL<TVN> {
 
   public static FrameIndex dbgFrameIndex = null;
 
@@ -39,7 +39,7 @@ public class TFKS extends LL<TV> {
   // Values
   public final int t, f, k, s;
 
-  public TFKS(TV item, TFKS next) {
+  public TFKS(TVN item, TFKS next) {
     super(item, next);
     switch (item.getType()) {
     case T:

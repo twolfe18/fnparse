@@ -13,9 +13,9 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
-import edu.jhu.hlt.fnparse.rl.full.StepScores.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
@@ -32,30 +32,6 @@ import edu.jhu.util.Alphabet;
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
-  
-  
-  
-  public static class Node2Loss extends Node2 {
-    private MaxLoss maxLoss;    // represents union of all children/eggs/pruned
-    public Node2Loss(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children, MaxLoss loss) {
-      super(prefix, eggs, pruned, children);
-      maxLoss = loss;
-    }
-  }
-  Node2 newNode2(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
-    // I still want children:LL<Node2> to be a LLTVML (actually a LLNode2ML)
-    
-    // Maybe this should only really be called with children==null
-    // How is newNode used in AbstractTransitionScheme?
-    
-    // Maybe I just need to derive MaxLoss from prefix HERE instead of having a separate function in AbstractTransitionSystem
-
-  }
-  
-  
-  
-  
-  
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -117,34 +93,45 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     prefix2primeIdx = new Alphabet<>();
   }
 
-  public long primeFor(LL<TV> prefix) {
+  public long primeFor(LL<TVN> prefix) {
     TFKS p = (TFKS) prefix;
     int i = prefix2primeIdx.lookupIndex(p, true);
     return primes.get(i);
   }
 
   @Override
-  public LL<TV> consPrefix(TV car, LL<TV> cdr) {
+  public TFKS consPrefix(TVN car, TFKS cdr) {
     return new TFKS(car, (TFKS) cdr);
   }
 
   @Override
-  public LL<Node2> consChild(Node2 car, LL<Node2> cdr) {
+  public LLML<Node2> consChild(Node2 car, LLML<Node2> cdr) {
     if (car.getType() == TFKS.K)
       return new RoleLL(car, cdr, this::primeFor);
     return new PrimesLL(car, cdr, this::primeFor);
   }
 
   @Override
-  public NodeWithSignature newNode(LL<TV> prefix, LL<TV> eggs, LL<TV> pruned, LL<Node2> children) {
+  LLML<TVN> consEggs(TVN car, LLML<TVN> cdr) {
+    return new LLML<>(car, cdr);
+  }
+
+  @Override
+  LLML<TVN> consPruned(TVN car, LLML<TVN> cdr) {
+    return new LLML<>(car, cdr);
+  }
+
+  @Override
+  public NodeWithSignature newNode(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children) {
     return new NodeWithSignature(prefix, eggs, pruned, children);
   }
 
   @Override
-  public Iterable<LL<TV>> encode(FNParse y) {
+  public Iterable<LLML<TVN>> encode(FNParse y) {
     if (DEBUG_ENCODE)
       Log.info("encoding y=" + Describe.fnParse(y));
-    List<LL<TV>> yy = new ArrayList<>();
+    MaxLoss l = new MaxLoss(1);
+    List<LLML<TVN>> yy = new ArrayList<>();
     int n = y.getSentence().size();
     for (FrameInstance fi : y.getFrameInstances()) {
       Frame fr = fi.getFrame();
@@ -155,15 +142,27 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Span a = fi.getArgument(k);
         if (a != Span.nullSpan) {
           int s = Span.encodeSpan(a, n);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+0*K, TFKS.F, f, TFKS.T, t));
+          yy.add(
+              consEggs(new TVN(TFKS.S, s, l),
+              consEggs(new TVN(TFKS.K, k+0*K, l),
+              consEggs(new TVN(TFKS.F, f, l),
+              consEggs(new TVN(TFKS.T, t, l), null)))));
         }
         for (Span ca : fi.getContinuationRoleSpans(k)) {
           int s = Span.encodeSpan(ca, n);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+1*K, TFKS.F, f, TFKS.T, t));
+          yy.add(
+              consEggs(new TVN(TFKS.S, s, l),
+              consEggs(new TVN(TFKS.K, k+1*K, l),
+              consEggs(new TVN(TFKS.F, f, l),
+              consEggs(new TVN(TFKS.T, t, l), null)))));
         }
         for (Span ra : fi.getReferenceRoleSpans(k)) {
           int s = Span.encodeSpan(ra, n);
-          yy.add(Node2Tests.lltvSugar(TFKS.S, s, TFKS.K, k+2*K, TFKS.F, f, TFKS.T, t));
+          yy.add(
+              consEggs(new TVN(TFKS.S, s, l),
+              consEggs(new TVN(TFKS.K, k+2*K, l),
+              consEggs(new TVN(TFKS.F, f, l),
+              consEggs(new TVN(TFKS.T, t, l), null)))));
         }
       }
     }
@@ -189,7 +188,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public Map<FrameInstance, List<Pair<String, Span>>> groupByFrame(
-      Iterable<LL<TV>> z,
+      Iterable<LL<TVN>> z,
       Info info) {
     Sentence sent = info.getSentence();
     int sentLen = sent.size();
@@ -197,7 +196,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("z=" + z);
     FrameIndex fi = info.getFrameIndex();
     Map<FrameInstance, List<Pair<String, Span>>> m = new HashMap<>();
-    for (LL<TV> prefix : z) {
+    for (LL<TVN> prefix : z) {
       TFKS p = (TFKS) prefix;
       if (p == null) {
         if (AbstractTransitionScheme.DEBUG)
@@ -229,7 +228,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public FNParse decode(Iterable<LL<TV>> z, Info info) {
+  public FNParse decode(Iterable<LL<TVN>> z, Info info) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting...");
     Sentence sent = info.getSentence();
@@ -251,9 +250,54 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return new FNParse(sent, fis);
   }
 
+  /**
+   * Give the size of the tree rooted at (type,value), whose parents are given
+   * by prefix.
+   */
+  private int subtreeSize(int type, int value, TFKS prefix, Info info) {
+    int sentLen = info.getSentence().size();
+    int n = 0;
+    if (type == TFKS.T) {
+      Span ts = Span.decodeSpan(value, sentLen);
+      for (Frame f : info.getPossibleFrames(ts)) {
+        int K = f.numRoles();
+        if (info.getConfig().useContRoles)
+          K += f.numRoles();
+        if (info.getConfig().useRefRoles)
+          K += f.numRoles();
+        int S = info.getPossibleArgs(f, ts).size();
+        n += K * S;
+      }
+    } else if (type == TFKS.F) {
+      Span ts = Span.decodeSpan(prefix.t, sentLen);
+      Frame f = info.getFrameIndex().getFrame(value);
+      int K = f.numRoles();
+      if (info.getConfig().useContRoles)
+        K += f.numRoles();
+      if (info.getConfig().useRefRoles)
+        K += f.numRoles();
+      int S = info.getPossibleArgs(f, ts).size();
+      n += K * S;
+    } else if (type == TFKS.K) {
+      Span ts = Span.decodeSpan(prefix.t, sentLen);
+      Frame f = info.getFrameIndex().getFrame(value);
+      // Since we are assuming (t,f) are given, there will be non-gold f' s.t. possibleArgs(t,f') = {}
+      List<Span> args = info.getPossibleArgs(f, ts);
+//      if (args == null)
+//        n += 1;
+//      else
+        n += args.size();
+    } else if (type == TFKS.S) {
+      n += 1;
+    } else {
+      throw new RuntimeException("unknown type: " + type);
+    }
+    return n;
+  }
+
   @Override
-  public LL<TV> genEggs(LL<TV> prefix, Info info) {
-    LL<TV> l = null;
+  public LLML<TVN> genEggs(TFKS prefix, Info info) {
+    LLML<TVN> l = null;
     int n = info.getSentence().size();
 
     // () -> T
@@ -261,33 +305,40 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // TODO Sort these by static model score
       for (Span ts : info.getPossibleTargets()) {
         int t = Span.encodeSpan(ts, n);
-        l = new LL<>(new TV(TFKS.T, t), l);
+        int possible = subtreeSize(TFKS.T, t, prefix, info);
+        int fn = info.getLabel().getCounts2(TFKS.T, t, prefix);
+        int determined = 0; // TODO
+        MaxLoss loss = new MaxLoss(possible, determined, 0, fn);
+        l = new LLML<>(new TVN(TFKS.T, t, loss), l);
       }
       return l;
     }
 
-    TFKS p;
-    if (prefix instanceof TFKS)
-      p = (TFKS) prefix;
-    else
-      throw new IllegalArgumentException("prefix must be a TFKS");
     Span t;
     Frame f;
     FrameIndex fi;
-    TV egg = prefix.car();
+    TVN egg = prefix.car();
     switch (egg.getType()) {
     case TFKS.T:      // T -> F
-      t = Span.decodeSpan(p.t, n);
+      t = Span.decodeSpan(prefix.t, n);
       for (Frame ff : info.getPossibleFrames(t)) {
-        l = new LL<>(new TV(TFKS.F, ff.getId()), l);
+        int possible = subtreeSize(TFKS.F, ff.getId(), prefix, info);
+        int fn = info.getLabel().getCounts2(TFKS.F, ff.getId(), prefix);
+        int determined = 0; // TODO
+        MaxLoss loss = new MaxLoss(possible, determined, 0, fn);
+        l = new LLML<>(new TVN(TFKS.F, ff.getId(), loss), l);
       }
       return l;
     case TFKS.F:
       fi = info.getFrameIndex();
-      f = fi.getFrame(p.f);
+      f = fi.getFrame(prefix.f);
       int k = f.numRoles() - 1;
       while (k >= 0) {
-        l = new LL<>(new TV(TFKS.K, k), l);
+        int possible = subtreeSize(TFKS.K, k, prefix, info);
+        int fn = info.getLabel().getCounts2(TFKS.K, k, prefix);
+        int determined = 0; // TODO
+        MaxLoss loss = new MaxLoss(possible, determined, 0, fn);
+        l = new LLML<>(new TVN(TFKS.K, k, loss), l);
         k--;
       }
       if (useContRoles)
@@ -297,15 +348,19 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return l;
     case TFKS.K:
       fi = info.getFrameIndex();
-      t = Span.decodeSpan(p.t, n);
-      f = fi.getFrame(p.f);
+      t = Span.decodeSpan(prefix.t, n);
+      f = fi.getFrame(prefix.f);
       List<Span> poss = info.getPossibleArgs(f, t);
       if (poss.size() == 0)
         throw new RuntimeException("check this!");
       assert !poss.contains(Span.nullSpan);
       for (Span ss : poss) {
         int s = Span.encodeSpan(ss, n);
-        l = new LL<>(new TV(TFKS.S, s), l);
+        int possible = subtreeSize(TFKS.S, s, prefix, info);
+        int fn = info.getLabel().getCounts2(TFKS.S, s, prefix);
+        int determined = 0; // TODO
+        MaxLoss loss = new MaxLoss(possible, determined, 0, fn);
+        l = new LLML<>(new TVN(TFKS.S, s, loss), l);
       }
       return l;
     case TFKS.S:
@@ -317,7 +372,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   private List<String> dynFeats1(Node2 n, Info info) {
     assert n.eggs != null : "hatch/squash both require an egg!";
-    TV egg = n.eggs.car();
+    TVN egg = n.eggs.car();
     TFKS p = (TFKS) consPrefix(egg, n.prefix);   // of the child!
     List<String> feats = new ArrayList<>();
     if (useOverfitFeatures) {

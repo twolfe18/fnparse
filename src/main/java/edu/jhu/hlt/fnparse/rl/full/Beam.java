@@ -38,7 +38,7 @@ public interface Beam<T extends StateLike> {
 
 
   public interface StateLike {
-    public StepScores getStepScores();
+    public StepScores<?> getStepScores();
     public BigInteger getSignature();
     // StateLike should be hashable
     public int hashCode();
@@ -144,7 +144,9 @@ public interface Beam<T extends StateLike> {
       case BEAM_SEARCH_OBJ:
         return s.getStepScores().forwards();
       case CONSTRAINT_OBJ:
-        return s.getStepScores().constraintObjectivePlusConstant();
+//        return s.getStepScores().constraintObjectivePlusConstant();
+        StepScores<?> ss = s.getStepScores();
+        return ss.getCumulativeModelScore() + ss.getLoss().maxLoss();
       default:
         throw new RuntimeException("unknown mode: " + mode);
       }
