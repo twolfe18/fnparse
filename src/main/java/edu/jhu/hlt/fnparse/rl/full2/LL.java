@@ -4,10 +4,12 @@ public class LL<T> {
 
   protected final T item;
   protected final LL<T> next;
+  protected final int length;
 
   public LL(T item, LL<T> next) {
     this.item = item;
     this.next = next;
+    this.length = next == null ? 1 : next.length + 1;
   }
 
   @Override
@@ -21,6 +23,15 @@ public class LL<T> {
 
   public LL<T> cdr() {
     return next;
+  }
+
+  public int length() {
+    return length;
+  }
+  public static int length(LL<?> l) {
+    if (l == null)
+      return 0;
+    return l.length;
   }
 
   /* THESE AREN'T GOING TO WORK FOR SUB-TYPES OF LL ***************************/
@@ -41,11 +52,5 @@ public class LL<T> {
 
   public LL<T> prepend(T item) {
     return new LL<>(item, this);
-  }
-
-  public static int length(LL<?> ll) {
-    if (ll == null)
-      return 0;
-    return 1 + length(ll.cdr());
   }
 }

@@ -10,6 +10,7 @@ import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
+import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
@@ -42,6 +43,7 @@ import edu.jhu.prim.tuple.Pair;
 public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
+  public static boolean DEBUG_LOSS = true;
 
   /*
    * Am I sure this shouldn't just all go into Node2?
@@ -71,8 +73,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    */
   abstract TFKS consPrefix(TVN car, TFKS cdr);
 
-  abstract LLML<TVN> consEggs(TVN car, LLML<TVN> cdr);
-  abstract LLML<TVN> consPruned(TVN car, LLML<TVN> cdr);
+  abstract LL<TVN> consEggs(TVN car, LL<TVN> cdr);
+  abstract LLTVN consPruned(TVN car, LLTVN cdr);
 
   /**
    * Create the appropriate list which stores aggregates for global features
@@ -83,7 +85,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * Construct a node. Needed to be a method so that if you want to instantiate
    * a sub-class of Node2, you can do that behind this layer of indirection.
    */
-  abstract Node2 newNode(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children);
+  abstract Node2 newNode(TFKS prefix, LL<TVN> eggs, LLTVN pruned, LLML<Node2> children);
 
 
   /**
@@ -91,7 +93,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * For now I'm assuming a total ordering over types, and thus the returned
    * values should match this order.
    */
-  public abstract Iterable<LLML<TVN>> encode(Y y);
+  public abstract Iterable<LL<TVN>> encode(Y y);
 
   /**
    * Must be able to ignore prefixes. E.g. if an element of z only specifies
@@ -105,7 +107,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * Create a list of possible next values to expand given a node at prefix.
    * For now I'm assuming the returned list is type-homongenous.
    */
-  abstract LLML<TVN> genEggs(TFKS prefix, Z z);
+  abstract LL<TVN> genEggs(TFKS prefix, Z z);
 
   // NOTE: The new goal is that MaxLoss is snuck in via TVN from genEggs
 //  abstract int subtreeSize(LL<TV> prefix);
@@ -179,13 +181,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   // light of the implementation below.
 
   /** Returns a copy of n with the child formed by hatching the next egg */
-  public Node2 hatch(Node2 n, Z z) {
-    TFKS newPrefix = consPrefix(n.eggs.car(), n.prefix);
-    LLML<TVN> newEggs = genEggs(newPrefix, z);
-    assert newEggs == null || newEggs.getLoss().noneDetermined();
+  public Node2 hatch(Node2 wife, Z z) {
+    TFKS newPrefix = consPrefix(wife.eggs.car(), wife.prefix);
+    LL<TVN> newEggs = genEggs(newPrefix, z);
     Node2 hatched = newNode(newPrefix, newEggs, null, null);
-    LLML<Node2> children = consChild(hatched, n.children);
-    return newNode(n.prefix, n.eggs.cdr(), n.pruned, children);
+    LLML<Node2> children = consChild(hatched, wife.children);
+    Node2 mother = newNode(wife.prefix, wife.eggs.cdr(), wife.pruned, children);
+    return mother;
   }
 
   /** Returns a copy of n with the next egg moved to pruned */
@@ -212,7 +214,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
      *  Node2.MaxLoss.fn,fp comes from pruned:LLTVML
      *  Node2.MaxLoss.determined comes from pruned:LLTVML + children:LLNode2Loss
      */
-    LLML<TVN> newPruned = consPruned(n.eggs.car(), n.pruned);
+    LLTVN newPruned = consPruned(n.eggs.car(), n.pruned);
     return newNode(n.prefix, n.eggs.cdr(), newPruned, n.children);
   }
 
@@ -298,11 +300,16 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
         throw new RuntimeException("not supported");
       }
     };
-//    LL<Node2> spine = consChild(cur.getNode(), null);
-    LL<Node2> spine = new LL<>(cur.getRoot(), null);
-    nextStates(cur, spine, composite);
+////    LL<Node2> spine = consChild(cur.getNode(), null);
+//    LL<Node2> spine = new LL<>(cur.getRoot(), null);
+//    nextStates(cur, spine, composite);
+    nextStates(cur, composite);
   }
 
+  public void nextStates(State2<Z> root, Beam<State2<Z>> addTo) {
+    LL<Node2> spine = new LL<>(root.getRoot(), null);
+    nextStates(root, spine, addTo);
+  }
 
   /**
    * TODO Add ability to bound new-node scores and bail out early (don't recurse).
@@ -318,11 +325,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
     Node2 wife = spine.car();
     if (DEBUG) {
-      Log.info("expanding a state:");
-      System.out.println("score: " + root.getStepScores());
-//      System.out.println("node: " + prev.getNode());
-//      System.out.print("root: ");
-//      root.getNode().show(System.out);
+      Log.info("expanding from wife:");
+      System.out.println("root score: " + root.getStepScores());
       System.out.print("wife: ");
       wife.show(System.out);
     }
@@ -343,49 +347,84 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       // hatch will be counted naturally and easily by squash. If this is too
       // slow then optimize, but this is so clean.
       Node2 mother = hatch(wife, info);
-//      HammingLoss hatchLoss = lossHatch(wife, info);
-      Adjoints hatchFeats = featsHatch(wife, info);
-      double hatchRand = r.nextGaussian();
-      StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, mother.getLoss(), hatchRand, prevScores);
+      Adjoints hatchFeats = Adjoints.sum(featsHatch(wife, info), prevScores.getModel());
+      double hatchRand = r.nextGaussian() + prevScores.getRand();
+      MaxLoss hatchLoss = mother.getLoss();
+      StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, hatchLoss, hatchRand);
 
-      /*
-       * MaxLosses need to be added up!
-       * Currently, only States have StepScores
-       * MaxLoss seems to indicate that they way this needs to happen is every node needs to have a MaxLoss (maybe StepScores too?)
-       *
-       * Where does MaxLoss live:
-       * 1) in Node2: consider the implications, likely large
-       * 2) in StepScores
-       *    if this were the case, then how would I construct a new MaxLoss in nextStates?
-       *    hatch => 
-       */
+      if (DEBUG_LOSS && DEBUG) {
+        System.out.println("[hatch] mother.loss=" + mother.getLoss());
+      }
+
 
       Node2 wife2 = squash(wife);
-//      HammingLoss squashLoss = lossSquash(wife, info);
       Adjoints squashFeats = featsSquash(wife, info);
       double squashRand = r.nextGaussian();
-      StepScores<Z> squashScore = new StepScores<>(info, squashFeats, wife2.getLoss(), squashRand, prevScores);
+      MaxLoss squashLoss = wife2.getLoss();
+      StepScores<Z> squashScore = new StepScores<>(info, squashFeats, squashLoss, squashRand);
+      /* These are features for just this action.
+       * If I want scores for the entire state, then I need to take them as
+       * an argument... maybe steal them from root:State2
+       * StepScores = {
+       *   MaxLoss which can be read off from root:Node2->getLoss
+       *   model features which are root:State2->StepScores->modelScore
+       *   rand which is root:State2.rand + newRand()
+       * }
+       * The only hard one is model score, which requires that I pass features computed
+       * somewhere in the tree up to the root.
+       *
+       * Why not just force Node2 to have StepScores?
+       * This would make everything run on replaceNode.
+       * For a node on a length D path from root, this would require D new StepScores
+       * The old way, we could just cons a new Adjoints onto a right-branching tree of Adjoints.Sum
+       * This is not the end of the world... its not clear that you can remove this O(D) factor anyway, you are likely just forcing the complexity onto the call stack
+       * What about bounding score of actions? Will I need Node2 to have StepScores for that?
+       * I need StepScores to bound the score of an action (since the coefs may look at model score)
+       * I'm not sure... but it seems like it would be helpful, or at least make the implementation simpler.
+       * => Make change provided implementation is clear:
+       *   consChild: adds all terms in StepScores, previously it just added MaxLoss
+       *     does this mean that every Node2 has a rand? before it was action...
+       *     every Node2 is created by a hatch action...
+       *     only non-trivial implication is that every TVN in pruned must also have a rand.
+       *     => TVN now goes to TVSS = (TV,StepScores)
+       *   consPrefix: should just be LL<TVN> (I remember needing numPossible and/or goldMatching in prefix.car())
+       *   consPruned: needs to sum up (rand:double, loss:MaxLoss, model:Adjoints)
+       *   consEggs: eggs have (rand:double, modelStatic:Adjoints) but loss:MaxLoss is ambiguous because all you know is goldMatching, its not clear if they'll end up as FP or FN because they could go in pruned or children respectively
+       * => Static scores can be stored in eggs!
+       */
+
+      if (DEBUG_LOSS && DEBUG) {
+        System.out.println("[squash] wife2.loss=" + wife2.getLoss());
+      }
+
+
+      assert mother.prefix == wife2.prefix;
+      assert wife.getLoss().numPossible == mother.getLoss().numPossible
+          : "possible should not change when you have a kid"
+            + " wife.poss=" + wife.getLoss().numPossible
+            + " mother.poss=" + mother.getLoss().numPossible;
+      assert mother.getLoss().numPossible == wife2.getLoss().numPossible
+          : "having vs not having shouldn't change possible";
+
+
 
       if (spine.cdr() == null) {  // mother is root!
-        addTo.offer(new State2<Z>(mother, hatchScore));
-        addTo.offer(new State2<Z>(wife2, squashScore));
+        addTo.offer(new State2<Z>(mother, hatchScore, "hatch"));
+        addTo.offer(new State2<Z>(wife2, squashScore, "squash"));
       } else {
-//        Node2 momInLaw = spine.cdr().car();
-//        Node2 rootHatch = replaceChild(momInLaw, wife, mother);
-//        Node2 rootSquash = replaceChild(momInLaw, wife, wife2);
         LL<Node2> momInLaw = spine.cdr();
         Node2 rootHatch = replaceNode(momInLaw, wife, mother);
         Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
-        addTo.offer(new State2<Z>(rootHatch, hatchScore));
-        addTo.offer(new State2<Z>(rootSquash, squashScore));
+        addTo.offer(new State2<Z>(rootHatch, hatchScore, "hatch"));
+        addTo.offer(new State2<Z>(rootSquash, squashScore, "squash"));
       }
     }
 
     // Recurse
     int i = 0;
     for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
-//      LL<Node2> spine2 = consChild(cur.car(), spine);
-      if (DEBUG) Log.info("recursing on child " + i);
+      if (DEBUG)
+        Log.info("recursing on child " + i);
       LL<Node2> spine2 = new LL<>(cur.car(), spine);
       nextStates(root, spine2, addTo);
     }
@@ -404,13 +443,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
     DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.CONSTRAINT_OBJ);
+//    DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.BEAM_SEARCH_OBJ);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), Beam.Mode.BEAM_SEARCH_OBJ);
-    DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), Beam.Mode.BEAM_SEARCH_OBJ);
+    Beam.Mode bsearchObj = Beam.Mode.BEAM_SEARCH_OBJ;
+    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), bsearchObj);
+    DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
 
     State2<Z> lastState = null;
     //      push(next, all, s0);
@@ -446,13 +487,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   }
 
   public Node2 genRootNode(Z info) {
-    LLML<TVN> eggs = genEggs(null, info);
+    LL<TVN> eggs = genEggs(null, info);
     return newNode(null, eggs, null, null);
   }
 
   public State2<Z> genRootState(Z info) {
     Node2 root = genRootNode(info);
-    StepScores<Z> s = new StepScores<>(info, Adjoints.Constant.ZERO, root.getLoss(), 0, null);
+    StepScores<Z> s = new StepScores<>(info, Adjoints.Constant.ZERO, root.getLoss(), 0);
     return new State2<>(root, s);
   }
 

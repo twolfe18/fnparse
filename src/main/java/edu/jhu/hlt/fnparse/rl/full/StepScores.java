@@ -17,33 +17,28 @@ public class StepScores<T extends HowToSearch> implements Adjoints {
   private final Adjoints model;
   private final MaxLoss loss;    // NOTE: This should be taken from Node2.loss
   private final double rand;
-  private final StepScores<T> prev;
 
   @Override
   public String toString() {
     return String.format(
-        "(Score forwards=%.1f"
+        "(Score"
+        + " forwards=%.1f"
+        + " forwardsMin=%.1f"
         + " model=%s*%s"
         + " maxLoss=%s*%s"
-        + " rand=%s*%.1f"
-        + ") -> %s",
+        + " rand=%s*%.1f)",
         forwards(),
+        forwardsMin(),
         info.coefModel().shortString(), model,
         info.coefLoss().shortString(), loss,
-        info.coefRand().shortString(), rand,
-        prev);
+        info.coefRand().shortString(), rand);
   }
 
-  /**
-   * Provide the non-cumulative version of model/loss/rand.
-   * This class memoizes calls to the cumulative query methods for model/loss/rand.
-   */
-  public StepScores(T info, Adjoints model, MaxLoss loss, double rand, StepScores<T> prev) {
+  public StepScores(T info, Adjoints model, MaxLoss loss, double rand) {
     this.info = info;
     this.model = model;
     this.loss = loss;
     this.rand = rand;
-    this.prev = prev;
   }
 
   public T getInfo() {
@@ -70,19 +65,17 @@ public class StepScores<T extends HowToSearch> implements Adjoints {
    * numDetermined,fp,fn are 0 (and thereafter determined by sum(map(determined, pruned ++ children))
    */
 
+  public Adjoints getModel() {
+    return model;
+  }
+
   public MaxLoss getLoss() {
     return loss;
   }
 
-  public double getCumulativeModelScore() {
-    if (Double.isNaN(__msMemo)) {
-      __msMemo = model.forwards();
-      if (prev != null)
-        __msMemo += prev.getCumulativeModelScore();
-    }
-    return __msMemo;
+  public double getRand() {
+    return rand;
   }
-  private double __msMemo = Double.NaN;
 
   /** Cumulative, info.coefs `dot` [model, loss, rand] */
   @Override
@@ -95,21 +88,36 @@ public class StepScores<T extends HowToSearch> implements Adjoints {
         s += info.coefLoss().coef * -loss.maxLoss();
       if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
         s += info.coefRand().coef * rand;
-      if (prev != null)
-        s += prev.forwards();
       __forwardsMemo = s;
     }
     return __forwardsMemo;
   }
   private double __forwardsMemo = Double.NaN;
 
+
+
+
+  /** Other one uses maxLoss, this uses minLoss */
+  public double forwardsMin() {
+    if (Double.isNaN(__forwardsMemo2)) {
+      double s = 0;
+      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+        s += info.coefModel().coef * model.forwards();
+      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+        s += info.coefLoss().coef * -loss.minLoss();
+      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+        s += info.coefRand().coef * rand;
+      __forwardsMemo2 = s;
+    }
+    return __forwardsMemo2;
+  }
+  private double __forwardsMemo2 = Double.NaN;
+
   @Override
   public void backwards(double dErr_dForwards) {
     if (!info.coefModel().iszero())
       model.backwards(info.coefModel().coef * dErr_dForwards);
     // rand and loss don't need to have backwards run.
-    if (prev != null)
-      prev.backwards(dErr_dForwards);
   }
 
 }

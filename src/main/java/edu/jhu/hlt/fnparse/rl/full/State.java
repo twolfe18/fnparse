@@ -778,7 +778,6 @@ public class State implements StateLike {
     }
 
     public List<Span> getPossibleArgs(Frame f, Span t) {
-      
       FrameInstance key = FrameInstance.frameMention(f, t, sentence);
       List<Span> all = prunedSpans.getPossibleArgs(key);
       if (all == null) {
@@ -796,10 +795,10 @@ public class State implements StateLike {
       return nn;
     }
 
-    public void setTargetPruningToGoldLabels() {
-      setTargetPruningToGoldLabels(null);
+    public Info setTargetPruningToGoldLabels() {
+      return setTargetPruningToGoldLabels(null);
     }
-    public void setTargetPruningToGoldLabels(Info alsoSetThisInstance) {
+    public Info setTargetPruningToGoldLabels(Info alsoSetThisInstance) {
       if (label == null)
         throw new IllegalStateException("need a label for this operation");
       assert sentenceAndLabelMatch();
@@ -817,12 +816,37 @@ public class State implements StateLike {
         alsoSetThisInstance.prunedSpans = null;
         alsoSetThisInstance.prunedFIs = prunedFIs;
       }
+      return this;
     }
 
-    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
-      setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
+    public Info setArgPruningUsingGoldLabelWithNoise() {
+      return setArgPruningUsingGoldLabelWithNoise(3, 3);
     }
-    public void setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
+    public Info setArgPruningUsingGoldLabelWithNoise(int kPerTF, int sPerTFK) {
+      prunedSpans = new FNParseSpanPruning(getSentence(), Collections.emptyList(), new HashMap<>());
+      for (FrameInstance fi : label.getParse().getFrameInstances()) {
+        Frame f = fi.getFrame();
+        FrameInstance key = FrameInstance.frameMention(f, fi.getTarget(), getSentence());
+        int K = f.numRoles();
+        int miscK = 0;
+        for (int k = 0; k < K; k++) {
+          Span a = fi.getArgument(k);
+          if (a != Span.nullSpan || miscK < kPerTF) {
+            prunedSpans.addSpan(key, a);
+            if (a == Span.nullSpan)
+              miscK++;
+          }
+          if (config.useContRoles || config.useRefRoles)
+            throw new RuntimeException("implement me");
+        }
+      }
+      return this;
+    }
+
+    public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
+      return setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
+    }
+    public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
       assert sentenceAndLabelMatch();
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
@@ -901,6 +925,7 @@ public class State implements StateLike {
         assert alsoSet.sentence == sentence;
         alsoSet.prunedSpans = prunedSpans;
       }
+      return this;
     }
 
     @Override
@@ -2236,7 +2261,8 @@ public class State implements StateLike {
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
      */
-    StepScores<Info> zero = new StepScores<>(inf, Adjoints.Constant.ZERO, MaxLoss.ZERO, 0, null);
+    StepScores<Info> zero = null;// new StepScores<>(inf, Adjoints.Constant.ZERO, MaxLoss.ZERO, 0, null);
+    assert false : "fixme, StepScores no longer has prev, need to do sum before StepScores constructor";
     State s0 = new State(null, false, false, null, zero, inf)
         .setFramesToGoldLabels();
 

@@ -8,7 +8,7 @@ package edu.jhu.hlt.fnparse.rl.full;
  * @author travis
  */
 public final class MaxLoss {
-  
+
   public static final MaxLoss ZERO = new MaxLoss(0, 0, 0, 0);
 
   public final int numPossible;
@@ -37,8 +37,9 @@ public final class MaxLoss {
   }
 
   public MaxLoss(int numPossible, int numDetermined, int fp, int fn) {
-    assert numPossible >= 0;
-    assert numDetermined <= numPossible;
+    System.out.flush();
+    assert numPossible >= 0 : "numPossible=" + numPossible;
+    assert numDetermined <= numPossible : "numDetermined=" + numDetermined + " numPossible=" + numPossible;
 
     // TODO return to this...
 //    assert fp + fn <= numDetermined : "fp=" + fp + " fn=" + fn + " numDetermined=" + numDetermined;
@@ -48,6 +49,18 @@ public final class MaxLoss {
     this.numDetermined = numDetermined;
     this.fp = fp;
     this.fn = fn;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof MaxLoss) {
+      MaxLoss x = (MaxLoss) other;
+      return numPossible == x.numPossible
+          && numDetermined == x.numDetermined
+          && fp == x.fp
+          && fn == x.fn;
+    }
+    return false;
   }
 
   public boolean noLoss() {
@@ -60,6 +73,10 @@ public final class MaxLoss {
 
   public int maxLoss() {
     return (numPossible - numDetermined) + fp + fn;
+  }
+
+  public int minLoss() {
+    return fp + fn;
   }
 
   /** Returns a new MaxLoss equal to this plus another FP */

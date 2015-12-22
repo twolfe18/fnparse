@@ -11,21 +11,40 @@ import edu.jhu.hlt.tutils.IntPair;
  *
  * @author travis
  */
-public class TVN extends IntPair implements HasMaxLoss {
+public class TVN extends IntPair { //implements HasMaxLoss {
   private static final long serialVersionUID = 5464423642943761171L;
 
-  private MaxLoss loss;
-
-  // TODO Should I switch out numPossible:int to be a full MaxLoss?
-  // This could let me store FN in eggs:LLML<TVN>...
-//  public TVN(int type, int value, int numPossible) {
+//  private MaxLoss loss;
+//  public TVN(int type, int value, MaxLoss loss) {
 //    super(type, value);
-//    loss = new MaxLoss(numPossible);
+//    this.loss = loss;
 //  }
-  public TVN(int type, int value, MaxLoss loss) {
+
+  public final int numPossible;   // how many completions of this prefix are there?
+  public final int goldMatching;  // this prefix, includes all completions. if this is a leaf (prefix==all columns), then this can be at most 1
+  // numDetermined is a property dependent on where a TVN lies in Node2
+
+  public TVN(int type, int value, int numPossible, int goldMatching) {
     super(type, value);
-    this.loss = loss;
+    assert goldMatching <= numPossible : "goldMatching=" + goldMatching + " numPossible=" + numPossible;
+    this.numPossible = numPossible;
+    this.goldMatching = goldMatching;
   }
+
+  // Hypothetical aggregate:
+  // if you were to aggregate sum(1 + f(left) + f(right)) over a hypothetical sub-tree, what would you get?
+//  public final int numPossible;
+//
+//  // Is this prefix/item in the gold label?
+//  public final Boolean gold;
+
+  /*
+   * Do you need to know an int for gold recusive (all completions of a prefix?)
+   * You do at some point...
+   * If you want to weight the cost of doing squash on a shallow node, you need to know this is costly!
+   * And there is the rub: if you know the sub-tree num-matches, you know if this state matched!
+   */
+
 
   public int getType() {
     return first;
@@ -36,7 +55,12 @@ public class TVN extends IntPair implements HasMaxLoss {
   }
 
   @Override
-  public MaxLoss getLoss() {
-    return loss;
+  public String toString() {
+    return "(TVN t=" + getType() + " v=" + getValue() + " poss=" + numPossible + " goldMatching=" + goldMatching + ")";
   }
+
+//  @Override
+//  public MaxLoss getLoss() {
+//    return loss;
+//  }
 }

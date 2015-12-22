@@ -142,11 +142,9 @@ public interface Beam<T extends StateLike> {
     public double value(T s) {
       switch (mode) {
       case BEAM_SEARCH_OBJ:
-        return s.getStepScores().forwards();
+        return s.getStepScores().forwardsMin();
       case CONSTRAINT_OBJ:
-//        return s.getStepScores().constraintObjectivePlusConstant();
-        StepScores<?> ss = s.getStepScores();
-        return ss.getCumulativeModelScore() + ss.getLoss().maxLoss();
+        return s.getStepScores().forwards();
       default:
         throw new RuntimeException("unknown mode: " + mode);
       }

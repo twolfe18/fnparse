@@ -49,6 +49,10 @@ public class FModel implements Serializable {
   private FNParseTransitionScheme ts;
   boolean useNewTS = true;
 
+  public FNParseTransitionScheme getTransitionSystem() {
+    return ts;
+  }
+
   public FModel(
       RTConfig config,
       DeterministicRolePruning.Mode pruningMode) {
@@ -155,7 +159,9 @@ public class FModel implements Serializable {
 
     timer.start("update.oracle");
     Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
-    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
+//    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
+    State oracleState = oracleStateColl.get1();   // get1 b/c need to enforce constraint that 
+    assert oracleState.getStepScores().getLoss().maxLoss() == 0 : "for testing use an exact oracle";
     timer.stop("update.oracle");
 
     timer.start("update.mv");
@@ -175,35 +181,29 @@ public class FModel implements Serializable {
     // Shit! oracle.forwards = loss(y,y_oracle) -- which should be basically 0
     // It should be score(y_oracle)!
 //    final double hinge = Math.max(0, mvState.score.forwards() - oracleState.score.forwards());
-    StepScores<Info> mvss = mvState.score;
+    StepScores<Info> mvss = mvState.getStepScores();
     StepScores<Info> oss = oracleState.getStepScores();
     return buildUpdate(oss, mvss);
   }
 
   private Update buildUpdate(StepScores<Info> oss, StepScores<Info> mvss) {
 
+    assert oss.getLoss().noLoss() : "oracle has loss: " + oss.getLoss();
     final double hinge = Math.max(0,
-        (mvss.getCumulativeModelScore() + mvss.getLoss().maxLoss()) - oss.getCumulativeModelScore());
+        (mvss.getModel().forwards() + mvss.getLoss().maxLoss())
+        - (oss.getModel().forwards() + oss.getLoss().maxLoss()));
 
-    Log.info("mv.score=" + mvss.getCumulativeModelScore()
+    Log.info("mv.model=" + mvss.getModel().forwards()
         + " mv.loss=" + mvss.getLoss()
-        + " oracle.score=" + oss.getCumulativeModelScore()
+        + " oracle.score=" + oss.getModel().forwards()
         + " oracle.loss=" + oss.getLoss()
         + " hinge=" + hinge);
-
-    assert oss.getLoss().noLoss() : "oracle has loss: " + oss.getLoss();
 
     return new Update() {
       @Override
       public double apply(double learningRate) {
         if (hinge > 0) {
           timer.start("update.apply");
-          // NOTE: The reason that I've switched to same sign in back-prop
-          // is primarily StepScore. That is oracle has a *muteForwards* model
-          // coef of 1 and MV has an *unmuted* model coef of -1, leading to the
-          // += behavior for oracle and -= for MV.
-//          oss.backwards(-learningRate);
-//          mvss.backwards(+learningRate);
           oss.backwards(learningRate);
           mvss.backwards(learningRate);
           timer.stop("update.apply");
@@ -217,15 +217,22 @@ public class FModel implements Serializable {
     };
   }
 
-  private Info getPredictInfo(FNParse y) {
+  public Info getPredictInfo(FNParse y) {
+    return getPredictInfo(y, false);
+  }
+  public Info getPredictInfo(FNParse y, boolean oracleArgPruning) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
     if (useNewTS)
       decInf.setLabel(y, ts);
     else
       decInf.setLabel(y);
     decInf.setTargetPruningToGoldLabels();
-    boolean includeGoldSpansIfMissing = true;
-    decInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing);
+    if (oracleArgPruning) {
+      decInf.setArgPruningUsingGoldLabelWithNoise();
+    } else {
+      boolean includeGoldSpansIfMissing = true;
+      decInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing);
+    }
     return decInf;
   }
 
@@ -263,6 +270,8 @@ public class FModel implements Serializable {
 //    RTConfig rtc = new RTConfig("fmodel-dbg", workingDir, new Random(9001));
 
     AbstractTransitionScheme.DEBUG = true;
+    
+    boolean simple = true;
 
     // Sort parses by number of frames so that small (easy to debug/see) examples come first
     List<FNParse> ys = State.getParse();
@@ -273,7 +282,7 @@ public class FModel implements Serializable {
       }
     });
 
-    FModel m = new FModel(null, Mode.XUE_PALMER_HERMANN);
+    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
@@ -286,6 +295,16 @@ public class FModel implements Serializable {
 //        continue;
 
       Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles() + " numFI=" + y.numFrameInstances());
+
+//      // Very basics
+//      if (simple) {
+//        Pair<Info, Info> ormv = m.getOracleAndMvInfo(y);
+//        Info oracleInf = ormv.get1();
+////        Info mvInf = ormv.get2();
+//        m.ts.genRootNode(oracleInf);
+//        
+//        return;
+//      }
 
 //      FNParse yhat = m.predict(y) ;
 //      m.getUpdate(y);

@@ -7,6 +7,7 @@ import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
+import edu.jhu.hlt.tutils.Log;
 
 public class Node2 implements HasMaxLoss {
 
@@ -17,7 +18,7 @@ public class Node2 implements HasMaxLoss {
    * signature
    */
   public static class NodeWithSignature extends Node2 {
-    public NodeWithSignature(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children) {
+    public NodeWithSignature(TFKS prefix, LL<TVN> eggs, LLTVN pruned, LLML<Node2> children) {
       super(prefix, eggs, pruned, children);
       assert children == null || children instanceof PrimesLL;
     }
@@ -35,30 +36,104 @@ public class Node2 implements HasMaxLoss {
     }
   }
 
+  /** Recursively counts number of children Node2s */
+  public static int numChildren(Node2 n) {
+    int c = 1;
+    for (LL<Node2> cur = n.children; cur != null; cur = cur.cdr())
+      c += numChildren(cur.car());
+    return c;
+  }
+
   // Conceptual note: each of these is a sub-class of either LL<TVN> or LL<Node2>
   public final TFKS prefix;        // path from root, including teis nodes (type,value)
-  public final LLML<TVN> eggs;
-  public final LLML<TVN> pruned;
+  public final LL<TVN> eggs;
+  public final LLTVN pruned;
   public final LLML<Node2> children;
+
+  // I've goofed with numDetermined in that things are more complex than they should be!
+  // numDetermined = 1 + sum(map(possible, pruned)) + sum(map(numDetermined, children))
+  // fp = gold.contains(this.prefix)?0:1 + sum(map(fp, children))   => children==null implies last term is 0
+  // fn = sum(map(fn, pruned))     => fn in eggs:LL<TVN> should store counts
+  /*
+   * Again with TVN as it currently is:
+   *   numPossible = set by user
+   *   numDetermined = 1 + sum(map(numPossible, pruned)) + sum(map(numDetermined, children))
+   *   fp = this.prefix.gold?0:1 + sum(map(fp, children))
+   *   fn = sum(map(tvn -> tvn.gold ? 1 : 0, pruned)) + sum(map(fn, children))
+   */
   public final MaxLoss loss;
 
-  public Node2(TFKS prefix, LLML<TVN> eggs, LLML<TVN> pruned, LLML<Node2> children) {
+  public Node2(TFKS prefix, LL<TVN> eggs, LLTVN pruned, LLML<Node2> children) {
     super();
     this.prefix = prefix;
     this.eggs = eggs;
     this.pruned = pruned;
     this.children = children;
-    MaxLoss eL = eggs == null ? MaxLoss.ZERO : eggs.getLoss();
-    MaxLoss pL = pruned == null ? MaxLoss.ZERO : pruned.getLoss();
-    MaxLoss cL = children == null ? MaxLoss.ZERO : children.getLoss();
-    this.loss = new MaxLoss(
-        eL.numPossible + pL.numPossible + cL.numPossible,
-        pL.numDetermined + cL.numDetermined,
-        pL.fp,
-        cL.fp);
-    assert eL.noneDetermined();
+//    MaxLoss tl = prefix == null ? MaxLoss.ZERO : prefix.car().getLoss();  // e.g. if this is a T node, says whether (t,???) is fp
+//    MaxLoss eL = eggs == null ? MaxLoss.ZERO : eggs.getLoss();
+//    MaxLoss pL = pruned == null ? MaxLoss.ZERO : pruned.getLoss();
+//    MaxLoss cL = children == null ? MaxLoss.ZERO : children.getLoss();
+//    this.loss = new MaxLoss(
+//        1 + eL.numPossible + pL.numPossible + cL.numPossible,
+//        1 + pL.numPossible + cL.numDetermined,
+//        cL.fp + tl.fp,
+//        cL.fn + pL.fn);
+    
+    /*
+     * This may be the NPE of doom (when prefix is null).
+     * (Do) we need to know goldMatching for every node in the tree?
+     * Could we make an exception for root since it is never a child?
+     *
+     * If its not goldMatching, its going to be possible...
+     */
+    int thisFP, possible;
+    if (prefix == null) {
+      if (AbstractTransitionScheme.DEBUG)
+        Log.info("prefix IS null");
+      // Compute for root
+      thisFP = 0;
+      possible = 0;
+      for (LL<TVN> cur = eggs; cur != null; cur = cur.cdr())
+        possible += cur.car().numPossible;
+      for (LL<TVN> cur = pruned; cur != null; cur = cur.cdr())
+        possible += cur.car().numPossible;
+      if (children != null)
+        possible += children.getLoss().numPossible;
+    } else {
+      if (AbstractTransitionScheme.DEBUG)
+        Log.info("prefix is NOT null");
+      thisFP = prefix.car().goldMatching == 0 ? 1 : 0;
+      possible = prefix.car().numPossible;
+    }
+    int det = LLTVN.sumPossible(pruned) + LL.length(children);
+    int fp = thisFP + LLTVN.sumGoldMatching(pruned);
+    int fn = LLTVN.numGoldMatchingEqZero(pruned);
+    if (AbstractTransitionScheme.DEBUG) {
+      Log.info("possible=" + possible + " det=" + det + " fp=" + fp + " fn=" + fn);
+      Log.info("LLTVN.sumPossible(pruned)=" + LLTVN.sumPossible(pruned));
+      Log.info("LL.length(children)=" + LL.length(children));
+      Log.info("LLTVN.sumGoldMatching(pruned)=" + LLTVN.sumGoldMatching(pruned));
+      Log.info("children=" + children);
+      Log.info("prefix=" + prefix);
+      int i = 0;
+      for (LL<Node2> cur = children; cur != null; cur = cur.cdr()) {
+        TFKS childPrefix = cur.car().prefix;
+        Log.info("child[" + (i++) + "] isRefinement=" + TFKS.isRefinement(prefix, childPrefix) + " child=" + cur.car());
+        System.out.flush();
+      }
+      System.out.flush();
+    }
+    this.loss = new MaxLoss(possible, det, fp, fn);
   }
 
+  /**
+   * MaxLoss {
+   *  possible = sum(eggs, pruned, children)
+   *  determined = sum(pruned, chlidren)
+   *  fp = sum(children).fp
+   *  fn = sum(pruned).fn
+   * }
+   */
   @Override
   public MaxLoss getLoss() {
     return loss;
@@ -182,4 +257,5 @@ public class Node2 implements HasMaxLoss {
       bs.set(cur.item.getType());
     return bs;
   }
+
 }

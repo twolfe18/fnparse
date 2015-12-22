@@ -20,6 +20,11 @@ public class LLML<T extends HasMaxLoss> extends LL<T> implements HasMaxLoss {
   }
 
   @Override
+  public String toString() {
+    return "(LLML sumLoss=" + sumLoss + " " + super.toString() + ")";
+  }
+
+  @Override
   public MaxLoss getLoss() {
     return sumLoss;
   }

@@ -16,11 +16,24 @@ public class State2<T extends HowToSearch> implements StateLike {
   private Node2 root;
   private StepScores<T> scores;
 
+  public String dbgString;
+
   public State2(Node2 root, StepScores<T> scores) {
+    this(root, scores, "");
+  }
+
+  public State2(Node2 root, StepScores<T> scores, String dbgString) {
     if (root.prefix != null)
       throw new IllegalArgumentException("must be a root!");
+    if (root.getLoss() != scores.getLoss()) {
+      // Can I get rid of one of these losses?
+      // => Node2 needs to have loss b/c for a variety of reasons around the fact that it is the only way to compute it (it knows pruned vs children) -- and things like children:LLML which requires Node2<:HasMaxLoss
+      // => StepScores needs it b/c its job is to handle search coeficients
+      throw new IllegalArgumentException("losses don't match");
+    }
     this.root = root;
     this.scores = scores;
+    this.dbgString = dbgString;
   }
 
   public Node2 getRoot() {

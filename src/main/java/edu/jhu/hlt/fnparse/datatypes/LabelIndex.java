@@ -12,7 +12,6 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.LL;
-import edu.jhu.hlt.fnparse.rl.full2.LLML;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.full2.TVN;
 import edu.jhu.hlt.tutils.Counts;
@@ -38,9 +37,12 @@ public class LabelIndex implements Serializable {
 
 
   public int getCounts2(int type, int value, TFKS prefix) {
-    LL<TVN> l = new LL<>(new TVN(type, value, null), prefix);
+    LL<TVN> l = new LL<>(new TVN(type, value, -1, -1), prefix);
     HashableIntArray a = AbstractTransitionScheme.prefixValues2ar(l);
-    return getCounts2().getCount(a);
+    int c = getCounts2().getCount(a);
+    if (AbstractTransitionScheme.DEBUG_LOSS && AbstractTransitionScheme.DEBUG)
+      Log.info("a=" + a + " c=" + c);
+    return c;
   }
 
   // New stuff from AbstractTransitionSystem
@@ -58,7 +60,7 @@ public class LabelIndex implements Serializable {
    *   s -> k -> f -> k -> null
    * for the transition system [T,F,K,S]
    */
-  private void provideLabel(Iterable<LLML<TVN>> goldYeses) {
+  private void provideLabel(Iterable<LL<TVN>> goldYeses) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("filling in counts");
     if (counts == null)
@@ -81,21 +83,26 @@ public class LabelIndex implements Serializable {
 //        counts.increment(i);
 //      }
 
-      // if x = [a,b,c]
+      // if x = [c,b,a]
       // this will do:
-      // [a,b,c]++
-      // [b,c]++
+      // [c,b,a]++
+      // [c,b]++
       // [c]++
-      for (LL<TVN> cur = x; cur != null; cur = cur.cdr()) {
+      /*
+       * if x = [c,b,a]
+       * then the prefix [b,a] needs to account for [b,a] and [c,b,a]
+       */
+      int below = 1;
+      for (LL<TVN> cur = x; cur != null; cur = cur.cdr(), below++) {
         HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
-        counts.increment(i);
+        counts.update(i, below);
       }
     }
-    if (AbstractTransitionScheme.DEBUG) {
+//    if (AbstractTransitionScheme.DEBUG) {
       for (HashableIntArray prefix : counts.getKeysSortedByCount(true)) {
         Log.info("count=" + counts.getCount(prefix) + " prefix=" + prefix);
       }
-    }
+//    }
   }
   public LabelIndex(FNParse y) {
     this(y, null);
@@ -105,7 +112,7 @@ public class LabelIndex implements Serializable {
     this.y = y;
 
     if (ts != null) {
-      Iterable<LLML<TVN>> conv = ts.encode(y);
+      Iterable<LL<TVN>> conv = ts.encode(y);
       this.provideLabel(conv);
     }
 

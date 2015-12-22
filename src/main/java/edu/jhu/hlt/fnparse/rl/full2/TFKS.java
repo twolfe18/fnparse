@@ -94,6 +94,11 @@ public class TFKS extends LL<TVN> {
       + ")";
   }
 
+  @Override
+  public String toString() {
+    return "(TFKS " + str() + " " + super.toString() + ")";
+  }
+
   public static String str(int i) {
     if (i == UNSET) return "UNSET";
     if (i == MANY_VALS) return "MANY_VALS";
@@ -122,6 +127,15 @@ public class TFKS extends LL<TVN> {
     if (maybeNull == null)
       return UNSET;
     return maybeNull.s;
+  }
+
+  public static boolean isRefinement(TFKS coarse, TFKS fine) {
+    if (coarse == null)
+      return fine.car().getType() == T;
+    int c = coarse.car().getType();
+    int f = fine.car().getType();
+//    return c < 0 || f == c+1;
+    return f == c+1;
   }
 
   public static int or(int valueA, int valueB) {
