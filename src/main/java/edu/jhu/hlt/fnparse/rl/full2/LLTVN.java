@@ -37,4 +37,10 @@ public class LLTVN extends LL<TVN> {
       return 0;
     return l.numGoldMachingEqZero;
   }
+
+  @Override
+  public LLTVN cdr() {
+    // Perfectly safe since there is only one constructor which proves next is a LLTVN
+    return (LLTVN) next;
+  }
 }

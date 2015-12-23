@@ -823,6 +823,7 @@ public class State implements StateLike {
       return setArgPruningUsingGoldLabelWithNoise(3, 3);
     }
     public Info setArgPruningUsingGoldLabelWithNoise(int kPerTF, int sPerTFK) {
+      Log.info("kPerTF=" + kPerTF + " sPerTFK" + sPerTFK);
       prunedSpans = new FNParseSpanPruning(getSentence(), Collections.emptyList(), new HashMap<>());
       for (FrameInstance fi : label.getParse().getFrameInstances()) {
         Frame f = fi.getFrame();
@@ -838,6 +839,8 @@ public class State implements StateLike {
           }
           if (config.useContRoles || config.useRefRoles)
             throw new RuntimeException("implement me");
+          assert fi.getContinuationRoleSpans(k).isEmpty();
+          assert fi.getReferenceRoleSpans(k).isEmpty();
         }
       }
       return this;

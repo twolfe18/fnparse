@@ -1,5 +1,12 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+/**
+ * TODO Change this to just an interface. There are a lot of little reasons,
+ * trust me...
+ *
+ * @author travis
+ * @param <T>
+ */
 public class LL<T> {
 
   protected final T item;

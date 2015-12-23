@@ -7,7 +7,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -20,10 +19,10 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
+import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.State;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
-import edu.jhu.hlt.fnparse.rl.full2.Node2.NodeWithSignature;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -39,7 +38,8 @@ import edu.jhu.util.Alphabet;
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
-  public static boolean DEBUG_GEN_EGGS = true;
+  public static boolean VERBOSE_FEATURES = false;
+  public static boolean DEBUG_GEN_EGGS = false;
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -101,42 +101,42 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     prefix2primeIdx = new Alphabet<>();
   }
 
-  public long primeFor(LL<TVN> prefix) {
-    TFKS p = (TFKS) prefix;
-    int i = prefix2primeIdx.lookupIndex(p, true);
+  public long primeFor(TFKS prefix) {
+    int i = prefix2primeIdx.lookupIndex(prefix, true);
     return primes.get(i);
   }
 
   @Override
-  public TFKS consPrefix(TVN car, TFKS cdr) {
-    return new TFKS(car, (TFKS) cdr);
+  public TFKS consPrefix(TVNS car, TFKS cdr) {
+    return new TFKS(car, cdr);
   }
 
   @Override
-  public LLML<Node2> consChild(Node2 car, LLML<Node2> cdr) {
-    if (car.getType() == TFKS.K)
-      return new RoleLL(car, cdr, this::primeFor);
-    return new PrimesLL(car, cdr, this::primeFor);
+  public LLSSP consChild(Node2 car, LLSSP cdr) {
+//    if (car.getType() == TFKS.K)
+//      return new RoleLL(car, cdr, this::primeFor);
+//    return new PrimesLL(car, cdr, this::primeFor);
+    return new LLSSP(car, cdr);
   }
 
   @Override
-  LL<TVN> consEggs(TVN car, LL<TVN> cdr) {
-    return new LL<>(car, cdr);
-  }
-
-  @Override
-  LLTVN consPruned(TVN car, LLTVN cdr) {
+  public LLTVN consEggs(TVN car, LLTVN cdr) {
     return new LLTVN(car, cdr);
   }
 
   @Override
-  public NodeWithSignature newNode(TFKS prefix, LL<TVN> eggs, LLTVN pruned, LLML<Node2> children) {
-    return new NodeWithSignature(prefix, eggs, pruned, children);
+  public LLTVNS consPruned(TVNS car, LLTVNS cdr) {
+    return new LLTVNS(car, cdr);
+  }
+
+  @Override
+  public Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
+    return new Node2(coefs, prefix, eggs, pruned, children);
   }
 
   @Override
   public Iterable<LL<TVN>> encode(FNParse y) {
-    if (DEBUG_ENCODE)
+    if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE)
       Log.info("encoding y=" + Describe.fnParse(y));
     List<LL<TVN>> yy = new ArrayList<>();
     int n = y.getSentence().size();
@@ -150,30 +150,30 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         if (a != Span.nullSpan) {
           int s = Span.encodeSpan(a, n);
           yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1),
-              consEggs(new TVN(TFKS.K, k+0*K, 1, 1),
-              consEggs(new TVN(TFKS.F, f, 1, 1),
-              consEggs(new TVN(TFKS.T, t, 1, 1), null)))));
+              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
+              consEggs(new TVN(TFKS.K, k+0*K, 1, 1, -1L),
+              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
+              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
         }
         for (Span ca : fi.getContinuationRoleSpans(k)) {
           int s = Span.encodeSpan(ca, n);
           yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1),
-              consEggs(new TVN(TFKS.K, k+1*K, 1, 1),
-              consEggs(new TVN(TFKS.F, f, 1, 1),
-              consEggs(new TVN(TFKS.T, t, 1, 1), null)))));
+              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
+              consEggs(new TVN(TFKS.K, k+1*K, 1, 1, -1L),
+              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
+              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
         }
         for (Span ra : fi.getReferenceRoleSpans(k)) {
           int s = Span.encodeSpan(ra, n);
           yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1),
-              consEggs(new TVN(TFKS.K, k+2*K, 1, 1),
-              consEggs(new TVN(TFKS.F, f, 1, 1),
-              consEggs(new TVN(TFKS.T, t, 1, 1), null)))));
+              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
+              consEggs(new TVN(TFKS.K, k+2*K, 1, 1, -1L),
+              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
+              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
         }
       }
     }
-    if (DEBUG_ENCODE) {
+    if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE) {
       Log.info("yy.size=" + yy.size());
     }
     return yy;
@@ -195,7 +195,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public Map<FrameInstance, List<Pair<String, Span>>> groupByFrame(
-      Iterable<LL<TVN>> z,
+      Iterable<LL<TVNS>> z,
       Info info) {
     Sentence sent = info.getSentence();
     int sentLen = sent.size();
@@ -203,7 +203,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("z=" + z);
     FrameIndex fi = info.getFrameIndex();
     Map<FrameInstance, List<Pair<String, Span>>> m = new HashMap<>();
-    for (LL<TVN> prefix : z) {
+    for (LL<TVNS> prefix : z) {
       TFKS p = (TFKS) prefix;
       if (p == null) {
         if (AbstractTransitionScheme.DEBUG)
@@ -235,7 +235,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public FNParse decode(Iterable<LL<TVN>> z, Info info) {
+  public FNParse decode(Iterable<LL<TVNS>> z, Info info) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting...");
     Sentence sent = info.getSentence();
@@ -265,6 +265,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int sentLen = info.getSentence().size();
     int n = 0;
     if (type == TFKS.T) {
+      n++;  // Count the T node
+      // Add in children (TF nodes)
       Span ts = Span.decodeSpan(value, sentLen);
       for (Frame f : info.getPossibleFrames(ts)) {
         int K = f.numRoles();
@@ -273,7 +275,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         if (info.getConfig().useRefRoles)
           K += f.numRoles();
         int S = info.getPossibleArgs(f, ts).size();
-        n += K * S;
+        n += 1 + K * (1 + S);
       }
     } else if (type == TFKS.F) {
       Span ts = Span.decodeSpan(prefix.t, sentLen);
@@ -284,12 +286,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       if (info.getConfig().useRefRoles)
         K += f.numRoles();
       int S = info.getPossibleArgs(f, ts).size();
-      n += K * S;
+      n++;  // Count the TF node
+      n += K * (1 + S); // K children, each of which must be counted on its own (inner +1) and has S children
     } else if (type == TFKS.K) {
       Span ts = Span.decodeSpan(prefix.t, sentLen);
       Frame f = info.getFrameIndex().getFrame(prefix.f);
-      List<Span> args = info.getPossibleArgs(f, ts);
-      n += args.size();
+      int S = info.getPossibleArgs(f, ts).size();
+      n++;  // Count the TFK node
+      n += S; // There are S children which are leaf nodes
     } else if (type == TFKS.S) {
       n += 1;
     } else {
@@ -299,10 +303,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public LL<TVN> genEggs(TFKS prefix, Info info) {
-    if (AbstractTransitionScheme.DEBUG)
+  public LLTVN genEggs(TFKS prefix, Info info) {
+    if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
       Log.info("prefix=" + prefix);
-    LL<TVN> l = null;
+    LLTVN l = null;
     int n = info.getSentence().size();
 
     // () -> T
@@ -312,9 +316,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int t = Span.encodeSpan(ts, n);
         int poss = subtreeSize(TFKS.T, t, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.T, t, prefix);
-        if (AbstractTransitionScheme.DEBUG)
+        long prime = -1;  // TODO
+        if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("T poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.T, t, poss, c), l);
+        l = consEggs(new TVN(TFKS.T, t, poss, c, prime), l);
       }
       return l;
     }
@@ -323,15 +328,16 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Frame f;
     FrameIndex fi;
     TVN egg = prefix.car();
-    switch (egg.getType()) {
+    switch (egg.type) {
     case TFKS.T:      // T -> F
       t = Span.decodeSpan(prefix.t, n);
       for (Frame ff : info.getPossibleFrames(t)) {
         int poss = subtreeSize(TFKS.F, ff.getId(), prefix, info);
         int c = info.getLabel().getCounts2(TFKS.F, ff.getId(), prefix);
-        if (AbstractTransitionScheme.DEBUG)
+        long prime = -1;  // TODO
+        if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("F poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.F, ff.getId(), poss, c), l);
+        l = consEggs(new TVN(TFKS.F, ff.getId(), poss, c, prime), l);
       }
       return l;
     case TFKS.F:
@@ -341,17 +347,20 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       while (k >= 0) {
         int poss = subtreeSize(TFKS.K, k, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.K, k, prefix);
+        long prime = -1;  // TODO
         
         
         // Skip some negs
 //        if (DEBUG_GEN_EGGS && c == 0 && AbstractTransitionScheme.DEBUG && info.getRandom().nextDouble() > 0.3)
-        if (c == 0 && LL.length(l) > 3)
-          break;
+//        if (c == 0 && LL.length(l) > 3) {
+//          k--;
+//          continue;
+//        }
         
         
-        if (AbstractTransitionScheme.DEBUG)
+        if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.K, k, poss, c), l);
+        l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l);
         k--;
       }
       if (useContRoles)
@@ -371,17 +380,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int s = Span.encodeSpan(ss, n);
         int possC = subtreeSize(TFKS.S, s, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.S, s, prefix);
+        long prime = -1;  // TODO
         
         
         // Skip some negs
 //        if (DEBUG_GEN_EGGS && c == 0 && AbstractTransitionScheme.DEBUG && info.getRandom().nextDouble() > 0.3)
-        if (c == 0 && LL.length(l) > 3)
-          break;
+//        if (c == 0 && LL.length(l) > 3)
+//          break;
         
         
-        if (AbstractTransitionScheme.DEBUG)
+        if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + possC + " c=" + c);
-        l = consEggs(new TVN(TFKS.S, s, possC, c), l);
+        l = consEggs(new TVN(TFKS.S, s, possC, c, prime), l);
       }
       return l;
     case TFKS.S:
@@ -394,14 +404,28 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private List<String> dynFeats1(Node2 n, Info info) {
     assert n.eggs != null : "hatch/squash both require an egg!";
     TVN egg = n.eggs.car();
-    TFKS p = (TFKS) consPrefix(egg, n.prefix);   // of the child!
+    /*
+     * TODO Optimize this.
+     * scoreHatch/Squash needs to return a TVNS to append to the prefix. This
+     * TVNS will have the score for the respective hatch/squash. That TVNS is
+     * created in scoreHatch/Squash (above this). That TVNS should only be
+     * created once. This instance is not necessary (makes the code a little
+     * clearer). I can't create the TVNS and pass a pointer to the Adjoints to
+     * modify here since Adjoints are immutable (maybe make a special purpose
+     * one for this reason though).
+     * Short term: keep as is
+     * Longer term: either refactor this code to never need a TFKS/TVNS or do
+     * the *Adjoints trick mentioned above.
+     */
+    TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
+    TFKS p = consPrefix(removeMe, n.prefix);
     List<String> feats = new ArrayList<>();
     if (useOverfitFeatures) {
       feats.add(p.toString());
     } else {
-      feats.add("intercept_" + egg.getType());
+      feats.add("intercept_" + egg.type);
       Frame f;
-      switch (egg.getType()) {
+      switch (egg.type) {
       case TFKS.S:
         assert p.t >= 0;
         assert p.f >= 0;
@@ -435,7 +459,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private void staticFeats1(Node2 n, Info info, List<ProductIndex> addTo) {
     assert n.eggs != null : "hatch/squash both require an egg!";
     ProductIndex base = ProductIndex.TRUE;
-    TFKS prefix = (TFKS) consPrefix(n.eggs.car(), n.prefix);   // of the child!
+    // TODO Same refactoring as in dynFeats1
+    TVN egg = n.eggs.car();
+    TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
+    TFKS prefix = consPrefix(removeMe, n.prefix);
     if (prefix.isFull()) {
       if (useOverfitFeatures) {
         String fs = prefix.toString();
@@ -472,11 +499,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public Adjoints featsHatch(Node2 n, Info info) {
+  public TVNS scoreHatch(Node2 n, Info info) {
+    TVN egg = n.eggs.car(); // what we're featurizing hatching
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
 //    staticFeats1(n, info, allFeats);
-    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.weights.getL2Norm(), System.identityHashCode(wHatch.weights)));
       for (ProductIndex p : allFeats) {
         int i = p.getProdFeatureModulo(dimension);
@@ -485,20 +513,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       }
     }
     ProductIndexAdjoints pi = new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wHatch);
-    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       pi.nameOfWeights = "hatch";
       pi.showUpdatesWith = alph;
       Log.info("featHatchEarlyAdjoints: " + pi);
     }
-    return pi;
+//    return pi;
+    return egg.withScore(pi, info.getRandom().nextGaussian());
   }
 
   @Override
-  public Adjoints featsSquash(Node2 n, Info info) {
+  public TVNS scoreSquash(Node2 n, Info info) {
+    TVN egg = n.eggs.car(); // what we're featurizing squashing
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
 //    staticFeats1(n, info, allFeats);
-    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.weights.getL2Norm(), System.identityHashCode(wSquash.weights)));
       for (ProductIndex p : allFeats) {
         int i = p.getProdFeatureModulo(dimension);
@@ -507,12 +537,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       }
     }
     ProductIndexAdjoints pi = new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wSquash);
-    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       pi.nameOfWeights = "squash";
       pi.showUpdatesWith = alph;
       Log.info("featSquashEarlyAdjoints: " + pi);
     }
-    return pi;
+//    return pi;
+    return egg.withScore(pi, info.getRandom().nextGaussian());
   }
 
 
@@ -553,8 +584,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     ExperimentProperties.init(args);
 
     DEBUG_GEN_EGGS = true;
-    AbstractTransitionScheme.DEBUG = true;
-    boolean simple = true;
+    AbstractTransitionScheme.DEBUG = false;
+    boolean simple = false;
 
     FNParse y = dummyParse();
     Log.info(Describe.fnParse(y));
@@ -563,9 +594,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     FNParseTransitionScheme ts = m.getTransitionSystem();
     ts.useOverfitFeatures = true;
 
-    boolean thinKS = true;
+    boolean thinKS = true;  // prune out some wrong answers to make the tree smaller (easier to see)
     Info inf = m.getPredictInfo(y, thinKS);
     State2<Info> s0 = ts.genRootState(inf);
+    Log.info("this is the root:");
     s0.getRoot().show(System.out);
 
     // Make a beam that can keep everything
@@ -586,6 +618,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (simple) {
       Log.info("\n\n\n\n\n");
       State2<Info> sLeft = s0;
+
       ts.nextStates(sLeft, b);
       sLeft = bl.stream().filter(s -> s.dbgString.contains("hatch")).reduce((elem,accum) -> accum).get();
       bl.clear();
@@ -629,22 +662,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Log.info("s0:");
     s0.getRoot().show(System.out);
 
-    // Loss in Node2 appears to be right
-    int sFposs2 = sF.getRoot().getLoss().numPossible;
-    int s0poss2 = s0.getRoot().getLoss().numPossible;
-    Log.info("sFposs2=" + sFposs2 + " s0poss2=" + s0poss2);
-    assert sFposs2 == s0poss2;
-
-    assert sF.getRoot().getLoss().equals(sF.getStepScores().getLoss())
-      : "sF->Node2->MaxLoss=" + sF.getRoot().getLoss()
-      + " sF->StepScores->MaxLoss=" + sF.getStepScores().getLoss();
-    assert sF.getRoot().getLoss() == sF.getStepScores().getLoss();  // stricter
-
     int s0poss = s0.getStepScores().getLoss().numPossible;
     int sFposs = sF.getStepScores().getLoss().numPossible;
     assert s0poss == sFposs : "s0poss=" + s0poss + " sFposs=" + sFposs;
     int sFn = Node2.numChildren(sF.getRoot());
     assert s0poss == sFn : "s0poss=" + s0poss + " sFn=" + sFn;
+    Log.info("done! everything went well :)");
   }
 }
 

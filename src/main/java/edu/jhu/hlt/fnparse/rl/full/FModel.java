@@ -146,8 +146,15 @@ public class FModel implements Serializable {
         ts.runInference(ts.genRootState(mvInf));
     timer.stop("update.mv");
 
-    StepScores<Info> oracleSc = oracleS.get2().pop().getStepScores();
+    // Oracle gets the last state because that enforces the constraint that Proj(z) == {y}
+    StepScores<Info> oracleSc = oracleS.get1().getStepScores();
+    // MostViolated may take any prefix according to s(z) + max_{y \in Proj(z)} loss(y)
     StepScores<Info> mvSc = mvS.get2().pop().getStepScores();
+
+    assert oracleSc.getLoss().maxLoss() == 0
+        : "check your pruning! if you pruned away a branch on the gold tree"
+            + " then you should consider reifying the pruning process into"
+            + " learning (since its so good at handling pruning!)";
 
     return buildUpdate(oracleSc, mvSc);
   }
@@ -269,7 +276,7 @@ public class FModel implements Serializable {
 //    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-dgb"));
 //    RTConfig rtc = new RTConfig("fmodel-dbg", workingDir, new Random(9001));
 
-    AbstractTransitionScheme.DEBUG = true;
+//    AbstractTransitionScheme.DEBUG = true;
     
     boolean simple = true;
 

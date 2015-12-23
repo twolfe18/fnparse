@@ -11,23 +11,39 @@ import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
  * This is basically the same as {@link MutedAdjoints}, but allows well-structured
  * introspection.
  */
-public class StepScores<T extends HowToSearch> implements Adjoints {
+public class StepScores<T extends SearchCoefficients> implements Adjoints {
 
   private final T info;
   private final Adjoints model;
   private final MaxLoss loss;    // NOTE: This should be taken from Node2.loss
   private final double rand;
 
+  /**
+   * info:T must match and MaxLosses must be over disjoint sets.
+   */
+  public static StepScores<?> sum(StepScores<?> a, StepScores<?> b) {
+    if (a.info != b.info) {
+      // consider extending this to .equals(), but should probably match == for efficiency
+      throw new IllegalArgumentException("infos must match!");
+    }
+    return new StepScores<>(a.info,
+        new Adjoints.Sum(a.model, b.model),
+        MaxLoss.sum(a.loss, b.loss),
+        a.rand + b.rand);
+  }
+
   @Override
   public String toString() {
     return String.format(
         "(Score"
-        + " forwards=%.1f"
-        + " forwardsMin=%.1f"
+        + " forwards=%.2f"
+        + " forwardsH=%.2f"
+        + " forwardsMin=%.2f"
         + " model=%s*%s"
         + " maxLoss=%s*%s"
         + " rand=%s*%.1f)",
         forwards(),
+        forwardsH(),
         forwardsMin(),
         info.coefModel().shortString(), model,
         info.coefLoss().shortString(), loss,
@@ -95,8 +111,6 @@ public class StepScores<T extends HowToSearch> implements Adjoints {
   private double __forwardsMemo = Double.NaN;
 
 
-
-
   /** Other one uses maxLoss, this uses minLoss */
   public double forwardsMin() {
     if (Double.isNaN(__forwardsMemo2)) {
@@ -112,6 +126,23 @@ public class StepScores<T extends HowToSearch> implements Adjoints {
     return __forwardsMemo2;
   }
   private double __forwardsMemo2 = Double.NaN;
+
+
+  public double forwardsH() {
+    if (Double.isNaN(__forwardsMemo3)) {
+      double s = 0;
+      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+        s += info.coefModel().coef * model.forwards();
+      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+        s += info.coefLoss().coef * -loss.hLoss();
+      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+        s += info.coefRand().coef * rand;
+      __forwardsMemo3 = s;
+    }
+    return __forwardsMemo3;
+  }
+  private double __forwardsMemo3 = Double.NaN;
+
 
   @Override
   public void backwards(double dErr_dForwards) {

@@ -142,7 +142,8 @@ public interface Beam<T extends StateLike> {
     public double value(T s) {
       switch (mode) {
       case BEAM_SEARCH_OBJ:
-        return s.getStepScores().forwardsMin();
+//        return s.getStepScores().forwardsMin();
+        return s.getStepScores().forwardsH();
       case CONSTRAINT_OBJ:
         return s.getStepScores().forwards();
       default:

@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.hash.Hash;
  *
  * @author travis
  */
-public class TFKS extends LL<TVN> {
+public class TFKS extends LL<TVNS> {
 
   public static FrameIndex dbgFrameIndex = null;
 
@@ -39,32 +39,37 @@ public class TFKS extends LL<TVN> {
   // Values
   public final int t, f, k, s;
 
-  public TFKS(TVN item, TFKS next) {
+  /** Inserts a zero score to promote {@link TVN} to {@link TVNS} */
+  public static TFKS lltvn2tfks(LL<TVN> l) {
+    throw new RuntimeException("implement me with a deque");
+  }
+
+  public TFKS(TVNS item, TFKS next) {
     super(item, next);
-    switch (item.getType()) {
+    switch (item.type) {
     case T:
-      t = or(safeT(next), item.getValue());
+      t = or(safeT(next), item.value);
       f = safeF(next);
       k = safeK(next);
       s = safeS(next);
       break;
     case F:
       t = safeT(next);
-      f = or(safeF(next), item.getValue());
+      f = or(safeF(next), item.value);
       k = safeK(next);
       s = safeS(next);
       break;
     case K:
       t = safeT(next);
       f = safeF(next);
-      k = or(safeK(next), item.getValue());
+      k = or(safeK(next), item.value);
       s = safeS(next);
       break;
     case S:
       t = safeT(next);
       f = safeF(next);
       k = safeK(next);
-      s = or(safeS(next), item.getValue());
+      s = or(safeS(next), item.value);
       break;
     default:
       throw new RuntimeException();
@@ -74,6 +79,15 @@ public class TFKS extends LL<TVN> {
       assert k < ff.numRoles() : "k=" + k + " but " + ff.getName() + " only has " + ff.numRoles() + " roles";
     }
   }
+
+  @Override
+  public TFKS cdr() {
+    return (TFKS) next;
+  }
+
+//  public LL<TVN> asLLTVN() {
+//    return new LL<TVN>((TVN) car(), cdr() == null ? null : cdr().asLLTVN());
+//  }
 
   public boolean isFull() {
     if (s >= 0) {
@@ -131,9 +145,9 @@ public class TFKS extends LL<TVN> {
 
   public static boolean isRefinement(TFKS coarse, TFKS fine) {
     if (coarse == null)
-      return fine.car().getType() == T;
-    int c = coarse.car().getType();
-    int f = fine.car().getType();
+      return fine.car().type == T;
+    int c = coarse.car().type;
+    int f = fine.car().type;
 //    return c < 0 || f == c+1;
     return f == c+1;
   }

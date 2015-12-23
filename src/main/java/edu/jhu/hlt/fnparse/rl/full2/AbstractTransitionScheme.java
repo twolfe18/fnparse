@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
@@ -11,11 +10,11 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
+import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -44,49 +43,43 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_LOSS = true;
-
-  /*
-   * Am I sure this shouldn't just all go into Node2?
-   * Note that the SUM does not live in Node2!
-   * Ah, this is the tricky bit.
-   * You could have Node2->MaxLoss and not have SUM in the LL.
-   * When you do hatch/squash you have to construct a new Node2 anyway...
-   * Ah crap (nice?), does this mean that I can scrap my "subclass LL" way of doing things?
-   * Node2 just has a field which is a monad composed of all the aggregates we need to keep (MaxLoss being one of them)
-   * Lets do a stress test: subclass Node2 with Node2Loss and override newNode...
-   *
-   * => I believe that I actually need to both:
-   * 1) have a MaxLoss field in Node2 since (fp,fn) come from pruned and determined comes from (pruned,children)
-   * 2) subclass LL<Node2Loss> in order to get cheap access to sum:MaxLoss for hatch/squash (e.g. computing determined in 1)
-   *
-   * Lets make sure I understand this:
-   * - its clear how to aggregate MaxLoss from everything under a node (supping fn,fp and determined)
-   * - how are MaxLoss allocated upon hatch?
-   *   there will be a new child, which will have a MaxLoss[fn=fp=0] from eggs
-   *   genEggs needs to know about how many sub-nodes there are in each egg
-   */
-
-
+  public static boolean DEBUG_ACTION_MAX_LOSS = true;
 
   /**
-   * See {@link TFKS}, maybe the only reason not to use LL<TV>.init
+   * How to glue stuff together. Hide instantiations of LL which keep track of
+   * useful aggregators in the implementation of these methods.
    */
-  abstract TFKS consPrefix(TVN car, TFKS cdr);
-
-  abstract LL<TVN> consEggs(TVN car, LL<TVN> cdr);
-  abstract LLTVN consPruned(TVN car, LLTVN cdr);
+  abstract TFKS consPrefix(TVNS car, TFKS cdr);
+  abstract LLTVN consEggs(TVN car, LLTVN cdr);
+  abstract LLTVNS consPruned(TVNS car, LLTVNS cdr);
+  abstract LLSSP consChild(Node2 car, LLSSP cdr);
 
   /**
-   * Create the appropriate list which stores aggregates for global features
+   * These parameterize the costs of moving from eggs -> (pruned|children).
+   *
+   * Global/dynamic features.
+   *
+   * NOTE: Pay attention to the corresponding methods of hatch and squash;
+   * they both involve taking the first egg (don't just look at prefix!)
+   *
+   * NOTE: static features should be wrapped in this.
+   *
    */
-  abstract LLML<Node2> consChild(Node2 car, LLML<Node2> cdr);
+  abstract TVNS scoreSquash(Node2 parentWhoseNextEggWillBeSquashed, Z info);
+  abstract TVNS scoreHatch(Node2 parentWhoseNextEggWillBeHatched, Z info);
 
   /**
    * Construct a node. Needed to be a method so that if you want to instantiate
    * a sub-class of Node2, you can do that behind this layer of indirection.
    */
-  abstract Node2 newNode(TFKS prefix, LL<TVN> eggs, LLTVN pruned, LLML<Node2> children);
+  abstract Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
 
+  /**
+   * META: Specifies the loop order (e.g. [T,F,K,S]).
+   * Create a list of possible next values to expand given a node at prefix.
+   * For now I'm assuming the returned list is type-homongenous.
+   */
+  abstract LLTVN genEggs(TFKS prefix, Z z);
 
   /**
    * Takes a label and converts it into a set of tuples.
@@ -99,36 +92,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * Must be able to ignore prefixes. E.g. if an element of z only specifies
    * [t,f,k] (but not s), then it should not be added to y.
    */
-  public abstract Y decode(Iterable<LL<TVN>> z, Z info);
+  public abstract Y decode(Iterable<LL<TVNS>> z, Z info);
 
 
-  /**
-   * META: Specifies the loop order (e.g. [T,F,K,S]).
-   * Create a list of possible next values to expand given a node at prefix.
-   * For now I'm assuming the returned list is type-homongenous.
-   */
-  abstract LL<TVN> genEggs(TFKS prefix, Z z);
 
-  // NOTE: The new goal is that MaxLoss is snuck in via TVN from genEggs
-//  abstract int subtreeSize(LL<TV> prefix);
-
-  /**
-   * Global/dynamic features.
-   *
-   * NOTE: Pay attention to the corresponding methods of hatch and squash;
-   * they both involve taking the first egg (don't just look at prefix!)
-   *
-   * NOTE: static features should be wrapped in this.
-   */
-  abstract Adjoints featsHatch(Node2 n, Z z);
-  abstract Adjoints featsSquash(Node2 n, Z z);
 
 
   /* NON-ABSTRACT STUFF *******************************************************/
 
-  public void collectChildrensSpines(Node2 node, List<LL<TVN>> addTo) {
-    addTo.add(node.prefix);
-    for (LL<Node2> cur = node.children; cur != null; cur = cur.cdr())
+  public void collectChildrensSpines(Node2 node, List<LL<TVNS>> addTo) {
+    if (node.prefix != null)
+      addTo.add(node.prefix);
+    for (LLSSP cur = node.children; cur != null; cur = cur.cdr())
       collectChildrensSpines(cur.car(), addTo);
   }
   public Y decode(State2<Z> root) {
@@ -136,44 +111,12 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       Log.info("running on:");
       root.getRoot().show(System.out);
     }
-    List<LL<TVN>> childrensSpines = new ArrayList<>();
+    List<LL<TVNS>> childrensSpines = new ArrayList<>();
     collectChildrensSpines(root.getRoot(), childrensSpines);
     if (DEBUG)
       Log.info("numSpines=" + childrensSpines.size());
     return decode(childrensSpines, root.getStepScores().getInfo());
   }
-
-  // Loss should now be handled through genEggs and cons*
-//  public HammingLoss lossHatch(Node2 n, Z info) {
-//    Counts<HashableIntArray> counts = info.getCounts();
-//    TVN e = n.eggs.car();
-//    LL<TVN> childPrefix = consPrefix(e, n.prefix);
-//    HashableIntArray x = prefixValues2ar(childPrefix);
-//    int c = counts.getCount(x);
-//    if (c == 0) {
-//      if (DEBUG) Log.info(" FP " + x + " c=" + c + " childPrefix=" + childPrefix);
-//      return HammingLoss.FP;
-//    } else {
-//      if (DEBUG) Log.info(" TP " + x + " c=" + c + " childPrefix=" + childPrefix);
-//      return HammingLoss.TP;
-//    }
-//  }
-//
-//  public HammingLoss lossSquash(Node2 n, Z info) {
-//    Counts<HashableIntArray> counts = info.getCounts();
-//    TVN e = n.eggs.car();
-//    LL<TVN> childPrefix = consPrefix(e, n.prefix);
-//    HashableIntArray x = prefixValues2ar(childPrefix);
-//    int c = counts.getCount(x);
-//    if (c == 0) {
-//      if (DEBUG) Log.info("TN " + x + " c=" + c + " childPrefix=" + childPrefix);
-//      return HammingLoss.TN;
-//    } else {
-//      if (DEBUG) Log.info("FN " + x + " c=" + c + " childPrefix=" + childPrefix);
-////      return HammingLoss.FN;
-//      return new HammingLoss(0, 0, c, 0);
-//    }
-//  }
 
   /* COHERENCE RULES ********************************************************/
   // The goal is to build these basic operations from the operations defined
@@ -182,47 +125,54 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
   /** Returns a copy of n with the child formed by hatching the next egg */
   public Node2 hatch(Node2 wife, Z z) {
-    TFKS newPrefix = consPrefix(wife.eggs.car(), wife.prefix);
-    LL<TVN> newEggs = genEggs(newPrefix, z);
-    Node2 hatched = newNode(newPrefix, newEggs, null, null);
-    LLML<Node2> children = consChild(hatched, wife.children);
-    Node2 mother = newNode(wife.prefix, wife.eggs.cdr(), wife.pruned, children);
+    TVNS cracked = scoreHatch(wife, z); // contains score(hatch)
+    TFKS newPrefix = consPrefix(cracked, wife.prefix);
+    LLTVN newEggs = genEggs(newPrefix, z);
+    Node2 hatched = newNode(wife.getCoefs(), newPrefix, newEggs, null, null);
+    LLSSP newChildrenhildren = consChild(hatched, wife.children);
+    Node2 mother = newNode(wife.getCoefs(), wife.prefix, wife.eggs.cdr(), wife.pruned, newChildrenhildren);
+    if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
+      MaxLoss wl = wife.getStepScores().getLoss();
+      MaxLoss ml = mother.getStepScores().getLoss();
+//      System.out.println("wife.maxLoss=" + wl.maxLoss()
+//          + " mother.maxLoss=" + ml.maxLoss()
+//          + " wife.minLoss=" + wl.minLoss()
+//          + " mother.minLoss=" + ml.minLoss()
+//          + " wife=" + wl
+//          + " mother=" + ml);
+      Log.info("wife:   " + wl);
+      Log.info("mother: " + ml);
+    }
     return mother;
   }
 
   /** Returns a copy of n with the next egg moved to pruned */
-  public Node2 squash(Node2 n) {
-    /*
-     * How would I do this to efficiently preserve MaxLoss?
-     * eggs = LL<TVML>
-     * pruned = LL<TVML>
-     * children = LL<Node2Loss>
-     *
-     * I'm missing some function like:
-     * squashEgg :: egg:TVML[fp=fn=0] -> info:Counts -> pruned:MaxLoss[fn,fp populated]
-     *
-     * def squashLoss(n):
-     *   MaxLoss eggLoss = squashEgg(n.egg)
-     *   LL<TVML> newPruned = consPruned(new TVML(n.egg, eggLoss), n.pruned)
-     *   LL<TV> newEggs = n.eggs.cdr()
-     *   return newNode(n.prefix, newEggs, newPruned, n.children)
-     *
-     * => MaxLoss only needs to live in pruned:LL<TVML>
-     *  NOT QUITE!
-     *  MaxLoss has both numDetermined (which can come from children) and fn,fp (which comes from pruned)
-     *  This seems to indicate that MaxLoss needs to live in Node2 (above pruned and children) to be coherent
-     *  Node2.MaxLoss.fn,fp comes from pruned:LLTVML
-     *  Node2.MaxLoss.determined comes from pruned:LLTVML + children:LLNode2Loss
-     */
-    LLTVN newPruned = consPruned(n.eggs.car(), n.pruned);
-    return newNode(n.prefix, n.eggs.cdr(), newPruned, n.children);
+  public Node2 squash(Node2 wife, Z info) {
+    TVNS cracked = scoreSquash(wife, info);
+    LLTVNS newPruned = consPruned(cracked, wife.pruned);
+    Node2 wife2 = newNode(wife.getCoefs(), wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
+    if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
+      MaxLoss wl = wife.getStepScores().getLoss();
+      MaxLoss ml = wife2.getStepScores().getLoss();
+//      System.out.println("wife.maxLoss=" + wl.maxLoss()
+//          + " wife2.maxLoss=" + ml.maxLoss()
+//          + " wife.minLoss=" + wl.minLoss()
+//          + " wife2.minLoss=" + ml.minLoss()
+//          + " wife=" + wl
+//          + " wife2=" + ml);
+      Log.info("wife:  " + wl);
+      Log.info("wife2: " + ml);
+      if (ml.minLoss() == 0)
+        System.out.println("squash has no loss!");
+    }
+    return wife2;
   }
 
   // NOTE: This has to be in the module due to the need for consChild
   public Node2 replaceChild(Node2 parent, Node2 searchChild, Node2 replaceChild) {
     // Search and store prefix
     ArrayDeque<Node2> stack = new ArrayDeque<>();
-    LLML<Node2> newChildren = parent.children;
+    LLSSP newChildren = parent.children;
     while (newChildren != null && newChildren.car() != searchChild) {
       stack.push(newChildren.car());
       newChildren = newChildren.cdr();
@@ -236,7 +186,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     while (!stack.isEmpty())
       newChildren = consChild(stack.pop(), newChildren);
     // Reconstruct the parent node
-    return newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
+    return newNode(parent.getCoefs(), parent.prefix, parent.eggs, parent.pruned, newChildren);
   }
 
   /**
@@ -249,7 +199,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     Node2 parent = spine.car();
     // Search and store prefix
     ArrayDeque<Node2> stack = new ArrayDeque<>();
-    LLML<Node2> newChildren = parent.children;
+    LLSSP newChildren = parent.children;
     while (newChildren != null && newChildren.car() != searchChild) {
       stack.push(newChildren.car());
       newChildren = newChildren.cdr();
@@ -263,7 +213,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     while (!stack.isEmpty())
       newChildren = consChild(stack.pop(), newChildren);
     // Reconstruct the parent node
-    Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
+    Node2 newParent = newNode(parent.getCoefs(), parent.prefix, parent.eggs, parent.pruned, newChildren);
     return replaceNode(spine.cdr(), parent, newParent);
   }
 
@@ -337,7 +287,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     } else {
       StepScores<Z> prevScores = root.getStepScores();
       Z info = prevScores.getInfo();
-      Random r = info.getRandom();
+//      Random r = info.getRandom();
 
       // TODO check oneXperY with egg.getType() and wife.getType(), and if
       // true, after `mother = hatch(wife)`
@@ -347,21 +297,21 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       // hatch will be counted naturally and easily by squash. If this is too
       // slow then optimize, but this is so clean.
       Node2 mother = hatch(wife, info);
-      Adjoints hatchFeats = Adjoints.sum(featsHatch(wife, info), prevScores.getModel());
-      double hatchRand = r.nextGaussian() + prevScores.getRand();
-      MaxLoss hatchLoss = mother.getLoss();
-      StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, hatchLoss, hatchRand);
+//      Adjoints hatchFeats = Adjoints.sum(featsHatch(wife, info), prevScores.getModel());
+//      double hatchRand = r.nextGaussian() + prevScores.getRand();
+//      MaxLoss hatchLoss = mother.getLoss();
+//      StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, hatchLoss, hatchRand);
 
-      if (DEBUG_LOSS && DEBUG) {
-        System.out.println("[hatch] mother.loss=" + mother.getLoss());
-      }
+//      if (DEBUG_LOSS && DEBUG) {
+//        System.out.println("[hatch] mother.loss=" + mother.getLoss());
+//      }
 
 
-      Node2 wife2 = squash(wife);
-      Adjoints squashFeats = featsSquash(wife, info);
-      double squashRand = r.nextGaussian();
-      MaxLoss squashLoss = wife2.getLoss();
-      StepScores<Z> squashScore = new StepScores<>(info, squashFeats, squashLoss, squashRand);
+      Node2 wife2 = squash(wife, info);
+//      Adjoints squashFeats = featsSquash(wife, info);
+//      double squashRand = r.nextGaussian();
+//      MaxLoss squashLoss = wife2.getLoss();
+//      StepScores<Z> squashScore = new StepScores<>(info, squashFeats, squashLoss, squashRand);
       /* These are features for just this action.
        * If I want scores for the entire state, then I need to take them as
        * an argument... maybe steal them from root:State2
@@ -393,31 +343,32 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
        * => Static scores can be stored in eggs!
        */
 
-      if (DEBUG_LOSS && DEBUG) {
-        System.out.println("[squash] wife2.loss=" + wife2.getLoss());
-      }
+//      if (DEBUG_LOSS && DEBUG) {
+//        System.out.println("[squash] wife2.loss=" + wife2.getLoss());
+//      }
 
 
-      assert mother.prefix == wife2.prefix;
-      assert wife.getLoss().numPossible == mother.getLoss().numPossible
-          : "possible should not change when you have a kid"
-            + " wife.poss=" + wife.getLoss().numPossible
-            + " mother.poss=" + mother.getLoss().numPossible;
-      assert mother.getLoss().numPossible == wife2.getLoss().numPossible
-          : "having vs not having shouldn't change possible";
+//      assert mother.prefix == wife2.prefix;
+//      assert wife.getLoss().numPossible == mother.getLoss().numPossible
+//          : "possible should not change when you have a kid"
+//            + " wife.poss=" + wife.getLoss().numPossible
+//            + " mother.poss=" + mother.getLoss().numPossible;
+//      assert mother.getLoss().numPossible == wife2.getLoss().numPossible
+//          : "having vs not having shouldn't change possible";
 
 
 
-      if (spine.cdr() == null) {  // mother is root!
-        addTo.offer(new State2<Z>(mother, hatchScore, "hatch"));
-        addTo.offer(new State2<Z>(wife2, squashScore, "squash"));
-      } else {
-        LL<Node2> momInLaw = spine.cdr();
-        Node2 rootHatch = replaceNode(momInLaw, wife, mother);
-        Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
-        addTo.offer(new State2<Z>(rootHatch, hatchScore, "hatch"));
-        addTo.offer(new State2<Z>(rootSquash, squashScore, "squash"));
-      }
+      // Zip everything back up!
+      LL<Node2> momInLaw = spine.cdr();
+      Node2 rootHatch = replaceNode(momInLaw, wife, mother);
+      Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
+      addTo.offer(new State2<Z>(rootHatch, "hatch"));
+      addTo.offer(new State2<Z>(rootSquash, "squash"));
+      /* The problem appears to be that mother and wife2 have the proper loss,
+       * but once they are percolated up with rootHatch and rootSquash, their
+       * losses are 1) the same and 2) don't reflect the extra determined indices
+       * forced by the squash.
+       */
     }
 
     // Recurse
@@ -443,7 +394,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
     DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.CONSTRAINT_OBJ);
-//    DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.BEAM_SEARCH_OBJ);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
@@ -487,28 +437,27 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   }
 
   public Node2 genRootNode(Z info) {
-    LL<TVN> eggs = genEggs(null, info);
-    return newNode(null, eggs, null, null);
+    LLTVN eggs = genEggs(null, info);
+    return newNode(info, null, eggs, null, null);
   }
 
   public State2<Z> genRootState(Z info) {
     Node2 root = genRootNode(info);
-    StepScores<Z> s = new StepScores<>(info, Adjoints.Constant.ZERO, root.getLoss(), 0);
-    return new State2<>(root, s);
+    return new State2<>(root);
   }
 
   /**
    * Convenient conversion method, preserves order like:
    *   (a -> b -> c) goes to [a, b, c]
    */
-  public static HashableIntArray prefixValues2ar(LL<TVN> x) {
+  public static <T extends TVN> HashableIntArray prefixValues2ar(LL<T> x) {
     int len = 0;
-    for (LL<TVN> cur = x; cur != null; cur = cur.cdr())
+    for (LL<T> cur = x; cur != null; cur = cur.cdr())
       len++;
     int[] ar = new int[len];
     int i = 0;
-    for (LL<TVN> cur = x; cur != null; cur = cur.cdr())
-      ar[i++] = cur.car().getValue();
+    for (LL<T> cur = x; cur != null; cur = cur.cdr())
+      ar[i++] = cur.car().value;
     return new HashableIntArray(ar);
   }
 }

@@ -14,10 +14,12 @@ import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.LL;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.full2.TVN;
+import edu.jhu.hlt.fnparse.rl.full2.TVNS;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -37,7 +39,7 @@ public class LabelIndex implements Serializable {
 
 
   public int getCounts2(int type, int value, TFKS prefix) {
-    LL<TVN> l = new LL<>(new TVN(type, value, -1, -1), prefix);
+    LL<TVNS> l = new LL<>(new TVNS(type, value, -1, -1, -1, Adjoints.Constant.ZERO, 0), prefix);
     HashableIntArray a = AbstractTransitionScheme.prefixValues2ar(l);
     int c = getCounts2().getCount(a);
     if (AbstractTransitionScheme.DEBUG_LOSS && AbstractTransitionScheme.DEBUG)
@@ -98,11 +100,11 @@ public class LabelIndex implements Serializable {
         counts.update(i, below);
       }
     }
-//    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG) {
       for (HashableIntArray prefix : counts.getKeysSortedByCount(true)) {
         Log.info("count=" + counts.getCount(prefix) + " prefix=" + prefix);
       }
-//    }
+    }
   }
   public LabelIndex(FNParse y) {
     this(y, null);

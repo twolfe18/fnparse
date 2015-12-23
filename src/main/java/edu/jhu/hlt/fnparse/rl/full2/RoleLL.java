@@ -8,6 +8,7 @@ import java.util.function.ToLongFunction;
  * numArgs.
  *
  * @author travis
+ * @deprecated
  */
 public class RoleLL extends PrimesLL {
 

@@ -37,7 +37,7 @@ public final class MaxLoss {
   }
 
   public MaxLoss(int numPossible, int numDetermined, int fp, int fn) {
-    System.out.flush();
+//    System.out.flush();
     assert numPossible >= 0 : "numPossible=" + numPossible;
     assert numDetermined <= numPossible : "numDetermined=" + numDetermined + " numPossible=" + numPossible;
 
@@ -79,6 +79,16 @@ public final class MaxLoss {
     return fp + fn;
   }
 
+  public double hLoss() {
+    // Good for true prunes: numDetermined will reward this but fp,fn wont
+    // Bad for false prunes: numDetermined will swamp fn
+//    return numDetermined + fp + fn;
+    // Fix for bad while maintaining good:
+    // Note: even if you determine the entire sub-tree, you can't beat even a single fn
+    // TODO Maybe introduce alpha * det/poss to effectively "give up" if a region is sparse enough
+    return fp + fn + ((double) numDetermined)/numPossible;
+  }
+
   /** Returns a new MaxLoss equal to this plus another FP */
   public MaxLoss fp() {
     return new MaxLoss(numPossible, numDetermined+1, fp+1, fn);
@@ -91,6 +101,8 @@ public final class MaxLoss {
 
   @Override
   public String toString() {
-    return "((N=" + numPossible + " - D=" + numDetermined + ") + fp=" + fp + " fn=" + fn + ")";
+//    return "((N=" + numPossible + " - D=" + numDetermined + ") + fp=" + fp + " fn=" + fn + ")";
+    return String.format("(ML h=%.2f min=%d max=%d N=%d D=%d fp=%d fn=%d)",
+        hLoss(), minLoss(), maxLoss(), numPossible, numDetermined, fp, fn);
   }
 }
