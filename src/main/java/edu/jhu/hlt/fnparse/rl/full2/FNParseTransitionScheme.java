@@ -8,6 +8,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import javax.print.attribute.standard.PrinterMessageFromOperator;
+
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -18,10 +20,10 @@ import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
+import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.State;
-import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -137,6 +139,21 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return new Node2(coefs, prefix, eggs, pruned, children);
   }
 
+  private long primeFor(int type, int value) {
+    TVNS tvns = new TVNS(type, value, -1, -1, 2, null, Double.NaN);
+    TFKS tfks = new TFKS(tvns, null);
+    return primeFor(tfks);
+  }
+  private TVN tvnFor(int type, int value) {
+    return new TVN(type, value, 1, 1, primeFor(type, value));
+  }
+  private LL<TVN> encSug(int t, int f, int k, int s) {
+    return consEggs(tvnFor(TFKS.S, s),
+        consEggs(tvnFor(TFKS.K, k),
+            consEggs(tvnFor(TFKS.F, f),
+                consEggs(tvnFor(TFKS.T, t), null))));
+  }
+
   @Override
   public Iterable<LL<TVN>> encode(FNParse y) {
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE)
@@ -152,27 +169,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Span a = fi.getArgument(k);
         if (a != Span.nullSpan) {
           int s = Span.encodeSpan(a, n);
-          yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
-              consEggs(new TVN(TFKS.K, k+0*K, 1, 1, -1L),
-              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
-              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
+          yy.add(encSug(t, f, k+0*K, s));
         }
         for (Span ca : fi.getContinuationRoleSpans(k)) {
           int s = Span.encodeSpan(ca, n);
-          yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
-              consEggs(new TVN(TFKS.K, k+1*K, 1, 1, -1L),
-              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
-              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
+          yy.add(encSug(t, f, k+1*K, s));
         }
         for (Span ra : fi.getReferenceRoleSpans(k)) {
           int s = Span.encodeSpan(ra, n);
-          yy.add(
-              consEggs(new TVN(TFKS.S, s, 1, 1, -1L),
-              consEggs(new TVN(TFKS.K, k+2*K, 1, 1, -1L),
-              consEggs(new TVN(TFKS.F, f, 1, 1, -1L),
-              consEggs(new TVN(TFKS.T, t, 1, 1, -1L), null)))));
+          yy.add(encSug(t, f, k+2*K, s));
         }
       }
     }
@@ -319,7 +324,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int t = Span.encodeSpan(ts, n);
         int poss = subtreeSize(TFKS.T, t, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.T, t, prefix);
-        long prime = -1;  // TODO
+        long prime = primeFor(TFKS.T, t);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("T poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.T, t, poss, c, prime), l);
@@ -337,7 +342,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       for (Frame ff : info.getPossibleFrames(t)) {
         int poss = subtreeSize(TFKS.F, ff.getId(), prefix, info);
         int c = info.getLabel().getCounts2(TFKS.F, ff.getId(), prefix);
-        long prime = -1;  // TODO
+        long prime = primeFor(TFKS.F, ff.getId());
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("F poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.F, ff.getId(), poss, c, prime), l);
@@ -350,7 +355,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       while (k >= 0) {
         int poss = subtreeSize(TFKS.K, k, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.K, k, prefix);
-        long prime = -1;  // TODO
+        long prime = primeFor(TFKS.K, k);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l);
@@ -373,7 +378,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int s = Span.encodeSpan(ss, n);
         int possC = subtreeSize(TFKS.S, s, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.S, s, prefix);
-        long prime = -1;  // TODO
+        long prime = primeFor(TFKS.S, s);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + possC + " c=" + c);
         l = consEggs(new TVN(TFKS.S, s, possC, c, prime), l);

@@ -29,6 +29,7 @@ public class TVN {
     this.numPossible = numPossible;
     this.goldMatching = goldMatching;
     this.prime = prime;
+    assert prime > 1 : "prime=" + prime;
   }
 
   @Override

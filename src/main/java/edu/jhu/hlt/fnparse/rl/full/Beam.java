@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
 
+import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
@@ -147,6 +148,23 @@ public interface Beam<T extends StateLike> {
       double sc = value(s);
       BeamItem<T> old = table.get(s);
       if (old != null) {
+        
+        
+//        State2<?> s1 = (State2<?>) s;
+//        State2<?> s2 = (State2<?>) old.state;
+//
+//        System.out.println("\ns1");
+//        s1.getRoot().show(System.out);
+//        System.out.println("\nold");
+//        s2.getRoot().show(System.out);
+//
+//        System.out.println("s1 sig: " + s1.getRoot().getSig());
+//        System.out.println("s2 sig: " + s2.getRoot().getSig());
+//
+//        if (s1 != s2)
+//          throw new RuntimeException();
+        
+        
         numCollapses++;
         if (old.score < sc) {
           // If this state is the same as something on our beam,

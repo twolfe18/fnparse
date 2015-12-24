@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
  */
 public class State2<T extends HowToSearch> implements StateLike {
   private Node2 root;
+  private int hash;
   public String dbgString;
 
   public State2(Node2 root) {
@@ -28,6 +29,7 @@ public class State2<T extends HowToSearch> implements StateLike {
       throw new IllegalArgumentException("must be a root!");
     this.root = root;
     this.dbgString = dbgString;
+    this.hash = root.hashCode();
   }
 
   public Node2 getRoot() {
@@ -41,6 +43,20 @@ public class State2<T extends HowToSearch> implements StateLike {
   @Override
   public BigInteger getSignature() {
     return root.getSig();
+  }
+
+  @Override
+  public int hashCode() {
+    return hash;
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof State2) {
+      State2<?> s = (State2<?>) other;
+      return hash == s.hash && root.equals(s.root);
+    }
+    return false;
   }
 
   @Override

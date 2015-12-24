@@ -44,6 +44,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   public static boolean DEBUG = false;
   public static boolean DEBUG_LOSS = true;
   public static boolean DEBUG_ACTION_MAX_LOSS = true;
+  public static boolean DEBUG_COLLAPSE = false;
 
   /**
    * How to glue stuff together. Hide instantiations of LL which keep track of
@@ -310,19 +311,27 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), bsearchObj);
     DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
 
+    if (DEBUG && DEBUG_COLLAPSE)
+      Log.info("beamSize=" + inf.beamSize() + " numConstraints=" + inf.numConstraints());
+
     State2<Z> lastState = null;
     next.offer(s0); all.offer(s0);
     for (int i = 0; true; i++) {
       if (DEBUG) Log.debug("starting iter=" + i);
       DoubleBeam<State2<Z>> t = cur; cur = next; next = t;
       assert next.size() == 0;
+      if (DEBUG && DEBUG_COLLAPSE)
+        Log.info("cur.size=" + cur.size());
       for (int b = 0; cur.size() > 0; b++) {
         State2<Z> s = cur.pop();
         if (b == 0) // best item in cur
           lastState = s;
         nextStatesB(s, next, all);
       }
-      if (DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
+      if (DEBUG && DEBUG_COLLAPSE) {
+        Log.info("next.size=" + next.size());
+        Log.info("collapseRate=" + next.getCollapseRate());
+      }
       if (next.size() == 0) {
         if (DEBUG) Log.info("returning because next.size==0");
         break;

@@ -49,6 +49,11 @@ public class LLSSP extends LL<Node2> {
     return scoreSum;
   }
 
+  public static BigInteger getPrimeProd(LLSSP l) {
+    if (l == null)
+      return BigInteger.ONE;
+    return l.primeProd;
+  }
   public BigInteger getPrimeProd() {
     return primeProd;
   }

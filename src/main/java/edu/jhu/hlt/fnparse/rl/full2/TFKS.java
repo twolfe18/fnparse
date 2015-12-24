@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+import java.math.BigInteger;
+
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -39,6 +41,8 @@ public class TFKS extends LL<TVNS> {
   // Values
   public final int t, f, k, s;
 
+  public final BigInteger primesProd;
+
   /** Inserts a zero score to promote {@link TVN} to {@link TVNS} */
   public static TFKS lltvn2tfks(LL<TVN> l) {
     throw new RuntimeException("implement me with a deque");
@@ -46,6 +50,10 @@ public class TFKS extends LL<TVNS> {
 
   public TFKS(TVNS item, TFKS next) {
     super(item, next);
+    if (next == null)
+      primesProd = BigInteger.valueOf(item.prime);
+    else
+      primesProd = BigInteger.valueOf(item.prime).multiply(next.primesProd);
     switch (item.type) {
     case T:
       t = or(safeT(next), item.value);
@@ -179,5 +187,14 @@ public class TFKS extends LL<TVNS> {
           && s == a.s;
     }
     return false;
+  }
+
+  public static BigInteger getPrimesProd(TFKS l) {
+    if (l == null)
+      return BigInteger.ONE;
+    return l.primesProd;
+  }
+  public BigInteger getPrimesProd() {
+    return primesProd;
   }
 }

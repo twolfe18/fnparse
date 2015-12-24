@@ -8,7 +8,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -25,11 +24,9 @@ import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
-import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameArgInstance;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
-import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
@@ -37,33 +34,22 @@ import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
-import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
-import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
-import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.HammingLoss;
-import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
-import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
-import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
-import edu.jhu.hlt.fnparse.util.HasRandom;
-import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -585,383 +571,6 @@ public class State implements StateLike {
     public String toString() {
       return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
     }
-  }
-
-  /** Everything that is annoying to copy in State */
-  public static class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
-    private static final long serialVersionUID = -4529781834599237479L;
-
-    private Sentence sentence;
-    private LabelIndex label;     // may be null
-
-    // State space pruning
-    private FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
-    private Map<Span, List<Frame>> prunedFIs;    // TODO fill this in
-
-    // Parameters of transition system
-    private Config config;
-    private RTConfig likeConf;  // legacy support :(
-
-    /* Parameters of search.
-     * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
-     *   oracle: {b0: 0.1, b1: -10, b2: 0}
-     *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
-     *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
-     */
-    public GeneralizedCoef coefLoss;
-    public GeneralizedCoef coefModel;
-    public GeneralizedCoef coefRand;
-
-    public int beamSize = 1;          // How many states to keep at every step
-    public int numConstraints = 1;    // How many states to keep for forming margin constraints (a la k-best MIRA)
-
-    public Info(Config config) {
-      this.config = config;
-      // coefs remain null
-    }
-
-    public Config getConfig() {
-      return config;
-    }
-
-    @Override
-    public Random getRandom() {
-      return config.rand;
-    }
-
-    public FrameIndex getFrameIndex() {
-      return config.frPacking.getFrameIndex();
-    }
-
-    public LabelIndex getLabel() {
-      return label;
-    }
-
-    public FNParse getLabelParse() {
-      return label.getParse();
-    }
-
-    public Sentence getSentence() {
-      return sentence;
-    }
-
-    /** Mutates! returns this */
-    public Info copyLabel(Info from) {
-      sentence = from.sentence;
-      label = from.label;
-      prunedFIs = null;
-      prunedSpans = null;
-      return this;
-    }
-
-    /** Mutates! returns this */
-    public Info setLabel(FNParse y) {
-      return setLabel(y, null);
-    }
-    public Info setLabel(FNParse y, AbstractTransitionScheme<FNParse, ?> ts) {
-      sentence = y.getSentence();
-      if (ts == null)
-        label = new LabelIndex(y);
-      else
-        label = new LabelIndex(y, ts);
-      prunedFIs = null;
-      prunedSpans = null;
-      return this;
-    }
-
-    /** Mutates! returns this */
-    public Info setSentence(Sentence s) {
-      sentence = s;
-      label = null;
-      prunedFIs = null;
-      prunedSpans = null;
-      return this;
-    }
-
-    public boolean sentenceAndLabelMatch() {
-      if (sentence == null)
-        throw new RuntimeException("this should never happen!");
-      if (label == null)
-        return true;
-      boolean m = label.getParse().getSentence() == sentence;
-      if (!m) {
-        System.err.println("label: " + label.getParse().getSentence().getId());
-        System.err.println("sentence: " + sentence.getId());
-      }
-      return m;
-    }
-
-    public Info setLike(RTConfig config) {
-      this.likeConf = config;
-      if (config == null) {
-        Log.warn("null config! no-op!");
-      } else {
-        assert config.trainBeamSize == config.testBeamSize;
-        beamSize = config.trainBeamSize;
-        this.config.rand = config.rand;
-      }
-      return this;
-    }
-
-    @Override
-    public String toString() {
-      return "(Info " + showCoefs() + ")";
-    }
-
-    /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
-    public Info setOracleCoefs() {
-      // TODO This should be bigger so that it doesn't get overwhelmed by model score!
-      coefLoss = new GeneralizedCoef(1, false);
-      if (likeConf == null) {
-        Log.warn("likeConf is null, defaulting to MIN");
-        coefModel = new GeneralizedCoef(-1, true);
-        coefRand = new GeneralizedCoef(0, false);
-      } else {
-        switch (likeConf.oracleMode) {
-        case RAND_MIN:
-          coefModel = new GeneralizedCoef(-1, true);
-          coefRand = new GeneralizedCoef(1, false);
-          break;
-        case RAND_MAX:
-          coefModel = new GeneralizedCoef(1, true);
-          coefRand = new GeneralizedCoef(1, false);
-          break;
-        case MIN:
-          coefModel = new GeneralizedCoef(-1, true);
-          coefRand = new GeneralizedCoef(0, false);
-          break;
-        case MAX:
-          coefModel = new GeneralizedCoef(1, true);
-          coefRand = new GeneralizedCoef(0, false);
-          break;
-        }
-      }
-      return this;
-    }
-    public Info setMostViolatedCoefs() {
-      coefLoss = new GeneralizedCoef(-1, false);
-      coefModel = new GeneralizedCoef(1, false);
-      coefRand = new GeneralizedCoef(0, false);
-      return this;
-    }
-    public Info setDecodeCoefs() {
-      coefLoss = new GeneralizedCoef(0, false);
-      coefModel = new GeneralizedCoef(1, false);
-      coefRand = new GeneralizedCoef(0, false);
-      return this;
-    }
-    public boolean anyCoefNonzero() {
-      return coefLoss.nonzero() || coefModel.nonzero() || coefRand.nonzero();
-    }
-    public String showCoefs() {
-      return "((loss " + coefLoss + ") (model " + coefModel + ") (rand " + coefRand + "))";
-    }
-
-    public int numFrames() {
-      return config.frPacking.getNumFrames();
-    }
-
-    public Collection<Span> getPossibleTargets() {
-      return prunedFIs.keySet();
-    }
-
-    public Collection<Frame> getPossibleFrames(Span t) {
-      return prunedFIs.get(t);
-    }
-
-    /** Does not include nullSpan */
-    public List<Span> getPossibleArgs(FI fi) {
-      assert fi.t != null;
-      assert fi.f != null;
-      return getPossibleArgs(fi.f, fi.t);
-    }
-
-    public List<Span> getPossibleArgs(Frame f, Span t) {
-      FrameInstance key = FrameInstance.frameMention(f, t, sentence);
-      List<Span> all = prunedSpans.getPossibleArgs(key);
-      if (all == null) {
-//        System.out.println("f=" + f.getName() + " t=" + t.shortString());
-//        System.out.println("s1.id=" + sentence.getId());
-//        System.out.println("s2.id=" + prunedSpans.getSentence().getId());
-//        System.out.println("s.size=" + sentence.size());
-
-        return Arrays.asList(Span.nullSpan);
-      }
-      List<Span> nn = new ArrayList<>(all.size() - 1);
-      for (Span s : all)
-        if (s != Span.nullSpan)
-          nn.add(s);
-      return nn;
-    }
-
-    public Info setTargetPruningToGoldLabels() {
-      return setTargetPruningToGoldLabels(null);
-    }
-    public Info setTargetPruningToGoldLabels(Info alsoSetThisInstance) {
-      if (label == null)
-        throw new IllegalStateException("need a label for this operation");
-      assert sentenceAndLabelMatch();
-      prunedSpans = null;
-      prunedFIs = new HashMap<>();
-      for (FrameInstance fi : label.getParse().getFrameInstances()) {
-        Span t = fi.getTarget();
-        Frame f = fi.getFrame();
-        List<Frame> other = prunedFIs.put(t, Arrays.asList(f));
-        assert other == null;
-      }
-      if (alsoSetThisInstance != null) {
-        assert alsoSetThisInstance.sentenceAndLabelMatch();
-        assert sentence == alsoSetThisInstance.sentence;
-        alsoSetThisInstance.prunedSpans = null;
-        alsoSetThisInstance.prunedFIs = prunedFIs;
-      }
-      return this;
-    }
-
-    public Info setArgPruningUsingGoldLabelWithNoise() {
-      return setArgPruningUsingGoldLabelWithNoise(3, 3);
-    }
-    public Info setArgPruningUsingGoldLabelWithNoise(int kPerTF, int sPerTFK) {
-      Log.info("kPerTF=" + kPerTF + " sPerTFK" + sPerTFK);
-      prunedSpans = new FNParseSpanPruning(getSentence(), Collections.emptyList(), new HashMap<>());
-      for (FrameInstance fi : label.getParse().getFrameInstances()) {
-        Frame f = fi.getFrame();
-        FrameInstance key = FrameInstance.frameMention(f, fi.getTarget(), getSentence());
-        int K = f.numRoles();
-        int miscK = 0;
-        for (int k = 0; k < K; k++) {
-          Span a = fi.getArgument(k);
-          if (a != Span.nullSpan || miscK < kPerTF) {
-            prunedSpans.addSpan(key, a);
-            if (a == Span.nullSpan)
-              miscK++;
-          }
-          if (config.useContRoles || config.useRefRoles)
-            throw new RuntimeException("implement me");
-          assert fi.getContinuationRoleSpans(k).isEmpty();
-          assert fi.getReferenceRoleSpans(k).isEmpty();
-        }
-      }
-      return this;
-    }
-
-    public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
-      return setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
-    }
-    public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
-      assert sentenceAndLabelMatch();
-      StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
-      prunedSpans = inf.decodeAll().get(0);
-
-      // Add any spans that appear in the gold label to the pruning mask if they do not appear already
-      if (includeGoldSpansIfMissing) {
-        if (label == null)
-          throw new RuntimeException("you need a label to perform this operation");
-        int adds = 0;
-        int realized = 0;
-        int present = 0;
-
-        // Is it possible to not emit any possible Span args for a given frame/target?
-
-        List<FrameInstance> fis = label.getParse().getFrameInstances();
-        for (FrameInstance fi : fis) {
-          FrameInstance key = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
-          List<Span> possible = prunedSpans.getPossibleArgs(key);
-          if (possible == null) {
-            System.out.println(label.getParse().getId());
-            System.out.println(label.getParse().getSentence().getId());
-            for (FrameInstance fi2 : fis)
-              System.out.println("label: " + Describe.frameInstance(fi2));
-            for (FrameInstance fi2 : prunedSpans.getFrameInstances())
-              System.out.println("prune: " + Describe.frameInstance(fi2));
-            throw new RuntimeException();
-          }
-          present += possible.size();
-          int K = fi.getFrame().numRoles();
-          for (int k = 0; k < K; k++) {
-
-            Span s = fi.getArgument(k);
-            if (s != Span.nullSpan) {
-              realized++;
-              if (!prunedSpans.getPossibleArgs(key).contains(s)) {
-                adds++;
-                prunedSpans.addSpan(key, s);
-              }
-            }
-
-            if (config.useContRoles) {
-              for (Span ss : fi.getContinuationRoleSpans(k)) {
-                if (ss != Span.nullSpan) {
-                  realized++;
-                  if (!prunedSpans.getPossibleArgs(key).contains(ss)) {
-                    adds++;
-                    prunedSpans.addSpan(key, ss);
-                  }
-                }
-              }
-            }
-
-            if (config.useRefRoles) {
-              for (Span ss : fi.getReferenceRoleSpans(k)) {
-                if (ss != Span.nullSpan) {
-                  realized++;
-                  if (!prunedSpans.getPossibleArgs(key).contains(ss)) {
-                    adds++;
-                    prunedSpans.addSpan(key, ss);
-                  }
-                }
-              }
-            }
-
-          }
-        }
-        if (DEBUG) {
-          Log.debug("includeGoldSpansIfMissing: adds=" + adds
-              + " realized=" + realized + " presentBefore=" + present
-              + " nFI=" + label.getParse().numFrameInstances()
-              + " nTokens=" + sentence.size());
-        }
-      }
-      if (alsoSet != null) {
-        assert alsoSet.sentenceAndLabelMatch();
-        assert alsoSet.sentence == sentence;
-        alsoSet.prunedSpans = prunedSpans;
-      }
-      return this;
-    }
-
-    @Override
-    public GeneralizedCoef coefLoss() {
-      return coefLoss;
-    }
-
-    @Override
-    public GeneralizedCoef coefModel() {
-      return coefModel;
-    }
-
-    @Override
-    public GeneralizedCoef coefRand() {
-      return coefRand;
-    }
-
-    @Override
-    public int beamSize() {
-      return beamSize;
-    }
-
-    @Override
-    public int numConstraints() {
-      return numConstraints;
-    }
-
-    @Override
-    public Counts<HashableIntArray> getCounts() {
-      if (label == null)
-        throw new IllegalStateException("can't call this on unlabelled Infos");
-      return label.getCounts2();
-    }
-
   }
 
   public State noMoreFrames(Adjoints partialScore) {

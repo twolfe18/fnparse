@@ -1,11 +1,13 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import java.io.File;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -15,12 +17,12 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
-import edu.jhu.hlt.fnparse.rl.full.State.Info;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -153,7 +155,8 @@ public class FModel implements Serializable {
     assert oracleSc.getLoss().maxLoss() == 0
         : "check your pruning! if you pruned away a branch on the gold tree"
             + " then you should consider reifying the pruning process into"
-            + " learning (since its so good at handling pruning!)";
+            + " learning (since its so good at handling pruning!)\n"
+            + oracleSc.getLoss();
 
     return buildUpdate(oracleSc, mvSc);
   }
@@ -175,18 +178,6 @@ public class FModel implements Serializable {
     State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
     timer.stop("update.mv");
 
-    // Pull loss out of state/trajectory
-//    double orL = oracleState.score.getHammingLoss();
-//    double mvL = mvState.score.getHammingLoss();
-//    double margin = mvL - orL;
-//    if (margin < 0)
-//      Log.warn("oracleLoss=" + orL + " > mvLoss=" + mvL);
-
-    // mv.forwards() contains loss, oracle doesn't due to muting
-//    final double hinge = Math.max(0, mvState.score.forwards() + margin - oracleState.score.forwards());
-    // Shit! oracle.forwards = loss(y,y_oracle) -- which should be basically 0
-    // It should be score(y_oracle)!
-//    final double hinge = Math.max(0, mvState.score.forwards() - oracleState.score.forwards());
     StepScores<Info> mvss = mvState.getStepScores();
     StepScores<Info> oss = oracleState.getStepScores();
     return buildUpdate(oss, mvss);
@@ -270,7 +261,7 @@ public class FModel implements Serializable {
 
 
   public static void main(String[] args) {
-    ExperimentProperties.init(args);
+    ExperimentProperties config = ExperimentProperties.init(args);
 
 //    AbstractTransitionScheme.DEBUG = true;
 
@@ -283,7 +274,13 @@ public class FModel implements Serializable {
       }
     });
 
-    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+    Random rand = new Random(config.getInt("seed", 9001));
+    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
+    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+    m.rtConf.oracleMode = OracleMode.MIN;
+    m.rtConf.setBeamSize(1);
+//    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
@@ -298,9 +295,9 @@ public class FModel implements Serializable {
       Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles() + " numFI=" + y.numFrameInstances());
 
       // Check learning
-      int c = 0, clim = 3;
+      int c = 0, clim = 5;
       double maxF1 = 0;
-      for (int i = 0; i < 20; i++) {
+      for (int i = 0; i < clim * 10; i++) {
         Update u = m.getUpdate(y);
         u.apply(0.1);
 

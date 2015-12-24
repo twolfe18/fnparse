@@ -39,7 +39,7 @@ public class LabelIndex implements Serializable {
 
 
   public int getCounts2(int type, int value, TFKS prefix) {
-    LL<TVNS> l = new LL<>(new TVNS(type, value, -1, -1, -1, Adjoints.Constant.ZERO, 0), prefix);
+    LL<TVNS> l = new LL<>(new TVNS(type, value, -1, -1, 3, Adjoints.Constant.ZERO, 0), prefix);
     HashableIntArray a = AbstractTransitionScheme.prefixValues2ar(l);
     int c = getCounts2().getCount(a);
     if (AbstractTransitionScheme.DEBUG_LOSS && AbstractTransitionScheme.DEBUG)

@@ -62,7 +62,6 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
-import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.Fixed;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -115,7 +114,7 @@ public class RerankerTrainer {
   }
 
   // may differ across pretrain/train
-  public class RTConfig implements Serializable {
+  public static class RTConfig implements Serializable {
     private static final long serialVersionUID = 2229792069360002582L;
 
     // Meta
@@ -213,6 +212,11 @@ public class RerankerTrainer {
     public void autoPropDev(int nTrain) {
       int nDev = (int) Math.pow(nTrain, 0.7d);
       setMaxDev(nDev);
+    }
+
+    /** Sets for both train and test */
+    public void setBeamSize(int n) {
+      trainBeamSize = testBeamSize = n;
     }
 
     public void scaleLearningRateToBatchSize(int batchSizeWithLearningRateOf1) {
@@ -2018,6 +2022,7 @@ public class RerankerTrainer {
     return StringUtils.join(" + ", features);
   }
 
+  @SuppressWarnings("unused")
   private static String getFeatureSetFromFileNew(String path) {
     Log.info("[main] getFeatureSetFromFileNew path=" + path);
     File f = new File(path);

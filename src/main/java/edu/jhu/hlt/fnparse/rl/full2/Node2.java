@@ -121,9 +121,23 @@ public class Node2 implements HasStepScores, HasSig {
     // Need some way to complete this, could do this by:
     // 1) knowing the length of eggs and pruned (if the egg order is static this is enough)
     // 2) give eggs two primes, one to use if they get squashed and another if they are hatched
-    if (children == null)
-      return BigInteger.ONE;
-    return children.getPrimeProd();
+    BigInteger a = LLTVN.getPrimesProd(eggs);
+    BigInteger b = LLTVN.getPrimesProd(pruned);
+    BigInteger c = LLSSP.getPrimeProd(children);
+    BigInteger d = TFKS.getPrimesProd(prefix);
+    return a.multiply(b).multiply(c).multiply(d);
+  }
+
+  @Override
+  public int hashCode() {
+    return getSig().intValue();
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (other instanceof Node2)
+      return getSig().equals(((Node2) other).getSig());
+    return false;
   }
 
   public SearchCoefficients getCoefs() {
