@@ -5,6 +5,12 @@ import java.math.BigInteger;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 
+/**
+ * Current use: LL<Node2> for children. Keeps track of the product of their
+ * primes and the sum of their score/loss/rand.
+ *
+ * @author travis
+ */
 public class LLSSP extends LL<Node2> {
 
   private BigInteger primeProd;

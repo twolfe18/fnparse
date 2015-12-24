@@ -37,13 +37,9 @@ public final class MaxLoss {
   }
 
   public MaxLoss(int numPossible, int numDetermined, int fp, int fn) {
-//    System.out.flush();
     assert numPossible >= 0 : "numPossible=" + numPossible;
     assert numDetermined <= numPossible : "numDetermined=" + numDetermined + " numPossible=" + numPossible;
-
-    // TODO return to this...
-//    assert fp + fn <= numDetermined : "fp=" + fp + " fn=" + fn + " numDetermined=" + numDetermined;
-
+    assert fp + fn <= numDetermined : "fp=" + fp + " fn=" + fn + " numDetermined=" + numDetermined;
     assert fp >= 0 && fn >= 0;
     this.numPossible = numPossible;
     this.numDetermined = numDetermined;

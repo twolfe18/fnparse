@@ -35,6 +35,12 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 
+/**
+ * An instantiation of {@link AbstractTransitionScheme} which specifies the
+ * [targetSpan, frame, role, argSpan] loop order for Propbank/FrameNet prediction.
+ *
+ * @author travis
+ */
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
@@ -113,9 +119,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public LLSSP consChild(Node2 car, LLSSP cdr) {
-//    if (car.getType() == TFKS.K)
-//      return new RoleLL(car, cdr, this::primeFor);
-//    return new PrimesLL(car, cdr, this::primeFor);
     return new LLSSP(car, cdr);
   }
 
@@ -348,16 +351,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int poss = subtreeSize(TFKS.K, k, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.K, k, prefix);
         long prime = -1;  // TODO
-        
-        
-        // Skip some negs
-//        if (DEBUG_GEN_EGGS && c == 0 && AbstractTransitionScheme.DEBUG && info.getRandom().nextDouble() > 0.3)
-//        if (c == 0 && LL.length(l) > 3) {
-//          k--;
-//          continue;
-//        }
-        
-        
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l);
@@ -381,14 +374,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int possC = subtreeSize(TFKS.S, s, prefix, info);
         int c = info.getLabel().getCounts2(TFKS.S, s, prefix);
         long prime = -1;  // TODO
-        
-        
-        // Skip some negs
-//        if (DEBUG_GEN_EGGS && c == 0 && AbstractTransitionScheme.DEBUG && info.getRandom().nextDouble() > 0.3)
-//        if (c == 0 && LL.length(l) > 3)
-//          break;
-        
-        
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + possC + " c=" + c);
         l = consEggs(new TVN(TFKS.S, s, possC, c, prime), l);
@@ -467,8 +452,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       if (useOverfitFeatures) {
         String fs = prefix.toString();
         int i = alph.lookupIndex(fs, true);
-//        if (AbstractTransitionScheme.DEBUG)
-//          Log.info("i=" + i + " dimension=" + dimension + " fs=" + fs);
         addTo.add(base.prod(i, dimension));
       } else {
         assert cachedFeatures != null : "forget to set CachedFeatures?";
@@ -503,7 +486,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     TVN egg = n.eggs.car(); // what we're featurizing hatching
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
-//    staticFeats1(n, info, allFeats);
+    staticFeats1(n, info, allFeats);
     if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.weights.getL2Norm(), System.identityHashCode(wHatch.weights)));
       for (ProductIndex p : allFeats) {
@@ -518,7 +501,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       pi.showUpdatesWith = alph;
       Log.info("featHatchEarlyAdjoints: " + pi);
     }
-//    return pi;
     return egg.withScore(pi, info.getRandom().nextGaussian());
   }
 
@@ -527,7 +509,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     TVN egg = n.eggs.car(); // what we're featurizing squashing
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
-//    staticFeats1(n, info, allFeats);
+    staticFeats1(n, info, allFeats);
     if (AbstractTransitionScheme.DEBUG && VERBOSE_FEATURES) {
       Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.weights.getL2Norm(), System.identityHashCode(wSquash.weights)));
       for (ProductIndex p : allFeats) {
@@ -542,25 +524,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       pi.showUpdatesWith = alph;
       Log.info("featSquashEarlyAdjoints: " + pi);
     }
-//    return pi;
     return egg.withScore(pi, info.getRandom().nextGaussian());
   }
 
 
-
-
-  // REAL TESTING YO
+  /** Returns the parse-du-jour for testing */
   public static FNParse dummyParse() {
-//    String[][] tpl = new String[][] {
-//      new String[] {"I", "hate", "writing", "tests"},
-//      new String[] {"N", "V", "V", "N"},
-//      new String[] {"I", "hate", "write", "test"},
-//    };
-//    Sentence s = new Sentence("testDS", "example1", tpl[0], tpl[1], tpl[2]);
-//    FrameIndex fs = FrameIndex.getFrameNet();
-//    List<FrameInstance> fi = new ArrayList<>();
-//    FrameInstance fi1 = FrameInstance.newFrameInstance(frame, target, arguments, sent)
-
     List<FNParse> ys = State.getParse();
     Collections.sort(ys, new Comparator<FNParse>() {
       @Override
@@ -568,7 +537,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         return State.numItems(o1) - State.numItems(o2);
       }
     });
-
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
         continue;
@@ -578,7 +546,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
     throw new RuntimeException();
   }
-
 
   public static void main(String[] args) {
     ExperimentProperties.init(args);

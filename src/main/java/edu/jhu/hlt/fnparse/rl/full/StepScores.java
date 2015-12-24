@@ -61,26 +61,6 @@ public class StepScores<T extends SearchCoefficients> implements Adjoints {
     return info;
   }
 
-  /*
-   * In what way does MaxLoss accumulate?
-   * You must accumulate over *disjoint* sets!
-   * PrefixLL must never call MaxLoss.sum since intersect(parent,child)=child
-   * LLML calls MaxLoss.sum...
-   * OK good, this is only called for pruned and eggs, where it is appropriate.
-   *
-   * Considering rule: StepScores is not recursive.
-   * Its components (Adjoints,MaxLoss,double) may be cumulative, but all the
-   * wiring up must be done by constructors of StepScores.
-   *
-   * I think the biggest problem is that, e.g. a T node needs to know its
-   * MaxLoss (via StepScores currently). The only way to get this MaxLoss is
-   * from aggregating children+pruned.
-   *
-   * At Node2 creation (in genEggs):
-   * numPossible is given by user
-   * numDetermined,fp,fn are 0 (and thereafter determined by sum(map(determined, pruned ++ children))
-   */
-
   public Adjoints getModel() {
     return model;
   }

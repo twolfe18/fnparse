@@ -2,19 +2,21 @@ package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.math.BigInteger;
 
-import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
+import edu.jhu.hlt.fnparse.rl.full.StateLike;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 
 /**
  * Holds everything bigger than {@link Node2}, including {@link StepScores}.
  *
+ * TODO Consider removing this. Things are pretty uniform in all being stored
+ * in {@link Node2}. This would be useful for operations which may only be done
+ * on the root of a tree.
+ *
  * @author travis
  */
 public class State2<T extends HowToSearch> implements StateLike {
   private Node2 root;
-//  private StepScores<T> scores;
-
   public String dbgString;
 
   public State2(Node2 root) {
@@ -43,7 +45,6 @@ public class State2<T extends HowToSearch> implements StateLike {
 
   @Override
   public String toString() {
-//    return String.format("(State\n\t%s\n\t%s\n)", scores.toString(), root.toString());
     if (dbgString == null || dbgString.isEmpty())
       return "(State " + root + ")";
     return "(State " + dbgString + " " + root + ")";

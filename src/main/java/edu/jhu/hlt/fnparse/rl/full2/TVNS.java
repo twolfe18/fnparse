@@ -16,11 +16,8 @@ public class TVNS extends TVN {
   private Adjoints model;
   private double rand;
 
-  public TVNS(int type, int value,
-      int numPossible, int goldMatching,
-      long prime,
-      Adjoints model,
-      double rand) {
+  public TVNS(int type, int value, int numPossible, int goldMatching,
+      long prime, Adjoints model, double rand) {
     super(type, value, numPossible, goldMatching, prime);
     this.model = model;
     this.rand = rand;

@@ -13,7 +13,6 @@ import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
-import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full.State.Info;
@@ -271,14 +270,9 @@ public class FModel implements Serializable {
 
 
   public static void main(String[] args) {
-//    ExperimentProperties config = ExperimentProperties.init(args);
     ExperimentProperties.init(args);
-//    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-dgb"));
-//    RTConfig rtc = new RTConfig("fmodel-dbg", workingDir, new Random(9001));
 
 //    AbstractTransitionScheme.DEBUG = true;
-    
-    boolean simple = true;
 
     // Sort parses by number of frames so that small (easy to debug/see) examples come first
     List<FNParse> ys = State.getParse();
@@ -302,19 +296,6 @@ public class FModel implements Serializable {
 //        continue;
 
       Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles() + " numFI=" + y.numFrameInstances());
-
-//      // Very basics
-//      if (simple) {
-//        Pair<Info, Info> ormv = m.getOracleAndMvInfo(y);
-//        Info oracleInf = ormv.get1();
-////        Info mvInf = ormv.get2();
-//        m.ts.genRootNode(oracleInf);
-//        
-//        return;
-//      }
-
-//      FNParse yhat = m.predict(y) ;
-//      m.getUpdate(y);
 
       // Check learning
       int c = 0, clim = 3;

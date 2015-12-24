@@ -85,10 +85,6 @@ public class TFKS extends LL<TVNS> {
     return (TFKS) next;
   }
 
-//  public LL<TVN> asLLTVN() {
-//    return new LL<TVN>((TVN) car(), cdr() == null ? null : cdr().asLLTVN());
-//  }
-
   public boolean isFull() {
     if (s >= 0) {
       assert t >= 0;
@@ -148,41 +144,24 @@ public class TFKS extends LL<TVNS> {
       return fine.car().type == T;
     int c = coarse.car().type;
     int f = fine.car().type;
-//    return c < 0 || f == c+1;
     return f == c+1;
   }
 
   public static int or(int valueA, int valueB) {
     if (valueA > valueB)
       return or(valueB, valueA);
-
     if (valueA == UNSET && valueB == UNSET)
       return UNSET;
-
     if (valueA == UNSET && valueB == MANY_VALS)
       return MANY_VALS;
-
     if (valueA == UNSET && valueB >= 0)
       return valueB;
-
     if (valueA == MANY_VALS)
       return MANY_VALS;
-
     assert valueA >= 0;
-
     if (valueA == valueB)
       return valueA;
-
     return MANY_VALS;
-
-  // 0 = UNSET
-  // UNSET + UNSET = UNSET
-  // UNSET + MANY_VALS = MANY_VALS
-  // UNSET + value = value
-  // MANY_VALS + MANY_VALS = MANY_VALS
-  // MANY_VALS + value = MANY_VALS
-  // value + value = value
-  // value + value' = MANY_VALS
   }
 
   @Override

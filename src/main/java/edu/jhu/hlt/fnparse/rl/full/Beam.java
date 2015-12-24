@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
 
-import edu.jhu.hlt.fnparse.rl.full.Beam.StateLike;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
@@ -33,18 +32,6 @@ public interface Beam<T extends StateLike> {
   public Double lowerBound();
 
   public T pop();
-
-
-
-
-  public interface StateLike {
-    public StepScores<?> getStepScores();
-    public BigInteger getSignature();
-    // StateLike should be hashable
-    public int hashCode();
-    public boolean equals(Object other);
-  }
-
 
 
   /**

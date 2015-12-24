@@ -12,22 +12,24 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
+/**
+ * The basic unit of prediction. Prefix describes a sub-set of the label indices
+ * that "match" this node (the first element in prefix gives the "type" and
+ * "value" of this node and the root (and only the root) has a null prefix.
+ * Eggs are a list of next (type,values) to be tried out. Pruned is the list of
+ * eggs which were not deemed worthy and children is the set that are.
+ *
+ * Note that there are some hidden values stored in the LL sub-types (e.g.
+ * {@link TFKS}, {@link LLTVN}, and {@link LLSSP}) such as the cardinality of
+ * each node in label indices, the number of gold "yes"s that are dominated by
+ * nodes, and the model score of the actions which lead to this structure.
+ *
+ * @author travis
+ */
 public class Node2 implements HasStepScores, HasSig {
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_INIT = false;
-
-  /** Recursively counts number of children Node2s */
-  public static int numChildren(Node2 n) {
-    // Root does not count in the hamming possible worlds setup since it doesn't
-    // specify any information, appears in every possible tree. T nodes are the
-    // first to make some statement about how the label needs to be.
-    boolean isRoot = n.prefix == null;
-    int c = isRoot ? 0 : 1;
-    for (LL<Node2> cur = n.children; cur != null; cur = cur.cdr())
-      c += numChildren(cur.car());
-    return c;
-  }
 
   // Conceptual note: each of these is a sub-class of either LL<TVN> or LL<Node2>
   public final TFKS prefix;        // path from root, including teis nodes (type,value)
@@ -35,49 +37,9 @@ public class Node2 implements HasStepScores, HasSig {
   public final LLTVNS pruned;
   public final LLSSP children;
 
-  // TODO BigInteger primesProd -- children already has this
-  @Override
-  public BigInteger getSig() {
-    // Need some way to complete this, could do this by:
-    // 1) knowing the length of eggs and pruned (if the egg order is static this is enough)
-    // 2) give eggs two primes, one to use if they get squashed and another if they are hatched
-    if (children == null)
-      return BigInteger.ONE;
-    return children.getPrimeProd();
-  }
-
-  /*
-   * Sum of the scores (along rand:double, model:Adjoints, and loss:MaxLoss)
-   * which lead to the state of this node and its sub-tree.
-   * I've worked this out for MaxLoss. We can assume eggs/pruned/children are
-   * conditionally (on prefix) disjoint, and MaxLoss can be summed over disjoint
-   * sets.
-   *
-   * First, model score. If we make the modeling assumption that:
-   *   s(squash, item | prefix, state?) = -s(hatch, item | prefix, state?)
-   * Then things get easier. We need one value 
-   * ...this is parameterization, I really should focus on the semantics...
-   * Every egg -> (pruned|children) is an action (squash|hatch) respectively.
-   * Every node has direct actions and chilren (nodes)
-   * Model score is the sum of all the actions for a given node + sum(actions of its children)
-   *
-   * Knowing how model score works make rand easy: it is just a perturbation of
-   * model score and should behave the same way.
-   */
+  // Score of the hatch action that lead to this node and the score of any
+  // actions taken at/below this node.
   public final StepScores<SearchCoefficients> score;
-
-  // Prunes need to have StepScores so that we can use LLML so that computing MaxLoss for a node is easy
-  // HasStepScores => Needs Info (since Info carries coefficients)
-  // I think Children need this too, so if you're going to have these infos floating around, you might as well put them in Node2 for easy access
-  // ABOVE is bad argument (no longer using LLML, but LLTVNS for pruned)
-  // BUT we still want Node2 to have StepScores so that replaceNode/zipUp can do the appropriate work in deriving a score for the entire tree
-  // Earlier I had some notes about how having each node have a score is likely necessary for pruning/branch+bound.
-  // FINALLY: Even though we do need StepScores, that doesn't mean we need to store the search coefs here.
-//  public final SearchCoefficients coefs;
-  public SearchCoefficients getCoefs() {
-    return score.getInfo();
-  }
-
 
   public Node2(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
     super();
@@ -85,33 +47,7 @@ public class Node2 implements HasStepScores, HasSig {
     this.eggs = eggs;
     this.pruned = pruned;
     this.children = children;
-    /*
-     * MaxLoss {
-     *  possible = sum(eggs, pruned, children)
-     *  determined = sum(pruned, chlidren)
-     *  fp = sum(children).fp
-     *  fn = sum(pruned).fn
-     * }
-     */
-//    int thisFP, possible;
-//    if (prefix == null) {
-//      if (DEBUG_INIT && AbstractTransitionScheme.DEBUG)
-//        Log.info("prefix IS null");
-//      // Compute for root
-//      thisFP = 0;
-//      possible = 0;
-//      for (LL<TVN> cur = eggs; cur != null; cur = cur.cdr())
-//        possible += cur.car().numPossible;
-//      for (LL<TVN> cur = pruned; cur != null; cur = cur.cdr())
-//        possible += cur.car().numPossible;
-//      if (children != null)
-//        possible += children.getLoss().numPossible;
-//    } else {
-//      if (DEBUG_INIT && AbstractTransitionScheme.DEBUG)
-//        Log.info("prefix is NOT null");
-//      thisFP = prefix.car().goldMatching == 0 ? 1 : 0;
-//      possible = prefix.car().numPossible;
-//    }
+
     int possible = 1    // this node
         + LLTVN.sumPossible(eggs)
         + LLTVN.sumPossible(pruned)
@@ -121,18 +57,13 @@ public class Node2 implements HasStepScores, HasSig {
       assert possible == prefix.car().numPossible
         : "possible=" + possible + " prefix.car.possible=" + prefix.car().numPossible;
 
-//    int det = LLTVN.sumPossible(pruned) + LL.length(children);
     int det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
 
-    // 1) only in children and thisFP
-    // 2) for children you many know numPossible and goldMatching, but you can't say for sure how many FP there are (positives are only laid down at each node)
-//    int fp = thisFP + LLTVN.sumGoldMatching(children);
     assert possible > 0;
     int thisFP = prefix != null && prefix.car().goldMatching == 0 ? 1 : 0;
     int fp = thisFP + LLSSP.getSumLoss(children).fp;
 
     int fn = LLTVN.sumGoldMatching(pruned);
-//    int fn = pruned.length() - LLTVN.numGoldMatchingEqZero(pruned);
 
     if (DEBUG_INIT && AbstractTransitionScheme.DEBUG) {
       Log.info("possible=" + possible + " det=" + det + " fp=" + fp + " fn=" + fn);
@@ -150,6 +81,7 @@ public class Node2 implements HasStepScores, HasSig {
       }
       System.out.flush();
     }
+
     MaxLoss loss = new MaxLoss(possible, det, fp, fn);
     Adjoints z = Adjoints.Constant.ZERO;
     Adjoints a, b, c;
@@ -183,6 +115,21 @@ public class Node2 implements HasStepScores, HasSig {
     this.score = new StepScores<SearchCoefficients>(coefs, score, loss, rand);
   }
 
+  // TODO BigInteger primesProd -- children already has this
+  @Override
+  public BigInteger getSig() {
+    // Need some way to complete this, could do this by:
+    // 1) knowing the length of eggs and pruned (if the egg order is static this is enough)
+    // 2) give eggs two primes, one to use if they get squashed and another if they are hatched
+    if (children == null)
+      return BigInteger.ONE;
+    return children.getPrimeProd();
+  }
+
+  public SearchCoefficients getCoefs() {
+    return score.getInfo();
+  }
+
   @Override
   public StepScores<?> getStepScores() {
     return score;
@@ -206,7 +153,6 @@ public class Node2 implements HasStepScores, HasSig {
 
   public void show(PrintStream ps) { show(ps, ""); }
   public void show(PrintStream ps, String indent) {
-//    ps.printf("%sNode %s  %s\n", indent, dbgGetTVStr(), loss);
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
     int i;
@@ -291,10 +237,12 @@ public class Node2 implements HasStepScores, HasSig {
 
     return errs;
   }
+
   public void dbgSantityCheckA() {
     List<String> errs = dbgSanityCheck();
     assert errs.isEmpty() : errs;
   }
+
   public void dbgSantityCheckE() {
     List<String> errs = dbgSanityCheck();
     if (!errs.isEmpty())
@@ -310,4 +258,15 @@ public class Node2 implements HasStepScores, HasSig {
     return bs;
   }
 
+  /** Recursively counts number of children Node2s */
+  public static int numChildren(Node2 n) {
+    // Root does not count in the hamming possible worlds setup since it doesn't
+    // specify any information, appears in every possible tree. T nodes are the
+    // first to make some statement about how the label needs to be.
+    boolean isRoot = n.prefix == null;
+    int c = isRoot ? 0 : 1;
+    for (LL<Node2> cur = n.children; cur != null; cur = cur.cdr())
+      c += numChildren(cur.car());
+    return c;
+  }
 }

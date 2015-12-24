@@ -95,9 +95,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   public abstract Y decode(Iterable<LL<TVNS>> z, Z info);
 
 
-
-
-
   /* NON-ABSTRACT STUFF *******************************************************/
 
   public void collectChildrensSpines(Node2 node, List<LL<TVNS>> addTo) {
@@ -134,12 +131,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = mother.getStepScores().getLoss();
-//      System.out.println("wife.maxLoss=" + wl.maxLoss()
-//          + " mother.maxLoss=" + ml.maxLoss()
-//          + " wife.minLoss=" + wl.minLoss()
-//          + " mother.minLoss=" + ml.minLoss()
-//          + " wife=" + wl
-//          + " mother=" + ml);
       Log.info("wife:   " + wl);
       Log.info("mother: " + ml);
     }
@@ -154,12 +145,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = wife2.getStepScores().getLoss();
-//      System.out.println("wife.maxLoss=" + wl.maxLoss()
-//          + " wife2.maxLoss=" + ml.maxLoss()
-//          + " wife.minLoss=" + wl.minLoss()
-//          + " wife2.minLoss=" + ml.minLoss()
-//          + " wife=" + wl
-//          + " wife2=" + ml);
       Log.info("wife:  " + wl);
       Log.info("wife2: " + ml);
       if (ml.minLoss() == 0)
@@ -250,9 +235,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
         throw new RuntimeException("not supported");
       }
     };
-////    LL<Node2> spine = consChild(cur.getNode(), null);
-//    LL<Node2> spine = new LL<>(cur.getRoot(), null);
-//    nextStates(cur, spine, composite);
     nextStates(cur, composite);
   }
 
@@ -287,88 +269,17 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     } else {
       StepScores<Z> prevScores = root.getStepScores();
       Z info = prevScores.getInfo();
-//      Random r = info.getRandom();
 
-      // TODO check oneXperY with egg.getType() and wife.getType(), and if
-      // true, after `mother = hatch(wife)`
-      // do `while (mother.eggs) mother = squash(mother)`
-      // (and make sure you keep track of loss too).
-      // This will mean that the FNs you would normally have to count in
-      // hatch will be counted naturally and easily by squash. If this is too
-      // slow then optimize, but this is so clean.
+      // Play-out the actions which lead to modified versions of this node (wife)
       Node2 mother = hatch(wife, info);
-//      Adjoints hatchFeats = Adjoints.sum(featsHatch(wife, info), prevScores.getModel());
-//      double hatchRand = r.nextGaussian() + prevScores.getRand();
-//      MaxLoss hatchLoss = mother.getLoss();
-//      StepScores<Z> hatchScore = new StepScores<>(info, hatchFeats, hatchLoss, hatchRand);
-
-//      if (DEBUG_LOSS && DEBUG) {
-//        System.out.println("[hatch] mother.loss=" + mother.getLoss());
-//      }
-
-
       Node2 wife2 = squash(wife, info);
-//      Adjoints squashFeats = featsSquash(wife, info);
-//      double squashRand = r.nextGaussian();
-//      MaxLoss squashLoss = wife2.getLoss();
-//      StepScores<Z> squashScore = new StepScores<>(info, squashFeats, squashLoss, squashRand);
-      /* These are features for just this action.
-       * If I want scores for the entire state, then I need to take them as
-       * an argument... maybe steal them from root:State2
-       * StepScores = {
-       *   MaxLoss which can be read off from root:Node2->getLoss
-       *   model features which are root:State2->StepScores->modelScore
-       *   rand which is root:State2.rand + newRand()
-       * }
-       * The only hard one is model score, which requires that I pass features computed
-       * somewhere in the tree up to the root.
-       *
-       * Why not just force Node2 to have StepScores?
-       * This would make everything run on replaceNode.
-       * For a node on a length D path from root, this would require D new StepScores
-       * The old way, we could just cons a new Adjoints onto a right-branching tree of Adjoints.Sum
-       * This is not the end of the world... its not clear that you can remove this O(D) factor anyway, you are likely just forcing the complexity onto the call stack
-       * What about bounding score of actions? Will I need Node2 to have StepScores for that?
-       * I need StepScores to bound the score of an action (since the coefs may look at model score)
-       * I'm not sure... but it seems like it would be helpful, or at least make the implementation simpler.
-       * => Make change provided implementation is clear:
-       *   consChild: adds all terms in StepScores, previously it just added MaxLoss
-       *     does this mean that every Node2 has a rand? before it was action...
-       *     every Node2 is created by a hatch action...
-       *     only non-trivial implication is that every TVN in pruned must also have a rand.
-       *     => TVN now goes to TVSS = (TV,StepScores)
-       *   consPrefix: should just be LL<TVN> (I remember needing numPossible and/or goldMatching in prefix.car())
-       *   consPruned: needs to sum up (rand:double, loss:MaxLoss, model:Adjoints)
-       *   consEggs: eggs have (rand:double, modelStatic:Adjoints) but loss:MaxLoss is ambiguous because all you know is goldMatching, its not clear if they'll end up as FP or FN because they could go in pruned or children respectively
-       * => Static scores can be stored in eggs!
-       */
 
-//      if (DEBUG_LOSS && DEBUG) {
-//        System.out.println("[squash] wife2.loss=" + wife2.getLoss());
-//      }
-
-
-//      assert mother.prefix == wife2.prefix;
-//      assert wife.getLoss().numPossible == mother.getLoss().numPossible
-//          : "possible should not change when you have a kid"
-//            + " wife.poss=" + wife.getLoss().numPossible
-//            + " mother.poss=" + mother.getLoss().numPossible;
-//      assert mother.getLoss().numPossible == wife2.getLoss().numPossible
-//          : "having vs not having shouldn't change possible";
-
-
-
-      // Zip everything back up!
+      // Zip everything back up to get a root reflecting these modifications
       LL<Node2> momInLaw = spine.cdr();
       Node2 rootHatch = replaceNode(momInLaw, wife, mother);
       Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
       addTo.offer(new State2<Z>(rootHatch, "hatch"));
       addTo.offer(new State2<Z>(rootSquash, "squash"));
-      /* The problem appears to be that mother and wife2 have the proper loss,
-       * but once they are percolated up with rootHatch and rootSquash, their
-       * losses are 1) the same and 2) don't reflect the extra determined indices
-       * forced by the squash.
-       */
     }
 
     // Recurse
@@ -383,12 +294,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
 
   /** Takes Info/Config from the state of this instance, see getInfo */
   public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0) {
-    if (DEBUG) {
+    if (DEBUG)
       Log.info("starting inference from state:");
-//      assert s0.getStepScores().forwards() == 0;
-////      System.out.println(s0.getNode());
-//      s0.getRoot().show(System.out);
-    }
     Z inf = s0.getStepScores().getInfo();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
@@ -404,7 +311,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
 
     State2<Z> lastState = null;
-    //      push(next, all, s0);
     next.offer(s0); all.offer(s0);
     for (int i = 0; true; i++) {
       if (DEBUG) Log.debug("starting iter=" + i);
@@ -414,7 +320,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
         State2<Z> s = cur.pop();
         if (b == 0) // best item in cur
           lastState = s;
-        //          s.next(next, all);
         nextStatesB(s, next, all);
       }
       if (DEBUG) Log.info("collapseRate=" + next.getCollapseRate());
