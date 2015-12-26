@@ -20,8 +20,8 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
+import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.State.FI;
-import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedCoef;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
@@ -33,7 +33,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
 /** Everything that is annoying to copy in State */
-public class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
+public class Info implements Serializable, HasCounts, HasRandom {
   private static final long serialVersionUID = -4529781834599237479L;
 
   Sentence sentence;
@@ -47,23 +47,52 @@ public class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
   Config config;
   private RTConfig likeConf;  // legacy support :(
 
-  /* Parameters of search.
-   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
-   *   oracle: {b0: 0.1, b1: -10, b2: 0}
-   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
-   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
-   */
-  GeneralizedCoef coefLoss;
-  GeneralizedCoef coefModel;
-  GeneralizedCoef coefRand;
+//  /* Parameters of search.
+//   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
+//   *   oracle: {b0: 0.1, b1: -10, b2: 0}
+//   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
+//   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
+//   */
+//  private GeneralizedCoef coefLoss;
+//  private GeneralizedCoef coefModel;
+//  private GeneralizedCoef coefRand;
+//  // TODO These should be replaced with SearchCoefficients search, constraints;
+//
+//  private int beamSize = 1;          // How many states to keep at every step
+//  private int numConstraints = 1;    // How many states to keep for forming margin constraints (a la k-best MIRA)
 
-  public int beamSize = 1;          // How many states to keep at every step
-  public int numConstraints = 1;    // How many states to keep for forming margin constraints (a la k-best MIRA)
+  public HowToSearchImpl htsBeam;
+  public HowToSearchImpl htsConstraints;
+
+  public static class HowToSearchImpl implements HowToSearch {
+    GeneralizedCoef model, loss, rand;
+    int beam;
+    public HowToSearchImpl(GeneralizedCoef model, GeneralizedCoef loss, GeneralizedCoef rand, int beam) {
+      this.model = model;
+      this.loss = loss;
+      this.rand = rand;
+      this.beam = beam;
+    }
+    @Override public GeneralizedCoef coefLoss() { return loss; }
+    @Override public GeneralizedCoef coefModel() { return model; }
+    @Override public GeneralizedCoef coefRand() { return rand; }
+    @Override public int beamSize() { return beam; }
+  }
 
   public Info(Config config) {
     this.config = config;
-    // coefs remain null
+    this.setDecodeCoefs();
   }
+
+//  @Override
+//  public SearchCoefficients beamCoefs() {
+//    throw new RuntimeException("implement me");
+//  }
+//
+//  @Override
+//  public SearchCoefficients consytraintCoefs() {
+//    throw new RuntimeException("implement me");
+//  }
 
   public Config getConfig() {
     return config;
@@ -142,7 +171,9 @@ public class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
       Log.warn("null config! no-op!");
     } else {
       assert config.trainBeamSize == config.testBeamSize;
-      beamSize = config.trainBeamSize;
+      htsBeam.beam = config.trainBeamSize;
+      // TODO set #constraints?
+//      beamSize = config.trainBeamSize;
       this.config.rand = config.rand;
     }
     return this;
@@ -150,56 +181,76 @@ public class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
 
   @Override
   public String toString() {
-    return "(Info " + showCoefs() + ")";
+//    return "(Info " + showCoefs() + ")";
+    throw new RuntimeException("implement me");
   }
 
   /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
   public Info setOracleCoefs() {
     // TODO This should be bigger so that it doesn't get overwhelmed by model score!
-    coefLoss = new GeneralizedCoef(1, false);
-    if (likeConf == null) {
-      Log.warn("likeConf is null, defaulting to MIN");
-      coefModel = new GeneralizedCoef(-1, true);
-      coefRand = new GeneralizedCoef(0, false);
-    } else {
-      switch (likeConf.oracleMode) {
-      case RAND_MIN:
-        coefModel = new GeneralizedCoef(-1, true);
-        coefRand = new GeneralizedCoef(1, false);
-        break;
-      case RAND_MAX:
-        coefModel = new GeneralizedCoef(1, true);
-        coefRand = new GeneralizedCoef(1, false);
-        break;
-      case MIN:
-        coefModel = new GeneralizedCoef(-1, true);
-        coefRand = new GeneralizedCoef(0, false);
-        break;
-      case MAX:
-        coefModel = new GeneralizedCoef(1, true);
-        coefRand = new GeneralizedCoef(0, false);
-        break;
-      }
-    }
+    this.htsBeam = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, true),
+        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        GeneralizedCoef.ZERO,
+        1);
+    this.htsConstraints = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, true),
+        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        GeneralizedCoef.ZERO,
+        1);
+    if (likeConf != null)
+      Log.warn("ignoring likeConf!");
+//    if (likeConf == null) {
+//      Log.warn("likeConf is null, defaulting to MIN");
+//      coefModel = new GeneralizedCoef(-1, true);
+//      coefRand = new GeneralizedCoef(0, false);
+//    } else {
+//      switch (likeConf.oracleMode) {
+//      case RAND_MIN:
+//        coefModel = new GeneralizedCoef(-1, true);
+//        coefRand = new GeneralizedCoef(1, false);
+//        break;
+//      case RAND_MAX:
+//        coefModel = new GeneralizedCoef(1, true);
+//        coefRand = new GeneralizedCoef(1, false);
+//        break;
+//      case MIN:
+//        coefModel = new GeneralizedCoef(-1, true);
+//        coefRand = new GeneralizedCoef(0, false);
+//        break;
+//      case MAX:
+//        coefModel = new GeneralizedCoef(1, true);
+//        coefRand = new GeneralizedCoef(0, false);
+//        break;
+//      }
+//    }
     return this;
   }
   public Info setMostViolatedCoefs() {
-    coefLoss = new GeneralizedCoef(-1, false);
-    coefModel = new GeneralizedCoef(1, false);
-    coefRand = new GeneralizedCoef(0, false);
+    this.htsBeam = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, false),
+        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        GeneralizedCoef.ZERO,
+        1);
+    this.htsConstraints = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, false),
+        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        GeneralizedCoef.ZERO,
+        1);
     return this;
   }
   public Info setDecodeCoefs() {
-    coefLoss = new GeneralizedCoef(0, false);
-    coefModel = new GeneralizedCoef(1, false);
-    coefRand = new GeneralizedCoef(0, false);
+    this.htsBeam = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, false),
+        GeneralizedCoef.ZERO,
+        GeneralizedCoef.ZERO,
+        1);
+    this.htsConstraints = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, false),
+        GeneralizedCoef.ZERO,
+        GeneralizedCoef.ZERO,
+        1);
     return this;
-  }
-  public boolean anyCoefNonzero() {
-    return coefLoss.nonzero() || coefModel.nonzero() || coefRand.nonzero();
-  }
-  public String showCoefs() {
-    return "((loss " + coefLoss + ") (model " + coefModel + ") (rand " + coefRand + "))";
   }
 
   public int numFrames() {
@@ -369,30 +420,30 @@ public class Info implements Serializable, HowToSearch, HasCounts, HasRandom {
     return this;
   }
 
-  @Override
-  public GeneralizedCoef coefLoss() {
-    return coefLoss;
-  }
+//  @Override
+//  public GeneralizedCoef coefLoss() {
+//    return coefLoss;
+//  }
+//
+//  @Override
+//  public GeneralizedCoef coefModel() {
+//    return coefModel;
+//  }
+//
+//  @Override
+//  public GeneralizedCoef coefRand() {
+//    return coefRand;
+//  }
 
-  @Override
-  public GeneralizedCoef coefModel() {
-    return coefModel;
-  }
-
-  @Override
-  public GeneralizedCoef coefRand() {
-    return coefRand;
-  }
-
-  @Override
-  public int beamSize() {
-    return beamSize;
-  }
-
-  @Override
-  public int numConstraints() {
-    return numConstraints;
-  }
+//  @Override
+//  public int beamSize() {
+//    return beamSize;
+//  }
+//
+//  @Override
+//  public int numConstraints() {
+//    return numConstraints;
+//  }
 
   @Override
   public Counts<HashableIntArray> getCounts() {

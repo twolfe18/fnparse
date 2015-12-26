@@ -5,7 +5,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
 
-import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
@@ -67,9 +66,13 @@ public interface Beam<T extends StateLike> {
     }
   }
 
+  /** See methods in {@link MaxLoss} for what these mean */
   public enum Mode {
-    CONSTRAINT_OBJ,     // f(z) = s(z) + max_{y \in Proj(z)} loss(y) -- where s(z) may include randomness
-    BEAM_SEARCH_OBJ,    // f(z) = searchCoefs \cdot [accumLoss, accumModel, accumRand]
+    MIN_LOSS,
+    H_LOSS,
+    MAX_LOSS,
+    MAX_LOSS_LIN,
+    MAX_LOSS_POW,
   }
 
   /**
@@ -88,15 +91,24 @@ public interface Beam<T extends StateLike> {
     private HashMap<T, BeamItem<T>> table;   // ensures that entries in scores are unique up to State
     private int capacity;
     private int numCollapses, numOffers;
-    private Mode mode;
+//    private Mode mode;
 
-    public DoubleBeam(int capacity, Mode mode) {
+    // TODO Replace Mode with:
+    private SearchCoefficients coefs;
+
+    public DoubleBeam(HowToSearch hts) {
+      this(hts.beamSize(), hts);
+    }
+
+//    public DoubleBeam(int capacity, Mode mode) {
+    public DoubleBeam(int capacity, SearchCoefficients coefs) {
       this.capacity = capacity;
       this.table = new HashMap<>((int) (capacity * 1.5 + 1));
       this.scores = new TreeSet<>();
       this.numCollapses = 0;
       this.numOffers = 0;
-      this.mode = mode;
+//      this.mode = mode;
+      this.coefs = coefs;
     }
 
     public void clear() {
@@ -127,17 +139,22 @@ public interface Beam<T extends StateLike> {
       return sb.toString();
     }
 
-    public double value(T s) {
-      switch (mode) {
-      case BEAM_SEARCH_OBJ:
+//    public double value(T s) {
+//      switch (mode) {
+//      case MIN_LOSS:
 //        return s.getStepScores().forwardsMin();
-        return s.getStepScores().forwardsH();
-      case CONSTRAINT_OBJ:
-        return s.getStepScores().forwards();
-      default:
-        throw new RuntimeException("unknown mode: " + mode);
-      }
-    }
+//      case H_LOSS:
+//        return s.getStepScores().forwardsH();
+//      case MAX_LOSS:
+//        return s.getStepScores().forwardsMax();
+//      case MAX_LOSS_LIN:
+//        return s.getStepScores().forwardsMaxLin();
+//      case MAX_LOSS_POW:
+//        return s.getStepScores().forwardsMaxPow();
+//      default:
+//        throw new RuntimeException("unknown mode: " + mode);
+//      }
+//    }
 
     /**
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
@@ -145,7 +162,8 @@ public interface Beam<T extends StateLike> {
     @Override
     public void offer(T s) {
       numOffers++;
-      double sc = value(s);
+//      double sc = value(s);
+      double sc = coefs.forwards(s.getStepScores());
       BeamItem<T> old = table.get(s);
       if (old != null) {
         

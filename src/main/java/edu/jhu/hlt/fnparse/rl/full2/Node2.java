@@ -7,7 +7,6 @@ import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
-import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -39,9 +38,9 @@ public class Node2 implements HasStepScores, HasSig {
 
   // Score of the hatch action that lead to this node and the score of any
   // actions taken at/below this node.
-  public final StepScores<SearchCoefficients> score;
+  public final StepScores<?> score;
 
-  public Node2(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
+  public Node2(TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
     super();
     this.prefix = prefix;
     this.eggs = eggs;
@@ -53,9 +52,10 @@ public class Node2 implements HasStepScores, HasSig {
         + LLTVN.sumPossible(pruned)
         + LLSSP.sumPossible(children);
     // TODO Just use TFKS.numPossible?
-    if (prefix != null)
+    if (prefix != null) {
       assert possible == prefix.car().numPossible
         : "possible=" + possible + " prefix.car.possible=" + prefix.car().numPossible;
+    }
 
     int det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
 
@@ -112,7 +112,7 @@ public class Node2 implements HasStepScores, HasSig {
     }
     Adjoints score = new Adjoints.Sum(a, b, c);
     double rand = ra + rb + rc;
-    this.score = new StepScores<SearchCoefficients>(coefs, score, loss, rand);
+    this.score = new StepScores<>(null, score, loss, rand);
   }
 
   // TODO BigInteger primesProd -- children already has this
@@ -140,9 +140,9 @@ public class Node2 implements HasStepScores, HasSig {
     return false;
   }
 
-  public SearchCoefficients getCoefs() {
-    return score.getInfo();
-  }
+//  public SearchCoefficients getCoefs() {
+//    return score.getInfo();
+//  }
 
   @Override
   public StepScores<?> getStepScores() {

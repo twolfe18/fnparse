@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
 
@@ -10,8 +11,12 @@ import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
  *
  * This is basically the same as {@link MutedAdjoints}, but allows well-structured
  * introspection.
+ *
+ * @param T TODO Remove this. I used to use this to figure out how to do
+ * (model,loss,rand) -> Adjoints, but now {@link DoubleBeam} has {@link HowToSearch}
+ * which does this. I'll keep info:T around for now, but it probably isn't necessary.
  */
-public class StepScores<T extends SearchCoefficients> implements Adjoints {
+public class StepScores<T> /* extends SearchCoefficients>*/ {//implements Adjoints {
 
   private final T info;
   private final Adjoints model;
@@ -34,20 +39,21 @@ public class StepScores<T extends SearchCoefficients> implements Adjoints {
 
   @Override
   public String toString() {
-    return String.format(
-        "(Score"
-        + " forwards=%.2f"
-        + " forwardsH=%.2f"
-        + " forwardsMin=%.2f"
-        + " model=%s*%s"
-        + " maxLoss=%s*%s"
-        + " rand=%s*%.1f)",
-        forwards(),
-        forwardsH(),
-        forwardsMin(),
-        info.coefModel().shortString(), model,
-        info.coefLoss().shortString(), loss,
-        info.coefRand().shortString(), rand);
+//    return String.format(
+//        "(Score"
+//        + " forwards=%.2f"
+//        + " forwardsH=%.2f"
+//        + " forwardsMin=%.2f"
+//        + " model=%s*%s"
+//        + " maxLoss=%s*%s"
+//        + " rand=%s*%.1f)",
+//        forwardsMax(),
+//        forwardsH(),
+//        forwardsMin(),
+//        info.coefModel().shortString(), model,
+//        info.coefLoss().shortString(), loss,
+//        info.coefRand().shortString(), rand);
+    throw new RuntimeException("implement me");
   }
 
   public StepScores(T info, Adjoints model, MaxLoss loss, double rand) {
@@ -57,9 +63,9 @@ public class StepScores<T extends SearchCoefficients> implements Adjoints {
     this.rand = rand;
   }
 
-  public T getInfo() {
-    return info;
-  }
+//  public T getInfo() {
+//    return info;
+//  }
 
   public Adjoints getModel() {
     return model;
@@ -73,62 +79,95 @@ public class StepScores<T extends SearchCoefficients> implements Adjoints {
     return rand;
   }
 
-  /** Cumulative, info.coefs `dot` [model, loss, rand] */
-  @Override
-  public double forwards() {
-    if (Double.isNaN(__forwardsMemo)) {
-      double s = 0;
-      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
-        s += info.coefModel().coef * model.forwards();
-      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
-        s += info.coefLoss().coef * -loss.maxLoss();
-      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
-        s += info.coefRand().coef * rand;
-      __forwardsMemo = s;
-    }
-    return __forwardsMemo;
-  }
-  private double __forwardsMemo = Double.NaN;
+//  /** Cumulative, info.coefs `dot` [model, loss, rand] */
+////  @Override
+//  public double forwardsMax() {
+//    if (Double.isNaN(__forwardsMemo)) {
+//      double s = 0;
+//      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+//        s += info.coefModel().coef * model.forwards();
+//      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+//        s += info.coefLoss().coef * -loss.maxLoss();
+//      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+//        s += info.coefRand().coef * rand;
+//      __forwardsMemo = s;
+//    }
+//    return __forwardsMemo;
+//  }
+//  private double __forwardsMemo = Double.NaN;
+//
+//
+//  /** Other one uses maxLoss, this uses minLoss */
+//  public double forwardsMin() {
+//    if (Double.isNaN(__forwardsMemo2)) {
+//      double s = 0;
+//      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+//        s += info.coefModel().coef * model.forwards();
+//      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+//        s += info.coefLoss().coef * -loss.minLoss();
+//      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+//        s += info.coefRand().coef * rand;
+//      __forwardsMemo2 = s;
+//    }
+//    return __forwardsMemo2;
+//  }
+//  private double __forwardsMemo2 = Double.NaN;
+//
+//
+//  public double forwardsH() {
+//    if (Double.isNaN(__forwardsMemo3)) {
+//      double s = 0;
+//      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+//        s += info.coefModel().coef * model.forwards();
+//      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+//        s += info.coefLoss().coef * -loss.hLoss();
+//      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+//        s += info.coefRand().coef * rand;
+//      __forwardsMemo3 = s;
+//    }
+//    return __forwardsMemo3;
+//  }
+//  private double __forwardsMemo3 = Double.NaN;
+//
+//
+//  public double forwardsMaxLin() {
+//    if (Double.isNaN(__forwardsMemo4)) {
+//      double beta = 0.25;
+//      double s = 0;
+//      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+//        s += info.coefModel().coef * model.forwards();
+//      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+//        s += info.coefLoss().coef * -loss.linMaxLoss(beta);
+//      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+//        s += info.coefRand().coef * rand;
+//      __forwardsMemo4 = s;
+//    }
+//    return __forwardsMemo4;
+//  }
+//  private double __forwardsMemo4 = Double.NaN;
+//
+//  public double forwardsMaxPow() {
+//    if (Double.isNaN(__forwardsMemo5)) {
+//      double beta = 0.5;
+//      double s = 0;
+//      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
+//        s += info.coefModel().coef * model.forwards();
+//      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
+//        s += info.coefLoss().coef * -loss.powMaxLoss(beta);
+//      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
+//        s += info.coefRand().coef * rand;
+//      __forwardsMemo5 = s;
+//    }
+//    return __forwardsMemo5;
+//  }
+//  private double __forwardsMemo5 = Double.NaN;
 
 
-  /** Other one uses maxLoss, this uses minLoss */
-  public double forwardsMin() {
-    if (Double.isNaN(__forwardsMemo2)) {
-      double s = 0;
-      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
-        s += info.coefModel().coef * model.forwards();
-      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
-        s += info.coefLoss().coef * -loss.minLoss();
-      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
-        s += info.coefRand().coef * rand;
-      __forwardsMemo2 = s;
-    }
-    return __forwardsMemo2;
-  }
-  private double __forwardsMemo2 = Double.NaN;
-
-
-  public double forwardsH() {
-    if (Double.isNaN(__forwardsMemo3)) {
-      double s = 0;
-      if (!info.coefModel().iszero() && !info.coefModel().muteForwards)
-        s += info.coefModel().coef * model.forwards();
-      if (!info.coefLoss().iszero() && !info.coefLoss().muteForwards)
-        s += info.coefLoss().coef * -loss.hLoss();
-      if (!info.coefRand().iszero() && !info.coefRand().muteForwards)
-        s += info.coefRand().coef * rand;
-      __forwardsMemo3 = s;
-    }
-    return __forwardsMemo3;
-  }
-  private double __forwardsMemo3 = Double.NaN;
-
-
-  @Override
-  public void backwards(double dErr_dForwards) {
-    if (!info.coefModel().iszero())
-      model.backwards(info.coefModel().coef * dErr_dForwards);
-    // rand and loss don't need to have backwards run.
-  }
+//  @Override
+//  public void backwards(double dErr_dForwards) {
+//    if (!info.coefModel().iszero())
+//      model.backwards(info.coefModel().coef * dErr_dForwards);
+//    // rand and loss don't need to have backwards run.
+//  }
 
 }

@@ -2,7 +2,6 @@ package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.math.BigInteger;
 
-import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.StateLike;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 
@@ -15,29 +14,35 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
  *
  * @author travis
  */
-public class State2<T extends HowToSearch> implements StateLike {
+public class State2<T>/* extends HowToSearch>*/ implements StateLike {
   private Node2 root;
+  private T info;
   private int hash;
   public String dbgString;
 
-  public State2(Node2 root) {
-    this(root, "");
+  public State2(Node2 root, T info) {
+    this(root, info, "");
   }
 
-  public State2(Node2 root, String dbgString) {
+  public State2(Node2 root, T info, String dbgString) {
     if (root.prefix != null)
       throw new IllegalArgumentException("must be a root!");
     this.root = root;
+    this.info = info;
     this.dbgString = dbgString;
     this.hash = root.hashCode();
+  }
+
+  public T getInfo() {
+    return info;
   }
 
   public Node2 getRoot() {
     return root;
   }
 
-  public StepScores<T> getStepScores() {
-    return (StepScores<T>) root.getStepScores();
+  public StepScores<?> getStepScores() {
+    return root.getStepScores();
   }
 
   @Override
@@ -66,7 +71,7 @@ public class State2<T extends HowToSearch> implements StateLike {
     return "(State " + dbgString + " " + root + ")";
   }
 
-  public static <T extends HowToSearch> StepScores<T> safeScores(State2<T> s) {
+  public static StepScores<?> safeScores(State2<?> s) {
     if (s == null)
       return null;
     return s.getStepScores();

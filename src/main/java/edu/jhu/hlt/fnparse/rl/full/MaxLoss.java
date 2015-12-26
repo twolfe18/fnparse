@@ -71,6 +71,23 @@ public final class MaxLoss {
     return (numPossible - numDetermined) + fp + fn;
   }
 
+  public double linMaxLoss(double alpha) {
+    if (alpha < 0 || alpha > 1)
+      throw new IllegalArgumentException("alpha must be in [0,1]: " + alpha);
+    return alpha * (numPossible - numDetermined) + fp + fn;
+  }
+
+  public double powMaxLoss(double beta) {
+    double m = numPossible - numDetermined;
+    if (beta == 0)
+      m = m > 0 ? 1 : 0;
+    else if (beta < 1)
+      m = Math.pow(m, beta);
+    else
+      throw new IllegalArgumentException("beta must be in [0,1]: " + beta);
+    return m + fp + fn;
+  }
+
   public int minLoss() {
     return fp + fn;
   }

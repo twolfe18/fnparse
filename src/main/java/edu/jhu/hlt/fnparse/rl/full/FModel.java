@@ -22,7 +22,6 @@ import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
-import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -49,6 +48,12 @@ public class FModel implements Serializable {
   // TODO Switch over to state2!
   private FNParseTransitionScheme ts;
   boolean useNewTS = true;
+
+  // Note: These over-ride any other settings for all Node2-related inference.
+//  public Beam.Mode scoreSearchOracle = Beam.Mode.H_LOSS;
+//  public Beam.Mode scoreSearchMV = Beam.Mode.H_LOSS;
+//  public Beam.Mode scoreConstraintOracle = Beam.Mode.H_LOSS;
+//  public Beam.Mode scoreConstraintMV = Beam.Mode.H_LOSS;
 
   public FNParseTransitionScheme getTransitionSystem() {
     return ts;
@@ -136,7 +141,7 @@ public class FModel implements Serializable {
       Log.info("doing oracle search...");
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
-        ts.runInference(ts.genRootState(oracleInf));
+        ts.runInference(ts.genRootState(oracleInf), oracleInf);
     timer.stop("update.oracle");
 
     timer.start("update.mv");
@@ -144,13 +149,15 @@ public class FModel implements Serializable {
       Log.info("doing most violated search...");
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> mvS =
-        ts.runInference(ts.genRootState(mvInf));
+        ts.runInference(ts.genRootState(mvInf), mvInf);
     timer.stop("update.mv");
 
     // Oracle gets the last state because that enforces the constraint that Proj(z) == {y}
-    StepScores<Info> oracleSc = oracleS.get1().getStepScores();
+    StepScores<?> oracleSc = oracleS.get1().getStepScores();
+    CoefsAndScoresAdjoints oracleB = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleSc);
     // MostViolated may take any prefix according to s(z) + max_{y \in Proj(z)} loss(y)
-    StepScores<Info> mvSc = mvS.get2().pop().getStepScores();
+    StepScores<?> mvSc = mvS.get2().pop().getStepScores();
+    CoefsAndScoresAdjoints mvB = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvSc);
 
     assert oracleSc.getLoss().maxLoss() == 0
         : "check your pruning! if you pruned away a branch on the gold tree"
@@ -158,7 +165,24 @@ public class FModel implements Serializable {
             + " learning (since its so good at handling pruning!)\n"
             + oracleSc.getLoss();
 
-    return buildUpdate(oracleSc, mvSc);
+    return buildUpdate(oracleB, mvB);
+  }
+
+  public static class CoefsAndScoresAdjoints implements edu.jhu.hlt.tutils.scoring.Adjoints {
+    private SearchCoefficients coefs;
+    private StepScores<?> scores;
+    public CoefsAndScoresAdjoints(SearchCoefficients coefs, StepScores<?> scores) {
+      this.coefs = coefs;
+      this.scores = scores;
+    }
+    @Override
+    public double forwards() {
+      return coefs.forwards(scores);
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      coefs.backwards(scores, dErr_dForwards);
+    }
   }
 
   public Update getUpdateOld(FNParse y) {
@@ -171,29 +195,29 @@ public class FModel implements Serializable {
 //    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
     State oracleState = oracleStateColl.get1();   // get1 b/c need to enforce constraint that 
     assert oracleState.getStepScores().getLoss().maxLoss() == 0 : "for testing use an exact oracle";
+    CoefsAndScoresAdjoints oracleBackwards = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleState.getStepScores());
     timer.stop("update.oracle");
 
     timer.start("update.mv");
     Pair<State, DoubleBeam<State>> mvStateColl = State.runInference(mvInf);
     State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
+    CoefsAndScoresAdjoints mvBackwards = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvState.getStepScores());
     timer.stop("update.mv");
 
-    StepScores<Info> mvss = mvState.getStepScores();
-    StepScores<Info> oss = oracleState.getStepScores();
-    return buildUpdate(oss, mvss);
+    return buildUpdate(oracleBackwards, mvBackwards);
   }
 
-  private Update buildUpdate(StepScores<Info> oss, StepScores<Info> mvss) {
+  private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv) {
 
-    assert oss.getLoss().noLoss() : "oracle has loss: " + oss.getLoss();
+    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
     final double hinge = Math.max(0,
-        (mvss.getModel().forwards() + mvss.getLoss().maxLoss())
-        - (oss.getModel().forwards() + oss.getLoss().maxLoss()));
+        (mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss())
+        - (oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss()));
 
-    Log.info("mv.model=" + mvss.getModel().forwards()
-        + " mv.loss=" + mvss.getLoss()
-        + " oracle.score=" + oss.getModel().forwards()
-        + " oracle.loss=" + oss.getLoss()
+    Log.info("mv.model=" + mv.scores.getModel().forwards()
+        + " mv.loss=" + mv.scores.getLoss()
+        + " oracle.score=" + oracle.scores.getModel().forwards()
+        + " oracle.loss=" + oracle.scores.getLoss()
         + " hinge=" + hinge);
 
     return new Update() {
@@ -201,8 +225,8 @@ public class FModel implements Serializable {
       public double apply(double learningRate) {
         if (hinge > 0) {
           timer.start("update.apply");
-          oss.backwards(learningRate);
-          mvss.backwards(learningRate);
+          oracle.backwards(learningRate);
+          mv.backwards(learningRate);
           timer.stop("update.apply");
         }
         return hinge;
@@ -246,7 +270,7 @@ public class FModel implements Serializable {
     Info inf = getPredictInfo(y);
     State2<Info> s0 = ts.genRootState(inf);
     ts.flushPrimes();
-    Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0);
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
     State2<Info> beamLast = i.get1();
     return ts.decode(beamLast);
   }
@@ -277,7 +301,7 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    m.rtConf.oracleMode = OracleMode.MIN;
+//    m.rtConf.oracleMode = OracleMode.MIN;
     m.rtConf.setBeamSize(1);
 //    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
 

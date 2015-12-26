@@ -7,11 +7,9 @@ import java.util.List;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
-import edu.jhu.hlt.fnparse.rl.full.Beam.Mode;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
+import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
-import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
-import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -39,7 +37,7 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCounts & HasRandom> {
+public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_LOSS = true;
@@ -73,7 +71,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
    * Construct a node. Needed to be a method so that if you want to instantiate
    * a sub-class of Node2, you can do that behind this layer of indirection.
    */
-  abstract Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
+//  abstract Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
+  abstract Node2 newNode(TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
 
   /**
    * META: Specifies the loop order (e.g. [T,F,K,S]).
@@ -113,7 +112,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     collectChildrensSpines(root.getRoot(), childrensSpines);
     if (DEBUG)
       Log.info("numSpines=" + childrensSpines.size());
-    return decode(childrensSpines, root.getStepScores().getInfo());
+    return decode(childrensSpines, root.getInfo());
   }
 
   /* COHERENCE RULES ********************************************************/
@@ -126,9 +125,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     TVNS cracked = scoreHatch(wife, z); // contains score(hatch)
     TFKS newPrefix = consPrefix(cracked, wife.prefix);
     LLTVN newEggs = genEggs(newPrefix, z);
-    Node2 hatched = newNode(wife.getCoefs(), newPrefix, newEggs, null, null);
+    Node2 hatched = newNode(newPrefix, newEggs, null, null);
     LLSSP newChildrenhildren = consChild(hatched, wife.children);
-    Node2 mother = newNode(wife.getCoefs(), wife.prefix, wife.eggs.cdr(), wife.pruned, newChildrenhildren);
+    Node2 mother = newNode(wife.prefix, wife.eggs.cdr(), wife.pruned, newChildrenhildren);
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = mother.getStepScores().getLoss();
@@ -142,7 +141,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   public Node2 squash(Node2 wife, Z info) {
     TVNS cracked = scoreSquash(wife, info);
     LLTVNS newPruned = consPruned(cracked, wife.pruned);
-    Node2 wife2 = newNode(wife.getCoefs(), wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
+    Node2 wife2 = newNode(wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = wife2.getStepScores().getLoss();
@@ -172,7 +171,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     while (!stack.isEmpty())
       newChildren = consChild(stack.pop(), newChildren);
     // Reconstruct the parent node
-    return newNode(parent.getCoefs(), parent.prefix, parent.eggs, parent.pruned, newChildren);
+    return newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
   }
 
   /**
@@ -199,16 +198,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     while (!stack.isEmpty())
       newChildren = consChild(stack.pop(), newChildren);
     // Reconstruct the parent node
-    Node2 newParent = newNode(parent.getCoefs(), parent.prefix, parent.eggs, parent.pruned, newChildren);
+    Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
     return replaceNode(spine.cdr(), parent, newParent);
   }
 
 
   /* NEXT-RELATED *************************************************************/
 
-  public List<State2<Z>> dbgNextStatesL(State2<Z> state) {
-    int n = 64;
-    DoubleBeam<State2<Z>> b = new DoubleBeam<>(n, Mode.CONSTRAINT_OBJ);
+  public List<State2<Z>> dbgNextStatesL(State2<Z> state, HowToSearch hts) {
+    DoubleBeam<State2<Z>> b = new DoubleBeam<>(hts);
     nextStates(state, consChild(state.getRoot(), null), b);
     if (b.size() == b.capacity())
       throw new RuntimeException("fixme");
@@ -268,8 +266,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     if (wife.eggs == null) {
       if (DEBUG) Log.info("wife.eggs is null");
     } else {
-      StepScores<Z> prevScores = root.getStepScores();
-      Z info = prevScores.getInfo();
+//      StepScores<Z> prevScores = root.getStepScores();
+      Z info = root.getInfo();
 
       // Play-out the actions which lead to modified versions of this node (wife)
       Node2 mother = hatch(wife, info);
@@ -279,8 +277,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
       LL<Node2> momInLaw = spine.cdr();
       Node2 rootHatch = replaceNode(momInLaw, wife, mother);
       Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
-      addTo.offer(new State2<Z>(rootHatch, "hatch"));
-      addTo.offer(new State2<Z>(rootSquash, "squash"));
+      addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
+      addTo.offer(new State2<Z>(rootSquash, info, "squash"));
     }
 
     // Recurse
@@ -293,26 +291,33 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
     }
   }
 
+  public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, Info inf) {
+    return runInference(s0, inf.htsBeam, inf.htsConstraints);
+  }
+
   /** Takes Info/Config from the state of this instance, see getInfo */
-  public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0) {
+  public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, HowToSearch beamSearch, HowToSearch constraints) {
     if (DEBUG)
       Log.info("starting inference from state:");
-    Z inf = s0.getStepScores().getInfo();
+//    Z inf = s0.getStepScores().getInfo();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-    DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.CONSTRAINT_OBJ);
+//    DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.MAX_LOSS);
+    DoubleBeam<State2<Z>> all = new DoubleBeam<>(constraints);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-    Beam.Mode bsearchObj = Beam.Mode.BEAM_SEARCH_OBJ;
-    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), bsearchObj);
-    DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
+//    Beam.Mode bsearchObj = Beam.Mode.H_LOSS;
+//    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), bsearchObj);
+//    DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
+    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(beamSearch);
+    DoubleBeam<State2<Z>> next = new DoubleBeam<>(beamSearch);
 
-    if (DEBUG && DEBUG_COLLAPSE)
-      Log.info("beamSize=" + inf.beamSize() + " numConstraints=" + inf.numConstraints());
+//    if (DEBUG && DEBUG_COLLAPSE)
+//      Log.info("beamSize=" + inf.beamSize() + " numConstraints=" + inf.numConstraints());
 
     State2<Z> lastState = null;
     next.offer(s0); all.offer(s0);
@@ -351,13 +356,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends HowToSearch & HasCou
   }
 
   public Node2 genRootNode(Z info) {
+    assert info != null;
     LLTVN eggs = genEggs(null, info);
-    return newNode(info, null, eggs, null, null);
+    return newNode(null, eggs, null, null);
   }
 
   public State2<Z> genRootState(Z info) {
+    assert info != null;
     Node2 root = genRootNode(info);
-    return new State2<>(root);
+    return new State2<>(root, info);
   }
 
   /**

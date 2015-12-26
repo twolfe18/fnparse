@@ -8,8 +8,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import javax.print.attribute.standard.PrinterMessageFromOperator;
-
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -22,7 +20,6 @@ import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
-import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.State;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
@@ -135,8 +132,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
-    return new Node2(coefs, prefix, eggs, pruned, children);
+  public Node2 newNode(TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children) {
+    return new Node2(prefix, eggs, pruned, children);
   }
 
   private long primeFor(int type, int value) {

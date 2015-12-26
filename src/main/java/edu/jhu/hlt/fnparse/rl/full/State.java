@@ -1,7 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.File;
-import java.io.Serializable;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -540,39 +539,6 @@ public class State implements StateLike {
     this.info = everythingElse;
   }
 
-  public static class GeneralizedCoef implements Serializable {
-    private static final long serialVersionUID = -8325375378258659099L;
-
-    public final double coef;
-    public final boolean muteForwards;
-
-    public GeneralizedCoef(double coef, boolean muteForwards) {
-      if (Double.isNaN(coef))
-        throw new IllegalArgumentException();
-      if (Double.isInfinite(coef))
-        throw new RuntimeException("not tested yet");
-      this.coef = coef;
-      this.muteForwards = muteForwards;
-    }
-
-    public boolean iszero() {
-      return coef == 0;
-    }
-
-    public boolean nonzero() {
-      return coef != 0;
-    }
-
-    public String shortString() {
-      return String.format("(%.1f mute=%s)", coef, muteForwards);
-    }
-
-    @Override
-    public String toString() {
-      return String.format("(GenCoef %.2f muteForwards=%s)", coef, muteForwards);
-    }
-  }
-
   public State noMoreFrames(Adjoints partialScore) {
     assert !noMoreFrames;
     double rand = info.config.rand.nextGaussian();
@@ -734,7 +700,7 @@ public class State implements StateLike {
 //    assert !(s.score instanceof Adjoints.Caching);
 //    s.score = new Adjoints.Caching(s.score);
     if (DEBUG) {
-      Log.debug("score: " + s.score.forwards());
+      Log.debug("score: " + s.score.forwardsMax());
       Log.debug("because: " + s.score);
       System.out.println();
     }
@@ -1772,8 +1738,8 @@ public class State implements StateLike {
   public static final Comparator<State> BY_SCORE_DESC = new Comparator<State>() {
     @Override
     public int compare(State o1, State o2) {
-      double s1 = o1.score.forwards();
-      double s2 = o2.score.forwards();
+      double s1 = o1.score.forwardsMax();
+      double s2 = o2.score.forwardsMax();
       if (s1 > s2)
         return -1;
       if (s1 < s2)
@@ -1879,14 +1845,14 @@ public class State implements StateLike {
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-    DoubleBeam<State> all = new DoubleBeam<>(inf.beamSize * 16, Beam.Mode.CONSTRAINT_OBJ);
+    DoubleBeam<State> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.MAX_LOSS);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-    DoubleBeam<State> cur = new DoubleBeam<>(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
-    DoubleBeam<State> next = new DoubleBeam<>(inf.beamSize, Beam.Mode.BEAM_SEARCH_OBJ);
+    DoubleBeam<State> cur = new DoubleBeam<>(inf.beamSize, Beam.Mode.H_LOSS);
+    DoubleBeam<State> next = new DoubleBeam<>(inf.beamSize, Beam.Mode.H_LOSS);
 
     State lastState = null;
     push(next, all, s0);
