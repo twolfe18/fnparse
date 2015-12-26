@@ -225,7 +225,7 @@ public class FModel implements Serializable {
       public double apply(double learningRate) {
         if (hinge > 0) {
           timer.start("update.apply");
-          oracle.backwards(learningRate);
+          oracle.backwards(-learningRate);
           mv.backwards(learningRate);
           timer.stop("update.apply");
         }
@@ -316,12 +316,15 @@ public class FModel implements Serializable {
 //      if (!y.getSentence().getId().equals("FNFUTXT1271864"))
 //        continue;
 
-      Log.info("working on: " + y.getId() + " crRoles=" + y.hasContOrRefRoles() + " numFI=" + y.numFrameInstances());
+      Log.info("working on: " + y.getId()
+          + " crRoles=" + y.hasContOrRefRoles()
+          + " numFI=" + y.numFrameInstances()
+          + " numItems=" + State.numItems(y));
 
       // Check learning
       int c = 0, clim = 5;
       double maxF1 = 0;
-      for (int i = 0; i < clim * 10; i++) {
+      for (int i = 0; i < clim * 5; i++) {
         Update u = m.getUpdate(y);
         u.apply(0.1);
 

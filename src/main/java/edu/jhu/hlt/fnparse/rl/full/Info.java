@@ -190,7 +190,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
     // TODO This should be bigger so that it doesn't get overwhelmed by model score!
     this.htsBeam = new HowToSearchImpl(
         new GeneralizedCoef.Model(1, true),
-        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO,
         1);
     this.htsConstraints = new HowToSearchImpl(
@@ -229,12 +229,12 @@ public class Info implements Serializable, HasCounts, HasRandom {
   public Info setMostViolatedCoefs() {
     this.htsBeam = new HowToSearchImpl(
         new GeneralizedCoef.Model(1, false),
-        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO,
         1);
     this.htsConstraints = new HowToSearchImpl(
         new GeneralizedCoef.Model(1, false),
-        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
+        new GeneralizedCoef.Loss(1, Mode.MAX_LOSS_POW, 0.5),
         GeneralizedCoef.ZERO,
         1);
     return this;

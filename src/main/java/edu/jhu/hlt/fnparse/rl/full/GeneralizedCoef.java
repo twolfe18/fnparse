@@ -83,6 +83,7 @@ public abstract class GeneralizedCoef implements Serializable {
     private static final long serialVersionUID = -4336010038231374048L;
 
     public static enum Mode {
+      H_LOSS,
       MIN_LOSS,
       MAX_LOSS,
       MAX_LOSS_LIN,
@@ -105,6 +106,8 @@ public abstract class GeneralizedCoef implements Serializable {
       if (coef == 0)
         return 0;
       switch (mode) {
+      case H_LOSS:
+        return coef * l.hLoss();
       case MIN_LOSS:
         return coef * l.minLoss();
       case MAX_LOSS:
