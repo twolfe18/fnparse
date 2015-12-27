@@ -205,6 +205,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
   /* NEXT-RELATED *************************************************************/
 
+  /* TODO Figure out how to do type-by-type (e.g. "frame-by-frame" for FN).
+   * The trick is that you can only allow actions in a particular type-subtree
+   * OR, if there are possible actions left in that type-subree, allow new-type.
+   * If allow new-type to be in competition with various new-subtype actions,
+   * then you will have to give it the cost of "as if you had done 'prune until
+   * you can't prune anymore on the entire type-subtree'" to maintain the
+   * desired semantics of only working on one type-subtree at a time.
+   */
+
   public List<State2<Z>> dbgNextStatesL(State2<Z> state, HowToSearch hts) {
     DoubleBeam<State2<Z>> b = new DoubleBeam<>(hts);
     nextStates(state, consChild(state.getRoot(), null), b);
