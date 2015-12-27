@@ -118,6 +118,16 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public LLSSP consChild(Node2 car, LLSSP cdr) {
+    /*
+     * Here is where we need to have a special implementation for
+     * ROLE_COOC, NUM_ARGS, and ARG_LOCATION.
+     *
+     * Indices that can be supported:
+     * - list of spans which overlap
+     * - number of roles for a given frame
+     */
+    if (car.getType() == TFKS.K)
+      return new LLSSPatF(car, (LLSSP) cdr, info);
     return new LLSSP(car, cdr);
   }
 
