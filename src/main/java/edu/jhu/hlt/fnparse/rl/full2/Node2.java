@@ -140,9 +140,14 @@ public class Node2 implements HasStepScores, HasSig {
     return false;
   }
 
-//  public SearchCoefficients getCoefs() {
-//    return score.getInfo();
-//  }
+  /**
+   * If there are no children, this returns false.
+   */
+  public boolean firstChildMatchesType(int type) {
+    if (children == null)
+      return false;
+    return children.car().getType() == type;
+  }
 
   @Override
   public StepScores<?> getStepScores() {

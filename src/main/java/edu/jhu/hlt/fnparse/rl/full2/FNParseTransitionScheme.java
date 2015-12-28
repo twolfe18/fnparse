@@ -112,32 +112,24 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public TFKS consPrefix(TVNS car, TFKS cdr) {
+  public TFKS consPrefix(TVNS car, TFKS cdr, Info info) {
     return new TFKS(car, cdr);
   }
 
   @Override
-  public LLSSP consChild(Node2 car, LLSSP cdr) {
-    /*
-     * Here is where we need to have a special implementation for
-     * ROLE_COOC, NUM_ARGS, and ARG_LOCATION.
-     *
-     * Indices that can be supported:
-     * - list of spans which overlap
-     * - number of roles for a given frame
-     */
+  public LLSSP consChild(Node2 car, LLSSP cdr, Info info) {
     if (car.getType() == TFKS.K)
-      return new LLSSPatF(car, (LLSSP) cdr, info);
+      return new LLSSPatF(car, (LLSSPatF) cdr, info);
     return new LLSSP(car, cdr);
   }
 
   @Override
-  public LLTVN consEggs(TVN car, LLTVN cdr) {
+  public LLTVN consEggs(TVN car, LLTVN cdr, Info info) {
     return new LLTVN(car, cdr);
   }
 
   @Override
-  public LLTVNS consPruned(TVNS car, LLTVNS cdr) {
+  public LLTVNS consPruned(TVNS car, LLTVNS cdr, Info info) {
     return new LLTVNS(car, cdr);
   }
 
@@ -155,10 +147,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return new TVN(type, value, 1, 1, primeFor(type, value));
   }
   private LL<TVN> encSug(int t, int f, int k, int s) {
+    Info info = null; // I believe this is only used for constructing a LabelIndex/Info, so we don't need to depend on Info
     return consEggs(tvnFor(TFKS.S, s),
         consEggs(tvnFor(TFKS.K, k),
             consEggs(tvnFor(TFKS.F, f),
-                consEggs(tvnFor(TFKS.T, t), null))));
+                consEggs(tvnFor(TFKS.T, t), null, info), info), info), info);
   }
 
   @Override
@@ -334,7 +327,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         long prime = primeFor(TFKS.T, t);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("T poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.T, t, poss, c, prime), l);
+        l = consEggs(new TVN(TFKS.T, t, poss, c, prime), l, info);
       }
       return l;
     }
@@ -352,7 +345,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         long prime = primeFor(TFKS.F, ff.getId());
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("F poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.F, ff.getId(), poss, c, prime), l);
+        l = consEggs(new TVN(TFKS.F, ff.getId(), poss, c, prime), l, info);
       }
       return l;
     case TFKS.F:
@@ -365,7 +358,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         long prime = primeFor(TFKS.K, k);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
-        l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l);
+        l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l, info);
         k--;
       }
       if (useContRoles)
@@ -388,7 +381,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         long prime = primeFor(TFKS.S, s);
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + possC + " c=" + c);
-        l = consEggs(new TVN(TFKS.S, s, possC, c, prime), l);
+        l = consEggs(new TVN(TFKS.S, s, possC, c, prime), l, info);
       }
       return l;
     case TFKS.S:
@@ -397,6 +390,25 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       throw new RuntimeException();
     }
   }
+
+  /* Convenience methods for getting FN-specific values out of this type ******/
+  // In general, these must match genEggs, which is why they're here.
+  public static Span getTarget(TFKS t, Info info) {
+    assert t.t >= 0;
+    int sentenceLen = info.getSentence().size();
+    return Span.decodeSpan(t.t, sentenceLen);
+  }
+  public static Frame getFrame(TFKS t, Info info) {
+    assert t.f >= 0;
+    FrameIndex fi = info.getFrameIndex();
+    return fi.getFrame(t.f);
+  }
+  public static Span getArgSpan(TFKS t, Info info) {
+    assert t.s >= 0;
+    int sentenceLen = info.getSentence().size();
+    return Span.decodeSpan(t.s, sentenceLen);
+  }
+  /* **************************************************************************/
 
   private List<String> dynFeats1(Node2 n, Info info) {
     assert n.eggs != null : "hatch/squash both require an egg!";
@@ -415,7 +427,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
      * the *Adjoints trick mentioned above.
      */
     TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
-    TFKS p = consPrefix(removeMe, n.prefix);
+    TFKS p = consPrefix(removeMe, n.prefix, info);
     List<String> feats = new ArrayList<>();
     if (useOverfitFeatures) {
       feats.add(p.toString());
@@ -439,6 +451,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         break;
       }
     }
+    
+    
+    // TODO It doesn't work when I un-comment this section!
+    
+    // TODO Move this outside of a method which returns strings!
+//    if (n.children instanceof LLSSPatF) {
+//      assert n.getType() == TFKS.F;
+//      LLSSPatF kids = (LLSSPatF) n.children;
+//      for (LL<List<ProductIndex>> cur = kids.features; cur != null; cur = cur.cdr()) {
+//        for (ProductIndex pi : cur.car()) {
+//          feats.add("sp1-" + pi.getProdFeatureModulo(1 << 20));
+//          Log.info("doing it: " + feats.get(feats.size() - 1));
+//        }
+//      }
+//    }
+
     return feats;
   }
 
@@ -459,7 +487,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     // TODO Same refactoring as in dynFeats1
     TVN egg = n.eggs.car();
     TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
-    TFKS prefix = consPrefix(removeMe, n.prefix);
+    TFKS prefix = consPrefix(removeMe, n.prefix, info);
     if (prefix.isFull()) {
       if (useOverfitFeatures) {
         String fs = prefix.toString();

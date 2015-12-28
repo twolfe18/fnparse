@@ -63,9 +63,13 @@ public class StepScores<T> /* extends SearchCoefficients>*/ {//implements Adjoin
     this.rand = rand;
   }
 
-//  public T getInfo() {
-//    return info;
-//  }
+  public StepScores<T> plusModel(Adjoints score) {
+    return new StepScores<>(info, new Adjoints.Sum(score, model), loss, rand);
+  }
+
+  public T getInfo() {
+    return info;
+  }
 
   public Adjoints getModel() {
     return model;

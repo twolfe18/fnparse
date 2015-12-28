@@ -48,10 +48,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    * How to glue stuff together. Hide instantiations of LL which keep track of
    * useful aggregators in the implementation of these methods.
    */
-  abstract TFKS consPrefix(TVNS car, TFKS cdr);
-  abstract LLTVN consEggs(TVN car, LLTVN cdr);
-  abstract LLTVNS consPruned(TVNS car, LLTVNS cdr);
-  abstract LLSSP consChild(Node2 car, LLSSP cdr);
+  abstract TFKS consPrefix(TVNS car, TFKS cdr, Z info);
+  abstract LLTVN consEggs(TVN car, LLTVN cdr, Z info);
+  abstract LLTVNS consPruned(TVNS car, LLTVNS cdr, Z info);
+  abstract LLSSP consChild(Node2 car, LLSSP cdr, Z info);
 
   /**
    * These parameterize the costs of moving from eggs -> (pruned|children).
@@ -121,12 +121,12 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   // light of the implementation below.
 
   /** Returns a copy of n with the child formed by hatching the next egg */
-  public Node2 hatch(Node2 wife, Z z) {
-    TVNS cracked = scoreHatch(wife, z); // contains score(hatch)
-    TFKS newPrefix = consPrefix(cracked, wife.prefix);
-    LLTVN newEggs = genEggs(newPrefix, z);
+  public Node2 hatch(Node2 wife, Z info) {
+    TVNS cracked = scoreHatch(wife, info); // contains score(hatch)
+    TFKS newPrefix = consPrefix(cracked, wife.prefix, info);
+    LLTVN newEggs = genEggs(newPrefix, info);
     Node2 hatched = newNode(newPrefix, newEggs, null, null);
-    LLSSP newChildrenhildren = consChild(hatched, wife.children);
+    LLSSP newChildrenhildren = consChild(hatched, wife.children, info);
     Node2 mother = newNode(wife.prefix, wife.eggs.cdr(), wife.pruned, newChildrenhildren);
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
@@ -140,7 +140,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   /** Returns a copy of n with the next egg moved to pruned */
   public Node2 squash(Node2 wife, Z info) {
     TVNS cracked = scoreSquash(wife, info);
-    LLTVNS newPruned = consPruned(cracked, wife.pruned);
+    LLTVNS newPruned = consPruned(cracked, wife.pruned, info);
     Node2 wife2 = newNode(wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
@@ -154,7 +154,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   }
 
   // NOTE: This has to be in the module due to the need for consChild
-  public Node2 replaceChild(Node2 parent, Node2 searchChild, Node2 replaceChild) {
+  public Node2 replaceChild(Node2 parent, Node2 searchChild, Node2 replaceChild, Z info) {
     // Search and store prefix
     ArrayDeque<Node2> stack = new ArrayDeque<>();
     LLSSP newChildren = parent.children;
@@ -166,10 +166,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     if (replaceChild == null)
       newChildren = newChildren.cdr();
     else
-      newChildren = consChild(replaceChild, newChildren.cdr());
+      newChildren = consChild(replaceChild, newChildren.cdr(), info);
     // Pre-pend the prefix appearing before searchChild
     while (!stack.isEmpty())
-      newChildren = consChild(stack.pop(), newChildren);
+      newChildren = consChild(stack.pop(), newChildren, info);
     // Reconstruct the parent node
     return newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
   }
@@ -178,7 +178,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    * Looks for searchChild in the first node in the spine's children, replaces it,
    * and returns a node representing the modified parent (first in spine).
    */
-  public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild) {
+  public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild, Z info) {
     if (spine == null)
       return replaceChild;
     Node2 parent = spine.car();
@@ -193,13 +193,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     if (replaceChild == null)
       newChildren = newChildren.cdr();
     else
-      newChildren = consChild(replaceChild, newChildren.cdr());
+      newChildren = consChild(replaceChild, newChildren.cdr(), info);
     // Pre-pend the prefix appearing before searchChild
     while (!stack.isEmpty())
-      newChildren = consChild(stack.pop(), newChildren);
+      newChildren = consChild(stack.pop(), newChildren, info);
     // Reconstruct the parent node
     Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
-    return replaceNode(spine.cdr(), parent, newParent);
+    return replaceNode(spine.cdr(), parent, newParent, info);
   }
 
 
@@ -216,7 +216,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
   public List<State2<Z>> dbgNextStatesL(State2<Z> state, HowToSearch hts) {
     DoubleBeam<State2<Z>> b = new DoubleBeam<>(hts);
-    nextStates(state, consChild(state.getRoot(), null), b);
+    Z info = state.getInfo();
+    nextStates(state, consChild(state.getRoot(), null, info), b);
     if (b.size() == b.capacity())
       throw new RuntimeException("fixme");
     List<State2<Z>> l = new ArrayList<>();
@@ -284,8 +285,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
       // Zip everything back up to get a root reflecting these modifications
       LL<Node2> momInLaw = spine.cdr();
-      Node2 rootHatch = replaceNode(momInLaw, wife, mother);
-      Node2 rootSquash = replaceNode(momInLaw, wife, wife2);
+      Node2 rootHatch = replaceNode(momInLaw, wife, mother, info);
+      Node2 rootSquash = replaceNode(momInLaw, wife, wife2, info);
       addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
       addTo.offer(new State2<Z>(rootSquash, info, "squash"));
     }
