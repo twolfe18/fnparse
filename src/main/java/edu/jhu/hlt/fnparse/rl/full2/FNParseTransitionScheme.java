@@ -107,6 +107,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     wSquash.weights.scale(0);
   }
 
+  @Override
+  public boolean oneAtATime(int type) {
+    if (type == TFKS.F || type == TFKS.K)
+      return true;
+    return super.oneAtATime(type);
+  }
+
   /**
    * Primes are assigned first-come-first-serve so that we get small primes and
    * small primes products for most inference tasks. This class keeps an alphabet

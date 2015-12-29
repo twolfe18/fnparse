@@ -49,6 +49,33 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   public static boolean DEBUG_REPLACE_NODE = false;
 
   /**
+   * This is a hook for clamping down on the set of actions which are considered
+   * out of a given state. What this means is that you can only perform actions
+   * generated from one sub-tree (of a node of the specified type), for example
+   * F node at a time, or more strictly, a K node at a time [1]. The way you do
+   * this is, starting at the parent of the type-at-a-time level, allow a new F
+   * actions iff the last F sub-tree has no actions in it. You can see that
+   * there is an inductive proof that if a given F node has no actions out of
+   * it, then all of its older siblings don't either since that F node could not
+   * have been created unless the older siblings were done with their actions.
+   *
+   * [1] Note that K-at-a-time does not imply F-at-a-time. In fact, you may want
+   * K-and-F-at-a-time. K-at-a-time alone would mean that you could have many
+   * frames going at the same time, but that you must immediately make all S
+   * valued children assesments of a given K node (hopefully N-1 prunes and 1
+   * hatch).
+   *
+   * @see AbstractTransitionScheme#nextStates(State2, LL, Beam) for how this
+   * mehtod's return value is used and affects next states.
+   *
+   * @param type is the type for which you may only generate actions from one
+   * sub-tree at a time.
+   */
+  boolean oneAtATime(int type) {
+    return false;
+  }
+
+  /**
    * How to glue stuff together. Hide instantiations of LL which keep track of
    * useful aggregators in the implementation of these methods.
    */
@@ -306,8 +333,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    *
    * @param spine is the path from the current node (first element) to root (last element).
    * @param addTo is a collection of subsequent root nodes.
+   * @return the number of next states offered.
    */
-  public void nextStates(State2<Z> root, LL<Node2> spine, Beam<State2<Z>> addTo) {
+  public int nextStates(State2<Z> root, LL<Node2> spine, Beam<State2<Z>> addTo) {
     if (root == null) {
       throw new IllegalArgumentException("prev may not be null, needed at "
           + "least for Info (e.g. search coefs)");
@@ -321,13 +349,26 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       wife.show(System.out);
     }
 
-    // Generate new nodes
-    if (wife.eggs == null) {
-      if (DEBUG && DEBUG_SEARCH) Log.info("wife.eggs is null");
-    } else {
-      Z info = root.getInfo();
+    int added = 0;
 
+    // Recurse
+    int i = 0;
+    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
+      if (DEBUG && DEBUG_SEARCH)
+        Log.info("recursing on child " + i);
+      LL<Node2> spine2 = new LL<>(cur.car(), spine);
+      added += nextStates(root, spine2, addTo);
+    }
+
+    if (wife.eggs == null) {
+      // No-op! Nothing more can be done with this node
+      // TODO add in LL<Node2> frozen (pointer) for increased efficiency
+      if (DEBUG && DEBUG_SEARCH)
+        Log.info("wife.eggs is null");
+    } else if (added == 0 || !oneAtATime(wife.getType())) {
+      // Consider hatch or squash
       // Play-out the actions which lead to modified versions of this node (wife)
+      Z info = root.getInfo();
       Node2 mother = hatch(wife, info);
       Node2 wife2 = squash(wife, info);
 
@@ -352,18 +393,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       assert rootSquash.getLoss().fn >= wife2.getLoss().fn;
       assert rootSquash.getLoss().fp >= wife2.getLoss().fp;
 
+      added += 2;
       addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
       addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+    } else {
+      if (DEBUG && DEBUG_SEARCH)
+        Log.info("skipping this node because one at a time: " + wife.prefix);
     }
 
-    // Recurse
-    int i = 0;
-    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
-      if (DEBUG && DEBUG_SEARCH)
-        Log.info("recursing on child " + i);
-      LL<Node2> spine2 = new LL<>(cur.car(), spine);
-      nextStates(root, spine2, addTo);
-    }
+    return added;
   }
 
   public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, Info inf) {
