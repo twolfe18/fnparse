@@ -29,12 +29,12 @@ public class TVN {
     this.numPossible = numPossible;
     this.goldMatching = goldMatching;
     this.prime = prime;
-    assert prime > 1 : "prime=" + prime;
   }
 
   @Override
   public String toString() {
-    return "(TVN t=" + type + " v=" + value + " poss=" + numPossible + " goldMatching=" + goldMatching + ")";
+//    return "(TVN t=" + type + " v=" + value + " poss=" + numPossible + " goldMatching=" + goldMatching + ")";
+    return "(TVN " + Node2.typeName(type) + ":" + value + " poss=" + numPossible + " goldMatching=" + goldMatching + ")";
   }
 
   public TVNS withScore(Adjoints model, double rand) {

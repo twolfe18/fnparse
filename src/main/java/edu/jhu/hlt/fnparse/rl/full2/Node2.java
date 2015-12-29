@@ -27,14 +27,48 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  */
 public class Node2 implements HasStepScores, HasSig {
 
+  // Regular loss is based on the number of false negatives in an entire sub-tree
+  // (false positives do not change: they are directly related to the structure
+  // of the (non-pruned part of the) tree). With myopic loss, we say that a node
+  // either fn \in {0, 1} (for whether there existed a gold item in the sub-tree
+  // which was pruned or not). This makes margin constraints a little easier to
+  // satisfy and a little more intuitive (e.g. pruning an egg of root may cause
+  // 150 FNs. Do we really want score(hatch) - score(prune) >= 150? This pretty
+  // much precludes regularization or requires special scaling). The downside is
+  // that the model is not trained to recognize big errors from small ones.
+  public static boolean MYOPIC_LOSS = false;
+
   public static boolean DEBUG = false;
   public static boolean DEBUG_INIT = false;
 
   // Conceptual note: each of these is a sub-class of either LL<TVN> or LL<Node2>
-  public final TFKS prefix;        // path from root, including teis nodes (type,value)
+  public final TFKS prefix;   // path from root, including this nodes (type,value)
   public final LLTVN eggs;
   public final LLTVNS pruned;
   public final LLSSP children;
+
+  /* TODO How to index nodes so that you can compute nextStates without touching
+   * any nodes that you don't have to?
+   * You want to ignore all nodes where eggs==null. Previously I had called this
+   * "frozen" (different from pruned). I think rather than have a separate list
+   * in Node2 (where nodes go from children -> frozen when they run out of eggs),
+   * we should have a pointer into children designating the index after which
+   * all Nodes have eggs==null. The solution with a separate frozen list does
+   * not work because you would have to remove from children, which cannot be
+   * done persistently and efficiently.
+   * Note: "frozen" doesn't JUST mean eggs==null, it means eggs==null AND any
+   * children (if there are any) are also frozen. If a node is frozen, it cannot
+   * generate any new actions, so it is useless to visit in nextStates.
+   * When the last hatch/squash occurs which leads to eggs==null for some node,
+   * it's parent MAY (there could be other non-frozen siblings) be replaced with
+   * a copy where the frozen pointer has been bumped back one position. This may
+   * form a cascade of freezes.
+   */
+
+  /* How to do the part where we rank eggs by their static score of becoming a child?
+   * 1) Sub-class TVN with a special StaticlyScoredEgg. Special checking would need to be done in hatch...
+   *    Actually this could be done in scoreHatch wich does (Node2 (eggs TVN ...) ...) -> TVNS
+   */
 
   // Score of the hatch action that lead to this node and the score of any
   // actions taken at/below this node.
@@ -60,10 +94,15 @@ public class Node2 implements HasStepScores, HasSig {
     int det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
 
     assert possible > 0;
-    int thisFP = prefix != null && prefix.car().goldMatching == 0 ? 1 : 0;
-    int fp = thisFP + LLSSP.getSumLoss(children).fp;
+    MaxLoss childrenLoss = LLSSP.getSumLoss(children);
 
-    int fn = LLTVN.sumGoldMatching(pruned);
+    int thisFP = prefix != null && prefix.car().goldMatching == 0 ? 1 : 0;
+    int fp = thisFP + childrenLoss.fp;
+
+    int thisFN = MYOPIC_LOSS
+        ? LLTVN.numGoldMatchingGtZero(pruned)
+        : LLTVN.sumGoldMatching(pruned);
+    int fn = thisFN + childrenLoss.fn;
 
     if (DEBUG_INIT && AbstractTransitionScheme.DEBUG) {
       Log.info("possible=" + possible + " det=" + det + " fp=" + fp + " fn=" + fn);
@@ -83,35 +122,34 @@ public class Node2 implements HasStepScores, HasSig {
     }
 
     MaxLoss loss = new MaxLoss(possible, det, fp, fn);
-    Adjoints z = Adjoints.Constant.ZERO;
-    Adjoints a, b, c;
-    double ra, rb, rc;
+    Adjoints prefixS, prunedS, childrenS;
+    double prefixR, prunedR, childrenR;
     if (prefix == null) {
-      a = z;
-      ra = 0;
+      prefixS = Adjoints.Constant.ZERO;
+      prefixR = 0;
     } else {
       // This is the fly in the ointment why everything can't be sums of MaxLoss.
       // We need a TVNS which doesn't have loss yet for prefixes.
       TVNS x = prefix.car();
-      a = x.getModel();
-      ra = x.getRand();
+      prefixS = x.getModel();
+      prefixR = x.getRand();
     }
     if (pruned == null) {
-      b = z;
-      rb = 0;
+      prunedS = Adjoints.Constant.ZERO;
+      prunedR = 0;
     } else {
-      b = pruned.getModelSum(); // Should not include rand!
-      rb = pruned.getRandSum();
+      prunedS = pruned.getModelSum(); // Should not include rand!
+      prunedR = pruned.getRandSum();
     }
     if (children == null) {
-      c = z;
-      rc = 0;
+      childrenS = Adjoints.Constant.ZERO;
+      childrenR = 0;
     } else {
-      c = children.getScoreSum().getModel();
-      rc = children.getScoreSum().getRand();
+      childrenS = children.getScoreSum().getModel();
+      childrenR = children.getScoreSum().getRand();
     }
-    Adjoints score = new Adjoints.Sum(a, b, c);
-    double rand = ra + rb + rc;
+    Adjoints score = new Adjoints.Sum(prefixS, prunedS, childrenS);
+    double rand = prefixR + prunedR + childrenR;
     this.score = new StepScores<>(null, score, loss, rand);
   }
 
@@ -154,6 +192,18 @@ public class Node2 implements HasStepScores, HasSig {
     return score;
   }
 
+  public Adjoints getModelScore() {
+    return score.getModel();
+  }
+
+  public MaxLoss getLoss() {
+    return score.getLoss();
+  }
+
+  public double getRand() {
+    return score.getRand();
+  }
+
   public boolean isLeaf() {
     boolean leaf = eggs == null && children == null;
     if (leaf) assert pruned == null;
@@ -167,6 +217,7 @@ public class Node2 implements HasStepScores, HasSig {
         + " nEgg=" + LL.length(eggs)
         + " nPrune=" + LL.length(pruned)
         + " nChild=" + LL.length(children)
+        + " loss=" + getLoss()
         + ")";
   }
 

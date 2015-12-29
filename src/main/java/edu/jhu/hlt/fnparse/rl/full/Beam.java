@@ -9,7 +9,8 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
 
-  public void offer(T next);
+  /** Returns true if the item was added to the beam (not pruned) */
+  public boolean offer(T next);
 
   /*
    * tutils' Beam uses TreeSet.add which uses Beam.Item.compareTo
@@ -91,24 +92,23 @@ public interface Beam<T extends StateLike> {
     private HashMap<T, BeamItem<T>> table;   // ensures that entries in scores are unique up to State
     private int capacity;
     private int numCollapses, numOffers;
-//    private Mode mode;
-
-    // TODO Replace Mode with:
     private SearchCoefficients coefs;
 
     public DoubleBeam(HowToSearch hts) {
       this(hts.beamSize(), hts);
     }
 
-//    public DoubleBeam(int capacity, Mode mode) {
     public DoubleBeam(int capacity, SearchCoefficients coefs) {
       this.capacity = capacity;
       this.table = new HashMap<>((int) (capacity * 1.5 + 1));
       this.scores = new TreeSet<>();
       this.numCollapses = 0;
       this.numOffers = 0;
-//      this.mode = mode;
       this.coefs = coefs;
+    }
+
+    public SearchCoefficients getCoefficients() {
+      return coefs;
     }
 
     public void clear() {
@@ -160,7 +160,7 @@ public interface Beam<T extends StateLike> {
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
      */
     @Override
-    public void offer(T s) {
+    public boolean offer(T s) {
       numOffers++;
 //      double sc = value(s);
       double sc = coefs.forwards(s.getStepScores());
@@ -192,13 +192,16 @@ public interface Beam<T extends StateLike> {
           boolean added = scores.add(si);
           assert added;
           table.put(s, si);
+          return true;
         }
         // else no op: we've proven this state is equivalent and lower-scoring than something we know about
+        return false;
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
         BeamItem<T> si = new BeamItem<>(s, sc);
         scores.add(si);
         table.put(s, si);
+        return true;
       } else if (sc > lowerBound()) {
         // Remove the worst item on the beam.
         BeamItem<T> worst = scores.pollLast();
@@ -208,6 +211,9 @@ public interface Beam<T extends StateLike> {
         scores.add(si);
         BeamItem<T> old2 = table.put(s, si);
         assert old2 == null;
+        return true;
+      } else {
+        return false;
       }
     }
 

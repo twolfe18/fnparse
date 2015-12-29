@@ -24,17 +24,35 @@ import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.State.FI;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
+import edu.jhu.hlt.fnparse.rl.full2.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
 /** Everything that is annoying to copy in State */
 public class Info implements Serializable, HasCounts, HasRandom {
   private static final long serialVersionUID = -4529781834599237479L;
+
+  // Put SortedEggCache here or in a sub-class of Node2?
+  // newNode with type==K could create a new SortedEggCache...
+  // I call newNode many times per (t,f) value... still need to cache them somewhere outside Node2
+  private Map<IntPair, SortedEggCache> tf2SortedEggs = new HashMap<>();
+  public void putSortedEggs(int t, int f, SortedEggCache eggs) {
+    SortedEggCache old = tf2SortedEggs.put(new IntPair(t, f), eggs);
+    assert old == null : "should only be one egg cache per (t,f)";
+  }
+  /** May return null if this value hasn't been computed yet */
+  public SortedEggCache getSortedEggs(int t, int f) {
+    return tf2SortedEggs.get(new IntPair(t, f));
+  }
+
+
+
 
   Sentence sentence;
   LabelIndex label;     // may be null
@@ -77,22 +95,16 @@ public class Info implements Serializable, HasCounts, HasRandom {
     @Override public GeneralizedCoef coefModel() { return model; }
     @Override public GeneralizedCoef coefRand() { return rand; }
     @Override public int beamSize() { return beam; }
+    @Override
+    public String toString() {
+      return "(HTS model=" + model + " loss=" + loss + " rand=" + rand + ")";
+    }
   }
 
   public Info(Config config) {
     this.config = config;
     this.setDecodeCoefs();
   }
-
-//  @Override
-//  public SearchCoefficients beamCoefs() {
-//    throw new RuntimeException("implement me");
-//  }
-//
-//  @Override
-//  public SearchCoefficients consytraintCoefs() {
-//    throw new RuntimeException("implement me");
-//  }
 
   public Config getConfig() {
     return config;
@@ -188,18 +200,19 @@ public class Info implements Serializable, HasCounts, HasRandom {
   /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
   public Info setOracleCoefs() {
     // TODO This should be bigger so that it doesn't get overwhelmed by model score!
-    this.htsBeam = new HowToSearchImpl(
+    if (likeConf != null)
+      Log.warn("ignoring likeConf!");
+
+    // Beam vs Constraint objectives do not matter for oracle because we take
+    // the final state (enforcing Proj(z) = {y}) rather than the best thing on
+    // all beam.
+    // TODO Any benefit to using MAX_LOSS instead of taking from the last beam step?
+    return setSameHTS(new HowToSearchImpl(
         new GeneralizedCoef.Model(1, true),
         new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO,
-        1);
-    this.htsConstraints = new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, true),
-        new GeneralizedCoef.Loss(-1, Mode.MAX_LOSS_POW, 0.5),
-        GeneralizedCoef.ZERO,
-        1);
-    if (likeConf != null)
-      Log.warn("ignoring likeConf!");
+        1));
+
 //    if (likeConf == null) {
 //      Log.warn("likeConf is null, defaulting to MIN");
 //      coefModel = new GeneralizedCoef(-1, true);
@@ -224,32 +237,28 @@ public class Info implements Serializable, HasCounts, HasRandom {
 //        break;
 //      }
 //    }
-    return this;
   }
+
   public Info setMostViolatedCoefs() {
-    this.htsBeam = new HowToSearchImpl(
+//    GeneralizedCoef.Loss cL = new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5);
+//    GeneralizedCoef.Loss cL = new GeneralizedCoef.Loss(1, Mode.MAX_LOSS_LIN, 0.005);
+    return setSameHTS(new HowToSearchImpl(
         new GeneralizedCoef.Model(1, false),
-        new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5),
+        new GeneralizedCoef.Loss(0.1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO,
-        1);
-    this.htsConstraints = new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, false),
-        new GeneralizedCoef.Loss(1, Mode.MAX_LOSS_POW, 0.5),
-        GeneralizedCoef.ZERO,
-        1);
-    return this;
+        1));
   }
   public Info setDecodeCoefs() {
-    this.htsBeam = new HowToSearchImpl(
+    return setSameHTS(new HowToSearchImpl(
         new GeneralizedCoef.Model(1, false),
         GeneralizedCoef.ZERO,
         GeneralizedCoef.ZERO,
-        1);
-    this.htsConstraints = new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, false),
-        GeneralizedCoef.ZERO,
-        GeneralizedCoef.ZERO,
-        1);
+        1));
+  }
+
+  public Info setSameHTS(HowToSearchImpl beamAndConstraints) {
+    htsBeam = beamAndConstraints;
+    htsConstraints = beamAndConstraints;
     return this;
   }
 

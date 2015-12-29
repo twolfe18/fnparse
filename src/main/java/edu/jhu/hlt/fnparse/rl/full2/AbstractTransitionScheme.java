@@ -10,6 +10,8 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
+import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
+import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -40,9 +42,11 @@ import edu.jhu.prim.tuple.Pair;
 public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
-  public static boolean DEBUG_LOSS = true;
-  public static boolean DEBUG_ACTION_MAX_LOSS = true;
+  public static boolean DEBUG_SEARCH = false;
+  public static boolean DEBUG_LOSS = false;
+  public static boolean DEBUG_ACTION_MAX_LOSS = false;
   public static boolean DEBUG_COLLAPSE = false;
+  public static boolean DEBUG_REPLACE_NODE = false;
 
   /**
    * How to glue stuff together. Hide instantiations of LL which keep track of
@@ -71,7 +75,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    * Construct a node. Needed to be a method so that if you want to instantiate
    * a sub-class of Node2, you can do that behind this layer of indirection.
    */
-//  abstract Node2 newNode(SearchCoefficients coefs, TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
   abstract Node2 newNode(TFKS prefix, LLTVN eggs, LLTVNS pruned, LLSSP children);
 
   /**
@@ -110,8 +113,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     }
     List<LL<TVNS>> childrensSpines = new ArrayList<>();
     collectChildrensSpines(root.getRoot(), childrensSpines);
-    if (DEBUG)
-      Log.info("numSpines=" + childrensSpines.size());
     return decode(childrensSpines, root.getInfo());
   }
 
@@ -179,9 +180,24 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    * and returns a node representing the modified parent (first in spine).
    */
   public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild, Z info) {
-    if (spine == null)
+    if (DEBUG && DEBUG_REPLACE_NODE) {
+      System.out.println("searchChild.loss=" + searchChild.getLoss());
+      System.out.println("replaceChild.loss=" + replaceChild.getLoss());
+      System.out.println("searchChild.model=" + searchChild.getModelScore());
+      System.out.println("replaceChild.model=" + replaceChild.getModelScore());
+    }
+    if (spine == null) {
+      if (DEBUG && DEBUG_REPLACE_NODE)
+        System.out.println("returning b/c spine is null");
       return replaceChild;
+    }
+    if (DEBUG && DEBUG_REPLACE_NODE) {
+      System.out.println("starting:");
+      if (replaceChild.getLoss().fn > 0)
+        System.out.println("break");
+    }
     Node2 parent = spine.car();
+
     // Search and store prefix
     ArrayDeque<Node2> stack = new ArrayDeque<>();
     LLSSP newChildren = parent.children;
@@ -189,16 +205,35 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       stack.push(newChildren.car());
       newChildren = newChildren.cdr();
     }
+
+    if (DEBUG && DEBUG_REPLACE_NODE) {
+      System.out.println("parent.children.length=" + parent.children.length
+          + " stack.size=" + stack.size());
+    }
+
     // Replace or delete searchChild
     if (replaceChild == null)
       newChildren = newChildren.cdr();
     else
       newChildren = consChild(replaceChild, newChildren.cdr(), info);
+
     // Pre-pend the prefix appearing before searchChild
     while (!stack.isEmpty())
       newChildren = consChild(stack.pop(), newChildren, info);
+
     // Reconstruct the parent node
     Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
+
+    // Santity check
+    if (DEBUG && DEBUG_REPLACE_NODE) {
+      System.out.println("newParent.loss=" + newParent.getLoss());
+      System.out.println("parent.loss=" + parent.getLoss());
+      System.out.println("newParent.model=" + newParent.getModelScore());
+      System.out.println("parent.model=" + parent.getModelScore());
+    }
+    assert newParent.getLoss().fn >= parent.getLoss().fn;
+    assert newParent.getLoss().fp >= parent.getLoss().fp;
+
     return replaceNode(spine.cdr(), parent, newParent, info);
   }
 
@@ -226,14 +261,28 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     return l;
   }
 
-  public void nextStatesB(State2<Z> cur, final Beam<State2<Z>> nextBeam, final Beam<State2<Z>> constraints) {
+  public void nextStatesB(State2<Z> cur, final DoubleBeam<State2<Z>> nextBeam, final DoubleBeam<State2<Z>> constraints) {
     Beam<State2<Z>> composite = new Beam<State2<Z>>() {
       @Override
-      public void offer(State2<Z> next) {
-        if (nextBeam != null)
-          nextBeam.offer(next);
+      public boolean offer(State2<Z> next) {
+        boolean a = false;
+        if (nextBeam != null) {
+          boolean b = nextBeam.offer(next);
+          if (DEBUG && DEBUG_SEARCH) {
+            SearchCoefficients c = nextBeam.getCoefficients();
+            StepScores<?> ss = next.getStepScores();
+            System.out.println("[nextBeam offer] add=" + b
+                + " forwards=" + c.forwards(ss)
+                + " model=" + ss.getModel().forwards()
+                + " loss=" + ss.getLoss()
+                + " coefs=" + c
+                );
+          }
+          a |= b;
+        }
         if (constraints != null)
-          constraints.offer(next);
+          a |= constraints.offer(next);
+        return a;
       }
       @Override
       public Double lowerBound() {
@@ -265,7 +314,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     }
 
     Node2 wife = spine.car();
-    if (DEBUG) {
+    if (DEBUG && DEBUG_SEARCH) {
       Log.info("expanding from wife:");
       System.out.println("root score: " + root.getStepScores());
       System.out.print("wife: ");
@@ -274,9 +323,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
     // Generate new nodes
     if (wife.eggs == null) {
-      if (DEBUG) Log.info("wife.eggs is null");
+      if (DEBUG && DEBUG_SEARCH) Log.info("wife.eggs is null");
     } else {
-//      StepScores<Z> prevScores = root.getStepScores();
       Z info = root.getInfo();
 
       // Play-out the actions which lead to modified versions of this node (wife)
@@ -285,8 +333,25 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
       // Zip everything back up to get a root reflecting these modifications
       LL<Node2> momInLaw = spine.cdr();
+      if (DEBUG && DEBUG_REPLACE_NODE) Log.info("replaceNode for HATCH");
       Node2 rootHatch = replaceNode(momInLaw, wife, mother, info);
+      if (DEBUG && DEBUG_REPLACE_NODE) Log.info("replaceNode for SQUASH");
       Node2 rootSquash = replaceNode(momInLaw, wife, wife2, info);
+
+      // Santity check to ensure replaceNode worked:
+      if (DEBUG && DEBUG_REPLACE_NODE) {
+        Log.info("rootHatch.loss=" + rootHatch.getLoss());
+        Log.info("rootSquash.loss=" + rootSquash.getLoss());
+        Log.info("rootHatch.model=" + rootHatch.getModelScore());
+        Log.info("rootSquash.model=" + rootSquash.getModelScore());
+        if (rootSquash.getModelScore().forwards() < 0)
+          System.out.println("break");
+      }
+      assert rootHatch.getLoss().fn >= mother.getLoss().fn;
+      assert rootHatch.getLoss().fp >= mother.getLoss().fp;
+      assert rootSquash.getLoss().fn >= wife2.getLoss().fn;
+      assert rootSquash.getLoss().fp >= wife2.getLoss().fp;
+
       addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
       addTo.offer(new State2<Z>(rootSquash, info, "squash"));
     }
@@ -294,7 +359,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     // Recurse
     int i = 0;
     for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
-      if (DEBUG)
+      if (DEBUG && DEBUG_SEARCH)
         Log.info("recursing on child " + i);
       LL<Node2> spine2 = new LL<>(cur.car(), spine);
       nextStates(root, spine2, addTo);
@@ -307,7 +372,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
   /** Takes Info/Config from the state of this instance, see getInfo */
   public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, HowToSearch beamSearch, HowToSearch constraints) {
-    if (DEBUG)
+    if (DEBUG && DEBUG_SEARCH)
       Log.info("starting inference from state:");
 //    Z inf = s0.getStepScores().getInfo();
 
@@ -332,7 +397,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
     State2<Z> lastState = null;
     next.offer(s0); all.offer(s0);
     for (int i = 0; true; i++) {
-      if (DEBUG) Log.debug("starting iter=" + i);
+      if (DEBUG && DEBUG_SEARCH) Log.debug("starting iter=" + i);
       DoubleBeam<State2<Z>> t = cur; cur = next; next = t;
       assert next.size() == 0;
       if (DEBUG && DEBUG_COLLAPSE)
@@ -348,13 +413,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
         Log.info("collapseRate=" + next.getCollapseRate());
       }
       if (next.size() == 0) {
-        if (DEBUG) Log.info("returning because next.size==0");
+        if (DEBUG && DEBUG_SEARCH) Log.info("returning because next.size==0");
         break;
       }
     }
 
     assert lastState != null;
-    if (DEBUG) {
+    if (DEBUG && DEBUG_SEARCH) {
       Log.info("lastState:");
       System.out.println(lastState.getStepScores());
       lastState.getRoot().show(System.out);

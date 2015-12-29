@@ -93,6 +93,12 @@ public class TFKS extends LL<TVNS> {
     return (TFKS) next;
   }
 
+  /** Only sets type and value fields */
+  public TFKS dumbPrepend(int type, int value) {
+    TVNS t = new TVNS(type, value, -1, -1, 1, null, Double.NaN);
+    return new TFKS(t, this);
+  }
+
   public boolean isFull() {
     if (s >= 0) {
       assert t >= 0;
@@ -116,8 +122,7 @@ public class TFKS extends LL<TVNS> {
   public String toString() {
     return "(TFKS " + str() + " " + super.toString() + ")";
   }
-
-  public static String str(int i) {
+  private static String str(int i) {
     if (i == UNSET) return "UNSET";
     if (i == MANY_VALS) return "MANY_VALS";
     return String.valueOf(i);

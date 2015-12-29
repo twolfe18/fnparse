@@ -78,6 +78,7 @@ public final class MaxLoss {
   }
 
   public double powMaxLoss(double beta) {
+    assert this != ZERO;
     double m = numPossible - numDetermined;
     if (beta == 0)
       m = m > 0 ? 1 : 0;
@@ -99,22 +100,27 @@ public final class MaxLoss {
     // Fix for bad while maintaining good:
     // Note: even if you determine the entire sub-tree, you can't beat even a single fn
     // TODO Maybe introduce alpha * det/poss to effectively "give up" if a region is sparse enough
+    if (this == ZERO)
+      return fp + fn;
     return fp + fn + ((double) numDetermined)/numPossible;
   }
 
   /** Returns a new MaxLoss equal to this plus another FP */
   public MaxLoss fp() {
+    assert this != ZERO;
     return new MaxLoss(numPossible, numDetermined+1, fp+1, fn);
   }
 
   /** Returns a new MaxLoss equal to this plus another FN */
   public MaxLoss fn() {
+    assert this != ZERO;
     return new MaxLoss(numPossible, numDetermined+1, fp, fn+1);
   }
 
   @Override
   public String toString() {
-//    return "((N=" + numPossible + " - D=" + numDetermined + ") + fp=" + fp + " fn=" + fn + ")";
+    if (this == ZERO)
+      return "(ML zero)";
     return String.format("(ML h=%.2f min=%d max=%d N=%d D=%d fp=%d fn=%d)",
         hLoss(), minLoss(), maxLoss(), numPossible, numDetermined, fp, fn);
   }

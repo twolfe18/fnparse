@@ -39,6 +39,8 @@ import edu.jhu.prim.tuple.Pair;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
+  public static boolean DEBUG_SEARCH_FINAL_SOLN = false;
+
   private Config conf;
   private RTConfig rtConf;
   private DeterministicRolePruning drp;
@@ -153,11 +155,20 @@ public class FModel implements Serializable {
     timer.stop("update.mv");
 
     // Oracle gets the last state because that enforces the constraint that Proj(z) == {y}
-    StepScores<?> oracleSc = oracleS.get1().getStepScores();
+    State2<?> oracleSt = oracleS.get1();
+    StepScores<?> oracleSc = oracleSt.getStepScores();
     CoefsAndScoresAdjoints oracleB = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleSc);
     // MostViolated may take any prefix according to s(z) + max_{y \in Proj(z)} loss(y)
-    StepScores<?> mvSc = mvS.get2().pop().getStepScores();
+    State2<?> mvSt = mvS.get2().peek();
+    StepScores<?> mvSc = mvSt.getStepScores();
     CoefsAndScoresAdjoints mvB = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvSc);
+
+    if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
+      Log.info("oracle terminal state:");
+      oracleSt.getRoot().show(System.out);
+      Log.info("MV terminal state:");
+      mvSt.getRoot().show(System.out);
+    }
 
     assert oracleSc.getLoss().maxLoss() == 0
         : "check your pruning! if you pruned away a branch on the gold tree"
@@ -214,11 +225,13 @@ public class FModel implements Serializable {
         (mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss())
         - (oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss()));
 
-    Log.info("mv.model=" + mv.scores.getModel().forwards()
-        + " mv.loss=" + mv.scores.getLoss()
-        + " oracle.score=" + oracle.scores.getModel().forwards()
-        + " oracle.loss=" + oracle.scores.getLoss()
-        + " hinge=" + hinge);
+    if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
+      Log.info("mv.model=" + mv.scores.getModel().forwards());
+      Log.info("mv.loss=" + mv.scores.getLoss());
+      Log.info("oracle.score=" + oracle.scores.getModel().forwards());
+      Log.info("oracle.loss=" + oracle.scores.getLoss());
+      Log.info("hinge=" + hinge);
+    }
 
     return new Update() {
       @Override
@@ -272,6 +285,10 @@ public class FModel implements Serializable {
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
     State2<Info> beamLast = i.get1();
+    if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
+      Log.info("decode terminal state:");
+      beamLast.getRoot().show(System.out);
+    }
     return ts.decode(beamLast);
   }
 
@@ -287,7 +304,7 @@ public class FModel implements Serializable {
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
 
-//    AbstractTransitionScheme.DEBUG = true;
+    AbstractTransitionScheme.DEBUG = false;
 
     // Sort parses by number of frames so that small (easy to debug/see) examples come first
     List<FNParse> ys = State.getParse();
@@ -312,8 +329,13 @@ public class FModel implements Serializable {
       if (State.numItems(y) < 2)
         continue;
 
+      // We seem to be having some problems with lock-in (bad initialization) :)
+      // We can get every example right if we start from 0 weights.
+      m.ts.zeroOutWeights();
+      m.ts.flushAlphabet();
+
 //      // skipping to interesting example...
-//      if (!y.getSentence().getId().equals("FNFUTXT1271864"))
+//      if (!y.getSentence().getId().equals("FNFUTXT1272423"))
 //        continue;
 
       Log.info("working on: " + y.getId()
@@ -323,10 +345,14 @@ public class FModel implements Serializable {
 
       // Check learning
       int c = 0, clim = 5;
+      int updatesPerPredict = 5;
       double maxF1 = 0;
       for (int i = 0; i < clim * 5; i++) {
-        Update u = m.getUpdate(y);
-        u.apply(0.1);
+
+        for (int j = 0; j < updatesPerPredict; j++) {
+          Update u = m.getUpdate(y);
+          u.apply(1);
+        }
 
         // Check k upon creation of TFKS
         TFKS.dbgFrameIndex = m.getPredictInfo(y).getConfig().frPacking.getFrameIndex();
@@ -335,7 +361,11 @@ public class FModel implements Serializable {
         SentenceEval se = new SentenceEval(y, yhat);
         Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
         double f1 = r.get("ArgumentMicroF1");
-        Log.info("result: " + y.getSentence().getId() + " " + i + " " + f1);
+        Log.info("result: " + y.getSentence().getId() + " " + i
+            + " f1=" + f1
+            + " p=" + r.get("ArgumentMicroPRECISION")
+            + " r=" + r.get("ArgumentMicroRECALL"));
+//        Log.info(r);
         maxF1 = Math.max(f1, maxF1);
         if (f1 == 1) {
           c++;

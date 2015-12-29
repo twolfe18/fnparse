@@ -16,7 +16,7 @@ import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
  * (model,loss,rand) -> Adjoints, but now {@link DoubleBeam} has {@link HowToSearch}
  * which does this. I'll keep info:T around for now, but it probably isn't necessary.
  */
-public class StepScores<T> /* extends SearchCoefficients>*/ {//implements Adjoints {
+public class StepScores<T> {
 
   private final T info;
   private final Adjoints model;
@@ -39,24 +39,15 @@ public class StepScores<T> /* extends SearchCoefficients>*/ {//implements Adjoin
 
   @Override
   public String toString() {
-//    return String.format(
-//        "(Score"
-//        + " forwards=%.2f"
-//        + " forwardsH=%.2f"
-//        + " forwardsMin=%.2f"
-//        + " model=%s*%s"
-//        + " maxLoss=%s*%s"
-//        + " rand=%s*%.1f)",
-//        forwardsMax(),
-//        forwardsH(),
-//        forwardsMin(),
-//        info.coefModel().shortString(), model,
-//        info.coefLoss().shortString(), loss,
-//        info.coefRand().shortString(), rand);
-    throw new RuntimeException("implement me");
+    return String.format(
+        "(Score info=%s model=%s maxLoss=%s rand=%.2f)",
+        info, model, loss, rand);
   }
 
   public StepScores(T info, Adjoints model, MaxLoss loss, double rand) {
+    assert model != null;
+    assert loss != null;
+    assert Double.isFinite(rand) && !Double.isNaN(rand);
     this.info = info;
     this.model = model;
     this.loss = loss;

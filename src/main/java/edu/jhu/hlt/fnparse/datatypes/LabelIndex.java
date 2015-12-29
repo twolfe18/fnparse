@@ -31,6 +31,8 @@ import edu.jhu.prim.tuple.Pair;
 public class LabelIndex implements Serializable {
   private static final long serialVersionUID = -3723865423922884724L;
 
+  public static boolean DEBUG_COUNTS = false;
+
   private final FNParse y;
   private Map<Span, List<FrameInstance>> byTarget;
   private Set<Pair<Span, Frame>> fis;
@@ -63,7 +65,7 @@ public class LabelIndex implements Serializable {
    * for the transition system [T,F,K,S]
    */
   private void provideLabel(Iterable<LL<TVN>> goldYeses) {
-    if (AbstractTransitionScheme.DEBUG)
+    if (AbstractTransitionScheme.DEBUG && DEBUG_COUNTS)
       Log.info("filling in counts");
     if (counts == null)
       counts = new Counts<>();
@@ -100,7 +102,7 @@ public class LabelIndex implements Serializable {
         counts.update(i, below);
       }
     }
-    if (AbstractTransitionScheme.DEBUG) {
+    if (AbstractTransitionScheme.DEBUG && DEBUG_COUNTS) {
       for (HashableIntArray prefix : counts.getKeysSortedByCount(true)) {
         Log.info("count=" + counts.getCount(prefix) + " prefix=" + prefix);
       }

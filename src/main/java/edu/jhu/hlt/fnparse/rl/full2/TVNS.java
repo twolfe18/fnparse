@@ -30,4 +30,11 @@ public class TVNS extends TVN {
   public double getRand() {
     return rand;
   }
+
+  @Override
+  public String toString() {
+    String[] c = this.getClass().getName().split("\\.");
+    String cn = c[c.length - 1];
+    return "(" + cn + " " + Node2.typeName(type) + ":" + value + " N=" + numPossible + " G=" + goldMatching + " model=" + model + " rand=" + rand + ")";
+  }
 }

@@ -52,6 +52,12 @@ public class LLTVN extends LL<TVN> {
     return l.numGoldMachingEqZero;
   }
 
+  public static int numGoldMatchingGtZero(LLTVN l) {
+    if (l == null)
+      return 0;
+    return l.length - l.numGoldMachingEqZero;
+  }
+
   @Override
   public LLTVN cdr() {
     // Perfectly safe since there is only one constructor which proves next is a LLTVN
