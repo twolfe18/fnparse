@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Info;
@@ -10,10 +11,9 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
-import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.prim.vector.IntDoubleDenseVector;
 
 /**
  * This is the list of children (K nodes) at an F node. It maintains indices
@@ -36,6 +36,10 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
  */
 public class LLSSPatF extends LLSSP {
 
+  // TODO Move to Info or FNParseTransitionScheme?
+  public static double learningRate = 1;
+  public static double l2Reg = 1e-7;
+
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;
   public static boolean NUM_ARGS = true;
@@ -48,22 +52,34 @@ public class LLSSPatF extends LLSSP {
   // that went into scoring the actions that lead to this list.
   public final LL<Adjoints> scores;
 
-  public double learningRate = 0.05;
-  public double l2Reg = 1e-7;
-  public int dimension = 1 << 18;
-  public int updateInterval = 32;
-  public LazyL2UpdateVector weights =
-      new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
+  // A bit set of realized roles. When C/R roles are used, this is used as an
+  // O(1) lookup to determine if a C/R K valued node is licensed (else it is
+  // given score(prune)=infinity).
+  public final long realizedBaseRoles;
 
-  public LLSSPatF(Node2 item, LLSSPatF next, Info info) {
+  public LLSSPatF(Node2 item, LLSSPatF next, Info info, LazyL2UpdateVector wGlobal, int wGlobalDimension) {
     super(item, next);
     if (item.prefix.car().type != TFKS.K)
       throw new IllegalArgumentException();
-    Adjoints curFeats = newFeatures(item, next, info);
-    if (next == null)
+
+    Adjoints curFeats = newFeatures(item, next, info, wGlobal, wGlobalDimension);
+
+    IntPair kq;
+    long kMask = 0;
+    if (item.firstChildMatchesType(TFKS.S) &&
+        (kq = FNParseTransitionScheme.getRole(item.prefix, info)).second == RoleType.BASE.ordinal()) {
+      assert FNParseTransitionScheme.getArgSpan(item.prefix, info) != Span.nullSpan;
+      kMask = 1L << kq.first;
+    }
+
+    if (next == null) {
       scores = new LL<>(curFeats, null);
-    else
+      realizedBaseRoles = kMask;
+    } else {
       scores = new LL<>(curFeats, next.scores);
+      realizedBaseRoles = kMask | next.realizedBaseRoles;
+    }
+
     /*
      * LLSSP:    (sum, adj) -> (sum', adj') -> ...
      *           getScoreSum:StepScores
@@ -72,6 +88,10 @@ public class LLSSPatF extends LLSSP {
      * 1) do monkey-business associated with inserting Adjoints into item/LLSSP
      * 2) only override getScoreSum and maintain separate data structures for global features.
      */
+  }
+
+  public boolean realizedRole(int k) {
+    return (realizedBaseRoles & (1L << k)) != 0;
   }
 
   @Override
@@ -88,7 +108,7 @@ public class LLSSPatF extends LLSSP {
     return (LLSSPatF) next;
   }
 
-  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info) {
+  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, LazyL2UpdateVector wGlobal, int wGlobalDimension) {
     List<ProductIndex> feats = new ArrayList<>();
     if (ARG_LOC)
       argLocSimple(item, prev, info, feats);
@@ -96,7 +116,7 @@ public class LLSSPatF extends LLSSP {
 //      Log.warn("need to implement other global features");
     if (NUM_ARGS)
       numArgs(item, prev, info, feats);
-    return new ProductIndexAdjoints(learningRate, l2Reg, dimension, feats, weights);
+    return new ProductIndexAdjoints(learningRate, l2Reg, wGlobalDimension, feats, wGlobal);
   }
 
   private void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {

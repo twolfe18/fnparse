@@ -98,6 +98,9 @@ public class TFKS extends LL<TVNS> {
     TVNS t = new TVNS(type, value, -1, -1, 1, null, Double.NaN);
     return new TFKS(t, this);
   }
+  public TFKS dumbPrepend(TVN typeValue) {
+    return dumbPrepend(typeValue.type, typeValue.value);
+  }
 
   public boolean isFull() {
     if (s >= 0) {

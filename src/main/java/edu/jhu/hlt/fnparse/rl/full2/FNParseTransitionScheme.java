@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
@@ -26,6 +27,7 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -76,6 +78,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // Weights
   private int dimension = 1 << 20;    // for each weight vector
   private LazyL2UpdateVector wHatch, wSquash;
+  private LazyL2UpdateVector wGlobal;   // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
   private Alphabet<String> alph;
   private double learningRate = 1;
   private double l2Reg = 1e-7;
@@ -135,7 +138,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   @Override
   public LLSSP consChild(Node2 car, LLSSP cdr, Info info) {
     if (useGlobalFeats && car.getType() == TFKS.K)
-      return new LLSSPatF(car, (LLSSPatF) cdr, info);
+      return new LLSSPatF(car, (LLSSPatF) cdr, info, wGlobal, dimension);
     return new LLSSP(car, cdr);
   }
 
@@ -344,6 +347,25 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
      * only adds in dynamic features.
      */
 
+    if (useContRoles || useRefRoles) {
+      /*
+       * NOTE: However K valued eggs are sorted, every base role must come before
+       * its continuation or reference version. Additionally, the FN counts for
+       * base roles must account for their cont/ref extensions.
+       *
+       * For a minute: genEggs(S) could generate eggs for cont/ref roles.
+       * S -> (Cont|Ref) -> S'
+       * S -> Q -> R
+       * TFKS => TFKS(QR)
+       *
+       * This makes computing loss conceptually easier...
+       * Struggling to find a reason not to do it this way. I think this clearly
+       * is a better way to do it, but perhaps the only argument to be had is
+       * whether C/R roles should be predicted at all.
+       */
+      throw new RuntimeException("consider how to implement C/R roles...");
+    }
+
     // Get or generate (k,s) eggs sorted according to a static score.
     if (TFKS.safeF(momPrefix) >= 0 && sortEggsMode != SortEggsMode.NONE) {
       // Generate all (k,s) possibilities given the known (t,f)
@@ -478,6 +500,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     FrameIndex fi = info.getFrameIndex();
     return fi.getFrame(t.f);
   }
+  /**
+   * Returns (k,q) where k is in [0,frame.numRoles) and q is the ordinal for
+   * some {@link RoleType}.
+   *
+   * TODO consider other approach: rather than flatten (k,q) -> k', have more
+   * levels in the hierarchy for a C/R role and span (see note in genEggs).
+   */
+  public static IntPair getRole(TFKS t, Info info) {
+    assert t.k >= 0;
+    Frame f = getFrame(t, info);
+    int K = f.numRoles();
+    int k = t.k % K;
+    int q = t.k / K;
+    assert q < RoleType.values().length;
+    return new IntPair(k, q);
+  }
   public static Span getArgSpan(TFKS t, Info info) {
     assert t.s >= 0;
     int sentenceLen = info.getSentence().size();
@@ -490,7 +528,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     TVN egg = n.eggs.car();
     /*
      * TODO Optimize this.
-     * scoreHatch/Squash needs to return a TVNS to append to the prefix. This
+     * scoreHatch/Squash needs to return a TVNS to append to the prejfix. This
      * TVNS will have the score for the respective hatch/squash. That TVNS is
      * created in scoreHatch/Squash (above this). That TVNS should only be
      * created once. This instance is not necessary (makes the code a little
@@ -594,9 +632,33 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return addTo;
   }
 
+  /**
+   * Returns true if the next hatch/squash action from the given node is not
+   * allowed because the requisite base role has not been realized. If this is
+   * an F node (with K valued eggs), then this returns false.
+   */
+  private boolean unlicensedContOrRefRole(Node2 n, Info info) {
+    if (!useContRoles && !useRefRoles)
+      return false;
+    if (n.getType() == TFKS.F) {
+      TFKS prefixWithK = n.prefix.dumbPrepend(n.eggs.car());
+      IntPair kq = getRole(prefixWithK, info);
+      if (kq.second != RoleType.BASE.ordinal()) {
+        LLSSPatF kids = (LLSSPatF) n.children;
+        if (!kids.realizedRole(kq.first))
+          return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public TVNS scoreHatch(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing hatching
+    if (unlicensedContOrRefRole(n, info)) {
+      // Don't allow this to be hatched
+      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+    }
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
     staticFeats1(n, info, allFeats);
@@ -621,6 +683,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   @Override
   public TVNS scoreSquash(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing squashing
+    if (unlicensedContOrRefRole(n, info)) {
+      // scoreHatch will ensure that squash is chosen, but we don't want to
+      // inflate the score here since it is a deterministic action (having
+      // nothing to do with model score).
+      return egg.withScore(Adjoints.Constant.ZERO, 0);
+    }
     List<ProductIndex> allFeats = new ArrayList<>();
     dynFeats2(n, info, allFeats);
     staticFeats1(n, info, allFeats);
