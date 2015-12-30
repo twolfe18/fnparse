@@ -39,7 +39,7 @@ import edu.jhu.prim.tuple.Pair;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
-  public static boolean DEBUG_SEARCH_FINAL_SOLN = false;
+  public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
 
   private Config conf;
   private RTConfig rtConf;
@@ -50,12 +50,6 @@ public class FModel implements Serializable {
   // TODO Switch over to state2!
   private FNParseTransitionScheme ts;
   boolean useNewTS = true;
-
-  // Note: These over-ride any other settings for all Node2-related inference.
-//  public Beam.Mode scoreSearchOracle = Beam.Mode.H_LOSS;
-//  public Beam.Mode scoreSearchMV = Beam.Mode.H_LOSS;
-//  public Beam.Mode scoreConstraintOracle = Beam.Mode.H_LOSS;
-//  public Beam.Mode scoreConstraintMV = Beam.Mode.H_LOSS;
 
   public FNParseTransitionScheme getTransitionSystem() {
     return ts;
@@ -344,7 +338,7 @@ public class FModel implements Serializable {
           + " numItems=" + State.numItems(y));
 
       // Check learning
-      int c = 0, clim = 5;
+      int c = 0, clim = 25;
       int updatesPerPredict = 5;
       double maxF1 = 0;
       for (int i = 0; i < clim * 5; i++) {

@@ -12,6 +12,7 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.tutils.IntPair;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
@@ -36,9 +37,11 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  */
 public class LLSSPatF extends LLSSP {
 
+  public static boolean DEBUG = true;
+
   // TODO Move to Info or FNParseTransitionScheme?
-  public static double learningRate = 1;
-  public static double l2Reg = 1e-7;
+  public static double learningRate = 0.1;
+  public static double l2Reg = 1e-6;
 
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;
@@ -62,13 +65,14 @@ public class LLSSPatF extends LLSSP {
     if (item.prefix.car().type != TFKS.K)
       throw new IllegalArgumentException();
 
+//    Adjoints curFeats = Adjoints.Constant.ZERO;
     Adjoints curFeats = newFeatures(item, next, info, wGlobal, wGlobalDimension);
 
     IntPair kq;
     long kMask = 0;
     if (item.firstChildMatchesType(TFKS.S) &&
         (kq = FNParseTransitionScheme.getRole(item.prefix, info)).second == RoleType.BASE.ordinal()) {
-      assert FNParseTransitionScheme.getArgSpan(item.prefix, info) != Span.nullSpan;
+      assert FNParseTransitionScheme.getArgSpan(item.children.car().prefix, info) != Span.nullSpan;
       kMask = 1L << kq.first;
     }
 
@@ -124,6 +128,8 @@ public class LLSSPatF extends LLSSP {
     ProductIndex na = BasicFeatureTemplates.discretizeWidth2(1, 5, numArgs);
     addTo.add(numArgsPI.flatProd(na));
     // TODO frame conjunctions/refinements!
+    if (AbstractTransitionScheme.DEBUG && DEBUG)
+      Log.info("numArgs=" + numArgs + "\t" + na);
   }
 
   /**
@@ -149,12 +155,17 @@ public class LLSSPatF extends LLSSP {
       Span argCur = FNParseTransitionScheme.getArgSpan(itemChild.prefix, info);
       addTo.add(argLocPI.prod(true).flatProd(BasicFeatureTemplates.spanPosRel2(target, argCur)));
 
+      if (AbstractTransitionScheme.DEBUG && DEBUG)
+        Log.info("target=" + target.shortString() + " argCur=" + argCur.shortString());
+
       // Spans of existing arguments
       for (LLSSPatF cur = prev; cur != null; cur = cur.cdr()) {
         Node2 otherS = cur.car();
         if (otherS.firstChildMatchesType(TFKS.S)) {
           Span argPrev = FNParseTransitionScheme.getArgSpan(otherS.children.car().prefix, info);
           addTo.add(argLocPI.prod(false).flatProd(BasicFeatureTemplates.spanPosRel2(argPrev, argCur)));
+          if (AbstractTransitionScheme.DEBUG && DEBUG)
+            Log.info("argPrev=" + argPrev.shortString() + " argCur=" + argCur.shortString());
         } else {
           boolean prunedAll = otherS.eggs == null && otherS.pruned != null && otherS.children == null;
           // TODO make a feature for this

@@ -62,7 +62,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  public SortEggsMode sortEggsMode = SortEggsMode.BY_KS;
   // NOTE: Just take this from EperimentProperties in constructor
 
-  public boolean useGlobalFeats = false;
+  public boolean useGlobalFeats = true;
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -87,9 +87,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
-    int updateInterval = 32;
+//    int updateInterval = 32;
+    int updateInterval = 4;
     wHatch = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
     wSquash = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
+    wGlobal = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
     prefix2primeIdx = new Alphabet<>();
     this.primes = primes;
   }
@@ -105,6 +107,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public void zeroOutWeights() {
     wHatch.weights.scale(0);
     wSquash.weights.scale(0);
+    wGlobal.weights.scale(0);
   }
 
   @Override

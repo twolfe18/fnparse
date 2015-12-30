@@ -42,8 +42,7 @@ import edu.jhu.prim.tuple.Pair;
 public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
-  public static boolean DEBUG_SEARCH = false;
-  public static boolean DEBUG_LOSS = false;
+  public static boolean DEBUG_SEARCH = true;
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
   public static boolean DEBUG_COLLAPSE = false;
   public static boolean DEBUG_REPLACE_NODE = false;
@@ -458,11 +457,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
     assert lastState != null;
     if (DEBUG && DEBUG_SEARCH) {
+      StepScores<?> ss;
+
       Log.info("lastState:");
-      System.out.println(lastState.getStepScores());
+      ss = all.peek().getStepScores();
+      System.out.println("model=" + ss.getModel());
+      System.out.println("loss=" + ss.getLoss());
       lastState.getRoot().show(System.out);
+
       Log.info("bestState:");
-      System.out.println(all.peek().getStepScores());
+      ss = all.peek().getStepScores();
+      System.out.println("model=" + ss.getModel());
+      System.out.println("loss=" + ss.getLoss());
       all.peek().getRoot().show(System.out);
     }
     return new Pair<>(lastState, all);
