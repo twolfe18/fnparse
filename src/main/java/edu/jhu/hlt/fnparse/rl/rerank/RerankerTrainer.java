@@ -2000,8 +2000,8 @@ public class RerankerTrainer {
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 
   /**
-   * Reads the tab-separated format:
-   * score, ig, hx, arity, intTemplates, stringTemplates
+   * Reads the 7 column tab-separated format:
+   * score, ig, hx, selectivity, arity, intTemplates, stringTemplates
    */
   private static String getFeatureSetFromFileNewNew(String path) {
     Log.info("[main] reading from " + path);
@@ -2012,9 +2012,9 @@ public class RerankerTrainer {
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
-        if (toks.length != 6)
-          Log.warn("uknown line format: " + line);
-        features.add(toks[5]);
+        if (toks.length != 7)
+          Log.warn("unknown line format: " + line);
+        features.add(toks[6]);
       }
     } catch (Exception e) {
       throw new RuntimeException(e);

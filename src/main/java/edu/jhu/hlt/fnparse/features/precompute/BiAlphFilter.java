@@ -94,7 +94,7 @@ public class BiAlphFilter {
   }
 
   public static void main(String[] args) throws IOException {
-    ExperimentProperties config = ExperimentProperties.init(args);
+    ExperimentProperties config = ExperimentProperties.init(new String[0]);
     if (args.length < 3) {
       System.out.println("please provide:");
       System.out.println("1) an input bialph (or someting else which is tsv having the first column be a template)");
