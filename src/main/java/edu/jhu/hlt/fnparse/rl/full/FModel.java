@@ -72,6 +72,7 @@ public class FModel implements Serializable {
     conf.frPacking = new FrameRolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
 
+    // TODO Remove, this is deprecate (FNParseTS has weights now)
     int l2UpdateInterval = 32;
     conf.weights = new GeneralizedWeights(conf, null, l2UpdateInterval);
 
@@ -79,6 +80,7 @@ public class FModel implements Serializable {
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
 
+    Log.info("[main] useNewTS=" + useNewTS);
     if (useNewTS) {
       Primes primes = new Primes(ExperimentProperties.getInstance());
       CachedFeatures params = null;

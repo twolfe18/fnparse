@@ -36,12 +36,14 @@ public class ShimModel {
   private CachedFeatures cachedFeatures;
 
   public ShimModel(Reranker r, RTConfig conf) {
+    Log.info("[main] starting with Reranker");
     reranker = r;
     this.conf = conf;
     fmodel = null;
   }
 
   public ShimModel(FModel m) {
+    Log.info("[main] starting with FModel");
     reranker = null;
     conf = null;
     fmodel = m;

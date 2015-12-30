@@ -12,6 +12,8 @@ import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 
+import org.apache.commons.io.FilenameUtils;
+
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -98,6 +100,7 @@ public class BiAlphProjection {
     // 1) file -> file
     // 2) dir -> dir
     boolean append = config.getBoolean("append", false);
+    boolean mock = config.getBoolean("mock", false);
     String inFileKey = "inputFeatures";
     if (config.containsKey(inFileKey)) {
       Log.info("file->file mode");
@@ -109,6 +112,7 @@ public class BiAlphProjection {
       Log.info("dir->dir mode");
       String featuresGlob = config.getString("featuresGlob", "glob:**/*");
       File out = config.getExistingDir("outputFeatures");
+      boolean stripOutputSuf = config.getBoolean("stripOutputSuf", false);
       if (!featuresGlob.isEmpty()) {
         File featuresParent = config.getExistingDir("featuresParent");
         PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
@@ -116,9 +120,15 @@ public class BiAlphProjection {
           @Override
           public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
             if (pm.matches(path)) {
-              File of = new File(out, path.getFileName().toString());
+              String on = path.getFileName().toString();
+              if (stripOutputSuf)
+                on = FilenameUtils.removeExtension(on);
+              File of = new File(out, on);
               Log.info("mapping features: " + path.toFile().getPath() + "  ==>  " + of.getPath() + "\t" + Describe.memoryUsage());
-              m.replace(path.toFile(), of, append);
+              if (!mock)
+                m.replace(path.toFile(), of, append);
+            } else {
+              Log.info("skipping " + path.toFile().getPath());
             }
             return FileVisitResult.CONTINUE;
           }
@@ -127,6 +137,8 @@ public class BiAlphProjection {
             return FileVisitResult.CONTINUE;
           }
         });
+      } else {
+        Log.info("featureGlob is empty!");
       }
     }
     Log.info("done");

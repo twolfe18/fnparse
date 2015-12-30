@@ -379,9 +379,9 @@ public class CachedFeatures implements Serializable {
       while (true) {
         n = li.size();
         if (n < 1) {
-          Log.info("sleeping because there are no labels to give out yet");
+          Log.info("sleeping because there are no labels to give out yet, test=" + test + " dev=" + dev + " eventualSize=" + eventualSize);
           try {
-            Thread.sleep(1 * 1000);
+            Thread.sleep(2 * 1000);
           } catch (Exception e) {
             throw new RuntimeException(e);
           }
