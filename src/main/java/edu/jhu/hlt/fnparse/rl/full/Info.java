@@ -193,8 +193,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
     } else {
       assert config.trainBeamSize == config.testBeamSize;
       htsBeam.beam = config.trainBeamSize;
-      // TODO set #constraints?
-//      beamSize = config.trainBeamSize;
       this.config.rand = config.rand;
     }
     return this;
@@ -226,8 +224,9 @@ public class Info implements Serializable, HasCounts, HasRandom {
        * If I do that then some of the oracle model will lead to update away
        * from the oracle!
        */
-      double mScale = 0.01;
-      double rScale = 0.01;
+      double lossScale = 100;
+      double mScale = (1/lossScale) * 0.1;
+      double rScale = (1/lossScale);
       switch (likeConf.oracleMode) {
       case RAND_MIN:
         return setSameHTS(new HowToSearchImpl(

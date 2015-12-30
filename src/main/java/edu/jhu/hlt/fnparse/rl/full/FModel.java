@@ -167,11 +167,13 @@ public class FModel implements Serializable {
       mvSt.getRoot().show(System.out);
     }
 
-    assert oracleSc.getLoss().maxLoss() == 0
-        : "check your pruning! if you pruned away a branch on the gold tree"
-            + " then you should consider reifying the pruning process into"
-            + " learning (since its so good at handling pruning!)\n"
-            + oracleSc.getLoss();
+    if (oracleSc.getLoss().maxLoss() > 0) {
+      System.err.println("oracle has loss");
+//      Log.warn("check your pruning! if you pruned away a branch on the gold tree"
+//            + " then you should consider reifying the pruning process into"
+//            + " learning (since its so good at handling pruning!)\n"
+//            + oracleSc.getLoss());
+    }
 
     return buildUpdate(oracleB, mvB);
   }
@@ -217,7 +219,7 @@ public class FModel implements Serializable {
 
   private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv) {
 
-    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
+//    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
     final double hinge = Math.max(0,
         (mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss())
         - (oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss()));
@@ -300,6 +302,7 @@ public class FModel implements Serializable {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
+    config.put("beamSize", "4");
 
     AbstractTransitionScheme.DEBUG = false;
 
@@ -315,10 +318,7 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-//    m.rtConf.oracleMode = OracleMode.MIN;
-    m.rtConf.setBeamSize(1);
     m.rtConf.oracleMode = OracleMode.RAND_MIN;
-//    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
 
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {

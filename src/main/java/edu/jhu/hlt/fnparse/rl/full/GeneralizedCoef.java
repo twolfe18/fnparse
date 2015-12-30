@@ -79,7 +79,7 @@ public abstract class GeneralizedCoef implements Serializable {
     private static final long serialVersionUID = -6443024647803364059L;
 
     public Model(double coef, boolean updateTowards) {
-      super(coef, updateTowards ? Math.abs(coef) : -Math.abs(coef));
+      super(coef, updateTowards ? +1 : -1);
     }
 
     @Override

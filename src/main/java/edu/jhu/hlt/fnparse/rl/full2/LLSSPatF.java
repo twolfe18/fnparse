@@ -37,7 +37,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  */
 public class LLSSPatF extends LLSSP {
 
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;

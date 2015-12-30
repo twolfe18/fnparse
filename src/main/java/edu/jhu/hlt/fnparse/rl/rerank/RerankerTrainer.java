@@ -62,7 +62,6 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
-import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.Fixed;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
