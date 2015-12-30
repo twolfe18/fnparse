@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -39,7 +40,7 @@ import edu.jhu.prim.tuple.Pair;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
-  public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
+  public static boolean DEBUG_SEARCH_FINAL_SOLN = false;
 
   private Config conf;
   private RTConfig rtConf;
@@ -70,8 +71,10 @@ public class FModel implements Serializable {
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
+
     int l2UpdateInterval = 32;
     conf.weights = new GeneralizedWeights(conf, null, l2UpdateInterval);
+
     rtConf = config;
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
@@ -233,7 +236,7 @@ public class FModel implements Serializable {
         if (hinge > 0) {
           timer.start("update.apply");
           oracle.backwards(-learningRate);
-          mv.backwards(learningRate);
+          mv.backwards(-learningRate);
           timer.stop("update.apply");
         }
         return hinge;
@@ -314,6 +317,7 @@ public class FModel implements Serializable {
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
 //    m.rtConf.oracleMode = OracleMode.MIN;
     m.rtConf.setBeamSize(1);
+    m.rtConf.oracleMode = OracleMode.RAND_MIN;
 //    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
 
     m.ts.useOverfitFeatures = true;

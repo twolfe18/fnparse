@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
+import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -48,10 +49,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public static boolean DEBUG_ENCODE = true;
   public static boolean DEBUG_FEATURES = false;
   public static boolean DEBUG_GEN_EGGS = false;
+  public static boolean MAIN_LOGGING = true;
 
   public enum SortEggsMode {
     BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
-    BY_S,     // sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
+    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
     NONE,     // K is in 0..K-1 order and S is in random order (shuffled)
   }
   // NOTE: We actually don't need features which say "this is the i^th egg"
@@ -76,38 +78,65 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public boolean useOverfitFeatures = false;
 
   // Weights
-  private int dimension = 1 << 20;    // for each weight vector
-  private LazyL2UpdateVector wHatch, wSquash;
-  private LazyL2UpdateVector wGlobal;   // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
-  private Alphabet<String> alph;
-  private double learningRate = 1;
-  private double l2Reg = 1e-7;
+  private WeightsInfo wHatch, wSquash;
+  private WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
+  private Alphabet<String> alph;  // TODO Remove!
 
 
   public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
-//    int updateInterval = 32;
-    int updateInterval = 4;
-    wHatch = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
-    wSquash = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
-    wGlobal = new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval);
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    int dimension = config.getInt("hashingTrickDim", 1 << 19);
+    int updateInterval = config.getInt("updateL2Every", 8);
+    double lrLocal = config.getDouble("lrLocal", 0.1);
+    double l2Local = config.getDouble("l2Penalty", 1e-7);
+    double lrGlobal = config.getDouble("lrGlobal", 0.01);
+    double l2Global = config.getDouble("globalL2Penalty", 1e-4);
+    wHatch = new WeightsInfo(
+        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+        dimension, lrLocal, l2Local);
+    wSquash = new WeightsInfo(
+        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+        dimension, lrLocal, l2Local);
+    wGlobal = new WeightsInfo(
+        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+        dimension, lrGlobal, l2Global);
     prefix2primeIdx = new Alphabet<>();
     this.primes = primes;
+
+    sortEggsMode = config.getBoolean("forceLeftRightInference")
+        ? SortEggsMode.BY_KS : SortEggsMode.NONE;
+    Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
+
+    if (MAIN_LOGGING) {
+      // Show L2Reg/learningRate for each
+      Log.info("[main] wHatch=" + wHatch.summary());
+      Log.info("[main] wSquash=" + wSquash.summary());
+      Log.info("[main] wGlobal=" + wGlobal.summary());
+      Log.info("[main] sortEggsMode=" + sortEggsMode);
+      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
+    }
   }
 
   public void setCachedFeatures(CachedFeatures cf) {
+    if (MAIN_LOGGING)
+      Log.info("[main] setting CachedFeatures: " + cf);
     this.cachedFeatures = cf;
   }
 
   public void flushAlphabet() {
+    if (MAIN_LOGGING)
+      Log.info("[main] flushing alphabet");
     alph = new Alphabet<>();
   }
 
   public void zeroOutWeights() {
-    wHatch.weights.scale(0);
-    wSquash.weights.scale(0);
-    wGlobal.weights.scale(0);
+    if (MAIN_LOGGING)
+      Log.info("[main] zeroing weights");
+    wHatch.scale(0);
+    wSquash.scale(0);
+    wGlobal.scale(0);
   }
 
   @Override
@@ -148,7 +177,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   @Override
   public LLSSP consChild(Node2 car, LLSSP cdr, Info info) {
     if (useGlobalFeats && car.getType() == TFKS.K)
-      return new LLSSPatF(car, (LLSSPatF) cdr, info, wGlobal, dimension);
+      return new LLSSPatF(car, (LLSSPatF) cdr, info, wGlobal);
     return new LLSSP(car, cdr);
   }
 
@@ -577,13 +606,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return feats;
   }
 
-  private void dynFeats2(Node2 n, Info info, List<ProductIndex> addTo) {
+  private void dynFeats2(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
     ProductIndex base = ProductIndex.FALSE;
     for (String fs : dynFeats1(n, info)) {
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-        Log.info("wHatch[this]=" + wHatch.weights.get(i)
-          + " wSquash[this]=" + wSquash.weights.get(i)
+        Log.info("wHatch[this]=" + wHatch.get(i)
+          + " wSquash[this]=" + wSquash.get(i)
           + " fs=" + fs);
       }
       addTo.add(base.prod(i, dimension));
@@ -591,12 +620,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   /** Features from {@link CachedFeatures.Params}, returns addTo */
-  private List<ProductIndex> staticFeats1(Node2 n, Info info, List<ProductIndex> addTo) {
+  private List<ProductIndex> staticFeats1(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
     assert n.eggs != null : "hatch/squash both require an egg!";
     TVN egg = n.eggs.car();
-    return staticFeats1(egg, n.prefix, info, addTo);
+    return staticFeats1(egg, n.prefix, info, addTo, dimension);
   }
-  private List<ProductIndex> staticFeats1(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo) {
+  private List<ProductIndex> staticFeats1(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
     ProductIndex base = ProductIndex.TRUE;
     // TODO Same refactoring as in dynFeats1
     TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
@@ -608,8 +637,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //        if (AbstractTransitionScheme.DEBUG)
 //          Log.info("i=" + i + "\tfs=" + fs);
         if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-          Log.info("wHatch[this]=" + wHatch.weights.get(i)
-          + " wSquash[this]=" + wSquash.weights.get(i)
+          Log.info("wHatch[this]=" + wHatch.get(i)
+          + " wSquash[this]=" + wSquash.get(i)
           + " fs=" + fs);
         }
         addTo.add(base.prod(i, dimension));
@@ -670,18 +699,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
     }
     List<ProductIndex> allFeats = new ArrayList<>();
-    dynFeats2(n, info, allFeats);
-    staticFeats1(n, info, allFeats);
+    int d = wHatch.dimension();
+    dynFeats2(n, info, allFeats, d);
+    staticFeats1(n, info, allFeats, d);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.weights.getL2Norm(), System.identityHashCode(wHatch.weights)));
+      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
       for (ProductIndex p : allFeats) {
-        int i = p.getProdFeatureModulo(dimension);
-        double d = wHatch.weights.get(i);
-        Log.info("hatch weight=" + d + " feature=" + p);
+        int i = p.getProdFeatureModulo(d);
+        double w = wHatch.get(i);
+        Log.info("hatch weight=" + w + " feature=" + p);
       }
     }
-    ProductIndexAdjoints pi = new ProductIndexAdjoints(
-        learningRate, l2Reg, dimension, allFeats, wHatch);
+    ProductIndexAdjoints pi = new ProductIndexAdjoints(wHatch, allFeats);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
       pi.nameOfWeights = "hatch";
       pi.showUpdatesWith = alph;
@@ -700,17 +729,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
     List<ProductIndex> allFeats = new ArrayList<>();
-    dynFeats2(n, info, allFeats);
-    staticFeats1(n, info, allFeats);
+    int d = wSquash.dimension();
+    dynFeats2(n, info, allFeats, d);
+    staticFeats1(n, info, allFeats, d);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.weights.getL2Norm(), System.identityHashCode(wSquash.weights)));
+      Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.getL2Norm(), System.identityHashCode(wSquash)));
       for (ProductIndex p : allFeats) {
-        int i = p.getProdFeatureModulo(dimension);
-        double d = wSquash.weights.get(i);
-        Log.info("squash weight=" + d + " feature=" + p);
+        int i = p.getProdFeatureModulo(d);
+        double w = wSquash.get(i);
+        Log.info("squash weight=" + w + " feature=" + p);
       }
     }
-    ProductIndexAdjoints pi = new ProductIndexAdjoints(learningRate, l2Reg, dimension, allFeats, wSquash);
+    ProductIndexAdjoints pi = new ProductIndexAdjoints(wSquash, allFeats);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
       pi.nameOfWeights = "squash";
       pi.showUpdatesWith = alph;

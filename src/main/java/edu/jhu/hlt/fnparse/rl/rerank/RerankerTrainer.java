@@ -107,7 +107,6 @@ public class RerankerTrainer {
 
   public static ConcreteStanfordWrapper PARSER = null;
 
-  /** @deprecated try to use {@link GeneralizedCoef.Loss.Mode} instead */
   public static enum OracleMode {
     MAX,
     MIN,

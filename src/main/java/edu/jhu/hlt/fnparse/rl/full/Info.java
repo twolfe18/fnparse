@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -85,6 +86,9 @@ public class Info implements Serializable, HasCounts, HasRandom {
   public static class HowToSearchImpl implements HowToSearch {
     GeneralizedCoef model, loss, rand;
     int beam;
+    public HowToSearchImpl(GeneralizedCoef model, GeneralizedCoef loss, GeneralizedCoef rand) {
+      this(model, loss, rand, ExperimentProperties.getInstance().getInt("beamSize", 1));
+    }
     public HowToSearchImpl(GeneralizedCoef model, GeneralizedCoef loss, GeneralizedCoef rand, int beam) {
       this.model = model;
       this.loss = loss;
@@ -97,7 +101,12 @@ public class Info implements Serializable, HasCounts, HasRandom {
     @Override public int beamSize() { return beam; }
     @Override
     public String toString() {
-      return "(HTS model=" + model + " loss=" + loss + " rand=" + rand + ")";
+      return "(HTS"
+          + " model=" + model
+          + " loss=" + loss
+          + " rand=" + rand
+          + " beam=" + beam
+          + ")";
     }
   }
 
@@ -193,67 +202,70 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   @Override
   public String toString() {
-//    return "(Info " + showCoefs() + ")";
-    throw new RuntimeException("implement me");
+    return "(Info for " + sentence.getId()
+      + " htsBeam=" + htsBeam
+      + " htsConstraint=" + htsConstraints
+      + ")";
   }
 
-  /* NOTE: Right now Loss is inverted, so the sign is actually flipped on coefLoss */
   public Info setOracleCoefs() {
-    // TODO This should be bigger so that it doesn't get overwhelmed by model score!
-    if (likeConf != null)
-      Log.warn("ignoring likeConf!");
-
     // Beam vs Constraint objectives do not matter for oracle because we take
     // the final state (enforcing Proj(z) = {y}) rather than the best thing on
     // all beam.
     // TODO Any benefit to using MAX_LOSS instead of taking from the last beam step?
-    return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, true),
-        new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
-        GeneralizedCoef.ZERO,
-        1));
-
-//    if (likeConf == null) {
-//      Log.warn("likeConf is null, defaulting to MIN");
-//      coefModel = new GeneralizedCoef(-1, true);
-//      coefRand = new GeneralizedCoef(0, false);
-//    } else {
-//      switch (likeConf.oracleMode) {
-//      case RAND_MIN:
-//        coefModel = new GeneralizedCoef(-1, true);
-//        coefRand = new GeneralizedCoef(1, false);
-//        break;
-//      case RAND_MAX:
-//        coefModel = new GeneralizedCoef(1, true);
-//        coefRand = new GeneralizedCoef(1, false);
-//        break;
-//      case MIN:
-//        coefModel = new GeneralizedCoef(-1, true);
-//        coefRand = new GeneralizedCoef(0, false);
-//        break;
-//      case MAX:
-//        coefModel = new GeneralizedCoef(1, true);
-//        coefRand = new GeneralizedCoef(0, false);
-//        break;
-//      }
-//    }
+    if (likeConf == null) {
+      Log.warn("likeConf is null, defaulting to MIN");
+      return setSameHTS(new HowToSearchImpl(
+          new GeneralizedCoef.Model(1, true),
+          new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+          GeneralizedCoef.ZERO));
+    } else {
+      /*
+       * Problem with how I did update!
+       * I should not multiply in the sign of the search coefficient!
+       * If I do that then some of the oracle model will lead to update away
+       * from the oracle!
+       */
+      double mScale = 0.01;
+      double rScale = 0.01;
+      switch (likeConf.oracleMode) {
+      case RAND_MIN:
+        return setSameHTS(new HowToSearchImpl(
+            new GeneralizedCoef.Model(+mScale, true),
+            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Rand(rScale)));
+      case RAND_MAX:
+        return setSameHTS(new HowToSearchImpl(
+            new GeneralizedCoef.Model(-mScale, true),
+            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Rand(rScale)));
+      case MIN:
+        return setSameHTS(new HowToSearchImpl(
+            new GeneralizedCoef.Model(+mScale, true),
+            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            GeneralizedCoef.ZERO));
+      case MAX:
+        return setSameHTS(new HowToSearchImpl(
+            new GeneralizedCoef.Model(-mScale, true),
+            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            GeneralizedCoef.ZERO));
+      default:
+        throw new RuntimeException();
+      }
+    }
   }
 
   public Info setMostViolatedCoefs() {
-//    GeneralizedCoef.Loss cL = new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5);
-//    GeneralizedCoef.Loss cL = new GeneralizedCoef.Loss(1, Mode.MAX_LOSS_LIN, 0.005);
     return setSameHTS(new HowToSearchImpl(
         new GeneralizedCoef.Model(1, false),
         new GeneralizedCoef.Loss(0.1, Mode.H_LOSS, 0.5),
-        GeneralizedCoef.ZERO,
-        1));
+        GeneralizedCoef.ZERO));
   }
   public Info setDecodeCoefs() {
     return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, false),
+        new GeneralizedCoef.Model(1, true),
         GeneralizedCoef.ZERO,
-        GeneralizedCoef.ZERO,
-        1));
+        GeneralizedCoef.ZERO));
   }
 
   public Info setSameHTS(HowToSearchImpl beamAndConstraints) {

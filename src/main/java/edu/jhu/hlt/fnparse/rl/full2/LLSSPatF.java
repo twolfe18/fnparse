@@ -9,7 +9,7 @@ import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
-import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
@@ -39,10 +39,6 @@ public class LLSSPatF extends LLSSP {
 
   public static boolean DEBUG = true;
 
-  // TODO Move to Info or FNParseTransitionScheme?
-  public static double learningRate = 0.1;
-  public static double l2Reg = 1e-6;
-
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;
   public static boolean NUM_ARGS = true;
@@ -60,13 +56,12 @@ public class LLSSPatF extends LLSSP {
   // given score(prune)=infinity).
   public final long realizedBaseRoles;
 
-  public LLSSPatF(Node2 item, LLSSPatF next, Info info, LazyL2UpdateVector wGlobal, int wGlobalDimension) {
+  public LLSSPatF(Node2 item, LLSSPatF next, Info info, WeightsInfo weights) {
     super(item, next);
     if (item.prefix.car().type != TFKS.K)
       throw new IllegalArgumentException();
 
-//    Adjoints curFeats = Adjoints.Constant.ZERO;
-    Adjoints curFeats = newFeatures(item, next, info, wGlobal, wGlobalDimension);
+    Adjoints curFeats = newFeatures(item, next, info, weights);
 
     IntPair kq;
     long kMask = 0;
@@ -112,7 +107,8 @@ public class LLSSPatF extends LLSSP {
     return (LLSSPatF) next;
   }
 
-  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, LazyL2UpdateVector wGlobal, int wGlobalDimension) {
+  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, WeightsInfo globals) {
+//      LazyL2UpdateVector wGlobal, int wGlobalDimension) {
     List<ProductIndex> feats = new ArrayList<>();
     if (ARG_LOC)
       argLocSimple(item, prev, info, feats);
@@ -120,7 +116,7 @@ public class LLSSPatF extends LLSSP {
 //      Log.warn("need to implement other global features");
     if (NUM_ARGS)
       numArgs(item, prev, info, feats);
-    return new ProductIndexAdjoints(learningRate, l2Reg, wGlobalDimension, feats, wGlobal);
+    return new ProductIndexAdjoints(globals, feats);
   }
 
   private void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {

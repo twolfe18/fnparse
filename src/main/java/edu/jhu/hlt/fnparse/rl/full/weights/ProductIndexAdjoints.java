@@ -30,6 +30,10 @@ public class ProductIndexAdjoints implements Adjoints {
   public String nameOfWeights = null;
   public Alphabet<?> showUpdatesWith = null;
 
+  public ProductIndexAdjoints(WeightsInfo weights, List<ProductIndex> features) {
+    this(weights.learningRate, weights.l2Reg, weights.dimension(), features, weights.weights);
+  }
+
   public ProductIndexAdjoints(double learningRate, double l2Reg, int dimension, List<ProductIndex> features, LazyL2UpdateVector weights) {
     if (weights == null)
       throw new IllegalArgumentException();
