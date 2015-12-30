@@ -7,6 +7,11 @@ jar:
 	mkdir -p $(M2_LOCAL)
 	time mvn -Dmaven.repo.local=$(M2_LOCAL) clean compile assembly:single -DskipTests
 
+jarLocal:
+	rm -f target/*.jar
+	mkdir -p $(M2_LOCAL)
+	time mvn clean compile assembly:single -DskipTests
+
 install:
 	mvn install -DskipTests -Dgpg.skip=true
 

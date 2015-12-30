@@ -539,7 +539,8 @@ public class State implements StateLike {
     this.info = everythingElse;
   }
 
-  public State noMoreFrames(Adjoints partialScore) {
+//  public State noMoreFrames(Adjoints partialScore) {
+  public State noMoreFrames(Object partialScore) {
     assert !noMoreFrames;
     double rand = info.config.rand.nextGaussian();
 //    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
@@ -547,7 +548,8 @@ public class State implements StateLike {
     throw new RuntimeException("fixme");
   }
 
-  public State noMoreTargets(Adjoints partialScore) {
+//  public State noMoreTargets(Adjoints partialScore) {
+  public State noMoreTargets(Object partialScore) {
     assert !noMoreTargets;
     double rand = info.config.rand.nextGaussian();
 //    StepScores<Info> ss = new StepScores<>(info, partialScore, 0, 0, score.trueP, score.trueN, rand, score);
@@ -700,8 +702,8 @@ public class State implements StateLike {
 //    assert !(s.score instanceof Adjoints.Caching);
 //    s.score = new Adjoints.Caching(s.score);
     if (DEBUG) {
-      Log.debug("score: " + s.score.forwardsMax());
-      Log.debug("because: " + s.score);
+      Log.debug("score: " + s.score);
+//      Log.debug("because: " + s.score);
       System.out.println();
     }
     next.offer(s);
@@ -1395,18 +1397,19 @@ public class State implements StateLike {
     // TODO How to update firstNotDone with surgery?
     push(beam, overall, ss);
 
-    if (!info.coefLoss.iszero()) {
-      double nl = featsN.getLoss().maxLoss();
-      double sl = featsS.getLoss().maxLoss();
-      if (nl == 0 && sl == 0) {
-        // Re-run f() so that you can see what loss it picked up
-        DEBUG_F = true;
-        f(AT.NEW_K, fi, newRI, sf);
-        f(AT.STOP_K, fi, riStop, sf);
-        Log.info(fi);
-      }
-      assert nl > 0 || sl > 0;
-    }
+//    if (!info.coefLoss.iszero()) {
+//      double nl = featsN.getLoss().maxLoss();
+//      double sl = featsS.getLoss().maxLoss();
+//      if (nl == 0 && sl == 0) {
+//        // Re-run f() so that you can see what loss it picked up
+//        DEBUG_F = true;
+//        f(AT.NEW_K, fi, newRI, sf);
+//        f(AT.STOP_K, fi, riStop, sf);
+//        Log.info(fi);
+//      }
+//      assert nl > 0 || sl > 0;
+//    }
+    Log.warn("re-implement this commented out bit!");
 
     return 2;
   }
@@ -1738,13 +1741,14 @@ public class State implements StateLike {
   public static final Comparator<State> BY_SCORE_DESC = new Comparator<State>() {
     @Override
     public int compare(State o1, State o2) {
-      double s1 = o1.score.forwardsMax();
-      double s2 = o2.score.forwardsMax();
-      if (s1 > s2)
-        return -1;
-      if (s1 < s2)
-        return +1;
-      return 0;
+//      double s1 = o1.score.forwardsMax();
+//      double s2 = o2.score.forwardsMax();
+//      if (s1 > s2)
+//        return -1;
+//      if (s1 < s2)
+//        return +1;
+//      return 0;
+      throw new RuntimeException("fixme");
     }
   };
 
@@ -1833,7 +1837,7 @@ public class State implements StateLike {
    */
   public static Pair<State, DoubleBeam<State>> runInference(Info inf) {
     if (DEBUG)
-      Log.info("starting: " + inf.showCoefs());
+      Log.info("starting: " + inf);
     /*
      * TODO maximizing loss: start with loss=0 and add in deltaLoss
      * minimizing loss: start with loss=totalLoss and subtract out deltaLoss
@@ -1845,14 +1849,14 @@ public class State implements StateLike {
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-    DoubleBeam<State> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.MAX_LOSS);
+    DoubleBeam<State> all = new DoubleBeam<>(inf.htsConstraints);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-    DoubleBeam<State> cur = new DoubleBeam<>(inf.beamSize, Beam.Mode.H_LOSS);
-    DoubleBeam<State> next = new DoubleBeam<>(inf.beamSize, Beam.Mode.H_LOSS);
+    DoubleBeam<State> cur = new DoubleBeam<>(inf.htsBeam);
+    DoubleBeam<State> next = new DoubleBeam<>(inf.htsBeam);
 
     State lastState = null;
     push(next, all, s0);
@@ -1886,7 +1890,7 @@ public class State implements StateLike {
       addDummyContRefRole(y, conf.rand, RoleType.REF);
 
     Info inf = new Info(conf);
-    inf.beamSize = 1;
+//    inf.beamSize = 1;
     inf.config = conf;
     inf.setOracleCoefs();
     inf.setLabel(y);
@@ -1923,7 +1927,7 @@ public class State implements StateLike {
     Info mvInf = new Info(conf).setMostViolatedCoefs();
     Info decInf = new Info(conf).setDecodeCoefs();
     for (Info inf : Arrays.asList(oracleInf, mvInf, decInf)) {
-      inf.beamSize = 1;
+//      inf.beamSize = 1;
       inf.config = conf;
       inf.setLabel(y);
       inf.setTargetPruningToGoldLabels();
@@ -1978,8 +1982,10 @@ public class State implements StateLike {
     System.out.println("mvState=" + mvState.show());
 
     System.out.println("applying updates:");
-    oracleState.score.backwards(lr);
-    mvState.score.backwards(lr);
+//    oracleState.score.backwards(lr);
+//    mvState.score.backwards(lr);
+    if (true)
+      throw new RuntimeException("fixme");
 
     System.out.println("re-playing inference for debugging:");
     yhat = runInference2(decInf);
