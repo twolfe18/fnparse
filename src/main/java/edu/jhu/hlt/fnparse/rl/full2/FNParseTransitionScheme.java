@@ -15,6 +15,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
@@ -584,6 +585,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     assert q < RoleType.values().length;
     return new IntPair(k, q);
   }
+  public int numRoles(TFKS t, Info info) {
+    if (useContRoles || useRefRoles)
+      throw new RuntimeException("fixme");
+    Frame f = getFrame(t, info);
+    return f.numRoles();
+  }
   public static Span getArgSpan(TFKS t, Info info) {
     assert t.s >= 0;
     int sentenceLen = info.getSentence().size();
@@ -635,7 +642,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return feats;
   }
 
-  private void dynFeats2(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
+  private List<ProductIndex> dynFeats2(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
     ProductIndex base = ProductIndex.FALSE;
     for (String fs : dynFeats1(n, info)) {
       int i = alph.lookupIndex(fs, true);
@@ -646,20 +653,28 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       }
       addTo.add(base.prod(i, dimension));
     }
+    return addTo;
   }
 
-  /** Features from {@link CachedFeatures.Params}, returns addTo */
-  private List<ProductIndex> staticFeats1(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
-    assert n.eggs != null : "hatch/squash both require an egg!";
-    TVN egg = n.eggs.car();
-    return staticFeats1(egg, n.prefix, info, addTo, dimension);
+  public ProductIndexAdjoints dynFeats0(Node2 n, Info info, WeightsInfo weights) {
+    List<ProductIndex> feats = dynFeats2(n, info, new ArrayList<>(), weights.dimension());
+    ProductIndexAdjoints a = new ProductIndexAdjoints(weights, feats);
+    return a;
   }
-  private List<ProductIndex> staticFeats1(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
-    ProductIndex base = ProductIndex.TRUE;
+
+  // TODO Memoize!
+  /** Features from {@link CachedFeatures.Params}, returns addTo */
+//  private List<ProductIndex> staticFeats1(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
+//    assert n.eggs != null : "hatch/squash both require an egg!";
+//    TVN egg = n.eggs.car();
+//    return staticFeats1Compute(egg, n.prefix, info, addTo, dimension);
+//  }
+  private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
+    ProductIndex base = ProductIndex.TRUE;    // dynamic features get base=FALSE
     // TODO Same refactoring as in dynFeats1
-    TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
-    TFKS prefix = consPrefix(removeMe, motherPrefix, info);
     if (useOverfitFeatures) {
+      TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
+      TFKS prefix = consPrefix(removeMe, motherPrefix, info);
       String fs = prefix.str();
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
@@ -669,7 +684,31 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       }
       addTo.add(base.prod(i, dimension));
     } else {
-      if (prefix.isFull()) {
+
+      // What to do if this is a T-valued or F-valued egg?
+      // The only eggs which will be present are positive examples, so one indicator feature should be sufficient
+      if (motherPrefix == null || motherPrefix.car().type == TFKS.T) {
+        // I'm ok with this possible collision...
+        addTo.add(base.prod(42, dimension));
+        return addTo;
+      }
+
+      if (motherPrefix.car().type == TFKS.F) {
+        // Simple features for k-valued children
+        assert egg.type == TFKS.K;
+        int k = egg.value;
+        ProductIndex fk = base
+            .prod(motherPrefix.f, info.numFrames())
+            .prod(k, numRoles(motherPrefix, info));
+        addTo.add(fk);
+        return addTo;
+      }
+
+      TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
+      TFKS prefix = consPrefix(removeMe, motherPrefix, info);
+
+      if (motherPrefix.car().type == TFKS.K) {
+        // Rich (static) features for s-valued children
         assert cachedFeatures != null : "forget to set CachedFeatures?";
         Sentence sent = info.getSentence();
         int sentLen = sent.size();
@@ -693,10 +732,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           addTo.add(p);
           addTo.add(pp);
         }
-      } else if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-        Log.info("prefix is not complete, not firing any features!");
-        assert false : "we need these features!";
+        return addTo;
       }
+
+      throw new RuntimeException("forget a case? " + prefix);
     }
     return addTo;
   }
@@ -706,7 +745,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return staticFeats0(egg, n.prefix, info, weights);
   }
   public ProductIndexAdjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
-    List<ProductIndex> feats = staticFeats1(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
+    List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
     return new ProductIndexAdjoints(weights, feats);
   }
 
@@ -752,9 +791,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // Compute static features for the first time
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("computing static features for the first time");
-      List<ProductIndex> staticFeats = new ArrayList<>();
-      staticFeats1(n, info, staticFeats, d);
-      staticScore = new ProductIndexAdjoints(wHatch, staticFeats);
+      staticScore = staticFeats0(n, info, wHatch);
     }
 
     // Dynamic score
@@ -789,26 +826,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // nothing to do with model score).
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
-    List<ProductIndex> allFeats = new ArrayList<>();
-    int d = wSquash.dimension();
-    if (!useOverfitFeatures)
-      dynFeats2(n, info, allFeats, d);
-    staticFeats1(n, info, allFeats, d);
+    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
+    ProductIndexAdjoints staticScore = staticFeats0(n, info, wSquash);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.getL2Norm(), System.identityHashCode(wSquash)));
-      for (ProductIndex p : allFeats) {
-        int i = p.getProdFeatureModulo(d);
-        double w = wSquash.get(i);
-        Log.info("squash weight=" + w + " feature=" + p);
-      }
+      staticScore.nameOfWeights = "squashStatic";
+      staticScore.showUpdatesWith = alph;
+      dynScore.nameOfWeights = "squashDyn";
+      dynScore.showUpdatesWith = alph;
+//      Log.info("featSquashEarlyAdjoints: " + dynScore);
     }
-    ProductIndexAdjoints pi = new ProductIndexAdjoints(wSquash, allFeats);
-    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      pi.nameOfWeights = "squash";
-      pi.showUpdatesWith = alph;
-      Log.info("featSquashEarlyAdjoints: " + pi);
-    }
-    return egg.withScore(pi, info.getRandom().nextGaussian());
+    Adjoints a = new Adjoints.Sum(staticScore, dynScore);
+    return egg.withScore(a, info.getRandom().nextGaussian());
   }
 
 

@@ -49,8 +49,10 @@ public class BiAlphMerger {
     while (true) {
       int tab = input.indexOf('\t', offset);
       if (tab < 0) {
-        // Last feature doesn't have a tab after it
-        pairs.add(new IntPair(offset, input.length()));
+        if (offset < input.length()) {  // makes this robust against trailing tabs
+          // Last feature doesn't have a tab after it
+          pairs.add(new IntPair(offset, input.length()));
+        }
         break;
       }
       pairs.add(new IntPair(offset, tab));

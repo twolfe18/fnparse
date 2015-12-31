@@ -102,6 +102,10 @@ public class InformationGainProducts {
       while (tmplFeatLocs.hasNext()) {
         IntPair se = tmplFeatLocs.next();
         int colon = line.indexOf(':', se.first);
+        if (colon < 0 || colon <= se.first) {
+          throw new RuntimeException("bad format for expected "
+              + "\"template:feature\" at " + se + " in " + line);
+        }
         String ts = line.substring(se.first, colon);
         int t = Integer.parseInt(ts);
         assert t >= 0;

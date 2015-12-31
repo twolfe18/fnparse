@@ -42,7 +42,7 @@ import edu.jhu.prim.tuple.Pair;
 public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ HasCounts & HasRandom> {
 
   public static boolean DEBUG = true;
-  public static boolean DEBUG_SEARCH = true;
+  public static boolean DEBUG_SEARCH = false;
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
   public static boolean DEBUG_COLLAPSE = false;
   public static boolean DEBUG_REPLACE_NODE = false;

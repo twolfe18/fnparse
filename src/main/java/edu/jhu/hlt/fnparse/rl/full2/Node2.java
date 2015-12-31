@@ -234,6 +234,7 @@ public class Node2 implements HasStepScores, HasSig {
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
     ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel());
+    ps.printf("%sloss=%s\n", indent, getLoss());
     int i;
     if (eggs == null) {
       ps.printf("%seggs == NIL\n", indent);

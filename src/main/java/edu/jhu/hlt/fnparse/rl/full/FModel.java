@@ -163,9 +163,9 @@ public class FModel implements Serializable {
     CoefsAndScoresAdjoints mvB = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvSc);
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("oracle terminal state:");
+      Log.info("oracle terminal state: (overfit=" + ts.useOverfitFeatures + ")");
       oracleSt.getRoot().show(System.out);
-      Log.info("MV terminal state:");
+      Log.info("MV terminal state: (overfit=" + ts.useOverfitFeatures + ")");
       mvSt.getRoot().show(System.out);
     }
 
@@ -222,16 +222,16 @@ public class FModel implements Serializable {
   private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv) {
 
 //    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
-    final double hinge = Math.max(0,
-        (mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss())
-        - (oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss()));
+    double a = mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss();
+    double b = oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss();
+    final double hinge = Math.max(0, a - b);
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
       Log.info("mv.model=" + mv.scores.getModel().forwards());
       Log.info("mv.loss=" + mv.scores.getLoss());
       Log.info("oracle.score=" + oracle.scores.getModel().forwards());
       Log.info("oracle.loss=" + oracle.scores.getLoss());
-      Log.info("hinge=" + hinge);
+      Log.info("hinge=" + hinge + " = max(0, " + a + " - " + b + ")");
     }
 
     return new Update() {
@@ -287,7 +287,7 @@ public class FModel implements Serializable {
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
     State2<Info> beamLast = i.get1();
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("decode terminal state:");
+      Log.info("decode terminal state: (overfit=" + ts.useOverfitFeatures + ")");
       beamLast.getRoot().show(System.out);
     }
     return ts.decode(beamLast);
