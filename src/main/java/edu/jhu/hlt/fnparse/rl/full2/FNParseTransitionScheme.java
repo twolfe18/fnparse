@@ -811,25 +811,24 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Dynamic score
-    List<ProductIndex> dynFeats = new ArrayList<>();
-    dynFeats2(n, info, dynFeats, d);
-    ProductIndexAdjoints dynScore = new ProductIndexAdjoints(wHatch, dynFeats);
+    ProductIndexAdjoints dynScore = dynFeats0(n, info, wHatch);
+
 
     // Debugging stuff
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
       Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
-      for (ProductIndex p : dynFeats) {
-        int i = p.getProdFeatureModulo(d);
-        double w = wHatch.get(i);
-        Log.info("hatch weight=" + w + " feature=" + p);
-      }
+//      for (ProductIndex p : dynFeats) {
+//        int i = p.getProdFeatureModulo(d);
+//        double w = wHatch.get(i);
+//        Log.info("hatch weight=" + w + " feature=" + p);
+//      }
       dynScore.nameOfWeights = "hatch";
       dynScore.showUpdatesWith = alph;
       Log.info("featHatchEarlyAdjoints: " + dynScore);
     }
 
     // Wrap up static + dynamic score into TVNS
-    Adjoints score = Adjoints.sum(staticScore, dynScore);
+    Adjoints score = Adjoints.cacheIfNeeded(Adjoints.sum(staticScore, Adjoints.cacheIfNeeded(dynScore)));
     return egg.withScore(score, info.getRandom().nextGaussian());
   }
 
@@ -858,7 +857,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       dynScore.showUpdatesWith = alph;
 //      Log.info("featSquashEarlyAdjoints: " + dynScore);
     }
-    Adjoints a = new Adjoints.Sum(staticScore, dynScore);
+    Adjoints a = Adjoints.cacheIfNeeded(new Adjoints.Sum(staticScore, dynScore));
     return egg.withScore(a, info.getRandom().nextGaussian());
   }
 

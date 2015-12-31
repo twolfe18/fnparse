@@ -116,7 +116,7 @@ public class LLSSPatF extends LLSSP {
 //      Log.warn("need to implement other global features");
     if (NUM_ARGS)
       numArgs(item, prev, info, feats);
-    return new ProductIndexAdjoints(globals, feats);
+    return Adjoints.cacheIfNeeded(new ProductIndexAdjoints(globals, feats));
   }
 
   private void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {

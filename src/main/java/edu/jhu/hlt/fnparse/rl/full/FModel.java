@@ -304,7 +304,7 @@ public class FModel implements Serializable {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("beamSize", "1");
+    config.put("beamSize", "16");
     config.put("forceLeftRightInference", "false");
 
     boolean backToBasics = false;

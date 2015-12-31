@@ -13,16 +13,18 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
  */
 public class LLSSP extends LL<Node2> {
 
+  public static final boolean DISABLE_PRIMES = true;
+
   private BigInteger primeProd;
   private StepScores<?> scoreSum;
 
   public LLSSP(Node2 item, LLSSP next) {
     super(item, next);
     if (next == null) {
-      primeProd = item.getSig();
+      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig();
       scoreSum = item.getStepScores();
     } else {
-      primeProd = item.getSig().multiply(next.primeProd);
+      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig().multiply(next.primeProd);
       scoreSum = StepScores.sum(item.getStepScores(), next.scoreSum);
     }
   }

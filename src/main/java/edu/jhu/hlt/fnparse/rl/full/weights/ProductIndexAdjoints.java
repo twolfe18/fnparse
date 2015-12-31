@@ -29,6 +29,7 @@ public class ProductIndexAdjoints implements Adjoints {
   // For debugging
   public String nameOfWeights = null;
   public Alphabet<?> showUpdatesWith = null;
+  public int forwardsCount = 0;
 
   public ProductIndexAdjoints(WeightsInfo weights, List<ProductIndex> features) {
     this(weights.learningRate, weights.l2Reg, weights.dimension(), features, weights.weights);
@@ -54,6 +55,7 @@ public class ProductIndexAdjoints implements Adjoints {
 
   @Override
   public double forwards() {
+    assert (++forwardsCount) < 2 : "you probably should wrap this is a caching";
     double d = 0;
     for (int i = 0; i < featIdx.length; i++)
       d += weights.weights.get(featIdx[i]);
