@@ -2026,7 +2026,8 @@ public class State implements StateLike {
 //    CachedFeatureParamsShim features = new RandomFeatures();
     CachedFeatureParamsShim features = new CheatingFeatures().add(ys);
     int updateInterval = 1;
-    conf.weights = new GeneralizedWeights(conf, features, updateInterval);
+    int dimension = 1 << 18;
+    conf.weights = new GeneralizedWeights(conf, features, dimension, updateInterval);
     conf.weights.staticL2Penalty = 1e-3;
     conf.weights.debug = true;
 
@@ -2257,7 +2258,8 @@ public class State implements StateLike {
       this.staticFeatures = f;
     }
 
-    public GeneralizedWeights(Config config, CachedFeatureParamsShim staticFeats, int updateInterval) {
+    public GeneralizedWeights(Config config, CachedFeatureParamsShim staticFeats,
+        int dimension, int updateInterval) {
       this.config = config;
       this.staticFeatures = staticFeats;
       this.globalFeatureWeights = new WeightsPerActionType();
@@ -2288,7 +2290,7 @@ public class State implements StateLike {
        */
 
       this.updateInterval = updateInterval;
-      dim = 1 << 18;
+      dim = dimension;
       int K = config.roleDependsOnFrame ? config.frPacking.size() : 100;
 //      Log.info("D=" + D + " K=" + K + " AT.size=" + AT.values().length + " all: " + (8d * D * K * AT.values().length)/(1024d * 1024d) + " MB");
       this.at2sfWeights = new LazyL2UpdateVector[AT.values().length];

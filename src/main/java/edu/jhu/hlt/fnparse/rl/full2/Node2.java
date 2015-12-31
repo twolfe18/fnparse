@@ -7,6 +7,7 @@ import java.util.BitSet;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
+import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -229,12 +230,15 @@ public class Node2 implements HasStepScores, HasSig {
         + ")";
   }
 
-  public void show(PrintStream ps) { show(ps, ""); }
-  public void show(PrintStream ps, String indent) {
+  public void show(PrintStream ps) { show(ps, "", null); }
+  public void show(PrintStream ps, SearchCoefficients scoreCoefs) { show(ps, "", scoreCoefs); }
+  public void show(PrintStream ps, String indent, SearchCoefficients scoreCoefs) {
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
     ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel());
     ps.printf("%sloss=%s\n", indent, getLoss());
+    if (scoreCoefs != null)
+      ps.printf("%sscore=%s\tcoefs=%s\n", indent, scoreCoefs.forwards(getStepScores()), scoreCoefs);
     int i;
     if (eggs == null) {
       ps.printf("%seggs == NIL\n", indent);
@@ -257,7 +261,7 @@ public class Node2 implements HasStepScores, HasSig {
     } else {
       i = 0;
       for (LLSSP cur = children; cur != null; cur = cur.cdr(), i++) {
-        ((Node2) cur.car()).show(ps, indent);
+        ((Node2) cur.car()).show(ps, indent, scoreCoefs);
       }
     }
   }

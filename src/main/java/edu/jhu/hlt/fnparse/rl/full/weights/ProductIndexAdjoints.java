@@ -55,7 +55,7 @@ public class ProductIndexAdjoints implements Adjoints {
 
   @Override
   public double forwards() {
-    assert (++forwardsCount) < 2 : "you probably should wrap this is a caching";
+//    assert (++forwardsCount) < 4 : "you probably should wrap this is a caching";
     double d = 0;
     for (int i = 0; i < featIdx.length; i++)
       d += weights.weights.get(featIdx[i]);

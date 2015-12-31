@@ -221,6 +221,7 @@ public interface Beam<T extends StateLike> {
     public Double lowerBound() {
       if (size() == 0)
         return null;
+//      assert scores.last().score >= scores.first().score;
       return scores.last().score;
     }
 
@@ -236,6 +237,10 @@ public interface Beam<T extends StateLike> {
       BeamItem<T> r = table.remove(bi.state);
       assert r != null;
       return bi.state;
+    }
+
+    public Iterator<BeamItem<T>> iterator() {
+      return scores.descendingIterator();
     }
 
     public int size() { return scores.size(); }

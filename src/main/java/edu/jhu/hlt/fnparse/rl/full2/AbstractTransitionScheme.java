@@ -2,13 +2,18 @@ package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
+import edu.jhu.hlt.fnparse.rl.full.Beam.BeamItem;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef;
+import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.Info;
+import edu.jhu.hlt.fnparse.rl.full.Info.HowToSearchImpl;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
@@ -46,6 +51,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
   public static boolean DEBUG_COLLAPSE = false;
   public static boolean DEBUG_REPLACE_NODE = false;
+  public static boolean DEBUG_PERCEPTRON = true;
 
   public static boolean CHECK_FOR_FINITE_SCORES = false;
 
@@ -406,32 +412,30 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   }
 
   public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, Info inf) {
-    return runInference(s0, inf.htsBeam, inf.htsConstraints);
+    return runInference(s0, inf.htsBeam, inf.htsConstraints, null);
   }
 
-  /** Takes Info/Config from the state of this instance, see getInfo */
-  public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(State2<Z> s0, HowToSearch beamSearch, HowToSearch constraints) {
+  /**
+   * Takes Info/Config from the state of this instance, see getInfo
+   */
+  public Pair<State2<Z>, DoubleBeam<State2<Z>>> runInference(
+      State2<Z> s0,
+      HowToSearch beamSearch,
+      HowToSearch constraints,
+      List<State2<Z>> storeBestItemOnBeamAtEveryIter) {
     if (DEBUG && DEBUG_SEARCH)
       Log.info("starting inference from state:");
-//    Z inf = s0.getStepScores().getInfo();
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
-//    DoubleBeam<State2<Z>> all = new DoubleBeam<>(inf.numConstraints(), Beam.Mode.MAX_LOSS);
     DoubleBeam<State2<Z>> all = new DoubleBeam<>(constraints);
 
     // Objective: search objective, that is,
     // coef:      accumLoss    accumModel      accumRand
     // oracle:    -1             0              0
     // mv:        +1            +1              0
-//    Beam.Mode bsearchObj = Beam.Mode.H_LOSS;
-//    DoubleBeam<State2<Z>> cur = new DoubleBeam<>(inf.beamSize(), bsearchObj);
-//    DoubleBeam<State2<Z>> next = new DoubleBeam<>(inf.beamSize(), bsearchObj);
     DoubleBeam<State2<Z>> cur = new DoubleBeam<>(beamSearch);
     DoubleBeam<State2<Z>> next = new DoubleBeam<>(beamSearch);
-
-//    if (DEBUG && DEBUG_COLLAPSE)
-//      Log.info("beamSize=" + inf.beamSize() + " numConstraints=" + inf.numConstraints());
 
     State2<Z> lastState = null;
     next.offer(s0); all.offer(s0);
@@ -443,8 +447,11 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
         Log.info("cur.size=" + cur.size());
       for (int b = 0; cur.size() > 0; b++) {
         State2<Z> s = cur.pop();
-        if (b == 0) // best item in cur
+        if (b == 0) { // best item in cur
           lastState = s;
+          if (storeBestItemOnBeamAtEveryIter != null)
+            storeBestItemOnBeamAtEveryIter.add(s);
+        }
         nextStatesB(s, next, all);
       }
       if (DEBUG && DEBUG_COLLAPSE) {
@@ -474,6 +481,105 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       all.peek().getRoot().show(System.out);
     }
     return new Pair<>(lastState, all);
+  }
+
+  /** See section 5 of http://www.aclweb.org/anthology/N12-1015 */
+  public enum PerceptronUpdateMode {
+    EARLY,
+    HYBRID,
+    MAX_VIOLATION,
+    LATEST,
+  }
+
+  /** Returns (updateTowardsState, updateAwayState) */
+  public Pair<State2<Z>, State2<Z>> perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
+    if (DEBUG && DEBUG_SEARCH)
+      Log.info("starting perceptron update, mode=" + mode);
+
+    // Create a beam which only accepts (size 1) loss-less states
+    GeneralizedCoef.Loss loss = new GeneralizedCoef.Loss(-9999, Mode.MIN_LOSS, 1);
+    HowToSearchImpl htsOracle = new HowToSearchImpl(decoder.coefModel(), loss, decoder.coefRand());
+
+    // Keep track of the "correct answer".
+    DoubleBeam<State2<Z>> oracleCur = new DoubleBeam<>(htsOracle);
+    DoubleBeam<State2<Z>> oracleNext = new DoubleBeam<>(htsOracle);
+
+    // Decoder
+    DoubleBeam<State2<Z>> decCur = new DoubleBeam<>(decoder);
+    DoubleBeam<State2<Z>> decNext = new DoubleBeam<>(decoder);
+
+    double maxViolation = 0;
+    Pair<State2<Z>, State2<Z>> violator = null;
+
+    decNext.offer(s0);
+    oracleNext.offer(s0);
+    for (int iter = 0; true; iter++) {
+      DoubleBeam<State2<Z>> t;
+      t = decCur; decCur = decNext; decNext = t;
+      t = oracleCur; oracleCur = oracleNext; oracleNext = t;
+      assert decNext.size() == 0;
+      assert oracleNext.size() == 0;
+
+      // Expand decoder
+      while (decCur.size() > 0) {
+        State2<Z> s = decCur.pop();
+        nextStates(s, decNext);
+      }
+
+      // Expand oracle
+      while (oracleCur.size() > 0) {
+        State2<Z> s = oracleCur.pop();
+        nextStates(s, oracleNext);
+      }
+
+      if (decNext.size() == 0) {
+        // We're done
+        assert oracleNext.size() == 0;
+        break;
+      }
+      assert oracleNext.size() > 0;
+
+      if (DEBUG && DEBUG_PERCEPTRON) {
+        State2<Z> s1 = decNext.peek();
+        State2<Z> s2 = oracleNext.peek();
+        Log.info("iter=" + iter);
+        System.out.println("best item on decoder beam:");
+        s1.getRoot().show(System.out, htsOracle);
+        System.out.println("best item on oracle beam:");
+        s2.getRoot().show(System.out, htsOracle);
+      }
+
+      // Check/update violator
+      if (mode == PerceptronUpdateMode.LATEST || mode == PerceptronUpdateMode.EARLY) {
+        // Check if all zero loss items have fallen off the beam
+        Iterator<BeamItem<State2<Z>>> itr = decNext.iterator();
+        boolean fellOff = true;
+        while (itr.hasNext() && fellOff) {
+          State2<Z> s = itr.next().state;
+          if (s.getStepScores().getLoss().noLoss())
+            fellOff = false;
+        }
+        if (fellOff)
+          violator = new Pair<>(oracleNext.peek(), decNext.peek());
+        if (mode == PerceptronUpdateMode.EARLY)
+          break;
+      } else if (mode == PerceptronUpdateMode.MAX_VIOLATION) {
+        State2<Z> z1 = decNext.peek();
+        State2<Z> z2 = oracleNext.peek();
+        double s1 = z1.getStepScores().getModel().forwards();
+        double s2 = z2.getStepScores().getModel().forwards();
+        if (DEBUG && DEBUG_PERCEPTRON)
+          Log.info("decBest.model=" + s1 + " oracleBest.model=" + s2);
+        double violation = Math.max(0, s1 - s2);
+        if (violation > maxViolation) {
+          maxViolation = violation;
+          violator = new Pair<>(z2, z1);
+        }
+      } else {
+        throw new RuntimeException("implement me");
+      }
+    }
+    return violator;
   }
 
   public Node2 genRootNode(Z info) {

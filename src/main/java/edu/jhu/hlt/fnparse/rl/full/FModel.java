@@ -16,11 +16,11 @@ import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
-import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
@@ -46,15 +46,11 @@ public class FModel implements Serializable {
   private RTConfig rtConf;
   private DeterministicRolePruning drp;
   private MultiTimer.ShowPeriodically timer;
-  private CachedFeatures cachedFeatures;
-
-  // TODO Switch over to state2!
+//  private CachedFeatures cachedFeatures;
   private FNParseTransitionScheme ts;
-  boolean useNewTS = true;
 
-  public FNParseTransitionScheme getTransitionSystem() {
-    return ts;
-  }
+  // LH's max violation
+  private boolean maxViolation;
 
   public FModel(
       RTConfig config,
@@ -68,24 +64,28 @@ public class FModel implements Serializable {
       fi = FrameIndex.getFrameNet();
     }
 
+    maxViolation = p.getBoolean("perceptron");
+
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
 
     // TODO Remove, this is deprecate (FNParseTS has weights now)
-    int l2UpdateInterval = 32;
-    conf.weights = new GeneralizedWeights(conf, null, l2UpdateInterval);
+//    int l2UpdateInterval = 32;
+//    int dimension = 1;  // Not using the weights in here, don't waste space
+//    conf.weights = new GeneralizedWeights(conf, null, dimension, l2UpdateInterval);
 
     rtConf = config;
     drp = new DeterministicRolePruning(pruningMode, null, null);
     timer = new MultiTimer.ShowPeriodically(15);
 
-    Log.info("[main] useNewTS=" + useNewTS);
-    if (useNewTS) {
-      Primes primes = new Primes(ExperimentProperties.getInstance());
-      CachedFeatures params = null;
-      ts = new FNParseTransitionScheme(params, primes);
-    }
+    Primes primes = new Primes(ExperimentProperties.getInstance());
+    CachedFeatures params = null;
+    ts = new FNParseTransitionScheme(params, primes);
+  }
+
+  public FNParseTransitionScheme getTransitionSystem() {
+    return ts;
   }
 
   public void setConfig(Config c) {
@@ -98,21 +98,20 @@ public class FModel implements Serializable {
 
   // Needed unless you setup syntactic parsers
   public void setCachedFeatures(CachedFeatures cf) {
-    cachedFeatures = cf;
+//    cachedFeatures = cf;
     drp.cachedFeatures = cf;
-    conf.weights.setStaticFeatures(cf.params);
-    if (useNewTS)
-      ts.setCachedFeatures(cf);
+//    conf.weights.setStaticFeatures(cf.params);
+    ts.setCachedFeatures(cf);
   }
 
   private Pair<Info, Info> getOracleAndMvInfo(FNParse y) {
     timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
-    if (useNewTS)
+//    if (useNewTS)
       oracleInf.setLabel(y, ts);
-    else
-      oracleInf.setLabel(y);
+//    else
+//      oracleInf.setLabel(y);
     mvInf.copyLabel(oracleInf);
     oracleInf.setTargetPruningToGoldLabels(mvInf);
     timer.stop("update.setup.other");
@@ -126,16 +125,35 @@ public class FModel implements Serializable {
   }
 
   public Update getUpdate(FNParse y) {
-    if (useNewTS)
+//    if (useNewTS)
       return getUpdateNew(y);
-    else
-      return getUpdateOld(y);
+//    else
+//      return getUpdateOld(y);
   }
 
   public Update getUpdateNew(FNParse y) {
     Pair<Info, Info> ormv = getOracleAndMvInfo(y);
     Info oracleInf = ormv.get1();
     Info mvInf = ormv.get2();
+
+    if (maxViolation) {
+      timer.start("update.perceptron");
+      ts.flushPrimes();
+      HowToSearch decoder = getPredictInfo(y, true).htsBeam;
+      State2<Info> s0 = ts.genRootState(oracleInf);
+      Pair<State2<Info>, State2<Info>> goodBad = ts.perceptronUpdate(s0, decoder, PerceptronUpdateMode.MAX_VIOLATION);
+      Update u;
+      if (goodBad == null) {
+        // No violator!
+        u = Update.NONE;
+      } else {
+        CoefsAndScoresAdjoints good = new CoefsAndScoresAdjoints(decoder, goodBad.get1().getStepScores());
+        CoefsAndScoresAdjoints bad = new CoefsAndScoresAdjoints(decoder, goodBad.get2().getStepScores());
+        u = buildUpdate(good, bad);
+      }
+      timer.stop("update.perceptron");
+      return u;
+    }
 
     timer.start("update.oracle");
     if (AbstractTransitionScheme.DEBUG)
@@ -178,23 +196,6 @@ public class FModel implements Serializable {
     }
 
     return buildUpdate(oracleB, mvB);
-  }
-
-  public static class CoefsAndScoresAdjoints implements edu.jhu.hlt.tutils.scoring.Adjoints {
-    private SearchCoefficients coefs;
-    private StepScores<?> scores;
-    public CoefsAndScoresAdjoints(SearchCoefficients coefs, StepScores<?> scores) {
-      this.coefs = coefs;
-      this.scores = scores;
-    }
-    @Override
-    public double forwards() {
-      return coefs.forwards(scores);
-    }
-    @Override
-    public void backwards(double dErr_dForwards) {
-      coefs.backwards(scores, dErr_dForwards);
-    }
   }
 
   public Update getUpdateOld(FNParse y) {
@@ -252,15 +253,32 @@ public class FModel implements Serializable {
     };
   }
 
+  public static class CoefsAndScoresAdjoints implements edu.jhu.hlt.tutils.scoring.Adjoints {
+    private SearchCoefficients coefs;
+    private StepScores<?> scores;
+    public CoefsAndScoresAdjoints(SearchCoefficients coefs, StepScores<?> scores) {
+      this.coefs = coefs;
+      this.scores = scores;
+    }
+    @Override
+    public double forwards() {
+      return coefs.forwards(scores);
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      coefs.backwards(scores, dErr_dForwards);
+    }
+  }
+
   public Info getPredictInfo(FNParse y) {
     return getPredictInfo(y, false);
   }
   public Info getPredictInfo(FNParse y, boolean oracleArgPruning) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
-    if (useNewTS)
+//    if (useNewTS)
       decInf.setLabel(y, ts);
-    else
-      decInf.setLabel(y);
+//    else
+//      decInf.setLabel(y);
     decInf.setTargetPruningToGoldLabels();
     if (oracleArgPruning) {
       decInf.setArgPruningUsingGoldLabelWithNoise();
@@ -272,10 +290,10 @@ public class FModel implements Serializable {
   }
 
   public FNParse predict(FNParse y) {
-    if (useNewTS)
+//    if (useNewTS)
       return predictNew(y);
-    else
-      return predictOld(y);
+//    else
+//      return predictOld(y);
   }
 
   public FNParse predictNew(FNParse y) {
@@ -304,7 +322,7 @@ public class FModel implements Serializable {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("beamSize", "16");
+    config.put("beamSize", "1");
     config.put("forceLeftRightInference", "false");
 
     boolean backToBasics = false;
@@ -322,6 +340,7 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+    m.maxViolation = false;
     m.rtConf.oracleMode = OracleMode.MIN;
 
     m.ts.useOverfitFeatures = true;
