@@ -1366,7 +1366,16 @@ public class RerankerTrainer {
 
       // Setup the params
       mt.start("params");
-      int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
+      // FModel does not use the weights in CachedFeature.Params, which take up a lot of
+      // space and make memory usage high and serialization slow. If we are using FModel,
+      // use a dummy/small amount of space.
+      int dimension;
+      if (config.getBoolean("useFModel", false)) {
+        Log.info("[main] since we're using FModel, making CachedFeatures.Params tiny!");
+        dimension = 1;
+      } else {
+        dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
+      }
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
       int updateL2Every = config.getInt("cachedFeatures.updateL2Every", 32);
