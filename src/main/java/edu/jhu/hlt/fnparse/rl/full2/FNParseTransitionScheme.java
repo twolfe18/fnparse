@@ -15,7 +15,6 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
-import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
@@ -64,6 +63,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public SortEggsMode sortEggsMode = SortEggsMode.NONE;
 //  public SortEggsMode sortEggsMode = SortEggsMode.BY_KS;
   // NOTE: Just take this from EperimentProperties in constructor
+
+  /*
+   * Automatically hatches any nodes which are not s-valued.
+   * Since all the s-valued eggs can be pruned, this does not imply that we have
+   * to add any items to the final prediction. The reason for doing this is that
+   * there is some difficulty in doing MV search when you can prune non-leaf
+   * nodes.
+   * Operationally, for a non-leaf node n, this makes scoreHatch(n)=Constant(0)
+   * and scoreSquash(n)=Constant(-inf).
+   */
+  public boolean disallowNonLeafPruning = true;
 
   public boolean useGlobalFeats = true;
 
@@ -771,8 +781,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public TVNS scoreHatch(Node2 n, Info info) {
-
     TVN egg = n.eggs.car(); // what we're featurizing hatching
+
+    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+      if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
+        Log.info("immediately requiring hatch of egg: " + egg);
+      return egg.withScore(Adjoints.Constant.ZERO, 0);
+    }
+
     if (unlicensedContOrRefRole(n, info)) {
       // Don't allow this to be hatched
       return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
@@ -820,6 +836,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   @Override
   public TVNS scoreSquash(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing squashing
+
+    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+      if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
+        Log.info("immediately preventing squash of egg: " + egg);
+      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+    }
+
     if (unlicensedContOrRefRole(n, info)) {
       // scoreHatch will ensure that squash is chosen, but we don't want to
       // inflate the score here since it is a deterministic action (having

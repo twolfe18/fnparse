@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+
 public interface SearchCoefficients {
   public GeneralizedCoef coefLoss();
   public GeneralizedCoef coefModel();
@@ -11,7 +13,7 @@ public interface SearchCoefficients {
     double c = coefLoss().forwards(scores);
     double d = a + b + c;
     assert !Double.isNaN(d);
-    assert Double.isFinite(d);
+    assert !AbstractTransitionScheme.CHECK_FOR_FINITE_SCORES || Double.isFinite(d);
     return d;
   }
 

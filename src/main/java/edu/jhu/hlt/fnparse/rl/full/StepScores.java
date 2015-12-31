@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
 
@@ -47,7 +48,8 @@ public class StepScores<T> {
   public StepScores(T info, Adjoints model, MaxLoss loss, double rand) {
     assert model != null;
     assert loss != null;
-    assert Double.isFinite(rand) && !Double.isNaN(rand);
+    assert !AbstractTransitionScheme.CHECK_FOR_FINITE_SCORES || Double.isFinite(rand);
+    assert !Double.isNaN(rand);
     this.info = info;
     this.model = model;
     this.loss = loss;
