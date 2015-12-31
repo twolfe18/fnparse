@@ -328,6 +328,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    * by prefix.
    */
   private int subtreeSize(int type, int value, TFKS prefix, Info info) {
+    assert (type == 0 && prefix == null) || (type > 0 && prefix.dbgGetValue(type - 1) >= 0)
+      : "type=" + type + " prefix=" + prefix;
     int sentLen = info.getSentence().size();
     int n = 0;
     if (type == TFKS.T) {
@@ -441,8 +443,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
               TFKS.K, k, possK, goldK, primeK, modelK, randK)));
           for (Span argSpan : possArgSpans) {
             int s = Span.encodeSpan(argSpan, sentLen);
-            int possS = subtreeSize(TFKS.S, s, momPrefix, info);
-            int goldS = info.getLabel().getCounts2(TFKS.S, s, momPrefix);
+            int possS = subtreeSize(TFKS.S, s, prefixK, info);
+            int goldS = info.getLabel().getCounts2(TFKS.S, s, prefixK);
             long primeS = primeFor(TFKS.S, s);
 
             /*
@@ -460,6 +462,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
               staticScore.showUpdatesWith = alph;
               Log.info("staticScore for egg: " + staticScore);
             }
+
+//            if (AbstractTransitionScheme.DEBUG) {
+//              System.out.println("possible problem with prefix:");
+//              System.out.println("momPrefix=" + momPrefix);
+//              System.out.println("goldS=" + goldS);
+//              System.out.println("possS=" + possS);
+//              assert possS >= goldS;
+//            }
 
             double randS = rand.nextGaussian();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);

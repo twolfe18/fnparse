@@ -337,7 +337,7 @@ public class FModel implements Serializable {
       m.ts.flushAlphabet();
 
 //      // skipping to interesting example...
-//      if (!y.getSentence().getId().equals("FNFUTXT1272423"))
+//      if (!y.getSentence().getId().equals("FNFUTXT1272003"))
 //        continue;
 
       Log.info("working on: " + y.getId()

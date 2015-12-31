@@ -88,6 +88,14 @@ public class TFKS extends LL<TVNS> {
     }
   }
 
+  public int dbgGetValue(int type) {
+    if (item.type == type)
+      return item.value;
+    if (next == null)
+      return -1;
+    return cdr().dbgGetValue(type);
+  }
+
   @Override
   public TFKS cdr() {
     return (TFKS) next;

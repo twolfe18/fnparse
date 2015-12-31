@@ -21,7 +21,6 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.Timer;
 
 /**
  * This is a shim designed to replace {@link Reranker}.
