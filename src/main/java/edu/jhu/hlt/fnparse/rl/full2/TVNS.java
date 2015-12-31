@@ -35,6 +35,7 @@ public class TVNS extends TVN {
   public String toString() {
     String[] c = this.getClass().getName().split("\\.");
     String cn = c[c.length - 1];
-    return "(" + cn + " " + Node2.typeName(type) + ":" + value + " N=" + numPossible + " G=" + goldMatching + " model=" + model + " rand=" + rand + ")";
+    String r = String.format("%.2f", rand);
+    return "(" + cn + " " + Node2.typeName(type) + ":" + value + " N=" + numPossible + " G=" + goldMatching + " model=" + model + " rand=" + r+ ")";
   }
 }

@@ -31,7 +31,7 @@ import edu.jhu.prim.tuple.Pair;
 public class LabelIndex implements Serializable {
   private static final long serialVersionUID = -3723865423922884724L;
 
-  public static boolean DEBUG_COUNTS = false;
+  public static boolean DEBUG_COUNTS = true;
 
   private final FNParse y;
   private Map<Span, List<FrameInstance>> byTarget;

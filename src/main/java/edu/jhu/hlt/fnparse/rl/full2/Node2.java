@@ -87,8 +87,16 @@ public class Node2 implements HasStepScores, HasSig {
         + LLSSP.sumPossible(children);
     // TODO Just use TFKS.numPossible?
     if (prefix != null) {
+//      for (TFKS cur = prefix; cur != null; cur = cur.cdr()) {
+//        System.err.println(cur.car());
+//      }
+//      System.err.println("eggs.poss=" + LLTVN.sumPossible(eggs));
+//      System.err.println("pruned.poss=" + LLTVN.sumPossible(pruned));
+//      System.err.println("children.poss=" + LLSSP.sumPossible(children));
       assert possible == prefix.car().numPossible
-        : "possible=" + possible + " prefix.car.possible=" + prefix.car().numPossible;
+        : "possible=" + possible
+        + " prefix.car.possible=" + prefix.car().numPossible;
+//        + " prefix=" + prefix;
     }
 
     int det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
@@ -225,6 +233,7 @@ public class Node2 implements HasStepScores, HasSig {
   public void show(PrintStream ps, String indent) {
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
+    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel());
     int i;
     if (eggs == null) {
       ps.printf("%seggs == NIL\n", indent);

@@ -40,7 +40,7 @@ import edu.jhu.prim.tuple.Pair;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
-  public static boolean DEBUG_SEARCH_FINAL_SOLN = false;
+  public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
 
   private Config conf;
   private RTConfig rtConf;
@@ -304,9 +304,11 @@ public class FModel implements Serializable {
 
   public static void main(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("beamSize", "4");
+    config.put("beamSize", "1");
+    config.put("forceLeftRightInference", "false");
 
-    AbstractTransitionScheme.DEBUG = false;
+    boolean backToBasics = false;
+    AbstractTransitionScheme.DEBUG = false || backToBasics;
 
     // Sort parses by number of frames so that small (easy to debug/see) examples come first
     List<FNParse> ys = State.getParse();
@@ -320,7 +322,7 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    m.rtConf.oracleMode = OracleMode.RAND_MIN;
+    m.rtConf.oracleMode = OracleMode.MIN;
 
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
@@ -342,6 +344,15 @@ public class FModel implements Serializable {
           + " crRoles=" + y.hasContOrRefRoles()
           + " numFI=" + y.numFrameInstances()
           + " numItems=" + State.numItems(y));
+
+      if (backToBasics) {
+        Update u = m.getUpdate(y);
+        u.apply(1);
+//        m.getUpdate(y).apply(1);
+//        m.getUpdate(y).apply(1);
+        m.predict(y);
+        return;
+      }
 
       // Check learning
       int c = 0, clim = 25;

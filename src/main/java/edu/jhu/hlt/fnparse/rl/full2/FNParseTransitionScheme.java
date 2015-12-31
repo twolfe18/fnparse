@@ -53,7 +53,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public enum SortEggsMode {
     BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
-    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
+//    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
     NONE,     // K is in 0..K-1 order and S is in random order (shuffled)
   }
   // NOTE: We actually don't need features which say "this is the i^th egg"
@@ -106,7 +106,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.primes = primes;
 
     sortEggsMode = config.getBoolean("forceLeftRightInference")
-        ? SortEggsMode.BY_KS : SortEggsMode.NONE;
+        ? SortEggsMode.NONE : SortEggsMode.BY_KS;
     Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
 
     if (MAIN_LOGGING) {
@@ -406,7 +406,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Get or generate (k,s) eggs sorted according to a static score.
-    if (TFKS.safeF(momPrefix) >= 0 && sortEggsMode != SortEggsMode.NONE) {
+//    if (TFKS.safeF(momPrefix) >= 0 && sortEggsMode != SortEggsMode.NONE) {
+    if (momPrefix != null && momPrefix.car().type == TFKS.F && sortEggsMode != SortEggsMode.NONE) {
+      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+        Log.info("using SortedEggCache to pre-compute static scores for eggs and sort them");
       // Generate all (k,s) possibilities given the known (t,f)
       SortedEggCache eggs = info.getSortedEggs(momPrefix.t, momPrefix.f);
       if (eggs == null) {
@@ -424,8 +427,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           int possK = subtreeSize(TFKS.K, k, momPrefix, info);
           int goldK = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
           long primeK = primeFor(TFKS.K, k);
-          Adjoints modelK = Adjoints.Constant.ZERO; // This is computed as max_s score(k,s)
-          double randK = 0;
+
+          ProductIndexAdjoints modelK = staticFeats0(
+              new TVN(TFKS.K, k, -1, -1, 1), momPrefix, info, wHatch);
+          if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+            modelK.nameOfWeights = "pre-computed genEggs(K) features";
+            modelK.showUpdatesWith = alph;
+          }
+
+          double randK = info.getRandom().nextGaussian();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
           egF.add(new Pair<>(prefixK, new EggWithStaticScore(
               TFKS.K, k, possK, goldK, primeK, modelK, randK)));
@@ -435,12 +445,21 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
             int goldS = info.getLabel().getCounts2(TFKS.S, s, momPrefix);
             long primeS = primeFor(TFKS.S, s);
 
-            // TODO Can we use wHatch here? What about prune?
-//            TVN egg = new TVN(TFKS.S, s, -1, -1, 1);
-//            List<ProductIndex> staticFeats = staticFeats1(egg, prefixK, info, new ArrayList<>());
-//            ProductIndexAdjoints staticScore = new ProductIndexAdjoints(
-//                learningRate, l2Reg, dimension, staticFeats, wHatch);
-            Adjoints staticScore = Adjoints.Constant.ZERO;
+            /*
+             * Sort eggs by hatch score?
+             * Sort eggs by hatch-squash meta score?
+             * Lets try hatch first, and if I decide to change it later, I at least have the start of that impl
+             *
+             * NOTE: In scoreHatch, I need to catch these features!
+             */
+            ProductIndexAdjoints staticScore = staticFeats0(
+                new TVN(TFKS.S, s, -1, -1, 1), prefixK, info, wHatch);
+
+            if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+              staticScore.nameOfWeights = "pre-computed genEggs(S) features";
+              staticScore.showUpdatesWith = alph;
+              Log.info("staticScore for egg: " + staticScore);
+            }
 
             double randS = rand.nextGaussian();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
@@ -630,19 +649,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     // TODO Same refactoring as in dynFeats1
     TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
     TFKS prefix = consPrefix(removeMe, motherPrefix, info);
-    if (prefix.isFull()) {
-      if (useOverfitFeatures) {
-        String fs = prefix.str();
-        int i = alph.lookupIndex(fs, true);
-//        if (AbstractTransitionScheme.DEBUG)
-//          Log.info("i=" + i + "\tfs=" + fs);
-        if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-          Log.info("wHatch[this]=" + wHatch.get(i)
-          + " wSquash[this]=" + wSquash.get(i)
-          + " fs=" + fs);
-        }
-        addTo.add(base.prod(i, dimension));
-      } else {
+    if (useOverfitFeatures) {
+      String fs = prefix.str();
+      int i = alph.lookupIndex(fs, true);
+      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+        Log.info("wHatch[this]=" + wHatch.get(i)
+        + " wSquash[this]=" + wSquash.get(i)
+        + " fs=" + fs);
+      }
+      addTo.add(base.prod(i, dimension));
+    } else {
+      if (prefix.isFull()) {
         assert cachedFeatures != null : "forget to set CachedFeatures?";
         Sentence sent = info.getSentence();
         int sentLen = sent.size();
@@ -666,9 +683,21 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           addTo.add(p);
           addTo.add(pp);
         }
+      } else if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+        Log.info("prefix is not complete, not firing any features!");
+        assert false : "we need these features!";
       }
     }
     return addTo;
+  }
+  public ProductIndexAdjoints staticFeats0(Node2 n, Info info, WeightsInfo weights) {
+    assert n.eggs != null : "hatch/squash both require an egg!";
+    TVN egg = n.eggs.car();
+    return staticFeats0(egg, n.prefix, info, weights);
+  }
+  public ProductIndexAdjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
+    List<ProductIndex> feats = staticFeats1(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
+    return new ProductIndexAdjoints(weights, feats);
   }
 
   /**
@@ -693,30 +722,52 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public TVNS scoreHatch(Node2 n, Info info) {
+
     TVN egg = n.eggs.car(); // what we're featurizing hatching
     if (unlicensedContOrRefRole(n, info)) {
       // Don't allow this to be hatched
       return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
     }
-    List<ProductIndex> allFeats = new ArrayList<>();
+
+    // Static score
+    Adjoints staticScore;
     int d = wHatch.dimension();
-    dynFeats2(n, info, allFeats, d);
-    staticFeats1(n, info, allFeats, d);
+    if (egg instanceof EggWithStaticScore) {
+      // Recover the static features which were computed in genEggs
+      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+        Log.info("recovering static features from EggWithStaticScore");
+      EggWithStaticScore eggSS = (EggWithStaticScore) egg;
+      staticScore = eggSS.getModel();
+    } else {
+      // Compute static features for the first time
+      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+        Log.info("computing static features for the first time");
+      List<ProductIndex> staticFeats = new ArrayList<>();
+      staticFeats1(n, info, staticFeats, d);
+      staticScore = new ProductIndexAdjoints(wHatch, staticFeats);
+    }
+
+    // Dynamic score
+    List<ProductIndex> dynFeats = new ArrayList<>();
+    dynFeats2(n, info, dynFeats, d);
+    ProductIndexAdjoints dynScore = new ProductIndexAdjoints(wHatch, dynFeats);
+
+    // Debugging stuff
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
       Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
-      for (ProductIndex p : allFeats) {
+      for (ProductIndex p : dynFeats) {
         int i = p.getProdFeatureModulo(d);
         double w = wHatch.get(i);
         Log.info("hatch weight=" + w + " feature=" + p);
       }
+      dynScore.nameOfWeights = "hatch";
+      dynScore.showUpdatesWith = alph;
+      Log.info("featHatchEarlyAdjoints: " + dynScore);
     }
-    ProductIndexAdjoints pi = new ProductIndexAdjoints(wHatch, allFeats);
-    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      pi.nameOfWeights = "hatch";
-      pi.showUpdatesWith = alph;
-      Log.info("featHatchEarlyAdjoints: " + pi);
-    }
-    return egg.withScore(pi, info.getRandom().nextGaussian());
+
+    // Wrap up static + dynamic score into TVNS
+    Adjoints score = Adjoints.sum(staticScore, dynScore);
+    return egg.withScore(score, info.getRandom().nextGaussian());
   }
 
   @Override
@@ -730,7 +781,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
     List<ProductIndex> allFeats = new ArrayList<>();
     int d = wSquash.dimension();
-    dynFeats2(n, info, allFeats, d);
+    if (!useOverfitFeatures)
+      dynFeats2(n, info, allFeats, d);
     staticFeats1(n, info, allFeats, d);
     if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
       Log.info(String.format("wSquash.l2=%.3f weights=%s", wSquash.getL2Norm(), System.identityHashCode(wSquash)));

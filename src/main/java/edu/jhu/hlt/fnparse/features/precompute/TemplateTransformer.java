@@ -18,6 +18,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.prim.map.IntIntHashMap;
 
 /**
@@ -226,7 +227,8 @@ public class TemplateTransformer {
      */
     @Override
     public void run(File features) throws IOException {
-      int hc = features.getPath().hashCode();
+//      int hc = features.getPath().hashCode();
+      int hc = Hash.fileName(features);
       int fm = Math.floorMod(hc, numShards);
       Log.info("hc=" + hc + " fm=" + fm + " shard=" + shard + " numShards=" + numShards);
       assert fm >= 0 && fm < numShards;
