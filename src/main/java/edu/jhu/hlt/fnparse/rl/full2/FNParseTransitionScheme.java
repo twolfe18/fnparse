@@ -84,6 +84,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
 
+//  // Higher values will raise the score of all (legal) hatches
+//  public Adjoints recallBias = new Adjoints.Constant(0);
+
   // Features
   private CachedFeatures cachedFeatures;
   public boolean useOverfitFeatures = false;
@@ -830,7 +833,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     if (unlicensedContOrRefRole(n, info)) {
       // Don't allow this to be hatched
-      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+//      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+      return null;
     }
 
     // Static score
@@ -866,7 +870,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Wrap up static + dynamic score into TVNS
-    Adjoints score = Adjoints.cacheIfNeeded(Adjoints.sum(staticScore, Adjoints.cacheIfNeeded(dynScore)));
+    double r = info.getConfig().recallBias;
+    Adjoints score = r != 0
+        ? Adjoints.sum(new Adjoints.Constant(r), staticScore, dynScore)
+            : Adjoints.sum(staticScore, dynScore);
     return egg.withScore(score, info.getRandom().nextGaussian());
   }
 
@@ -896,7 +903,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       dynScore.showUpdatesWith = alph;
 //      Log.info("featSquashEarlyAdjoints: " + dynScore);
     }
-    Adjoints a = Adjoints.cacheIfNeeded(new Adjoints.Sum(staticScore, dynScore));
+    Adjoints a = new Adjoints.Sum(staticScore, dynScore);
     return egg.withScore(a, info.getRandom().nextGaussian());
   }
 

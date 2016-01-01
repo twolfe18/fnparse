@@ -238,6 +238,10 @@ public class Info implements Serializable, HasCounts, HasRandom {
       + ")";
   }
 
+  final double lossScale = 10;
+  final double mScale = (1/lossScale);
+  final double rScale = (1/lossScale);
+
   public Info setOracleCoefs() {
     // Beam vs Constraint objectives do not matter for oracle because we take
     // the final state (enforcing Proj(z) = {y}) rather than the best thing on
@@ -246,7 +250,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
     if (likeConf == null) {
       Log.warn("likeConf is null, defaulting to MIN");
       return setSameHTS(new HowToSearchImpl(
-          new GeneralizedCoef.Model(1, true),
+          new GeneralizedCoef.Model(+mScale, true),
           new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
           GeneralizedCoef.ZERO));
     } else {
@@ -256,9 +260,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
        * If I do that then some of the oracle model will lead to update away
        * from the oracle!
        */
-      double lossScale = 100;
-      double mScale = (1/lossScale) * 0.1;
-      double rScale = (1/lossScale);
       switch (likeConf.oracleMode) {
       case RAND_MIN:
         return setSameHTS(new HowToSearchImpl(
@@ -288,8 +289,8 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   public Info setMostViolatedCoefs() {
     return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, false),
-        new GeneralizedCoef.Loss(0.1, Mode.H_LOSS, 0.5),
+        new GeneralizedCoef.Model(mScale, false),
+        new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO));
   }
 

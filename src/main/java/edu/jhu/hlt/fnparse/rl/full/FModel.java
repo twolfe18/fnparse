@@ -280,10 +280,7 @@ public class FModel implements Serializable {
   }
   public Info getPredictInfo(FNParse y, boolean oracleArgPruning) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
-//    if (useNewTS)
-      decInf.setLabel(y, ts);
-//    else
-//      decInf.setLabel(y);
+    decInf.setLabel(y, ts);
     decInf.setTargetPruningToGoldLabels();
     if (oracleArgPruning) {
       decInf.setArgPruningUsingGoldLabelWithNoise();
@@ -295,10 +292,7 @@ public class FModel implements Serializable {
   }
 
   public FNParse predict(FNParse y) {
-//    if (useNewTS)
-      return predictNew(y);
-//    else
-//      return predictOld(y);
+    return predictNew(y);
   }
 
   public FNParse predictNew(FNParse y) {
@@ -317,6 +311,7 @@ public class FModel implements Serializable {
   }
 
   public FNParse predictOld(FNParse y) {
+    Log.warn("using old predict method");
     timer.start("predict");
     Info decInf = getPredictInfo(y);
     FNParse yhat = State.runInference2(decInf);
@@ -347,8 +342,8 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    m.ts.useGlobalFeats = true;
-    m.rtConf.oracleMode = OracleMode.RAND_MAX;
+    m.ts.useGlobalFeats = false;
+    m.rtConf.oracleMode = OracleMode.RAND_MIN;
 
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
