@@ -189,6 +189,9 @@ public class FModel implements Serializable {
         // nodes.
       } else {
         System.err.println("oracle has loss: " + oracleSc.getLoss());
+        System.err.println("mode="+ this.rtConf.oracleMode);
+        System.err.println("mvInf=" + mvInf);
+        System.err.println("oracleInf=" + oracleInf);
       }
 //      Log.warn("check your pruning! if you pruned away a branch on the gold tree"
 //            + " then you should consider reifying the pruning process into"
