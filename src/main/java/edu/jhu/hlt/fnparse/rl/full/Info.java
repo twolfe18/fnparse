@@ -138,9 +138,17 @@ public class Info implements Serializable, HasCounts, HasRandom {
     }
   }
 
+  final double lossScale;// = 10;
+  final double mScale;// = (1/lossScale);
+  final double rScale;// = (1/lossScale);
+
   public Info(Config config) {
     this.config = config;
     this.setDecodeCoefs();
+    ExperimentProperties p = ExperimentProperties.getInstance();
+    lossScale = p.getDouble("lossScale", 10);
+    mScale = (1/lossScale);
+    rScale = (1/lossScale) * p.getDouble("rScale", 0.5);
   }
 
   public Config getConfig() {
@@ -244,12 +252,11 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return "(Info for " + sentence.getId()
       + " htsBeam=" + htsBeam
       + " htsConstraint=" + htsConstraints
+      + " lossScale=" + lossScale
+      + " mScale=" + mScale
+      + " rScale=" + rScale
       + ")";
   }
-
-  final double lossScale = 10;
-  final double mScale = (1/lossScale);
-  final double rScale = (1/lossScale);
 
   public Info setOracleCoefs() {
     // Beam vs Constraint objectives do not matter for oracle because we take
