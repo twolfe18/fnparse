@@ -140,6 +140,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   final double lossScale;// = 10;
   final double mScale;// = (1/lossScale);
+  final double mScaleMV;// = (1/lossScale);
   final double rScale;// = (1/lossScale);
 
   public Info(Config config) {
@@ -148,6 +149,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
     ExperimentProperties p = ExperimentProperties.getInstance();
     lossScale = p.getDouble("lossScale", 10);
     mScale = (1/lossScale);
+    mScaleMV = p.getDouble("mScaleMV", 1);
     rScale = (1/lossScale) * p.getDouble("rScale", 0.5);
   }
 
@@ -305,7 +307,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   public Info setMostViolatedCoefs() {
     return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(mScale, false),
+        new GeneralizedCoef.Model(mScaleMV, false),
         new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO));
   }

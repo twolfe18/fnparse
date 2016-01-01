@@ -188,6 +188,10 @@ public class FModel implements Serializable {
         // TODO The cause of this is FPs counted on not pruning the non-leaf
         // nodes.
       } else {
+        if (badThings++ % 30 == 0) {
+          System.err.println("BAD ORACLE FINAL STATE:");
+          oracleSt.getRoot().show(System.err);
+        }
         System.err.println("oracle has loss: " + oracleSc.getLoss());
         System.err.println("mode="+ this.rtConf.oracleMode);
         System.err.println("mvInf=" + mvInf);
@@ -201,6 +205,7 @@ public class FModel implements Serializable {
 
     return buildUpdate(oracleB, mvB, false);
   }
+  private int badThings = 0;
 
   public Update getUpdateOld(FNParse y) {
     Pair<Info, Info> ormv = getOracleAndMvInfo(y);

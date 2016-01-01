@@ -45,35 +45,6 @@ public abstract class GeneralizedCoef implements Serializable {
       // no-op
     }
   }
-  
-//  public static class SecondTry {
-//    private double forwardsCoef;
-//    private double backwardsCoef;
-//
-//    public SecondTry(double forwardsCoef, double backwardsCoef) {
-//      this.forwardsCoef = forwardsCoef;
-//      this.backwardsCoef = backwardsCoef;
-//    }
-//
-//    public static SecondTry randMin() {
-//      /*
-//       * abstract.oracle {
-//       * model : forwards=?   backwards=1
-//       * loss  : forwards=-10 backwards=0
-//       * rand  : forwards=?   backwards=0
-//       * }
-//       * randMin : abstract.oracle {
-//       * model : forwards=-1  backwards=1
-//       * rand  : forwards=1   backwards=0
-//       * }
-//       * MV {
-//       * model  : forwards=1 backwards=-1
-//       * loss   : forwards=1 backwards=0
-//       * rand   : forwards=0 backwards=0
-//       * }
-//       */
-//    }
-//  }
 
   public static class Model extends GeneralizedCoef {
     private static final long serialVersionUID = -6443024647803364059L;
@@ -143,6 +114,11 @@ public abstract class GeneralizedCoef implements Serializable {
       default:
         throw new RuntimeException();
       }
+    }
+
+    @Override
+    public String toString() {
+      return String.format("(GC.Loss forwards=%.2f mode=%s backwards=%.2f)", coefForwards, mode, coefBackwards);
     }
 
     @Override
