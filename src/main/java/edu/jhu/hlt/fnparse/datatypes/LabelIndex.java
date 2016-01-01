@@ -18,6 +18,7 @@ import edu.jhu.hlt.fnparse.rl.full2.TVNS;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
@@ -32,6 +33,9 @@ public class LabelIndex implements Serializable {
   private static final long serialVersionUID = -3723865423922884724L;
 
   public static boolean DEBUG_COUNTS = false;
+
+  public static MultiTimer.ShowPeriodically T =
+      new MultiTimer.ShowPeriodically(45);
 
   private final FNParse y;
   private Map<Span, List<FrameInstance>> byTarget;
@@ -67,6 +71,7 @@ public class LabelIndex implements Serializable {
   private void provideLabel(Iterable<LL<TVN>> goldYeses) {
     if (AbstractTransitionScheme.DEBUG && DEBUG_COUNTS)
       Log.info("filling in counts");
+    T.start("LabelIndex.provideLabel");
     if (counts == null)
       counts = new Counts<>();
     else
@@ -99,59 +104,61 @@ public class LabelIndex implements Serializable {
         Log.info("count=" + counts.getCount(prefix) + " prefix=" + prefix);
       }
     }
+    T.stop("LabelIndex.provideLabel");
   }
   public LabelIndex(FNParse y) {
     this(y, null);
   }
 
   public LabelIndex(FNParse y, AbstractTransitionScheme<FNParse, ?> ts) {
+    T.start("LabelIndex.init");
     this.y = y;
-
     if (ts != null) {
       Iterable<LL<TVN>> conv = ts.encode(y);
       this.provideLabel(conv);
-    }
+    } else {
+      this.byTarget = new HashMap<>();
+      this.fis = new HashSet<>();
+      this.all2 = new HashMap<>();
 
-    this.byTarget = new HashMap<>();
-    this.fis = new HashSet<>();
-    this.all2 = new HashMap<>();
+      for (FrameInstance fi : y.getFrameInstances()) {
+        Span t = fi.getTarget();
+        Frame f = fi.getFrame();
+        Pair<Span, Frame> tf = new Pair<>(t, f);
 
-    for (FrameInstance fi : y.getFrameInstances()) {
-      Span t = fi.getTarget();
-      Frame f = fi.getFrame();
-      Pair<Span, Frame> tf = new Pair<>(t, f);
+        List<FrameInstance> fis = byTarget.get(t);
+        if (fis == null) fis = new ArrayList<>();
+        fis.add(fi);
+        this.byTarget.put(t, fis);
+        this.fis.add(tf);
 
-      List<FrameInstance> fis = byTarget.get(t);
-      if (fis == null) fis = new ArrayList<>();
-      fis.add(fi);
-      this.byTarget.put(t, fis);
-      this.fis.add(tf);
+        int K = f.numRoles();
+        for (int k = 0; k < K; k++) {
+          Span s = fi.getArgument(k);
+          if (s == null || s == Span.nullSpan)
+            continue;
+          Span tt = fi.getTarget();
+          RoleType q = RoleType.BASE;
+          FrameArgInstance val = new FrameArgInstance(f, t, k, s);
+          add(new FrameArgInstance(null, null, -1, null), val);
+          add(new FrameArgInstance(null, tt, -1, null), val);
+          add(new FrameArgInstance(f, tt, -1, null), val);
+          add(new FrameArgInstance(f, tt, k(f,k,q), null), val);
+          add(new FrameArgInstance(f, tt, -1, s), val);
+          add(new FrameArgInstance(f, tt, k(f,k,q), s), val);
 
-      int K = f.numRoles();
-      for (int k = 0; k < K; k++) {
-        Span s = fi.getArgument(k);
-        if (s == null || s == Span.nullSpan)
-          continue;
-        Span tt = fi.getTarget();
-        RoleType q = RoleType.BASE;
-        FrameArgInstance val = new FrameArgInstance(f, t, k, s);
-        add(new FrameArgInstance(null, null, -1, null), val);
-        add(new FrameArgInstance(null, tt, -1, null), val);
-        add(new FrameArgInstance(f, tt, -1, null), val);
-        add(new FrameArgInstance(f, tt, k(f,k,q), null), val);
-        add(new FrameArgInstance(f, tt, -1, s), val);
-        add(new FrameArgInstance(f, tt, k(f,k,q), s), val);
-
-        for (Span sc : fi.getContinuationRoleSpans(k)) {
-          add(new FrameArgInstance(f, tt, k(f,k,RoleType.CONT), null), val);
-          add(new FrameArgInstance(f, tt, k(f,k,RoleType.CONT), sc), val);
-        }
-        for (Span sr : fi.getReferenceRoleSpans(k)) {
-          add(new FrameArgInstance(f, tt, k(f,k,RoleType.REF), null), val);
-          add(new FrameArgInstance(f, tt, k(f,k,RoleType.REF), sr), val);
+          for (Span sc : fi.getContinuationRoleSpans(k)) {
+            add(new FrameArgInstance(f, tt, k(f,k,RoleType.CONT), null), val);
+            add(new FrameArgInstance(f, tt, k(f,k,RoleType.CONT), sc), val);
+          }
+          for (Span sr : fi.getReferenceRoleSpans(k)) {
+            add(new FrameArgInstance(f, tt, k(f,k,RoleType.REF), null), val);
+            add(new FrameArgInstance(f, tt, k(f,k,RoleType.REF), sr), val);
+          }
         }
       }
     }
+    T.stop("LabelIndex.init");
   }
 
   private void add(FrameArgInstance key, FrameArgInstance value) {

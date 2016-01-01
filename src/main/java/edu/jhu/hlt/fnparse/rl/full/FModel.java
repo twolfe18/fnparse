@@ -119,10 +119,7 @@ public class FModel implements Serializable {
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
     oracleInf.shareStaticFeatureCacheWith(mvInf);
-//    if (useNewTS)
-      oracleInf.setLabel(y, ts);
-//    else
-//      oracleInf.setLabel(y);
+    oracleInf.setLabel(y, ts);
     mvInf.copyLabel(oracleInf);
     oracleInf.setTargetPruningToGoldLabels(mvInf);
     timer.stop("update.setup.other");
@@ -136,10 +133,7 @@ public class FModel implements Serializable {
   }
 
   public Update getUpdate(FNParse y) {
-//    if (useNewTS)
-      return getUpdateNew(y);
-//    else
-//      return getUpdateOld(y);
+    return getUpdateNew(y);
   }
 
   public Update getUpdateNew(FNParse y) {
