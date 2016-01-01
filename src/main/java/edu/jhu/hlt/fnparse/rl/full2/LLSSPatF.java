@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Info;
@@ -11,6 +12,7 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -72,10 +74,11 @@ public class LLSSPatF extends LLSSP {
     }
 
     if (next == null) {
-      scores = new LL<>(curFeats, null);
+      scores = new LL<>(Adjoints.cacheIfNeeded(curFeats), null);
       realizedBaseRoles = kMask;
     } else {
-      scores = new LL<>(curFeats, next.scores);
+      Adjoints sum = Adjoints.cacheIfNeeded(new Adjoints.Sum(curFeats, next.scores.car()));
+      scores = new LL<>(sum, next.scores);
       realizedBaseRoles = kMask | next.realizedBaseRoles;
     }
 
@@ -108,30 +111,73 @@ public class LLSSPatF extends LLSSP {
   }
 
   protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, WeightsInfo globals) {
-//      LazyL2UpdateVector wGlobal, int wGlobalDimension) {
     List<ProductIndex> feats = new ArrayList<>();
     if (ARG_LOC)
       argLocSimple(item, prev, info, feats);
-//    if (ROLE_COOC)
-//      Log.warn("need to implement other global features");
+    if (ROLE_COOC)
+      roleCooc(item, prev, info, feats);
     if (NUM_ARGS)
       numArgs(item, prev, info, feats);
-    return Adjoints.cacheIfNeeded(new ProductIndexAdjoints(globals, feats));
+    if (feats.isEmpty())
+      return Adjoints.Constant.ZERO;
+    return new ProductIndexAdjoints(globals, feats);
   }
 
-  private void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
+  private static void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
+
     int numArgs = 1 + LL.length(prev);
-    ProductIndex na = BasicFeatureTemplates.discretizeWidth2(1, 5, numArgs);
-    addTo.add(numArgsPI.flatProd(na));
-    // TODO frame conjunctions/refinements!
     if (AbstractTransitionScheme.DEBUG && DEBUG)
-      Log.info("numArgs=" + numArgs + "\t" + na);
+      Log.info("numArgs=" + numArgs);
+
+    Frame frame = FNParseTransitionScheme.getFrame(item.prefix, info);
+    assert item.getType() == TFKS.K;
+    int k = item.getValue();
+    FrameRolePacking frp = info.getFRPacking();
+    int f = frp.index(frame);
+    int fk = frp.index(frame, k);
+    int N = frp.size();
+
+    ProductIndex na = BasicFeatureTemplates.discretizeWidth2(1, 5, numArgs);
+    ProductIndex pna = numArgsPI.flatProd(na);
+    addTo.add(pna);
+    addTo.add(pna.prod(f, N));
+    addTo.add(pna.prod(fk, N));
+  }
+
+  private static void roleCooc(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
+
+    Frame frame = FNParseTransitionScheme.getFrame(item.prefix, info);
+    assert item.getType() == TFKS.K;
+    int k1 = item.getValue();
+    FrameRolePacking frp = info.getFRPacking();
+    int f = frp.index(frame);
+//    int fk1 = frp.index(frame, k1);
+    int N = frp.size();
+    int K = frame.numRoles();
+
+    ProductIndex p0 = roleCoocPI.prod(f, N);
+    addTo.add(p0);
+
+    // TODO Other targets?
+    int T = 3;
+    int t = Math.min(T-1, LLSSP.length(prev));
+    for (LLSSPatF cur = prev; cur != null; cur = cur.cdr()) {
+
+      Node2 otherK = cur.car();
+      assert otherK.getType() == TFKS.K;
+      int k2 = otherK.getValue();
+
+      int kk = Math.min(k1, k2) * K + Math.max(k1, k2);
+      ProductIndex p1 = p0.prod(kk, K * K);
+      addTo.add(p1.prod(0, T+1));
+      addTo.add(p1.prod(t+1, T+1));
+    }
   }
 
   /**
    * Mean to mimic {@link GlobalFeature.ArgLocSimple}
    */
-  private void argLocSimple(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
+  private static void argLocSimple(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
     // We may know whether there is a s:S/Span chosen already.
     // If not, this feature doesn't fire.
     assert item.getType() == TFKS.K;
@@ -144,12 +190,22 @@ public class LLSSPatF extends LLSSP {
 
       // These we know for sure
       Span target = FNParseTransitionScheme.getTarget(item.prefix, info);
-//      Frame frame = FNParseTransitionScheme.getFrame(item.prefix, info);
-//      int k = item.getValue();
+      Frame frame = FNParseTransitionScheme.getFrame(item.prefix, info);
+      int k = item.getValue();
 
       // Span of next argument to be added
       Span argCur = FNParseTransitionScheme.getArgSpan(itemChild.prefix, info);
-      addTo.add(argLocPI.prod(true).flatProd(BasicFeatureTemplates.spanPosRel2(target, argCur)));
+      ProductIndex t2a = BasicFeatureTemplates.spanPosRel2(target, argCur);
+      ProductIndex pt2a = argLocPI.prod(true).flatProd(t2a);
+      FrameRolePacking frp = info.getFRPacking();
+      int f = frp.index(frame);
+      int fk = frp.index(frame, k);
+      int N = frp.size();
+      ProductIndex pt2a_f = pt2a.prod(f, N);
+      ProductIndex pt2a_fk = pt2a.prod(fk, N);
+      addTo.add(pt2a);
+      addTo.add(pt2a_f);
+      addTo.add(pt2a_fk);
 
       if (AbstractTransitionScheme.DEBUG && DEBUG)
         Log.info("target=" + target.shortString() + " argCur=" + argCur.shortString());
@@ -159,17 +215,20 @@ public class LLSSPatF extends LLSSP {
         Node2 otherS = cur.car();
         if (otherS.firstChildMatchesType(TFKS.S)) {
           Span argPrev = FNParseTransitionScheme.getArgSpan(otherS.children.car().prefix, info);
-          addTo.add(argLocPI.prod(false).flatProd(BasicFeatureTemplates.spanPosRel2(argPrev, argCur)));
+
+          ProductIndex a2a = BasicFeatureTemplates.spanPosRel2(argPrev, argCur);
+          ProductIndex pa2a = argLocPI.prod(false).flatProd(a2a);
+          addTo.add(pa2a);
+          addTo.add(pa2a.prod(f, N));
+          addTo.add(pa2a.prod(fk, N));
+
           if (AbstractTransitionScheme.DEBUG && DEBUG)
             Log.info("argPrev=" + argPrev.shortString() + " argCur=" + argCur.shortString());
-        } else {
-          boolean prunedAll = otherS.eggs == null && otherS.pruned != null && otherS.children == null;
+//        } else {
+//          boolean prunedAll = otherS.eggs == null && otherS.pruned != null && otherS.children == null;
           // TODO make a feature for this
         }
       }
-
-      // TODO Conjoin with frame and frame-role!
-//      Log.warn("implement conjunctions!");
     }
   }
 }

@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.rl.full2.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -153,6 +154,10 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   public FrameIndex getFrameIndex() {
     return config.frPacking.getFrameIndex();
+  }
+
+  public FrameRolePacking getFRPacking() {
+    return config.frPacking;
   }
 
   public LabelIndex getLabel() {

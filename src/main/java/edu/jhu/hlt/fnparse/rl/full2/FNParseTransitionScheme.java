@@ -75,7 +75,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    */
   public boolean disallowNonLeafPruning = true;
 
-  public boolean useGlobalFeats = true;
+  public boolean useGlobalFeats;
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -98,11 +98,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
     ExperimentProperties config = ExperimentProperties.getInstance();
-    int dimension = config.getInt("hashingTrickDim", 1 << 19);
-    int updateInterval = config.getInt("updateL2Every", 8);
-    double lrLocal = config.getDouble("lrLocal", 0.1);
-    double l2Local = config.getDouble("l2Penalty", 1e-7);
-    double lrGlobal = config.getDouble("lrGlobal", 0.01);
+    int dimension = config.getInt("hashingTrickDim", 1 << 20);
+    int updateInterval = config.getInt("updateL2Every", 16);
+    double lrLocal = config.getDouble("lrLocal", 1);
+    double l2Local = config.getDouble("l2Penalty", 1e-6);
+    double lrGlobal = config.getDouble("lrGlobal", 0.3);
     double l2Global = config.getDouble("globalL2Penalty", 1e-4);
     wHatch = new WeightsInfo(
         new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
@@ -120,6 +120,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         ? SortEggsMode.NONE : SortEggsMode.BY_KS;
     Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
 
+    boolean g = config.getBoolean("useGlobalFeatures", true);
+    LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
+    LLSSPatF.NUM_ARGS = config.getBoolean("globalFeatNumArgs", g);
+    LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
+    useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
+
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
@@ -127,6 +133,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wGlobal=" + wGlobal.summary());
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
+      Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
+      Log.info("[main] LLSSPatF.NUM_ARGS=" + LLSSPatF.NUM_ARGS);
+      Log.info("[main] LLSSPatF.ROLE_COOC" + LLSSPatF.ROLE_COOC);
+      Log.info("[main] useGlobalFeats=" + useGlobalFeats);
     }
   }
 
