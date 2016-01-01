@@ -261,8 +261,10 @@ public class Info implements Serializable, HasCounts, HasRandom {
         GeneralizedCoef.ZERO));
   }
   public Info setDecodeCoefs() {
+    // updateAway for decoder is used in perceptron updates
+    boolean updateTowards = false;
     return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(1, true),
+        new GeneralizedCoef.Model(1, updateTowards),
         GeneralizedCoef.ZERO,
         GeneralizedCoef.ZERO));
   }

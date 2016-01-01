@@ -11,6 +11,7 @@ import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
@@ -18,6 +19,7 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
@@ -51,6 +53,7 @@ public class FModel implements Serializable {
 
   // LH's max violation
   private boolean maxViolation;
+  public PerceptronUpdateMode perceptronUpdateMode;
 
   public FModel(
       RTConfig config,
@@ -65,6 +68,11 @@ public class FModel implements Serializable {
     }
 
     maxViolation = p.getBoolean("perceptron");
+    perceptronUpdateMode =
+        p.getBoolean("maxViolation", true)
+        ? PerceptronUpdateMode.MAX_VIOLATION
+            : PerceptronUpdateMode.EARLY;
+    Log.info("[main] perceptron=" + maxViolation + " mode=" + perceptronUpdateMode);
 
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
@@ -82,6 +90,8 @@ public class FModel implements Serializable {
     Primes primes = new Primes(ExperimentProperties.getInstance());
     CachedFeatures params = null;
     ts = new FNParseTransitionScheme(params, primes);
+    if (maxViolation && ts.sortEggsMode != SortEggsMode.NONE)
+      Log.warn("[main] perceptron=true and sorting eggs?! don't do this");
   }
 
   public FNParseTransitionScheme getTransitionSystem() {
@@ -139,18 +149,9 @@ public class FModel implements Serializable {
     if (maxViolation) {
       timer.start("update.perceptron");
       ts.flushPrimes();
-      HowToSearch decoder = getPredictInfo(y, true).htsBeam;
+      HowToSearch decoder = getPredictInfo(y).htsBeam;
       State2<Info> s0 = ts.genRootState(oracleInf);
-      Pair<State2<Info>, State2<Info>> goodBad = ts.perceptronUpdate(s0, decoder, PerceptronUpdateMode.MAX_VIOLATION);
-      Update u;
-      if (goodBad == null) {
-        // No violator!
-        u = Update.NONE;
-      } else {
-        CoefsAndScoresAdjoints good = new CoefsAndScoresAdjoints(decoder, goodBad.get1().getStepScores());
-        CoefsAndScoresAdjoints bad = new CoefsAndScoresAdjoints(decoder, goodBad.get2().getStepScores());
-        u = buildUpdate(good, bad);
-      }
+      Update u = ts.perceptronUpdate(s0, decoder, perceptronUpdateMode);
       timer.stop("update.perceptron");
       return u;
     }
@@ -188,14 +189,19 @@ public class FModel implements Serializable {
     }
 
     if (oracleSc.getLoss().maxLoss() > 0) {
-      System.err.println("oracle has loss");
+      if (ts.disallowNonLeafPruning && oracleSc.getLoss().fn == 0) {
+        // TODO The cause of this is FPs counted on not pruning the non-leaf
+        // nodes.
+      } else {
+        System.err.println("oracle has loss: " + oracleSc.getLoss());
+      }
 //      Log.warn("check your pruning! if you pruned away a branch on the gold tree"
 //            + " then you should consider reifying the pruning process into"
 //            + " learning (since its so good at handling pruning!)\n"
 //            + oracleSc.getLoss());
     }
 
-    return buildUpdate(oracleB, mvB);
+    return buildUpdate(oracleB, mvB, false);
   }
 
   public Update getUpdateOld(FNParse y) {
@@ -217,17 +223,17 @@ public class FModel implements Serializable {
     CoefsAndScoresAdjoints mvBackwards = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvState.getStepScores());
     timer.stop("update.mv");
 
-    return buildUpdate(oracleBackwards, mvBackwards);
+    return buildUpdate(oracleBackwards, mvBackwards, false);
   }
 
-  private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv) {
+  private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv, boolean ignoreHinge) {
 
 //    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
     double a = mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss();
     double b = oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss();
     final double hinge = Math.max(0, a - b);
 
-    if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
+    if (AbstractTransitionScheme.DEBUG && (DEBUG_SEARCH_FINAL_SOLN || AbstractTransitionScheme.DEBUG_PERCEPTRON)) {
       Log.info("mv.model=" + mv.scores.getModel().forwards());
       Log.info("mv.loss=" + mv.scores.getLoss());
       Log.info("oracle.score=" + oracle.scores.getModel().forwards());
@@ -238,9 +244,13 @@ public class FModel implements Serializable {
     return new Update() {
       @Override
       public double apply(double learningRate) {
-        if (hinge > 0) {
+        if (hinge > 0 || ignoreHinge) {
           timer.start("update.apply");
+          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+            Log.info("about to apply the oracle updates");
           oracle.backwards(-learningRate);
+          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+            Log.info("about to apply the most violated updates");
           mv.backwards(-learningRate);
           timer.stop("update.apply");
         }
@@ -324,6 +334,8 @@ public class FModel implements Serializable {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("beamSize", "1");
     config.put("forceLeftRightInference", "false");
+    config.put("perceptron", "false");
+    config.put("maxViolation", "true"); // only takes effect when perceptron=true
 
     boolean backToBasics = false;
     AbstractTransitionScheme.DEBUG = false || backToBasics;
@@ -340,8 +352,8 @@ public class FModel implements Serializable {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    m.maxViolation = false;
-    m.rtConf.oracleMode = OracleMode.MIN;
+    m.ts.useGlobalFeats = true;
+    m.rtConf.oracleMode = OracleMode.RAND_MAX;
 
     m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
@@ -367,15 +379,24 @@ public class FModel implements Serializable {
       if (backToBasics) {
         Update u = m.getUpdate(y);
         u.apply(1);
-//        m.getUpdate(y).apply(1);
-//        m.getUpdate(y).apply(1);
-        m.predict(y);
+        for (int i = 0; i < 5; i++)
+          m.getUpdate(y).apply(1);
+        AbstractTransitionScheme.DEBUG = true;
+        AbstractTransitionScheme.DEBUG_SEARCH = true;
+        FNParse yhat = m.predict(y);
+        SentenceEval se = new SentenceEval(y, yhat);
+        Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+        double f1 = r.get("ArgumentMicroF1");
+        Log.info("result: " + y.getSentence().getId() 
+            + " f1=" + f1
+            + " p=" + r.get("ArgumentMicroPRECISION")
+            + " r=" + r.get("ArgumentMicroRECALL"));
         return;
       }
 
       // Check learning
-      int c = 0, clim = 25;
-      int updatesPerPredict = 5;
+      int c = 0, clim = 30;
+      int updatesPerPredict = 6;
       double maxF1 = 0;
       for (int i = 0; i < clim * 5; i++) {
 
@@ -404,8 +425,15 @@ public class FModel implements Serializable {
           c = 0;
         }
       }
-      if (c < clim)
+      if (c < clim) {
+        AbstractTransitionScheme.DEBUG = true;
+        FNParseTransitionScheme.DEBUG_FEATURES = true;
+        LabelIndex.DEBUG_COUNTS = true;
+        m.getUpdate(y).apply(1);
+        AbstractTransitionScheme.DEBUG_SEARCH = true;
+        m.predict(y);
         throw new RuntimeException();
+      }
     }
   }
 

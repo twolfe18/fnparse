@@ -50,9 +50,9 @@ public interface Beam<T extends StateLike> {
     @Override
     public int compareTo(BeamItem<R> o) {
       if (score < o.score)
-        return +1;
-      if (score > o.score)
         return -1;
+      if (score > o.score)
+        return +1;
       BigInteger s1 = state.getSignature();
       BigInteger s2 = o.state.getSignature();
       int c = s1.compareTo(s2);
@@ -204,7 +204,7 @@ public interface Beam<T extends StateLike> {
         return true;
       } else if (sc > lowerBound()) {
         // Remove the worst item on the beam.
-        BeamItem<T> worst = scores.pollLast();
+        BeamItem<T> worst = scores.pollFirst();
         table.remove(worst.state);
         // Add this item
         BeamItem<T> si = new BeamItem<>(s, sc);
@@ -221,19 +221,19 @@ public interface Beam<T extends StateLike> {
     public Double lowerBound() {
       if (size() == 0)
         return null;
-//      assert scores.last().score >= scores.first().score;
-      return scores.last().score;
+      assert scores.first().score <= scores.last().score;
+      return scores.first().score;
     }
 
     public T peek() {
       if (scores.isEmpty())
         throw new IllegalStateException();
-      return scores.first().state;
+      return scores.last().state;
     }
 
     @Override
     public T pop() {
-      BeamItem<T> bi = scores.pollFirst();
+      BeamItem<T> bi = scores.pollLast();
       BeamItem<T> r = table.remove(bi.state);
       assert r != null;
       return bi.state;

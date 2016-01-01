@@ -5,11 +5,13 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 /**
@@ -27,6 +29,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  * @author travis
  */
 public class Node2 implements HasStepScores, HasSig {
+  private static final Random rand = new Random(9001);
 
   // Regular loss is based on the number of false negatives in an entire sub-tree
   // (false positives do not change: they are directly related to the structure
@@ -37,6 +40,9 @@ public class Node2 implements HasStepScores, HasSig {
   // 150 FNs. Do we really want score(hatch) - score(prune) >= 150? This pretty
   // much precludes regularization or requires special scaling). The downside is
   // that the model is not trained to recognize big errors from small ones.
+  //
+  // NOTE: This currently doesn't matter due to disallowNonLeafPruning.
+  //
   public static boolean MYOPIC_LOSS = false;
 
   public static boolean DEBUG = false;
@@ -168,12 +174,23 @@ public class Node2 implements HasStepScores, HasSig {
     // Need some way to complete this, could do this by:
     // 1) knowing the length of eggs and pruned (if the egg order is static this is enough)
     // 2) give eggs two primes, one to use if they get squashed and another if they are hatched
-    BigInteger a = LLTVN.getPrimesProd(eggs);
-    BigInteger b = LLTVN.getPrimesProd(pruned);
-    BigInteger c = LLSSP.getPrimeProd(children);
-    BigInteger d = TFKS.getPrimesProd(prefix);
-    return a.multiply(b).multiply(c).multiply(d);
+    if (__sigMemo == null) {
+      if (LLSSP.DISABLE_PRIMES) {
+        // This is enough to make collisions unlikely while still being fast
+        // and not requiring modification of DoubleBeam.
+        // TODO This is REALLY slow! Like slower than using real primes!
+        __sigMemo = BigInteger.probablePrime(16, rand);
+      } else {
+        BigInteger a = LLTVN.getPrimesProd(eggs);
+        BigInteger b = LLTVN.getPrimesProd(pruned);
+        BigInteger c = LLSSP.getPrimeProd(children);
+        BigInteger d = TFKS.getPrimesProd(prefix);
+        __sigMemo = a.multiply(b).multiply(c).multiply(d);
+      }
+    }
+    return __sigMemo;
   }
+  private BigInteger __sigMemo = null;
 
   @Override
   public int hashCode() {
@@ -204,9 +221,19 @@ public class Node2 implements HasStepScores, HasSig {
   public Adjoints getModelScore() {
     return score.getModel();
   }
+  public static Adjoints getModelScore(Node2 n) {
+    if (n == null)
+      return null;
+    return n.getModelScore();
+  }
 
   public MaxLoss getLoss() {
     return score.getLoss();
+  }
+  public static MaxLoss getLoss(Node2 n) {
+    if (n == null)
+      return null;
+    return n.getLoss();
   }
 
   public double getRand() {
@@ -235,7 +262,8 @@ public class Node2 implements HasStepScores, HasSig {
   public void show(PrintStream ps, String indent, SearchCoefficients scoreCoefs) {
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
-    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel());
+//    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel().forwards());
+    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : StringUtils.trunc(prefix.car().getModel(), 120));
     ps.printf("%sloss=%s\n", indent, getLoss());
     if (scoreCoefs != null)
       ps.printf("%sscore=%s\tcoefs=%s\n", indent, scoreCoefs.forwards(getStepScores()), scoreCoefs);

@@ -9,6 +9,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.Beam.BeamItem;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.FModel.CoefsAndScoresAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef;
 import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
@@ -17,6 +18,7 @@ import edu.jhu.hlt.fnparse.rl.full.Info.HowToSearchImpl;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
+import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -44,12 +46,12 @@ import edu.jhu.prim.tuple.Pair;
  *
  * @author travis
  */
-public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ HasCounts & HasRandom> {
+public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRandom> {
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_SEARCH = false;
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
-  public static boolean DEBUG_COLLAPSE = false;
+  public static boolean DEBUG_COLLAPSE = false;    // also shows beam sizes (not capacities)
   public static boolean DEBUG_REPLACE_NODE = false;
   public static boolean DEBUG_PERCEPTRON = true;
 
@@ -95,6 +97,12 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
    * These parameterize the costs of moving from eggs -> (pruned|children).
    *
    * Global/dynamic features.
+   *
+   * If you would like a particular score to be "illegal", the way to do this is
+   * to return null from this method. If you try to do this through +/-Infinity
+   * through model score or rand, you can get flipped semantics by flipping the
+   * sign of a search coefficient. Illegal is illegal, and changing a sign should
+   * not change that.
    *
    * NOTE: Pay attention to the corresponding methods of hatch and squash;
    * they both involve taking the first egg (don't just look at prefix!)
@@ -158,6 +166,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   /** Returns a copy of n with the child formed by hatching the next egg */
   public Node2 hatch(Node2 wife, Z info) {
     TVNS cracked = scoreHatch(wife, info); // contains score(hatch)
+    if (cracked == null)
+      return null;
     TFKS newPrefix = consPrefix(cracked, wife.prefix, info);
     LLTVN newEggs = genEggs(newPrefix, info);
     Node2 hatched = newNode(newPrefix, newEggs, null, null);
@@ -175,6 +185,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   /** Returns a copy of n with the next egg moved to pruned */
   public Node2 squash(Node2 wife, Z info) {
     TVNS cracked = scoreSquash(wife, info);
+    if (cracked == null)
+      return null;
     LLTVNS newPruned = consPruned(cracked, wife.pruned, info);
     Node2 wife2 = newNode(wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
     if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
@@ -381,28 +393,35 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
 
       // Zip everything back up to get a root reflecting these modifications
       LL<Node2> momInLaw = spine.cdr();
-      if (DEBUG && DEBUG_REPLACE_NODE) Log.info("replaceNode for HATCH");
-      Node2 rootHatch = replaceNode(momInLaw, wife, mother, info);
-      if (DEBUG && DEBUG_REPLACE_NODE) Log.info("replaceNode for SQUASH");
-      Node2 rootSquash = replaceNode(momInLaw, wife, wife2, info);
+
+      if (DEBUG && DEBUG_REPLACE_NODE && mother != null)
+        Log.info("replaceNode for HATCH");
+      Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+
+      if (DEBUG && DEBUG_REPLACE_NODE && wife2 != null)
+        Log.info("replaceNode for SQUASH");
+      Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
 
       // Santity check to ensure replaceNode worked:
       if (DEBUG && DEBUG_REPLACE_NODE) {
-        Log.info("rootHatch.loss=" + rootHatch.getLoss());
-        Log.info("rootSquash.loss=" + rootSquash.getLoss());
-        Log.info("rootHatch.model=" + rootHatch.getModelScore());
-        Log.info("rootSquash.model=" + rootSquash.getModelScore());
-        if (rootSquash.getModelScore().forwards() < 0)
-          System.out.println("break");
+        Log.info("rootHatch.loss=" + Node2.getLoss(rootHatch));
+        Log.info("rootSquash.loss=" + Node2.getLoss(rootSquash));
+        Log.info("rootHatch.model=" + Node2.getModelScore(rootHatch));
+        Log.info("rootSquash.model=" + Node2.getModelScore(rootSquash));
       }
-      assert rootHatch.getLoss().fn >= mother.getLoss().fn;
-      assert rootHatch.getLoss().fp >= mother.getLoss().fp;
-      assert rootSquash.getLoss().fn >= wife2.getLoss().fn;
-      assert rootSquash.getLoss().fp >= wife2.getLoss().fp;
+      assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
+      assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
+      assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
+      assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
 
-      added += 2;
-      addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
-      addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+      if (rootHatch != null) {
+        addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
+        added++;
+      }
+      if (rootSquash != null) {
+        addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+        added++;
+      }
     } else {
       if (DEBUG && DEBUG_SEARCH)
         Log.info("skipping this node because one at a time: " + wife.prefix);
@@ -423,8 +442,12 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       HowToSearch beamSearch,
       HowToSearch constraints,
       List<State2<Z>> storeBestItemOnBeamAtEveryIter) {
-    if (DEBUG && DEBUG_SEARCH)
-      Log.info("starting inference from state:");
+    if (DEBUG && (DEBUG_SEARCH || DEBUG_COLLAPSE)) {
+//      Log.info("starting inference from state:");
+      Log.info("starting inference...");
+      Log.info("htsBeam=" + beamSearch);
+      Log.info("htsConstraints=" + constraints);
+    }
 
     // Objective: s(z) + max_{y \in Proj(z)} loss(y)
     // [where s(z) may contain random scores]
@@ -492,13 +515,22 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
   }
 
   /** Returns (updateTowardsState, updateAwayState) */
-  public Pair<State2<Z>, State2<Z>> perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
-    if (DEBUG && DEBUG_SEARCH)
-      Log.info("starting perceptron update, mode=" + mode);
+//  public Pair<State2<Z>, State2<Z>> perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
+  public Update perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
+    boolean fineLog = false;
 
     // Create a beam which only accepts (size 1) loss-less states
-    GeneralizedCoef.Loss loss = new GeneralizedCoef.Loss(-9999, Mode.MIN_LOSS, 1);
-    HowToSearchImpl htsOracle = new HowToSearchImpl(decoder.coefModel(), loss, decoder.coefRand());
+    GeneralizedCoef.Loss loss = new GeneralizedCoef.Loss(-1, Mode.MIN_LOSS, 1);
+    HowToSearchImpl htsOracle = new HowToSearchImpl(
+        new GeneralizedCoef.Model(0, true), loss, decoder.coefRand());
+    if (decoder.coefModel().coefBackwards != -1)
+      throw new IllegalArgumentException("needed to make updateAway work");
+
+    if (DEBUG && (DEBUG_SEARCH || DEBUG_PERCEPTRON)) {
+      Log.info("starting perceptron update, mode=" + mode);
+      Log.info("decoder=" + decoder);
+      Log.info("htsOracle=" + htsOracle);
+    }
 
     // Keep track of the "correct answer".
     DoubleBeam<State2<Z>> oracleCur = new DoubleBeam<>(htsOracle);
@@ -539,47 +571,110 @@ public abstract class AbstractTransitionScheme<Y, Z extends /*HowToSearch &*/ Ha
       }
       assert oracleNext.size() > 0;
 
-      if (DEBUG && DEBUG_PERCEPTRON) {
+      if (DEBUG && DEBUG_PERCEPTRON && fineLog) {
         State2<Z> s1 = decNext.peek();
         State2<Z> s2 = oracleNext.peek();
+        System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
         Log.info("iter=" + iter);
         System.out.println("best item on decoder beam:");
-        s1.getRoot().show(System.out, htsOracle);
+        s1.getRoot().show(System.out, decoder);
+        System.out.println();
         System.out.println("best item on oracle beam:");
         s2.getRoot().show(System.out, htsOracle);
+        System.out.println();
       }
 
       // Check/update violator
       if (mode == PerceptronUpdateMode.LATEST || mode == PerceptronUpdateMode.EARLY) {
         // Check if all zero loss items have fallen off the beam
         Iterator<BeamItem<State2<Z>>> itr = decNext.iterator();
+
+        // TODO This is a hack to due spurious FPs on non-leaf nodes.
+        // Remove this and check against loss==0
+        int minLoss = oracleNext.peek().getStepScores().getLoss().minLoss();
+
         boolean fellOff = true;
         while (itr.hasNext() && fellOff) {
           State2<Z> s = itr.next().state;
-          if (s.getStepScores().getLoss().noLoss())
+          int l = s.getStepScores().getLoss().minLoss();
+          assert l >= minLoss;
+          if (l == minLoss)
             fellOff = false;
         }
-        if (fellOff)
+        if (fellOff) {
           violator = new Pair<>(oracleNext.peek(), decNext.peek());
-        if (mode == PerceptronUpdateMode.EARLY)
-          break;
+          if (mode == PerceptronUpdateMode.EARLY)
+            break;
+        }
       } else if (mode == PerceptronUpdateMode.MAX_VIOLATION) {
         State2<Z> z1 = decNext.peek();
-        State2<Z> z2 = oracleNext.peek();
-        double s1 = z1.getStepScores().getModel().forwards();
-        double s2 = z2.getStepScores().getModel().forwards();
-        if (DEBUG && DEBUG_PERCEPTRON)
-          Log.info("decBest.model=" + s1 + " oracleBest.model=" + s2);
-        double violation = Math.max(0, s1 - s2);
-        if (violation > maxViolation) {
-          maxViolation = violation;
-          violator = new Pair<>(z2, z1);
+
+        if (z1.getStepScores().getLoss().minLoss() > 0) {
+          // First: we must have gotten this prefix wrong
+          State2<Z> z2 = oracleNext.peek();
+
+//          assert z2.getStepScores().getLoss().noLoss(); // TODO fix FPs introduced by not pruning internal nodes
+          assert z2.getStepScores().getLoss().fn == 0;
+
+          double s1 = z1.getStepScores().getModel().forwards();
+          double s2 = z2.getStepScores().getModel().forwards();
+          if (DEBUG && DEBUG_PERCEPTRON) {
+            Log.info("some loss, and decBest.model=" + s1
+                + " oracleBest.model=" + s2
+                + " maybeViolation=" + (s1-s2));
+          }
+          // Second: the score of the predicted z must be greater than the oracle (y) score
+          double violation = Math.max(0, s1 - s2);
+          if (violation >= maxViolation) {
+            maxViolation = violation;
+            violator = new Pair<>(z2, z1);
+          }
         }
+
+
       } else {
         throw new RuntimeException("implement me");
       }
     }
-    return violator;
+
+    /*
+     * All of the states in the oracle beam use htsOracle
+     * => they have coefMode = ZERO
+     * => their update is zero!
+     */
+    if (DEBUG && DEBUG_PERCEPTRON)
+      System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    if (violator == null) {
+      if (DEBUG && DEBUG_PERCEPTRON)
+        Log.info("no violator!");
+      return Update.NONE;
+    } else {
+      if (DEBUG && DEBUG_PERCEPTRON) {
+        Log.info("best item on oracle beam:");
+        violator.get1().getRoot().show(System.out, htsOracle);
+        System.out.println();
+        Log.info("best item on decoder beam:");
+        violator.get2().getRoot().show(System.out, decoder);
+        System.out.println("\nviolation=" + maxViolation);
+      }
+      final double mv = maxViolation;
+      CoefsAndScoresAdjoints good = new CoefsAndScoresAdjoints(htsOracle, violator.get1().getStepScores());
+      CoefsAndScoresAdjoints bad = new CoefsAndScoresAdjoints(decoder, violator.get2().getStepScores());
+      return new Update() {
+        @Override public double apply(double learningRate) {
+          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+            Log.info("about to apply the oracle updates");
+          good.backwards(-learningRate);
+          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+            Log.info("about to apply the most violated updates");
+          bad.backwards(-learningRate);
+          return mv;
+        }
+        @Override public double violation() {
+          return mv;
+        }
+      };
+    }
   }
 
   public Node2 genRootNode(Z info) {

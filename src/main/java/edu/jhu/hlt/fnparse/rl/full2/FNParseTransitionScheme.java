@@ -47,7 +47,7 @@ import edu.jhu.util.Alphabet;
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
-  public static boolean DEBUG_FEATURES = false;
+  public static boolean DEBUG_FEATURES = true;
   public static boolean DEBUG_GEN_EGGS = false;
   public static boolean MAIN_LOGGING = true;
 
@@ -71,7 +71,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    * there is some difficulty in doing MV search when you can prune non-leaf
    * nodes.
    * Operationally, for a non-leaf node n, this makes scoreHatch(n)=Constant(0)
-   * and scoreSquash(n)=Constant(-inf).
+   * and scoreSquash(n)=null
    */
   public boolean disallowNonLeafPruning = true;
 
@@ -89,9 +89,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public boolean useOverfitFeatures = false;
 
   // Weights
-  private WeightsInfo wHatch, wSquash;
-  private WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
-  private Alphabet<String> alph;  // TODO Remove!
+  public WeightsInfo wHatch, wSquash;
+  public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
+  public Alphabet<String> alph;  // TODO Remove!
 
 
   public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
@@ -234,6 +234,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       int f = fr.getId();
       int t = Span.encodeSpan(fi.getTarget(), n);
       int K = fr.numRoles();
+      int before = yy.size();
       for (int k = 0; k < K; k++) {
         Span a = fi.getArgument(k);
         if (a != Span.nullSpan) {
@@ -248,6 +249,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           int s = Span.encodeSpan(ra, n);
           yy.add(encSug(t, f, k+2*K, s));
         }
+      }
+      if (yy.size() == before) {
+        // We have not added any roles. This is a problem because it means that
+        // there are no smaller prefixes which support the positive (t,f) nodes
+        // which should appear.
+        // Deomonstrative bug, use FMode.main with EARLY update on FNFUTXT1271864
+        Info info = null; // I believe this is only used for constructing a LabelIndex/Info, so we don't need to depend on Info
+        yy.add(consEggs(tvnFor(TFKS.F, f),
+            consEggs(tvnFor(TFKS.T, t), null, info), info));
       }
     }
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE) {
@@ -536,6 +546,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int poss = subtreeSize(TFKS.K, k, momPrefix, info);
         int c = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
         long prime = primeFor(TFKS.K, k);
+
+        // TODO disallowNonLeaf pruning modification to avoid FP problems on
+        // non leaf nodes?
+
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l, info);
@@ -839,7 +853,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (disallowNonLeafPruning && n.getType() < TFKS.K) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
         Log.info("immediately preventing squash of egg: " + egg);
-      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+//      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
+      return null;
     }
 
     if (unlicensedContOrRefRole(n, info)) {

@@ -71,16 +71,8 @@ public class LabelIndex implements Serializable {
       counts = new Counts<>();
     else
       counts.clear();
-    int prevLen = -1;
     for (LL<TVN> x : goldYeses) {
-      HashableIntArray xx = AbstractTransitionScheme.prefixValues2ar(x);
-      if (prevLen < 0)
-        prevLen = xx.length();
-      else
-        assert prevLen == xx.length();
 
-//      counts.increment(xx);
-//
 //      // prefix counts (e.g. [t,f,k] counts)
 //      for (LL<TV> cur = x.cdr(); cur != null; cur = cur.cdr()) {
 //        HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
