@@ -13,7 +13,7 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
  */
 public class LLSSP extends LL<Node2> {
 
-  public static final boolean DISABLE_PRIMES = false;
+  public static final boolean DISABLE_PRIMES = true;
 
   private BigInteger primeProd;
   private StepScores<?> scoreSum;

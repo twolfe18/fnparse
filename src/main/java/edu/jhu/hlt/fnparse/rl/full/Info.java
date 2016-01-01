@@ -17,6 +17,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
@@ -63,7 +64,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   // State space pruning
   FNParseSpanPruning prunedSpans;     // or Map<Span, List<Span>> prunedSpans
-  Map<Span, List<Frame>> prunedFIs;    // TODO fill this in
+  Map<Span, List<Frame>> prunedFIs;
 
   // Parameters of transition system
   Config config;
@@ -138,19 +139,19 @@ public class Info implements Serializable, HasCounts, HasRandom {
     }
   }
 
-  final double lossScale;// = 10;
-  final double mScale;// = (1/lossScale);
-  final double mScaleMV;// = (1/lossScale);
-  final double rScale;// = (1/lossScale);
+//  final double lossScale;// = 10;
+//  final double mScale;// = (1/lossScale);
+//  final double mScaleMV;// = (1/lossScale);
+//  final double rScale;// = (1/lossScale);
 
   public Info(Config config) {
     this.config = config;
     this.setDecodeCoefs();
-    ExperimentProperties p = ExperimentProperties.getInstance();
-    lossScale = p.getDouble("lossScale", 10);
-    mScale = (1/lossScale);
-    mScaleMV = p.getDouble("mScaleMV", 1);
-    rScale = (1/lossScale) * p.getDouble("rScale", 0.5);
+//    ExperimentProperties p = ExperimentProperties.getInstance();
+//    lossScale = p.getDouble("lossScale", 10);
+//    mScale = (1/lossScale);
+//    mScaleMV = p.getDouble("mScaleMV", 1);
+//    rScale = (1/lossScale) * p.getDouble("rScale", 0.1);
   }
 
   public Config getConfig() {
@@ -254,9 +255,9 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return "(Info for " + sentence.getId()
       + " htsBeam=" + htsBeam
       + " htsConstraint=" + htsConstraints
-      + " lossScale=" + lossScale
-      + " mScale=" + mScale
-      + " rScale=" + rScale
+//      + " lossScale=" + lossScale
+//      + " mScale=" + mScale
+//      + " rScale=" + rScale
       + ")";
   }
 
@@ -268,7 +269,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
     if (likeConf == null) {
       Log.warn("likeConf is null, defaulting to MIN");
       return setSameHTS(new HowToSearchImpl(
-          new GeneralizedCoef.Model(+mScale, true),
+          new GeneralizedCoef.Model(+1, true),
           new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
           GeneralizedCoef.ZERO));
     } else {
@@ -278,26 +279,29 @@ public class Info implements Serializable, HasCounts, HasRandom {
        * If I do that then some of the oracle model will lead to update away
        * from the oracle!
        */
+      Log.info("ORACLE MODE: " + likeConf.oracleMode);
+      GeneralizedCoef cL = new GeneralizedCoef.Loss.Oracle();
+      double rScale = 0.5;
       switch (likeConf.oracleMode) {
       case RAND_MIN:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+mScale, true),
-            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Model(+1, true),
+            cL,
             new GeneralizedCoef.Rand(rScale)));
       case RAND_MAX:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-mScale, true),
-            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Model(-1, true),
+            cL,
             new GeneralizedCoef.Rand(rScale)));
       case MIN:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+mScale, true),
-            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Model(+1, true),
+            cL,
             GeneralizedCoef.ZERO));
       case MAX:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-mScale, true),
-            new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
+            new GeneralizedCoef.Model(-1, true),
+            cL,
             GeneralizedCoef.ZERO));
       default:
         throw new RuntimeException();
@@ -307,7 +311,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   public Info setMostViolatedCoefs() {
     return setSameHTS(new HowToSearchImpl(
-        new GeneralizedCoef.Model(mScaleMV, false),
+        new GeneralizedCoef.Model(1, false),
         new GeneralizedCoef.Loss(1, Mode.H_LOSS, 0.5),
         GeneralizedCoef.ZERO));
   }
@@ -387,7 +391,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
   }
   public Info setArgPruningUsingGoldLabelWithNoise(int kPerTF, int sPerTFK) {
     Log.info("kPerTF=" + kPerTF + " sPerTFK" + sPerTFK);
-    prunedSpans = new FNParseSpanPruning(getSentence(), Collections.emptyList(), new HashMap<>());
+    prunedSpans = new FNParseSpanPruning(getSentence(), Collections.emptyList(), new HashMap<>(), false);
     for (FrameInstance fi : label.getParse().getFrameInstances()) {
       Frame f = fi.getFrame();
       FrameInstance key = FrameInstance.frameMention(f, fi.getTarget(), getSentence());
@@ -409,13 +413,38 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return this;
   }
 
-  public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
-    return setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, null);
+  public Info setArgPruning(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing) {
+    return setArgPruning(drp, includeGoldSpansIfMissing, null);
   }
-  public Info setArgPruningUsingSyntax(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
+
+  /**
+   * @param drp if null, will look for {@link FNParse#featuresAndSpans} in the label for how to do the arg pruning
+   * @param includeGoldSpansIfMissing
+   * @param alsoSet
+   * @return
+   */
+  public Info setArgPruning(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
     assert sentenceAndLabelMatch();
-    StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
-    prunedSpans = inf.decodeAll().get(0);
+    if (drp == null) {
+      Log.info("using CachedFeatures.Item to get possible arg spans");
+      FNParse y = label.getParse();
+      CachedFeatures.Item i = y.featuresAndSpans;
+      assert i != null;
+      // span -> [frame]
+      // fi -> [span]
+      Map<FrameInstance, List<Span>> spans = new HashMap<>();
+      for (FrameInstance fi : y.getFrameInstances()) {
+        FrameInstance key = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), sentence);
+        List<Span> possArgs = i.getArgSpansForTarget(fi.getTarget());
+        spans.put(key, possArgs);
+      }
+      boolean nullSpanInPossArgs = false;
+      prunedSpans = new FNParseSpanPruning(sentence, y.getFrameInstances(), spans, nullSpanInPossArgs);
+    } else {
+      Log.info("decoding via DeterministicRolePruning");
+      StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
+      prunedSpans = inf.decodeAll().get(0);
+    }
 
     // Add any spans that appear in the gold label to the pruning mask if they do not appear already
     if (includeGoldSpansIfMissing) {

@@ -46,6 +46,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.FModel.CFLike;
 import edu.jhu.hlt.fnparse.rl.full.State.CachedFeatureParamsShim;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
@@ -61,8 +62,10 @@ import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.IntArrayList;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -126,6 +129,31 @@ public class CachedFeatures implements Serializable {
 //        this.features[t] = new HashMap<>();
 //      this.features2 = new HashMap<>();
       this.features3 = new HashMap<>();
+    }
+
+    public FNParse getParse() {
+      return parse;
+    }
+
+    public List<Span> getArgSpansForTarget(Span t) {
+      Map<Span, BaseTemplates> f = features3.get(t);
+      if (f == null)
+        throw new RuntimeException("don't know about this target: " + t.shortString());
+      List<Span> args = new ArrayList<>();
+      args.addAll(f.keySet());
+      return args;
+    }
+
+    public Iterator<Pair<SpanPair, BaseTemplates>> getFeatures() {
+      List<Pair<SpanPair, BaseTemplates>> l = new ArrayList<>();
+      for (Map.Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
+        Span t = x1.getKey();
+        for (Map.Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
+          Span s = x2.getKey();
+          l.add(new Pair<>(new SpanPair(t, s), x2.getValue()));
+        }
+      }
+      return l.iterator();
     }
 
     public void setFeatures(Span t, Span arg, BaseTemplates features) {
@@ -413,7 +441,8 @@ public class CachedFeatures implements Serializable {
   public class Params implements Serializable,
       edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
       edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold,
-      CachedFeatureParamsShim {
+      CachedFeatureParamsShim,
+      CFLike {
     private static final long serialVersionUID = -5359275348868455837L;
 
     /*
@@ -693,7 +722,7 @@ public class CachedFeatures implements Serializable {
     public FNParseSpanPruning getPruningMask(FNTagging y) {
       Item cur = loadedSentId2Item.get(y.getSentence().getId());
       Map<FrameInstance, List<Span>> possibleSpans = cur.spansWithFeatures();
-      return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans);
+      return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans, true);
     }
   }
 
@@ -1029,18 +1058,22 @@ public class CachedFeatures implements Serializable {
     return tf2feat;
   }
 
-  /**
-   * TODO Need to do coordination betweeen what the CachedFeatures module has
-   * loaded and what you ask for features for!
-   */
+
   public static CachedFeatures buildCachedFeaturesForTesting(ExperimentProperties config) throws TemplateDescriptionParsingException {
-    MultiTimer mt = new MultiTimer();
 //    String fs = "Word3-3-grams-between-Head1-and-Head2-Top25*head1head2Path-Basic-NONE-DEP-t-Top25"
 //        + " + Dist-Direction-<S>-Span1.Last"
 //        + " + Lemma-2-grams-between-<S>-and-Span1.Last";
     String fs = "Bc256/99-1-grams-between-Head2-and-Span1.Last"
         + " + WordWnSynset-2-grams-between-<S>-and-Span1.First"
         + " + Dist-discLen2-Span1.Last-Span2.First";
+    return buildCachedFeaturesForTesting(config, fs);
+  }
+  /**
+   * TODO Need to do coordination betweeen what the CachedFeatures module has
+   * loaded and what you ask for features for!
+   */
+  public static CachedFeatures buildCachedFeaturesForTesting(ExperimentProperties config, String fs) throws TemplateDescriptionParsingException {
+    MultiTimer mt = new MultiTimer();
     Random rand = new Random(9001);
 
     // stringTemplate <-> intTemplate and other stuff like template cardinality

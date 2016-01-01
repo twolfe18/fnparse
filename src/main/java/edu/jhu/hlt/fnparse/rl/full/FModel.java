@@ -2,34 +2,49 @@ package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.File;
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
+import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
+import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
+import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
+import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
-import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
+import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -46,17 +61,27 @@ public class FModel implements Serializable {
 
   public static boolean HIJACK_GET_UPDATE_FOR_DEBUG = false;
 
+  private MultiTimer.ShowPeriodically timer;
+
   private Config conf;
   private RTConfig rtConf;
+
+  // This may be null in which case we will assume that any incoming FNParses
+  // will have their featuresAndSpans:CachedFeatures.Item fields set.
   private DeterministicRolePruning drp;
-  private MultiTimer.ShowPeriodically timer;
+
 //  private CachedFeatures cachedFeatures;
   private FNParseTransitionScheme ts;
+
 
   // LH's max violation
   private boolean maxViolation;
   public PerceptronUpdateMode perceptronUpdateMode;
 
+  /**
+   * @param config
+   * @param pruningMode may be null if you want use {@link FNParse#featuresAndSpans}
+   */
   public FModel(
       RTConfig config,
       DeterministicRolePruning.Mode pruningMode) {
@@ -86,11 +111,15 @@ public class FModel implements Serializable {
 //    conf.weights = new GeneralizedWeights(conf, null, dimension, l2UpdateInterval);
 
     rtConf = config;
-    drp = new DeterministicRolePruning(pruningMode, null, null);
+    if (pruningMode != null)
+      drp = new DeterministicRolePruning(pruningMode, null, null);
+    else
+      drp = null;
     timer = new MultiTimer.ShowPeriodically(15);
 
     Primes primes = new Primes(ExperimentProperties.getInstance());
-    CachedFeatures params = null;
+//    CachedFeatures params = null;
+    CFLike params = null;
     ts = new FNParseTransitionScheme(params, primes);
     if (maxViolation && ts.sortEggsMode != SortEggsMode.NONE)
       Log.warn("[main] perceptron=true and sorting eggs?! don't do this");
@@ -109,10 +138,10 @@ public class FModel implements Serializable {
   }
 
   // Needed unless you setup syntactic parsers
-  public void setCachedFeatures(CachedFeatures cf) {
-//    cachedFeatures = cf;
-    drp.cachedFeatures = cf;
-//    conf.weights.setStaticFeatures(cf.params);
+//  public void setCachedFeatures(CachedFeatures cf) {
+  public void setCachedFeatures(CFLike cf) {
+//    drp.cachedFeatures = cf;
+    assert cf != null;
     ts.setCachedFeatures(cf);
   }
 
@@ -128,7 +157,7 @@ public class FModel implements Serializable {
 
     timer.start("update.setup.argPrune");
     boolean includeGoldSpansIfMissing = true;
-    oracleInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing, mvInf);
+    oracleInf.setArgPruning(drp, includeGoldSpansIfMissing, mvInf);
     timer.stop("update.setup.argPrune");
 
     return new Pair<>(oracleInf, mvInf);
@@ -179,9 +208,11 @@ public class FModel implements Serializable {
     timer.start("update.oracle");
     if (AbstractTransitionScheme.DEBUG)
       Log.info("doing oracle search...");
+    AbstractTransitionScheme.DEBUG_ORACLE_FN = true;
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
         ts.runInference(ts.genRootState(oracleInf), oracleInf);
+    AbstractTransitionScheme.DEBUG_ORACLE_FN = false;
     timer.stop("update.oracle");
 
     timer.start("update.mv");
@@ -210,8 +241,7 @@ public class FModel implements Serializable {
 
     if (oracleSc.getLoss().maxLoss() > 0) {
       if (ts.disallowNonLeafPruning && oracleSc.getLoss().fn == 0) {
-        // TODO The cause of this is FPs counted on not pruning the non-leaf
-        // nodes.
+        // TODO The cause of this is FPs counted on not pruning the non-leaf nodes.
       } else {
         if (badThings++ % 30 == 0) {
           System.err.println("BAD ORACLE FINAL STATE:");
@@ -222,37 +252,33 @@ public class FModel implements Serializable {
         System.err.println("mvInf=" + mvInf);
         System.err.println("oracleInf=" + oracleInf);
       }
-//      Log.warn("check your pruning! if you pruned away a branch on the gold tree"
-//            + " then you should consider reifying the pruning process into"
-//            + " learning (since its so good at handling pruning!)\n"
-//            + oracleSc.getLoss());
     }
 
     return buildUpdate(oracleB, mvB, false);
   }
   private int badThings = 0;
 
-  public Update getUpdateOld(FNParse y) {
-    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
-    Info oracleInf = ormv.get1();
-    Info mvInf = ormv.get2();
-
-    timer.start("update.oracle");
-    Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
-//    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
-    State oracleState = oracleStateColl.get1();   // get1 b/c need to enforce constraint that 
-    assert oracleState.getStepScores().getLoss().maxLoss() == 0 : "for testing use an exact oracle";
-    CoefsAndScoresAdjoints oracleBackwards = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleState.getStepScores());
-    timer.stop("update.oracle");
-
-    timer.start("update.mv");
-    Pair<State, DoubleBeam<State>> mvStateColl = State.runInference(mvInf);
-    State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
-    CoefsAndScoresAdjoints mvBackwards = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvState.getStepScores());
-    timer.stop("update.mv");
-
-    return buildUpdate(oracleBackwards, mvBackwards, false);
-  }
+//  public Update getUpdateOld(FNParse y) {
+//    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+//    Info oracleInf = ormv.get1();
+//    Info mvInf = ormv.get2();
+//
+//    timer.start("update.oracle");
+//    Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
+////    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
+//    State oracleState = oracleStateColl.get1();   // get1 b/c need to enforce constraint that 
+//    assert oracleState.getStepScores().getLoss().maxLoss() == 0 : "for testing use an exact oracle";
+//    CoefsAndScoresAdjoints oracleBackwards = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleState.getStepScores());
+//    timer.stop("update.oracle");
+//
+//    timer.start("update.mv");
+//    Pair<State, DoubleBeam<State>> mvStateColl = State.runInference(mvInf);
+//    State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
+//    CoefsAndScoresAdjoints mvBackwards = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvState.getStepScores());
+//    timer.stop("update.mv");
+//
+//    return buildUpdate(oracleBackwards, mvBackwards, false);
+//  }
 
   private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv, boolean ignoreHinge) {
 
@@ -319,7 +345,7 @@ public class FModel implements Serializable {
       decInf.setArgPruningUsingGoldLabelWithNoise();
     } else {
       boolean includeGoldSpansIfMissing = true;
-      decInf.setArgPruningUsingSyntax(drp, includeGoldSpansIfMissing);
+      decInf.setArgPruning(drp, includeGoldSpansIfMissing);
     }
     return decInf;
   }
@@ -343,17 +369,50 @@ public class FModel implements Serializable {
     return ts.decode(beamLast);
   }
 
-  public FNParse predictOld(FNParse y) {
-    Log.warn("using old predict method");
-    timer.start("predict");
-    Info decInf = getPredictInfo(y);
-    FNParse yhat = State.runInference2(decInf);
-    timer.stop("predict");
-    return yhat;
+//  public FNParse predictOld(FNParse y) {
+//    Log.warn("using old predict method");
+//    timer.start("predict");
+//    Info decInf = getPredictInfo(y);
+//    FNParse yhat = State.runInference2(decInf);
+//    timer.stop("predict");
+//    return yhat;
+//  }
+
+  State2<Info> oracleS(FNParse y) {
+    assert !maxViolation;
+    AbstractTransitionScheme.DEBUG_ORACLE_FN = true;
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Info oracleInf = ormv.get1();
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("doing oracle search...");
+    ts.flushPrimes();
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
+        ts.runInference(ts.genRootState(oracleInf), oracleInf);
+    State2<Info> s = oracleS.get1();
+    AbstractTransitionScheme.DEBUG_ORACLE_FN = false;
+    return s;
+  }
+  FNParse oracleY(FNParse y) {
+    return ts.decode(oracleS(y));
   }
 
 
-  public static void main(String[] args) {
+  private static FModel getFModel(ExperimentProperties config) {
+    Random rand = new Random(config.getInt("seed", 9001));
+    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
+
+//    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+    // CachedFeatures version
+    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), null);
+
+    m.ts.useGlobalFeats = false;
+    m.rtConf.oracleMode = OracleMode.MIN;
+    m.ts.useOverfitFeatures = false;
+
+    return m;
+  }
+
+  public static void main1(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("beamSize", "1");
     config.put("forceLeftRightInference", "false");
@@ -372,13 +431,8 @@ public class FModel implements Serializable {
       }
     });
 
-    Random rand = new Random(config.getInt("seed", 9001));
-    File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
-    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    m.ts.useGlobalFeats = false;
-    m.rtConf.oracleMode = OracleMode.RAND_MIN;
+    FModel m = getFModel(config);
 
-    m.ts.useOverfitFeatures = true;
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
         continue;
@@ -458,6 +512,213 @@ public class FModel implements Serializable {
         throw new RuntimeException();
       }
     }
+  }
+
+  public static void main(String[] args) throws Exception {
+    main2(args);
+//    main1(args);
+  }
+
+  public interface CFLike {
+    public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s);
+  }
+  public static class SimpleCFLike implements CFLike {
+    private Map<Pair<Sentence, SpanPair>, List<ProductIndex>> sentTS2feats;
+    private List<FNParse> parses;
+
+    public SimpleCFLike(List<CachedFeatures.Item> items) {
+      sentTS2feats = new HashMap<>();
+      parses = new ArrayList<>();
+      for (CachedFeatures.Item i : items) {
+        FNParse y = i.getParse();
+        y.featuresAndSpans = i;  // evil
+        parses.add(y);
+        Sentence s = y.getSentence();
+        Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
+        while (btIter.hasNext()) {
+          Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
+          List<ProductIndex> feats2 = bt2pi(st2feats.get2());
+          Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
+          List<ProductIndex> old = sentTS2feats.put(key, feats2);
+          assert old == null;
+        }
+      }
+    }
+
+    public List<FNParse> getParses() {
+      return parses;
+    }
+
+    @Override
+    public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
+      Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
+      List<ProductIndex> feats = sentTS2feats.get(key);
+      assert feats != null;
+      return feats;
+    }
+  }
+
+  // TODO This does not do feature sets! This just takes templates rather than their products.
+  public static List<ProductIndex> bt2pi(BaseTemplates bt) {
+    int n = bt.size();
+    List<ProductIndex> pi = new ArrayList<>(n);
+    for (int i = 0; i < n; i++) {
+      // TODO lookup card from bt.getTemplate(i) and BiAlph?
+      ProductIndex t = new ProductIndex(i, n);
+      int f = bt.getValue(i);
+      ProductIndex p = t.destructiveProd(f);
+      pi.add(p);
+    }
+    return pi;
+  }
+
+  public static List<CachedFeatures.Item> fooMemo() {
+    File f = new File("/tmp/fooMemo");
+    if (f.isFile())
+      return (List<CachedFeatures.Item>) FileUtil.deserialize(f);
+    List<CachedFeatures.Item> l = foo();
+    FileUtil.serialize(l, f);
+    return l;
+  }
+
+  public static List<CachedFeatures.Item> foo() {
+    // Read some features out of one file eagerly
+    File ff = new File("data/debugging/coherent-shards-filtered-small/features/shard0.txt");
+    boolean templatesSorted = true;
+    Iterable<FeatureFile.Line> itr = FeatureFile.getLines(ff, templatesSorted);
+//    String x = StreamSupport.stream(itr.spliterator(), false)
+//      .collect(Collectors.groupingBy(FeatureFile.Line::getSentenceId));
+//    Collectors.groupingBy(FeatureFile.Line::getSentenceId, LinkedHashMap::new, Collectors.toList())
+    Iterator<List<FeatureFile.Line>> bySent = new GroupBy<>(itr.iterator(), FeatureFile.Line::getSentenceId);
+
+    // We also need the FNParses
+    // Just read in the dev data.
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    Map<String, FNParse> parseById = new HashMap<>();
+    ParsePropbankData.Redis propbankAutoParses = null;
+    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+    for (FNParse y : pbr.getDevData()) {
+      FNParse old = parseById.put(y.getId(), y);
+      assert old == null;
+    }
+    Log.info("[main] parseById.size()=" + parseById.size());
+
+    // Perform join
+    List<CachedFeatures.Item> all = new ArrayList<>();
+    int skipped = 0;
+    while (bySent.hasNext()) {
+      List<FeatureFile.Line> feats = bySent.next();
+      String id = feats.get(0).getSentenceId();
+      FNParse y = parseById.get(id);
+      if (y == null) {
+        // This is a parse which is in the feature file but not in the dev set,
+        // skip it
+        skipped++;
+        continue;
+      }
+      CachedFeatures.Item i = new CachedFeatures.Item(y);
+      for (FeatureFile.Line l : feats) {
+        Span t = l.getTarget();
+        Span s = l.getArgSpan();
+        BitSet relTemplates = null; // null means all
+        boolean storeTemplates = true;
+        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
+        i.setFeatures(t, s, bt);
+      }
+      all.add(i);
+    }
+    Log.info("[main] all.size=" + all.size() + " skipped=" + skipped);
+
+    return all;
+  }
+
+  /*
+   * This isn't working... CachedFeatures is too complex due to its parallel
+   * nature and its difficult to figure out if something is a timing issue or
+   * why its wrong in the first place.
+   */
+  public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+
+//    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
+//        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
+//        + " + Dist-discLen5-Span1.First-Span2.Last-Top10"
+//        + " + Head2-RootPath-Basic-POS-DEP-t-Top10"
+//        + " + Head2-Word-Top1000"
+//        + " + Span1-PosPat-FULL_POS-2-0-Cnt8"
+//        + " + Dist-discLen3-Head1-Span1.Last"
+//        + " + Head1-BasicLabel"
+//        + " + Role1";
+//    CachedFeatures cf = CachedFeatures.buildCachedFeaturesForTesting(config, fs);
+//    ItemProvider ip = cf.new ItemProvider(100, true, false);
+
+
+    List<CachedFeatures.Item> stuff = fooMemo();
+    SimpleCFLike cfLike = new SimpleCFLike(stuff);
+
+    boolean justOracle = false;
+
+    SentenceEval se;
+    Map<String, Double> r;
+    double f1;
+
+    FModel m = getFModel(config);
+    m.setCachedFeatures(cfLike);
+    m.ts.useOverfitFeatures = false;
+
+    for (FNParse y : cfLike.getParses()) {
+      System.out.println("working on " + y.getId());
+
+      // make sure that oracle can get F1=1 regardless of model scores.
+      Log.info("testing the oracle");
+      FNParse yOracle = m.oracleY(y);
+      se = new SentenceEval(y, yOracle);
+      r = BasicEvaluation.evaluate(Arrays.asList(se));
+      f1 = r.get("ArgumentMicroF1");
+      Log.info("ORACLE TEST result: " + y.getSentence().getId()
+          + " f1=" + f1
+          + " p=" + r.get("ArgumentMicroPRECISION")
+          + " r=" + r.get("ArgumentMicroRECALL"));
+      assert f1 == 1;
+      if (justOracle)
+        continue;
+
+
+      Log.info("testing learning");
+      int updates = 0;
+      int lim = 2;
+      int passed = 0;
+      int enough = 3;
+      FNParse yhat = null;
+      for (int tryy = 0; tryy < 10 && passed < enough; tryy++) {
+        // Do some learning
+        for (int j = 0; j < lim; j++) {
+          m.getUpdate(y).apply(1);
+          updates++;
+        }
+
+        // Test
+        yhat = m.predict(y);
+        se = new SentenceEval(y, yhat);
+        r = BasicEvaluation.evaluate(Arrays.asList(se));
+        f1 = r.get("ArgumentMicroF1");
+        Log.info("result: " + y.getSentence().getId()
+            + " try=" + tryy
+            + " updates=" + updates
+            + " f1=" + f1
+            + " p=" + r.get("ArgumentMicroPRECISION")
+            + " r=" + r.get("ArgumentMicroRECALL"));
+        if (f1 == 1) {
+          passed++;
+        } else {
+//          assert false;
+          passed = 0;
+          lim = (int) (lim * 1.3 + 2);
+        }
+      }
+      assert passed == enough : FNDiff.diffArgs(y, yhat, true);
+    }
+
   }
 
 }

@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
+import edu.jhu.hlt.fnparse.rl.full.FModel.CFLike;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State;
@@ -26,15 +27,14 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.prim.map.IntDoubleEntry;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
-import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -87,7 +87,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  public Adjoints recallBias = new Adjoints.Constant(0);
 
   // Features
-  private CachedFeatures cachedFeatures;
+//  private CachedFeatures cachedFeatures;
+  private CFLike cachedFeatures;
   public boolean useOverfitFeatures = false;
 
   // Weights
@@ -96,7 +97,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public Alphabet<String> alph;  // TODO Remove!
 
 
-  public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
+//  public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
+  public FNParseTransitionScheme(CFLike cf, Primes primes) {
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -128,6 +130,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
 
+
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
@@ -143,6 +146,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public void setCachedFeatures(CachedFeatures cf) {
+    setCachedFeatures(cf.params);
+  }
+  public void setCachedFeatures(CFLike cf) {
     if (MAIN_LOGGING)
       Log.info("[main] setting CachedFeatures: " + cf);
     this.cachedFeatures = cf;
@@ -700,6 +706,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
     ProductIndex base = ProductIndex.TRUE;    // dynamic features get base=FALSE
+
     // TODO Same refactoring as in dynFeats1
     if (useOverfitFeatures) {
       TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
@@ -711,8 +718,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         + " wSquash[this]=" + wSquash.get(i)
         + " fs=" + fs);
       }
-      addTo.add(base.prod(i, dimension));
+      addTo.add(base.destructiveProd(i)); // destroys card, can't prod in any more features
     } else {
+
+      // Condition on the node type.
+      // NOTE: This does not specify the *values* on the prefix, only the type.
+      base = base.prod(egg.type + 1, 4 + 1);
 
       // What to do if this is a T-valued or F-valued egg?
       // The only eggs which will be present are positive examples, so one indicator feature should be sufficient
@@ -745,23 +756,40 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Span s = Span.decodeSpan(prefix.s, sentLen);
         FrameIndex fi = info.getFrameIndex();
         Frame f = fi.getFrame(prefix.f);
-        int k = prefix.k; assert k >= 0 && k < f.numRoles();
-        int K = f.numRoles(); assert !useContRoles && !useRefRoles;
-        boolean roleDepsOnFrame = info.roleDependsOnFrame();
+//        int k = prefix.k; assert k >= 0 && k < f.numRoles();
+//        int K = f.numRoles(); assert !useContRoles && !useRefRoles;
+        int k, K;
+        if (info.roleDependsOnFrame()) {
+          FrameRolePacking frp = info.getFRPacking();
+          k = frp.index(f, prefix.k);
+          K = frp.size();
+        } else {
+          k = prefix.k;
+          K = f.numRoles();
+        }
 
         // These are exact feature indices (from disk, who precompute pipeline)
-        List<ProductIndex> feats = cachedFeatures.params.getFeaturesNoModulo(sent, t, s);
+//        List<ProductIndex> feats = cachedFeatures.params.getFeaturesNoModulo(sent, t, s);
+        List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
 
         // Take the product of these (t,s) features with (f,k).
         // ProductIndexAdjoints will take the modulo the weights size as late as possible.
         for (ProductIndex pi : feats) {
-          ProductIndex p = base.flatProd(pi);   // f(t,s)
-          ProductIndex pp = p.prod(k, K);       // f(t,fk,s)
-          if (roleDepsOnFrame)
-            pp = pp.prod(f.getId(), fi.getNumFrames());
+
+//          ProductIndex p = base.flatProd(pi);   // f(t,s)
+//          ProductIndex pp = p.prod(k, K);       // f(t,fk,s)
+//          if (roleDepsOnFrame)
+//            pp = pp.prod(f.getId(), fi.getNumFrames());
+
+          long i = pi.getProdFeature();
+          ProductIndex p = base.prod(0, K+1).destructiveProd(i);
+          ProductIndex pp = base.prod(k+1, K+1).destructiveProd(i);
+
           addTo.add(p);
           addTo.add(pp);
+//          Log.info("p=" + p + " pp=" + pp + " i=" + i + " f=" + f.getName() + " k=" + k);
         }
+//        Log.info("numFeats=" + addTo.size());
 
 //        IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
 //        Iterator<IntDoubleEntry> itr = fv.iterator();

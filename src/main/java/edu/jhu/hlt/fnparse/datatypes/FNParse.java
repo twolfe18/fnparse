@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.tutils.Span;
 
 /**
@@ -15,6 +16,8 @@ import edu.jhu.hlt.tutils.Span;
  */
 public class FNParse extends FNTagging implements Serializable {
   private static final long serialVersionUID = -1190604209550969930L;
+
+  public CachedFeatures.Item featuresAndSpans;
 
   /**
    * @param s is the Sentence that has been parsed

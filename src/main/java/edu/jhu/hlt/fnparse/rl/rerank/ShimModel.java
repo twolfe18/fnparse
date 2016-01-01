@@ -45,6 +45,9 @@ public class ShimModel {
     reranker = null;
     conf = null;
     fmodel = m;
+
+    Log.warn("DOING A DUMB THING, OVERFITTING WITH WITH CACHEDFEATURES...");
+    m.getTransitionSystem().useOverfitFeatures = true;
   }
 
   public boolean isFModel() {
@@ -96,7 +99,7 @@ public class ShimModel {
     Log.info("setting CachedFeatures");
     cachedFeatures = cf;
     if (fmodel != null)
-      fmodel.setCachedFeatures(cf);
+      fmodel.setCachedFeatures(cf.params);
   }
 
   public CachedFeatures getCachedFeatures() {

@@ -234,6 +234,12 @@ public class FrameIndex implements FrameIndexInterface {
   }
 
   public Frame getFrame(int id) {
+    if (id < 0)
+      throw new IllegalArgumentException();
+    if (id >= byId.length) {
+      String n = this == frameNet ? "FrameNet" : this == propbank ? "Propbank" : "???";
+      throw new IllegalArgumentException("frame id=" + id + " is not valid in " + n);
+    }
     Frame f = byId[id];
     if (f == null)
       throw new RuntimeException();

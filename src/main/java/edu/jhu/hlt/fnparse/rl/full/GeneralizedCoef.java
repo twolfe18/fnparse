@@ -5,8 +5,8 @@ import java.io.Serializable;
 public abstract class GeneralizedCoef implements Serializable {
   private static final long serialVersionUID = -8325375378258659099L;
 
-  public final double coefForwards;
-  public final double coefBackwards;
+  protected final double coefForwards;
+  protected final double coefBackwards;
 
   public GeneralizedCoef(double coefForwards, double coefBackwards) {
     if (Double.isNaN(coefForwards) || Double.isInfinite(coefForwards))
@@ -96,6 +96,7 @@ public abstract class GeneralizedCoef implements Serializable {
       beta = b;
     }
 
+    @Override
     public double forwards(StepScores<?> modelLossRand) {
       MaxLoss l = modelLossRand.getLoss();
       if (coefForwards == 0)
@@ -124,6 +125,29 @@ public abstract class GeneralizedCoef implements Serializable {
     @Override
     public void backwards(StepScores<?> modelLossRand, double dErr_dForwards) {
       // no-op
+    }
+
+    /** Doesn't respect {@link Loss#mode}, uses I(delta min loss > 0, -inf, 0) */
+    public static class Oracle extends Loss {
+      private static final long serialVersionUID = -2669067902555041859L;
+      public Oracle() {
+        super(0, Mode.MIN_LOSS, 1);
+      }
+      @Override
+      public double forwards(StepScores<?> modelLossRand) {
+        MaxLoss l = modelLossRand.getLoss();
+        if (l.fn > 0)
+          return Double.NEGATIVE_INFINITY;
+        // TODO Accounting where spurious FPs are introduced by pruning non-leaves?
+        // We shouldn't have to worry about spurious FPs causing the oracle to
+        // do the wrong thing, because an spurious hatch will always outscore a
+        // bad squash (-inf).
+        return -l.fp;
+      }
+      @Override
+      public String toString() {
+        return "(CoefLoss ORACLE)";
+      }
     }
   }
 }

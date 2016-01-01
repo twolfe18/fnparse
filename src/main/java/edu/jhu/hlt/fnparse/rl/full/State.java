@@ -1899,7 +1899,7 @@ public class State implements StateLike {
     DeterministicRolePruning drp = new DeterministicRolePruning(
         DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
     boolean addSpansIfMissing = true;   // for train at least
-    inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
+    inf.setArgPruning(drp, addSpansIfMissing);
 
     FNParse yhat = runInference2(inf);
 
@@ -1939,7 +1939,7 @@ public class State implements StateLike {
       // Normally we would not allow the decoder to see the gold spans, but for
       // this test it is easier to check against F1=1 than F1=bestAchievable
       boolean addSpansIfMissing = true;// inf != decInf;
-      inf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
+      inf.setArgPruning(drp, addSpansIfMissing);
 //      System.out.println("addSpansIfMissing=" + addSpansIfMissing
 //          + " prunedSpans=" + inf.prunedSpans.describe());
     }
@@ -1998,7 +1998,7 @@ public class State implements StateLike {
     // We're assuming the FNParses already have the parses in them
     DeterministicRolePruning drp = new DeterministicRolePruning(
         DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, null, null);
-    decInf.setArgPruningUsingSyntax(drp, addSpansIfMissing);
+    decInf.setArgPruning(drp, addSpansIfMissing);
     System.out.println("yhatPruning=" + decInf.prunedSpans.describe());
 
     assert false : "didn't learn in " + maxiter + " iterations";

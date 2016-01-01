@@ -199,6 +199,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     }
     return wife2;
   }
+  // Only turn this one during oracle searches
+  public static boolean DEBUG_ORACLE_FN = false;
 
   // NOTE: This has to be in the module due to the need for consChild
   public Node2 replaceChild(Node2 parent, Node2 searchChild, Node2 replaceChild, Z info) {
@@ -523,8 +525,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     GeneralizedCoef.Loss loss = new GeneralizedCoef.Loss(-1, Mode.MIN_LOSS, 1);
     HowToSearchImpl htsOracle = new HowToSearchImpl(
         new GeneralizedCoef.Model(0, true), loss, decoder.coefRand());
-    if (decoder.coefModel().coefBackwards != -1)
-      throw new IllegalArgumentException("needed to make updateAway work");
+//    if (decoder.coefModel().coefBackwards != -1)
+//      throw new IllegalArgumentException("needed to make updateAway work");
 
     if (DEBUG && (DEBUG_SEARCH || DEBUG_PERCEPTRON)) {
       Log.info("starting perceptron update, mode=" + mode);
