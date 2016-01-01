@@ -769,8 +769,23 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return staticFeats0(egg, n.prefix, info, weights);
   }
   public ProductIndexAdjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
-    List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
-    return new ProductIndexAdjoints(weights, feats);
+    // This should be memoized because there is still a loop over all the features in ProductIndexAdjoints.init
+    Map<TFKS, ProductIndexAdjoints> m;
+    if (weights == wHatch) {
+      m = info.staticHatchFeatCache;
+    } else if (weights == wSquash) {
+      m = info.staticSquashFeatCache;
+    } else {
+      throw new RuntimeException();
+    }
+    TFKS memoKey = motherPrefix.dumbPrepend(egg);
+    ProductIndexAdjoints pia = m.get(memoKey);
+    if (pia == null) {
+      List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
+      pia = new ProductIndexAdjoints(weights, feats);
+      m.put(memoKey, pia);
+    }
+    return pia;
   }
 
   /**
@@ -810,7 +825,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     // Static score
     Adjoints staticScore;
-    int d = wHatch.dimension();
     if (egg instanceof EggWithStaticScore) {
       // Recover the static features which were computed in genEggs
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)

@@ -22,9 +22,11 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.State.FI;
+import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
 import edu.jhu.hlt.fnparse.rl.full2.SortedEggCache;
+import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.HasRandom;
@@ -82,6 +84,31 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   public HowToSearchImpl htsBeam;
   public HowToSearchImpl htsConstraints;
+
+
+  /* Static feature cache *****************************************************/
+
+  public Map<TFKS, ProductIndexAdjoints> staticHatchFeatCache = new HashMap<>();
+  public Map<TFKS, ProductIndexAdjoints> staticSquashFeatCache = new HashMap<>();
+
+  /** Probably don't need to do this because Info's should only last for one search, get GC'd quickly */
+  public void clearStaticFeatureCache() {
+    staticHatchFeatCache.clear();
+    staticSquashFeatCache.clear();
+  }
+
+  // copy between oracle and MV Info instances?
+  // easy 2x...
+  /** Sets this instances cache to the same cache as other */
+  public void shareStaticFeatureCacheWith(Info other) {
+    staticHatchFeatCache = other.staticHatchFeatCache;
+    staticSquashFeatCache = other.staticSquashFeatCache;
+  }
+
+  /* ************************************************************************ */
+
+
+
 
   public static class HowToSearchImpl implements HowToSearch {
     GeneralizedCoef model, loss, rand;

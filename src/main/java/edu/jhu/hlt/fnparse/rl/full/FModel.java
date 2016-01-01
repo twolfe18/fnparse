@@ -118,6 +118,7 @@ public class FModel implements Serializable {
     timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
+    oracleInf.shareStaticFeatureCacheWith(mvInf);
 //    if (useNewTS)
       oracleInf.setLabel(y, ts);
 //    else
