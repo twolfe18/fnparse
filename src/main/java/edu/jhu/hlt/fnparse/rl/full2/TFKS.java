@@ -42,6 +42,7 @@ public class TFKS extends LL<TVNS> {
   public final int t, f, k, s;
 
   public final BigInteger primesProd;
+  private final int hash;
 
   /** Inserts a zero score to promote {@link TVN} to {@link TVNS} */
   public static TFKS lltvn2tfks(LL<TVN> l) {
@@ -50,10 +51,13 @@ public class TFKS extends LL<TVNS> {
 
   public TFKS(TVNS item, TFKS next) {
     super(item, next);
-    if (next == null)
+    if (LLSSP.DISABLE_PRIMES) {
+      primesProd = null;
+    } else if (next == null) {
       primesProd = BigInteger.valueOf(item.prime);
-    else
+    } else {
       primesProd = BigInteger.valueOf(item.prime).multiply(next.primesProd);
+    }
     switch (item.type) {
     case T:
       t = or(safeT(next), item.value);
@@ -82,6 +86,7 @@ public class TFKS extends LL<TVNS> {
     default:
       throw new RuntimeException();
     }
+    hash = Hash.mix(t, f, k, s);
     if (dbgFrameIndex != null && f >= 0 && k >= 0) {
       Frame ff = dbgFrameIndex.getFrame(f);
       assert k < ff.numRoles() : "k=" + k + " but " + ff.getName() + " only has " + ff.numRoles() + " roles";
@@ -190,11 +195,12 @@ public class TFKS extends LL<TVNS> {
 
   @Override
   public int hashCode() {
-    return Hash.mix(t, f, k, s);
+    return hash;
   }
 
   @Override
   public boolean equals(Object other) {
+//    assert (++eqCalls) > 10 : "why?";
     if (other instanceof TFKS) {
       TFKS a = (TFKS) other;
       return t == a.t
@@ -204,6 +210,7 @@ public class TFKS extends LL<TVNS> {
     }
     return false;
   }
+//  private int eqCalls = 0;
 
   public static BigInteger getPrimesProd(TFKS l) {
     if (l == null)

@@ -139,19 +139,9 @@ public class Info implements Serializable, HasCounts, HasRandom {
     }
   }
 
-//  final double lossScale;// = 10;
-//  final double mScale;// = (1/lossScale);
-//  final double mScaleMV;// = (1/lossScale);
-//  final double rScale;// = (1/lossScale);
-
   public Info(Config config) {
     this.config = config;
     this.setDecodeCoefs();
-//    ExperimentProperties p = ExperimentProperties.getInstance();
-//    lossScale = p.getDouble("lossScale", 10);
-//    mScale = (1/lossScale);
-//    mScaleMV = p.getDouble("mScaleMV", 1);
-//    rScale = (1/lossScale) * p.getDouble("rScale", 0.1);
   }
 
   public Config getConfig() {
@@ -255,9 +245,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return "(Info for " + sentence.getId()
       + " htsBeam=" + htsBeam
       + " htsConstraint=" + htsConstraints
-//      + " lossScale=" + lossScale
-//      + " mScale=" + mScale
-//      + " rScale=" + rScale
       + ")";
   }
 
@@ -279,28 +266,34 @@ public class Info implements Serializable, HasCounts, HasRandom {
        * If I do that then some of the oracle model will lead to update away
        * from the oracle!
        */
-      Log.info("ORACLE MODE: " + likeConf.oracleMode);
+//      Log.info("ORACLE MODE: " + likeConf.oracleMode);
       GeneralizedCoef cL = new GeneralizedCoef.Loss.Oracle();
+
+
+      // If this is is 0, then MIN=MAX and RAND_MIN=RAND_MAX.
+      // If this is > 0, then the oracle can be over-ridden by the model score, leading to problems
+      double mScale = 0;
+
       double rScale = 0.5;
       switch (likeConf.oracleMode) {
       case RAND_MIN:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+1, true),
+            new GeneralizedCoef.Model(+mScale, true),
             cL,
             new GeneralizedCoef.Rand(rScale)));
       case RAND_MAX:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-1, true),
+            new GeneralizedCoef.Model(-mScale, true),
             cL,
             new GeneralizedCoef.Rand(rScale)));
       case MIN:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+1, true),
+            new GeneralizedCoef.Model(+mScale, true),
             cL,
             GeneralizedCoef.ZERO));
       case MAX:
         return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-1, true),
+            new GeneralizedCoef.Model(-mScale, true),
             cL,
             GeneralizedCoef.ZERO));
       default:
@@ -426,7 +419,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
   public Info setArgPruning(DeterministicRolePruning drp, boolean includeGoldSpansIfMissing, Info alsoSet) {
     assert sentenceAndLabelMatch();
     if (drp == null) {
-      Log.info("using CachedFeatures.Item to get possible arg spans");
+//      Log.info("using CachedFeatures.Item to get possible arg spans");
       FNParse y = label.getParse();
       CachedFeatures.Item i = y.featuresAndSpans;
       assert i != null;
@@ -441,7 +434,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
       boolean nullSpanInPossArgs = false;
       prunedSpans = new FNParseSpanPruning(sentence, y.getFrameInstances(), spans, nullSpanInPossArgs);
     } else {
-      Log.info("decoding via DeterministicRolePruning");
+      Log.warn("decoding via DeterministicRolePruning");
       StageDatumExampleList<FNTagging, FNParseSpanPruning> inf = drp.setupInference(Arrays.asList(label.getParse()), null);
       prunedSpans = inf.decodeAll().get(0);
     }

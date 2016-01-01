@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
 
+import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
@@ -53,6 +54,8 @@ public interface Beam<T extends StateLike> {
         return -1;
       if (score > o.score)
         return +1;
+      if (LLSSP.DISABLE_PRIMES)
+        return 0;
       BigInteger s1 = state.getSignature();
       BigInteger s2 = o.state.getSignature();
       int c = s1.compareTo(s2);
@@ -100,7 +103,14 @@ public interface Beam<T extends StateLike> {
 
     public DoubleBeam(int capacity, SearchCoefficients coefs) {
       this.capacity = capacity;
-      this.table = new HashMap<>((int) (capacity * 1.5 + 1));
+      if (LLSSP.DISABLE_PRIMES) {
+        // All states are assumed to be unique, don't attempt to call equals
+        // which will at best waste time calling getSig and at worst falsely
+        // assume two States are the same because of some dummy primeProd value.
+        this.table = null;
+      } else {
+        this.table = new HashMap<>((int) (capacity * 1.5 + 1));
+      }
       this.scores = new TreeSet<>();
       this.numCollapses = 0;
       this.numOffers = 0;
@@ -113,7 +123,8 @@ public interface Beam<T extends StateLike> {
 
     public void clear() {
       scores.clear();
-      table.clear();
+      if (table != null)
+        table.clear();
       numCollapses = 0;
       numOffers = 0;
     }
@@ -139,23 +150,6 @@ public interface Beam<T extends StateLike> {
       return sb.toString();
     }
 
-//    public double value(T s) {
-//      switch (mode) {
-//      case MIN_LOSS:
-//        return s.getStepScores().forwardsMin();
-//      case H_LOSS:
-//        return s.getStepScores().forwardsH();
-//      case MAX_LOSS:
-//        return s.getStepScores().forwardsMax();
-//      case MAX_LOSS_LIN:
-//        return s.getStepScores().forwardsMaxLin();
-//      case MAX_LOSS_POW:
-//        return s.getStepScores().forwardsMaxPow();
-//      default:
-//        throw new RuntimeException("unknown mode: " + mode);
-//      }
-//    }
-
     /**
      * Assumes that {@link Adjoints}s are cached and calls to forwards() are cheap.
      */
@@ -174,7 +168,7 @@ public interface Beam<T extends StateLike> {
         return false;
       }
 
-      BeamItem<T> old = table.get(s);
+      BeamItem<T> old = table == null ? null : table.get(s);
       if (old != null) {
         numCollapses++;
         if (old.score < sc) {
@@ -193,17 +187,21 @@ public interface Beam<T extends StateLike> {
         // If this is a new state and we have room, then add this item without eviction
         BeamItem<T> si = new BeamItem<>(s, sc);
         scores.add(si);
-        table.put(s, si);
+        if (table != null)
+          table.put(s, si);
         return true;
       } else if (sc > lowerBound()) {
         // Remove the worst item on the beam.
         BeamItem<T> worst = scores.pollFirst();
-        table.remove(worst.state);
+        if (table != null)
+          table.remove(worst.state);
         // Add this item
         BeamItem<T> si = new BeamItem<>(s, sc);
         scores.add(si);
-        BeamItem<T> old2 = table.put(s, si);
-        assert old2 == null;
+        if (table != null) {
+          BeamItem<T> old2 = table.put(s, si);
+          assert old2 == null;
+        }
         return true;
       } else {
         return false;
@@ -227,8 +225,10 @@ public interface Beam<T extends StateLike> {
     @Override
     public T pop() {
       BeamItem<T> bi = scores.pollLast();
-      BeamItem<T> r = table.remove(bi.state);
-      assert r != null;
+      if (table != null) {
+        BeamItem<T> r = table.remove(bi.state);
+        assert r != null;
+      }
       return bi.state;
     }
 

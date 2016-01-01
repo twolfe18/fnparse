@@ -516,6 +516,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     LATEST,
   }
 
+  // TODO Need to know what the weights are so that maybeApplyL2Update does
+  // not need to go through backwards. Do this onece per update, not once per
+  // every time backwards hits weights (which is a lot).
+
   /** Returns (updateTowardsState, updateAwayState) */
 //  public Pair<State2<Z>, State2<Z>> perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
   public Update perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
@@ -670,6 +674,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the most violated updates");
           bad.backwards(-learningRate);
+
+          assert false : "need to put an attempted L2 update here, see how its done in buildUpdate";
+
           return mv;
         }
         @Override public double violation() {

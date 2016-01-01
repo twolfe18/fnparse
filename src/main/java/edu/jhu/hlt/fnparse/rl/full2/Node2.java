@@ -29,6 +29,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  * @author travis
  */
 public class Node2 implements HasStepScores, HasSig {
+  @SuppressWarnings("unused")
   private static final Random rand = new Random(9001);
 
   // Regular loss is based on the number of false negatives in an entire sub-tree
@@ -160,6 +161,7 @@ public class Node2 implements HasStepScores, HasSig {
       childrenS = Adjoints.Constant.ZERO;
       childrenR = 0;
     } else {
+//      Log.info("children.class=" + children.getClass());
       childrenS = children.getScoreSum().getModel();
       childrenR = children.getScoreSum().getRand();
     }
@@ -179,7 +181,8 @@ public class Node2 implements HasStepScores, HasSig {
         // This is enough to make collisions unlikely while still being fast
         // and not requiring modification of DoubleBeam.
         // TODO This is REALLY slow! Like slower than using real primes!
-        __sigMemo = BigInteger.probablePrime(16, rand);
+//        __sigMemo = BigInteger.probablePrime(16, rand);
+        __sigMemo = BigInteger.ZERO;
       } else {
         BigInteger a = LLTVN.getPrimesProd(eggs);
         BigInteger b = LLTVN.getPrimesProd(pruned);

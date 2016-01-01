@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
@@ -49,6 +50,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public static boolean DEBUG_FEATURES = true;
   public static boolean DEBUG_GEN_EGGS = false;
   public static boolean MAIN_LOGGING = true;
+
+  public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
 
   public enum SortEggsMode {
     BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
@@ -96,30 +99,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
   public Alphabet<String> alph;  // TODO Remove!
 
+  public void maybeApplyL2Reg() {
+    wHatch.maybeApplyL2Reg();
+    wSquash.maybeApplyL2Reg();
+    if (wGlobal != null)
+      wGlobal.maybeApplyL2Reg();
+  }
 
 //  public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
   public FNParseTransitionScheme(CFLike cf, Primes primes) {
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    int dimension = config.getInt("hashingTrickDim", 1 << 20);
-    int updateInterval = config.getInt("updateL2Every", 16);
-    double lrLocal = config.getDouble("lrLocal", 1);
-    double l2Local = config.getDouble("l2Penalty", 1e-6);
-    double lrGlobal = config.getDouble("lrGlobal", 0.3);
-    double l2Global = config.getDouble("globalL2Penalty", 1e-4);
-    wHatch = new WeightsInfo(
-        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-        dimension, lrLocal, l2Local);
-    wSquash = new WeightsInfo(
-        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-        dimension, lrLocal, l2Local);
-    wGlobal = new WeightsInfo(
-        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-        dimension, lrGlobal, l2Global);
+
     prefix2primeIdx = new Alphabet<>();
     this.primes = primes;
 
+    ExperimentProperties config = ExperimentProperties.getInstance();
     sortEggsMode = config.getBoolean("forceLeftRightInference")
         ? SortEggsMode.NONE : SortEggsMode.BY_KS;
     Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
@@ -130,12 +125,30 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
 
+    int dimension = config.getInt("hashingTrickDim", 1 << 24);
+    int updateInterval = config.getInt("updateL2Every", 8);
+    double lrLocal = config.getDouble("lrLocal", 1);
+    double l2Local = config.getDouble("l2Penalty", 1e-3);
+    double lrGlobal = config.getDouble("lrGlobal", 1);
+    double l2Global = config.getDouble("globalL2Penalty", 1e-2);
+
+    wHatch = new WeightsInfo(
+        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+        dimension, lrLocal, l2Local);
+    wSquash = new WeightsInfo(
+        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+        dimension, lrLocal, l2Local);
+    if (useGlobalFeats) {
+      wGlobal = new WeightsInfo(
+          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+          dimension, lrGlobal, l2Global);
+    }
 
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + wSquash.summary());
-      Log.info("[main] wGlobal=" + wGlobal.summary());
+      Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
@@ -226,6 +239,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   private long primeFor(int type, int value) {
+    if (LLSSP.DISABLE_PRIMES)
+      return 0;
     TVNS tvns = new TVNS(type, value, -1, -1, 2, null, Double.NaN);
     TFKS tfks = new TFKS(tvns, null);
     return primeFor(tfks);
@@ -245,6 +260,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public Iterable<LL<TVN>> encode(FNParse y) {
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE)
       Log.info("encoding y=" + Describe.fnParse(y));
+    timer.start("encode");
     List<LL<TVN>> yy = new ArrayList<>();
     int n = y.getSentence().size();
     for (FrameInstance fi : y.getFrameInstances()) {
@@ -281,6 +297,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE) {
       Log.info("yy.size=" + yy.size());
     }
+    timer.stop("encode");
     return yy;
   }
 
@@ -698,9 +715,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return addTo;
   }
 
-  public ProductIndexAdjoints dynFeats0(Node2 n, Info info, WeightsInfo weights) {
+  private ProductIndexAdjoints dynFeats0(Node2 n, Info info, WeightsInfo weights) {
     List<ProductIndex> feats = dynFeats2(n, info, new ArrayList<>(), weights.dimension());
-    ProductIndexAdjoints a = new ProductIndexAdjoints(weights, feats);
+    boolean attemptApplyL2Update = false;   // done in Update instead!
+    ProductIndexAdjoints a = new ProductIndexAdjoints(weights, feats, attemptApplyL2Update);
     return a;
   }
 
@@ -832,7 +850,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     ProductIndexAdjoints pia = m.get(memoKey);
     if (pia == null) {
       List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
-      pia = new ProductIndexAdjoints(weights, feats);
+      boolean attemptApplyL2Update = false;   // done in Update instead!
+      pia = new ProductIndexAdjoints(weights, feats, attemptApplyL2Update);
       m.put(memoKey, pia);
     }
     return pia;

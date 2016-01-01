@@ -195,6 +195,9 @@ public class FModel implements Serializable {
     Info oracleInf = ormv.get1();
     Info mvInf = ormv.get2();
 
+//    Log.info("oracleInf: " + oracleInf);
+//    Log.info("mvInf: " + mvInf);
+
     if (maxViolation) {
       timer.start("update.perceptron");
       ts.flushPrimes();
@@ -242,6 +245,12 @@ public class FModel implements Serializable {
     if (oracleSc.getLoss().maxLoss() > 0) {
       if (ts.disallowNonLeafPruning && oracleSc.getLoss().fn == 0) {
         // TODO The cause of this is FPs counted on not pruning the non-leaf nodes.
+        
+        
+        // This is still a problem!
+        // Number of FPs is unbounded due to being weighed against model score
+        // TEST: If you set oracle to have mScale=0, then this should not be a problem!
+        // TEST PASSED!
       } else {
         if (badThings++ % 30 == 0) {
           System.err.println("BAD ORACLE FINAL STATE:");
@@ -300,12 +309,17 @@ public class FModel implements Serializable {
       public double apply(double learningRate) {
         if (hinge > 0 || ignoreHinge) {
           timer.start("update.apply");
+
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the oracle updates");
           oracle.backwards(-learningRate);
+
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the most violated updates");
           mv.backwards(-learningRate);
+
+          ts.maybeApplyL2Reg();
+
           timer.stop("update.apply");
         }
         return hinge;
@@ -405,9 +419,9 @@ public class FModel implements Serializable {
     // CachedFeatures version
     FModel m = new FModel(new RTConfig("rtc", workingDir, rand), null);
 
-    m.ts.useGlobalFeats = false;
-    m.rtConf.oracleMode = OracleMode.MIN;
-    m.ts.useOverfitFeatures = false;
+//    m.ts.useGlobalFeats = false;
+//    m.rtConf.oracleMode = OracleMode.MIN;
+//    m.ts.useOverfitFeatures = false;
 
     return m;
   }
@@ -639,6 +653,11 @@ public class FModel implements Serializable {
    */
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
+    config.put("oracleMode", "MIN");
+    config.put("forceLeftRightInference", "true");
+    config.put("perceptron", "false");
+    config.put("useGlobalFeatures", "true");
+    config.put("beamSize", "1");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
 //        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
@@ -664,7 +683,8 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-    m.ts.useOverfitFeatures = false;
+    m.ts.useOverfitFeatures = true;
+    Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
     for (FNParse y : cfLike.getParses()) {
       System.out.println("working on " + y.getId());
@@ -692,10 +712,17 @@ public class FModel implements Serializable {
       FNParse yhat = null;
       for (int tryy = 0; tryy < 10 && passed < enough; tryy++) {
         // Do some learning
+        double hinge = 0;
         for (int j = 0; j < lim; j++) {
-          m.getUpdate(y).apply(1);
+          hinge += m.getUpdate(y).apply(1);
           updates++;
         }
+        hinge /= updates;
+
+        System.out.println("wHatch: " + m.ts.wHatch);
+        System.out.println("wSquash: " + m.ts.wSquash);
+        System.out.println("wGlobal: " + m.ts.wGlobal);
+        System.out.println("hinge: " + hinge);
 
         // Test
         yhat = m.predict(y);
@@ -713,7 +740,7 @@ public class FModel implements Serializable {
         } else {
 //          assert false;
           passed = 0;
-          lim = (int) (lim * 1.3 + 2);
+          lim = (int) (lim * 1.2 + 2);
         }
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);

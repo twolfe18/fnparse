@@ -25,19 +25,24 @@ public class ProductIndexAdjoints implements Adjoints {
   private LazyL2UpdateVector weights;
   private double l2Reg;
   private double lr;
+  boolean attemptL2Update;
 
   // For debugging
   public String nameOfWeights = null;
   public Alphabet<?> showUpdatesWith = null;
   public int forwardsCount = 0;
 
-  public ProductIndexAdjoints(WeightsInfo weights, List<ProductIndex> features) {
-    this(weights.learningRate, weights.l2Reg, weights.dimension(), features, weights.weights);
+  public ProductIndexAdjoints(WeightsInfo weights, List<ProductIndex> features, boolean attemptApplyL2Update) {
+    this(weights.learningRate, weights.l2Reg, weights.dimension(), features, weights.weights, attemptApplyL2Update);
   }
 
-  public ProductIndexAdjoints(double learningRate, double l2Reg, int dimension, List<ProductIndex> features, LazyL2UpdateVector weights) {
+  public ProductIndexAdjoints(
+      double learningRate, double l2Reg, int dimension,
+      List<ProductIndex> features, LazyL2UpdateVector weights,
+      boolean attemptApplyL2Update) {
     if (weights == null)
       throw new IllegalArgumentException();
+    this.attemptL2Update = attemptApplyL2Update;
     this.lr = learningRate;
     this.l2Reg = l2Reg;
     this.weights = weights;
@@ -55,7 +60,9 @@ public class ProductIndexAdjoints implements Adjoints {
 
   @Override
   public double forwards() {
-//    assert (++forwardsCount) < 4 : "you probably should wrap this is a caching";
+    // Counter example: the static feature cache. I can't cache those because
+    // the weights will change. Though I still want to cache the features/ProductIndexAdjoints
+//    assert (++forwardsCount) <= 5 : "you probably should wrap this is a caching";
     double d = 0;
     for (int i = 0; i < featIdx.length; i++)
       d += weights.weights.get(featIdx[i]);
@@ -77,6 +84,9 @@ public class ProductIndexAdjoints implements Adjoints {
       System.out.println();
     }
 
-    weights.maybeApplyL2Reg(l2Reg);
+    if (attemptL2Update) {
+      Log.info("why?");
+      weights.maybeApplyL2Reg(l2Reg);
+    }
   }
 }

@@ -120,7 +120,8 @@ public class LLSSPatF extends LLSSP {
       numArgs(item, prev, info, feats);
     if (feats.isEmpty())
       return Adjoints.Constant.ZERO;
-    return new ProductIndexAdjoints(globals, feats);
+    boolean attemptApplyL2Update = false;   // done in Update instead!
+    return new ProductIndexAdjoints(globals, feats, attemptApplyL2Update);
   }
 
   private static void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {

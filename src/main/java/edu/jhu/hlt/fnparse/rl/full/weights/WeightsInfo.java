@@ -16,6 +16,11 @@ public class WeightsInfo {
     this.l2Reg = l2Reg;
   }
 
+  /** Forwards to {@link LazyL2UpdateVector#maybeApplyL2Reg(double)} */
+  public void maybeApplyL2Reg() {
+    weights.maybeApplyL2Reg(l2Reg);;
+  }
+
   public void scale(double scale) {
     weights.weights.scale(scale);
   }
@@ -30,6 +35,11 @@ public class WeightsInfo {
 
   public int dimension() {
     return dimension;
+  }
+
+  @Override
+  public String toString() {
+    return summary();
   }
 
   public String summary() {
