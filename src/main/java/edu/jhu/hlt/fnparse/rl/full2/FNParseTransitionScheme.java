@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -699,13 +698,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return a;
   }
 
-  // TODO Memoize!
-  /** Features from {@link CachedFeatures.Params}, returns addTo */
-//  private List<ProductIndex> staticFeats1(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
-//    assert n.eggs != null : "hatch/squash both require an egg!";
-//    TVN egg = n.eggs.car();
-//    return staticFeats1Compute(egg, n.prefix, info, addTo, dimension);
-//  }
   private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
     ProductIndex base = ProductIndex.TRUE;    // dynamic features get base=FALSE
     // TODO Same refactoring as in dynFeats1
@@ -756,19 +748,36 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int k = prefix.k; assert k >= 0 && k < f.numRoles();
         int K = f.numRoles(); assert !useContRoles && !useRefRoles;
         boolean roleDepsOnFrame = info.roleDependsOnFrame();
-        IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
-        Iterator<IntDoubleEntry> itr = fv.iterator();
-        while (itr.hasNext()) {
-          IntDoubleEntry ide = itr.next();
-          assert ide.get() > 0; // but you lose magnitude either way
-          int i = ide.index();
-          ProductIndex p = base.prod(i, dimension);
-          ProductIndex pp = p.prod(k, K);
+
+        // These are exact feature indices (from disk, who precompute pipeline)
+        List<ProductIndex> feats = cachedFeatures.params.getFeaturesNoModulo(sent, t, s);
+
+        // Take the product of these (t,s) features with (f,k).
+        // ProductIndexAdjoints will take the modulo the weights size as late as possible.
+        for (ProductIndex pi : feats) {
+          ProductIndex p = base.flatProd(pi);   // f(t,s)
+          ProductIndex pp = p.prod(k, K);       // f(t,fk,s)
           if (roleDepsOnFrame)
             pp = pp.prod(f.getId(), fi.getNumFrames());
           addTo.add(p);
           addTo.add(pp);
         }
+
+//        IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
+//        Iterator<IntDoubleEntry> itr = fv.iterator();
+//        while (itr.hasNext()) {
+//          IntDoubleEntry ide = itr.next();
+//          assert ide.get() > 0; // but you lose magnitude either way
+//          int i = ide.index();
+//          System.out.println("cachedFeatures(t=" + t.shortString() + ", s=" + s.shortString() + ")=" + i);
+//          ProductIndex p = base.prod(i, dimension);   // f(t,s)
+//          ProductIndex pp = p.prod(k, K);             // f(t,fk,s)
+//          if (roleDepsOnFrame)
+//            pp = pp.prod(f.getId(), fi.getNumFrames());
+//          addTo.add(p);
+//          addTo.add(pp);
+//        }
+
         return addTo;
       }
 
@@ -853,21 +862,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Dynamic score
-    ProductIndexAdjoints dynScore = dynFeats0(n, info, wHatch);
-
-
-    // Debugging stuff
-    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
-//      for (ProductIndex p : dynFeats) {
-//        int i = p.getProdFeatureModulo(d);
-//        double w = wHatch.get(i);
-//        Log.info("hatch weight=" + w + " feature=" + p);
-//      }
-      dynScore.nameOfWeights = "hatch";
-      dynScore.showUpdatesWith = alph;
-      Log.info("featHatchEarlyAdjoints: " + dynScore);
-    }
+    // TODO Remove this distinction, staticFeatures now does stuff like this, why have separate dynamic?
+//    ProductIndexAdjoints dynScore = dynFeats0(n, info, wHatch);
+//    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+//      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
+//      dynScore.nameOfWeights = "hatch";
+//      dynScore.showUpdatesWith = alph;
+//    }
+    Adjoints dynScore = Adjoints.Constant.ZERO;
 
     // Wrap up static + dynamic score into TVNS
     double r = info.getConfig().recallBias;
@@ -894,15 +896,16 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // nothing to do with model score).
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
-    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
     ProductIndexAdjoints staticScore = staticFeats0(n, info, wSquash);
-    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-      staticScore.nameOfWeights = "squashStatic";
-      staticScore.showUpdatesWith = alph;
-      dynScore.nameOfWeights = "squashDyn";
-      dynScore.showUpdatesWith = alph;
-//      Log.info("featSquashEarlyAdjoints: " + dynScore);
-    }
+//    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
+//    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+//      staticScore.nameOfWeights = "squashStatic";
+//      staticScore.showUpdatesWith = alph;
+//      dynScore.nameOfWeights = "squashDyn";
+//      dynScore.showUpdatesWith = alph;
+//    }
+    Adjoints dynScore = Adjoints.Constant.ZERO;
+
     Adjoints a = new Adjoints.Sum(staticScore, dynScore);
     return egg.withScore(a, info.getRandom().nextGaussian());
   }

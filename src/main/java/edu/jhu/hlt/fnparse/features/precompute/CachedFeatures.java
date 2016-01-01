@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -529,47 +530,94 @@ public class CachedFeatures implements Serializable {
       return getFeatures(f.getSentence(), t, s);
     }
 
-    @Override
-    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
-      if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
-        throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
-
-      // I should be able to use the same code as in InformationGainProducts.
-      IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
-      features.add(0, 2);   // intercept
+    public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
+      if (dropoutMode != DropoutMode.OFF)
+        throw new RuntimeException("fixme");
+      final int fsLen = featureSet.length;
 
       // pre-computed features don't include nullSpan
-      if (s == Span.nullSpan)
-        return features;
+      ProductIndex intercept = new ProductIndex(0, fsLen + 1);
+      if (s == Span.nullSpan) {
+        return Arrays.asList(intercept.prod(false));
+      }
+      List<ProductIndex> features = new ArrayList<>();
+      features.add(intercept.prod(true));
 
       // Get the templates needed for all the features.
       Item cur = loadedSentId2Item.get(sent.getId());
       BaseTemplates data = cur.getFeatures(t, s);
 
       List<ProductIndex> buf = new ArrayList<>();
-      final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
-      final int fsLen = featureSet.length;
       for (int i = 0; i < fsLen; i++) {
         int[] feat = featureSet[i];
+        ProductIndex featPI = new ProductIndex(i + 1, fsLen + 1);
+
         // Note that these features don't need to be producted with k due to the
         // fact that we have separate weights for those.
         InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
 
         // If I get a long here, I can zip them all together by multiplying by
         // featureSet.length and then adding in an offset.
-        for (ProductIndex pi : buf) {
+        for (ProductIndex pi : buf)
+          features.add(featPI.flatProd(pi));
 
-          if (dropoutMode == DropoutMode.TRAIN && rand.nextDouble() < dropoutProbability)
-            continue;
-
-//          int h = pi.getHashedProdFeatureModulo(dimension);
-          int h = pi.prod(i, fsLen).getProdFeatureModulo(dimension);
-          features.add(h + 1, v);   // +1 to make space for intercept
-        }
         buf.clear();
       }
       return features;
     }
+
+    @Override
+    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
+      if (dropoutMode != DropoutMode.OFF)
+        throw new RuntimeException("fixme");
+      List<ProductIndex> feats = getFeaturesNoModulo(sent, t, s);
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector(feats.size());
+      for (ProductIndex f : feats)
+        fv.add(f.getProdFeatureModulo(dimension), 1);
+      return fv;
+    }
+
+//    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
+//      if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
+//        throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
+//
+//      // I should be able to use the same code as in InformationGainProducts.
+//      IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
+//      features.add(0, 2);   // intercept
+//
+//      // pre-computed features don't include nullSpan
+//      if (s == Span.nullSpan)
+//        return features;
+//
+//      // Get the templates needed for all the features.
+//      Item cur = loadedSentId2Item.get(sent.getId());
+//      BaseTemplates data = cur.getFeatures(t, s);
+//
+//      List<ProductIndex> buf = new ArrayList<>();
+//      final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
+//      final int fsLen = featureSet.length;
+//      for (int i = 0; i < fsLen; i++) {
+//        int[] feat = featureSet[i];
+//        // Note that these features don't need to be producted with k due to the
+//        // fact that we have separate weights for those.
+//        InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
+//
+//        // If I get a long here, I can zip them all together by multiplying by
+//        // featureSet.length and then adding in an offset.
+//        for (ProductIndex pi : buf) {
+//
+//          if (dropoutMode == DropoutMode.TRAIN && rand.nextDouble() < dropoutProbability)
+//            continue;
+//
+////          int h = pi.getHashedProdFeatureModulo(dimension);
+//          int h = pi.prod(i, fsLen).getProdFeatureModulo(dimension);
+//          Log.info("i=" + i + " dimension=" + dimension + " fsLen=" + fsLen + " feat=" + Arrays.toString(feat));
+//          features.add(h + 1, v);   // +1 to make space for intercept
+//        }
+//        buf.clear();
+//      }
+//      return features;
+//    }
 
     /**
      * @param a must be a COMMIT action.

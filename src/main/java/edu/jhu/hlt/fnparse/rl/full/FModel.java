@@ -44,6 +44,8 @@ public class FModel implements Serializable {
 
   public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
 
+  public static boolean HIJACK_GET_UPDATE_FOR_DEBUG = false;
+
   private Config conf;
   private RTConfig rtConf;
   private DeterministicRolePruning drp;
@@ -133,7 +135,30 @@ public class FModel implements Serializable {
   }
 
   public Update getUpdate(FNParse y) {
+    if (HIJACK_GET_UPDATE_FOR_DEBUG)
+      hijack(y);
+
     return getUpdateNew(y);
+  }
+
+  private void hijack(FNParse y) {
+    Log.info("presumably with CachedFeatures enabled, lets try to see if we can make an update work");
+
+    AbstractTransitionScheme.DEBUG = true;
+    FNParseTransitionScheme.DEBUG_FEATURES = true;
+    Update u = getUpdateNew(y);
+    u.apply(1);
+
+    FNParse yhat = predict(y);
+    SentenceEval se = new SentenceEval(y, yhat);
+    Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+    double f1 = r.get("ArgumentMicroF1");
+    Log.info("result: " + y.getSentence().getId() 
+        + " f1=" + f1
+        + " p=" + r.get("ArgumentMicroPRECISION")
+        + " r=" + r.get("ArgumentMicroRECALL"));
+
+    Log.info("done hijacking");
   }
 
   public Update getUpdateNew(FNParse y) {
