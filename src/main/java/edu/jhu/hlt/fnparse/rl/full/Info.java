@@ -160,6 +160,15 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return config.frPacking;
   }
 
+  public boolean roleDependsOnFrame() {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    if (config.getBoolean("overrideRoleDependsOnFrame", true))
+      return true;
+    boolean b = getConfig().roleDependsOnFrame;
+    assert b == !config.getBoolean("propbank");
+    return b;
+  }
+
   public LabelIndex getLabel() {
     return label;
   }

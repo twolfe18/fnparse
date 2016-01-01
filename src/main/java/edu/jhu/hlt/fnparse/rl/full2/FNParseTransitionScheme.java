@@ -753,9 +753,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Span s = Span.decodeSpan(prefix.s, sentLen);
         FrameIndex fi = info.getFrameIndex();
         Frame f = fi.getFrame(prefix.f);
-        int k = prefix.k;
-        int K = f.numRoles() * 3;
-        boolean roleDepsOnFrame = info.getConfig().roleDependsOnFrame;
+        int k = prefix.k; assert k >= 0 && k < f.numRoles();
+        int K = f.numRoles(); assert !useContRoles && !useRefRoles;
+        boolean roleDepsOnFrame = info.roleDependsOnFrame();
         IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
         Iterator<IntDoubleEntry> itr = fv.iterator();
         while (itr.hasNext()) {
