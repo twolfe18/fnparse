@@ -29,4 +29,9 @@ public class EggWithStaticScore extends TVNS /* and thus TVN as well */ {
   public EggWithStaticScore setScore(Adjoints modelScore, double rand) {
     return new EggWithStaticScore(type, value, numPossible, goldMatching, prime, modelScore, rand);
   }
+
+  @Override
+  public EggWithStaticScore withScore(Adjoints model, double rand) {
+    return new EggWithStaticScore(type, value, numPossible, goldMatching, prime, model, rand);
+  }
 }

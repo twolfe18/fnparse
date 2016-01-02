@@ -166,10 +166,13 @@ public class Node2 implements HasStepScores, HasSig {
       int thisFN = LLTVN.sumGoldMatching(pruned);
       fn = thisFN + childrenLoss.fn;
     } else {
-      if (isLeaf)
-        fn = LLTVN.sumGoldMatching(pruned);
-      else
-        fn = LLSSP.getSumLoss(children).fn;
+//      if (isLeaf)
+//        fn = LLTVN.sumGoldMatching(pruned);
+//      else
+//        fn = LLSSP.getSumLoss(children).fn;
+      // We can't have any false negatives at a leaf.
+      // If not a leaf, then this is the correct formula.
+      fn = LLTVN.sumGoldMatching(pruned) + LLSSP.getSumLoss(children).fn;
     }
 
     if (DEBUG_INIT && AbstractTransitionScheme.DEBUG) {
@@ -316,10 +319,14 @@ public class Node2 implements HasStepScores, HasSig {
   public void show(PrintStream ps) { show(ps, "", null); }
   public void show(PrintStream ps, SearchCoefficients scoreCoefs) { show(ps, "", scoreCoefs); }
   public void show(PrintStream ps, String indent, SearchCoefficients scoreCoefs) {
+    int cut = 150;
     ps.printf("%sNode %s\n", indent, dbgGetTVStr());
     indent = "  " + indent;
-//    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : prefix.car().getModel().forwards());
-    ps.printf("%sprefix.car.model=%s\n", indent, prefix == null ? "null" : StringUtils.trunc(prefix.car().getModel(), 120));
+    if (prefix == null)
+      ps.printf("%sprefix.car.model=0 null\n", indent);
+    else
+      ps.printf("%sprefix.car.model=%.3f %s\n", indent, prefix.car().getModel().forwards(), StringUtils.trunc(prefix.car().getModel(), cut));
+    ps.printf("%sthis.score.model=%.3f %s\n", indent, score.getModel().forwards(), StringUtils.trunc(score.getModel(), cut));
     ps.printf("%sloss=%s\n", indent, getLoss());
     if (scoreCoefs != null)
       ps.printf("%sscore=%s\tcoefs=%s\n", indent, scoreCoefs.forwards(getStepScores()), scoreCoefs);

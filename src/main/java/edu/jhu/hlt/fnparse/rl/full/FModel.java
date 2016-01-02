@@ -35,7 +35,6 @@ import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
-import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -58,6 +57,8 @@ public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
   public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
+  public static boolean DEBUG_ORACLE_MV_CONF = true;
+  public static boolean DEBUG_HINGE_COMPUTATION = true;
 
   public static boolean HIJACK_GET_UPDATE_FOR_DEBUG = false;
 
@@ -160,6 +161,11 @@ public class FModel implements Serializable {
     oracleInf.setArgPruning(drp, includeGoldSpansIfMissing, mvInf);
     timer.stop("update.setup.argPrune");
 
+    if (DEBUG_ORACLE_MV_CONF) {
+      Log.info("oracleInf: " + oracleInf);
+      Log.info("mvInf: " + mvInf);
+    }
+
     return new Pair<>(oracleInf, mvInf);
   }
 
@@ -194,9 +200,6 @@ public class FModel implements Serializable {
     Pair<Info, Info> ormv = getOracleAndMvInfo(y);
     Info oracleInf = ormv.get1();
     Info mvInf = ormv.get2();
-
-//    Log.info("oracleInf: " + oracleInf);
-//    Log.info("mvInf: " + mvInf);
 
     if (maxViolation) {
       timer.start("update.perceptron");
@@ -264,7 +267,8 @@ public class FModel implements Serializable {
     double b = oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss();
     final double hinge = Math.max(0, a - b);
 
-    if (AbstractTransitionScheme.DEBUG && (DEBUG_SEARCH_FINAL_SOLN || AbstractTransitionScheme.DEBUG_PERCEPTRON)) {
+    if (AbstractTransitionScheme.DEBUG &&
+        (DEBUG_HINGE_COMPUTATION || DEBUG_SEARCH_FINAL_SOLN || AbstractTransitionScheme.DEBUG_PERCEPTRON)) {
       Log.info("mv.model=" + mv.scores.getModel().forwards());
       Log.info("mv.loss=" + mv.scores.getLoss());
       Log.info("oracle.score=" + oracle.scores.getModel().forwards());
@@ -637,10 +641,10 @@ public class FModel implements Serializable {
    */
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("oracleMode", "MIN");
-    config.put("forceLeftRightInference", "false");
+    config.put("oracleMode", "RAND_MIN");
+    config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
     config.put("perceptron", "false");
-    config.put("useGlobalFeatures", "false");
+    config.put("useGlobalFeatures", "true");
     config.put("beamSize", "1");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
@@ -700,6 +704,10 @@ public class FModel implements Serializable {
       if (justOracle)
         continue;
 
+//      // We seem to be having some problems with lock-in (bad initialization) :)
+//      // We can get every example right if we start from 0 weights.
+//      m.ts.zeroOutWeights();
+//      m.ts.flushAlphabet();
 
       Log.info("testing learning");
       int updates = 0;
@@ -707,7 +715,7 @@ public class FModel implements Serializable {
       int passed = 0;
       int enough = 3;
       FNParse yhat = null;
-      for (int tryy = 0; tryy < 20 && passed < enough; tryy++) {
+      for (int tryy = 0; tryy < 10 && passed < enough; tryy++) {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
@@ -746,12 +754,20 @@ public class FModel implements Serializable {
         FNParseTransitionScheme.DEBUG_DECODE = true;
         FModel.DEBUG_SEARCH_FINAL_SOLN = true;
 
+        // Check an update
+        m.getUpdate(y).apply(1);
+
+        // Show a run of the decoder
+        m.predict(y);
+
+        // Run the oracle by itself
         State2<Info> as = m.oracleS(y);
         Log.info("about to decode the oracle state");
         FNParse a = m.ts.decode(as);
         Log.info("oracle decode has C/R roles? " + a.hasContOrRefRoles());
         showLoss(y, a, "oracle");
 
+        // Run most violated by itself
         FNParse b = m.mostVoilatedY(y);
         showLoss(y, b, "MV");
       }

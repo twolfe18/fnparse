@@ -197,6 +197,9 @@ public class RerankerTrainer {
       this.name = name;
       this.workingDir = workingDir;
       this.rand = rand;
+
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      this.oracleMode = OracleMode.valueOf(config.getString("oracleMode"));
     }
 
     public void setPropDev(double propDev) {
