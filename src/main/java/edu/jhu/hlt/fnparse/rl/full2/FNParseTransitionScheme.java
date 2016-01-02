@@ -47,8 +47,10 @@ import edu.jhu.util.Alphabet;
 public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
 
   public static boolean DEBUG_ENCODE = true;
-  public static boolean DEBUG_FEATURES = true;
+  public static boolean DEBUG_FEATURES = false;
   public static boolean DEBUG_GEN_EGGS = false;
+  public static boolean DEBUG_DECODE = false;
+
   public static boolean MAIN_LOGGING = true;
 
   public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
@@ -75,7 +77,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    * Operationally, for a non-leaf node n, this makes scoreHatch(n)=Constant(0)
    * and scoreSquash(n)=null
    */
-  public boolean disallowNonLeafPruning = true;
+//  public boolean disallowNonLeafPruning = true;
 
   public boolean useGlobalFeats;
 
@@ -117,7 +119,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     ExperimentProperties config = ExperimentProperties.getInstance();
     sortEggsMode = config.getBoolean("forceLeftRightInference")
         ? SortEggsMode.NONE : SortEggsMode.BY_KS;
-    Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
+//    Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
 
     boolean g = config.getBoolean("useGlobalFeatures", true);
     LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
@@ -128,9 +130,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
     int updateInterval = config.getInt("updateL2Every", 8);
     double lrLocal = config.getDouble("lrLocal", 1);
-    double l2Local = config.getDouble("l2Penalty", 1e-3);
+    double l2Local = config.getDouble("l2Penalty", 1e-8);
     double lrGlobal = config.getDouble("lrGlobal", 1);
-    double l2Global = config.getDouble("globalL2Penalty", 1e-2);
+    double l2Global = config.getDouble("globalL2Penalty", 1e-7);
 
     wHatch = new WeightsInfo(
         new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
@@ -150,12 +152,20 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wSquash=" + wSquash.summary());
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
       Log.info("[main] sortEggsMode=" + sortEggsMode);
-      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
+//      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
       Log.info("[main] LLSSPatF.NUM_ARGS=" + LLSSPatF.NUM_ARGS);
       Log.info("[main] LLSSPatF.ROLE_COOC" + LLSSPatF.ROLE_COOC);
       Log.info("[main] useGlobalFeats=" + useGlobalFeats);
     }
+  }
+
+  @Override
+  public boolean isLeaf(Node2 n) {
+    boolean b1 = super.isLeaf(n);
+    boolean b2 = n.getType() == TFKS.S;
+    assert b1 == b2;
+    return b1;
   }
 
   public void setCachedFeatures(CachedFeatures cf) {
@@ -258,6 +268,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public Iterable<LL<TVN>> encode(FNParse y) {
+
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE)
       Log.info("encoding y=" + Describe.fnParse(y));
     timer.start("encode");
@@ -321,19 +332,19 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Info info) {
     Sentence sent = info.getSentence();
     int sentLen = sent.size();
-    if (AbstractTransitionScheme.DEBUG)
+    if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
       Log.info("z=" + z);
     FrameIndex fi = info.getFrameIndex();
     Map<FrameInstance, List<Pair<String, Span>>> m = new HashMap<>();
     for (LL<TVNS> prefix : z) {
       TFKS p = (TFKS) prefix;
       if (p == null) {
-        if (AbstractTransitionScheme.DEBUG)
+        if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
           Log.info("skipping b/c null");
         continue;
       }
       if (!p.isFull()) {
-        if (AbstractTransitionScheme.DEBUG)
+        if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
           Log.info("skipping not full: " + p);
         continue;
       }
@@ -350,7 +361,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       String k = roleName(p.k, f);
       Span s = Span.decodeSpan(p.s, sentLen);
       args.add(new Pair<>(k, s));
-      if (AbstractTransitionScheme.DEBUG)
+      if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
         Log.info("adding t=" + t.shortString() + " f=" + f.getName() + " k=" + k + " s=" + s.shortString());
     }
     return m;
@@ -358,14 +369,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public FNParse decode(Iterable<LL<TVNS>> z, Info info) {
-    if (AbstractTransitionScheme.DEBUG)
+    if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
       Log.info("starting...");
     Sentence sent = info.getSentence();
     List<FrameInstance> fis = new ArrayList<>();
     for (Map.Entry<FrameInstance, List<Pair<String, Span>>> tf2ks : groupByFrame(z, info).entrySet()) {
       Span t = tf2ks.getKey().getTarget();
       Frame f = tf2ks.getKey().getFrame();
-      if (AbstractTransitionScheme.DEBUG)
+      if (AbstractTransitionScheme.DEBUG && DEBUG_DECODE)
         Log.info("t=" + t.shortString() + " f=" + f.getName());
       try {
         fis.add(FrameInstance.buildPropbankFrameInstance(f, t, tf2ks.getValue(), sent));
@@ -389,7 +400,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int sentLen = info.getSentence().size();
     int n = 0;
     if (type == TFKS.T) {
-      n++;  // Count the T node
+      if (Node2.INTERNAL_NODES_COUNT)
+        n++;  // Count the T node
       // Add in children (TF nodes)
       Span ts = Span.decodeSpan(value, sentLen);
       for (Frame f : info.getPossibleFrames(ts)) {
@@ -399,7 +411,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         if (info.getConfig().useRefRoles)
           K += f.numRoles();
         int S = info.getPossibleArgs(f, ts).size();
-        n += 1 + K * (1 + S);
+        if (Node2.INTERNAL_NODES_COUNT)
+          n += 1 + K * (1 + S);
+        else
+          n += K * S;
       }
     } else if (type == TFKS.F) {
       Span ts = Span.decodeSpan(prefix.t, sentLen);
@@ -410,13 +425,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       if (info.getConfig().useRefRoles)
         K += f.numRoles();
       int S = info.getPossibleArgs(f, ts).size();
-      n++;  // Count the TF node
-      n += K * (1 + S); // K children, each of which must be counted on its own (inner +1) and has S children
+      if (Node2.INTERNAL_NODES_COUNT) {
+        n++;  // Count the TF node
+        n += K * (1 + S); // K children, each of which must be counted on its own (inner +1) and has S children
+      } else {
+        n += K * S;
+      }
     } else if (type == TFKS.K) {
       Span ts = Span.decodeSpan(prefix.t, sentLen);
       Frame f = info.getFrameIndex().getFrame(prefix.f);
       int S = info.getPossibleArgs(f, ts).size();
-      n++;  // Count the TFK node
+      if (Node2.INTERNAL_NODES_COUNT)
+        n++;  // Count the TFK node
       n += S; // There are S children which are leaf nodes
     } else if (type == TFKS.S) {
       n += 1;
@@ -464,7 +484,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Get or generate (k,s) eggs sorted according to a static score.
-//    if (TFKS.safeF(momPrefix) >= 0 && sortEggsMode != SortEggsMode.NONE) {
     if (momPrefix != null && momPrefix.car().type == TFKS.F && sortEggsMode != SortEggsMode.NONE) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("using SortedEggCache to pre-compute static scores for eggs and sort them");
@@ -715,6 +734,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return addTo;
   }
 
+  @SuppressWarnings("unused")
   private ProductIndexAdjoints dynFeats0(Node2 n, Info info, WeightsInfo weights) {
     List<ProductIndex> feats = dynFeats2(n, info, new ArrayList<>(), weights.dimension());
     boolean attemptApplyL2Update = false;   // done in Update instead!
@@ -881,7 +901,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public TVNS scoreHatch(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing hatching
 
-    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+//    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+    if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
         Log.info("immediately requiring hatch of egg: " + egg);
       return egg.withScore(Adjoints.Constant.ZERO, 0);
@@ -930,7 +951,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public TVNS scoreSquash(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing squashing
 
-    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+//    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
+    if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
         Log.info("immediately preventing squash of egg: " + egg);
 //      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);

@@ -53,7 +53,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
   public static boolean DEBUG_COLLAPSE = false;    // also shows beam sizes (not capacities)
   public static boolean DEBUG_REPLACE_NODE = false;
-  public static boolean DEBUG_PERCEPTRON = true;
+  public static boolean DEBUG_PERCEPTRON = false;
+
+  // Only turn this one during oracle searches
+  public static boolean DEBUG_ORACLE_FN = false;
 
   public static boolean CHECK_FOR_FINITE_SCORES = false;
 
@@ -142,6 +145,11 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
 
   /* NON-ABSTRACT STUFF *******************************************************/
 
+  // I'm not sure, but its conceivable that this will need to be over-ridden
+  public boolean isLeaf(Node2 n) {
+    return n.eggs == null && n.children == null && n.pruned == null;
+  }
+
   public void collectChildrensSpines(Node2 node, List<LL<TVNS>> addTo) {
     if (node.prefix != null)
       addTo.add(node.prefix);
@@ -199,8 +207,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     }
     return wife2;
   }
-  // Only turn this one during oracle searches
-  public static boolean DEBUG_ORACLE_FN = false;
 
   // NOTE: This has to be in the module due to the need for consChild
   public Node2 replaceChild(Node2 parent, Node2 searchChild, Node2 replaceChild, Z info) {

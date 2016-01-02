@@ -243,55 +243,23 @@ public class FModel implements Serializable {
     }
 
     if (oracleSc.getLoss().maxLoss() > 0) {
-      if (ts.disallowNonLeafPruning && oracleSc.getLoss().fn == 0) {
-        // TODO The cause of this is FPs counted on not pruning the non-leaf nodes.
-        
-        
-        // This is still a problem!
-        // Number of FPs is unbounded due to being weighed against model score
-        // TEST: If you set oracle to have mScale=0, then this should not be a problem!
-        // TEST PASSED!
-      } else {
-        if (badThings++ % 30 == 0) {
-          System.err.println("BAD ORACLE FINAL STATE:");
-          oracleSt.getRoot().show(System.err);
-        }
-        System.err.println("oracle has loss: " + oracleSc.getLoss());
-        System.err.println("mode="+ this.rtConf.oracleMode);
-        System.err.println("mvInf=" + mvInf);
-        System.err.println("oracleInf=" + oracleInf);
+      if (badThings++ % 30 == 0) {
+        System.err.println("BAD ORACLE FINAL STATE:");
+        oracleSt.getRoot().show(System.err);
       }
+      System.err.println("oracle has loss: " + oracleSc.getLoss());
+      System.err.println("mode="+ this.rtConf.oracleMode);
+      System.err.println("mvInf=" + mvInf);
+      System.err.println("oracleInf=" + oracleInf);
     }
 
     return buildUpdate(oracleB, mvB, false);
   }
   private int badThings = 0;
 
-//  public Update getUpdateOld(FNParse y) {
-//    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
-//    Info oracleInf = ormv.get1();
-//    Info mvInf = ormv.get2();
-//
-//    timer.start("update.oracle");
-//    Pair<State, DoubleBeam<State>> oracleStateColl = State.runInference(oracleInf);
-////    State oracleState = oracleStateColl.get2().pop(); // TODO consider items down the PQ
-//    State oracleState = oracleStateColl.get1();   // get1 b/c need to enforce constraint that 
-//    assert oracleState.getStepScores().getLoss().maxLoss() == 0 : "for testing use an exact oracle";
-//    CoefsAndScoresAdjoints oracleBackwards = new CoefsAndScoresAdjoints(oracleInf.htsConstraints, oracleState.getStepScores());
-//    timer.stop("update.oracle");
-//
-//    timer.start("update.mv");
-//    Pair<State, DoubleBeam<State>> mvStateColl = State.runInference(mvInf);
-//    State mvState = mvStateColl.get2().pop(); // TODO consider items down the PQ
-//    CoefsAndScoresAdjoints mvBackwards = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvState.getStepScores());
-//    timer.stop("update.mv");
-//
-//    return buildUpdate(oracleBackwards, mvBackwards, false);
-//  }
-
   private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv, boolean ignoreHinge) {
 
-//    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
+    assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
     double a = mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss();
     double b = oracle.scores.getModel().forwards() + oracle.scores.getLoss().maxLoss();
     final double hinge = Math.max(0, a - b);
@@ -408,6 +376,22 @@ public class FModel implements Serializable {
   }
   FNParse oracleY(FNParse y) {
     return ts.decode(oracleS(y));
+  }
+
+  State2<Info> mostViolatedS(FNParse y) {
+    assert !maxViolation;
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Info mvInf = ormv.get2();
+    if (AbstractTransitionScheme.DEBUG)
+      Log.info("doing most violated search...");
+    ts.flushPrimes();
+    Pair<State2<Info>, DoubleBeam<State2<Info>>> mvS =
+        ts.runInference(ts.genRootState(mvInf), mvInf);
+    State2<Info> s = mvS.get1();
+    return s;
+  }
+  FNParse mostVoilatedY(FNParse y) {
+    return ts.decode(mostViolatedS(y));
   }
 
 
@@ -654,9 +638,9 @@ public class FModel implements Serializable {
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("oracleMode", "MIN");
-    config.put("forceLeftRightInference", "true");
+    config.put("forceLeftRightInference", "false");
     config.put("perceptron", "false");
-    config.put("useGlobalFeatures", "true");
+    config.put("useGlobalFeatures", "false");
     config.put("beamSize", "1");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
@@ -686,8 +670,17 @@ public class FModel implements Serializable {
     m.ts.useOverfitFeatures = true;
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
+    int checked = 0;
     for (FNParse y : cfLike.getParses()) {
-      System.out.println("working on " + y.getId());
+      if (y.hasContOrRefRoles())
+        continue;
+      checked++;
+
+      Log.info("working on: " + y.getId()
+          + " crRoles=" + y.hasContOrRefRoles()
+          + " numFI=" + y.numFrameInstances()
+          + " numItems=" + State.numItems(y));
+      System.out.println(new SentenceEval(y, y));
 
       // make sure that oracle can get F1=1 regardless of model scores.
       Log.info("testing the oracle");
@@ -699,6 +692,10 @@ public class FModel implements Serializable {
           + " f1=" + f1
           + " p=" + r.get("ArgumentMicroPRECISION")
           + " r=" + r.get("ArgumentMicroRECALL"));
+      if (f1 < 1) {
+        Log.warn("oracle with non-perfect f1=" + f1 + ":");
+        m.oracleS(y).getRoot().show(System.err);
+      }
       assert f1 == 1;
       if (justOracle)
         continue;
@@ -710,7 +707,7 @@ public class FModel implements Serializable {
       int passed = 0;
       int enough = 3;
       FNParse yhat = null;
-      for (int tryy = 0; tryy < 10 && passed < enough; tryy++) {
+      for (int tryy = 0; tryy < 20 && passed < enough; tryy++) {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
@@ -743,9 +740,35 @@ public class FModel implements Serializable {
           lim = (int) (lim * 1.2 + 2);
         }
       }
+      if (passed < enough) {
+        Log.warn("HERE IS YOUR FAILURE!!!");
+        AbstractTransitionScheme.DEBUG = true;
+        FNParseTransitionScheme.DEBUG_DECODE = true;
+        FModel.DEBUG_SEARCH_FINAL_SOLN = true;
+
+        State2<Info> as = m.oracleS(y);
+        Log.info("about to decode the oracle state");
+        FNParse a = m.ts.decode(as);
+        Log.info("oracle decode has C/R roles? " + a.hasContOrRefRoles());
+        showLoss(y, a, "oracle");
+
+        FNParse b = m.mostVoilatedY(y);
+        showLoss(y, b, "MV");
+      }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);
     }
 
+    Log.info("done, checked " + checked + " parses");
+  }
+
+  private static void showLoss(FNParse y, FNParse yhat, String label) {
+    SentenceEval se = new SentenceEval(y, yhat);
+    Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+    double f1 = r.get("ArgumentMicroF1");
+    Log.info(label + " result: " + y.getSentence().getId()
+        + " f1=" + f1
+        + " p=" + r.get("ArgumentMicroPRECISION")
+        + " r=" + r.get("ArgumentMicroRECALL"));
   }
 
 }

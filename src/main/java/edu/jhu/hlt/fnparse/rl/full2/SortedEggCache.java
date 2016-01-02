@@ -3,12 +3,15 @@ package edu.jhu.hlt.fnparse.rl.full2;
 import java.io.PrintStream;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
@@ -19,7 +22,7 @@ import edu.jhu.prim.tuple.Pair;
  * need later.
  */
 public class SortedEggCache {
-  public static boolean DEBUG = false;
+  public static boolean DEBUG = true;
 
   private int t;
   private int f;    // keep?
@@ -50,23 +53,48 @@ public class SortedEggCache {
       List<Pair<TFKS, EggWithStaticScore>> fEggs,
       List<Pair<TFKS, EggWithStaticScore>> kEggs,
       HowToSearch howToScore) {
-    initFEggs(fEggs, howToScore);
-    initKEggs(kEggs, howToScore);
-    if (AbstractTransitionScheme.DEBUG && DEBUG)
-      show(System.out);
-  }
 
-  /**
-   * Just sorts k-valued (F) eggs by their model score (as deemed by howToScore).
-   * I thought I wanted to do some type of max_s score(k,s), but I'm not sure
-   * about that anymore, seems like the model already has an opinon about k-valued
-   * eggs which needs to be respected.
-   */
-  private void initFEggs(List<Pair<TFKS, EggWithStaticScore>> fEggs, HowToSearch howToScore) {
-    if (AbstractTransitionScheme.DEBUG && DEBUG)
+//    initFEggs(fEggs, howToScore);
+
+    final Map<Integer, Adjoints> kScores = initKEggs(kEggs, howToScore);
+
+    if (AbstractTransitionScheme.DEBUG && DEBUG) {
       Log.info("sorting " + fEggs.size() + " k-valued eggs");
-    // Just need kEggs sorted in order (low -> high)
-    Collections.sort(fEggs, byEggScore(howToScore, false));
+      if (kScores != null) {
+        for (int k : kScores.keySet())
+          System.out.println("k=" + k + " -> " + kScores.get(k));
+      } else {
+        System.out.println("kScore is null!");
+      }
+      for (Pair<TFKS, EggWithStaticScore> p : fEggs) {
+        System.out.println("kEgg: " + p.get1().k);
+      }
+    }
+
+    if (!Node2.INTERNAL_NODES_COUNT) {
+      // fEggs should all be TVNS with score of Constant(0)
+      // Sort by kEggs max score over all s for a given k
+      // (low -> high)
+      Collections.sort(fEggs, new Comparator<Pair<TFKS, EggWithStaticScore>>() {
+        @Override
+        public int compare(Pair<TFKS, EggWithStaticScore> o1, Pair<TFKS, EggWithStaticScore> o2) {
+          int k1 = o1.get1().k;
+          int k2 = o2.get1().k;
+          assert k1 >= 0 && k2 >= 0;
+          double s1 = kScores.get(k1).forwards();
+          double s2 = kScores.get(k2).forwards();
+          if (s1 < s2)
+            return -1;
+          if (s1 > s2)
+            return +1;
+          return 0;
+        }
+      });
+    } else {
+      // Just need kEggs sorted in order (low -> high)
+      Collections.sort(fEggs, byEggScore(howToScore, false));
+    }
+
     this.fEggs = null;
     for (int i = 0; i < fEggs.size(); i++) {
       EggWithStaticScore egg = fEggs.get(i).get2();
@@ -74,7 +102,19 @@ public class SortedEggCache {
         System.out.println("k-valued egg after sorting: " + egg + "\thts.forwards=" + howToScore.forwards(e2ss(egg)));
       this.fEggs = new LLTVN(egg, this.fEggs);
     }
+
+    if (AbstractTransitionScheme.DEBUG && DEBUG)
+      show(System.out);
   }
+
+//  /**
+//   * Just sorts k-valued (F) eggs by their model score (as deemed by howToScore).
+//   * I thought I wanted to do some type of max_s score(k,s), but I'm not sure
+//   * about that anymore, seems like the model already has an opinon about k-valued
+//   * eggs which needs to be respected.
+//   */
+//  private void initFEggs(List<Pair<TFKS, EggWithStaticScore>> fEggs, HowToSearch howToScore) {
+//  }
 
   public static Comparator<Pair<TFKS, EggWithStaticScore>> byEggScore(HowToSearch howToScore, boolean groupByKSFirst) {
     return new Comparator<Pair<TFKS, EggWithStaticScore>>() {
@@ -103,9 +143,17 @@ public class SortedEggCache {
     };
   }
 
-  private void initKEggs(List<Pair<TFKS, EggWithStaticScore>> kEggs, HowToSearch howToScore) {
+  /**
+   * Returns a k -> Adjoints representing the best (k,s) from an s-valued egg.
+   * Use this to sort k-vauled eggs if !Node.INTERNAL_NODES_COUNT
+   */
+  private Map<Integer, Adjoints> initKEggs(List<Pair<TFKS, EggWithStaticScore>> kEggs, HowToSearch howToScore) {
     // Sort by (k,s) then score (low -> high)
     Collections.sort(kEggs, byEggScore(howToScore, true));
+
+    Map<Integer, Adjoints> kScores = null;
+    if (!Node2.INTERNAL_NODES_COUNT)
+      kScores = new HashMap<>();
 
     // Group-by k and check that (t,f) is the same for all
     this.k2Eggs = new IntObjectHashMap<>();
@@ -129,8 +177,14 @@ public class SortedEggCache {
       // New k value
       if (curK != i.k) {
         // Check that this isn't the first run through the loop (null aggregates)
-        if (curK >= 0)
+        if (curK >= 0) {
           k2Eggs.put(curK, curKEggs);
+          if (kScores != null) {
+            Adjoints bestScore = ((EggWithStaticScore) curKEggs.car()).getModel();
+            Adjoints old = kScores.put(curK, bestScore);
+            assert old == null;
+          }
+        }
 
         // Clear k-aggregators
         curKEggs = null;
@@ -144,6 +198,12 @@ public class SortedEggCache {
       }
     }
     k2Eggs.put(curK, curKEggs);
+    if (kScores != null) {
+      Adjoints bestScore = ((EggWithStaticScore) curKEggs.car()).getModel();
+      Adjoints old = kScores.put(curK, bestScore);
+      assert old == null;
+    }
+    return kScores;
   }
 
   public void show(PrintStream ps) {

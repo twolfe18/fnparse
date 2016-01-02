@@ -142,7 +142,10 @@ public abstract class GeneralizedCoef implements Serializable {
         // We shouldn't have to worry about spurious FPs causing the oracle to
         // do the wrong thing, because an spurious hatch will always outscore a
         // bad squash (-inf).
-        return -l.fp;
+//        return -l.fp;
+        if (l.fp > 0)
+          return Double.NEGATIVE_INFINITY;
+        return 0;
       }
       @Override
       public String toString() {

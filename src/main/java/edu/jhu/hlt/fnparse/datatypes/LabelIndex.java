@@ -12,6 +12,7 @@ import java.util.Set;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.LL;
+import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.full2.TVN;
 import edu.jhu.hlt.fnparse.rl.full2.TVNS;
@@ -97,6 +98,8 @@ public class LabelIndex implements Serializable {
       for (LL<TVN> cur = x; cur != null; cur = cur.cdr(), below++) {
         HashableIntArray i = AbstractTransitionScheme.prefixValues2ar(cur);
         counts.update(i, below);
+        if (!Node2.INTERNAL_NODES_COUNT)
+          break;
       }
     }
     if (AbstractTransitionScheme.DEBUG && DEBUG_COUNTS) {

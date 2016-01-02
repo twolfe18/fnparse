@@ -44,7 +44,12 @@ public class Node2 implements HasStepScores, HasSig {
   //
   // NOTE: This currently doesn't matter due to disallowNonLeafPruning.
   //
-  public static boolean MYOPIC_LOSS = false;
+//  public static boolean MYOPIC_LOSS = false;
+
+  // If this is true, then internal nodes count towards FPs and FNs. This is more
+  // important for FPs because a FN on an internal node still implies a FN on a
+  // leaf. Transition schemes which implement encode should respect this flag.
+  public static boolean INTERNAL_NODES_COUNT = false;
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_INIT = false;
@@ -89,36 +94,83 @@ public class Node2 implements HasStepScores, HasSig {
     this.pruned = pruned;
     this.children = children;
 
-    int possible = 1    // this node
-        + LLTVN.sumPossible(eggs)
-        + LLTVN.sumPossible(pruned)
-        + LLSSP.sumPossible(children);
+    // TODO Is this always right?
+    // If not, need to take it as an arg, since Node2 doesn't know about the
+    // transition system which could answer this question for it.
+    boolean isLeaf = eggs == null && pruned == null && children == null;
+    boolean preterminal = prefix != null && prefix.car().type == TFKS.K;  // TODO Find a work-around
+    MaxLoss childrenLoss = LLSSP.getSumLoss(children);
+
+    /* NUMBER OF POSSIBLE SUB-NODES *******************************************/
+    int possible;
+    if (INTERNAL_NODES_COUNT) {
+      // ...I'm starting to think that this is more of a sanity check than the
+      // right way to compute this. We should check that this is correct against
+      // the true source of truth: prefix.car().possible
+      possible = 1    // this node
+          + LLTVN.sumPossible(eggs)
+          + LLTVN.sumPossible(pruned)
+          + LLSSP.sumPossible(children);
+    } else {
+      if (isLeaf) {
+        possible = 1;
+      } else {
+//        possible = childrenLoss.numPossible;
+        possible = 0
+          + LLTVN.sumPossible(eggs)
+          + LLTVN.sumPossible(pruned)
+          + LLSSP.sumPossible(children);
+      }
+    }
     // TODO Just use TFKS.numPossible?
+    // This is a good santity check that our zippering still lines up with the
+    // users code in genEggs, either one could be wrong, they can inform each other.
     if (prefix != null) {
-//      for (TFKS cur = prefix; cur != null; cur = cur.cdr()) {
-//        System.err.println(cur.car());
-//      }
-//      System.err.println("eggs.poss=" + LLTVN.sumPossible(eggs));
-//      System.err.println("pruned.poss=" + LLTVN.sumPossible(pruned));
-//      System.err.println("children.poss=" + LLSSP.sumPossible(children));
       assert possible == prefix.car().numPossible
         : "possible=" + possible
         + " prefix.car.possible=" + prefix.car().numPossible;
-//        + " prefix=" + prefix;
+    }
+    assert possible > 0;
+
+    /* NUMBER OF SUB-NODES WHICH HAVE BEEN LABELED/SET ************************/
+    int det;
+    if (INTERNAL_NODES_COUNT) {
+      det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
+    } else {
+      if (isLeaf)
+        det = 1;  // LL.length(pruned) + LL.length(children);
+      else
+        det = childrenLoss.numDetermined;
+      if (preterminal)
+        det += LL.length(pruned);
     }
 
-    int det = 1 + LLTVN.sumPossible(pruned) + LLSSP.getSumLoss(children).numDetermined;
+    /* FALSE POSITIVES ********************************************************/
+    int fp;
+    if (INTERNAL_NODES_COUNT) {
+      int thisFP = prefix != null && prefix.car().goldMatching == 0 ? 1 : 0;
+      fp = thisFP + childrenLoss.fp;
+    } else {
+      if (isLeaf)
+        fp = prefix.car().goldMatching == 0 ? 1 : 0;
+      else
+        fp = childrenLoss.fp;
+    }
 
-    assert possible > 0;
-    MaxLoss childrenLoss = LLSSP.getSumLoss(children);
-
-    int thisFP = prefix != null && prefix.car().goldMatching == 0 ? 1 : 0;
-    int fp = thisFP + childrenLoss.fp;
-
-    int thisFN = MYOPIC_LOSS
-        ? LLTVN.numGoldMatchingGtZero(pruned)
-        : LLTVN.sumGoldMatching(pruned);
-    int fn = thisFN + childrenLoss.fn;
+    /* FALSE NEGATIVES ********************************************************/
+    int fn;
+    if (INTERNAL_NODES_COUNT) {
+//      int thisFN = MYOPIC_LOSS
+//          ? LLTVN.numGoldMatchingGtZero(pruned)
+//          : LLTVN.sumGoldMatching(pruned);
+      int thisFN = LLTVN.sumGoldMatching(pruned);
+      fn = thisFN + childrenLoss.fn;
+    } else {
+      if (isLeaf)
+        fn = LLTVN.sumGoldMatching(pruned);
+      else
+        fn = LLSSP.getSumLoss(children).fn;
+    }
 
     if (DEBUG_INIT && AbstractTransitionScheme.DEBUG) {
       Log.info("possible=" + possible + " det=" + det + " fp=" + fp + " fn=" + fn);
@@ -137,6 +189,7 @@ public class Node2 implements HasStepScores, HasSig {
       System.out.flush();
     }
 
+    /* SCORE OF THIS NODE (COEFS * [MODEL,LOSS,RAND]) *************************/
     MaxLoss loss = new MaxLoss(possible, det, fp, fn);
     Adjoints prefixS, prunedS, childrenS;
     double prefixR, prunedR, childrenR;

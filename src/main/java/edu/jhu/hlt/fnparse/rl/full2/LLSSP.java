@@ -38,6 +38,15 @@ public class LLSSP extends LL<Node2> {
     return scoreSum.getLoss().numPossible;
   }
 
+  public static int sumDetermined(LLSSP l) {
+    if (l == null)
+      return 0;
+    return l.sumDetermined();
+  }
+  public int sumDetermined() {
+    return scoreSum.getLoss().numDetermined;
+  }
+
   public static MaxLoss getSumLoss(LLSSP l) {
     if (l == null)
       return MaxLoss.ZERO;

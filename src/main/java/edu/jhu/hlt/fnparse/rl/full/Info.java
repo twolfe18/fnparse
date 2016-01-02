@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
 import edu.jhu.hlt.fnparse.rl.full2.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -253,52 +254,42 @@ public class Info implements Serializable, HasCounts, HasRandom {
     // the final state (enforcing Proj(z) = {y}) rather than the best thing on
     // all beam.
     // TODO Any benefit to using MAX_LOSS instead of taking from the last beam step?
+
+    OracleMode m;
     if (likeConf == null) {
       Log.warn("likeConf is null, defaulting to MIN");
-      return setSameHTS(new HowToSearchImpl(
-          new GeneralizedCoef.Model(+1, true),
-          new GeneralizedCoef.Loss(-1, Mode.H_LOSS, 0.5),
-          GeneralizedCoef.ZERO));
+      m = OracleMode.MIN;
     } else {
-      /*
-       * Problem with how I did update!
-       * I should not multiply in the sign of the search coefficient!
-       * If I do that then some of the oracle model will lead to update away
-       * from the oracle!
-       */
-//      Log.info("ORACLE MODE: " + likeConf.oracleMode);
-      GeneralizedCoef cL = new GeneralizedCoef.Loss.Oracle();
+      m = likeConf.oracleMode;
+    }
 
+    GeneralizedCoef cL = new GeneralizedCoef.Loss.Oracle();
+    double mScale = 1;
+    double rScale = 1;
 
-      // If this is is 0, then MIN=MAX and RAND_MIN=RAND_MAX.
-      // If this is > 0, then the oracle can be over-ridden by the model score, leading to problems
-      double mScale = 0;
-
-      double rScale = 0.5;
-      switch (likeConf.oracleMode) {
-      case RAND_MIN:
-        return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+mScale, true),
-            cL,
-            new GeneralizedCoef.Rand(rScale)));
-      case RAND_MAX:
-        return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-mScale, true),
-            cL,
-            new GeneralizedCoef.Rand(rScale)));
-      case MIN:
-        return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(+mScale, true),
-            cL,
-            GeneralizedCoef.ZERO));
-      case MAX:
-        return setSameHTS(new HowToSearchImpl(
-            new GeneralizedCoef.Model(-mScale, true),
-            cL,
-            GeneralizedCoef.ZERO));
-      default:
-        throw new RuntimeException();
-      }
+    switch (m) {
+    case RAND_MIN:
+      return setSameHTS(new HowToSearchImpl(
+          new GeneralizedCoef.Model(+mScale, true),
+          cL,
+          new GeneralizedCoef.Rand(rScale)));
+    case RAND_MAX:
+      return setSameHTS(new HowToSearchImpl(
+          new GeneralizedCoef.Model(-mScale, true),
+          cL,
+          new GeneralizedCoef.Rand(rScale)));
+    case MIN:
+      return setSameHTS(new HowToSearchImpl(
+          new GeneralizedCoef.Model(+mScale, true),
+          cL,
+          GeneralizedCoef.ZERO));
+    case MAX:
+      return setSameHTS(new HowToSearchImpl(
+          new GeneralizedCoef.Model(-mScale, true),
+          cL,
+          GeneralizedCoef.ZERO));
+    default:
+      throw new RuntimeException();
     }
   }
 

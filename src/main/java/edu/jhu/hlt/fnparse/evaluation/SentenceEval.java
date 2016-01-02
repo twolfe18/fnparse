@@ -186,6 +186,8 @@ public class SentenceEval {
           if (onlyArgPreds != null)
             onlyArgPreds.add(p);
         }
+        if (!fi.getContinuationRoleSpans(i).isEmpty() || !fi.getReferenceRoleSpans(i).isEmpty())
+          throw new RuntimeException("C/R roles not supported");
       }
     }
   }
