@@ -30,6 +30,7 @@ public class ProductIndexAdjoints implements Adjoints {
   // For debugging
   public String nameOfWeights = null;
   public Alphabet<?> showUpdatesWith = null;
+  public String[] showUpdatesWithAlt = null;
   public int forwardsCount = 0;
 
   public ProductIndexAdjoints(WeightsInfo weights, List<ProductIndex> features, boolean attemptApplyL2Update) {
@@ -75,10 +76,16 @@ public class ProductIndexAdjoints implements Adjoints {
     for (int i = 0; i < featIdx.length; i++)
       weights.weights.add(featIdx[i], a);
 
-    if (showUpdatesWith != null) {
+    if (nameOfWeights != null) {
       Log.info(String.format("dErr_dForwards=%.3f lr=%.3f weights=%s", dErr_dForwards, lr, System.identityHashCode(weights.weights)));
       for (int i = 0; i < featIdx.length; i++) {
-        String fs = showUpdatesWith.lookupObject(featIdx[i]).toString();
+        String fs;
+        if (showUpdatesWith != null)
+          fs = showUpdatesWith.lookupObject(featIdx[i]).toString();
+        else if (showUpdatesWithAlt != null)
+          fs = showUpdatesWithAlt[featIdx[i]];
+        else
+          fs = null;
         System.out.printf("w[%s,%d,%s] += %.2f\n", nameOfWeights, featIdx[i], fs, a);
       }
       System.out.println();
@@ -86,6 +93,7 @@ public class ProductIndexAdjoints implements Adjoints {
 
     if (attemptL2Update) {
       Log.info("why?");
+      assert false;
       weights.maybeApplyL2Reg(l2Reg);
     }
   }

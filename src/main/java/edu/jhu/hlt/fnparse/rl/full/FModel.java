@@ -31,6 +31,7 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
@@ -751,8 +752,9 @@ public class FModel implements Serializable {
       if (passed < enough) {
         Log.warn("HERE IS YOUR FAILURE!!!");
         AbstractTransitionScheme.DEBUG = true;
-        FNParseTransitionScheme.DEBUG_DECODE = true;
+//        FNParseTransitionScheme.DEBUG_DECODE = true;
         FModel.DEBUG_SEARCH_FINAL_SOLN = true;
+        LLSSPatF.DEBUG_SHOW_BACKWARDS = true;
 
         // Check an update
         m.getUpdate(y).apply(1);
@@ -761,14 +763,17 @@ public class FModel implements Serializable {
         m.predict(y);
 
         // Run the oracle by itself
+        Log.info("about to run most violated search for the last time");
         State2<Info> as = m.oracleS(y);
-        Log.info("about to decode the oracle state");
+        Log.info("about to decode oracle state for the last time");
         FNParse a = m.ts.decode(as);
-        Log.info("oracle decode has C/R roles? " + a.hasContOrRefRoles());
         showLoss(y, a, "oracle");
 
         // Run most violated by itself
-        FNParse b = m.mostVoilatedY(y);
+        Log.info("about to run most violated search for the last time");
+        State2<Info> bs = m.mostViolatedS(y);
+        Log.info("about to decode most violated state for the last time");
+        FNParse b = m.ts.decode(bs);
         showLoss(y, b, "MV");
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);

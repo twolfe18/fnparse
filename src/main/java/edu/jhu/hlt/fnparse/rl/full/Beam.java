@@ -156,7 +156,6 @@ public interface Beam<T extends StateLike> {
     @Override
     public boolean offer(T s) {
       numOffers++;
-//      double sc = value(s);
       double sc = coefs.forwards(s.getStepScores());
 
       assert !Double.isNaN(sc);

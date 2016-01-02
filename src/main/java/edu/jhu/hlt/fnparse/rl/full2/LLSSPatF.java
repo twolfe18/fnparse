@@ -17,6 +17,7 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.util.Alphabet;
 
 /**
  * This is the list of children (K nodes) at an F node. It maintains indices
@@ -40,6 +41,10 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 public class LLSSPatF extends LLSSP {
 
   public static boolean DEBUG = false;
+  public static boolean DEBUG_SHOW_BACKWARDS = true;
+
+//  public static Alphabet<String> DEBUG_ALPH = new Alphabet<>();
+  public static String[] DEBUG_ALPH = new String[5 * 1024 * 1024];
 
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;
@@ -112,8 +117,8 @@ public class LLSSPatF extends LLSSP {
 
   protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, WeightsInfo globals) {
     List<ProductIndex> feats = new ArrayList<>();
-    if (ARG_LOC)
-      argLocSimple(item, prev, info, feats);
+//    if (ARG_LOC)
+//      argLocSimple(item, prev, info, feats);
     if (ROLE_COOC)
       roleCooc(item, prev, info, feats);
     if (NUM_ARGS)
@@ -121,7 +126,12 @@ public class LLSSPatF extends LLSSP {
     if (feats.isEmpty())
       return Adjoints.Constant.ZERO;
     boolean attemptApplyL2Update = false;   // done in Update instead!
-    return new ProductIndexAdjoints(globals, feats, attemptApplyL2Update);
+    ProductIndexAdjoints pia = new ProductIndexAdjoints(globals, feats, attemptApplyL2Update);
+    if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
+      pia.nameOfWeights = "LLSSPatF-dyn";
+      pia.showUpdatesWithAlt = DEBUG_ALPH;
+    }
+    return pia;
   }
 
   private static void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
@@ -143,6 +153,20 @@ public class LLSSPatF extends LLSSP {
     addTo.add(pna);
     addTo.add(pna.prod(f, N));
     addTo.add(pna.prod(fk, N));
+
+    if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
+      int pnai = pna.getProdFeatureSafe();
+      assert DEBUG_ALPH[pnai] == null;
+      DEBUG_ALPH[pnai] = "numArgs=" + numArgs;
+
+      int pnafi = pna.prod(f, N).getProdFeatureSafe();
+      assert DEBUG_ALPH[pnafi] == null;
+      DEBUG_ALPH[pnafi] = "numArgs=" + numArgs + " & frame=" + frame.getName();
+
+      int pnafki = pna.prod(fk, N).getProdFeatureSafe();
+      assert DEBUG_ALPH[pnafki] == null;
+      DEBUG_ALPH[pnafki] = "numArgs=" + numArgs + " & frame=" + frame.getName() + " & role=" + frame.getRole(k);
+    }
   }
 
   private static void roleCooc(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
