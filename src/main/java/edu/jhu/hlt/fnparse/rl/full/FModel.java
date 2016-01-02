@@ -600,7 +600,8 @@ public class FModel implements Serializable {
     Map<String, FNParse> parseById = new HashMap<>();
     ParsePropbankData.Redis propbankAutoParses = null;
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
-    for (FNParse y : pbr.getDevData()) {
+//    for (FNParse y : pbr.getDevData()) {
+    for (FNParse y : pbr.getTrainData()) {
       FNParse old = parseById.put(y.getId(), y);
       assert old == null;
     }
@@ -642,9 +643,9 @@ public class FModel implements Serializable {
    */
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("oracleMode", "RAND_MIN");
+    config.put("oracleMode", "MIN");
     config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
-    config.put("perceptron", "false");
+    config.put("perceptron", "true");
     config.put("useGlobalFeatures", "true");
     config.put("beamSize", "1");
 
@@ -687,23 +688,25 @@ public class FModel implements Serializable {
           + " numItems=" + State.numItems(y));
       System.out.println(new SentenceEval(y, y));
 
-      // make sure that oracle can get F1=1 regardless of model scores.
-      Log.info("testing the oracle");
-      FNParse yOracle = m.oracleY(y);
-      se = new SentenceEval(y, yOracle);
-      r = BasicEvaluation.evaluate(Arrays.asList(se));
-      f1 = r.get("ArgumentMicroF1");
-      Log.info("ORACLE TEST result: " + y.getSentence().getId()
-          + " f1=" + f1
-          + " p=" + r.get("ArgumentMicroPRECISION")
-          + " r=" + r.get("ArgumentMicroRECALL"));
-      if (f1 < 1) {
-        Log.warn("oracle with non-perfect f1=" + f1 + ":");
-        m.oracleS(y).getRoot().show(System.err);
+      if (!config.getBoolean("perceptron")) {
+        // make sure that oracle can get F1=1 regardless of model scores.
+        Log.info("testing the oracle");
+        FNParse yOracle = m.oracleY(y);
+        se = new SentenceEval(y, yOracle);
+        r = BasicEvaluation.evaluate(Arrays.asList(se));
+        f1 = r.get("ArgumentMicroF1");
+        Log.info("ORACLE TEST result: " + y.getSentence().getId()
+            + " f1=" + f1
+            + " p=" + r.get("ArgumentMicroPRECISION")
+            + " r=" + r.get("ArgumentMicroRECALL"));
+        if (f1 < 1) {
+          Log.warn("oracle with non-perfect f1=" + f1 + ":");
+          m.oracleS(y).getRoot().show(System.err);
+        }
+        assert f1 == 1;
+        if (justOracle)
+          continue;
       }
-      assert f1 == 1;
-      if (justOracle)
-        continue;
 
 //      // We seem to be having some problems with lock-in (bad initialization) :)
 //      // We can get every example right if we start from 0 weights.
@@ -716,7 +719,7 @@ public class FModel implements Serializable {
       int passed = 0;
       int enough = 3;
       FNParse yhat = null;
-      for (int tryy = 0; tryy < 10 && passed < enough; tryy++) {
+      for (int tryy = 0; tryy < 30 && passed < enough; tryy++) {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
@@ -762,19 +765,21 @@ public class FModel implements Serializable {
         // Show a run of the decoder
         m.predict(y);
 
-        // Run the oracle by itself
-        Log.info("about to run most violated search for the last time");
-        State2<Info> as = m.oracleS(y);
-        Log.info("about to decode oracle state for the last time");
-        FNParse a = m.ts.decode(as);
-        showLoss(y, a, "oracle");
+        if (!config.getBoolean("perceptron")) {
+          // Run the oracle by itself
+          Log.info("about to run most violated search for the last time");
+          State2<Info> as = m.oracleS(y);
+          Log.info("about to decode oracle state for the last time");
+          FNParse a = m.ts.decode(as);
+          showLoss(y, a, "oracle");
 
-        // Run most violated by itself
-        Log.info("about to run most violated search for the last time");
-        State2<Info> bs = m.mostViolatedS(y);
-        Log.info("about to decode most violated state for the last time");
-        FNParse b = m.ts.decode(bs);
-        showLoss(y, b, "MV");
+          // Run most violated by itself
+          Log.info("about to run most violated search for the last time");
+          State2<Info> bs = m.mostViolatedS(y);
+          Log.info("about to decode most violated state for the last time");
+          FNParse b = m.ts.decode(bs);
+          showLoss(y, b, "MV");
+        }
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);
     }

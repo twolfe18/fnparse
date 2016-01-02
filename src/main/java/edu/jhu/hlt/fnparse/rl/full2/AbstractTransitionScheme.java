@@ -681,7 +681,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
             Log.info("about to apply the most violated updates");
           bad.backwards(-learningRate);
 
-          assert false : "need to put an attempted L2 update here, see how its done in buildUpdate";
+//          assert false : "need to put an attempted L2 update here, see how its done in buildUpdate";
+          Log.warn("make sure you do averaging to regularize the perceptron!");
 
           return mv;
         }

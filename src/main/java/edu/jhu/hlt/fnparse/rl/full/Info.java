@@ -266,7 +266,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
     GeneralizedCoef cL = new GeneralizedCoef.Loss.Oracle();
     double mScale = 1;
     double rScale = 1;
-
     switch (m) {
     case RAND_MIN:
       return setSameHTS(new HowToSearchImpl(

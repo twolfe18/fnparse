@@ -58,6 +58,10 @@ public class LLSSPatF extends LLSSP {
   // that went into scoring the actions that lead to this list.
   public final LL<Adjoints> scores;
 
+//  public final Adjoints uncacheable;
+  public final Info info;
+  public final WeightsInfo weights;
+
   // A bit set of realized roles. When C/R roles are used, this is used as an
   // O(1) lookup to determine if a C/R K valued node is licensed (else it is
   // given score(prune)=infinity).
@@ -77,6 +81,33 @@ public class LLSSPatF extends LLSSP {
       assert FNParseTransitionScheme.getArgSpan(item.children.car().prefix, info) != Span.nullSpan;
       kMask = 1L << kq.first;
     }
+    
+    
+    
+    
+    this.info = info;
+    this.weights = weights;
+    if (next != null) {
+      assert info == next.info;
+      assert weights == next.weights;
+    }
+//    if (ARG_LOC) {
+//      List<ProductIndex> f = argLocSimple(item, next, info, new ArrayList<>());
+//      uncacheable = new ProductIndexAdjoints(weights, f, false);
+//    } else {
+//      uncacheable = Adjoints.Constant.ZERO;
+//    }
+    
+    // Still wrong!
+    // Don't know why.
+    // I'm starting to think that I'm not re-building the tree properly.
+//    for (LLSSPatF cur = this; cur != null; cur = cur.cdr()) {
+//      List<ProductIndex> f = argLocSimple(cur.car(), cur.cdr(), info, new ArrayList<>());
+//      curFeats = new Adjoints.Sum(curFeats, new ProductIndexAdjoints(weights, f, false));
+//    }
+      
+      
+      
 
     if (next == null) {
       scores = new LL<>(Adjoints.cacheIfNeeded(curFeats), null);
@@ -86,6 +117,11 @@ public class LLSSPatF extends LLSSP {
       scores = new LL<>(sum, next.scores);
       realizedBaseRoles = kMask | next.realizedBaseRoles;
     }
+
+      
+      
+      
+      
 
     /*
      * LLSSP:    (sum, adj) -> (sum', adj') -> ...
@@ -104,8 +140,21 @@ public class LLSSPatF extends LLSSP {
   @Override
   public StepScores<?> getScoreSum() {
     // Putting this here instead of the constructor so that I'm sure super.getScoreSum() will work properly
-    if (__ssMemo == null)
-      __ssMemo = super.getScoreSum().plusModel(scores.car());
+    if (__ssMemo == null) {
+      Adjoints addIn = scores.car();
+
+      // Wrong: only inclues features from the end of the list.
+//      Adjoints addIn = new Adjoints.Sum(scores.car(), uncacheable);
+
+      // Impossible to be stale?
+//      // Wrong: features that were used before are not present in this!
+//      for (LLSSPatF cur = this; cur != null; cur = cur.cdr()) {
+//        List<ProductIndex> f = argLocSimple(cur.car(), cur.cdr(), info, new ArrayList<>());
+//        addIn = new Adjoints.Sum(addIn, new ProductIndexAdjoints(weights, f, false));
+//      }
+
+      __ssMemo = super.getScoreSum().plusModel(addIn);
+    }
     return __ssMemo;
   }
   private StepScores<?> __ssMemo = null;
@@ -117,8 +166,8 @@ public class LLSSPatF extends LLSSP {
 
   protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, WeightsInfo globals) {
     List<ProductIndex> feats = new ArrayList<>();
-//    if (ARG_LOC)
-//      argLocSimple(item, prev, info, feats);
+    if (ARG_LOC)
+      argLocSimple(item, prev, info, feats);
     if (ROLE_COOC)
       roleCooc(item, prev, info, feats);
     if (NUM_ARGS)
@@ -156,15 +205,15 @@ public class LLSSPatF extends LLSSP {
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
       int pnai = pna.getProdFeatureSafe();
-      assert DEBUG_ALPH[pnai] == null;
+//      assert DEBUG_ALPH[pnai] == null;
       DEBUG_ALPH[pnai] = "numArgs=" + numArgs;
 
       int pnafi = pna.prod(f, N).getProdFeatureSafe();
-      assert DEBUG_ALPH[pnafi] == null;
+//      assert DEBUG_ALPH[pnafi] == null;
       DEBUG_ALPH[pnafi] = "numArgs=" + numArgs + " & frame=" + frame.getName();
 
       int pnafki = pna.prod(fk, N).getProdFeatureSafe();
-      assert DEBUG_ALPH[pnafki] == null;
+//      assert DEBUG_ALPH[pnafki] == null;
       DEBUG_ALPH[pnafki] = "numArgs=" + numArgs + " & frame=" + frame.getName() + " & role=" + frame.getRole(k);
     }
   }
@@ -201,8 +250,9 @@ public class LLSSPatF extends LLSSP {
 
   /**
    * Mean to mimic {@link GlobalFeature.ArgLocSimple}
+   * @return addTo
    */
-  private static void argLocSimple(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
+  private List<ProductIndex> argLocSimple(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {
     // We may know whether there is a s:S/Span chosen already.
     // If not, this feature doesn't fire.
     assert item.getType() == TFKS.K;
@@ -254,6 +304,8 @@ public class LLSSPatF extends LLSSP {
           // TODO make a feature for this
         }
       }
+
     }
+    return addTo;
   }
 }
