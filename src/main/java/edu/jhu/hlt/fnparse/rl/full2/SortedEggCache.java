@@ -30,6 +30,11 @@ public class SortedEggCache {
   private IntObjectHashMap<LLTVN> k2Eggs;   // children of K node, S values
 
   public static StepScores<?> e2ss(EggWithStaticScore egg) {
+    // TODO We are sorting this list with the intention of doing as many
+    // hatches right away followed by prunes, so we are either sorting for
+    // scoreHatch or scoreHatch-scoreSquash.
+    // Is there a way to replace loss with a "loss assuming we hatch it" (scoreHatch)
+    // or "delta loss if we hatch it vs prune it" (scoreHatch-scoreSquash).
     return new StepScores<>(null, egg.getModel(), MaxLoss.ZERO, egg.getRand());
   }
 
@@ -54,22 +59,14 @@ public class SortedEggCache {
       List<Pair<TFKS, EggWithStaticScore>> kEggs,
       HowToSearch howToScore) {
 
-//    initFEggs(fEggs, howToScore);
-
-    final Map<Integer, Adjoints> kScores = initKEggs(kEggs, howToScore);
-
-    if (AbstractTransitionScheme.DEBUG && DEBUG) {
-      Log.info("sorting " + fEggs.size() + " k-valued eggs");
-      if (kScores != null) {
-        for (int k : kScores.keySet())
-          System.out.println("k=" + k + " -> " + kScores.get(k));
-      } else {
-        System.out.println("kScore is null!");
-      }
-      for (Pair<TFKS, EggWithStaticScore> p : fEggs) {
-        System.out.println("kEgg: " + p.get1().k);
-      }
-    }
+    /*
+     * TODO Current sort is based on *model score*, not *search objective*
+     * (which might include loss,rand for example). The reason this is not a
+     * trivial change is that all we have is an EggWithStaticScore/TVNS, which
+     * does not yet know about loss (i.e. Node2).
+     * Should we sort by search objective instead? Probably...
+     */
+    final Map<Integer, EggWithStaticScore> kScores = initKEggs(kEggs, howToScore);
 
     if (!Node2.INTERNAL_NODES_COUNT) {
       // fEggs should all be TVNS with score of Constant(0)
@@ -81,8 +78,8 @@ public class SortedEggCache {
           int k1 = o1.get1().k;
           int k2 = o2.get1().k;
           assert k1 >= 0 && k2 >= 0;
-          double s1 = kScores.get(k1).forwards();
-          double s2 = kScores.get(k2).forwards();
+          double s1 = howToScore.forwards(e2ss(kScores.get(k1)));
+          double s2 = howToScore.forwards(e2ss(kScores.get(k2)));
           if (s1 < s2)
             return -1;
           if (s1 > s2)
@@ -96,40 +93,52 @@ public class SortedEggCache {
     }
 
     this.fEggs = null;
+    if (AbstractTransitionScheme.DEBUG && DEBUG)
+      Log.info("sorted " + fEggs.size() + " k-valued eggs");
     for (int i = 0; i < fEggs.size(); i++) {
-      EggWithStaticScore egg = fEggs.get(i).get2();
-      if (AbstractTransitionScheme.DEBUG && DEBUG)
-        System.out.println("k-valued egg after sorting: " + egg + "\thts.forwards=" + howToScore.forwards(e2ss(egg)));
-      this.fEggs = new LLTVN(egg, this.fEggs);
+      EggWithStaticScore fe = fEggs.get(i).get2();
+      EggWithStaticScore feMod;
+      int k = fe.value;
+      if (kScores != null) {
+        feMod = kScores.get(k); // s-valued egg, not k-valued!
+        assert feMod.type == TFKS.S : "feMode.type=" + feMod.type + " fe.type=" + fe.type;
+        assert fe.type == TFKS.K : "feMode.type=" + feMod.type + " fe.type=" + fe.type;
+        feMod = fe.withScore(feMod.getModel(), feMod.getRand());
+        if (AbstractTransitionScheme.DEBUG && DEBUG)
+          System.out.println("k=" + k + " -> max_s model(k,s): " + howToScore.forwards(e2ss(feMod)));
+      } else {
+        feMod = fe;
+        if (AbstractTransitionScheme.DEBUG && DEBUG)
+          System.out.println("k=" + k + " -> model(k): " + howToScore.forwards(e2ss(feMod)));
+      }
+      assert feMod.type == TFKS.K && feMod.type == fe.type;
+      this.fEggs = new LLTVN(feMod, this.fEggs);
     }
+
+//    this.fEggs = null;
+//    for (int i = 0; i < fEggs.size(); i++) {
+//      EggWithStaticScore egg = fEggs.get(i).get2();
+//      if (AbstractTransitionScheme.DEBUG && DEBUG)
+//        System.out.println("k-valued egg after sorting: " + egg + "\thts.forwards=" + howToScore.forwards(e2ss(egg)));
+//      this.fEggs = new LLTVN(egg, this.fEggs);
+//    }
 
     if (AbstractTransitionScheme.DEBUG && DEBUG)
       show(System.out);
   }
 
-//  /**
-//   * Just sorts k-valued (F) eggs by their model score (as deemed by howToScore).
-//   * I thought I wanted to do some type of max_s score(k,s), but I'm not sure
-//   * about that anymore, seems like the model already has an opinon about k-valued
-//   * eggs which needs to be respected.
-//   */
-//  private void initFEggs(List<Pair<TFKS, EggWithStaticScore>> fEggs, HowToSearch howToScore) {
-//  }
-
-  public static Comparator<Pair<TFKS, EggWithStaticScore>> byEggScore(HowToSearch howToScore, boolean groupByKSFirst) {
+  public static Comparator<Pair<TFKS, EggWithStaticScore>> byEggScore(HowToSearch howToScore, boolean groupByKFirst) {
     return new Comparator<Pair<TFKS, EggWithStaticScore>>() {
       @Override
       public int compare(Pair<TFKS, EggWithStaticScore> p1, Pair<TFKS, EggWithStaticScore> p2) {
-        if (groupByKSFirst) {
-          // First sort on (k,s)
+        if (groupByKFirst) {
+          // First sort on k
           TFKS i1 = p1.get1();
           TFKS i2 = p2.get1();
           if (i1.k != i2.k)
             return i1.k < i2.k ? -1 : 1;
-          if (i1.s != i2.s)
-            return i1.s < i2.s ? -1 : 1;
         }
-        // Within a (k,s) block, sort by score, low->high
+        // Within a k block, sort by score, low->high
         StepScores<?> ss1 = e2ss(p1.get2());
         StepScores<?> ss2 = e2ss(p2.get2());
         double s1 = howToScore.forwards(ss1);
@@ -147,11 +156,11 @@ public class SortedEggCache {
    * Returns a k -> Adjoints representing the best (k,s) from an s-valued egg.
    * Use this to sort k-vauled eggs if !Node.INTERNAL_NODES_COUNT
    */
-  private Map<Integer, Adjoints> initKEggs(List<Pair<TFKS, EggWithStaticScore>> kEggs, HowToSearch howToScore) {
+  private Map<Integer, EggWithStaticScore> initKEggs(List<Pair<TFKS, EggWithStaticScore>> kEggs, HowToSearch howToScore) {
     // Sort by (k,s) then score (low -> high)
     Collections.sort(kEggs, byEggScore(howToScore, true));
 
-    Map<Integer, Adjoints> kScores = null;
+    Map<Integer, EggWithStaticScore> kScores = null;
     if (!Node2.INTERNAL_NODES_COUNT)
       kScores = new HashMap<>();
 
@@ -180,8 +189,8 @@ public class SortedEggCache {
         if (curK >= 0) {
           k2Eggs.put(curK, curKEggs);
           if (kScores != null) {
-            Adjoints bestScore = ((EggWithStaticScore) curKEggs.car()).getModel();
-            Adjoints old = kScores.put(curK, bestScore);
+            EggWithStaticScore bestScore = (EggWithStaticScore) curKEggs.car();
+            EggWithStaticScore old = kScores.put(curK, bestScore);
             assert old == null;
           }
         }
@@ -199,8 +208,8 @@ public class SortedEggCache {
     }
     k2Eggs.put(curK, curKEggs);
     if (kScores != null) {
-      Adjoints bestScore = ((EggWithStaticScore) curKEggs.car()).getModel();
-      Adjoints old = kScores.put(curK, bestScore);
+      EggWithStaticScore bestScore = (EggWithStaticScore) curKEggs.car();
+      EggWithStaticScore old = kScores.put(curK, bestScore);
       assert old == null;
     }
     return kScores;
