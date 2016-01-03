@@ -221,7 +221,8 @@ public class Node2 implements HasStepScores, HasSig {
       childrenS = children.getScoreSum().getModel();
       childrenR = children.getScoreSum().getRand();
     }
-    Adjoints score = Adjoints.cacheIfNeeded(new Adjoints.Sum(prefixS, prunedS, childrenS));
+//    Adjoints score = Adjoints.cacheIfNeeded(new Adjoints.Sum(prefixS, prunedS, childrenS));
+    Adjoints score = Adjoints.cacheSum(prefixS, prunedS, childrenS);
     double rand = prefixR + prunedR + childrenR;
     this.score = new StepScores<>(null, score, loss, rand);
   }

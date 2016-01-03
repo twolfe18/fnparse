@@ -96,12 +96,15 @@ public class FModel implements Serializable {
       fi = FrameIndex.getFrameNet();
     }
 
+    rtConf = config;
     maxViolation = p.getBoolean("perceptron");
     perceptronUpdateMode =
         p.getBoolean("maxViolation", true)
         ? PerceptronUpdateMode.MAX_VIOLATION
             : PerceptronUpdateMode.EARLY;
-    Log.info("[main] perceptron=" + maxViolation + " mode=" + perceptronUpdateMode);
+    Log.info("[main] perceptron=" + maxViolation
+        + " mode=" + perceptronUpdateMode
+        + " oracleMode=" + rtConf.oracleMode);
 
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
@@ -112,7 +115,6 @@ public class FModel implements Serializable {
 //    int dimension = 1;  // Not using the weights in here, don't waste space
 //    conf.weights = new GeneralizedWeights(conf, null, dimension, l2UpdateInterval);
 
-    rtConf = config;
     if (pruningMode != null)
       drp = new DeterministicRolePruning(pruningMode, null, null);
     else
@@ -162,7 +164,7 @@ public class FModel implements Serializable {
     oracleInf.setArgPruning(drp, includeGoldSpansIfMissing, mvInf);
     timer.stop("update.setup.argPrune");
 
-    if (DEBUG_ORACLE_MV_CONF) {
+    if (AbstractTransitionScheme.DEBUG && DEBUG_ORACLE_MV_CONF) {
       Log.info("oracleInf: " + oracleInf);
       Log.info("mvInf: " + mvInf);
     }
@@ -205,9 +207,8 @@ public class FModel implements Serializable {
     if (maxViolation) {
       timer.start("update.perceptron");
       ts.flushPrimes();
-      HowToSearch decoder = getPredictInfo(y).htsBeam;
       State2<Info> s0 = ts.genRootState(oracleInf);
-      Update u = ts.perceptronUpdate(s0, decoder, perceptronUpdateMode);
+      Update u = ts.perceptronUpdate(s0, perceptronUpdateMode, rtConf.oracleMode);
       timer.stop("update.perceptron");
       return u;
     }
@@ -647,7 +648,7 @@ public class FModel implements Serializable {
     config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
     config.put("perceptron", "true");
     config.put("useGlobalFeatures", "true");
-    config.put("beamSize", "1");
+    config.put("beamSize", "4");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
 //        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
@@ -661,7 +662,6 @@ public class FModel implements Serializable {
 //    CachedFeatures cf = CachedFeatures.buildCachedFeaturesForTesting(config, fs);
 //    ItemProvider ip = cf.new ItemProvider(100, true, false);
 
-
     List<CachedFeatures.Item> stuff = fooMemo();
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
 
@@ -673,7 +673,7 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-    m.ts.useOverfitFeatures = true;
+//    m.ts.useOverfitFeatures = true;
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
     int checked = 0;

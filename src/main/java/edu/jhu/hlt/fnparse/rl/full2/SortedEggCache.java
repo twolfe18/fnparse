@@ -11,7 +11,6 @@ import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 

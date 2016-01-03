@@ -151,6 +151,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   @Override
   public Random getRandom() {
+    assert false : "don't use this!";
     return config.rand;
   }
 

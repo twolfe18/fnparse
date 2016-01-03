@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.util.HasRandom;
 import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.Log;
@@ -527,16 +528,32 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
   // every time backwards hits weights (which is a lot).
 
   /** Returns (updateTowardsState, updateAwayState) */
-//  public Pair<State2<Z>, State2<Z>> perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
-  public Update perceptronUpdate(State2<Z> s0, HowToSearch decoder, PerceptronUpdateMode mode) {
+  public Update perceptronUpdate(State2<Z> s0, PerceptronUpdateMode mode, OracleMode oracleMode) {
     boolean fineLog = false;
 
-    // Create a beam which only accepts (size 1) loss-less states
-    GeneralizedCoef.Loss loss = new GeneralizedCoef.Loss(-1, Mode.MIN_LOSS, 1);
+    // Away
+    double marginCoef = 0;    // Should be 0 to remain consistent with perceptron
+    HowToSearch decoder = new HowToSearchImpl(
+        new GeneralizedCoef.Model(1, false),
+        new GeneralizedCoef.Loss(marginCoef, Mode.MIN_LOSS, 1),
+        GeneralizedCoef.ZERO);
+
+    // Towards
+    double rScale = 1;
+    GeneralizedCoef rand;
+    GeneralizedCoef model;
+    if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.RAND_MIN)
+      rand = new GeneralizedCoef.Rand(rScale);
+    else
+      rand = GeneralizedCoef.ZERO;
+    if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.MAX)
+      model = new GeneralizedCoef.Model(-1, true);
+    else
+      model = new GeneralizedCoef.Model(+1, true);
     HowToSearchImpl htsOracle = new HowToSearchImpl(
-        new GeneralizedCoef.Model(0, true), loss, decoder.coefRand());
-//    if (decoder.coefModel().coefBackwards != -1)
-//      throw new IllegalArgumentException("needed to make updateAway work");
+        model,
+        new GeneralizedCoef.Loss.Oracle(),
+        rand);
 
     if (DEBUG && (DEBUG_SEARCH || DEBUG_PERCEPTRON)) {
       Log.info("starting perceptron update, mode=" + mode);
@@ -625,9 +642,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           // First: we must have gotten this prefix wrong
           State2<Z> z2 = oracleNext.peek();
 
-//          assert z2.getStepScores().getLoss().noLoss(); // TODO fix FPs introduced by not pruning internal nodes
-          assert z2.getStepScores().getLoss().fn == 0;
+          assert z2.getStepScores().getLoss().noLoss();
+//          assert z2.getStepScores().getLoss().fn == 0;
 
+          double margin = 0;
           double s1 = z1.getStepScores().getModel().forwards();
           double s2 = z2.getStepScores().getModel().forwards();
           if (DEBUG && DEBUG_PERCEPTRON) {
@@ -636,7 +654,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
                 + " maybeViolation=" + (s1-s2));
           }
           // Second: the score of the predicted z must be greater than the oracle (y) score
-          double violation = Math.max(0, s1 - s2);
+          double violation = Math.max(0, (margin + s1) - s2);
           if (violation >= maxViolation) {
             maxViolation = violation;
             violator = new Pair<>(z2, z1);

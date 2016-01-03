@@ -6,7 +6,9 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+
+import org.apache.commons.math3.distribution.NormalDistribution;
+import org.apache.commons.math3.random.ISAACRandom;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
@@ -80,10 +82,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  public boolean disallowNonLeafPruning = true;
 
   public boolean useGlobalFeats;
+  public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
+  private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
+  private double nextGaussian() {
+    return rnorm.sample();
+  }
 
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
@@ -137,9 +144,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     wHatch = new WeightsInfo(
         new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
         dimension, lrLocal, l2Local);
-    wSquash = new WeightsInfo(
-        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-        dimension, lrLocal, l2Local);
+    if (!onlyUseHatchWeights) {
+      wSquash = new WeightsInfo(
+          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+          dimension, lrLocal, l2Local);
+    }
     if (useGlobalFeats) {
       wGlobal = new WeightsInfo(
           new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
@@ -149,7 +158,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
-      Log.info("[main] wSquash=" + wSquash.summary());
+      Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
       Log.info("[main] sortEggsMode=" + sortEggsMode);
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
@@ -187,13 +196,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (MAIN_LOGGING)
       Log.info("[main] zeroing weights");
     wHatch.scale(0);
-    wSquash.scale(0);
-    wGlobal.scale(0);
+    if (wSquash != null)
+      wSquash.scale(0);
+    if (wGlobal != null)
+      wGlobal.scale(0);
   }
 
   @Override
   public boolean oneAtATime(int type) {
-    if (type == TFKS.F || type == TFKS.K)
+//    if (type == TFKS.F || type == TFKS.K)
+//      return true;
+    if (type == TFKS.T || type == TFKS.F || type == TFKS.K)
       return true;
     return super.oneAtATime(type);
   }
@@ -217,6 +230,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public long primeFor(TFKS prefix) {
+    if (LLSSP.DISABLE_PRIMES)
+      return 0;
     int i = prefix2primeIdx.lookupIndex(prefix, true);
     return primes.get(i);
   }
@@ -453,7 +468,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int momType = momPrefix == null ? -1 : momPrefix.car().type;
     if (momType == TFKS.S)
       return null;
-    final Random rand = info.getRandom();
     final int sentLen = info.getSentence().size();
 
     /*
@@ -505,14 +519,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           int goldK = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
           long primeK = primeFor(TFKS.K, k);
 
-          ProductIndexAdjoints modelK = staticFeats0(
+          Adjoints modelK = staticFeats0(
               new TVN(TFKS.K, k, -1, -1, 1), momPrefix, info, wHatch);
-          if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-            modelK.nameOfWeights = "pre-computed genEggs(K) features";
-            modelK.showUpdatesWith = alph;
-          }
+//          if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+//            modelK.nameOfWeights = "pre-computed genEggs(K) features";
+//            modelK.showUpdatesWith = alph;
+//          }
 
-          double randK = info.getRandom().nextGaussian();
+          double randK = nextGaussian();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
           egF.add(new Pair<>(prefixK, new EggWithStaticScore(
               TFKS.K, k, possK, goldK, primeK, modelK, randK)));
@@ -529,14 +543,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
              *
              * NOTE: In scoreHatch, I need to catch these features!
              */
-            ProductIndexAdjoints staticScore = staticFeats0(
+            Adjoints staticScore = staticFeats0(
                 new TVN(TFKS.S, s, -1, -1, 1), prefixK, info, wHatch);
 
-            if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-              staticScore.nameOfWeights = "pre-computed genEggs(S) features";
-              staticScore.showUpdatesWith = alph;
-              Log.info("staticScore for egg: " + staticScore);
-            }
+//            if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+//              staticScore.nameOfWeights = "pre-computed genEggs(S) features";
+//              staticScore.showUpdatesWith = alph;
+//              Log.info("staticScore for egg: " + staticScore);
+//            }
 
 //            if (AbstractTransitionScheme.DEBUG) {
 //              System.out.println("possible problem with prefix:");
@@ -546,7 +560,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //              assert possS >= goldS;
 //            }
 
-            double randS = rand.nextGaussian();
+            double randS = nextGaussian();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
             egK.add(new Pair<>(prefixS, new EggWithStaticScore(
                 TFKS.S, s, possS, goldS, primeS, staticScore, randS)));
@@ -726,7 +740,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
         Log.info("wHatch[this]=" + wHatch.get(i)
-          + " wSquash[this]=" + wSquash.get(i)
+          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
           + " fs=" + fs);
       }
       addTo.add(base.prod(i, dimension));
@@ -753,8 +767,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
         Log.info("wHatch[this]=" + wHatch.get(i)
-        + " wSquash[this]=" + wSquash.get(i)
-        + " fs=" + fs);
+          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
+          + " fs=" + fs);
       }
       addTo.add(base.destructiveProd(i)); // destroys card, can't prod in any more features
     } else {
@@ -782,81 +796,58 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         return addTo;
       }
 
-      TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
-      TFKS prefix = consPrefix(removeMe, motherPrefix, info);
-
       if (motherPrefix.car().type == TFKS.K) {
         // Rich (static) features for s-valued children
         assert cachedFeatures != null : "forget to set CachedFeatures?";
         Sentence sent = info.getSentence();
         int sentLen = sent.size();
-        Span t = Span.decodeSpan(prefix.t, sentLen);
-        Span s = Span.decodeSpan(prefix.s, sentLen);
+        Span t = Span.decodeSpan(motherPrefix.t, sentLen);
+        Span s = Span.decodeSpan(egg.value, sentLen); assert egg.type == TFKS.S;
         FrameIndex fi = info.getFrameIndex();
-        Frame f = fi.getFrame(prefix.f);
-//        int k = prefix.k; assert k >= 0 && k < f.numRoles();
-//        int K = f.numRoles(); assert !useContRoles && !useRefRoles;
+        Frame f = fi.getFrame(motherPrefix.f);
         int k, K;
         if (info.roleDependsOnFrame()) {
           FrameRolePacking frp = info.getFRPacking();
-          k = frp.index(f, prefix.k);
+          k = frp.index(f, motherPrefix.k);
           K = frp.size();
         } else {
-          k = prefix.k;
+          k = motherPrefix.k;
           K = f.numRoles();
         }
 
         // These are exact feature indices (from disk, who precompute pipeline)
-//        List<ProductIndex> feats = cachedFeatures.params.getFeaturesNoModulo(sent, t, s);
         List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
 
         // Take the product of these (t,s) features with (f,k).
         // ProductIndexAdjoints will take the modulo the weights size as late as possible.
         for (ProductIndex pi : feats) {
-
-//          ProductIndex p = base.flatProd(pi);   // f(t,s)
-//          ProductIndex pp = p.prod(k, K);       // f(t,fk,s)
-//          if (roleDepsOnFrame)
-//            pp = pp.prod(f.getId(), fi.getNumFrames());
-
           long i = pi.getProdFeature();
           ProductIndex p = base.prod(0, K+1).destructiveProd(i);
           ProductIndex pp = base.prod(k+1, K+1).destructiveProd(i);
 
           addTo.add(p);
           addTo.add(pp);
-//          Log.info("p=" + p + " pp=" + pp + " i=" + i + " f=" + f.getName() + " k=" + k);
         }
-//        Log.info("numFeats=" + addTo.size());
-
-//        IntDoubleUnsortedVector fv = cachedFeatures.params.getFeatures(sent, t, s);
-//        Iterator<IntDoubleEntry> itr = fv.iterator();
-//        while (itr.hasNext()) {
-//          IntDoubleEntry ide = itr.next();
-//          assert ide.get() > 0; // but you lose magnitude either way
-//          int i = ide.index();
-//          System.out.println("cachedFeatures(t=" + t.shortString() + ", s=" + s.shortString() + ")=" + i);
-//          ProductIndex p = base.prod(i, dimension);   // f(t,s)
-//          ProductIndex pp = p.prod(k, K);             // f(t,fk,s)
-//          if (roleDepsOnFrame)
-//            pp = pp.prod(f.getId(), fi.getNumFrames());
-//          addTo.add(p);
-//          addTo.add(pp);
-//        }
 
         return addTo;
       }
 
-      throw new RuntimeException("forget a case? " + prefix);
+      throw new RuntimeException("forget a case? " + motherPrefix);
     }
     return addTo;
   }
-  public ProductIndexAdjoints staticFeats0(Node2 n, Info info, WeightsInfo weights) {
+  public Adjoints staticFeats0(Node2 n, Info info, WeightsInfo weights) {
     assert n.eggs != null : "hatch/squash both require an egg!";
     TVN egg = n.eggs.car();
     return staticFeats0(egg, n.prefix, info, weights);
   }
-  public ProductIndexAdjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
+  public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
+    boolean flip = false;
+    if (onlyUseHatchWeights && weights != wHatch) {
+      flip = true;
+      weights = wHatch;
+    }
+
     // This should be memoized because there is still a loop over all the features in ProductIndexAdjoints.init
     Map<TFKS, ProductIndexAdjoints> m;
     if (weights == wHatch) {
@@ -874,7 +865,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       pia = new ProductIndexAdjoints(weights, feats, attemptApplyL2Update);
       m.put(memoKey, pia);
     }
-    return pia;
+
+    // This way if you compute the dot product for hatch, you've also computed
+    // it for squash!
+    Adjoints a = Adjoints.cacheIfNeeded(pia);
+    if (flip)
+      return new Adjoints.Scale(-1, a);
+    return a;
   }
 
   /**
@@ -901,7 +898,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public TVNS scoreHatch(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing hatching
 
-//    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
     if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
         Log.info("immediately requiring hatch of egg: " + egg);
@@ -910,23 +906,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     if (unlicensedContOrRefRole(n, info)) {
       // Don't allow this to be hatched
-//      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
       return null;
     }
 
     // Static score
-    Adjoints staticScore;
+    Adjoints score;
     if (egg instanceof EggWithStaticScore) {
       // Recover the static features which were computed in genEggs
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("recovering static features from EggWithStaticScore");
       EggWithStaticScore eggSS = (EggWithStaticScore) egg;
-      staticScore = eggSS.getModel();
+      score = eggSS.getModel();
     } else {
       // Compute static features for the first time
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("computing static features for the first time");
-      staticScore = staticFeats0(n, info, wHatch);
+      score = staticFeats0(n, info, wHatch);
     }
 
     // Dynamic score
@@ -937,25 +932,22 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //      dynScore.nameOfWeights = "hatch";
 //      dynScore.showUpdatesWith = alph;
 //    }
-    Adjoints dynScore = Adjoints.Constant.ZERO;
+//    score = new Adjoints.Sum(score, dynScore);
 
     // Wrap up static + dynamic score into TVNS
     double r = info.getConfig().recallBias;
-    Adjoints score = r != 0
-        ? Adjoints.sum(new Adjoints.Constant(r), staticScore, dynScore)
-            : Adjoints.sum(staticScore, dynScore);
-    return egg.withScore(score, info.getRandom().nextGaussian());
+    if (r != 0)
+      score = Adjoints.sum(score, new Adjoints.Constant(r));
+    return egg.withScore(score, nextGaussian());
   }
 
   @Override
   public TVNS scoreSquash(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing squashing
 
-//    if (disallowNonLeafPruning && n.getType() < TFKS.K) {
     if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
         Log.info("immediately preventing squash of egg: " + egg);
-//      return egg.withScore(Adjoints.Constant.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY);
       return null;
     }
 
@@ -965,7 +957,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // nothing to do with model score).
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
-    ProductIndexAdjoints staticScore = staticFeats0(n, info, wSquash);
+
+    Adjoints score = staticFeats0(n, info, wSquash);
 //    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
 //    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
 //      staticScore.nameOfWeights = "squashStatic";
@@ -973,10 +966,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //      dynScore.nameOfWeights = "squashDyn";
 //      dynScore.showUpdatesWith = alph;
 //    }
-    Adjoints dynScore = Adjoints.Constant.ZERO;
+//    score = new Adjoints.Sum(score, dynScore);
 
-    Adjoints a = new Adjoints.Sum(staticScore, dynScore);
-    return egg.withScore(a, info.getRandom().nextGaussian());
+    return egg.withScore(score, nextGaussian());
   }
 
 

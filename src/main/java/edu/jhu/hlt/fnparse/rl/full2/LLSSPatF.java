@@ -17,7 +17,6 @@ import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.util.Alphabet;
 
 /**
  * This is the list of children (K nodes) at an F node. It maintains indices
@@ -58,9 +57,8 @@ public class LLSSPatF extends LLSSP {
   // that went into scoring the actions that lead to this list.
   public final LL<Adjoints> scores;
 
-//  public final Adjoints uncacheable;
-  public final Info info;
-  public final WeightsInfo weights;
+//  public final Info info;
+//  public final WeightsInfo weights;
 
   // A bit set of realized roles. When C/R roles are used, this is used as an
   // O(1) lookup to determine if a C/R K valued node is licensed (else it is
@@ -81,47 +79,23 @@ public class LLSSPatF extends LLSSP {
       assert FNParseTransitionScheme.getArgSpan(item.children.car().prefix, info) != Span.nullSpan;
       kMask = 1L << kq.first;
     }
-    
-    
-    
-    
-    this.info = info;
-    this.weights = weights;
-    if (next != null) {
-      assert info == next.info;
-      assert weights == next.weights;
-    }
-//    if (ARG_LOC) {
-//      List<ProductIndex> f = argLocSimple(item, next, info, new ArrayList<>());
-//      uncacheable = new ProductIndexAdjoints(weights, f, false);
-//    } else {
-//      uncacheable = Adjoints.Constant.ZERO;
+
+//    this.info = info;
+//    this.weights = weights;
+//    if (next != null) {
+//      assert info == next.info;
+//      assert weights == next.weights;
 //    }
-    
-    // Still wrong!
-    // Don't know why.
-    // I'm starting to think that I'm not re-building the tree properly.
-//    for (LLSSPatF cur = this; cur != null; cur = cur.cdr()) {
-//      List<ProductIndex> f = argLocSimple(cur.car(), cur.cdr(), info, new ArrayList<>());
-//      curFeats = new Adjoints.Sum(curFeats, new ProductIndexAdjoints(weights, f, false));
-//    }
-      
-      
-      
 
     if (next == null) {
       scores = new LL<>(Adjoints.cacheIfNeeded(curFeats), null);
       realizedBaseRoles = kMask;
     } else {
-      Adjoints sum = Adjoints.cacheIfNeeded(new Adjoints.Sum(curFeats, next.scores.car()));
+//      Adjoints sum = Adjoints.cacheIfNeeded(new Adjoints.Sum(curFeats, next.scores.car()));
+      Adjoints sum = Adjoints.cacheSum(curFeats, next.scores.car());
       scores = new LL<>(sum, next.scores);
       realizedBaseRoles = kMask | next.realizedBaseRoles;
     }
-
-      
-      
-      
-      
 
     /*
      * LLSSP:    (sum, adj) -> (sum', adj') -> ...
@@ -142,17 +116,6 @@ public class LLSSPatF extends LLSSP {
     // Putting this here instead of the constructor so that I'm sure super.getScoreSum() will work properly
     if (__ssMemo == null) {
       Adjoints addIn = scores.car();
-
-      // Wrong: only inclues features from the end of the list.
-//      Adjoints addIn = new Adjoints.Sum(scores.car(), uncacheable);
-
-      // Impossible to be stale?
-//      // Wrong: features that were used before are not present in this!
-//      for (LLSSPatF cur = this; cur != null; cur = cur.cdr()) {
-//        List<ProductIndex> f = argLocSimple(cur.car(), cur.cdr(), info, new ArrayList<>());
-//        addIn = new Adjoints.Sum(addIn, new ProductIndexAdjoints(weights, f, false));
-//      }
-
       __ssMemo = super.getScoreSum().plusModel(addIn);
     }
     return __ssMemo;
