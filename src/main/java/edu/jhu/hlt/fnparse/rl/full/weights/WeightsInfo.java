@@ -16,6 +16,18 @@ public class WeightsInfo {
     this.l2Reg = l2Reg;
   }
 
+  public WeightsInfo(WeightsInfo copyFrom) {
+    weights = new LazyL2UpdateVector(copyFrom.weights);
+    dimension = copyFrom.dimension;
+    learningRate = copyFrom.learningRate;
+    l2Reg = copyFrom.l2Reg;
+  }
+
+  public void add(WeightsInfo other) {
+    assert dimension == other.dimension;
+    weights.weights.add(other.weights.weights);
+  }
+
   /** Forwards to {@link LazyL2UpdateVector#maybeApplyL2Reg(double)} */
   public void maybeApplyL2Reg() {
     weights.maybeApplyL2Reg(l2Reg);;

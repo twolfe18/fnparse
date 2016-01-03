@@ -172,7 +172,7 @@ public class RerankerTrainer {
     // Convenient extras
     public final File workingDir;
     public final Random rand;
-    public Consumer<Integer> calledEveryEpoch = i -> {};
+    public Consumer<Integer> calledEveryIter = i -> {};
     public boolean performTuning() { return propDev > 0 && maxDev > 0; }
     public void dontPerformTuning() { propDev = 0; maxDev = 0; }
     public void spreadTuneRange(double factor) {
@@ -588,6 +588,13 @@ public class RerankerTrainer {
     else
       Log.warn("cachedFeatures is null!");
 
+    assert pretrainConf.calledEveryIter == trainConf.calledEveryIter;
+    assert pretrainConf.calledEveryIter == null;
+    pretrainConf.calledEveryIter = trainConf.calledEveryIter = iter -> {
+      sm.callEveryIter(iter);
+    };
+
+    // SPAGHETTI!
     sm.observeConfiguration(config);
 
     return sm;
@@ -1065,9 +1072,11 @@ public class RerankerTrainer {
           parameterServerClient.paramsChanged();
         }
 
+        // Hook for things like taking perceptron weight averages
+        conf.calledEveryIter.accept(iter);
+
         iter++;
       }
-      conf.calledEveryEpoch.accept(iter);
       epoch++;
     }
     if (es != null)

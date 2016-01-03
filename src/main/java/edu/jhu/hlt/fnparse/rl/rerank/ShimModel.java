@@ -30,6 +30,9 @@ public class ShimModel {
   private final RTConfig conf;
 
   private final FModel fmodel;
+  private int itersBetweenPerceptronWeightAverages =
+      ExperimentProperties.getInstance()
+        .getInt("itersBetweenPerceptronWeightAverages", 50);
 
   private CachedFeatures cachedFeatures;
 
@@ -48,6 +51,15 @@ public class ShimModel {
 
     Log.warn("DOING A DUMB THING, OVERFITTING WITH WITH CACHEDFEATURES...");
     m.getTransitionSystem().useOverfitFeatures = true;
+  }
+
+  public void callEveryIter(int iter) {
+    if (fmodel != null) {
+      if (iter % itersBetweenPerceptronWeightAverages == 0)
+        fmodel.getTransitionSystem().takeAverageOfWeights();
+    } else {
+      // no-op
+    }
   }
 
   public boolean isFModel() {
@@ -121,6 +133,8 @@ public class ShimModel {
       reranker.getStatelessParams().doneTraining();
       reranker.getStatefulParams().doneTraining();
       reranker.getPruningParams().doneTraining();
+    } else {
+      fmodel.getTransitionSystem().setParamsToAverage();
     }
   }
 

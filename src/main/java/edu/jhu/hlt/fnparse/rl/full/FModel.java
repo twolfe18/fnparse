@@ -646,9 +646,9 @@ public class FModel implements Serializable {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("oracleMode", "MIN");
     config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
-    config.put("perceptron", "true");
+    config.put("perceptron", "true"); // always keep true
     config.put("useGlobalFeatures", "true");
-    config.put("beamSize", "4");
+    config.put("beamSize", "2");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
 //        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
@@ -687,6 +687,8 @@ public class FModel implements Serializable {
           + " numFI=" + y.numFrameInstances()
           + " numItems=" + State.numItems(y));
       System.out.println(new SentenceEval(y, y));
+
+      m.ts.setParamsToAverage();
 
       if (!config.getBoolean("perceptron")) {
         // make sure that oracle can get F1=1 regardless of model scores.
@@ -782,6 +784,7 @@ public class FModel implements Serializable {
         }
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);
+      m.ts.takeAverageOfWeights();
     }
 
     Log.info("done, checked " + checked + " parses");

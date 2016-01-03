@@ -115,7 +115,6 @@ public class Node2 implements HasStepScores, HasSig {
       if (isLeaf) {
         possible = 1;
       } else {
-//        possible = childrenLoss.numPossible;
         possible = 0
           + LLTVN.sumPossible(eggs)
           + LLTVN.sumPossible(pruned)
@@ -166,10 +165,6 @@ public class Node2 implements HasStepScores, HasSig {
       int thisFN = LLTVN.sumGoldMatching(pruned);
       fn = thisFN + childrenLoss.fn;
     } else {
-//      if (isLeaf)
-//        fn = LLTVN.sumGoldMatching(pruned);
-//      else
-//        fn = LLSSP.getSumLoss(children).fn;
       // We can't have any false negatives at a leaf.
       // If not a leaf, then this is the correct formula.
       fn = LLTVN.sumGoldMatching(pruned) + LLSSP.getSumLoss(children).fn;
@@ -217,11 +212,9 @@ public class Node2 implements HasStepScores, HasSig {
       childrenS = Adjoints.Constant.ZERO;
       childrenR = 0;
     } else {
-//      Log.info("children.class=" + children.getClass());
       childrenS = children.getScoreSum().getModel();
       childrenR = children.getScoreSum().getRand();
     }
-//    Adjoints score = Adjoints.cacheIfNeeded(new Adjoints.Sum(prefixS, prunedS, childrenS));
     Adjoints score = Adjoints.cacheSum(prefixS, prunedS, childrenS);
     double rand = prefixR + prunedR + childrenR;
     this.score = new StepScores<>(null, score, loss, rand);

@@ -2091,7 +2091,7 @@ public class State implements StateLike {
     if (testCachedFeatures) {
       Log.info("trying out some updates when using CachedFeatures.ItemProvider");
       FModel m = new FModel(null, DeterministicRolePruning.Mode.CACHED_FEATURES);
-      m.setCachedFeatures(cf);
+      m.setCachedFeatures(cf.params);
       CachedFeatures.ItemProvider ip = cf.new ItemProvider(100, false, false);
       Log.info("ip.loaded=" + ip.getNumActuallyLoaded());
       for (int i = 0; i < ip.size(); i++) {
@@ -2347,6 +2347,7 @@ public class State implements StateLike {
 
     public Adjoints allFeatures(AT actionType, FI fi, RI ri, Sentence s, List<ProductIndex> stateFeatures) {
       assert fi.f != null;
+      boolean attemptApplyL2Update = true;
 
       if (++fCalls % 500000 == 0) {
         Log.info("debug=true, fCalls=" + fCalls + " anyGlobalFeatures=" + config.anyGlobalFeatures());
@@ -2365,7 +2366,7 @@ public class State implements StateLike {
       }
       LazyL2UpdateVector w = at2sfWeights[actionType.ordinal()];
       List<ProductIndex> f2 = convert(f, dim);
-      Adjoints staticScore = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, f2, w);
+      Adjoints staticScore = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, f2, w, attemptApplyL2Update);
 
       if (ri.k >= 0) {
         int prodF, prodC;
@@ -2382,7 +2383,7 @@ public class State implements StateLike {
           fk.add(pp);
         }
         LazyL2UpdateVector wk = at2k2sfWeights[actionType.ordinal()];
-        Adjoints staticScoreK = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, fk, wk);
+        Adjoints staticScoreK = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, fk, wk, attemptApplyL2Update);
         staticScore = new Adjoints.Sum(staticScore, staticScoreK);
       }
 
@@ -2394,7 +2395,7 @@ public class State implements StateLike {
           LazyL2UpdateVector ww = at2k2sfWeights[actionType.ordinal()];
           if (DEBUG)
             Log.info("overFeat=" + overFeatI + " weight=" + ww.weights.get(overFeatI) + "\t" + overFeat);
-          Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, ww);
+          Adjoints score = new ProductIndexAdjoints(staticLR, staticL2Penalty, dim, overFeats, ww, attemptApplyL2Update);
           return score;
         } else {
           throw new RuntimeException("implement me");

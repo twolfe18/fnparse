@@ -83,6 +83,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public boolean useGlobalFeats;
   public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
+  public int oneAtATime = TFKS.F;  // F => try hatch/squash for every K,  K => try hatch/squash for newest K
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -108,9 +109,55 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
   public Alphabet<String> alph;  // TODO Remove!
 
+  // For averaged perceptron
+  private WeightsInfo wHatchSum, wSquashSum, wGlobalSum;
+  private int numAverages = 0;
+  public void takeAverageOfWeights() {
+    Log.info("[main] taking " + numAverages + " average");
+    timer.start("takeAverageOfWeights");
+    if (wHatchSum == null) {
+      assert numAverages == 0;
+      wHatchSum = new WeightsInfo(wHatch);
+      if (wSquash != null)
+        wSquashSum = new WeightsInfo(wSquash);
+      if (wGlobal != null)
+        wGlobalSum = new WeightsInfo(wGlobal);
+    } else {
+      wHatchSum.add(wHatch);
+      if (wSquash != null)
+        wSquashSum.add(wSquash);
+      if (wGlobal != null)
+        wGlobalSum.add(wGlobal);
+    }
+    numAverages++;
+    timer.stop("takeAverageOfWeights");
+  }
+  public void setParamsToAverage() {
+    Log.info("[main] numAverages=" + numAverages);
+    timer.start("setParamsToAverage");
+    if (numAverages <= 1) {
+      Log.warn("[main] not modifying weights!");
+    } else {
+      double s = 1d / numAverages;
+      wHatch = new WeightsInfo(wHatchSum);
+      wHatch.scale(s);
+      if (wSquash != null) {
+        wSquash = new WeightsInfo(wSquashSum);
+        wSquash.scale(s);
+      }
+      if (wGlobal != null) {
+        wGlobal = new WeightsInfo(wGlobalSum);
+        wGlobal.scale(s);
+      }
+    }
+    timer.stop("setParamsToAverage");
+  }
+
+
   public void maybeApplyL2Reg() {
     wHatch.maybeApplyL2Reg();
-    wSquash.maybeApplyL2Reg();
+    if (wSquash != null)
+      wSquash.maybeApplyL2Reg();
     if (wGlobal != null)
       wGlobal.maybeApplyL2Reg();
   }
@@ -124,8 +171,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.primes = primes;
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    sortEggsMode = config.getBoolean("forceLeftRightInference")
-        ? SortEggsMode.NONE : SortEggsMode.BY_KS;
+    if (config.getBoolean("forceLeftRightInference")) {
+      oneAtATime = TFKS.K;
+      sortEggsMode = SortEggsMode.NONE;
+    } else {
+      oneAtATime = TFKS.F;
+      sortEggsMode = SortEggsMode.BY_KS;
+    }
 //    Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
 
     boolean g = config.getBoolean("useGlobalFeatures", true);
@@ -161,6 +213,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
       Log.info("[main] sortEggsMode=" + sortEggsMode);
+      Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
       Log.info("[main] LLSSPatF.NUM_ARGS=" + LLSSPatF.NUM_ARGS);
@@ -206,7 +259,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public boolean oneAtATime(int type) {
 //    if (type == TFKS.F || type == TFKS.K)
 //      return true;
-    if (type == TFKS.T || type == TFKS.F || type == TFKS.K)
+    if (type <= oneAtATime)
       return true;
     return super.oneAtATime(type);
   }

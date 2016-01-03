@@ -19,7 +19,7 @@ public class LLTVNS extends LLTVN {
       modelSum = item.getModel();
       randSum = item.getRand();
     } else {
-      modelSum = new Adjoints.Sum(item.getModel(), next.modelSum);
+      modelSum = Adjoints.cacheSum(item.getModel(), next.modelSum);
       randSum = item.getRand() + next.randSum;
     }
   }
