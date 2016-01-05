@@ -135,8 +135,8 @@ class Feature:
     y = self.ig / (1 + self.hx)
     it = '*'.join(map(str, self.int_templates))
     st = '*'.join(self.str_templates)
-    return "%f\t%f\t%f\t%d\t%s\t%s" % \
-      (y, self.ig, self.hx, len(self.int_templates), it, st)
+    return "%f\t%f\t%f\t%f\t%d\t%s\t%s" % \
+      (y, self.ig, self.hx, self.selectivity, len(self.int_templates), it, st)
 
   def features_in_one_str(self):
     return '*'.join(self.str_templates)
