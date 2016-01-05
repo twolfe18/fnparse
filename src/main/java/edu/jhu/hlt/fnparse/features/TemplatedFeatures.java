@@ -8,6 +8,7 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -24,7 +25,12 @@ import edu.jhu.util.Alphabet;
  * 
  * labels = <none>, frame, role, frameRole
  * templates = ... (a lot, see below)
- * 
+ *
+ * NOTE: I believe this is still largely tied to {@link BasicFeatureTemplates},
+ * so this is "pre" the pre-compute stage.
+ *
+ * @see FeatureSet for IO and convenience methods related to this.
+ *
  * @author travis
  */
 public abstract class TemplatedFeatures implements Serializable {

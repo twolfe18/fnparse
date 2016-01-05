@@ -22,17 +22,21 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Item;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
+import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -531,20 +535,36 @@ public class FModel implements Serializable {
     private Map<Pair<Sentence, SpanPair>, List<ProductIndex>> sentTS2feats;
     private List<FNParse> parses;
 
+    private Map<Sentence, Item> s2i;
+    private int[][] featureSet; // TODO initialize
+    private int[] template2cardinality;
+
+    public void setFeatureset(File featureSetFile, BiAlph bialph) {
+      Log.info("[main] using featuresSetFile=" + featureSetFile.getPath()
+        + " and bialph=" + bialph.getSource().getPath()
+        + " and code close to CachedFeatures.Params");
+      template2cardinality = bialph.makeTemplate2Cardinality();
+      featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
+    }
+
     public SimpleCFLike(List<CachedFeatures.Item> items) {
+      Object old;
       sentTS2feats = new HashMap<>();
       parses = new ArrayList<>();
+      s2i = new HashMap<>();
       for (CachedFeatures.Item i : items) {
         FNParse y = i.getParse();
         y.featuresAndSpans = i;  // evil
         parses.add(y);
         Sentence s = y.getSentence();
+        old = s2i.put(s, i);
+        assert old == null;
         Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
         while (btIter.hasNext()) {
           Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
           List<ProductIndex> feats2 = bt2pi(st2feats.get2());
           Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
-          List<ProductIndex> old = sentTS2feats.put(key, feats2);
+          old = sentTS2feats.put(key, feats2);
           assert old == null;
         }
       }
@@ -556,14 +576,23 @@ public class FModel implements Serializable {
 
     @Override
     public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
-      Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
-      List<ProductIndex> feats = sentTS2feats.get(key);
+      List<ProductIndex> feats;
+      if (featureSet != null) {
+        // Try to match as closely as possible how CachedFeatures.Params get features
+        Item cur = s2i.get(sent);
+        feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+      } else {
+        // This was the simplest way...
+        Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
+        feats = sentTS2feats.get(key);
+      }
       assert feats != null;
       return feats;
     }
   }
 
   // TODO This does not do feature sets! This just takes templates rather than their products.
+  // CachedFeatures.getFeaturesNoModulo uses InformationGainProducts.flatten
   public static List<ProductIndex> bt2pi(BaseTemplates bt) {
     int n = bt.size();
     List<ProductIndex> pi = new ArrayList<>(n);
@@ -649,7 +678,7 @@ public class FModel implements Serializable {
     config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
     config.put("perceptron", "true"); // always keep true
     config.put("useGlobalFeatures", "true");
-    config.put("beamSize", "2");
+    config.put("beamSize", "1");
 
 //    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
 //        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
@@ -666,6 +695,16 @@ public class FModel implements Serializable {
     List<CachedFeatures.Item> stuff = fooMemo();
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
 
+    // Try to mimic the code in CachedFeatures.Params.
+    // This is the data needed to create the state that CachedFeatures.Params has.
+    boolean mimicRT = true;
+    if (mimicRT) {
+      File dd = new File("data/debugging/");
+      BiAlph bialph = new BiAlph(new File(dd, "coherent-shards-filtered-small/alphabet.txt"), LineMode.ALPH);
+      File featureSetFile = new File(dd, "propbank-8-40.fs");
+      cfLike.setFeatureset(featureSetFile, bialph);
+    }
+
     boolean justOracle = false;
 
     SentenceEval se;
@@ -674,7 +713,7 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-//    m.ts.useOverfitFeatures = true;
+    m.ts.useOverfitFeatures = false;
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
     int checked = 0;
@@ -717,6 +756,7 @@ public class FModel implements Serializable {
 //      m.ts.flushAlphabet();
 
       Log.info("testing learning");
+      double lr = 0.05;
       int updates = 0;
       int lim = 2;
       int passed = 0;
@@ -726,7 +766,7 @@ public class FModel implements Serializable {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
-          hinge += m.getUpdate(y).apply(1);
+          hinge += m.getUpdate(y).apply(lr);
           updates++;
         }
         hinge /= updates;
@@ -763,7 +803,7 @@ public class FModel implements Serializable {
         LLSSPatF.DEBUG_SHOW_BACKWARDS = true;
 
         // Check an update
-        m.getUpdate(y).apply(1);
+        m.getUpdate(y).apply(lr);
 
         // Show a run of the decoder
         m.predict(y);

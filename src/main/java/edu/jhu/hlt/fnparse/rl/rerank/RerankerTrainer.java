@@ -58,6 +58,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.DropoutMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.PropbankFNParses;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -1333,28 +1334,7 @@ public class RerankerTrainer {
 
       // Convert string feature set to ints for CachedFeatures (using BiAlph)
       mt.start("features");
-      boolean allowLossyAlphForFS = config.getBoolean("allowLossyAlphForFS", false);
-      List<int[]> features = new ArrayList<>();
-      BitSet templates = new BitSet();
-      for (String featureString : TemplatedFeatures.tokenizeTemplates(fs)) {
-        List<String> strTemplates = TemplatedFeatures.tokenizeProducts(featureString);
-        int n = strTemplates.size();
-        int[] intTemplates = new int[n];
-        for (int i = 0; i < n; i++) {
-          String tn = strTemplates.get(i);
-          Log.info("looking up template: " + tn);
-          int t = bialph.mapTemplate(tn);
-          if (t < 0 && allowLossyAlphForFS) {
-            Log.info("skipping because " + tn + " was not in the alphabet");
-            continue;
-          }
-          assert t >= 0;
-          intTemplates[i] = t;
-          templates.set(t);
-        }
-        features.add(intTemplates);
-      }
-      Log.info("[main] loaded " + features.size() + " features covering " + templates.cardinality() + " templates");
+      List<int[]> features = FeatureSet.parseFeatureSet(fs, bialph);
       mt.stop("features");
 
       // Instantiate the module (holder of the data)
