@@ -166,7 +166,8 @@ public class RerankerTrainer {
     private double propDev = 0.2d;
     private int maxDev = 1000;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
-    public double recallBiasLo = -0.5, recallBiasHi = 0.5;
+    public double recallBiasLo = ExperimentProperties.getInstance().getDouble("recallBiasLo", -1);
+    public double recallBiasHi = ExperimentProperties.getInstance().getDouble("recallBiasHi", 1);
     public int tuneSteps = 3;
     public boolean tuneOnTrainingData = false;
 
@@ -888,7 +889,7 @@ public class RerankerTrainer {
         throw new RuntimeException("no dev data!");
       EvalFunc lossFunc = conf.objective; // null => SVM objective
       Log.info("[main] adding dev set stopping, dev.size=" + dev.size() + " lossFunc=" + lossFunc);
-      File rScript = new File("scripts/stop.sh");
+      File rScript = ExperimentProperties.getInstance().getExistingFile("stoppingScript", new File("/home/hltcoe/twolfe/fnparse/scripts/stop.sh"));
       double alpha = 0.1;     // Lower numbers mean stop earlier.
       double k = 8;           // Size of history
       int skipFirst = 3;      // Drop the first value(s) to get the variance est. right.
