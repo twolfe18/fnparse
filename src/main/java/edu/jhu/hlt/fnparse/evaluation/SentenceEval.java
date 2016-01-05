@@ -176,18 +176,32 @@ public class SentenceEval {
         targetPreds.add(new FrameArgInstance(f, t, -1, null));
       if (targetRolePreds != null)
         targetRolePreds.add(new FrameArgInstance(f, t, -1, null));
-      int n = fi.getFrame().numRoles();
-      for (int i = 0; i < n; i++) {
-        Span arg = fi.getArgument(i);
+      int K = fi.getFrame().numRoles();
+      for (int k = 0; k < K; k++) {
+        Span arg = fi.getArgument(k);
         if (arg != Span.nullSpan) {
-          FrameArgInstance p = new FrameArgInstance(f, t, i, arg);
+          FrameArgInstance p = new FrameArgInstance(f, t, k, arg);
           if (targetRolePreds != null)
             targetRolePreds.add(p);
           if (onlyArgPreds != null)
             onlyArgPreds.add(p);
         }
-        if (!fi.getContinuationRoleSpans(i).isEmpty() || !fi.getReferenceRoleSpans(i).isEmpty())
-          throw new RuntimeException("C/R roles not supported");
+        for (Span argC : fi.getContinuationRoleSpans(k)) {
+          int kk = K + k;
+          FrameArgInstance p = new FrameArgInstance(f, t, kk, argC);
+          if (targetRolePreds != null)
+            targetRolePreds.add(p);
+          if (onlyArgPreds != null)
+            onlyArgPreds.add(p);
+        }
+        for (Span argR : fi.getReferenceRoleSpans(k)) {
+          int kk = 2 * K + k;
+          FrameArgInstance p = new FrameArgInstance(f, t, kk, argR);
+          if (targetRolePreds != null)
+            targetRolePreds.add(p);
+          if (onlyArgPreds != null)
+            onlyArgPreds.add(p);
+        }
       }
     }
   }
