@@ -97,11 +97,11 @@ public class FModel implements Serializable {
     }
 
     rtConf = config;
-    maxViolation = p.getBoolean("perceptron");
-    perceptronUpdateMode =
-        p.getBoolean("maxViolation", true)
-        ? PerceptronUpdateMode.MAX_VIOLATION
-            : PerceptronUpdateMode.EARLY;
+    maxViolation = true; //p.getBoolean("perceptron");
+    perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
+//        p.getBoolean("maxViolation", true)
+//        ? PerceptronUpdateMode.MAX_VIOLATION
+//            : PerceptronUpdateMode.EARLY;
     Log.info("[main] perceptron=" + maxViolation
         + " mode=" + perceptronUpdateMode
         + " oracleMode=" + rtConf.oracleMode);
@@ -354,7 +354,8 @@ public class FModel implements Serializable {
       Log.info("decode terminal state: (overfit=" + ts.useOverfitFeatures + ")");
       beamLast.getRoot().show(System.out);
     }
-    return ts.decode(beamLast);
+    FNParse yhat = ts.decode(beamLast);
+    return yhat;
   }
 
 //  public FNParse predictOld(FNParse y) {

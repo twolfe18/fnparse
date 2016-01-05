@@ -217,9 +217,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
       Log.info("[main] LLSSPatF.NUM_ARGS=" + LLSSPatF.NUM_ARGS);
-      Log.info("[main] LLSSPatF.ROLE_COOC" + LLSSPatF.ROLE_COOC);
+      Log.info("[main] LLSSPatF.ROLE_COOC=" + LLSSPatF.ROLE_COOC);
       Log.info("[main] useGlobalFeats=" + useGlobalFeats);
     }
+  }
+
+  public void showWeights() {
+    Log.info("[main] wHatch=" + wHatch.summary());
+    Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
+    Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
   }
 
   @Override
@@ -877,7 +883,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           long i = pi.getProdFeature();
           ProductIndex p = base.prod(0, K+1).destructiveProd(i);
           ProductIndex pp = base.prod(k+1, K+1).destructiveProd(i);
-
           addTo.add(p);
           addTo.add(pp);
         }

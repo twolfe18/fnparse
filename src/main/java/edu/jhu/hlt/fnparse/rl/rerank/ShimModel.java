@@ -20,6 +20,7 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.TimeMarker;
 
 /**
  * This is a shim designed to replace {@link Reranker}.
@@ -55,10 +56,13 @@ public class ShimModel {
     Log.info("[main] ts.useOverfitFeatures=" + m.getTransitionSystem().useOverfitFeatures);
   }
 
+  private TimeMarker showWeights = new TimeMarker();
   public void callEveryIter(int iter) {
     if (fmodel != null) {
       if (iter % itersBetweenPerceptronWeightAverages == 0)
         fmodel.getTransitionSystem().takeAverageOfWeights();
+      if (showWeights.enoughTimePassed(60))
+        fmodel.getTransitionSystem().showWeights();
     } else {
       // no-op
     }
@@ -94,7 +98,12 @@ public class ShimModel {
       reranker.setPruningParams(new Params.PruneThreshold.Sum(bias, tau));
       return bias::setRecallBias;
     } else {
-      return d -> { fmodel.getConfig().recallBias = d; };
+      return d -> {
+        Log.info("[main] setting fmodel recal bias: "
+            + fmodel.getConfig().recallBias
+            + " => " + d);
+        fmodel.getConfig().recallBias = d;
+      };
     }
   }
 
@@ -148,6 +157,8 @@ public class ShimModel {
       reranker.getStatelessParams().showWeights();
       Log.info("model tau params:");
       reranker.getPruningParams().showWeights();
+    } else {
+      fmodel.getTransitionSystem().showWeights();
     }
   }
 
