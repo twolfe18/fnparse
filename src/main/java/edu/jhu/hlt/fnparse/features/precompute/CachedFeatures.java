@@ -829,6 +829,7 @@ public class CachedFeatures implements Serializable {
             }
           }
           cur = new Item(parse);
+          parse.featuresAndSpans = cur;
         }
 
         kept++;

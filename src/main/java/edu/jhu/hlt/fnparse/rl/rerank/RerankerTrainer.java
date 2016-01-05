@@ -570,7 +570,11 @@ public class RerankerTrainer {
     if (config.getBoolean("useFModel")) {
       Log.info("transitionSystem=fmodel");
       assert cachedFeatures != null;
-      sm = new ShimModel(new FModel(trainConf, DeterministicRolePruning.Mode.CACHED_FEATURES));
+      assert cachedFeatures.params != null;
+      //sm = new ShimModel(new FModel(trainConf, DeterministicRolePruning.Mode.CACHED_FEATURES));
+      FModel fm = new FModel(trainConf, null);
+      fm.setCachedFeatures(cachedFeatures.params);
+      sm = new ShimModel(fm);
     } else {
       Log.info("transitionSystem=old");
       sm = new ShimModel(new Reranker(
@@ -589,10 +593,18 @@ public class RerankerTrainer {
       Log.warn("cachedFeatures is null!");
 
     assert pretrainConf.calledEveryIter == trainConf.calledEveryIter;
-    assert pretrainConf.calledEveryIter == null;
-    pretrainConf.calledEveryIter = trainConf.calledEveryIter = iter -> {
+    Consumer<Integer> shimCEI = iter -> {
       sm.callEveryIter(iter);
     };
+    if (trainConf.calledEveryIter == null) {
+      trainConf.calledEveryIter = pretrainConf.calledEveryIter = shimCEI;
+    } else {
+      Consumer<Integer> oldCEI = trainConf.calledEveryIter;
+      trainConf.calledEveryIter = pretrainConf.calledEveryIter = iter -> {
+        oldCEI.accept(iter);
+        shimCEI.accept(iter);
+      };
+    }
 
     // SPAGHETTI!
     sm.observeConfiguration(config);
@@ -1382,7 +1394,7 @@ public class RerankerTrainer {
       // space and make memory usage high and serialization slow. If we are using FModel,
       // use a dummy/small amount of space.
       int dimension;
-      if (config.getBoolean("useFModel", false)) {
+      if (config.getBoolean("useFModel", true)) {
         Log.info("[main] since we're using FModel, making CachedFeatures.Params tiny!");
         dimension = 1;
       } else {
