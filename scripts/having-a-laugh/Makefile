@@ -1,8 +1,11 @@
 
 #FN_WD = /export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 #PB_WD = /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
-FN_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
-PB_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
+#FN_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
+#PB_WD = /export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
+FN_WD = /export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet
+PB_WD = /export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank
+
 
 # TODO Update to penalize selectivity
 
@@ -107,6 +110,27 @@ propbank-all-features:
 	make propbank-32-40.fs propbank-32-160.fs propbank-32-640.fs
 	make propbank-64-40.fs propbank-64-160.fs propbank-64-640.fs
 	make propbank-mix-40.fs propbank-mix-160.fs propbank-mix-640.fs
+
+
+
+
+propbank-clean:
+	rm -f propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt propbank-ig-feat.32.dedup.txt propbank-ig-feat.64.dedup.txt
+	rm -f propbank-8-40.fs propbank-8-160.fs propbank-8-640.fs
+	rm -f propbank-16-40.fs propbank-16-160.fs propbank-16-640.fs
+	rm -f propbank-32-40.fs propbank-32-160.fs propbank-32-640.fs
+	rm -f propbank-64-40.fs propbank-64-160.fs propbank-64-640.fs
+	rm -f propbank-mix-40.fs propbank-mix-160.fs propbank-mix-640.fs
+
+framenet-clean:
+	rm -f framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt framenet-ig-feat.32.dedup.txt framenet-ig-feat.64.dedup.txt
+	rm -f framenet-8-40.fs framenet-8-160.fs framenet-8-640.fs
+	rm -f framenet-16-40.fs framenet-16-160.fs framenet-16-640.fs
+	rm -f framenet-32-40.fs framenet-32-160.fs framenet-32-640.fs
+	rm -f framenet-64-40.fs framenet-64-160.fs framenet-64-640.fs
+	rm -f framenet-mix-40.fs framenet-mix-160.fs framenet-mix-640.fs
+
+clean: propbank-clean framenet-clean
 
 # NOTE: Here is how you can tell the difference between two feature sets (e.g. if you have new IG estimates):
 # DIM=10
