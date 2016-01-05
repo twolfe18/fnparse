@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -45,6 +46,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.FModel.CFLike;
 import edu.jhu.hlt.fnparse.rl.full.State.CachedFeatureParamsShim;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
@@ -60,8 +62,10 @@ import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.list.IntArrayList;
+import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleUnsortedVector;
 import edu.jhu.prim.vector.IntDoubleVector;
@@ -127,6 +131,31 @@ public class CachedFeatures implements Serializable {
       this.features3 = new HashMap<>();
     }
 
+    public FNParse getParse() {
+      return parse;
+    }
+
+    public List<Span> getArgSpansForTarget(Span t) {
+      Map<Span, BaseTemplates> f = features3.get(t);
+      if (f == null)
+        throw new RuntimeException("don't know about this target: " + t.shortString());
+      List<Span> args = new ArrayList<>();
+      args.addAll(f.keySet());
+      return args;
+    }
+
+    public Iterator<Pair<SpanPair, BaseTemplates>> getFeatures() {
+      List<Pair<SpanPair, BaseTemplates>> l = new ArrayList<>();
+      for (Map.Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
+        Span t = x1.getKey();
+        for (Map.Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
+          Span s = x2.getKey();
+          l.add(new Pair<>(new SpanPair(t, s), x2.getValue()));
+        }
+      }
+      return l.iterator();
+    }
+
     public void setFeatures(Span t, Span arg, BaseTemplates features) {
       if (arg.start < 0 || arg.end < 0)
         throw new IllegalArgumentException("span=" + arg);
@@ -147,7 +176,7 @@ public class CachedFeatures implements Serializable {
 //      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
 //      BaseTemplates feats = this.features2.get(new SpanPair(t, arg));
       BaseTemplates feats = this.features3.get(t).get(arg);
-      assert feats != null;
+      assert feats != null : "t=" + t.shortString() + " arg=" + arg.shortString() + " y=" + parse.getId();
       return feats;
     }
 
@@ -379,9 +408,9 @@ public class CachedFeatures implements Serializable {
       while (true) {
         n = li.size();
         if (n < 1) {
-          Log.info("sleeping because there are no labels to give out yet");
+          Log.info("sleeping because there are no labels to give out yet, test=" + test + " dev=" + dev + " eventualSize=" + eventualSize);
           try {
-            Thread.sleep(1 * 1000);
+            Thread.sleep(2 * 1000);
           } catch (Exception e) {
             throw new RuntimeException(e);
           }
@@ -412,7 +441,8 @@ public class CachedFeatures implements Serializable {
   public class Params implements Serializable,
       edu.jhu.hlt.fnparse.rl.params.Params.Stateless,
       edu.jhu.hlt.fnparse.rl.params.Params.PruneThreshold,
-      CachedFeatureParamsShim {
+      CachedFeatureParamsShim,
+      CFLike {
     private static final long serialVersionUID = -5359275348868455837L;
 
     /*
@@ -529,43 +559,94 @@ public class CachedFeatures implements Serializable {
       return getFeatures(f.getSentence(), t, s);
     }
 
-    @Override
-    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
-      if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
-        throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
+    public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
+      if (dropoutMode != DropoutMode.OFF)
+        throw new RuntimeException("fixme");
+      final int fsLen = featureSet.length;
+
+      // pre-computed features don't include nullSpan
+      ProductIndex intercept = new ProductIndex(0, fsLen + 1);
+      if (s == Span.nullSpan) {
+        return Arrays.asList(intercept.prod(false));
+      }
+      List<ProductIndex> features = new ArrayList<>();
+      features.add(intercept.prod(true));
 
       // Get the templates needed for all the features.
       Item cur = loadedSentId2Item.get(sent.getId());
       BaseTemplates data = cur.getFeatures(t, s);
 
-      // I should be able to use the same code as in InformationGainProducts.
-      IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
-      features.add(0, 2);   // intercept
-
       List<ProductIndex> buf = new ArrayList<>();
-      final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
-      final int fsLen = featureSet.length;
       for (int i = 0; i < fsLen; i++) {
         int[] feat = featureSet[i];
+        ProductIndex featPI = new ProductIndex(i + 1, fsLen + 1);
+
         // Note that these features don't need to be producted with k due to the
         // fact that we have separate weights for those.
         InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
 
         // If I get a long here, I can zip them all together by multiplying by
         // featureSet.length and then adding in an offset.
-        for (ProductIndex pi : buf) {
+        for (ProductIndex pi : buf)
+          features.add(featPI.flatProd(pi));
 
-          if (dropoutMode == DropoutMode.TRAIN && rand.nextDouble() < dropoutProbability)
-            continue;
-
-//          int h = pi.getHashedProdFeatureModulo(dimension);
-          int h = pi.prod(i, fsLen).getProdFeatureModulo(dimension);
-          features.add(h + 1, v);   // +1 to make space for intercept
-        }
         buf.clear();
       }
       return features;
     }
+
+    @Override
+    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
+      if (dropoutMode != DropoutMode.OFF)
+        throw new RuntimeException("fixme");
+      List<ProductIndex> feats = getFeaturesNoModulo(sent, t, s);
+      IntDoubleUnsortedVector fv = new IntDoubleUnsortedVector(feats.size());
+      for (ProductIndex f : feats)
+        fv.add(f.getProdFeatureModulo(dimension), 1);
+      return fv;
+    }
+
+//    public IntDoubleUnsortedVector getFeatures(Sentence sent, Span t, Span s) {
+//      if (dropoutMode != DropoutMode.OFF && dropoutProbability <= 0)
+//        throw new RuntimeException("mode=" + dropoutMode + " prob=" + dropoutProbability);
+//
+//      // I should be able to use the same code as in InformationGainProducts.
+//      IntDoubleUnsortedVector features = new IntDoubleUnsortedVector();
+//      features.add(0, 2);   // intercept
+//
+//      // pre-computed features don't include nullSpan
+//      if (s == Span.nullSpan)
+//        return features;
+//
+//      // Get the templates needed for all the features.
+//      Item cur = loadedSentId2Item.get(sent.getId());
+//      BaseTemplates data = cur.getFeatures(t, s);
+//
+//      List<ProductIndex> buf = new ArrayList<>();
+//      final double v = dropoutMode == DropoutMode.TRAIN ? (1 / (1-dropoutProbability)) : 1;
+//      final int fsLen = featureSet.length;
+//      for (int i = 0; i < fsLen; i++) {
+//        int[] feat = featureSet[i];
+//        // Note that these features don't need to be producted with k due to the
+//        // fact that we have separate weights for those.
+//        InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
+//
+//        // If I get a long here, I can zip them all together by multiplying by
+//        // featureSet.length and then adding in an offset.
+//        for (ProductIndex pi : buf) {
+//
+//          if (dropoutMode == DropoutMode.TRAIN && rand.nextDouble() < dropoutProbability)
+//            continue;
+//
+////          int h = pi.getHashedProdFeatureModulo(dimension);
+//          int h = pi.prod(i, fsLen).getProdFeatureModulo(dimension);
+//          Log.info("i=" + i + " dimension=" + dimension + " fsLen=" + fsLen + " feat=" + Arrays.toString(feat));
+//          features.add(h + 1, v);   // +1 to make space for intercept
+//        }
+//        buf.clear();
+//      }
+//      return features;
+//    }
 
     /**
      * @param a must be a COMMIT action.
@@ -641,7 +722,7 @@ public class CachedFeatures implements Serializable {
     public FNParseSpanPruning getPruningMask(FNTagging y) {
       Item cur = loadedSentId2Item.get(y.getSentence().getId());
       Map<FrameInstance, List<Span>> possibleSpans = cur.spansWithFeatures();
-      return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans);
+      return new FNParseSpanPruning(y.getSentence(), y.getFrameInstances(), possibleSpans, true);
     }
   }
 
@@ -977,18 +1058,22 @@ public class CachedFeatures implements Serializable {
     return tf2feat;
   }
 
-  /**
-   * TODO Need to do coordination betweeen what the CachedFeatures module has
-   * loaded and what you ask for features for!
-   */
+
   public static CachedFeatures buildCachedFeaturesForTesting(ExperimentProperties config) throws TemplateDescriptionParsingException {
-    MultiTimer mt = new MultiTimer();
 //    String fs = "Word3-3-grams-between-Head1-and-Head2-Top25*head1head2Path-Basic-NONE-DEP-t-Top25"
 //        + " + Dist-Direction-<S>-Span1.Last"
 //        + " + Lemma-2-grams-between-<S>-and-Span1.Last";
     String fs = "Bc256/99-1-grams-between-Head2-and-Span1.Last"
         + " + WordWnSynset-2-grams-between-<S>-and-Span1.First"
         + " + Dist-discLen2-Span1.Last-Span2.First";
+    return buildCachedFeaturesForTesting(config, fs);
+  }
+  /**
+   * TODO Need to do coordination betweeen what the CachedFeatures module has
+   * loaded and what you ask for features for!
+   */
+  public static CachedFeatures buildCachedFeaturesForTesting(ExperimentProperties config, String fs) throws TemplateDescriptionParsingException {
+    MultiTimer mt = new MultiTimer();
     Random rand = new Random(9001);
 
     // stringTemplate <-> intTemplate and other stuff like template cardinality

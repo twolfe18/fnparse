@@ -37,14 +37,35 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   // Every key should be a FrameInstance.frameMention
   private Map<FrameInstance, List<Span>> possibleArgs;
 
+  /** May return null if no args, should only be used for debugging */
+  public Sentence dbgGetSentence() {
+    if (possibleArgs.isEmpty())
+      return null;
+    return possibleArgs.keySet().iterator().next().getSentence();
+  }
+
   public void addSpan(FrameInstance key, Span value) {
-    possibleArgs.get(key).add(value);
+    List<Span> vals = possibleArgs.get(key);
+    if (vals == null) {
+      vals = new ArrayList<>();
+      possibleArgs.put(key, vals);
+    }
+    vals.add(value);
+  }
+  public void addSpan(FrameInstance key, List<Span> values) {
+    List<Span> vals = possibleArgs.get(key);
+    if (vals == null) {
+      vals = new ArrayList<>();
+      possibleArgs.put(key, vals);
+    }
+    vals.addAll(values);
   }
 
   public FNParseSpanPruning(
       Sentence s,
       List<FrameInstance> frameMentions,
-      Map<FrameInstance, List<Span>> possibleArgs) {
+      Map<FrameInstance, List<Span>> possibleArgs,
+      boolean requirePossArgsContainsNullSpan) {
     super(s, frameMentions);
     this.possibleArgs = possibleArgs;
     for (FrameInstance fi : frameMentions) {
@@ -66,7 +87,7 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
         }
         assert seen.add(sp);
       }
-      assert foundNS;
+      assert !requirePossArgsContainsNullSpan || foundNS;
     }
   }
 
@@ -169,6 +190,12 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
   public List<Span> getPossibleArgs(FrameInstance key) {
     List<Span> args = possibleArgs.get(key);
     if (args == null) {
+//      System.out.println("entries in possibleArgs:");
+//      for (Map.Entry<FrameInstance, List<Span>> x : possibleArgs.entrySet()) {
+//        System.out.println(x.getKey());
+//        System.out.println(x.getValue());
+//        System.out.println();
+//      }
       return null;
 //      throw new IllegalStateException();
     }
@@ -291,7 +318,7 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
         throw new RuntimeException();
     }
     return new FNParseSpanPruning(
-        p.getSentence(), p.getFrameInstances(), possibleArgs);
+        p.getSentence(), p.getFrameInstances(), possibleArgs, true);
   }
 
   public static List<FNParseSpanPruning> optimalPrune(List<FNParse> ps) {
@@ -323,6 +350,6 @@ public class FNParseSpanPruning extends FNTagging implements Serializable {
         throw new RuntimeException();
     }
     return new FNParseSpanPruning(
-        p.getSentence(), p.getFrameInstances(), possibleArgs);
+        p.getSentence(), p.getFrameInstances(), possibleArgs, true);
   }
 }

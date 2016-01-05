@@ -1,0 +1,41 @@
+package edu.jhu.hlt.fnparse.rl.full2;
+
+import edu.jhu.hlt.fnparse.rl.full.SearchCoefficients;
+import edu.jhu.hlt.fnparse.rl.full.StepScores;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
+
+/**
+ * "S" for score, which includes rand, which is a perturbation on the score. I
+ * considered hiding rand within the model score, but since I still need
+ * {@link StepScores} and {@link SearchCoefficients}, I might as well keep it
+ * as is.
+ *
+ * @author travis
+ */
+public class TVNS extends TVN {
+  private Adjoints model;
+  private double rand;
+
+  public TVNS(int type, int value, int numPossible, int goldMatching,
+      long prime, Adjoints model, double rand) {
+    super(type, value, numPossible, goldMatching, prime);
+    this.model = Adjoints.cacheIfNeeded(model);
+    this.rand = rand;
+  }
+
+  public Adjoints getModel() {
+    return model;
+  }
+
+  public double getRand() {
+    return rand;
+  }
+
+  @Override
+  public String toString() {
+    String[] c = this.getClass().getName().split("\\.");
+    String cn = c[c.length - 1];
+    String r = String.format("%.2f", rand);
+    return "(" + cn + " " + Node2.typeName(type) + ":" + value + " N=" + numPossible + " G=" + goldMatching + " model=" + model + " rand=" + r+ ")";
+  }
+}

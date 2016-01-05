@@ -44,6 +44,6 @@ public abstract class WeightsMatrix<T> {
       return new Adjoints.OnlyShowScore("NoFeatures[" + t + "]", Adjoints.Constant.ZERO);
     }
     final LazyL2UpdateVector w = at2w[row(t)];
-    return new ProductIndexAdjoints(learningRate, l2Lambda, dimension, features, w);
+    return new ProductIndexAdjoints(learningRate, l2Lambda, dimension, features, w, true);
   }
 }

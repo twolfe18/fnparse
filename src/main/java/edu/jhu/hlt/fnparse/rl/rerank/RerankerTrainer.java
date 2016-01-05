@@ -62,7 +62,6 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
-import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.EmbeddingParams;
 import edu.jhu.hlt.fnparse.rl.params.Fixed;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -115,7 +114,7 @@ public class RerankerTrainer {
   }
 
   // may differ across pretrain/train
-  public class RTConfig implements Serializable {
+  public static class RTConfig implements Serializable {
     private static final long serialVersionUID = 2229792069360002582L;
 
     // Meta
@@ -173,7 +172,7 @@ public class RerankerTrainer {
     // Convenient extras
     public final File workingDir;
     public final Random rand;
-    public Consumer<Integer> calledEveryEpoch = i -> {};
+    public Consumer<Integer> calledEveryIter = i -> {};
     public boolean performTuning() { return propDev > 0 && maxDev > 0; }
     public void dontPerformTuning() { propDev = 0; maxDev = 0; }
     public void spreadTuneRange(double factor) {
@@ -198,6 +197,9 @@ public class RerankerTrainer {
       this.name = name;
       this.workingDir = workingDir;
       this.rand = rand;
+
+      ExperimentProperties config = ExperimentProperties.getInstance();
+      this.oracleMode = OracleMode.valueOf(config.getString("oracleMode"));
     }
 
     public void setPropDev(double propDev) {
@@ -213,6 +215,11 @@ public class RerankerTrainer {
     public void autoPropDev(int nTrain) {
       int nDev = (int) Math.pow(nTrain, 0.7d);
       setMaxDev(nDev);
+    }
+
+    /** Sets for both train and test */
+    public void setBeamSize(int n) {
+      trainBeamSize = testBeamSize = n;
     }
 
     public void scaleLearningRateToBatchSize(int batchSizeWithLearningRateOf1) {
@@ -581,6 +588,13 @@ public class RerankerTrainer {
     else
       Log.warn("cachedFeatures is null!");
 
+    assert pretrainConf.calledEveryIter == trainConf.calledEveryIter;
+    assert pretrainConf.calledEveryIter == null;
+    pretrainConf.calledEveryIter = trainConf.calledEveryIter = iter -> {
+      sm.callEveryIter(iter);
+    };
+
+    // SPAGHETTI!
     sm.observeConfiguration(config);
 
     return sm;
@@ -1058,9 +1072,11 @@ public class RerankerTrainer {
           parameterServerClient.paramsChanged();
         }
 
+        // Hook for things like taking perceptron weight averages
+        conf.calledEveryIter.accept(iter);
+
         iter++;
       }
-      conf.calledEveryEpoch.accept(iter);
       epoch++;
     }
     if (es != null)
@@ -1362,7 +1378,16 @@ public class RerankerTrainer {
 
       // Setup the params
       mt.start("params");
-      int dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
+      // FModel does not use the weights in CachedFeature.Params, which take up a lot of
+      // space and make memory usage high and serialization slow. If we are using FModel,
+      // use a dummy/small amount of space.
+      int dimension;
+      if (config.getBoolean("useFModel", false)) {
+        Log.info("[main] since we're using FModel, making CachedFeatures.Params tiny!");
+        dimension = 1;
+      } else {
+        dimension = config.getInt("cachedFeatures.hashingTrickDim", 1 * 1024 * 1024);
+      }
       int numRoles = config.getInt("cachedFeatures.numRoles",
           trainer.cachedFeatures.sentIdsAndFNParses.getMaxRole());
       int updateL2Every = config.getInt("cachedFeatures.updateL2Every", 32);
@@ -1996,8 +2021,8 @@ public class RerankerTrainer {
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
 
   /**
-   * Reads the tab-separated format:
-   * score, ig, hx, arity, intTemplates, stringTemplates
+   * Reads the 7 column tab-separated format:
+   * score, ig, hx, selectivity, arity, intTemplates, stringTemplates
    */
   private static String getFeatureSetFromFileNewNew(String path) {
     Log.info("[main] reading from " + path);
@@ -2008,9 +2033,9 @@ public class RerankerTrainer {
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
-        if (toks.length != 6)
-          Log.warn("uknown line format: " + line);
-        features.add(toks[5]);
+        if (toks.length != 7)
+          Log.warn("unknown line format: " + line);
+        features.add(toks[6]);
       }
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -2018,6 +2043,7 @@ public class RerankerTrainer {
     return StringUtils.join(" + ", features);
   }
 
+  @SuppressWarnings("unused")
   private static String getFeatureSetFromFileNew(String path) {
     Log.info("[main] getFeatureSetFromFileNew path=" + path);
     File f = new File(path);

@@ -22,6 +22,7 @@ import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 
 public class FeatureFile {
 
@@ -70,6 +71,10 @@ public class FeatureFile {
       features.clear();
     }
 
+    public String getLine() {
+      return line;
+    }
+
     private void tokenize() {
       tokenized = line.split("\t");
       for (int i = 5; i < tokenized.length; i++) {
@@ -79,6 +84,20 @@ public class FeatureFile {
         int f = Integer.parseInt(tfs[1]);
         features.add(new Feature(null, t, null, f, 1));
       }
+    }
+
+    public Span getTarget() {
+      if (tokenized == null)
+        tokenize();
+      String ts = tokenized[2];
+      return Span.inverseShortString(ts);
+    }
+
+    public Span getArgSpan() {
+      if (tokenized == null)
+        tokenize();
+      String ts = tokenized[3];
+      return Span.inverseShortString(ts);
     }
 
     public String getSentenceId() {

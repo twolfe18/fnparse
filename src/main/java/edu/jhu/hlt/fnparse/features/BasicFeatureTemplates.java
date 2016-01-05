@@ -65,12 +65,12 @@ public class BasicFeatureTemplates {
       sprMemo[i] = new ProductIndex(i, sprMemo.length);
   }
   public static ProductIndex spanPosRel2(Span s1, Span s2) {
-    int f = 0;
+    long f = 0;
     f = f * 5 + posRel2(s1.start, s2.start).getFeature();
     f = f * 5 + posRel2(s1.end, s2.end).getFeature();
     f = f * 5 + posRel2(s1.start, s2.end).getFeature();
     f = f * 5 + posRel2(s1.end, s2.start).getFeature();
-    return sprMemo[f];
+    return sprMemo[(int) f];
   }
 
   private static ProductIndex PI_B = new ProductIndex(0, 5);

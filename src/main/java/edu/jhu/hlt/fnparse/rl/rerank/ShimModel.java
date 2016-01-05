@@ -5,7 +5,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.function.Consumer;
@@ -21,7 +20,6 @@ import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.tutils.Timer;
 
 /**
  * This is a shim designed to replace {@link Reranker}.
@@ -32,19 +30,36 @@ public class ShimModel {
   private final RTConfig conf;
 
   private final FModel fmodel;
+  private int itersBetweenPerceptronWeightAverages =
+      ExperimentProperties.getInstance()
+        .getInt("itersBetweenPerceptronWeightAverages", 50);
 
   private CachedFeatures cachedFeatures;
 
   public ShimModel(Reranker r, RTConfig conf) {
+    Log.info("[main] starting with Reranker");
     reranker = r;
     this.conf = conf;
     fmodel = null;
   }
 
   public ShimModel(FModel m) {
+    Log.info("[main] starting with FModel");
     reranker = null;
     conf = null;
     fmodel = m;
+
+    Log.warn("DOING A DUMB THING, OVERFITTING WITH WITH CACHEDFEATURES...");
+    m.getTransitionSystem().useOverfitFeatures = true;
+  }
+
+  public void callEveryIter(int iter) {
+    if (fmodel != null) {
+      if (iter % itersBetweenPerceptronWeightAverages == 0)
+        fmodel.getTransitionSystem().takeAverageOfWeights();
+    } else {
+      // no-op
+    }
   }
 
   public boolean isFModel() {
@@ -96,7 +111,7 @@ public class ShimModel {
     Log.info("setting CachedFeatures");
     cachedFeatures = cf;
     if (fmodel != null)
-      fmodel.setCachedFeatures(cf);
+      fmodel.setCachedFeatures(cf.params);
   }
 
   public CachedFeatures getCachedFeatures() {
@@ -118,6 +133,8 @@ public class ShimModel {
       reranker.getStatelessParams().doneTraining();
       reranker.getStatefulParams().doneTraining();
       reranker.getPruningParams().doneTraining();
+    } else {
+      fmodel.getTransitionSystem().setParamsToAverage();
     }
   }
 
@@ -146,42 +163,7 @@ public class ShimModel {
       throw new RuntimeException("implement me");
   }
 
-  private List<Update> getUpdateReranker(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) throws InterruptedException, ExecutionException {
-    List<Update> finishedUpdates = new ArrayList<>();
-    Reranker r = reranker;
-    Timer tmv = null; // TODO
-    Timer to = null;  // TODO
-    if (es == null) {
-      if (verbose)
-        Log.info("[hammingTrainBatch] running serial");
-      for (int idx : batch) {
-        if (verbose)
-          Log.info("[hammingTrainBatch] submitting " + idx);
-        FNParse y = ip.label(idx);
-        State init = r.getInitialStateWithPruning(y, y);
-        Update u = r.hasStatefulFeatures() || conf.forceGlobalTrain
-            ? r.getFullUpdate(init, y, conf.oracleMode, conf.rand, to, tmv)
-                : r.getStatelessUpdate(init, y);
-        finishedUpdates.add(u);
-      }
-    } else {
-      List<Future<Update>> futures = new ArrayList<>(batch.size());
-      for (int idx : batch) {
-        futures.add(es.submit( () -> {
-          FNParse y = ip.label(idx);
-          State init = r.getInitialStateWithPruning(y, y);
-          return r.hasStatefulFeatures() || conf.forceGlobalTrain
-              ? r.getFullUpdate(init, y, conf.oracleMode, conf.rand, to, tmv)
-                  : r.getStatelessUpdate(init, y);
-        } ));
-      }
-      for (Future<Update> f : futures)
-        finishedUpdates.add(f.get());
-    }
-    return finishedUpdates;
-  }
-
-  private List<Update> getUpdateFModel(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) throws InterruptedException, ExecutionException {
+  public List<Update> getUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
     List<Update> finishedUpdates = new ArrayList<>(batch.size());
     if (es == null) {
       for (int idx : batch) {
@@ -193,25 +175,17 @@ public class ShimModel {
       for (int idx : batch) {
         futures.add(es.submit( () -> {
           FNParse y = ip.label(idx);
-          return fmodel.getUpdate(y);
+          return getUpdate(y);
         } ));
       }
-      for (Future<Update> f : futures)
-        finishedUpdates.add(f.get());
+      try {
+        for (Future<Update> f : futures)
+          finishedUpdates.add(f.get());
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
     }
     return finishedUpdates;
-  }
-
-  public List<Update> getUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
-    try {
-      if (reranker != null) {
-        return getUpdateReranker(batch, ip, es, verbose);
-      } else {
-        return getUpdateFModel(batch, ip, es, verbose);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   public Update getUpdate(FNParse y) {

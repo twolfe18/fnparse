@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.BitSet;
 
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 
@@ -17,6 +18,11 @@ import edu.jhu.hlt.tutils.Log;
  * @author travis
  */
 public class BiAlphFilter {
+
+  // Selectivity was added to he file format last, so it may not appear in all
+  // text files. If you need to use an old text file, you can set this to true
+  // and it will skip selectivity and set it to 1.
+  public static boolean SKIP_SLECTIVITY = false;
 
   public static class Feature {
     public final double score, mi, hx, selectivity;
@@ -29,7 +35,10 @@ public class BiAlphFilter {
       score = Double.parseDouble(ar[i++]);
       mi = Double.parseDouble(ar[i++]);
       hx = Double.parseDouble(ar[i++]);
-      selectivity = Double.parseDouble(ar[i++]);
+      if (SKIP_SLECTIVITY)
+        selectivity = 1;
+      else
+        selectivity = Double.parseDouble(ar[i++]);
       arity = Integer.parseInt(ar[i++]);
       String[] is = ar[i++].split("\\*");
       template_str = ar[i++].split("\\*");
@@ -85,6 +94,7 @@ public class BiAlphFilter {
   }
 
   public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(new String[0]);
     if (args.length < 3) {
       System.out.println("please provide:");
       System.out.println("1) an input bialph (or someting else which is tsv having the first column be a template)");
@@ -92,6 +102,7 @@ public class BiAlphFilter {
       System.out.println("3+) feature files");
       return;
     }
+    SKIP_SLECTIVITY = config.getBoolean("skipSelectivity", false);
     File inA = new File(args[0]);
     File outA = new File(args[1]);
     BitSet relevant = getTemplates(Arrays.copyOfRange(args, 2, args.length));

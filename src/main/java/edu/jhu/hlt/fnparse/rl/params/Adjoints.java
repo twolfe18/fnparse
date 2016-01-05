@@ -1,6 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.params;
 
 import java.io.Serializable;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Random;
 import java.util.function.Supplier;
@@ -90,6 +91,14 @@ public interface Adjoints {
       this.weights = weights;
       this.numUpdatesDeferred = 0;
       this.updateInterval = updateInterval;
+    }
+
+    public LazyL2UpdateVector(LazyL2UpdateVector copyFrom) {
+      double[] c = copyFrom.weights.getInternalElements();
+      c = Arrays.copyOf(c, c.length);
+      this.weights = new IntDoubleDenseVector(c);
+      this.numUpdatesDeferred = copyFrom.numUpdatesDeferred;
+      this.updateInterval = copyFrom.updateInterval;
     }
 
     public int getUpdateInterval() {

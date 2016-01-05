@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.hash.MurmurHash3;
 
 public class ProductIndex {
@@ -13,11 +14,12 @@ public class ProductIndex {
   public static final ProductIndex TRUE = new ProductIndex(1, 2);
 
   private long featProd, cardProd;
-  private int feat, card;
+  private long feat, card;
   private int arity;    // cache/memo, makes a few things O(1) instead of LL traversal
   private ProductIndex derivedFrom;
 
-  private ProductIndex(int feat, int card, ProductIndex derivedFrom) {
+  private ProductIndex(long feat, long card, ProductIndex derivedFrom) {
+    assert feat >= 0 && card >= 0;
     this.feat = feat;
     this.card = card;
     this.featProd = feat + derivedFrom.featProd * card;
@@ -74,11 +76,21 @@ public class ProductIndex {
     return (int) r;
   }
 
-  public int getFeature() {
+  public int getFeatureSafe() {
+    int i = (int) feat;
+    assert i >= 0;
+    return i;
+  }
+  public long getFeature() {
     return feat;
   }
 
-  public int getCardinality() {
+  public int getCardinalitySafe() {
+    int i = (int) card;
+    assert i >= 0;
+    return i;
+  }
+  public long getCardinality() {
     return card;
   }
 
@@ -105,6 +117,14 @@ public class ProductIndex {
     assert i + 4 == buf.length;
     return MurmurHash3.murmurhash3_x86_32(buf, 0, buf.length, SEED);
   }
+
+  public int getHashedFasterProdFeature() {
+    long h = Hash.mix64(feat, arity);
+    for (ProductIndex p = derivedFrom; p != null; p = p.derivedFrom)
+      h = Hash.mix64(h, p.feat);
+    return (int) h;
+  }
+
   /**
    * See unsafe version, but this will only return a value >= 0.
    * NOTE: You loose a bit of entropy.
@@ -130,12 +150,21 @@ public class ProductIndex {
   }
 
   public ProductIndex prod(int feat, int card) {
+    assert feat < card && feat >= 0 : "feat=" + feat + " card=" + card;
     return new ProductIndex(feat, card, this);
   }
 
   /** You loose the chain in the argument, calls getProd(Feat|Card)Safe */
   public ProductIndex flatProd(ProductIndex other) {
     return prod(other.getProdFeatureSafe(), other.getProdCardinalitySafe());
+  }
+
+  /** Destroys cardinality, may be used once */
+  public ProductIndex destructiveProd(long i) {
+    assert i >= 0;
+    assert cardProd > 0;
+    long f = cardProd * i + featProd;
+    return new ProductIndex(f, 0L, NIL);
   }
 
   public ProductIndex div() {

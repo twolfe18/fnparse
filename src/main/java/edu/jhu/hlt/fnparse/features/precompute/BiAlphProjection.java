@@ -4,13 +4,15 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.apache.commons.io.FilenameUtils;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -18,7 +20,9 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
 
 /**
  * Read in some int features and a bialph and spit out some int features (in a
@@ -98,6 +102,7 @@ public class BiAlphProjection {
     // 1) file -> file
     // 2) dir -> dir
     boolean append = config.getBoolean("append", false);
+    boolean mock = config.getBoolean("mock", false);
     String inFileKey = "inputFeatures";
     if (config.containsKey(inFileKey)) {
       Log.info("file->file mode");
@@ -107,27 +112,68 @@ public class BiAlphProjection {
       m.replace(in, out, append);
     } else {
       Log.info("dir->dir mode");
-      String featuresGlob = config.getString("featuresGlob", "glob:**/*");
       File out = config.getExistingDir("outputFeatures");
-      if (!featuresGlob.isEmpty()) {
-        File featuresParent = config.getExistingDir("featuresParent");
-        PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-        Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-          @Override
-          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-            if (pm.matches(path)) {
-              File of = new File(out, path.getFileName().toString());
-              Log.info("mapping features: " + path.toFile().getPath() + "  ==>  " + of.getPath() + "\t" + Describe.memoryUsage());
-              m.replace(path.toFile(), of, append);
-            }
-            return FileVisitResult.CONTINUE;
-          }
-          @Override
-          public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-            return FileVisitResult.CONTINUE;
-          }
-        });
+      IntPair shard = ShardUtils.getShard(config);
+      boolean stripOutputSuf = config.getBoolean("stripOutputSuf", false);
+      File featuresParent = config.getExistingDir("featuresParent");
+
+      // Collect all the files
+      List<File> inputs = new ArrayList<>();
+      Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+        @Override
+        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+          inputs.add(path.toFile());
+          return FileVisitResult.CONTINUE;
+        }
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+          return FileVisitResult.CONTINUE;
+        }
+      });
+
+      // Take your shard
+      List<File> filteredInputs = ShardUtils.shard(inputs, Hash::fileName, shard);
+      Log.info("filtered " + inputs.size() + " inputs down to " + filteredInputs.size());
+      int i = 0;
+      for (File f : filteredInputs) {
+        String on = f.getName();
+        if (stripOutputSuf)
+          on = FilenameUtils.removeExtension(on);
+        File of = new File(out, on);
+        Log.info("mapping features: " + f.getPath() + "  ==>  " + of.getPath());
+        i++;
+        Log.info(i + " of " + filteredInputs.size() + "\t" + Describe.memoryUsage());
+        if (!mock)
+          m.replace(f, of, append);
       }
+
+//      String featuresGlob = config.getString("featuresGlob", "glob:**/*");
+//      if (!featuresGlob.isEmpty()) {
+//        PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+//        Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+//          @Override
+//          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+//            if (pm.matches(path)) {
+//              String on = path.getFileName().toString();
+//              if (stripOutputSuf)
+//                on = FilenameUtils.removeExtension(on);
+//              File of = new File(out, on);
+//              Log.info("mapping features: " + path.toFile().getPath() + "  ==>  " + of.getPath() + "\t" + Describe.memoryUsage());
+//              if (!mock)
+//                m.replace(path.toFile(), of, append);
+//            } else {
+//              Log.info("skipping " + path.toFile().getPath());
+//            }
+//            return FileVisitResult.CONTINUE;
+//          }
+//          @Override
+//          public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+//            return FileVisitResult.CONTINUE;
+//          }
+//        });
+//      } else {
+//        Log.info("featureGlob is empty!");
+//      }
     }
     Log.info("done");
   }

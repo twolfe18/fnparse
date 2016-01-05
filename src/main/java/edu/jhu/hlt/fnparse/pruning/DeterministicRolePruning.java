@@ -318,10 +318,12 @@ public class DeterministicRolePruning {
         } else {
           throw new RuntimeException("unknown mode: " + mode);
         }
+        boolean nullSpanAppears = true;
         output = new FNParseSpanPruning(
             input.getSentence(),
             input.getFrameInstances(),
-            possibleSpans);
+            possibleSpans,
+            nullSpanAppears);
       }
       //LOG.debug(String.format("[decode] possible args for n=%d nFI=%d is %d",
       //    input.getSentence().size(), input.numFrameInstances(), output.numPossibleArgs()));

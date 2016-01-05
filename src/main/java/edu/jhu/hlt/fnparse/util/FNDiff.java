@@ -29,11 +29,13 @@ public class FNDiff {
     Set<FrameArgInstance> aNotB = new HashSet<>();
     aNotB.addAll(aroles);
     aNotB.removeAll(broles);
+//    System.out.println("aNotB.size=" + aNotB.size());
 
     // In b but not a
     Set<FrameArgInstance> bNotA = new HashSet<>();
     bNotA.addAll(broles);
     bNotA.removeAll(aroles);
+//    System.out.println("bNotA.size=" + bNotA.size());
 
     List<FrameArgInstance> allrolesSorted = new ArrayList<>();
     allrolesSorted.addAll(allroles);
