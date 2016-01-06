@@ -36,6 +36,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.tutils.scoring.Adjoints.Caching2;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.util.Alphabet;
@@ -134,6 +135,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
   public void setParamsToAverage() {
     Log.info("[main] numAverages=" + numAverages);
+    showWeights("before-param-avg");
     timer.start("setParamsToAverage");
     if (numAverages <= 1) {
       Log.warn("[main] not modifying weights!");
@@ -150,6 +152,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         wGlobal.scale(s);
       }
     }
+    showWeights("after-param-avg");
     timer.stop("setParamsToAverage");
   }
 
@@ -226,6 +229,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Log.info("[main] wHatch=" + wHatch.summary());
     Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
     Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
+  }
+  public void showWeights(String key) {
+    Log.info("[main] " + key + " wHatch=" + wHatch.summary());
+    Log.info("[main] " + key + " wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
+    Log.info("[main] " + key + " wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
   }
 
   @Override
@@ -907,29 +915,29 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // This should be memoized because there is still a loop over all the features in ProductIndexAdjoints.init
-    Map<TFKS, ProductIndexAdjoints> m;
-    if (weights == wHatch) {
-      m = info.staticHatchFeatCache;
-    } else if (weights == wSquash) {
-      m = info.staticSquashFeatCache;
-    } else {
-      throw new RuntimeException();
-    }
+    Map<TFKS, Caching2<ProductIndexAdjoints>> m;
+    m = info.staticHatchFeatCache;
+//    if (weights == wHatch) {
+//      m = info.staticHatchFeatCache;
+//    } else if (weights == wSquash) {
+//      m = info.staticSquashFeatCache;
+//    } else {
+//      throw new RuntimeException();
+//    }
     TFKS memoKey = motherPrefix.dumbPrepend(egg);
-    ProductIndexAdjoints pia = m.get(memoKey);
+    Caching2<ProductIndexAdjoints> pia = m.get(memoKey);
     if (pia == null) {
       List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
       boolean attemptApplyL2Update = false;   // done in Update instead!
-      pia = new ProductIndexAdjoints(weights, feats, attemptApplyL2Update);
+      pia = new Caching2<>(new ProductIndexAdjoints(weights, feats, attemptApplyL2Update));
       m.put(memoKey, pia);
     }
 
     // This way if you compute the dot product for hatch, you've also computed
     // it for squash!
-    Adjoints a = Adjoints.cacheIfNeeded(pia);
     if (flip)
-      return new Adjoints.Scale(-1, a);
-    return a;
+      return new Adjoints.Scale(-1, pia);
+    return pia;
   }
 
   /**

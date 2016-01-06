@@ -27,6 +27,8 @@ import edu.jhu.hlt.tutils.TimeMarker;
  */
 public class ShimModel {
 
+  private boolean verbose;
+
   private final Reranker reranker;
   private final RTConfig conf;
 
@@ -42,6 +44,7 @@ public class ShimModel {
     reranker = r;
     this.conf = conf;
     fmodel = null;
+    verbose = ExperimentProperties.getInstance().getBoolean("verbose.ShimModel", false);
   }
 
   public ShimModel(FModel m) {
@@ -54,6 +57,7 @@ public class ShimModel {
       m.getTransitionSystem().useOverfitFeatures = true;
     }
     Log.info("[main] ts.useOverfitFeatures=" + m.getTransitionSystem().useOverfitFeatures);
+    verbose = ExperimentProperties.getInstance().getBoolean("verbose.ShimModel", false);
   }
 
   private TimeMarker showWeights = new TimeMarker();
@@ -92,6 +96,8 @@ public class ShimModel {
    * prune features.
    */
   public Consumer<Double> getPruningBias() {
+    if (verbose)
+      Log.info("getting pruning bias");
     if (reranker != null) {
       Params.PruneThreshold tau = reranker.getPruningParams();
       DecoderBias bias = new DecoderBias();
@@ -108,7 +114,8 @@ public class ShimModel {
   }
 
   public void observeConfiguration(ExperimentProperties config) {
-    Log.info("[main] isFModel=" + isFModel());
+    if (verbose)
+      Log.info("[main] isFModel=" + isFModel());
     if (fmodel != null) {
       Config c = fmodel.getConfig();
       c.argLocFeature = config.getBoolean("globalFeatArgLocSimple", false);
@@ -119,7 +126,8 @@ public class ShimModel {
   }
 
   public void setCachedFeatures(CachedFeatures cf) {
-    Log.info("setting CachedFeatures");
+    if (verbose)
+      Log.info("[main] setting CachedFeatures");
     cachedFeatures = cf;
     if (fmodel != null)
       fmodel.setCachedFeatures(cf.params);
@@ -131,20 +139,28 @@ public class ShimModel {
 
   public FNParse predict(FNParse y) {
     if (reranker != null) {
+      if (verbose)
+        Log.info("predicting on " + y.getId() + " with reranker");
       State init = reranker.getInitialStateWithPruning(y, y);
       FNParse yhat = reranker.predict(init);
       return yhat;
     } else {
+      if (verbose)
+        Log.info("predicting on " + y.getId() + " with fmodel");
       return fmodel.predict(y);
     }
   }
 
   public void doneTraining() {
     if (reranker != null) {
+      if (verbose)
+        Log.info("telling reranker params that we're done training");
       reranker.getStatelessParams().doneTraining();
       reranker.getStatefulParams().doneTraining();
       reranker.getPruningParams().doneTraining();
     } else {
+      if (verbose)
+        Log.info("setting fmodel params to average");
       fmodel.getTransitionSystem().setParamsToAverage();
     }
   }
@@ -181,7 +197,7 @@ public class ShimModel {
     if (es == null) {
       for (int idx : batch) {
         FNParse y = ip.label(idx);
-        finishedUpdates.add(fmodel.getUpdate(y));
+        finishedUpdates.add(getUpdate(y));
       }
     } else {
       List<Future<Update>> futures = new ArrayList<>(batch.size());
@@ -203,11 +219,15 @@ public class ShimModel {
 
   public Update getUpdate(FNParse y) {
     if (reranker != null) {
+      if (verbose)
+        Log.info("getting update for " + y.getId() + " with reranker");
       State init = reranker.getInitialStateWithPruning(y, y);
       return reranker.hasStatefulFeatures() || conf.forceGlobalTrain
           ? reranker.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
               : reranker.getStatelessUpdate(init, y);
     } else {
+      if (verbose)
+        Log.info("getting update for " + y.getId() + " with fmodel");
       return fmodel.getUpdate(y);
     }
   }

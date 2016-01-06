@@ -61,6 +61,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
 
   public static boolean CHECK_FOR_FINITE_SCORES = false;
 
+  protected int perceptronUpdatesTotal = 0;
+  protected int perceptronUpdatesViolated = 0;
+  protected int perceptronRecentUpdatesTotal = 0;
+  protected int perceptronRecentUpdatesViolated = 0;
+  protected int perceptronUpdatePrintInterval = 100;
+
+
   /**
    * This is a hook for clamping down on the set of actions which are considered
    * out of a given state. What this means is that you can only perform actions
@@ -546,10 +553,11 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       rand = new GeneralizedCoef.Rand(rScale);
     else
       rand = GeneralizedCoef.ZERO;
+    double mScale = 0;
     if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.MAX)
-      model = new GeneralizedCoef.Model(-1, true);
+      model = new GeneralizedCoef.Model(-mScale, true);
     else
-      model = new GeneralizedCoef.Model(+1, true);
+      model = new GeneralizedCoef.Model(+mScale, true);
     HowToSearchImpl htsOracle = new HowToSearchImpl(
         model,
         new GeneralizedCoef.Loss.Oracle(),
@@ -674,11 +682,29 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
      */
     if (DEBUG && DEBUG_PERCEPTRON)
       System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
+    if (perceptronUpdatesTotal % perceptronUpdatePrintInterval == 0 && perceptronUpdatesTotal > 0) {
+      Log.info("[main] " + perceptronUpdatesViolated + "/" + perceptronUpdatesTotal
+          + " ("
+          + (100d*perceptronUpdatesViolated)/perceptronUpdatesTotal
+          + " %)"
+          + " of perceptron updates were violated");
+      Log.info("[main] recently " + perceptronRecentUpdatesViolated + "/" + perceptronRecentUpdatesTotal
+          + " ("
+          + (100d*perceptronRecentUpdatesViolated)/perceptronRecentUpdatesTotal
+          + " %)"
+          + " of perceptron updates were violated");
+      perceptronRecentUpdatesTotal = 0;
+      perceptronRecentUpdatesViolated = 0;
+    }
+    perceptronUpdatesTotal++;
+    perceptronRecentUpdatesTotal++;
     if (violator == null) {
       if (DEBUG && DEBUG_PERCEPTRON)
         Log.info("no violator!");
       return Update.NONE;
     } else {
+      perceptronUpdatesViolated++;
+      perceptronRecentUpdatesViolated++;
       if (DEBUG && DEBUG_PERCEPTRON) {
         Log.info("best item on oracle beam:");
         violator.get1().getRoot().show(System.out, htsOracle);

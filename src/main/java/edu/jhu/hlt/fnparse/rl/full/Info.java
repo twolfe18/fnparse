@@ -39,10 +39,19 @@ import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.scoring.Adjoints.Caching2;
 
 /** Everything that is annoying to copy in State */
 public class Info implements Serializable, HasCounts, HasRandom {
   private static final long serialVersionUID = -4529781834599237479L;
+
+  public static int COUNTER_CONSTRUCT = 0;
+  public static void zeroCounters() {
+    COUNTER_CONSTRUCT = 0;
+  }
+  public static void logCounters() {
+    Log.info("nConstruct=" + COUNTER_CONSTRUCT);
+  }
 
   // Put SortedEggCache here or in a sub-class of Node2?
   // newNode with type==K could create a new SortedEggCache...
@@ -91,13 +100,22 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   /* Static feature cache *****************************************************/
 
-  public Map<TFKS, ProductIndexAdjoints> staticHatchFeatCache = new HashMap<>();
-  public Map<TFKS, ProductIndexAdjoints> staticSquashFeatCache = new HashMap<>();
+  // NOTE: We are now hard-coded to the method of caching Adjoints.Caching
+  // instances and constructing a new Adjoints.Scale(-1,wHatchAdjoints) for
+  // every call of scoreSquash.
+  // ASSUMPTION NEEDED: weights don't change during the life of an Info (e.g.
+  // getUpdate, perceptronUpdate, predictNew).
+
+//  public Map<TFKS, ProductIndexAdjoints> staticHatchFeatCache = new HashMap<>();
+//  public Map<TFKS, ProductIndexAdjoints> staticSquashFeatCache = new HashMap<>();
+  public Map<TFKS, Caching2<ProductIndexAdjoints>> staticHatchFeatCache = new HashMap<>();
+  // Just construct a scaled version on the fly...
+//  public Map<TFKS, Scale2<Caching2<ProductIndexAdjoints>>> staticSquashFeatCache = new HashMap<>();
 
   /** Probably don't need to do this because Info's should only last for one search, get GC'd quickly */
   public void clearStaticFeatureCache() {
     staticHatchFeatCache.clear();
-    staticSquashFeatCache.clear();
+//    staticSquashFeatCache.clear();
   }
 
   // copy between oracle and MV Info instances?
@@ -105,7 +123,7 @@ public class Info implements Serializable, HasCounts, HasRandom {
   /** Sets this instances cache to the same cache as other */
   public void shareStaticFeatureCacheWith(Info other) {
     staticHatchFeatCache = other.staticHatchFeatCache;
-    staticSquashFeatCache = other.staticSquashFeatCache;
+//    staticSquashFeatCache = other.staticSquashFeatCache;
   }
 
   /* ************************************************************************ */
@@ -141,8 +159,18 @@ public class Info implements Serializable, HasCounts, HasRandom {
   }
 
   public Info(Config config) {
+    COUNTER_CONSTRUCT++;
     this.config = config;
     this.setDecodeCoefs();
+
+//    RuntimeException e = new RuntimeException();
+//    for (StackTraceElement ste : e.getStackTrace()) {
+//      System.out.println(ste);
+//    }
+//    System.out.println();
+
+//    Log.info("beam.beam=" + this.htsBeam.beam
+//        + " cons.beam=" + this.htsConstraints.beam);
   }
 
   public Config getConfig() {
