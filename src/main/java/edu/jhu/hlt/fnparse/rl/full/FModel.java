@@ -17,21 +17,23 @@ import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Item;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
-import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
@@ -349,6 +351,7 @@ public class FModel implements Serializable {
   public FNParse predictNew(FNParse y) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting prediction");
+    timer.start("predictNew");
     Info inf = getPredictInfo(y);
     State2<Info> s0 = ts.genRootState(inf);
     ts.flushPrimes();
@@ -359,6 +362,7 @@ public class FModel implements Serializable {
       beamLast.getRoot().show(System.out);
     }
     FNParse yhat = ts.decode(beamLast);
+    timer.stop("predictNew");
     return yhat;
   }
 
@@ -524,6 +528,7 @@ public class FModel implements Serializable {
   }
 
   public static void main(String[] args) throws Exception {
+//    main3(args);
     main2(args);
 //    main1(args);
   }
@@ -672,6 +677,7 @@ public class FModel implements Serializable {
    * nature and its difficult to figure out if something is a timing issue or
    * why its wrong in the first place.
    */
+  // Check that we get convergence with cheating features
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("oracleMode", "MIN");
@@ -679,18 +685,6 @@ public class FModel implements Serializable {
     config.put("perceptron", "true"); // always keep true
     config.put("useGlobalFeatures", "true");
     config.put("beamSize", "1");
-
-//    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
-//        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
-//        + " + Dist-discLen5-Span1.First-Span2.Last-Top10"
-//        + " + Head2-RootPath-Basic-POS-DEP-t-Top10"
-//        + " + Head2-Word-Top1000"
-//        + " + Span1-PosPat-FULL_POS-2-0-Cnt8"
-//        + " + Dist-discLen3-Head1-Span1.Last"
-//        + " + Head1-BasicLabel"
-//        + " + Role1";
-//    CachedFeatures cf = CachedFeatures.buildCachedFeaturesForTesting(config, fs);
-//    ItemProvider ip = cf.new ItemProvider(100, true, false);
 
     List<CachedFeatures.Item> stuff = fooMemo();
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
@@ -829,6 +823,134 @@ public class FModel implements Serializable {
     }
 
     Log.info("done, checked " + checked + " parses");
+  }
+
+  /**
+   * Prints info on how much work is being done every time inference is run.
+   */
+  public static void featureAudit(FNParse y, FModel m, boolean predict) {
+    ProductIndexAdjoints.zeroCounters();
+    Info.zeroCounters();
+
+    m.ts.zeroOutWeights();
+
+    if (predict) {
+      Log.info("predict");
+      m.predict(y);
+    } else {
+      Log.info("update");
+      m.getUpdate(y).apply(1);
+    }
+
+    int nFI  = y.numFrameInstances();
+    int nI = State.numItems(y);
+    int nTok = y.getSentence().size();
+    int Ksum = 0, Kmax = 0;
+    for (FrameInstance fi : y.getFrameInstances()) {
+      int k = fi.getFrame().numRoles();
+      Ksum += k;
+      Kmax = Math.max(Kmax, k);
+    }
+    Log.info("id=" + y.getId() + " nFI=" + nFI + " nI=" + nI + " nTok=" + nTok
+        + " Ksum=" + Ksum + " Kmax=" + Kmax);
+    ProductIndexAdjoints.logCounters();
+    Info.logCounters();
+  }
+
+  // Lets see if we can get decent performance on LOOCV
+  public static void main3(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    config.put("oracleMode", "RAND_MAX");
+    config.put("useGlobalFeatures", "true");
+    config.put("forceLeftRightInference", "true");
+    config.put("beamSize", "8");
+
+    FModel m = getFModel(config);
+
+    List<CachedFeatures.Item> stuff = fooMemo();
+//    stuff = stuff.subList(0, 100);
+
+    SimpleCFLike cfLike = new SimpleCFLike(stuff);
+    m.setCachedFeatures(cfLike);
+
+    boolean speedAudit = false;
+    if (speedAudit) {
+      int n = Math.min(stuff.size(), 15);
+      for (int i = 0; i < n; i++) {
+        featureAudit(stuff.get(i).parse, m, true);
+        featureAudit(stuff.get(i).parse, m, false);
+      }
+      return;
+    }
+
+    // Try to mimic the code in CachedFeatures.Params.
+    // This is the data needed to create the state that CachedFeatures.Params has.
+    boolean mimicRT = true;
+    if (mimicRT) {
+      File dd = new File("data/debugging/");
+      BiAlph bialph = new BiAlph(new File(dd, "coherent-shards-filtered-small/alphabet.txt"), LineMode.ALPH);
+      File featureSetFile = new File(dd, "propbank-16-40.fs");
+      cfLike.setFeatureset(featureSetFile, bialph);
+    }
+    Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
+
+    int folds = 20;
+    int n = stuff.size();
+    for (int testIdx = 0; testIdx < stuff.size(); testIdx++) {
+      Log.info("starting fold " + (testIdx % folds));
+
+      // Training set (all data minus one instance)
+      List<FNParse> train = new ArrayList<>();
+      List<FNParse> test = new ArrayList<>();
+      for (int i = 0; i < n; i++)
+        if ((i % folds) == (testIdx % folds))
+          test.add(stuff.get(i).parse);
+        else
+          train.add(stuff.get(i).parse);
+
+      // Do some learning (few epochs)
+      double lr = 0.1;
+      m.ts.zeroOutWeights();
+      for (int i = 0; i < 150; i++) {
+        Log.info("[main] training on " + train.size() + " examples");
+        Collections.shuffle(train);
+        for (FNParse y : train)
+          m.getUpdate(y).apply(lr);
+//        if (i % 5 == 0 && i > 0)
+//          m.ts.setParamsToAverage();
+//        else
+//          m.ts.takeAverageOfWeights();
+        m.ts.takeAverageOfWeights();
+        showLoss(test, m, "after-epoch-" + i);
+      }
+
+      // See what we get on the test example
+      m.ts.setParamsToAverage();
+      showLoss(test, m, "on-fold-" + (testIdx%folds));
+//      FNParse yhat = m.predict(yTest);
+//      SentenceEval se = new SentenceEval(yTest, yhat);
+//      Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+//      double f1 = r.get("ArgumentMicroF1");
+//      Log.info("LOOCV result: " + yTest.getSentence().getId()
+//          + " f1=" + f1
+//          + " p=" + r.get("ArgumentMicroPRECISION")
+//          + " r=" + r.get("ArgumentMicroRECALL"));
+//      assert f1 >= 0.5;
+    }
+  }
+
+  private static void showLoss(List<FNParse> ys, FModel m, String label) {
+    List<SentenceEval> se = new ArrayList<>();
+    for (FNParse y : ys) {
+      FNParse yhat = m.predict(y);
+      se.add(new SentenceEval(y, yhat));
+    }
+    Map<String, Double> r = BasicEvaluation.evaluate(se);
+    double f1 = r.get("ArgumentMicroF1");
+    Log.info(label + " result: "
+        + " f1=" + f1
+        + " p=" + r.get("ArgumentMicroPRECISION")
+        + " r=" + r.get("ArgumentMicroRECALL"));
   }
 
   private static void showLoss(FNParse y, FNParse yhat, String label) {
