@@ -6,6 +6,7 @@ import java.util.Iterator;
 import java.util.TreeSet;
 
 import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface Beam<T extends StateLike> {
@@ -42,11 +43,16 @@ public interface Beam<T extends StateLike> {
    * thus you should only ever construct pairs of instances s.t. (score,sig) are unique!
    */
   public static class BeamItem<R extends StateLike> implements Comparable<BeamItem<R>> {
+    public static long INSTANCE_COUNTER = 0;
+
     public final R state;
     public final double score;
+    public final long inst;
+
     public BeamItem(R state, double score) {
       this.state = state;
       this.score = score;
+      this.inst = INSTANCE_COUNTER++;
     }
     @Override
     public int compareTo(BeamItem<R> o) {
@@ -54,8 +60,14 @@ public interface Beam<T extends StateLike> {
         return -1;
       if (score > o.score)
         return +1;
-      if (LLSSP.DISABLE_PRIMES)
+      if (this == o)
         return 0;
+      if (LLSSP.DISABLE_PRIMES) {
+//        return 0;
+        assert inst != o.inst || this == o;
+        assert inst >= 0 && o.inst >= 0;
+        return inst < o.inst ? +1 : -1;
+      }
       BigInteger s1 = state.getSignature();
       BigInteger s2 = o.state.getSignature();
       int c = s1.compareTo(s2);
@@ -67,6 +79,13 @@ public interface Beam<T extends StateLike> {
         }
       }
       return c;
+    }
+    @Override
+    public boolean equals(Object other) {
+      if (this == other)
+        return true;
+      Log.warn("wat");
+      return false;
     }
   }
 
@@ -185,7 +204,10 @@ public interface Beam<T extends StateLike> {
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
         BeamItem<T> si = new BeamItem<>(s, sc);
+        int j = scores.size();
         scores.add(si);
+        int k = scores.size();
+        assert k == j+1 : "before=" + j + " after=" + k + " item=" + si;
         if (table != null)
           table.put(s, si);
         return true;
