@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -42,8 +43,8 @@ public class LLSSPatF extends LLSSP {
   public static boolean DEBUG = false;
   public static boolean DEBUG_SHOW_BACKWARDS = true;
 
-//  public static Alphabet<String> DEBUG_ALPH = new Alphabet<>();
-  public static String[] DEBUG_ALPH = new String[5 * 1024 * 1024];
+  public static String[] DEBUG_ALPH = null;
+//      new String[ExperimentProperties.getInstance().getInt("hashingTrickDim", 1 << 24)];
 
   public static boolean ARG_LOC = true;
   public static boolean ROLE_COOC = true;
