@@ -48,10 +48,11 @@ public class LLSSPatF extends LLSSP {
 //      new String[ExperimentProperties.getInstance().getInt("hashingTrickDim", 1 << 24)];
 
   private static final ExperimentProperties C = ExperimentProperties.getInstance();
+  public static final boolean ANY_GLOBALS = C.getBoolean("ANY_GLOBALS", true);
 
-  public static boolean ARG_LOC = C.getBoolean("ARG_LOC", true);
-  public static boolean ROLE_COOC = C.getBoolean("ROLE_COOC", true);
-  public static boolean NUM_ARGS = C.getBoolean("NUM_ARGS", true);
+  public static final boolean ARG_LOC = C.getBoolean("ARG_LOC", ANY_GLOBALS);
+  public static final boolean ROLE_COOC = C.getBoolean("ROLE_COOC", ANY_GLOBALS);
+  public static final boolean NUM_ARGS = C.getBoolean("NUM_ARGS", ANY_GLOBALS);
 
   public static final ProductIndex ARG_LOC_TA =
       ARG_LOC && C.getBoolean("ARG_LOC_TA", true) ? new ProductIndex(0, 16) : null;

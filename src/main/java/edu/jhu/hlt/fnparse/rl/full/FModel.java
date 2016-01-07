@@ -600,6 +600,7 @@ public class FModel implements Serializable {
   @SuppressWarnings("unchecked")
   public static List<CachedFeatures.Item> fooMemo() {
     File f = new File("/tmp/fooMemo");
+    f = ExperimentProperties.getInstance().getFile("fooMemoFile", f);
     if (f.isFile())
       return (List<CachedFeatures.Item>) FileUtil.deserialize(f);
     List<CachedFeatures.Item> l = foo();
@@ -608,8 +609,11 @@ public class FModel implements Serializable {
   }
 
   public static List<CachedFeatures.Item> foo() {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+
     // Read some features out of one file eagerly
     File ff = new File("data/debugging/coherent-shards-filtered-small/features/shard0.txt");
+    ff = config.getExistingFile("fooFeatureFile", ff);
     boolean templatesSorted = true;
     Iterable<FeatureFile.Line> itr = FeatureFile.getLines(ff, templatesSorted);
 //    String x = StreamSupport.stream(itr.spliterator(), false)
@@ -619,7 +623,6 @@ public class FModel implements Serializable {
 
     // We also need the FNParses
     // Just read in the dev data.
-    ExperimentProperties config = ExperimentProperties.getInstance();
     Map<String, FNParse> parseById = new HashMap<>();
     ParsePropbankData.Redis propbankAutoParses = null;
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
@@ -880,7 +883,8 @@ public class FModel implements Serializable {
       File dd = new File("data/debugging/");
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
-      File featureSetFile = config.getExistingFile("featureSet", new File(dd, "propbank-16-640.fs"));
+      File fsParent = config.getExistingDir("featureSetParent", dd);
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-640.fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
@@ -900,9 +904,10 @@ public class FModel implements Serializable {
           train.add(stuff.get(i).parse);
 
       // Do some learning (few epochs)
-      double lr = 0.1;
+      double lr = config.getDouble("learningRate", 0.1);
+      double maxIters = config.getInt("maxIters", 30);
       m.ts.zeroOutWeights();
-      for (int i = 0; i < 150; i++) {
+      for (int i = 0; i < maxIters; i++) {
         Log.info("[main] training on " + train.size() + " examples");
         Collections.shuffle(train);
         for (FNParse y : train)

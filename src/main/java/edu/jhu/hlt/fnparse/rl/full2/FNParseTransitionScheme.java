@@ -205,10 +205,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.featProdFK = config.getBoolean("featProdFK", true);
     this.featProdK = config.getBoolean("featProdK", true);
 
-    boolean g = config.getBoolean("useGlobalFeatures", true);
-    LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
-    LLSSPatF.NUM_ARGS = config.getBoolean("globalFeatNumArgs", g);
-    LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
+//    boolean g = config.getBoolean("useGlobalFeatures", true);
+//    LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
+//    LLSSPatF.NUM_ARGS = config.getBoolean("globalFeatNumArgs", g);
+//    LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
 
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
