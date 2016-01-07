@@ -21,6 +21,21 @@ import edu.jhu.util.Alphabet;
  * @author travis
  */
 public class ProductIndexAdjoints implements Adjoints {
+  // Use this for benchmarking: surround a block with gets/sets of these.
+  public static int COUNTER_CONSTRUCT = 0;
+  public static int COUNTER_FORWARDS = 0;
+  public static int COUNTER_BACKWARDS = 0;
+  public static void zeroCounters() {
+    COUNTER_CONSTRUCT = 0;
+    COUNTER_FORWARDS = 0;
+    COUNTER_BACKWARDS = 0;
+  }
+  public static void logCounters() {
+    Log.info("nConstruct=" + COUNTER_CONSTRUCT
+        + " nForwards=" + COUNTER_FORWARDS
+        + " nBacwards=" + COUNTER_BACKWARDS);
+  }
+
   private int[] featIdx;
   private LazyL2UpdateVector weights;
   private double l2Reg;
@@ -50,6 +65,7 @@ public class ProductIndexAdjoints implements Adjoints {
     this.featIdx = new int[features.size()];
     for (int i = 0; i < featIdx.length; i++)
       featIdx[i] = features.get(i).getProdFeatureModulo(dimension);
+    COUNTER_CONSTRUCT++;
   }
 
   @Override
@@ -63,10 +79,16 @@ public class ProductIndexAdjoints implements Adjoints {
   public double forwards() {
     // Counter example: the static feature cache. I can't cache those because
     // the weights will change. Though I still want to cache the features/ProductIndexAdjoints
+
 //    assert (++forwardsCount) <= 5 : "you probably should wrap this is a caching";
+//    forwardsCount++;
+//    if (forwardsCount > 1)
+//      throw new RuntimeException();
+
     double d = 0;
     for (int i = 0; i < featIdx.length; i++)
       d += weights.weights.get(featIdx[i]);
+    COUNTER_FORWARDS++;
     return d;
   }
 
@@ -96,5 +118,6 @@ public class ProductIndexAdjoints implements Adjoints {
       assert false;
       weights.maybeApplyL2Reg(l2Reg);
     }
+    COUNTER_BACKWARDS++;
   }
 }

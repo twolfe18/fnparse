@@ -14,25 +14,31 @@ import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.LabelIndex;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Item;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
+import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
-import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -75,8 +81,6 @@ public class FModel implements Serializable {
 //  private CachedFeatures cachedFeatures;
   private FNParseTransitionScheme ts;
 
-
-  // LH's max violation
   private boolean maxViolation;
   public PerceptronUpdateMode perceptronUpdateMode;
 
@@ -97,23 +101,17 @@ public class FModel implements Serializable {
     }
 
     rtConf = config;
-    maxViolation = true; //p.getBoolean("perceptron");
+    maxViolation = true;
     perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
-//        p.getBoolean("maxViolation", true)
-//        ? PerceptronUpdateMode.MAX_VIOLATION
-//            : PerceptronUpdateMode.EARLY;
+    // OracleMode is what modulates behavior
     Log.info("[main] perceptron=" + maxViolation
         + " mode=" + perceptronUpdateMode
         + " oracleMode=" + rtConf.oracleMode);
 
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
+    conf.rPacking = new RolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
-
-    // TODO Remove, this is deprecate (FNParseTS has weights now)
-//    int l2UpdateInterval = 32;
-//    int dimension = 1;  // Not using the weights in here, don't waste space
-//    conf.weights = new GeneralizedWeights(conf, null, dimension, l2UpdateInterval);
 
     if (pruningMode != null)
       drp = new DeterministicRolePruning(pruningMode, null, null);
@@ -122,11 +120,8 @@ public class FModel implements Serializable {
     timer = new MultiTimer.ShowPeriodically(15);
 
     Primes primes = new Primes(ExperimentProperties.getInstance());
-//    CachedFeatures params = null;
     CFLike params = null;
     ts = new FNParseTransitionScheme(params, primes);
-    if (maxViolation && ts.sortEggsMode != SortEggsMode.NONE)
-      Log.warn("[main] perceptron=true and sorting eggs?! don't do this");
   }
 
   public FNParseTransitionScheme getTransitionSystem() {
@@ -141,10 +136,7 @@ public class FModel implements Serializable {
     return conf;
   }
 
-  // Needed unless you setup syntactic parsers
-//  public void setCachedFeatures(CachedFeatures cf) {
   public void setCachedFeatures(CFLike cf) {
-//    drp.cachedFeatures = cf;
     assert cf != null;
     ts.setCachedFeatures(cf);
   }
@@ -241,9 +233,9 @@ public class FModel implements Serializable {
     CoefsAndScoresAdjoints mvB = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvSc);
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("oracle terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("oracle terminal state: (overfit=" + ts.featOverfit + ")");
       oracleSt.getRoot().show(System.out);
-      Log.info("MV terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("MV terminal state: (overfit=" + ts.featOverfit + ")");
       mvSt.getRoot().show(System.out);
     }
 
@@ -345,16 +337,18 @@ public class FModel implements Serializable {
   public FNParse predictNew(FNParse y) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting prediction");
+    timer.start("predictNew");
     Info inf = getPredictInfo(y);
     State2<Info> s0 = ts.genRootState(inf);
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
     State2<Info> beamLast = i.get1();
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("decode terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("decode terminal state: (overfit=" + ts.featOverfit + ")");
       beamLast.getRoot().show(System.out);
     }
     FNParse yhat = ts.decode(beamLast);
+    timer.stop("predictNew");
     return yhat;
   }
 
@@ -520,7 +514,8 @@ public class FModel implements Serializable {
   }
 
   public static void main(String[] args) throws Exception {
-    main2(args);
+    main3(args);
+//    main2(args);
 //    main1(args);
   }
 
@@ -531,20 +526,36 @@ public class FModel implements Serializable {
     private Map<Pair<Sentence, SpanPair>, List<ProductIndex>> sentTS2feats;
     private List<FNParse> parses;
 
+    private Map<Sentence, Item> s2i;
+    private int[][] featureSet; // TODO initialize
+    private int[] template2cardinality;
+
+    public void setFeatureset(File featureSetFile, BiAlph bialph) {
+      Log.info("[main] using featuresSetFile=" + featureSetFile.getPath()
+        + " and bialph=" + bialph.getSource().getPath()
+        + " and code close to CachedFeatures.Params");
+      template2cardinality = bialph.makeTemplate2Cardinality();
+      featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
+    }
+
     public SimpleCFLike(List<CachedFeatures.Item> items) {
+      Object old;
       sentTS2feats = new HashMap<>();
       parses = new ArrayList<>();
+      s2i = new HashMap<>();
       for (CachedFeatures.Item i : items) {
         FNParse y = i.getParse();
         y.featuresAndSpans = i;  // evil
         parses.add(y);
         Sentence s = y.getSentence();
+        old = s2i.put(s, i);
+        assert old == null;
         Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
         while (btIter.hasNext()) {
           Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
           List<ProductIndex> feats2 = bt2pi(st2feats.get2());
           Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
-          List<ProductIndex> old = sentTS2feats.put(key, feats2);
+          old = sentTS2feats.put(key, feats2);
           assert old == null;
         }
       }
@@ -556,14 +567,23 @@ public class FModel implements Serializable {
 
     @Override
     public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
-      Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
-      List<ProductIndex> feats = sentTS2feats.get(key);
+      List<ProductIndex> feats;
+      if (featureSet != null) {
+        // Try to match as closely as possible how CachedFeatures.Params get features
+        Item cur = s2i.get(sent);
+        feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+      } else {
+        // This was the simplest way...
+        Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
+        feats = sentTS2feats.get(key);
+      }
       assert feats != null;
       return feats;
     }
   }
 
   // TODO This does not do feature sets! This just takes templates rather than their products.
+  // CachedFeatures.getFeaturesNoModulo uses InformationGainProducts.flatten
   public static List<ProductIndex> bt2pi(BaseTemplates bt) {
     int n = bt.size();
     List<ProductIndex> pi = new ArrayList<>(n);
@@ -577,8 +597,10 @@ public class FModel implements Serializable {
     return pi;
   }
 
+  @SuppressWarnings("unchecked")
   public static List<CachedFeatures.Item> fooMemo() {
     File f = new File("/tmp/fooMemo");
+    f = ExperimentProperties.getInstance().getFile("fooMemoFile", f);
     if (f.isFile())
       return (List<CachedFeatures.Item>) FileUtil.deserialize(f);
     List<CachedFeatures.Item> l = foo();
@@ -587,8 +609,11 @@ public class FModel implements Serializable {
   }
 
   public static List<CachedFeatures.Item> foo() {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+
     // Read some features out of one file eagerly
     File ff = new File("data/debugging/coherent-shards-filtered-small/features/shard0.txt");
+    ff = config.getExistingFile("fooFeatureFile", ff);
     boolean templatesSorted = true;
     Iterable<FeatureFile.Line> itr = FeatureFile.getLines(ff, templatesSorted);
 //    String x = StreamSupport.stream(itr.spliterator(), false)
@@ -598,7 +623,6 @@ public class FModel implements Serializable {
 
     // We also need the FNParses
     // Just read in the dev data.
-    ExperimentProperties config = ExperimentProperties.getInstance();
     Map<String, FNParse> parseById = new HashMap<>();
     ParsePropbankData.Redis propbankAutoParses = null;
     PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
@@ -643,28 +667,27 @@ public class FModel implements Serializable {
    * nature and its difficult to figure out if something is a timing issue or
    * why its wrong in the first place.
    */
+  // Check that we get convergence with cheating features
   public static void main2(String[] args) throws TemplateDescriptionParsingException, InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.put("oracleMode", "MIN");
     config.put("forceLeftRightInference", "false"); // actually whether you sort your eggs or not...
     config.put("perceptron", "true"); // always keep true
     config.put("useGlobalFeatures", "true");
-    config.put("beamSize", "2");
-
-//    String fs = "Word4-1-grams-between-Span2.First-and-Span2.Last-Top1000"
-//        + " + Word4-2-grams-between-</S>-and-Span1.First-Top10"
-//        + " + Dist-discLen5-Span1.First-Span2.Last-Top10"
-//        + " + Head2-RootPath-Basic-POS-DEP-t-Top10"
-//        + " + Head2-Word-Top1000"
-//        + " + Span1-PosPat-FULL_POS-2-0-Cnt8"
-//        + " + Dist-discLen3-Head1-Span1.Last"
-//        + " + Head1-BasicLabel"
-//        + " + Role1";
-//    CachedFeatures cf = CachedFeatures.buildCachedFeaturesForTesting(config, fs);
-//    ItemProvider ip = cf.new ItemProvider(100, true, false);
+    config.put("beamSize", "1");
 
     List<CachedFeatures.Item> stuff = fooMemo();
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
+
+    // Try to mimic the code in CachedFeatures.Params.
+    // This is the data needed to create the state that CachedFeatures.Params has.
+    boolean mimicRT = true;
+    if (mimicRT) {
+      File dd = new File("data/debugging/");
+      BiAlph bialph = new BiAlph(new File(dd, "coherent-shards-filtered-small/alphabet.txt"), LineMode.ALPH);
+      File featureSetFile = new File(dd, "propbank-8-40.fs");
+      cfLike.setFeatureset(featureSetFile, bialph);
+    }
 
     boolean justOracle = false;
 
@@ -674,7 +697,6 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-//    m.ts.useOverfitFeatures = true;
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
     int checked = 0;
@@ -717,6 +739,7 @@ public class FModel implements Serializable {
 //      m.ts.flushAlphabet();
 
       Log.info("testing learning");
+      double lr = 0.05;
       int updates = 0;
       int lim = 2;
       int passed = 0;
@@ -726,7 +749,7 @@ public class FModel implements Serializable {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
-          hinge += m.getUpdate(y).apply(1);
+          hinge += m.getUpdate(y).apply(lr);
           updates++;
         }
         hinge /= updates;
@@ -763,7 +786,7 @@ public class FModel implements Serializable {
         LLSSPatF.DEBUG_SHOW_BACKWARDS = true;
 
         // Check an update
-        m.getUpdate(y).apply(1);
+        m.getUpdate(y).apply(lr);
 
         // Show a run of the decoder
         m.predict(y);
@@ -789,6 +812,143 @@ public class FModel implements Serializable {
     }
 
     Log.info("done, checked " + checked + " parses");
+  }
+
+  /**
+   * Prints info on how much work is being done every time inference is run.
+   */
+  public static void featureAudit(FNParse y, FModel m, boolean predict) {
+    ProductIndexAdjoints.zeroCounters();
+    Info.zeroCounters();
+
+    m.ts.zeroOutWeights();
+
+    if (predict) {
+      Log.info("predict");
+      m.predict(y);
+    } else {
+      Log.info("update");
+      m.getUpdate(y).apply(1);
+    }
+
+    int nFI  = y.numFrameInstances();
+    int nI = State.numItems(y);
+    int nTok = y.getSentence().size();
+    int Ksum = 0, Kmax = 0;
+    for (FrameInstance fi : y.getFrameInstances()) {
+      int k = fi.getFrame().numRoles();
+      Ksum += k;
+      Kmax = Math.max(Kmax, k);
+    }
+    Log.info("id=" + y.getId() + " nFI=" + nFI + " nI=" + nI + " nTok=" + nTok
+        + " Ksum=" + Ksum + " Kmax=" + Kmax);
+    ProductIndexAdjoints.logCounters();
+    Info.logCounters();
+  }
+
+  // Lets see if we can get decent performance on LOOCV
+  public static void main3(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    config.putIfAbsent("oracleMode", "RAND");
+    config.putIfAbsent("useGlobalFeatures", "true");
+    config.putIfAbsent("forceLeftRightInference", "false");
+    config.putIfAbsent("beamSize", "1");
+
+//    config.put("globalFeatArgLocSimple", "false");
+//    config.put("globalFeatNumArgs", "false");
+//    config.put("globalFeatRoleCoocSimple", "false");
+
+    FModel m = getFModel(config);
+
+    List<CachedFeatures.Item> stuff = fooMemo();
+//    stuff = stuff.subList(0, 100);
+
+    SimpleCFLike cfLike = new SimpleCFLike(stuff);
+    m.setCachedFeatures(cfLike);
+
+    boolean speedAudit = false;
+    if (speedAudit) {
+      int n = Math.min(stuff.size(), 15);
+      for (int i = 0; i < n; i++) {
+        featureAudit(stuff.get(i).parse, m, true);
+        featureAudit(stuff.get(i).parse, m, false);
+      }
+      return;
+    }
+
+    // Try to mimic the code in CachedFeatures.Params.
+    // This is the data needed to create the state that CachedFeatures.Params has.
+    boolean mimicRT = true;
+    if (mimicRT) {
+      File dd = new File("data/debugging/");
+      File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
+      BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+      File fsParent = config.getExistingDir("featureSetParent", dd);
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-640.fs"));
+      cfLike.setFeatureset(featureSetFile, bialph);
+    }
+    Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
+
+    int folds = 20;
+    int n = stuff.size();
+    for (int testIdx = 0; testIdx < stuff.size(); testIdx++) {
+      Log.info("starting fold " + (testIdx % folds));
+
+      // Training set (all data minus one instance)
+      List<FNParse> train = new ArrayList<>();
+      List<FNParse> test = new ArrayList<>();
+      for (int i = 0; i < n; i++)
+        if ((i % folds) == (testIdx % folds))
+          test.add(stuff.get(i).parse);
+        else
+          train.add(stuff.get(i).parse);
+
+      // Do some learning (few epochs)
+      double lr = config.getDouble("learningRate", 0.1);
+      double maxIters = config.getInt("maxIters", 30);
+      m.ts.zeroOutWeights();
+      for (int i = 0; i < maxIters; i++) {
+        Log.info("[main] training on " + train.size() + " examples");
+        Collections.shuffle(train);
+        for (FNParse y : train)
+          m.getUpdate(y).apply(lr);
+//        if (i % 5 == 0 && i > 0)
+//          m.ts.setParamsToAverage();
+//        else
+//          m.ts.takeAverageOfWeights();
+        m.ts.takeAverageOfWeights();
+        showLoss(test, m, "after-epoch-" + i + "-TEST");
+        int tn = Math.min(100, train.size());
+        showLoss(train.subList(0, tn), m, "after-epoch-" + i + "-TRAIN");
+      }
+
+      // See what we get on the test example
+      m.ts.setParamsToAverage();
+      showLoss(test, m, "on-fold-" + (testIdx%folds));
+//      FNParse yhat = m.predict(yTest);
+//      SentenceEval se = new SentenceEval(yTest, yhat);
+//      Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
+//      double f1 = r.get("ArgumentMicroF1");
+//      Log.info("LOOCV result: " + yTest.getSentence().getId()
+//          + " f1=" + f1
+//          + " p=" + r.get("ArgumentMicroPRECISION")
+//          + " r=" + r.get("ArgumentMicroRECALL"));
+//      assert f1 >= 0.5;
+    }
+  }
+
+  private static void showLoss(List<FNParse> ys, FModel m, String label) {
+    List<SentenceEval> se = new ArrayList<>();
+    for (FNParse y : ys) {
+      FNParse yhat = m.predict(y);
+      se.add(new SentenceEval(y, yhat));
+    }
+    Map<String, Double> r = BasicEvaluation.evaluate(se);
+    double f1 = r.get("ArgumentMicroF1");
+    Log.info(label + " result: "
+        + " f1=" + f1
+        + " p=" + r.get("ArgumentMicroPRECISION")
+        + " r=" + r.get("ArgumentMicroRECALL"));
   }
 
   private static void showLoss(FNParse y, FNParse yhat, String label) {

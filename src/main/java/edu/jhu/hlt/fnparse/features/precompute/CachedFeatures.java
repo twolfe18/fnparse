@@ -562,37 +562,39 @@ public class CachedFeatures implements Serializable {
     public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
       if (dropoutMode != DropoutMode.OFF)
         throw new RuntimeException("fixme");
-      final int fsLen = featureSet.length;
-
-      // pre-computed features don't include nullSpan
-      ProductIndex intercept = new ProductIndex(0, fsLen + 1);
-      if (s == Span.nullSpan) {
-        return Arrays.asList(intercept.prod(false));
-      }
-      List<ProductIndex> features = new ArrayList<>();
-      features.add(intercept.prod(true));
-
-      // Get the templates needed for all the features.
       Item cur = loadedSentId2Item.get(sent.getId());
-      BaseTemplates data = cur.getFeatures(t, s);
-
-      List<ProductIndex> buf = new ArrayList<>();
-      for (int i = 0; i < fsLen; i++) {
-        int[] feat = featureSet[i];
-        ProductIndex featPI = new ProductIndex(i + 1, fsLen + 1);
-
-        // Note that these features don't need to be producted with k due to the
-        // fact that we have separate weights for those.
-        InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
-
-        // If I get a long here, I can zip them all together by multiplying by
-        // featureSet.length and then adding in an offset.
-        for (ProductIndex pi : buf)
-          features.add(featPI.flatProd(pi));
-
-        buf.clear();
-      }
-      return features;
+      return statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+//      final int fsLen = featureSet.length;
+//
+//      // pre-computed features don't include nullSpan
+//      ProductIndex intercept = new ProductIndex(0, fsLen + 1);
+//      if (s == Span.nullSpan) {
+//        return Arrays.asList(intercept.prod(false));
+//      }
+//      List<ProductIndex> features = new ArrayList<>();
+//      features.add(intercept.prod(true));
+//
+//      // Get the templates needed for all the features.
+//      Item cur = loadedSentId2Item.get(sent.getId());
+//      BaseTemplates data = cur.getFeatures(t, s);
+//
+//      List<ProductIndex> buf = new ArrayList<>();
+//      for (int i = 0; i < fsLen; i++) {
+//        int[] feat = featureSet[i];
+//        ProductIndex featPI = new ProductIndex(i + 1, fsLen + 1);
+//
+//        // Note that these features don't need to be producted with k due to the
+//        // fact that we have separate weights for those.
+//        InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
+//
+//        // If I get a long here, I can zip them all together by multiplying by
+//        // featureSet.length and then adding in an offset.
+//        for (ProductIndex pi : buf)
+//          features.add(featPI.flatProd(pi));
+//
+//        buf.clear();
+//      }
+//      return features;
     }
 
     @Override
@@ -1013,6 +1015,44 @@ public class CachedFeatures implements Serializable {
         }
       }
     }
+  }
+
+  public static List<ProductIndex> statelessGetFeaturesNoModulo(
+      Sentence sent, Span t, Span s,
+      Item cur, int[][] featureSet, int[] template2cardinality) {
+    //      if (dropoutMode != DropoutMode.OFF)
+    //        throw new RuntimeException("fixme");
+    final int fsLen = featureSet.length;
+
+    // pre-computed features don't include nullSpan
+    ProductIndex intercept = new ProductIndex(0, fsLen + 1);
+    if (s == Span.nullSpan) {
+      return Arrays.asList(intercept.prod(false));
+    }
+    List<ProductIndex> features = new ArrayList<>();
+    features.add(intercept.prod(true));
+
+    // Get the templates needed for all the features.
+    //      Item cur = loadedSentId2Item.get(sent.getId());
+    BaseTemplates data = cur.getFeatures(t, s);
+
+    List<ProductIndex> buf = new ArrayList<>();
+    for (int i = 0; i < fsLen; i++) {
+      int[] feat = featureSet[i];
+      ProductIndex featPI = new ProductIndex(i + 1, fsLen + 1);
+
+      // Note that these features don't need to be producted with k due to the
+      // fact that we have separate weights for those.
+      InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
+
+      // If I get a long here, I can zip them all together by multiplying by
+      // featureSet.length and then adding in an offset.
+      for (ProductIndex pi : buf)
+        features.add(featPI.flatProd(pi));
+
+      buf.clear();
+    }
+    return features;
   }
 
   // For redis (intTemplate,intFeature) -> stringFeature
