@@ -2,7 +2,7 @@
 #$ -V
 #$ -l h_rt=72:00:00
 #$ -l mem_free=31G
-#$ -l num_proc=3
+#$ -l num_proc=1
 #$ -S /bin/bash
 
 set -eu
@@ -66,7 +66,16 @@ fi
 #-DnumShards=1
 #-Dshard=0
 
+#-DcachedFeatures.bialph=$DD/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt \
 #-DcachedFeatures.bialph=$DD/coherent-shards-filtered/alphabet.txt.gz
+
+echo "b L2_LOCAL=$L2_LOCAL"
+echo "b L2_GLOBAL=$L2_GLOBAL"
+
+DATA_HOME=/export/projects/twolfe/fnparse-data
+TIME_LIMIT_MINS=`echo "8 * 60" | bc`
+#TIME_LIMIT_MINS=`echo "48 * 60" | bc`
+#TIME_LIMIT_MINS=5
 
 #mvn compile exec:java -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
 java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
@@ -82,25 +91,28 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DbeamSize=$BEAM_SIZE \
   -DtemplateCardinalityBug=true \
   -DcachedFeatures.numRoles=$NR \
-  -DcachedFeatures.bialph=$DD/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt \
   -DcachedFeatures.bialph.lineMode=ALPH \
-  -DcachedFeatures.featuresParent=$DD/coherent-shards-filtered/features \
+  -DcachedFeatures.bialph=$DD/coherent-shards-filtered-small/alphabet.txt \
+  -DcachedFeatures.featuresParent=$DD/coherent-shards-filtered-small/features \
   -DcachedFeatures.featuresGlob="glob:**/*" \
   -DcachedFeatures.numDataLoadThreads=2 \
   -DcachedFeatures.hashingTrickDim=`echo "2 * 1024 * 1024" | bc` \
   -DstoppingConditionFrequency=4 \
   -DpretrainBatchSize=8 \
   -DtrainBatchSize=8 \
-  -Dthreads=2 \
+  -Dthreads=1 \
+  -DuseFModel=true \
+  -DprimesFile=${DATA_HOME}/primes/primes1.byLine.txt.gz \
   -DnTrain=$NTRAIN \
   -DtemplatedFeatureParams.throwExceptionOnComputingFeatures=true \
   -DgradientBugfix=true \
   -DignoreNoNullSpanFeatures=true \
-  -Ddata.wordnet=toydata/wordnet/dict \
-  -Ddata.embeddings=data/embeddings \
-  -Ddata.ontonotes5=data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations \
-  -Ddata.propbank.conll=../conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
-  -Ddata.propbank.frames=data/ontonotes-release-5.0-fixed-frames/frames \
+  -Ddata.framenet.root=${DATA_HOME} \
+  -Ddata.wordnet=${DATA_HOME}/wordnet/dict \
+  -Ddata.embeddings=${DATA_HOME}/embeddings \
+  -Ddata.ontonotes5=/export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \
+  -Ddata.propbank.conll=${DATA_HOME}/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
+  -Ddata.propbank.frames=${DATA_HOME}/ontonotes-release-5.0-fixed-frames/frames \
   -DdisallowConcreteStanford=false \
   -DaddStanfordParses=false \
   -DrealTestSet=true \
@@ -110,7 +122,7 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -Dl2Penalty=${L2_LOCAL} \
   -DglobalL2Penalty=${L2_GLOBAL} \
   -DsecsBetweenShowingWeights=60 \
-  -DtrainTimeLimit=`echo "48 * 60" | bc` \
+  -DtrainTimeLimit=${TIME_LIMIT_MINS} \
   -DestimateLearningRateFreq=0 \
   -DfeatCoversFrames=false \
   edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \

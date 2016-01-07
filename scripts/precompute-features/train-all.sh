@@ -45,12 +45,16 @@ cp $JAR $JAR_STABLE
 
 
 if [[ $PROPBANK == "true" ]]; then
-  MEM_OFFSET=22
-  MEM_SLOPE="0.11"
+  #MEM_OFFSET=22
+  #MEM_SLOPE="0.11"
+  MEM_OFFSET=16
+  MEM_SLOPE="0.09"
   NTRAIN_VALUES=(1000 3000 9000 27000 0)
 elif [[ $PROPBANK == "false" ]]; then
+  #MEM_OFFSET=7
+  #MEM_SLOPE="0.04"
   MEM_OFFSET=7
-  MEM_SLOPE="0.04"
+  MEM_SLOPE="0.035"
   NTRAIN_VALUES=(100 500 1000 2000 0)
 else
   echo "must provide a boolean for propbank: $PROPBANK"
@@ -73,7 +77,7 @@ for PERCEPTRON in "true" "false"; do
 if [[ $SET_PERCEPTRON != "#" && $SET_PERCEPTRON != $PERCEPTRON ]]; then
   continue
 fi
-for BEAM_SIZE in 1 4 16 64; do
+for BEAM_SIZE in 1 2 4 8 16; do
 if [[ $SET_BEAM_SIZE != "#" && $SET_BEAM_SIZE != $BEAM_SIZE ]]; then
   continue
 fi
@@ -87,7 +91,8 @@ fi
 # twice as slow as previously, but i only do it once (sweep-dim)...
 # If I remove mix and 640, then
 # 3 * 2 = 6  => just as fast as before (faster actually, smaller feature sets)
-for DIM in 8-40 16-40 32-40 mix-40 8-160 16-160 32-160 mix-160 8-640 16-640 32-640 mix-640; do
+for DIM in 8-40 16-40 32-40 64-40 mix-40 8-160 16-160 32-160 64-160 mix-160 8-640 16-640 32-640 64-640 mix-640; do
+#for DIM in 8-40 16-40 32-40 mix-40 8-160 16-160 32-160 mix-160 8-640 16-640 32-640 mix-640; do
 #for DIM in 16-40 32-40 mix-40 8-160 16-160 32-160 mix-160 8-640 16-640 32-640; do
 if [[ $SET_DIM != "#" && $SET_DIM != $DIM ]]; then
   continue
@@ -98,6 +103,7 @@ if [[ $SET_REG != "#" && $SET_REG != $REG ]]; then
 fi
 L2_LOCAL="1e-$REG"
 L2_GLOBAL="5e-$REG"
+
 for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
   D=`echo $DIM | cut -d'-' -f2`
   MEM=`echo "$MEM_SLOPE * $D + $MEM_OFFSET" | bc | perl -pe 's/(\d+)\.\d+/\1/'`
@@ -108,10 +114,11 @@ for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
   fi
   MEM_SGE=`echo "$MEM + 4" | bc`
   echo "MEM=$MEM MEM_SGE=$MEM_SGE"
+  F_HOME=/home/hltcoe/twolfe/fnparse
   if [[ $PROPBANK == "true" ]]; then
-    FF=scripts/having-a-laugh/propbank-${DIM}.fs
+    FF=$F_HOME/scripts/having-a-laugh/propbank-${DIM}.fs
   elif [[ $PROPBANK == "false" ]]; then
-    FF=scripts/having-a-laugh/framenet-${DIM}.fs
+    FF=$F_HOME/scripts/having-a-laugh/framenet-${DIM}.fs
   else
     echo "need boolean: $PROPBANK"
     exit 2
@@ -123,6 +130,10 @@ for MODE in FULL LOCAL ARG-LOCATION NUM-ARGS ROLE-COOC; do
   KEY="$PREFIX-${REG}-$NTRAIN-$FORCE_LEFT_RIGHT-$PERCEPTRON-$BEAM_SIZE-$ORACLE_MODE-$DIM-$MODE"
   WDJ="$WD/$KEY"
   mkdir -p $WDJ
+
+  echo "a L2_LOCAL=$L2_LOCAL"
+  echo "a L2_GLOBAL=$L2_GLOBAL"
+
   qsub \
     -l "mem_free=${MEM_SGE}G" \
     -N "$KEY" \

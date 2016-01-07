@@ -350,14 +350,14 @@ java -cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server edu
 #WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/experiments/dropoutY-noreg
 #DD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 
-#WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/experiments-nov7
-#DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a
-#IS_PROPBANK="false"
-#DEFAULT_DIM=32-160
-WD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a/experiments-nov7
-DD=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/propbank/oct21a
-IS_PROPBANK="true"
-DEFAULT_DIM=32-640
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet/experiment/jan5a
+DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet
+IS_PROPBANK="false"
+DEFAULT_DIM=32-160
+#WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank/experiment/jan5a
+#DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank
+#IS_PROPBANK="true"
+#DEFAULT_DIM=32-640
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1
