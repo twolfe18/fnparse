@@ -548,16 +548,17 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     // Towards
     double rScale = 1;
     GeneralizedCoef rand;
-    GeneralizedCoef model;
     if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.RAND_MIN)
       rand = new GeneralizedCoef.Rand(rScale);
     else
       rand = GeneralizedCoef.ZERO;
-    double mScale = 0;
-    if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.MAX)
-      model = new GeneralizedCoef.Model(-mScale, true);
+    GeneralizedCoef model;
+    if (oracleMode == OracleMode.RAND)
+      model = new GeneralizedCoef.Model(0, true);   // don't use GeneralizedCoef.ZERO b/c we don't update towards it
+    else if (oracleMode == OracleMode.RAND_MAX || oracleMode == OracleMode.MAX)
+      model = new GeneralizedCoef.Model(-1, true);
     else
-      model = new GeneralizedCoef.Model(+mScale, true);
+      model = new GeneralizedCoef.Model(+1, true);
     HowToSearchImpl htsOracle = new HowToSearchImpl(
         model,
         new GeneralizedCoef.Loss.Oracle(),

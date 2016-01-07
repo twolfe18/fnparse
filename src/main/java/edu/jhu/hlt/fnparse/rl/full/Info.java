@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -163,6 +164,10 @@ public class Info implements Serializable, HasCounts, HasRandom {
     this.config = config;
     this.setDecodeCoefs();
 
+    // deprecated
+//    ExperimentProperties c = ExperimentProperties.getInstance();
+//    this.config.roleDependsOnFrame = c.getBoolean("roleDependsOnFrame");
+
 //    RuntimeException e = new RuntimeException();
 //    for (StackTraceElement ste : e.getStackTrace()) {
 //      System.out.println(ste);
@@ -187,17 +192,21 @@ public class Info implements Serializable, HasCounts, HasRandom {
     return config.frPacking.getFrameIndex();
   }
 
+  public RolePacking getRPacking() {
+    return config.rPacking;
+  }
   public FrameRolePacking getFRPacking() {
     return config.frPacking;
   }
 
   public boolean roleDependsOnFrame() {
-    ExperimentProperties config = ExperimentProperties.getInstance();
-    if (config.getBoolean("overrideRoleDependsOnFrame", true))
-      return true;
-    boolean b = getConfig().roleDependsOnFrame;
-    assert b == !config.getBoolean("propbank");
-    return b;
+//    ExperimentProperties config = ExperimentProperties.getInstance();
+//    if (config.getBoolean("overrideRoleDependsOnFrame", true))
+//      return true;
+//    boolean b = getConfig().roleDependsOnFrame;
+//    assert b == !config.getBoolean("propbank");
+//    return b;
+    return config.roleDependsOnFrame;
   }
 
   public LabelIndex getLabel() {
@@ -296,6 +305,11 @@ public class Info implements Serializable, HasCounts, HasRandom {
     double mScale = 1;
     double rScale = 1;
     switch (m) {
+    case RAND:
+      return setSameHTS(new HowToSearchImpl(
+          GeneralizedCoef.ZERO,
+          cL,
+          new GeneralizedCoef.Rand(rScale)));
     case RAND_MIN:
       return setSameHTS(new HowToSearchImpl(
           new GeneralizedCoef.Model(+mScale, true),

@@ -14,6 +14,7 @@ import java.util.Map;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -37,7 +38,6 @@ import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme.SortEggsMode;
 import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
@@ -81,8 +81,6 @@ public class FModel implements Serializable {
 //  private CachedFeatures cachedFeatures;
   private FNParseTransitionScheme ts;
 
-
-  // LH's max violation
   private boolean maxViolation;
   public PerceptronUpdateMode perceptronUpdateMode;
 
@@ -103,23 +101,17 @@ public class FModel implements Serializable {
     }
 
     rtConf = config;
-    maxViolation = true; //p.getBoolean("perceptron");
+    maxViolation = true;
     perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
-//        p.getBoolean("maxViolation", true)
-//        ? PerceptronUpdateMode.MAX_VIOLATION
-//            : PerceptronUpdateMode.EARLY;
+    // OracleMode is what modulates behavior
     Log.info("[main] perceptron=" + maxViolation
         + " mode=" + perceptronUpdateMode
         + " oracleMode=" + rtConf.oracleMode);
 
     conf = new Config();
     conf.frPacking = new FrameRolePacking(fi);
+    conf.rPacking = new RolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
-
-    // TODO Remove, this is deprecate (FNParseTS has weights now)
-//    int l2UpdateInterval = 32;
-//    int dimension = 1;  // Not using the weights in here, don't waste space
-//    conf.weights = new GeneralizedWeights(conf, null, dimension, l2UpdateInterval);
 
     if (pruningMode != null)
       drp = new DeterministicRolePruning(pruningMode, null, null);
@@ -128,11 +120,8 @@ public class FModel implements Serializable {
     timer = new MultiTimer.ShowPeriodically(15);
 
     Primes primes = new Primes(ExperimentProperties.getInstance());
-//    CachedFeatures params = null;
     CFLike params = null;
     ts = new FNParseTransitionScheme(params, primes);
-    if (maxViolation && ts.sortEggsMode != SortEggsMode.NONE)
-      Log.warn("[main] perceptron=true and sorting eggs?! don't do this");
   }
 
   public FNParseTransitionScheme getTransitionSystem() {
@@ -147,10 +136,7 @@ public class FModel implements Serializable {
     return conf;
   }
 
-  // Needed unless you setup syntactic parsers
-//  public void setCachedFeatures(CachedFeatures cf) {
   public void setCachedFeatures(CFLike cf) {
-//    drp.cachedFeatures = cf;
     assert cf != null;
     ts.setCachedFeatures(cf);
   }
@@ -247,9 +233,9 @@ public class FModel implements Serializable {
     CoefsAndScoresAdjoints mvB = new CoefsAndScoresAdjoints(mvInf.htsConstraints, mvSc);
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("oracle terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("oracle terminal state: (overfit=" + ts.featOverfit + ")");
       oracleSt.getRoot().show(System.out);
-      Log.info("MV terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("MV terminal state: (overfit=" + ts.featOverfit + ")");
       mvSt.getRoot().show(System.out);
     }
 
@@ -358,7 +344,7 @@ public class FModel implements Serializable {
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
     State2<Info> beamLast = i.get1();
     if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH_FINAL_SOLN) {
-      Log.info("decode terminal state: (overfit=" + ts.useOverfitFeatures + ")");
+      Log.info("decode terminal state: (overfit=" + ts.featOverfit + ")");
       beamLast.getRoot().show(System.out);
     }
     FNParse yhat = ts.decode(beamLast);
@@ -528,8 +514,8 @@ public class FModel implements Serializable {
   }
 
   public static void main(String[] args) throws Exception {
-//    main3(args);
-    main2(args);
+    main3(args);
+//    main2(args);
 //    main1(args);
   }
 
@@ -611,6 +597,7 @@ public class FModel implements Serializable {
     return pi;
   }
 
+  @SuppressWarnings("unchecked")
   public static List<CachedFeatures.Item> fooMemo() {
     File f = new File("/tmp/fooMemo");
     if (f.isFile())
@@ -707,7 +694,6 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-    m.ts.useOverfitFeatures = false;
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
     int checked = 0;
@@ -860,10 +846,14 @@ public class FModel implements Serializable {
   // Lets see if we can get decent performance on LOOCV
   public static void main3(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.put("oracleMode", "RAND_MAX");
-    config.put("useGlobalFeatures", "true");
-    config.put("forceLeftRightInference", "true");
-    config.put("beamSize", "8");
+    config.putIfAbsent("oracleMode", "RAND");
+    config.putIfAbsent("useGlobalFeatures", "true");
+    config.putIfAbsent("forceLeftRightInference", "false");
+    config.putIfAbsent("beamSize", "1");
+
+//    config.put("globalFeatArgLocSimple", "false");
+//    config.put("globalFeatNumArgs", "false");
+//    config.put("globalFeatRoleCoocSimple", "false");
 
     FModel m = getFModel(config);
 
@@ -888,8 +878,9 @@ public class FModel implements Serializable {
     boolean mimicRT = true;
     if (mimicRT) {
       File dd = new File("data/debugging/");
-      BiAlph bialph = new BiAlph(new File(dd, "coherent-shards-filtered-small/alphabet.txt"), LineMode.ALPH);
-      File featureSetFile = new File(dd, "propbank-16-40.fs");
+      File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
+      BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+      File featureSetFile = config.getExistingFile("featureSet", new File(dd, "propbank-16-640.fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
@@ -921,7 +912,9 @@ public class FModel implements Serializable {
 //        else
 //          m.ts.takeAverageOfWeights();
         m.ts.takeAverageOfWeights();
-        showLoss(test, m, "after-epoch-" + i);
+        showLoss(test, m, "after-epoch-" + i + "-TEST");
+        int tn = Math.min(100, train.size());
+        showLoss(train.subList(0, tn), m, "after-epoch-" + i + "-TRAIN");
       }
 
       // See what we get on the test example

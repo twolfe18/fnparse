@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full;
 import java.io.Serializable;
 import java.util.Random;
 
+import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.rl.full.State.GeneralizedWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -14,6 +15,7 @@ public class Config implements Serializable {
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
 
+  /** @deprecated */
   public boolean roleDependsOnFrame = false;
 
   /** Structural constraints **************************************************/
@@ -85,6 +87,7 @@ public class Config implements Serializable {
   // Should be set from above
   public PrimesAdapter primes = null;
   public FrameRolePacking frPacking = null;
+  public RolePacking rPacking = null;
   public Random rand = new Random(9001);
 
   /** @deprecated These are now stored in {@link FNParseTransitionScheme} */

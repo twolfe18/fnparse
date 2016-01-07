@@ -11,6 +11,7 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 import org.apache.commons.math3.random.ISAACRandom;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -103,7 +104,24 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // Features
 //  private CachedFeatures cachedFeatures;
   private CFLike cachedFeatures;
-  public boolean useOverfitFeatures = false;
+  public final boolean featOverfit;
+  public final boolean featProdBase;     // feature for just (t,s), center of shrinkage for others
+  public final boolean featProdF;    // finer than (t,s) feature, but ignores role
+  public final boolean featProdFK;   // perhaps not necessary for propbank?
+  public final boolean featProdK;    // perhaps not sufficient for framenet?
+
+//  public static ProductIndex featProdPI_BASE = new ProductIndex(0, 4);
+//  public static ProductIndex featProdPI_F = new ProductIndex(1, 4);
+//  public static ProductIndex featProdPI_FK = new ProductIndex(2, 4);
+//  public static ProductIndex featProdPI_K = new ProductIndex(3, 4);
+  public static final ProductIndex PI_DYN = new ProductIndex(0, 8);
+  public static final ProductIndex PI_STAT_T = new ProductIndex(1, 8);
+  public static final ProductIndex PI_STAT_F = new ProductIndex(2, 8);
+  public static final ProductIndex PI_STAT_K = new ProductIndex(3, 8);
+  public static final ProductIndex PI_STAT_S = new ProductIndex(4, 8);
+  public static final ProductIndex PI_STAT_S_F = new ProductIndex(5, 8);
+  public static final ProductIndex PI_STAT_S_FK = new ProductIndex(6, 8);
+  public static final ProductIndex PI_STAT_S_K = new ProductIndex(7, 8);
 
   // Weights
   public WeightsInfo wHatch, wSquash;
@@ -165,7 +183,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       wGlobal.maybeApplyL2Reg();
   }
 
-//  public FNParseTransitionScheme(CachedFeatures cf, Primes primes) {
   public FNParseTransitionScheme(CFLike cf, Primes primes) {
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
@@ -181,7 +198,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       oneAtATime = TFKS.F;
       sortEggsMode = SortEggsMode.BY_KS;
     }
-//    Node2.MYOPIC_LOSS = config.getBoolean("perceptron");
+
+    this.featOverfit = config.getBoolean("featOverfit", false);
+    this.featProdBase = config.getBoolean("featProdBase", true);
+    this.featProdF = config.getBoolean("featProdF", true);
+    this.featProdFK = config.getBoolean("featProdFK", true);
+    this.featProdK = config.getBoolean("featProdK", true);
 
     boolean g = config.getBoolean("useGlobalFeatures", true);
     LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
@@ -215,6 +237,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
+      Log.info("[main] featOverfit=" + featOverfit);
+      Log.info("[main] featProdBase=" + featProdBase);
+      Log.info("[main] featProdF=" + featProdF);
+      Log.info("[main] featProdFK=" + featProdFK);
+      Log.info("[main] featProdK=" + featProdK);
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
@@ -776,7 +803,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
     TFKS p = consPrefix(removeMe, n.prefix, info);
     List<String> feats = new ArrayList<>();
-    if (useOverfitFeatures) {
+    if (featOverfit) {
       feats.add(p.str());
     } else {
       feats.add("intercept_" + egg.type);
@@ -802,7 +829,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   private List<ProductIndex> dynFeats2(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
-    ProductIndex base = ProductIndex.FALSE;
     for (String fs : dynFeats1(n, info)) {
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
@@ -810,7 +836,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
           + " fs=" + fs);
       }
-      addTo.add(base.prod(i, dimension));
+      addTo.add(PI_DYN.prod(i, dimension));
     }
     return addTo;
   }
@@ -824,10 +850,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
-    ProductIndex base = ProductIndex.TRUE;    // dynamic features get base=FALSE
-
     // TODO Same refactoring as in dynFeats1
-    if (useOverfitFeatures) {
+    if (featOverfit) {
       TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
       TFKS prefix = consPrefix(removeMe, motherPrefix, info);
       String fs = prefix.str();
@@ -837,18 +861,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
           + " fs=" + fs);
       }
-      addTo.add(base.destructiveProd(i)); // destroys card, can't prod in any more features
+      addTo.add(PI_STAT_S.destructiveProd(i)); // destroys card, can't prod in any more features
     } else {
-
-      // Condition on the node type.
-      // NOTE: This does not specify the *values* on the prefix, only the type.
-      base = base.prod(egg.type + 1, 4 + 1);
 
       // What to do if this is a T-valued or F-valued egg?
       // The only eggs which will be present are positive examples, so one indicator feature should be sufficient
       if (motherPrefix == null || motherPrefix.car().type == TFKS.T) {
         // I'm ok with this possible collision...
-        addTo.add(base.prod(42, dimension));
+        addTo.add(PI_STAT_T.prod(42, dimension));
         return addTo;
       }
 
@@ -856,7 +876,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         // Simple features for k-valued children
         assert egg.type == TFKS.K;
         int k = egg.value;
-        ProductIndex fk = base
+        ProductIndex fk = PI_STAT_K
             .prod(motherPrefix.f, info.numFrames())
             .prod(k, numRoles(motherPrefix, info));
         addTo.add(fk);
@@ -871,28 +891,47 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Span t = Span.decodeSpan(motherPrefix.t, sentLen);
         Span s = Span.decodeSpan(egg.value, sentLen); assert egg.type == TFKS.S;
         FrameIndex fi = info.getFrameIndex();
-        Frame f = fi.getFrame(motherPrefix.f);
-        int k, K;
-        if (info.roleDependsOnFrame()) {
-          FrameRolePacking frp = info.getFRPacking();
-          k = frp.index(f, motherPrefix.k);
-          K = frp.size();
-        } else {
-          k = motherPrefix.k;
-          K = f.numRoles();
-        }
+        Frame frame = fi.getFrame(motherPrefix.f);
 
         // These are exact feature indices (from disk, who precompute pipeline)
         List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
 
-        // Take the product of these (t,s) features with (f,k).
-        // ProductIndexAdjoints will take the modulo the weights size as late as possible.
-        for (ProductIndex pi : feats) {
-          long i = pi.getProdFeature();
-          ProductIndex p = base.prod(0, K+1).destructiveProd(i);
-          ProductIndex pp = base.prod(k+1, K+1).destructiveProd(i);
-          addTo.add(p);
-          addTo.add(pp);
+        if (featProdBase) {
+          for (ProductIndex pi : feats) {
+            long i = pi.getProdFeature();
+            addTo.add(PI_STAT_S.destructiveProd(i));
+          }
+        }
+
+        if (featProdF) {
+          int f = frame.getId();
+          int F = fi.getNumFrames();
+          for (ProductIndex pi : feats) {
+            long i = pi.getProdFeature();
+            addTo.add(PI_STAT_S_F.prod(f, F).destructiveProd(i));
+          }
+        }
+
+        if (featProdFK) {
+          FrameRolePacking frp = info.getFRPacking();
+          int fk = frp.index(frame, motherPrefix.k);
+          int FK = frp.size();
+          for (ProductIndex pi : feats) {
+            long i = pi.getProdFeature();
+            addTo.add(PI_STAT_S_FK.prod(fk, FK).destructiveProd(i));
+          }
+        }
+
+        if (featProdK) {
+//          int k = motherPrefix.k;
+//          int K = frame.numRoles();
+          RolePacking rp = info.getRPacking();
+          int k = rp.getRole(frame, motherPrefix.k);
+          int K = rp.size();
+          for (ProductIndex pi : feats) {
+            long i = pi.getProdFeature();
+            addTo.add(PI_STAT_S_K.prod(k, K).destructiveProd(i));
+          }
         }
 
         return addTo;
@@ -1058,7 +1097,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public static void main(String[] args) {
-    ExperimentProperties.init(args);
+    ExperimentProperties config = ExperimentProperties.init(args);
+    config.put("featOverfit", "true");
 
     DEBUG_GEN_EGGS = true;
     AbstractTransitionScheme.DEBUG = false;
@@ -1069,7 +1109,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
     FNParseTransitionScheme ts = m.getTransitionSystem();
-    ts.useOverfitFeatures = true;
 
     boolean thinKS = true;  // prune out some wrong answers to make the tree smaller (easier to see)
     Info inf = m.getPredictInfo(y, thinKS);

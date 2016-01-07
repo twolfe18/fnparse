@@ -52,11 +52,6 @@ public class ShimModel {
     reranker = null;
     conf = null;
     fmodel = m;
-    if (ExperimentProperties.getInstance().getBoolean("FModel.overfitFeatures", false)) {
-      Log.warn("DOING A DUMB THING, OVERFITTING WITH WITH CACHEDFEATURES...");
-      m.getTransitionSystem().useOverfitFeatures = true;
-    }
-    Log.info("[main] ts.useOverfitFeatures=" + m.getTransitionSystem().useOverfitFeatures);
     verbose = ExperimentProperties.getInstance().getBoolean("verbose.ShimModel", false);
   }
 
