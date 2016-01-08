@@ -854,6 +854,10 @@ public class FModel implements Serializable {
     config.putIfAbsent("forceLeftRightInference", "false");
     config.putIfAbsent("beamSize", "1");
 
+    Log.info("oracleMode=" + config.getString("oracleMode"));
+    Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));
+    Log.info("beamSize=" + config.getInt("beamSize"));
+
 //    config.put("globalFeatArgLocSimple", "false");
 //    config.put("globalFeatNumArgs", "false");
 //    config.put("globalFeatRoleCoocSimple", "false");

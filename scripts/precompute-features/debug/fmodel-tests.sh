@@ -1,7 +1,7 @@
 #$ -j y
 #$ -V
 #$ -l h_rt=72:00:00
-#$ -l mem_free=5G
+#$ -l mem_free=8G
 #$ -l num_proc=1
 #$ -S /bin/bash
 
@@ -17,13 +17,25 @@ if [[ ! -f $JAR ]]; then
 fi
 
 DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank
+DATA_HOME=/export/projects/twolfe/fnparse-data
 
-java -cp $JAR -ea -server -Xmx4G edu.jhu.hlt.fnparse.rl.full.FModel \
+java -cp $JAR -ea -server -Xmx6G -XX:+UseSerialGC \
+  edu.jhu.hlt.fnparse.rl.full.FModel \
   fooFeatureFile $DD/coherent-shards-filtered-small/features/shard250.txt \
   bialph $DD/coherent-shards-filtered-small/alphabet.txt \
   featureSetParent /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh \
   learningRate 0.1 \
+  sortEggsMode BY_KS \
+  oneAtATime 1 \
   maxIters 30 \
+  propbank true \
+  data.framenet.root ${DATA_HOME} \
+  data.wordnet ${DATA_HOME}/wordnet/dict \
+  data.embeddings ${DATA_HOME}/embeddings \
+  data.ontonotes5 /export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \
+  data.propbank.conll ${DATA_HOME}/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
+  data.propbank.frames ${DATA_HOME}/ontonotes-release-5.0-fixed-frames/frames \
+  primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
   $@
 
 echo "ret code: $?"
