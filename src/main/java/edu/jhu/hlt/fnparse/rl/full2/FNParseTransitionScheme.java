@@ -191,7 +191,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.primes = primes;
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode"));
+    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode", "BY_KS"));
     oneAtATime = config.getInt("oneAtATime", TFKS.F);
     // if (config.getBoolean("forceLeftRightInference")) {
     //   oneAtATime = TFKS.K;
@@ -203,7 +203,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     this.featOverfit = config.getBoolean("featOverfit", false);
     this.featProdBase = config.getBoolean("featProdBase", true);
-    this.featProdF = config.getBoolean("featProdF", true);
+    this.featProdF = config.getBoolean("featProdF", false);
     this.featProdFK = config.getBoolean("featProdFK", true);
     this.featProdK = config.getBoolean("featProdK", true);
 

@@ -25,8 +25,6 @@ java -cp $JAR -ea -server -Xmx6G -XX:+UseSerialGC \
   bialph $DD/coherent-shards-filtered-small/alphabet.txt \
   featureSetParent /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh \
   learningRate 0.1 \
-  sortEggsMode BY_KS \
-  oneAtATime 1 \
   maxIters 30 \
   propbank true \
   data.framenet.root ${DATA_HOME} \

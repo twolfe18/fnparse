@@ -853,6 +853,7 @@ public class FModel implements Serializable {
     config.putIfAbsent("useGlobalFeatures", "true");
     config.putIfAbsent("forceLeftRightInference", "false");
     config.putIfAbsent("beamSize", "1");
+    config.putIfAbsent("oneAtATime", "" + TFKS.F);
 
     Log.info("oracleMode=" + config.getString("oracleMode"));
     Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));

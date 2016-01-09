@@ -33,22 +33,10 @@ qsub -N oaat-S -o $1 ./fmodel-tests.sh oneAtATime 3 # S
 
 #for m in RAND MIN RAND_MIN RAND_MAX MAX; do
 for m in RAND MIN; do
-  for b in 2 4 8 16 32; do
+  for b in 2 4 8 16 32 64; do
     qsub -N beam$b-oracle$m -o $1 ./fmodel-tests.sh beamSize $b oracleMode $m
   done
 done
-
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-640.fs
-#qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-640.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-640.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-640.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-640.fs
-
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-160.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-160.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-160.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-160.fs
-qsub -N tune-FS -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-160.fs
 
 # ablate one
 qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA false ARG_LOC_TA_TA_F true ARG_LOC_TA_TA_FK true ARG_LOC_TA_TA_K true
@@ -75,10 +63,22 @@ qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM
 qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA true NUM_ARGS_TA_F true NUM_ARGS_TA_FK true NUM_ARGS_TA_K false
 
 for m in RAND_MIN RAND_MAX MAX; do
-  for b in 2 4 8 16 32; do
+  for b in 2 4 8 16 32 64; do
     qsub -N beam$b-oracle$m -o $1 ./fmodel-tests.sh beamSize $b oracleMode $m
   done
 done
+
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-640.fs
+
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-160.fs
 
 
 qinfo
