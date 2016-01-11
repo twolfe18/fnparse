@@ -68,16 +68,18 @@ for m in RAND_MIN RAND_MAX MAX; do
   done
 done
 
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-4-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-640.fs
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-640.fs
+#qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-640.fs
 
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-4-160.fs
 qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-160.fs
 qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-160.fs
 qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-160.fs
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-160.fs
+#qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-160.fs
 qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-160.fs
 
 

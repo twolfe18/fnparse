@@ -90,6 +90,32 @@ public class LLSSPatF extends LLSSP {
   public static final ProductIndex NUM_ARGS_TA_K =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA_K", true) ? new ProductIndex(15, 16) : null;
 
+  public static void logGlobalFeatures(boolean oneLine) {
+    String sep = oneLine ? " " : "\n";
+    StringBuilder sb = new StringBuilder();
+    sb.append("[main]");
+    sb.append(sep + "LLSSPatF.ARG_LOC=" + ARG_LOC);
+    sb.append(sep + "LLSSPatF.NUM_ARGS=" + NUM_ARGS);
+    sb.append(sep + "LLSSPatF.ROLE_COOC=" + ROLE_COOC);
+    sb.append(sep + "ARG_LOC_TA=" + ARG_LOC_TA);
+    sb.append(sep + "ARG_LOC_TA_F=" + ARG_LOC_TA_F);
+    sb.append(sep + "ARG_LOC_TA_FK=" + ARG_LOC_TA_FK);
+    sb.append(sep + "ARG_LOC_TA_K=" + ARG_LOC_TA_K);
+    sb.append(sep + "ARG_LOC_AA=" + ARG_LOC_AA);
+    sb.append(sep + "ARG_LOC_AA_F=" + ARG_LOC_AA_F);
+    sb.append(sep + "ARG_LOC_AA_FK=" + ARG_LOC_AA_FK);
+    sb.append(sep + "ARG_LOC_AA_K=" + ARG_LOC_AA_K);
+    sb.append(sep + "ROLE_COOC_TA=" + ROLE_COOC_TA);
+    sb.append(sep + "ROLE_COOC_TA_F=" + ROLE_COOC_TA_F);
+    sb.append(sep + "ROLE_COOC_TA_FK=" + ROLE_COOC_TA_FK);
+    sb.append(sep + "ROLE_COOC_TA_K=" + ROLE_COOC_TA_K);
+    sb.append(sep + "NUM_ARGS_TA=" + NUM_ARGS_TA);
+    sb.append(sep + "NUM_ARGS_TA_F=" + NUM_ARGS_TA_F);
+    sb.append(sep + "NUM_ARGS_TA_FK=" + NUM_ARGS_TA_FK);
+    sb.append(sep + "NUM_ARGS_TA_K=" + NUM_ARGS_TA_K);
+    Log.info(sb.toString());
+  }
+
   // Each entry in this is a prefix-sum of all of the global features/weights
   // that went into scoring the actions that lead to this list.
   public final LL<Adjoints> scores;

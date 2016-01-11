@@ -247,10 +247,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
-      Log.info("[main] LLSSPatF.ARG_LOC=" + LLSSPatF.ARG_LOC);
-      Log.info("[main] LLSSPatF.NUM_ARGS=" + LLSSPatF.NUM_ARGS);
-      Log.info("[main] LLSSPatF.ROLE_COOC=" + LLSSPatF.ROLE_COOC);
       Log.info("[main] useGlobalFeats=" + useGlobalFeats);
+      LLSSPatF.logGlobalFeatures(true);
     }
   }
 
