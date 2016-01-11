@@ -118,7 +118,7 @@ class Feature:
     self.hx = float(ar[2])
     self.selectivity = float(ar[3])
     self.order = int(ar[4])
-    self.int_templates = map(int, ar[4].split('*'))
+    self.int_templates = map(int, ar[5].split('*'))
     self.str_templates = ar[6].split('*')
     if template_name_bug:
       self.str_templates = map(undo_template_name_bug, self.str_templates)
@@ -127,16 +127,16 @@ class Feature:
 
   def __str__(self):
     if self.rank:
-      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f sel=%.4g %s>" % (self.rank, self.order, self.ig, self.hx, str(self.str_templates), self.selectivity)
-    return "<Feat n=%d ig=%.4f hx=%.4f sel=%.4g %s>" % (self.order, self.ig, self.hx, str(self.str_templates), self.selectivity)
+      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f sel=%.4g %s>" % (self.rank, self.order, self.ig, self.hx, self.selectivity, str(self.str_templates))
+    return "<Feat n=%d ig=%.4f hx=%.4f sel=%.4g %s>" % (self.order, self.ig, self.hx, self.selectivity, str(self.str_templates))
 
   def str_like_input(self):
     #y = self.ig / (1 + self.hx * self.hx)
     y = self.ig / (1 + self.hx)
     it = '*'.join(map(str, self.int_templates))
     st = '*'.join(self.str_templates)
-    return "%f\t%f\t%f\t%d\t%s\t%s" % \
-      (y, self.ig, self.hx, len(self.int_templates), it, st)
+    return "%f\t%f\t%f\t%f\t%d\t%s\t%s" % \
+      (y, self.ig, self.hx, self.selectivity, len(self.int_templates), it, st)
 
   def features_in_one_str(self):
     return '*'.join(self.str_templates)
@@ -179,7 +179,7 @@ def build_feature_set(raw_feature_file, output_ff=None, budget=10, sim_thresh=5.
         if sim_max[0]:
           similarity_feature(sim_max[0].str_templates, feat.str_templates, show=True)
       fs.append(feat)
-      of.write(f.str_like_input() + '\n')
+      of.write(feat.str_like_input() + '\n')
       of.flush()
       if len(fs) >= budget:
         break
