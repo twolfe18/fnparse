@@ -984,7 +984,7 @@ public class RerankerTrainer {
         List<Integer> batch = batchProvider.getBatch(conf.batchSize, conf.batchWithReplacement);
         double violation = hammingTrainBatch(r, batch, es, train, conf, iter, timerStr);
         conf.tHammingTrain.stop();
-        violationRunningAvg =violationRunningAvgLambda * violationRunningAvg
+        violationRunningAvg = violationRunningAvgLambda * violationRunningAvg
             + (1 - violationRunningAvgLambda) * violation;
 
         if (showViolation && iter % 10 == 0) {

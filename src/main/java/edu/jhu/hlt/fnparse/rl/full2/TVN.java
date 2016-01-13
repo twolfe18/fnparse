@@ -22,6 +22,13 @@ public class TVN {
   // numDetermined is a property dependent on where a TVN lies in Node2
   // NOTE: goldMatching will either go to FP or FN in MaxLoss
 
+  /*
+   * TODO numPossible and goldMatching are aggregates over the sub-tree. If
+   * Node2.INTERNAL_NODES_COUNT == false, then we have no mechanism for knowning
+   * if a node is needed in the INTERNAL_NODES_COUNT == true sense.
+   * => Add "boolean isPrefixOfGoldItem"?
+   */
+
   public TVN(int type, int value, int numPossible, int goldMatching, long prime) {
     assert goldMatching <= numPossible : "goldMatching=" + goldMatching + " numPossible=" + numPossible;
     this.type = type;

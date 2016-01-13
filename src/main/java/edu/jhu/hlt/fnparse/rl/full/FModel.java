@@ -5,13 +5,16 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -112,6 +115,7 @@ public class FModel implements Serializable {
     conf.frPacking = new FrameRolePacking(fi);
     conf.rPacking = new RolePacking(fi);
     conf.primes = new PrimesAdapter(new Primes(p), conf.frPacking);
+    conf.rand = new Random(9001);
 
     if (pruningMode != null)
       drp = new DeterministicRolePruning(pruningMode, null, null);
@@ -846,6 +850,21 @@ public class FModel implements Serializable {
     Info.logCounters();
   }
 
+  public static boolean overlappingIds(Collection<FNParse> a, Collection<FNParse> b) {
+    // Ensure a.size <= b.size
+    if (a.size() > b.size()) {
+      Collection<FNParse> t = a; a = b; b = t;
+    }
+    Set<String> s = new HashSet<>();
+    for (FNParse y : a)
+      s.add(y.getId());
+    for (FNParse y : b)
+      if (s.contains(y.getId()))
+        return true;
+    Log.info("no overlap between " + a.size() + " and " + b.size() + " ids");
+    return false;
+  }
+
   // Lets see if we can get decent performance on LOOCV
   public static void main3(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
@@ -855,6 +874,10 @@ public class FModel implements Serializable {
     config.putIfAbsent("beamSize", "1");
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
 
+//    config.putIfAbsent("sortEggsMode", "NONE");
+//    config.putIfAbsent("sortEggsMode", "BY_KS");
+    config.putIfAbsent("sortEggsMode", "BY_EXPECTED_UTILITY");
+
     Log.info("oracleMode=" + config.getString("oracleMode"));
     Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));
     Log.info("beamSize=" + config.getInt("beamSize"));
@@ -863,10 +886,12 @@ public class FModel implements Serializable {
 //    config.put("globalFeatNumArgs", "false");
 //    config.put("globalFeatRoleCoocSimple", "false");
 
+    AbstractTransitionScheme.DEBUG = false;
+
     FModel m = getFModel(config);
 
     List<CachedFeatures.Item> stuff = fooMemo();
-//    stuff = stuff.subList(0, 100);
+    stuff = stuff.subList(0, 200);
 
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
     m.setCachedFeatures(cfLike);
@@ -894,7 +919,7 @@ public class FModel implements Serializable {
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
 
-    int folds = 20;
+    int folds = 10;
     int n = stuff.size();
     for (int testIdx = 0; testIdx < stuff.size(); testIdx++) {
       Log.info("starting fold " + (testIdx % folds));
@@ -907,14 +932,15 @@ public class FModel implements Serializable {
           test.add(stuff.get(i).parse);
         else
           train.add(stuff.get(i).parse);
+      assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
       double lr = config.getDouble("learningRate", 0.1);
-      double maxIters = config.getInt("maxIters", 30);
+      double maxIters = config.getInt("maxIters", 12);
       m.ts.zeroOutWeights();
       for (int i = 0; i < maxIters; i++) {
         Log.info("[main] training on " + train.size() + " examples");
-        Collections.shuffle(train);
+        Collections.shuffle(train, m.getConfig().rand);
         for (FNParse y : train)
           m.getUpdate(y).apply(lr);
 //        if (i % 5 == 0 && i > 0)
@@ -922,6 +948,7 @@ public class FModel implements Serializable {
 //        else
 //          m.ts.takeAverageOfWeights();
         m.ts.takeAverageOfWeights();
+        assert !overlappingIds(train, test);
         showLoss(test, m, "after-epoch-" + i + "-TEST");
         int tn = Math.min(100, train.size());
         showLoss(train.subList(0, tn), m, "after-epoch-" + i + "-TRAIN");
@@ -929,6 +956,7 @@ public class FModel implements Serializable {
 
       // See what we get on the test example
       m.ts.setParamsToAverage();
+      assert !overlappingIds(train, test);
       showLoss(test, m, "on-fold-" + (testIdx%folds));
 //      FNParse yhat = m.predict(yTest);
 //      SentenceEval se = new SentenceEval(yTest, yhat);

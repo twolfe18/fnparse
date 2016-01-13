@@ -28,6 +28,9 @@ import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.EggWithStaticScore;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.ExpectedUtilityEggSorter;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -59,7 +62,19 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
 
+  /**
+   * This is confused: NONE does no sorting and the others sort all (k,s).
+   *
+   * There are two things here:
+   * boolean kScoreIsMaxOverS
+   * SortMode {
+   *   NONE,        // whatever order they came in
+   *   MODEL,       // model + rand
+   *   UTILITY,     // gain * logistic(hatch ~ model + rand)
+   * }
+   */
   public enum SortEggsMode {
+    BY_EXPECTED_UTILITY,   // sort by sign(y) * p(y; model)
     BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
 //    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
     NONE,     // K is in 0..K-1 order and S is in random order (shuffled)
@@ -592,14 +607,25 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Get or generate (k,s) eggs sorted according to a static score.
-    if (momPrefix != null && momPrefix.car().type == TFKS.F && sortEggsMode != SortEggsMode.NONE) {
+    if (momPrefix != null &&
+        (momPrefix.car().type == TFKS.F
+        || momPrefix.car().type == TFKS.K)
+        && sortEggsMode != SortEggsMode.NONE) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("using SortedEggCache to pre-compute static scores for eggs and sort them");
+
+      // TODO Right now we compute all K and S valued eggs, refactor so that
+      // K eggs are computed separately from S eggs. Originally did this because
+      // score(K egg) = max_S score(S egg), but its not clear that I should be
+      // doing this anymore (and SortedEggCache didn't even implement this, it
+      // used the static feature on K valued eggs, which was not a max).
+
       // Generate all (k,s) possibilities given the known (t,f)
       SortedEggCache eggs = info.getSortedEggs(momPrefix.t, momPrefix.f);
       if (eggs == null) {
         List<Pair<TFKS, EggWithStaticScore>> egF = new ArrayList<>();
         List<Pair<TFKS, EggWithStaticScore>> egK = new ArrayList<>();
+
         Frame f = getFrame(momPrefix, info);
         Span t = getTarget(momPrefix, info);
         List<Span> possArgSpans = info.getPossibleArgs(f, t);
@@ -609,6 +635,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         if (useContRoles || useRefRoles)
           throw new RuntimeException("implement me");
         for (int k = f.numRoles() - 1; k >= 0; k--) {
+
           int possK = subtreeSize(TFKS.K, k, momPrefix, info);
           int goldK = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
           long primeK = primeFor(TFKS.K, k);
@@ -620,10 +647,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //            modelK.showUpdatesWith = alph;
 //          }
 
+            if (goldK > 0)
+              Log.info("yay1");
+
           double randK = nextGaussian();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
-          egF.add(new Pair<>(prefixK, new EggWithStaticScore(
-              TFKS.K, k, possK, goldK, primeK, modelK, randK)));
+          EggWithStaticScore ef = new EggWithStaticScore(
+              TFKS.K, k, possK, goldK, primeK, modelK, randK);
+          egF.add(new Pair<>(prefixK, ef));
           for (Span argSpan : possArgSpans) {
             int s = Span.encodeSpan(argSpan, sentLen);
             int possS = subtreeSize(TFKS.S, s, prefixK, info);
@@ -656,17 +687,28 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
             double randS = nextGaussian();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
-            egK.add(new Pair<>(prefixS, new EggWithStaticScore(
-                TFKS.S, s, possS, goldS, primeS, staticScore, randS)));
+            EggWithStaticScore es = new EggWithStaticScore(
+                TFKS.S, s, possS, goldS, primeS, staticScore, randS);
+            egK.add(new Pair<>(prefixS, es));
           }
         }
-        eggs = new SortedEggCache(egF, egK, info.htsBeam);
+        if (sortEggsMode == SortEggsMode.BY_KS) {
+//          Log.info("this is being called: BY_KS");
+          eggs = new SortedEggCache(egF, egK, info.htsBeam);
+        } else if (sortEggsMode == SortEggsMode.BY_EXPECTED_UTILITY) {
+//          Log.info("this is being called: BY_EXPECTED_UTILITY");
+          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, info.htsBeam);
+        } else {
+          throw new RuntimeException("unknown mode: " + sortEggsMode);
+        }
         info.putSortedEggs(momPrefix.t, momPrefix.f, eggs);
       }
-      if (momType == TFKS.F)
+      if (momType == TFKS.F) {
         return eggs.getSortedEggs();
-      if (momType == TFKS.K)
+      }
+      if (momType == TFKS.K) {
         return eggs.getSortedEggs(momPrefix.k);
+      }
       throw new RuntimeException("wat: momType=" + momType);
     }
 
@@ -880,6 +922,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
             .prod(motherPrefix.f, info.numFrames())
             .prod(k, numRoles(motherPrefix, info));
         addTo.add(fk);
+        // TODO F and K features
         return addTo;
       }
 

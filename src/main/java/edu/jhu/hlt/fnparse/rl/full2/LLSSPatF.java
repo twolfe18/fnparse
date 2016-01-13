@@ -42,7 +42,7 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
 public class LLSSPatF extends LLSSP {
 
   public static boolean DEBUG = false;
-  public static boolean DEBUG_SHOW_BACKWARDS = true;
+  public static boolean DEBUG_SHOW_BACKWARDS = false;
 
   public static String[] DEBUG_ALPH = null;
 //      new String[ExperimentProperties.getInstance().getInt("hashingTrickDim", 1 << 24)];
@@ -229,7 +229,7 @@ public class LLSSPatF extends LLSSP {
       addTo.add(NUM_ARGS_TA_K.flatProd(na).prod(k, K));
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
-      throw new RuntimeException("re-implement me");
+      Log.warn("re-implement me");
 //      int pnai = pna.getProdFeatureSafe();
 ////      assert DEBUG_ALPH[pnai] == null;
 //      DEBUG_ALPH[pnai] = "numArgs=" + numArgs;
