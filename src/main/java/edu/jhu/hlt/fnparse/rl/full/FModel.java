@@ -875,8 +875,11 @@ public class FModel implements Serializable {
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
 
 //    config.putIfAbsent("sortEggsMode", "NONE");
-//    config.putIfAbsent("sortEggsMode", "BY_KS");
-    config.putIfAbsent("sortEggsMode", "BY_EXPECTED_UTILITY");
+    config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
+//    config.putIfAbsent("sortEggsMode", "BY_EXPECTED_UTILITY");
+
+//    config.putIfAbsent("sortEggsKmaxS", "false");
+    config.putIfAbsent("sortEggsKmaxS", "true");
 
     Log.info("oracleMode=" + config.getString("oracleMode"));
     Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));
@@ -891,7 +894,7 @@ public class FModel implements Serializable {
     FModel m = getFModel(config);
 
     List<CachedFeatures.Item> stuff = fooMemo();
-    stuff = stuff.subList(0, 200);
+//    stuff = stuff.subList(0, 200);
 
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
     m.setCachedFeatures(cfLike);

@@ -65,8 +65,9 @@ public class ExpectedUtilityEggSorter {
     public Adapter(
         List<Pair<TFKS, EggWithStaticScore>> fEggs,
         List<Pair<TFKS, EggWithStaticScore>> kEggs,
+        boolean fEggsAreMaxOverKEggs,
         HowToSearch howToScore) {
-      super(fEggs, kEggs, howToScore);
+      super(fEggs, kEggs, fEggsAreMaxOverKEggs, howToScore);
 
       // In super implementation, eggs will have hts score; for K valued eggs
       // (computed as a max_S) and S valued eggs. We just need to use this as a
@@ -75,7 +76,9 @@ public class ExpectedUtilityEggSorter {
       kEggsEU = new ExpectedUtilityEggSorter(howToScore);
       for (LLTVN cur = super.fEggs; cur != null; cur = cur.cdr()) {
         // Compute EU for K valued egg
-        SortedEggCache.EWSSMax egg = (SortedEggCache.EWSSMax) cur.car();
+        EggWithStaticScore egg = (EggWithStaticScore) cur.car();
+//        SortedEggCache.EWSSMax egg = (SortedEggCache.EWSSMax) cur.car();
+        assert fEggsAreMaxOverKEggs == (egg instanceof SortedEggCache.EWSSMax);
         kEggsEU.addEgg(egg);
 
         // Compute EU for S valued eggs

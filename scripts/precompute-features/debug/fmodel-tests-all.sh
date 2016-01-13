@@ -17,7 +17,17 @@ qsub -N ablate1-f -o $1 ./fmodel-tests.sh featProdF false
 qsub -N ablate1-fk -o $1 ./fmodel-tests.sh featProdFK false
 qsub -N ablate1-k -o $1 ./fmodel-tests.sh featProdK false
 
-qsub -N noEggSort -o $1 ./fmodel-tests.sh sortEggsMode NONE  # default is BY_KS
+# How to sort your eggs
+for m in NONE BY_MODEL_SCORE BY_EXPECTED_UTILITY; do
+  for kmax in true false; do
+    qsub -N sortEggs-$m-$kmax -o $1 ./fmodel-tests.sh sortEggsMode $m sortEggsKmaxS $kmax
+  done
+done
+
+# Learning rate
+for lr in 0.01 0.03 0.1 0.3 1.0; do
+  qsub -N learningRate-$lr -o $1 ./fmodel-tests.sh learningRate $lr
+done
 
 #f=/export/projects/twolfe/fnparse-output/experiments/debug/jan6a
 #qsub -o $1 ./fmodel-tests.sh oracleMode RAND
@@ -39,28 +49,28 @@ for m in RAND MIN; do
 done
 
 # ablate one
-qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA false ARG_LOC_TA_TA_F true ARG_LOC_TA_TA_FK true ARG_LOC_TA_TA_K true
-qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA true ARG_LOC_TA_TA_F false ARG_LOC_TA_TA_FK true ARG_LOC_TA_TA_K true
-qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA true ARG_LOC_TA_TA_F true ARG_LOC_TA_TA_FK false ARG_LOC_TA_TA_K true
-qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA true ARG_LOC_TA_TA_F true ARG_LOC_TA_TA_FK true ARG_LOC_TA_TA_K false
+qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA flip
+qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA_F flip
+qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA_FK flip
+qsub -N tune-argLoc1 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_TA_TA_K flip
 
 # ablate one
-qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA false ARG_LOC_AA_TA_F true ARG_LOC_AA_TA_FK true ARG_LOC_AA_TA_K true
-qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA true ARG_LOC_AA_TA_F false ARG_LOC_AA_TA_FK true ARG_LOC_AA_TA_K true
-qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA true ARG_LOC_AA_TA_F true ARG_LOC_AA_TA_FK false ARG_LOC_AA_TA_K true
-qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA true ARG_LOC_AA_TA_F true ARG_LOC_AA_TA_FK true ARG_LOC_AA_TA_K false
+qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA flip
+qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA_F flip
+qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA_FK flip
+qsub -N tune-argLoc2 -o $1 ./fmodel-tests.sh ANY_GLOBALS false ARG_LOC true ARG_LOC_AA_TA_K flip
 
 # ablate one
-qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA false ROLE_COOC_TA_F true ROLE_COOC_TA_FK true ROLE_COOC_TA_K true
-qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA true ROLE_COOC_TA_F false ROLE_COOC_TA_FK true ROLE_COOC_TA_K true
-qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA true ROLE_COOC_TA_F true ROLE_COOC_TA_FK false ROLE_COOC_TA_K true
-qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA true ROLE_COOC_TA_F true ROLE_COOC_TA_FK true ROLE_COOC_TA_K false
+qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA flip
+qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA_F flip
+qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA_FK flip
+qsub -N tune-roleCooc -o $1 ./fmodel-tests.sh ANY_GLOBALS false ROLE_COOC true ROLE_COOC_TA_K flip
 
 # ablate one
-qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA false NUM_ARGS_TA_F true NUM_ARGS_TA_FK true NUM_ARGS_TA_K true
-qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA true NUM_ARGS_TA_F false NUM_ARGS_TA_FK true NUM_ARGS_TA_K true
-qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA true NUM_ARGS_TA_F true NUM_ARGS_TA_FK false NUM_ARGS_TA_K true
-qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA true NUM_ARGS_TA_F true NUM_ARGS_TA_FK true NUM_ARGS_TA_K false
+qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA flip
+qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA_F flip
+qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA_FK flip
+qsub -N tune-numArgs -o $1 ./fmodel-tests.sh ANY_GLOBALS false NUM_ARGS true NUM_ARGS_TA_K flip
 
 for m in RAND_MIN RAND_MAX MAX; do
   for b in 2 4 8 16 32 64; do

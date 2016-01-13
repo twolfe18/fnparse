@@ -62,30 +62,19 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
 
-  /**
-   * This is confused: NONE does no sorting and the others sort all (k,s).
-   *
-   * There are two things here:
-   * boolean kScoreIsMaxOverS
-   * SortMode {
-   *   NONE,        // whatever order they came in
-   *   MODEL,       // model + rand
-   *   UTILITY,     // gain * logistic(hatch ~ model + rand)
-   * }
-   */
   public enum SortEggsMode {
-    BY_EXPECTED_UTILITY,   // sort by sign(y) * p(y; model)
-    BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
-//    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
-    NONE,     // K is in 0..K-1 order and S is in random order (shuffled)
+    BY_EXPECTED_UTILITY,
+    BY_MODEL_SCORE,
+    NONE,
   }
   // NOTE: We actually don't need features which say "this is the i^th egg"
   // because the global features applied in different orders will lead to things
   // being pushed off the beam at different times.
   // This is not to say that "i^th egg" features wont help...
   public SortEggsMode sortEggsMode = SortEggsMode.NONE;
-//  public SortEggsMode sortEggsMode = SortEggsMode.BY_KS;
-  // NOTE: Just take this from EperimentProperties in constructor
+  // If true, the static score of a K hatch is the max of the static scores of
+  // the S hatch actions beneath it.
+  public boolean sortEggsKmaxS = true;
 
   /*
    * Automatically hatches any nodes which are not s-valued.
@@ -117,7 +106,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  public Adjoints recallBias = new Adjoints.Constant(0);
 
   // Features
-//  private CachedFeatures cachedFeatures;
   private CFLike cachedFeatures;
   public final boolean featOverfit;
   public final boolean featProdBase;     // feature for just (t,s), center of shrinkage for others
@@ -125,10 +113,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public final boolean featProdFK;   // perhaps not necessary for propbank?
   public final boolean featProdK;    // perhaps not sufficient for framenet?
 
-//  public static ProductIndex featProdPI_BASE = new ProductIndex(0, 4);
-//  public static ProductIndex featProdPI_F = new ProductIndex(1, 4);
-//  public static ProductIndex featProdPI_FK = new ProductIndex(2, 4);
-//  public static ProductIndex featProdPI_K = new ProductIndex(3, 4);
   public static final ProductIndex PI_DYN = new ProductIndex(0, 8);
   public static final ProductIndex PI_STAT_T = new ProductIndex(1, 8);
   public static final ProductIndex PI_STAT_F = new ProductIndex(2, 8);
@@ -206,15 +190,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.primes = primes;
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode", "BY_KS"));
+    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode", "BY_MODEL_SCORE"));
+    sortEggsKmaxS = config.getBoolean("sortEggsKmaxS", true);
     oneAtATime = config.getInt("oneAtATime", TFKS.F);
-    // if (config.getBoolean("forceLeftRightInference")) {
-    //   oneAtATime = TFKS.K;
-    //   sortEggsMode = SortEggsMode.NONE;
-    // } else {
-    //   oneAtATime = TFKS.F;
-    //   sortEggsMode = SortEggsMode.BY_KS;
-    // }
 
     this.featOverfit = config.getBoolean("featOverfit", false);
     this.featProdBase = config.getBoolean("featProdBase", true);
@@ -260,6 +238,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] featProdFK=" + featProdFK);
       Log.info("[main] featProdK=" + featProdK);
       Log.info("[main] sortEggsMode=" + sortEggsMode);
+      Log.info("[main] sortEggsKmaxS=" + sortEggsKmaxS);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] useGlobalFeats=" + useGlobalFeats);
@@ -692,12 +671,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
             egK.add(new Pair<>(prefixS, es));
           }
         }
-        if (sortEggsMode == SortEggsMode.BY_KS) {
-//          Log.info("this is being called: BY_KS");
-          eggs = new SortedEggCache(egF, egK, info.htsBeam);
+        if (sortEggsMode == SortEggsMode.BY_MODEL_SCORE) {
+          eggs = new SortedEggCache(egF, egK, sortEggsKmaxS, info.htsBeam);
         } else if (sortEggsMode == SortEggsMode.BY_EXPECTED_UTILITY) {
-//          Log.info("this is being called: BY_EXPECTED_UTILITY");
-          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, info.htsBeam);
+          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, sortEggsKmaxS, info.htsBeam);
         } else {
           throw new RuntimeException("unknown mode: " + sortEggsMode);
         }
@@ -918,11 +895,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         // Simple features for k-valued children
         assert egg.type == TFKS.K;
         int k = egg.value;
-        ProductIndex fk = PI_STAT_K
-            .prod(motherPrefix.f, info.numFrames())
-            .prod(k, numRoles(motherPrefix, info));
-        addTo.add(fk);
-        // TODO F and K features
+//        ProductIndex fk = PI_STAT_K
+//            .prod(motherPrefix.f, info.numFrames())
+//            .prod(k, numRoles(motherPrefix, info));
+//        addTo.add(fk);
+        // F features don't discriminate K values
+        // K features may not generalize well, don't have time to tune this.
+        // Stick with just a FK feature here.
+        FrameRolePacking frp = info.getFRPacking();
+        int fk = frp.index(getFrame(motherPrefix, info), k);
+        int FK = frp.size();
+        addTo.add(PI_STAT_K.prod(fk, FK));
         return addTo;
       }
 

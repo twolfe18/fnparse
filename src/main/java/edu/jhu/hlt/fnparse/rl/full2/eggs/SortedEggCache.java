@@ -53,6 +53,7 @@ public class SortedEggCache {
 
   protected int t;
   protected int f;    // keep?
+  protected boolean fEggsAreMaxOverKEggs;
   protected LLTVN fEggs;                      // children of F node, K values
   protected IntObjectHashMap<LLTVN> k2Eggs;   // children of K node, S values
 
@@ -84,6 +85,7 @@ public class SortedEggCache {
   public SortedEggCache(
       List<Pair<TFKS, EggWithStaticScore>> fEggs,
       List<Pair<TFKS, EggWithStaticScore>> kEggs,
+      boolean fEggsAreMaxOverKEggs,
       HowToSearch howToScore) {
 
     /*
@@ -93,9 +95,10 @@ public class SortedEggCache {
      * does not yet know about loss (i.e. Node2).
      * Should we sort by search objective instead? Probably...
      */
+    this.fEggsAreMaxOverKEggs = fEggsAreMaxOverKEggs;
     final Map<Integer, EggWithStaticScore> kScores = initKEggs(kEggs, howToScore);
 
-    if (!Node2.INTERNAL_NODES_COUNT) {
+    if (kScores != null) {
       // fEggs should all be TVNS with score of Constant(0)
       // Sort by kEggs max score over all s for a given k
       // (low -> high)
@@ -191,7 +194,7 @@ public class SortedEggCache {
     Collections.sort(kEggs, byEggScore(howToScore, true));
 
     Map<Integer, EggWithStaticScore> kScores = null;
-    if (!Node2.INTERNAL_NODES_COUNT)
+    if (fEggsAreMaxOverKEggs)
       kScores = new HashMap<>();
 
     // Group-by k and check that (t,f) is the same for all
