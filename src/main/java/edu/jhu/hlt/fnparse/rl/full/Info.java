@@ -27,8 +27,8 @@ import edu.jhu.hlt.fnparse.rl.full.State.FI;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
-import edu.jhu.hlt.fnparse.rl.full2.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -54,18 +54,24 @@ public class Info implements Serializable, HasCounts, HasRandom {
     Log.info("nConstruct=" + COUNTER_CONSTRUCT);
   }
 
+
+  /* ************************************************************************ */
   // Put SortedEggCache here or in a sub-class of Node2?
   // newNode with type==K could create a new SortedEggCache...
   // I call newNode many times per (t,f) value... still need to cache them somewhere outside Node2
   private Map<IntPair, SortedEggCache> tf2SortedEggs = new HashMap<>();
+
   public void putSortedEggs(int t, int f, SortedEggCache eggs) {
     SortedEggCache old = tf2SortedEggs.put(new IntPair(t, f), eggs);
-    assert old == null : "should only be one egg cache per (t,f)";
+    assert old == null : "should only be one egg cache per (t,f,k)";
   }
+
   /** May return null if this value hasn't been computed yet */
   public SortedEggCache getSortedEggs(int t, int f) {
     return tf2SortedEggs.get(new IntPair(t, f));
   }
+
+  /* ************************************************************************ */
 
 
 

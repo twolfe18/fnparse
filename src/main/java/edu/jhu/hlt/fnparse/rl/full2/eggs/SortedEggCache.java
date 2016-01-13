@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.rl.full2;
+package edu.jhu.hlt.fnparse.rl.full2.eggs;
 
 import java.io.PrintStream;
 import java.util.Collections;
@@ -10,6 +10,11 @@ import java.util.Map;
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
+import edu.jhu.hlt.fnparse.rl.full2.Node2;
+import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.full2.TVN;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -23,10 +28,34 @@ import edu.jhu.prim.tuple.Pair;
 public class SortedEggCache {
   public static boolean DEBUG = true;
 
-  private int t;
-  private int f;    // keep?
-  private LLTVN fEggs;                      // children of F node, K values
-  private IntObjectHashMap<LLTVN> k2Eggs;   // children of K node, S values
+  /**
+   * When {@link Node2#INTERNAL_NODES_COUNT} == false, the K-valued eggs will
+   * always have goldMatching=0. Since {@link SortedEggCache} does an argmax
+   * over S valued eggs to compute a max model score, we can re-use that work
+   * to fix a design bug of that K valued egg not knowing if it has
+   * goldMatching > 0.
+   */
+  public static class EWSSMax extends EggWithStaticScore {
+    public final EggWithStaticScore maximalSValuedEgg;
+    public EWSSMax(TVN k, EggWithStaticScore maximalSValuedEgg) {
+      super(k.type, k.value, k.numPossible, k.goldMatching, k.prime,
+          maximalSValuedEgg.getModel(), maximalSValuedEgg.getRand());
+      assert k.type == TFKS.K;
+      assert maximalSValuedEgg.type == TFKS.S;
+      this.maximalSValuedEgg = maximalSValuedEgg;
+    }
+    public String toString() {
+      String s = super.toString();
+      String[] toks = s.split("\\s+", 2);
+      return toks[0] + " maximal.G=" + maximalSValuedEgg.goldMatching + " " + toks[1];
+    }
+  }
+
+  protected int t;
+  protected int f;    // keep?
+  protected boolean fEggsAreMaxOverKEggs;
+  protected LLTVN fEggs;                      // children of F node, K values
+  protected IntObjectHashMap<LLTVN> k2Eggs;   // children of K node, S values
 
   public static StepScores<?> e2ss(EggWithStaticScore egg) {
     // TODO We are sorting this list with the intention of doing as many
@@ -56,6 +85,7 @@ public class SortedEggCache {
   public SortedEggCache(
       List<Pair<TFKS, EggWithStaticScore>> fEggs,
       List<Pair<TFKS, EggWithStaticScore>> kEggs,
+      boolean fEggsAreMaxOverKEggs,
       HowToSearch howToScore) {
 
     /*
@@ -65,9 +95,10 @@ public class SortedEggCache {
      * does not yet know about loss (i.e. Node2).
      * Should we sort by search objective instead? Probably...
      */
+    this.fEggsAreMaxOverKEggs = fEggsAreMaxOverKEggs;
     final Map<Integer, EggWithStaticScore> kScores = initKEggs(kEggs, howToScore);
 
-    if (!Node2.INTERNAL_NODES_COUNT) {
+    if (kScores != null) {
       // fEggs should all be TVNS with score of Constant(0)
       // Sort by kEggs max score over all s for a given k
       // (low -> high)
@@ -102,7 +133,10 @@ public class SortedEggCache {
         feMod = kScores.get(k); // s-valued egg, not k-valued!
         assert feMod.type == TFKS.S : "feMode.type=" + feMod.type + " fe.type=" + fe.type;
         assert fe.type == TFKS.K : "feMode.type=" + feMod.type + " fe.type=" + fe.type;
-        feMod = fe.withScore(feMod.getModel(), feMod.getRand());
+
+//        feMod = fe.withScore(feMod.getModel(), feMod.getRand());
+        feMod = new EWSSMax(fe, feMod);
+
         if (AbstractTransitionScheme.DEBUG && DEBUG)
           System.out.println("k=" + k + " -> max_s model(k,s): " + howToScore.forwards(e2ss(feMod)));
       } else {
@@ -160,7 +194,7 @@ public class SortedEggCache {
     Collections.sort(kEggs, byEggScore(howToScore, true));
 
     Map<Integer, EggWithStaticScore> kScores = null;
-    if (!Node2.INTERNAL_NODES_COUNT)
+    if (fEggsAreMaxOverKEggs)
       kScores = new HashMap<>();
 
     // Group-by k and check that (t,f) is the same for all
@@ -215,14 +249,15 @@ public class SortedEggCache {
   }
 
   public void show(PrintStream ps) {
+    String prefix = "[SEC] ";
     int i = 0;
     for (LLTVN cur = fEggs; cur != null; cur = cur.cdr(), i++) {
       ps.println("fEggs[" + i + "]=" + cur.car());
     }
     for (int k : k2Eggs.keys()) {
-      ps.println("k=" + k);
+      ps.println(prefix + "k=" + k);
       for (LLTVN cur = k2Eggs.get(k); cur != null; cur = cur.cdr()) {
-        ps.println("\t" + cur.car());
+        ps.println(prefix + "\t" + cur.car());
       }
     }
   }

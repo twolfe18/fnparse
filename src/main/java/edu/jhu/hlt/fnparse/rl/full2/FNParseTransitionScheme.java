@@ -28,6 +28,9 @@ import edu.jhu.hlt.fnparse.rl.full.Primes;
 import edu.jhu.hlt.fnparse.rl.full.State;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.EggWithStaticScore;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.ExpectedUtilityEggSorter;
+import edu.jhu.hlt.fnparse.rl.full2.eggs.SortedEggCache;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
@@ -60,17 +63,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
 
   public enum SortEggsMode {
-    BY_KS,    // sort K eggs by k -> max_s score(k,s) and S nodes by score(k,s)
-//    BY_S,     // (kind of useless) sort S eggs by s -> score(k,s) and K nodes stay in 0..K-1 order
-    NONE,     // K is in 0..K-1 order and S is in random order (shuffled)
+    BY_EXPECTED_UTILITY,
+    BY_MODEL_SCORE,
+    NONE,
   }
   // NOTE: We actually don't need features which say "this is the i^th egg"
   // because the global features applied in different orders will lead to things
   // being pushed off the beam at different times.
   // This is not to say that "i^th egg" features wont help...
   public SortEggsMode sortEggsMode = SortEggsMode.NONE;
-//  public SortEggsMode sortEggsMode = SortEggsMode.BY_KS;
-  // NOTE: Just take this from EperimentProperties in constructor
+  // If true, the static score of a K hatch is the max of the static scores of
+  // the S hatch actions beneath it.
+  public boolean sortEggsKmaxS = true;
 
   /*
    * Automatically hatches any nodes which are not s-valued.
@@ -102,7 +106,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  public Adjoints recallBias = new Adjoints.Constant(0);
 
   // Features
-//  private CachedFeatures cachedFeatures;
   private CFLike cachedFeatures;
   public final boolean featOverfit;
   public final boolean featProdBase;     // feature for just (t,s), center of shrinkage for others
@@ -110,10 +113,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public final boolean featProdFK;   // perhaps not necessary for propbank?
   public final boolean featProdK;    // perhaps not sufficient for framenet?
 
-//  public static ProductIndex featProdPI_BASE = new ProductIndex(0, 4);
-//  public static ProductIndex featProdPI_F = new ProductIndex(1, 4);
-//  public static ProductIndex featProdPI_FK = new ProductIndex(2, 4);
-//  public static ProductIndex featProdPI_K = new ProductIndex(3, 4);
   public static final ProductIndex PI_DYN = new ProductIndex(0, 8);
   public static final ProductIndex PI_STAT_T = new ProductIndex(1, 8);
   public static final ProductIndex PI_STAT_F = new ProductIndex(2, 8);
@@ -191,15 +190,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.primes = primes;
 
     ExperimentProperties config = ExperimentProperties.getInstance();
-    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode", "BY_KS"));
+    sortEggsMode = SortEggsMode.valueOf(config.getString("sortEggsMode", "BY_MODEL_SCORE"));
+    sortEggsKmaxS = config.getBoolean("sortEggsKmaxS", true);
     oneAtATime = config.getInt("oneAtATime", TFKS.F);
-    // if (config.getBoolean("forceLeftRightInference")) {
-    //   oneAtATime = TFKS.K;
-    //   sortEggsMode = SortEggsMode.NONE;
-    // } else {
-    //   oneAtATime = TFKS.F;
-    //   sortEggsMode = SortEggsMode.BY_KS;
-    // }
 
     this.featOverfit = config.getBoolean("featOverfit", false);
     this.featProdBase = config.getBoolean("featProdBase", true);
@@ -245,6 +238,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] featProdFK=" + featProdFK);
       Log.info("[main] featProdK=" + featProdK);
       Log.info("[main] sortEggsMode=" + sortEggsMode);
+      Log.info("[main] sortEggsKmaxS=" + sortEggsKmaxS);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
       Log.info("[main] useGlobalFeats=" + useGlobalFeats);
@@ -592,14 +586,25 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // Get or generate (k,s) eggs sorted according to a static score.
-    if (momPrefix != null && momPrefix.car().type == TFKS.F && sortEggsMode != SortEggsMode.NONE) {
+    if (momPrefix != null &&
+        (momPrefix.car().type == TFKS.F
+        || momPrefix.car().type == TFKS.K)
+        && sortEggsMode != SortEggsMode.NONE) {
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("using SortedEggCache to pre-compute static scores for eggs and sort them");
+
+      // TODO Right now we compute all K and S valued eggs, refactor so that
+      // K eggs are computed separately from S eggs. Originally did this because
+      // score(K egg) = max_S score(S egg), but its not clear that I should be
+      // doing this anymore (and SortedEggCache didn't even implement this, it
+      // used the static feature on K valued eggs, which was not a max).
+
       // Generate all (k,s) possibilities given the known (t,f)
       SortedEggCache eggs = info.getSortedEggs(momPrefix.t, momPrefix.f);
       if (eggs == null) {
         List<Pair<TFKS, EggWithStaticScore>> egF = new ArrayList<>();
         List<Pair<TFKS, EggWithStaticScore>> egK = new ArrayList<>();
+
         Frame f = getFrame(momPrefix, info);
         Span t = getTarget(momPrefix, info);
         List<Span> possArgSpans = info.getPossibleArgs(f, t);
@@ -609,6 +614,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         if (useContRoles || useRefRoles)
           throw new RuntimeException("implement me");
         for (int k = f.numRoles() - 1; k >= 0; k--) {
+
           int possK = subtreeSize(TFKS.K, k, momPrefix, info);
           int goldK = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
           long primeK = primeFor(TFKS.K, k);
@@ -620,10 +626,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //            modelK.showUpdatesWith = alph;
 //          }
 
+            if (goldK > 0)
+              Log.info("yay1");
+
           double randK = nextGaussian();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
-          egF.add(new Pair<>(prefixK, new EggWithStaticScore(
-              TFKS.K, k, possK, goldK, primeK, modelK, randK)));
+          EggWithStaticScore ef = new EggWithStaticScore(
+              TFKS.K, k, possK, goldK, primeK, modelK, randK);
+          egF.add(new Pair<>(prefixK, ef));
           for (Span argSpan : possArgSpans) {
             int s = Span.encodeSpan(argSpan, sentLen);
             int possS = subtreeSize(TFKS.S, s, prefixK, info);
@@ -656,17 +666,26 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
             double randS = nextGaussian();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
-            egK.add(new Pair<>(prefixS, new EggWithStaticScore(
-                TFKS.S, s, possS, goldS, primeS, staticScore, randS)));
+            EggWithStaticScore es = new EggWithStaticScore(
+                TFKS.S, s, possS, goldS, primeS, staticScore, randS);
+            egK.add(new Pair<>(prefixS, es));
           }
         }
-        eggs = new SortedEggCache(egF, egK, info.htsBeam);
+        if (sortEggsMode == SortEggsMode.BY_MODEL_SCORE) {
+          eggs = new SortedEggCache(egF, egK, sortEggsKmaxS, info.htsBeam);
+        } else if (sortEggsMode == SortEggsMode.BY_EXPECTED_UTILITY) {
+          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, sortEggsKmaxS, info.htsBeam);
+        } else {
+          throw new RuntimeException("unknown mode: " + sortEggsMode);
+        }
         info.putSortedEggs(momPrefix.t, momPrefix.f, eggs);
       }
-      if (momType == TFKS.F)
+      if (momType == TFKS.F) {
         return eggs.getSortedEggs();
-      if (momType == TFKS.K)
+      }
+      if (momType == TFKS.K) {
         return eggs.getSortedEggs(momPrefix.k);
+      }
       throw new RuntimeException("wat: momType=" + momType);
     }
 
@@ -876,10 +895,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         // Simple features for k-valued children
         assert egg.type == TFKS.K;
         int k = egg.value;
-        ProductIndex fk = PI_STAT_K
-            .prod(motherPrefix.f, info.numFrames())
-            .prod(k, numRoles(motherPrefix, info));
-        addTo.add(fk);
+//        ProductIndex fk = PI_STAT_K
+//            .prod(motherPrefix.f, info.numFrames())
+//            .prod(k, numRoles(motherPrefix, info));
+//        addTo.add(fk);
+        // F features don't discriminate K values
+        // K features may not generalize well, don't have time to tune this.
+        // Stick with just a FK feature here.
+        FrameRolePacking frp = info.getFRPacking();
+        int fk = frp.index(getFrame(motherPrefix, info), k);
+        int FK = frp.size();
+        addTo.add(PI_STAT_K.prod(fk, FK));
         return addTo;
       }
 

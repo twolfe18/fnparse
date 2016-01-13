@@ -96,7 +96,7 @@ public class BiAlphProjection {
 
     BiAlphIntMapper m = new BiAlphIntMapper(
         config.getExistingFile("inputBialph"),
-        LineMode.valueOf(config.getString("lineMode")));
+        LineMode.valueOf(config.getString("lineMode", LineMode.ALPH_AS_TRIVIAL_BIALPH.name())));
 
     // Two modes (wrt features, both take an alphabet):
     // 1) file -> file

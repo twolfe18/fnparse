@@ -1,5 +1,11 @@
-package edu.jhu.hlt.fnparse.rl.full2;
+package edu.jhu.hlt.fnparse.rl.full2.eggs;
 
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
+import edu.jhu.hlt.fnparse.rl.full2.Node2;
+import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.fnparse.rl.full2.TVN;
+import edu.jhu.hlt.fnparse.rl.full2.TVNS;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 /**
