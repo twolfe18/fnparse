@@ -82,6 +82,13 @@ for maxIters in 5 10 15 20 30 40 50; do
   qsub -N maxIters-$maxIters -o $1 ./fmodel-tests.sh maxIters $maxIters
 done
 
+qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-4-1280.fs
+qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-8-1280.fs
+qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-16-1280.fs
+qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-32-1280.fs
+#qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-64-1280.fs
+qsub -N tune-FS-1280 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-mix-1280.fs
+
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-4-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-8-640.fs
 qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-16-640.fs
