@@ -312,8 +312,13 @@ done
 ### Build feature sets
 # see Makefile in scripts/having-a-laugh
 
+#DATASET=propbank
+#NUM_SHARDS=256
 DATASET=framenet
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
+NUM_SHARDS=32
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
+WD=$WORKING_DIR/coherent-shards-filtered-small
 
 ## Build a filtered bilaph
 # After all the filters, these alphabets will have hundreds of millions of
@@ -322,13 +327,49 @@ WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DAT
 # feature (order of hundreds of templates).
 # This step just removes unused templates from the full bialph.
 BIALPH_FULL=$WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF
-BIALPH_SMALL=$WORKING_DIR/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt
-#zcat $BIALPH_FULL \
-#  | python scripts/having-a-laugh/filter_bialph.py \
-#    /dev/stdin \
-#    $BIALPH_SMALL \
-#    scripts/having-a-laugh/${DATASET}-[1-9]*.fs
-java -cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server edu.jhu.hlt.fnparse.features.precompute.BiAlphFilter $BIALPH_FULL $BIALPH_SMALL scripts/having-a-laugh/${DATASET}-8-640.fs scripts/having-a-laugh/${DATASET}-16-640.fs scripts/having-a-laugh/${DATASET}-32-640.fs
+#BIALPH_SMALL=$WORKING_DIR/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt
+BIALPH_SMALL=$WD/alphabet.txt
+
+JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+JAR_STABLE=$WD/fnparse.jar
+echo "copying the jar to a safe place..."
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
+# I don't think I can afford 2560, 640 is already really slow
+# cat framenet-*-640.fs | awk -F"\t" '{print $6}' | tr '*' '\n' | sort -u | wc -l
+# 671
+# cat framenet-*-1280.fs | awk -F"\t" '{print $6}' | tr '*' '\n' | sort -u | wc -l
+# 1555
+# cat framenet-*-2560.fs | awk -F"\t" '{print $6}' | tr '*' '\n' | sort -u | wc -l
+# 3320
+D=1280
+java -cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server \
+  edu.jhu.hlt.fnparse.features.precompute.BiAlphFilter \
+    $BIALPH_FULL \
+    $BIALPH_SMALL \
+    scripts/having-a-laugh/${DATASET}-4-${D}.fs \
+    scripts/having-a-laugh/${DATASET}-8-${D}.fs \
+    scripts/having-a-laugh/${DATASET}-16-${D}.fs \
+    scripts/having-a-laugh/${DATASET}-32-${D}.fs
+
+
+# Filter the feature files to only includ ethe features in the alphabet
+mkdir -p $WD/sge-logs
+for i in `seq $NUM_SHARDS | awk '{print $1-1}'`; do
+  qsub -N "featFilt-$i" -b y -j y -V -o $WD/sge-logs \
+    -l 'num_proc=1,mem_free=5G,h_rt=48:00:00' \
+    java -ea -server -Xmx4G -cp $JAR_STABLE \
+      -DinputBialph=$BIALPH_SMALL \
+      -DlineMode="ALPH_AS_TRIVIAL_BIALPH" \
+      -DfeaturesParent=$WORKING_DIR/coherent-shards-filtered/features \
+      -DoutputFeatures=$WD/features \
+      -DstripOutputSuf=true \
+      -Dshard=$i \
+      -DnumShards=$NUM_SHARDS \
+      edu.jhu.hlt.fnparse.features.precompute.BiAlphProjection
+done
 
 
 ############################################################################################

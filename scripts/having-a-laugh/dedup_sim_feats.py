@@ -124,6 +124,7 @@ class Feature:
       self.str_templates = map(undo_template_name_bug, self.str_templates)
     assert self.order == len(self.int_templates)
     assert self.order == len(self.str_templates)
+    #print 'just read', self.str_like_input()
 
   def __str__(self):
     if self.rank:
@@ -132,7 +133,8 @@ class Feature:
 
   def str_like_input(self):
     #y = self.ig / (1 + self.hx * self.hx)
-    y = self.ig / (1 + self.hx)
+    #y = self.ig / (1 + self.hx)
+    y = self.score
     it = '*'.join(map(str, self.int_templates))
     st = '*'.join(self.str_templates)
     return "%f\t%f\t%f\t%f\t%d\t%s\t%s" % \
