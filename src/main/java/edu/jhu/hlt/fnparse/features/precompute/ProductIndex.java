@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import java.util.Comparator;
+
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.hash.MurmurHash3;
 
@@ -12,6 +14,20 @@ public class ProductIndex {
 
   public static final ProductIndex FALSE = new ProductIndex(0, 2);
   public static final ProductIndex TRUE = new ProductIndex(1, 2);
+
+  /** Ignores cardinality */
+  public static final Comparator<ProductIndex> BY_PROD_FEAT_ASC = new Comparator<ProductIndex>() {
+    @Override
+    public int compare(ProductIndex o1, ProductIndex o2) {
+      long i1 = o1.getProdCardinality();
+      long i2 = o2.getProdCardinality();
+      if (i1 < i2)
+        return -1;
+      if (i1 > i2)
+        return +1;
+      return 0;
+    }
+  };
 
   private long featProd, cardProd;
   private long feat, card;

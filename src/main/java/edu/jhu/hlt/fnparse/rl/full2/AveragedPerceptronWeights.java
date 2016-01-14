@@ -15,6 +15,9 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
 public class AveragedPerceptronWeights implements Serializable, ProductIndexWeights {
   private static final long serialVersionUID = 708063405325278777L;
 
+  // false=>649243 true=>546725
+  public static final boolean EAGER_FEATURE_MODULO = true;
+
   private IntDoubleDenseVector w;
   private IntDoubleDenseVector u;
   private int c;
@@ -93,26 +96,44 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
    */
   public class Adj implements Adjoints {
     private int[] features;
+    private List<ProductIndex> features2;
 
     public Adj(List<ProductIndex> features) {
-      this.features = new int[features.size()];
-      for (int i = 0; i < this.features.length; i++)
-        this.features[i] = features.get(i).getProdFeatureModulo(dimension);
+      if (EAGER_FEATURE_MODULO) {
+        this.features = new int[features.size()];
+        for (int i = 0; i < this.features.length; i++)
+          this.features[i] = features.get(i).getProdFeatureModulo(dimension);
+      } else {
+        this.features2 = features;
+      }
     }
 
     @Override
     public double forwards() {
       double d = 0;
-      for (int i = 0; i < features.length; i++)
-        d += getWeight(features[i]);
+      if (EAGER_FEATURE_MODULO) {
+        for (int i = 0; i < features.length; i++)
+          d += getWeight(features[i]);
+      } else {
+        for (ProductIndex pi : features2)
+          d += getWeight(pi.getProdFeatureModulo(dimension));
+      }
       return d;
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
+      if (EAGER_FEATURE_MODULO) {
       for (int i = 0; i < features.length; i++) {
         w.add(features[i], -dErr_dForwards);
         u.add(features[i], c * -dErr_dForwards);
+      }
+      } else {
+        for (ProductIndex pi : features2) {
+          int i = pi.getProdFeatureModulo(dimension);
+          w.add(i, -dErr_dForwards);
+          u.add(i, c * -dErr_dForwards);
+        }
       }
     }
   }

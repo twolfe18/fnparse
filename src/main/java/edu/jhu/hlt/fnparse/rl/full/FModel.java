@@ -66,6 +66,8 @@ import edu.jhu.prim.tuple.Pair;
 public class FModel implements Serializable {
   private static final long serialVersionUID = -3155569129086851946L;
 
+  public static final boolean CACHE_FLATTEN = true;
+
   public static boolean DEBUG_SEARCH_FINAL_SOLN = true;
   public static boolean DEBUG_ORACLE_MV_CONF = true;
   public static boolean DEBUG_HINGE_COMPUTATION = true;
@@ -540,6 +542,14 @@ public class FModel implements Serializable {
         + " and code close to CachedFeatures.Params");
       template2cardinality = bialph.makeTemplate2Cardinality();
       featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
+
+      // Cache InformationGainProducts.flatten
+      if (CACHE_FLATTEN) {
+        Log.info("caching flatten operation for " + featureSet.length + " features");
+        for (Item i : s2i.values())
+          i.convertToFlattenedRepresentation(featureSet, template2cardinality);
+        Log.info("done caching flatten operation");
+      }
     }
 
     public SimpleCFLike(List<CachedFeatures.Item> items) {
@@ -575,7 +585,9 @@ public class FModel implements Serializable {
       if (featureSet != null) {
         // Try to match as closely as possible how CachedFeatures.Params get features
         Item cur = s2i.get(sent);
-        feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+        feats = cur.getFlattenedCachedFeatures(t, s);
+        if (feats == null)
+          feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
       } else {
         // This was the simplest way...
         Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
@@ -919,8 +931,9 @@ public class FModel implements Serializable {
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
       File fsParent = config.getExistingDir("featureSetParent", dd);
-      int fsN = 640;
-      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-" + fsN + ".fs"));
+      int fsC = 8;
+      int fsN = 1280;
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);

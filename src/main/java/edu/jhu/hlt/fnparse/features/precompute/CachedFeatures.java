@@ -10,11 +10,13 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -46,6 +48,7 @@ import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.PruneAdjoints;
 import edu.jhu.hlt.fnparse.rl.State;
+import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.CFLike;
 import edu.jhu.hlt.fnparse.rl.full.State.CachedFeatureParamsShim;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints;
@@ -81,6 +84,8 @@ import edu.jhu.prim.vector.IntDoubleVector;
  */
 public class CachedFeatures implements Serializable {
   private static final long serialVersionUID = 1063789546828258765L;
+
+  public static final boolean DEDUP_FEATS = true;
 
   private int[][] featureSet;   // each int[] is a feature, each of those values is a template
   private BitSet templateSet;
@@ -119,6 +124,32 @@ public class CachedFeatures implements Serializable {
 //    private Map<SpanPair, BaseTemplates> features2;
     private Map<Span, Map<Span, BaseTemplates>> features3;
 
+    // These are for caching InformationGain.flatten
+    private Map<Span, Map<Span, List<ProductIndex>>> features4;
+    private int[][] featureSet;
+    public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
+      assert features4 == null;
+      Sentence sent = parse.getSentence();
+      features4 = new HashMap<>();
+      this.featureSet = featureSet;
+      for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
+        Span t = x1.getKey();
+        Map<Span, List<ProductIndex>> m1 = new HashMap<>();
+        for (Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
+          Span s = x2.getKey();
+          List<ProductIndex> features = statelessGetFeaturesNoModulo(sent, t, s, this, featureSet, template2cardinality);
+          m1.put(s, features);
+        }
+        features4.put(t, m1);
+      }
+      features3 = null;
+    }
+    public List<ProductIndex> getFlattenedCachedFeatures(Span t, Span s) {
+      if (features4 == null)
+        return null;
+      return features4.get(t).get(s);
+    }
+
     public Item(FNParse parse) {
       if (parse == null)
         throw new IllegalArgumentException();
@@ -136,10 +167,14 @@ public class CachedFeatures implements Serializable {
     }
 
     public List<Span> getArgSpansForTarget(Span t) {
+      List<Span> args = new ArrayList<>();
+      if (features4 != null) {
+        args.addAll(features4.get(t).keySet());
+        return args;
+      }
       Map<Span, BaseTemplates> f = features3.get(t);
       if (f == null)
         throw new RuntimeException("don't know about this target: " + t.shortString());
-      List<Span> args = new ArrayList<>();
       args.addAll(f.keySet());
       return args;
     }
@@ -871,6 +906,9 @@ public class CachedFeatures implements Serializable {
   }
 
   private void addItem(Item cur, Set<String> devSentIds, Set<String> testSentIds) {
+    if (FModel.CACHE_FLATTEN) {
+      cur.convertToFlattenedRepresentation(featureSet, template2cardinality);
+    }
     // I think this might still be wrong...
     synchronized (loadedSentId2Item) {
       Item old = loadedSentId2Item.put(cur.parse.getSentence().getId(), cur);
@@ -1044,6 +1082,18 @@ public class CachedFeatures implements Serializable {
       // Note that these features don't need to be producted with k due to the
       // fact that we have separate weights for those.
       InformationGainProducts.flatten(data, 0, feat, 0, ProductIndex.NIL, template2cardinality, buf);
+
+      if (DEDUP_FEATS && buf.size() > 1) {
+        Collections.sort(buf, ProductIndex.BY_PROD_FEAT_ASC);
+        List<ProductIndex> tmp = new ArrayList<>();
+        for (ProductIndex pi : buf) {
+          if (tmp.size() > 0 && tmp.get(tmp.size() - 1).getProdFeature() == pi.getProdFeature())
+            continue;
+          tmp.add(pi);
+        }
+//        Log.info("[dedup] " + buf.size() + " => " + tmp.size());
+        buf = tmp;
+      }
 
       // If I get a long here, I can zip them all together by multiplying by
       // featureSet.length and then adding in an offset.
