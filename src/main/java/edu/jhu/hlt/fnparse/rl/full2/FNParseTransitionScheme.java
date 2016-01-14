@@ -280,14 +280,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     alph = new Alphabet<>();
   }
 
-  public void zeroOutWeights() {
+  public void zeroOutWeights(boolean includeWeightSums) {
     if (MAIN_LOGGING)
-      Log.info("[main] zeroing weights");
-    wHatch.scale(0);
-    if (wSquash != null)
-      wSquash.scale(0);
-    if (wGlobal != null)
-      wGlobal.scale(0);
+      Log.info("[main] zeroing weights, includeWeightSums=" + includeWeightSums);
+    if (wHatch != null) wHatch.scale(0);
+    if (wSquash != null) wSquash.scale(0);
+    if (wGlobal != null) wGlobal.scale(0);
+    if (includeWeightSums) {
+      if (wHatchSum != null) wHatchSum.scale(0);
+      if (wSquashSum != null) wSquashSum.scale(0);
+      if (wGlobalSum != null) wGlobalSum.scale(0);
+    }
   }
 
   @Override

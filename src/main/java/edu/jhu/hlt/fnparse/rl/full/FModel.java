@@ -328,7 +328,7 @@ public class FModel implements Serializable {
     if (oracleArgPruning) {
       decInf.setArgPruningUsingGoldLabelWithNoise();
     } else {
-      boolean includeGoldSpansIfMissing = true;
+      boolean includeGoldSpansIfMissing = false;
       decInf.setArgPruning(drp, includeGoldSpansIfMissing);
     }
     return decInf;
@@ -444,7 +444,7 @@ public class FModel implements Serializable {
 
       // We seem to be having some problems with lock-in (bad initialization) :)
       // We can get every example right if we start from 0 weights.
-      m.ts.zeroOutWeights();
+      m.ts.zeroOutWeights(true);
       m.ts.flushAlphabet();
 
 //      // skipping to interesting example...
@@ -825,7 +825,7 @@ public class FModel implements Serializable {
     ProductIndexAdjoints.zeroCounters();
     Info.zeroCounters();
 
-    m.ts.zeroOutWeights();
+    m.ts.zeroOutWeights(true);
 
     if (predict) {
       Log.info("predict");
@@ -890,6 +890,7 @@ public class FModel implements Serializable {
 //    config.put("globalFeatRoleCoocSimple", "false");
 
     AbstractTransitionScheme.DEBUG = false;
+    boolean pedantic = true;
 
     FModel m = getFModel(config);
 
@@ -938,14 +939,18 @@ public class FModel implements Serializable {
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double lr = config.getDouble("learningRate", 0.1);
+      double lr = config.getDouble("learningRate", 0.1);  // TODO Remove
       double maxIters = config.getInt("maxIters", 12);
-      m.ts.zeroOutWeights();
+      boolean zeroSumsToo = true;
+      m.ts.zeroOutWeights(zeroSumsToo);
+      m.ts.showWeights("after-zeroing");
       for (int i = 0; i < maxIters; i++) {
         Log.info("[main] training on " + train.size() + " examples");
         Collections.shuffle(train, m.getConfig().rand);
-        for (FNParse y : train)
+        for (FNParse y : train) {
+          if (pedantic) Log.info("training against: " + y.getId());
           m.getUpdate(y).apply(lr);
+        }
 //        if (i % 5 == 0 && i > 0)
 //          m.ts.setParamsToAverage();
 //        else
@@ -959,7 +964,11 @@ public class FModel implements Serializable {
 
       // See what we get on the test example
       m.ts.setParamsToAverage();
+      m.ts.showWeights("after-averaging");
       assert !overlappingIds(train, test);
+      if (pedantic) 
+        for (FNParse y : test)
+          Log.info("testing against: " + y.getId());
       showLoss(test, m, "on-fold-" + (testIdx%folds));
 //      FNParse yhat = m.predict(yTest);
 //      SentenceEval se = new SentenceEval(yTest, yhat);
