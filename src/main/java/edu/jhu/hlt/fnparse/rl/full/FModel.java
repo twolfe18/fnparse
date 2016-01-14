@@ -812,7 +812,6 @@ public class FModel implements Serializable {
         }
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);
-      m.ts.takeAverageOfWeights();
     }
 
     Log.info("done, checked " + checked + " parses");
@@ -895,7 +894,7 @@ public class FModel implements Serializable {
     FModel m = getFModel(config);
 
     List<CachedFeatures.Item> stuff = fooMemo();
-//    stuff = stuff.subList(0, 200);
+//    stuff = stuff.subList(0, 50);
 
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
     m.setCachedFeatures(cfLike);
@@ -918,7 +917,8 @@ public class FModel implements Serializable {
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
       File fsParent = config.getExistingDir("featureSetParent", dd);
-      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-640.fs"));
+      int fsN = 640;
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-" + fsN + ".fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
@@ -940,7 +940,7 @@ public class FModel implements Serializable {
 
       // Do some learning (few epochs)
       double lr = config.getDouble("learningRate", 0.1);  // TODO Remove
-      double maxIters = config.getInt("maxIters", 12);
+      double maxIters = config.getInt("maxIters", 10);
       boolean zeroSumsToo = true;
       m.ts.zeroOutWeights(zeroSumsToo);
       m.ts.showWeights("after-zeroing");
@@ -951,11 +951,6 @@ public class FModel implements Serializable {
           if (pedantic) Log.info("training against: " + y.getId());
           m.getUpdate(y).apply(lr);
         }
-//        if (i % 5 == 0 && i > 0)
-//          m.ts.setParamsToAverage();
-//        else
-//          m.ts.takeAverageOfWeights();
-        m.ts.takeAverageOfWeights();
         assert !overlappingIds(train, test);
         showLoss(test, m, "after-epoch-" + i + "-TEST");
         int tn = Math.min(100, train.size());

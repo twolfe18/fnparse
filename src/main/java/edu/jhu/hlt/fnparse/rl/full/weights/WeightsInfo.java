@@ -1,8 +1,13 @@
 package edu.jhu.hlt.fnparse.rl.full.weights;
 
-import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import java.util.List;
 
-public class WeightsInfo {
+import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.fnparse.rl.full2.ProductIndexWeights;
+import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
+
+public class WeightsInfo implements ProductIndexWeights {
 
   LazyL2UpdateVector weights;
   private int dimension;
@@ -45,8 +50,15 @@ public class WeightsInfo {
     return weights.weights.get(i);
   }
 
+  @Override
   public int dimension() {
     return dimension;
+  }
+
+  @Override
+  public Adjoints score(List<ProductIndex> features) {
+    boolean attemptApplyL2Update = false;
+    return new ProductIndexAdjoints(this, features, attemptApplyL2Update);
   }
 
   @Override

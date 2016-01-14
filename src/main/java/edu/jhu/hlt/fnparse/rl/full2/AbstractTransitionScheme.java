@@ -150,6 +150,13 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
    */
   public abstract Y decode(Iterable<LL<TVNS>> z, Z info);
 
+  /**
+   * Use this to implement book-keeping that must fire after all of the backwards
+   * calls have been made for a given update. Fires even if there is no violation.
+   * Can be used for maybeApplyL2Update or incrementing the number of observations
+   * for averaged perceptron.
+   */
+  public abstract void calledAfterEveryUpdate();
 
   /* NON-ABSTRACT STUFF *******************************************************/
 
@@ -702,7 +709,16 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     if (violator == null) {
       if (DEBUG && DEBUG_PERCEPTRON)
         Log.info("no violator!");
-      return Update.NONE;
+//      return Update.NONE;
+      return new Update() {
+        @Override public double apply(double learningRate) {
+          calledAfterEveryUpdate();
+          return 0;
+        }
+        @Override public double violation() {
+          return 0;
+        }
+      };
     } else {
       perceptronUpdatesViolated++;
       perceptronRecentUpdatesViolated++;
@@ -718,20 +734,26 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       CoefsAndScoresAdjoints good = new CoefsAndScoresAdjoints(htsOracle, violator.get1().getStepScores());
       CoefsAndScoresAdjoints bad = new CoefsAndScoresAdjoints(decoder, violator.get2().getStepScores());
       return new Update() {
-        @Override public double apply(double learningRate) {
+        @Override
+        public double apply(double learningRate) {
+
+          // Take step
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the oracle updates");
           good.backwards(-learningRate);
+
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the most violated updates");
           bad.backwards(-learningRate);
 
-//          assert false : "need to put an attempted L2 update here, see how its done in buildUpdate";
-          //Log.warn("make sure you do averaging to regularize the perceptron!");
+          // Do either maybeApplyL2Update or perceptron avg book keeping.
+          calledAfterEveryUpdate();
 
           return mv;
         }
-        @Override public double violation() {
+
+        @Override
+        public double violation() {
           return mv;
         }
       };

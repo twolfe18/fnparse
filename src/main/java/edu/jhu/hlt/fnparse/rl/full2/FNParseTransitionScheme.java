@@ -40,6 +40,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.tutils.scoring.Adjoints.Caching;
 import edu.jhu.hlt.tutils.scoring.Adjoints.Caching2;
 import edu.jhu.prim.tuple.Pair;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
@@ -122,64 +123,86 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public static final ProductIndex PI_STAT_S_FK = new ProductIndex(6, 8);
   public static final ProductIndex PI_STAT_S_K = new ProductIndex(7, 8);
 
-  // Weights
-  public WeightsInfo wHatch, wSquash;
-  public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
   public Alphabet<String> alph;  // TODO Remove!
 
-  // For averaged perceptron
-  private WeightsInfo wHatchSum, wSquashSum, wGlobalSum;
-  private int numAverages = 0;
-  public void takeAverageOfWeights() {
-    Log.info("[main] taking " + numAverages + " average");
-    timer.start("takeAverageOfWeights");
-    if (wHatchSum == null) {
-      assert numAverages == 0;
-      wHatchSum = new WeightsInfo(wHatch);
-      if (wSquash != null)
-        wSquashSum = new WeightsInfo(wSquash);
-      if (wGlobal != null)
-        wGlobalSum = new WeightsInfo(wGlobal);
-    } else {
-      wHatchSum.add(wHatch);
-      if (wSquash != null)
-        wSquashSum.add(wSquash);
-      if (wGlobal != null)
-        wGlobalSum.add(wGlobal);
-    }
-    numAverages++;
-    timer.stop("takeAverageOfWeights");
+  // Weights
+  public AveragedPerceptronWeights wHatch;
+  public AveragedPerceptronWeights wSquash;
+  public AveragedPerceptronWeights wGlobal;
+//  public WeightsInfo wHatch, wSquash;
+//  public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
+//
+//  // For averaged perceptron
+//  private WeightsInfo wHatchSum, wSquashSum, wGlobalSum;
+//  private int numAverages = 0;
+
+//  public void takeAverageOfWeights() {
+//    Log.info("[main] taking " + numAverages + " average");
+//    timer.start("takeAverageOfWeights");
+//    if (wHatchSum == null) {
+//      assert numAverages == 0;
+//      wHatchSum = new WeightsInfo(wHatch);
+//      if (wSquash != null)
+//        wSquashSum = new WeightsInfo(wSquash);
+//      if (wGlobal != null)
+//        wGlobalSum = new WeightsInfo(wGlobal);
+//    } else {
+//      wHatchSum.add(wHatch);
+//      if (wSquash != null)
+//        wSquashSum.add(wSquash);
+//      if (wGlobal != null)
+//        wGlobalSum.add(wGlobal);
+//    }
+//    numAverages++;
+//    timer.stop("takeAverageOfWeights");
+//  }
+
+  @Override
+  public void calledAfterEveryUpdate() {
+    if (wHatch != null) wHatch.completedObservation();
+    if (wSquash != null) wSquash.completedObservation();
+    if (wGlobal != null) wGlobal.completedObservation();
   }
+
   public void setParamsToAverage() {
-    Log.info("[main] numAverages=" + numAverages);
     showWeights("before-param-avg");
     timer.start("setParamsToAverage");
-    if (numAverages <= 1) {
-      Log.warn("[main] not modifying weights!");
-    } else {
-      double s = 1d / numAverages;
-      wHatch = new WeightsInfo(wHatchSum);
-      wHatch.scale(s);
-      if (wSquash != null) {
-        wSquash = new WeightsInfo(wSquashSum);
-        wSquash.scale(s);
-      }
-      if (wGlobal != null) {
-        wGlobal = new WeightsInfo(wGlobalSum);
-        wGlobal.scale(s);
-      }
+    if (wHatch != null) {
+      Log.info("[main] numObservations=" + wHatch.numObervations());
+      wHatch = wHatch.computeAverageWeights();
     }
+    if (wSquash != null)
+      wSquash = wSquash.computeAverageWeights();
+    if (wGlobal != null)
+      wGlobal = wGlobal.computeAverageWeights();
+//    Log.info("[main] numAverages=" + numAverages);
+//    if (numAverages <= 1) {
+//      Log.warn("[main] not modifying weights!");
+//    } else {
+//      double s = 1d / numAverages;
+//      wHatch = new WeightsInfo(wHatchSum);
+//      wHatch.scale(s);
+//      if (wSquash != null) {
+//        wSquash = new WeightsInfo(wSquashSum);
+//        wSquash.scale(s);
+//      }
+//      if (wGlobal != null) {
+//        wGlobal = new WeightsInfo(wGlobalSum);
+//        wGlobal.scale(s);
+//      }
+//    }
     showWeights("after-param-avg");
     timer.stop("setParamsToAverage");
   }
 
 
   public void maybeApplyL2Reg() {
-    wHatch.maybeApplyL2Reg();
-    if (wSquash != null)
-      wSquash.maybeApplyL2Reg();
-    if (wGlobal != null)
-      wGlobal.maybeApplyL2Reg();
+//    wHatch.maybeApplyL2Reg();
+//    if (wSquash != null)
+//      wSquash.maybeApplyL2Reg();
+//    if (wGlobal != null)
+//      wGlobal.maybeApplyL2Reg();
+    throw new RuntimeException("using averaged perceptron, think again");
   }
 
   public FNParseTransitionScheme(CFLike cf, Primes primes) {
@@ -207,25 +230,32 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
 
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
-    int updateInterval = config.getInt("updateL2Every", 8);
-    double lrLocal = config.getDouble("lrLocal", 1);
-    double l2Local = config.getDouble("l2Penalty", 1e-8);
-    double lrGlobal = config.getDouble("lrGlobal", 1);
-    double l2Global = config.getDouble("globalL2Penalty", 1e-7);
 
-    wHatch = new WeightsInfo(
-        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-        dimension, lrLocal, l2Local);
-    if (!onlyUseHatchWeights) {
-      wSquash = new WeightsInfo(
-          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-          dimension, lrLocal, l2Local);
-    }
-    if (useGlobalFeats) {
-      wGlobal = new WeightsInfo(
-          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-          dimension, lrGlobal, l2Global);
-    }
+    wHatch = new AveragedPerceptronWeights(dimension);
+    if (!onlyUseHatchWeights)
+      wSquash = new AveragedPerceptronWeights(dimension);
+    if (useGlobalFeats)
+      wGlobal = new AveragedPerceptronWeights(dimension);
+
+//    int updateInterval = config.getInt("updateL2Every", 8);
+//    double lrLocal = config.getDouble("lrLocal", 1);
+//    double l2Local = config.getDouble("l2Penalty", 1e-8);
+//    double lrGlobal = config.getDouble("lrGlobal", 1);
+//    double l2Global = config.getDouble("globalL2Penalty", 1e-7);
+
+//    wHatch = new WeightsInfo(
+//        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+//        dimension, lrLocal, l2Local);
+//    if (!onlyUseHatchWeights) {
+//      wSquash = new WeightsInfo(
+//          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+//          dimension, lrLocal, l2Local);
+//    }
+//    if (useGlobalFeats) {
+//      wGlobal = new WeightsInfo(
+//          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
+//          dimension, lrGlobal, l2Global);
+//    }
 
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
@@ -283,13 +313,21 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public void zeroOutWeights(boolean includeWeightSums) {
     if (MAIN_LOGGING)
       Log.info("[main] zeroing weights, includeWeightSums=" + includeWeightSums);
-    if (wHatch != null) wHatch.scale(0);
-    if (wSquash != null) wSquash.scale(0);
-    if (wGlobal != null) wGlobal.scale(0);
+//    if (wHatch != null) wHatch.scale(0);
+//    if (wSquash != null) wSquash.scale(0);
+//    if (wGlobal != null) wGlobal.scale(0);
+//    if (includeWeightSums) {
+//      if (wHatchSum != null) wHatchSum.scale(0);
+//      if (wSquashSum != null) wSquashSum.scale(0);
+//      if (wGlobalSum != null) wGlobalSum.scale(0);
+//    }
+    if (wHatch != null) wHatch.zeroWeights();
+    if (wSquash != null) wSquash.zeroWeights();
+    if (wGlobal != null) wGlobal.zeroWeights();
     if (includeWeightSums) {
-      if (wHatchSum != null) wHatchSum.scale(0);
-      if (wSquashSum != null) wSquashSum.scale(0);
-      if (wGlobalSum != null) wGlobalSum.scale(0);
+      if (wHatch != null) wHatch.zeroWeightsAverage();
+      if (wSquash != null) wSquash.zeroWeightsAverage();
+      if (wGlobal != null) wGlobal.zeroWeightsAverage();
     }
   }
 
@@ -970,12 +1008,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
     return addTo;
   }
-  public Adjoints staticFeats0(Node2 n, Info info, WeightsInfo weights) {
+  public Adjoints staticFeats0(Node2 n, Info info, ProductIndexWeights weights) {
     assert n.eggs != null : "hatch/squash both require an egg!";
     TVN egg = n.eggs.car();
     return staticFeats0(egg, n.prefix, info, weights);
   }
-  public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, WeightsInfo weights) {
+  public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, ProductIndexWeights weights) {
     boolean flip = false;
     if (onlyUseHatchWeights && weights != wHatch) {
       flip = true;
@@ -983,7 +1021,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     // This should be memoized because there is still a loop over all the features in ProductIndexAdjoints.init
-    Map<TFKS, Caching2<ProductIndexAdjoints>> m;
+    Map<TFKS, Caching> m;
     m = info.staticHatchFeatCache;
 //    if (weights == wHatch) {
 //      m = info.staticHatchFeatCache;
@@ -993,11 +1031,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //      throw new RuntimeException();
 //    }
     TFKS memoKey = motherPrefix.dumbPrepend(egg);
-    Caching2<ProductIndexAdjoints> pia = m.get(memoKey);
+    Caching pia = m.get(memoKey);
     if (pia == null) {
       List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
-      boolean attemptApplyL2Update = false;   // done in Update instead!
-      pia = new Caching2<>(new ProductIndexAdjoints(weights, feats, attemptApplyL2Update));
+      pia = new Caching(weights.score(feats));
       m.put(memoKey, pia);
     }
 
