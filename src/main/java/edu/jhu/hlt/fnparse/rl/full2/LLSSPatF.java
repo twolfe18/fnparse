@@ -55,38 +55,38 @@ public class LLSSPatF extends LLSSP {
   public static final boolean NUM_ARGS = C.getBoolean("NUM_ARGS", ANY_GLOBALS);
 
   public static final ProductIndex ARG_LOC_TA =
-      ARG_LOC && C.getBoolean("ARG_LOC_TA", true) ? new ProductIndex(0, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_TA", false) ? new ProductIndex(0, 16) : null;
   public static final ProductIndex ARG_LOC_TA_F =
-      ARG_LOC && C.getBoolean("ARG_LOC_TA_F", true) ? new ProductIndex(1, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_TA_F", false) ? new ProductIndex(1, 16) : null;
   public static final ProductIndex ARG_LOC_TA_FK =
       ARG_LOC && C.getBoolean("ARG_LOC_TA_FK", true) ? new ProductIndex(2, 16) : null;
   public static final ProductIndex ARG_LOC_TA_K =
       ARG_LOC && C.getBoolean("ARG_LOC_TA_K", true) ? new ProductIndex(3, 16) : null;
 
   public static final ProductIndex ARG_LOC_AA =
-      ARG_LOC && C.getBoolean("ARG_LOC_AA", true) ? new ProductIndex(4, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_AA", false) ? new ProductIndex(4, 16) : null;
   public static final ProductIndex ARG_LOC_AA_F =
       ARG_LOC && C.getBoolean("ARG_LOC_AA_F", true) ? new ProductIndex(5, 16) : null;
   public static final ProductIndex ARG_LOC_AA_FK =
-      ARG_LOC && C.getBoolean("ARG_LOC_AA_FK", true) ? new ProductIndex(6, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_AA_FK", false) ? new ProductIndex(6, 16) : null;
   public static final ProductIndex ARG_LOC_AA_K =
-      ARG_LOC && C.getBoolean("ARG_LOC_AA_K", true) ? new ProductIndex(7, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_AA_K", false) ? new ProductIndex(7, 16) : null;
 
   public static final ProductIndex ROLE_COOC_TA =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA", true) ? new ProductIndex(8, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA", false) ? new ProductIndex(8, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_F =
       ROLE_COOC && C.getBoolean("ROLE_COOC_TA_F", true) ? new ProductIndex(9, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_FK =
       ROLE_COOC && C.getBoolean("ROLE_COOC_TA_FK", true) ? new ProductIndex(10, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_K =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", true) ? new ProductIndex(11, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", false) ? new ProductIndex(11, 16) : null;
 
   public static final ProductIndex NUM_ARGS_TA =
-      NUM_ARGS && C.getBoolean("NUM_ARGS_TA", true) ? new ProductIndex(12, 16) : null;
+      NUM_ARGS && C.getBoolean("NUM_ARGS_TA", false) ? new ProductIndex(12, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_F =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA_F", true) ? new ProductIndex(13, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_FK =
-      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_FK", true) ? new ProductIndex(14, 16) : null;
+      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_FK", false) ? new ProductIndex(14, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_K =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA_K", true) ? new ProductIndex(15, 16) : null;
 

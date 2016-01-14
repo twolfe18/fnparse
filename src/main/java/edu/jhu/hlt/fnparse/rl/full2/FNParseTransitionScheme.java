@@ -195,7 +195,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     oneAtATime = config.getInt("oneAtATime", TFKS.F);
 
     this.featOverfit = config.getBoolean("featOverfit", false);
-    this.featProdBase = config.getBoolean("featProdBase", true);
+
+    this.featProdBase = config.getBoolean("featProdBase", false);
     this.featProdF = config.getBoolean("featProdF", false);
     this.featProdFK = config.getBoolean("featProdFK", true);
     this.featProdK = config.getBoolean("featProdK", true);

@@ -873,6 +873,7 @@ public class FModel implements Serializable {
     config.putIfAbsent("forceLeftRightInference", "false");
     config.putIfAbsent("beamSize", "1");
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
+    config.putIfAbsent("learningRate", "" + 0.1);
 
 //    config.putIfAbsent("sortEggsMode", "NONE");
     config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
@@ -884,6 +885,7 @@ public class FModel implements Serializable {
     Log.info("oracleMode=" + config.getString("oracleMode"));
     Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));
     Log.info("beamSize=" + config.getInt("beamSize"));
+    Log.info("learningRate=" + config.getDouble("learningRate"));
 
 //    config.put("globalFeatArgLocSimple", "false");
 //    config.put("globalFeatNumArgs", "false");
@@ -938,7 +940,7 @@ public class FModel implements Serializable {
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double lr = config.getDouble("learningRate", 0.1);
+      double lr = config.getDouble("learningRate");
       double maxIters = config.getInt("maxIters", 12);
       m.ts.zeroOutWeights();
       for (int i = 0; i < maxIters; i++) {

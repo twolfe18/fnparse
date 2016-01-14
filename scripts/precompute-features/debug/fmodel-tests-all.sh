@@ -12,10 +12,10 @@ cd scripts/precompute-features/debug
 qsub -N baseline -o $1 ./fmodel-tests.sh
 
 # ablate one
-qsub -N ablate1-base -o $1 ./fmodel-tests.sh featProdBase false
-qsub -N ablate1-f -o $1 ./fmodel-tests.sh featProdF false
-qsub -N ablate1-fk -o $1 ./fmodel-tests.sh featProdFK false
-qsub -N ablate1-k -o $1 ./fmodel-tests.sh featProdK false
+qsub -N ablate1-base -o $1 ./fmodel-tests.sh featProdBase flip
+qsub -N ablate1-f -o $1 ./fmodel-tests.sh featProdF flip
+qsub -N ablate1-fk -o $1 ./fmodel-tests.sh featProdFK flip
+qsub -N ablate1-k -o $1 ./fmodel-tests.sh featProdK flip
 
 # How to sort your eggs
 for m in NONE BY_MODEL_SCORE BY_EXPECTED_UTILITY; do
@@ -78,19 +78,23 @@ for m in RAND_MIN RAND_MAX MAX; do
   done
 done
 
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-4-640.fs
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-640.fs
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-640.fs
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-640.fs
-#qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-640.fs
-qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-640.fs
+for maxIters in 5 10 15 20 30 40 50; do
+  qsub -N maxIters-$maxIters -o $1 ./fmodel-tests.sh maxIters $maxIters
+done
 
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-4-160.fs
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-8-160.fs
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-16-160.fs
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-32-160.fs
-#qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-64-160.fs
-qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse/scripts/having-a-laugh/propbank-mix-160.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-4-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-8-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-16-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-32-640.fs
+#qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-64-640.fs
+qsub -N tune-FS-640 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-mix-640.fs
+
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-4-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-8-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-16-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-32-160.fs
+#qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-64-160.fs
+qsub -N tune-FS-160 -o $1 ./fmodel-tests.sh featureSet /home/hltcoe/twolfe/fnparse-build/fnparse/scripts/having-a-laugh/propbank-mix-160.fs
 
 
 qinfo

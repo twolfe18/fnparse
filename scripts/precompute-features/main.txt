@@ -394,11 +394,11 @@ done
 WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet/experiment/jan5a
 DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet
 IS_PROPBANK="false"
-DEFAULT_DIM=32-160
+DEFAULT_DIM=16-160
 #WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank/experiment/jan5a
 #DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank
 #IS_PROPBANK="true"
-#DEFAULT_DIM=32-640
+#DEFAULT_DIM=8-640
 
 DEFAULT_ORACLE="RAND_MIN"
 DEFAULT_BEAM=1
