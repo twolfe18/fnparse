@@ -328,7 +328,7 @@ public class FModel implements Serializable {
     if (oracleArgPruning) {
       decInf.setArgPruningUsingGoldLabelWithNoise();
     } else {
-      boolean includeGoldSpansIfMissing = true;
+      boolean includeGoldSpansIfMissing = false;
       decInf.setArgPruning(drp, includeGoldSpansIfMissing);
     }
     return decInf;
@@ -444,7 +444,7 @@ public class FModel implements Serializable {
 
       // We seem to be having some problems with lock-in (bad initialization) :)
       // We can get every example right if we start from 0 weights.
-      m.ts.zeroOutWeights();
+      m.ts.zeroOutWeights(true);
       m.ts.flushAlphabet();
 
 //      // skipping to interesting example...
@@ -812,7 +812,6 @@ public class FModel implements Serializable {
         }
       }
       assert passed == enough : FNDiff.diffArgs(y, yhat, true);
-      m.ts.takeAverageOfWeights();
     }
 
     Log.info("done, checked " + checked + " parses");
@@ -825,7 +824,7 @@ public class FModel implements Serializable {
     ProductIndexAdjoints.zeroCounters();
     Info.zeroCounters();
 
-    m.ts.zeroOutWeights();
+    m.ts.zeroOutWeights(true);
 
     if (predict) {
       Log.info("predict");
@@ -892,11 +891,12 @@ public class FModel implements Serializable {
 //    config.put("globalFeatRoleCoocSimple", "false");
 
     AbstractTransitionScheme.DEBUG = false;
+    boolean pedantic = true;
 
     FModel m = getFModel(config);
 
     List<CachedFeatures.Item> stuff = fooMemo();
-//    stuff = stuff.subList(0, 200);
+//    stuff = stuff.subList(0, 50);
 
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
     m.setCachedFeatures(cfLike);
@@ -919,7 +919,8 @@ public class FModel implements Serializable {
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
       File fsParent = config.getExistingDir("featureSetParent", dd);
-      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-640.fs"));
+      int fsN = 640;
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-16-" + fsN + ".fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
@@ -940,19 +941,18 @@ public class FModel implements Serializable {
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double lr = config.getDouble("learningRate");
-      double maxIters = config.getInt("maxIters", 12);
-      m.ts.zeroOutWeights();
+      double lr = config.getDouble("learningRate");  // TODO Remove
+      double maxIters = config.getInt("maxIters", 15);
+      boolean zeroSumsToo = true;
+      m.ts.zeroOutWeights(zeroSumsToo);
+      m.ts.showWeights("after-zeroing");
       for (int i = 0; i < maxIters; i++) {
         Log.info("[main] training on " + train.size() + " examples");
         Collections.shuffle(train, m.getConfig().rand);
-        for (FNParse y : train)
+        for (FNParse y : train) {
+          if (pedantic) Log.info("training against: " + y.getId());
           m.getUpdate(y).apply(lr);
-//        if (i % 5 == 0 && i > 0)
-//          m.ts.setParamsToAverage();
-//        else
-//          m.ts.takeAverageOfWeights();
-        m.ts.takeAverageOfWeights();
+        }
         assert !overlappingIds(train, test);
         showLoss(test, m, "after-epoch-" + i + "-TEST");
         int tn = Math.min(100, train.size());
@@ -961,7 +961,11 @@ public class FModel implements Serializable {
 
       // See what we get on the test example
       m.ts.setParamsToAverage();
+      m.ts.showWeights("after-averaging");
       assert !overlappingIds(train, test);
+      if (pedantic) 
+        for (FNParse y : test)
+          Log.info("testing against: " + y.getId());
       showLoss(test, m, "on-fold-" + (testIdx%folds));
 //      FNParse yhat = m.predict(yTest);
 //      SentenceEval se = new SentenceEval(yTest, yhat);

@@ -24,7 +24,6 @@ import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.pruning.FNParseSpanPruning;
 import edu.jhu.hlt.fnparse.rl.full.GeneralizedCoef.Loss.Mode;
 import edu.jhu.hlt.fnparse.rl.full.State.FI;
-import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.HasCounts;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
@@ -40,7 +39,7 @@ import edu.jhu.hlt.tutils.HashableIntArray;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.scoring.Adjoints.Caching2;
+import edu.jhu.hlt.tutils.scoring.Adjoints.Caching;
 
 /** Everything that is annoying to copy in State */
 public class Info implements Serializable, HasCounts, HasRandom {
@@ -115,7 +114,8 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
 //  public Map<TFKS, ProductIndexAdjoints> staticHatchFeatCache = new HashMap<>();
 //  public Map<TFKS, ProductIndexAdjoints> staticSquashFeatCache = new HashMap<>();
-  public Map<TFKS, Caching2<ProductIndexAdjoints>> staticHatchFeatCache = new HashMap<>();
+//  public Map<TFKS, Caching2<ProductIndexAdjoints>> staticHatchFeatCache = new HashMap<>();
+  public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>();
   // Just construct a scaled version on the fly...
 //  public Map<TFKS, Scale2<Caching2<ProductIndexAdjoints>>> staticSquashFeatCache = new HashMap<>();
 

@@ -10,8 +10,6 @@ import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
-import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
-import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -125,7 +123,7 @@ public class LLSSPatF extends LLSSP {
   // given score(prune)=infinity).
   public final long realizedBaseRoles;
 
-  public LLSSPatF(Node2 item, LLSSPatF next, Info info, WeightsInfo weights) {
+  public LLSSPatF(Node2 item, LLSSPatF next, Info info, ProductIndexWeights weights) {
     super(item, next);
     if (item.prefix.car().type != TFKS.K)
       throw new IllegalArgumentException();
@@ -179,7 +177,7 @@ public class LLSSPatF extends LLSSP {
     return (LLSSPatF) next;
   }
 
-  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, WeightsInfo globals) {
+  protected Adjoints newFeatures(Node2 item, LLSSPatF prev, Info info, ProductIndexWeights globals) {
     List<ProductIndex> feats = new ArrayList<>(16);
     if (ARG_LOC)
       argLocSimple(item, prev, info, feats);
@@ -189,13 +187,14 @@ public class LLSSPatF extends LLSSP {
       numArgs(item, prev, info, feats);
     if (feats.isEmpty())
       return Adjoints.Constant.ZERO;
-    boolean attemptApplyL2Update = false;   // done in Update instead!
-    ProductIndexAdjoints pia = new ProductIndexAdjoints(globals, feats, attemptApplyL2Update);
-    if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
-      pia.nameOfWeights = "LLSSPatF-dyn";
-      pia.showUpdatesWithAlt = DEBUG_ALPH;
-    }
-    return pia;
+//    boolean attemptApplyL2Update = false;   // done in Update instead!
+//    ProductIndexAdjoints pia = new ProductIndexAdjoints(globals, feats, attemptApplyL2Update);
+//    if (AbstractTransitionScheme.DEBUG && DEBUG_SHOW_BACKWARDS) {
+//      pia.nameOfWeights = "LLSSPatF-dyn";
+//      pia.showUpdatesWithAlt = DEBUG_ALPH;
+//    }
+//    return pia;
+    return globals.score(feats);
   }
 
   private static void numArgs(Node2 item, LLSSPatF prev, Info info, List<ProductIndex> addTo) {

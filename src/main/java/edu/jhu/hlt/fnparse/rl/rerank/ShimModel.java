@@ -33,9 +33,6 @@ public class ShimModel {
   private final RTConfig conf;
 
   private final FModel fmodel;
-  private int itersBetweenPerceptronWeightAverages =
-      ExperimentProperties.getInstance()
-        .getInt("itersBetweenPerceptronWeightAverages", 500);
 
   private CachedFeatures cachedFeatures;
 
@@ -58,8 +55,6 @@ public class ShimModel {
   private TimeMarker showWeights = new TimeMarker();
   public void callEveryIter(int iter) {
     if (fmodel != null) {
-      if (iter % itersBetweenPerceptronWeightAverages == 0)
-        fmodel.getTransitionSystem().takeAverageOfWeights();
       if (showWeights.enoughTimePassed(60))
         fmodel.getTransitionSystem().showWeights();
     } else {

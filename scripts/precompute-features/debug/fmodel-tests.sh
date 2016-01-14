@@ -9,7 +9,7 @@ echo "starting at `date` on $HOSTNAME in `pwd`"
 echo "args: $@"
 
 #JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-JAR=/export/projects/twolfe/fnparse-output/experiments/debug/jan13a/fnparse.jar
+JAR=/export/projects/twolfe/fnparse-output/experiments/debug/jan13b/fnparse.jar
 if [[ ! -f $JAR ]]; then
   echo "put the jar here:"
   echo $JAR
