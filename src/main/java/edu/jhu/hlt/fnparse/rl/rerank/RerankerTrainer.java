@@ -112,6 +112,7 @@ public class RerankerTrainer {
     RAND_MIN,
     RAND,       // ignores model score
   }
+  public static String DEFAULT_ORACLE_MODE = OracleMode.RAND_MIN.name();
 
   // may differ across pretrain/train
   public static class RTConfig implements Serializable {
@@ -147,7 +148,7 @@ public class RerankerTrainer {
 
     // How to implement bFunc for oracle
     // TODO Move to Reranker
-    public OracleMode oracleMode = OracleMode.RAND;
+    public OracleMode oracleMode = OracleMode.valueOf(DEFAULT_ORACLE_MODE);
 
     // How to prune possible argument spans
     public DeterministicRolePruning.Mode argPruningMode = Mode.XUE_PALMER_HERMANN;
@@ -200,7 +201,7 @@ public class RerankerTrainer {
       this.rand = rand;
 
       ExperimentProperties config = ExperimentProperties.getInstance();
-      this.oracleMode = OracleMode.valueOf(config.getString("oracleMode"));
+      this.oracleMode = OracleMode.valueOf(config.getString("oracleMode", DEFAULT_ORACLE_MODE));
     }
 
     public void setPropDev(double propDev) {
@@ -888,7 +889,7 @@ public class RerankerTrainer {
         throw new RuntimeException("no dev data!");
       EvalFunc lossFunc = conf.objective; // null => SVM objective
       Log.info("[main] adding dev set stopping, dev.size=" + dev.size() + " lossFunc=" + lossFunc);
-      File rScript = ExperimentProperties.getInstance().getExistingFile("stoppingScript", new File("/home/hltcoe/twolfe/fnparse/scripts/stop.sh"));
+      File rScript = ExperimentProperties.getInstance().getExistingFile("stoppingScript", new File("/home/hltcoe/twolfe/fnparse-build/fnparse/scripts/stop.sh"));
       double alpha = 0.1;     // Lower numbers mean stop earlier.
       double k = 8;           // Size of history
       int skipFirst = 3;      // Drop the first value(s) to get the variance est. right.
@@ -1237,7 +1238,7 @@ public class RerankerTrainer {
     trainer.useSyntaxSpanPruning = config.getBoolean("useSyntaxSpanPruning", true);
 
     trainer.trainConf.oracleMode = OracleMode.valueOf(
-        config.getString("oracleMode", "RAND_MIN").toUpperCase());
+        config.getString("oracleMode", DEFAULT_ORACLE_MODE).toUpperCase());
 
     trainer.pretrainConf.batchSize = config.getInt("pretrainBatchSize", 1);
     trainer.trainConf.batchSize = config.getInt("trainBatchSize", 1);

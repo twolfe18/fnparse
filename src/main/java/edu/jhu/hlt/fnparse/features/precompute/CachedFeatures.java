@@ -601,6 +601,9 @@ public class CachedFeatures implements Serializable {
       if (dropoutMode != DropoutMode.OFF)
         throw new RuntimeException("fixme");
       Item cur = loadedSentId2Item.get(sent.getId());
+      List<ProductIndex> feats = cur.getFlattenedCachedFeatures(t, s);
+      if (feats != null)
+        return feats;
       return statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
 //      final int fsLen = featureSet.length;
 //

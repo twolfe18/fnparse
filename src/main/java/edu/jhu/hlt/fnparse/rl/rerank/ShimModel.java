@@ -107,6 +107,8 @@ public class ShimModel {
     if (verbose)
       Log.info("[main] isFModel=" + isFModel());
     if (fmodel != null) {
+      // NOTE: This code path is deprecated, argLoc, numArgs, and roleCooc
+      // are read directly from LLSSPatF at class initialization.
       Config c = fmodel.getConfig();
       c.argLocFeature = config.getBoolean("globalFeatArgLocSimple", false);
       c.numArgsFeature = config.getBoolean("globalFeatNumArgs", false);
