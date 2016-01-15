@@ -147,7 +147,7 @@ public class RerankerTrainer {
 
     // How to implement bFunc for oracle
     // TODO Move to Reranker
-    public OracleMode oracleMode = OracleMode.MAX;
+    public OracleMode oracleMode = OracleMode.RAND;
 
     // How to prune possible argument spans
     public DeterministicRolePruning.Mode argPruningMode = Mode.XUE_PALMER_HERMANN;

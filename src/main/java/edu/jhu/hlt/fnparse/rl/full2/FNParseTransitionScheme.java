@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.rl.full2;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -31,7 +32,6 @@ import edu.jhu.hlt.fnparse.rl.full.weights.WeightsInfo;
 import edu.jhu.hlt.fnparse.rl.full2.eggs.EggWithStaticScore;
 import edu.jhu.hlt.fnparse.rl.full2.eggs.ExpectedUtilityEggSorter;
 import edu.jhu.hlt.fnparse.rl.full2.eggs.SortedEggCache;
-import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -41,9 +41,7 @@ import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.tutils.scoring.Adjoints.Caching;
-import edu.jhu.hlt.tutils.scoring.Adjoints.Caching2;
 import edu.jhu.prim.tuple.Pair;
-import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.util.Alphabet;
 
 /**
@@ -52,7 +50,8 @@ import edu.jhu.util.Alphabet;
  *
  * @author travis
  */
-public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> {
+public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, Info> implements Serializable {
+  private static final long serialVersionUID = -3778783151385695349L;
 
   public static boolean DEBUG_ENCODE = true;
   public static boolean DEBUG_FEATURES = false;

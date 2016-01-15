@@ -85,6 +85,10 @@ import edu.jhu.prim.vector.IntDoubleVector;
 public class CachedFeatures implements Serializable {
   private static final long serialVersionUID = 1063789546828258765L;
 
+  // If true sort features and remove any which have the same feature product
+  // (does not check against cardinality, though I guess they should probably
+  // be equal for all features).
+  // With dedup, performance tends to be a little higher.
   public static final boolean DEDUP_FEATS = true;
 
   private int[][] featureSet;   // each int[] is a feature, each of those values is a template
@@ -126,12 +130,11 @@ public class CachedFeatures implements Serializable {
 
     // These are for caching InformationGain.flatten
     private Map<Span, Map<Span, List<ProductIndex>>> features4;
-    private int[][] featureSet;
+
     public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
       assert features4 == null;
       Sentence sent = parse.getSentence();
       features4 = new HashMap<>();
-      this.featureSet = featureSet;
       for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
         Map<Span, List<ProductIndex>> m1 = new HashMap<>();

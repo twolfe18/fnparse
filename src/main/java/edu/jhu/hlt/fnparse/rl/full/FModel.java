@@ -537,7 +537,7 @@ public class FModel implements Serializable {
     private int[] template2cardinality;
 
     public void setFeatureset(File featureSetFile, BiAlph bialph) {
-      Log.info("[main] using featuresSetFile=" + featureSetFile.getPath()
+      Log.info("[main] using featureSetFile=" + featureSetFile.getPath()
         + " and bialph=" + bialph.getSource().getPath()
         + " and code close to CachedFeatures.Params");
       template2cardinality = bialph.makeTemplate2Cardinality();

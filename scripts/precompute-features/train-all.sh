@@ -77,7 +77,7 @@ for PERCEPTRON in "true" "false"; do
 if [[ $SET_PERCEPTRON != "#" && $SET_PERCEPTRON != $PERCEPTRON ]]; then
   continue
 fi
-for BEAM_SIZE in 1 2 4 8 16; do
+for BEAM_SIZE in 1 2 4 8 16 32 64; do
 if [[ $SET_BEAM_SIZE != "#" && $SET_BEAM_SIZE != $BEAM_SIZE ]]; then
   continue
 fi
