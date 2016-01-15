@@ -387,33 +387,41 @@ done
 # 1) see Makefile in scripts/having-a-laugh (build feature sets based on product IG + dedup)
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet/experiment/jan5a
-DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/framenet
-DATASET="framenet"
-
-#WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank/experiment/jan5a
-#DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/propbank
+#DATASET="framenet"
 DATASET="propbank"
+
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan15a
+DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
 
 
 ### Setup
 mkdir -p $WD/sge-logs
 
 echo "Copying the features into place..."
-mkdir $DD/features
-cp scripts/having-a-laugh/$DATASET-*.fs $DD/features
-DEFAULT_FEATURES=$DD/features/$DATASET-8-640.fs
-if [[ ! -f $DEFAULT_FEATURS ]]; then
+mkdir $WD/features
+for f in scripts/having-a-laugh/$DATASET-*.fs; do
+  echo "$f  ==>  $WD/features"
+  cp $f $WD/features
+done
+DEFAULT_FEATURES=$WD/features/$DATASET-8-640.fs
+if [[ ! -f $DEFAULT_FEATURES ]]; then
   echo "something went wrong with copying features, default doesn't exist:"
-  echo $DEFAULT_FEATURS
+  echo $DEFAULT_FEATURES
 fi
 
+JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
+JAR_STABLE=$WD/fnparse.jar
+echo "copying the jar to a safe place..."
+echo "    $JAR"
+echo "==> $JAR_STABLE"
+cp $JAR $JAR_STABLE
+
 if [[ $DATASET == "propbank" ]]; then
-  MEM="29G"
-  MEM_FREE="31G"
+  MEM="57G"
+  MEM_FREE="60G"
 elif [[ $DATASET == "framenet" ]]; then
-  MEM="7G"
-  MEM_FREE="8G"
+  MEM="12G"
+  MEM_FREE="14G"
 else
   echo "unknown dataset: $DATASET"
 fi
@@ -423,19 +431,109 @@ echo "using MEM=$MEM MEM_FREE=$MEM_FREE"
 
 # Oracle (-DoracleMode)
 for OM in RAND RAND_MIN RAND_MAX MIN MAX; do
-  qsub -N "oracleMode-$OM" -o $WD/sge-logs
+  K="oracleMode-$OM"
+  qsub -N $K -o $WD/sge-logs \
     -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
     ./scripts/precompute-features/train2.sh \
-      $WD $DD $DATASET $MEM $JAR \
+      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
       featureSetFile $DEFAULT_FEATURES \
       oracleMode $OM
 done
 
 # Global features (see LLSSPatF)
+qsub -N "global-NONE" -o $WD/sge-logs \
+  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+  ./scripts/precompute-features/train2.sh \
+    $WD/global-NONE $DD $DATASET $MEM $JAR_STABLE \
+    featureSetFile $DEFAULT_FEATURES \
+    ARG_LOC false ROLE_COOC false NUM_ARGS false
+
+qsub -N "global-ARG_LOC" -o $WD/sge-logs \
+  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+  ./scripts/precompute-features/train2.sh \
+    $WD/global-ARG_LOC $DD $DATASET $MEM $JAR_STABLE \
+    featureSetFile $DEFAULT_FEATURES \
+    ARG_LOC true ROLE_COOC false NUM_ARGS false
+
+qsub -N "global-ROLE_COOC" -o $WD/sge-logs \
+  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+  ./scripts/precompute-features/train2.sh \
+    $WD/global-ROLE_COOC $DD $DATASET $MEM $JAR_STABLE \
+    featureSetFile $DEFAULT_FEATURES \
+    ARG_LOC false ROLE_COOC true NUM_ARGS false
+
+qsub -N "global-NUM_ARGS" -o $WD/sge-logs \
+  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+  ./scripts/precompute-features/train2.sh \
+    $WD/global-NUM_ARGS $DD $DATASET $MEM $JAR_STABLE \
+    featureSetFile $DEFAULT_FEATURES \
+    ARG_LOC false ROLE_COOC false NUM_ARGS true
+
+qsub -N "global-FULL" -o $WD/sge-logs \
+  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+  ./scripts/precompute-features/train2.sh \
+    $WD/global-FULL $DD $DATASET $MEM $JAR_STABLE \
+    featureSetFile $DEFAULT_FEATURES \
+    ARG_LOC true ROLE_COOC true NUM_ARGS true
+
 # Feature set (-DfeatureSetFile)
+#for D in 640 1280 160 2560; do
+for D in 640 1280 160; do
+for C in 4 8 16; do
+  FS=${WD}/features/${DATASET}-${C}-${D}.fs
+  if [[ ! -f $FS ]]; then
+    echo "missing feature file: $FS"
+  else
+    K="features-C${C}-D${D}"
+    qsub -N $K -o $WD/sge-logs \
+      -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+      ./scripts/precompute-features/train2.sh \
+        $WD/$K $DD $DATASET $MEM $JAR_STABLE \
+        featureSetFile $FS
+  fi
+done
+done
+
 # Beam size (-DbeamSize)
+for B in 01 02 04 08 16 32 64; do
+  K="beam-${B}"
+  qsub -N $K -o $WD/sge-logs \
+    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+    ./scripts/precompute-features/train2.sh \
+      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
+      featureSetFile $DEFAULT_FEATURES \
+      beamSize $B
+done
+
 # Egg sorting * Kmax
+for SORT_MODE in NONE BY_MODEL_SCORE BY_EXPECTED_UTILITY; do
+for KMAX in true false; do
+  K="eggSort-${SORT_MODE}-kmax-${KMAX}"
+  qsub -N $K -o $WD/sge-logs \
+    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+    ./scripts/precompute-features/train2.sh \
+      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
+      featureSetFile $DEFAULT_FEATURES \
+      sortEggsMode $SORT_MODE sortEggsKmaxS $KMAX
+done
+done
+
 # Train size (-DnTrain)
+if [[ $DATASET == PROPBANK ]]; then
+  N=115812
+else
+  N=3500
+fi
+for D in 2 4 8 16 32 64 128 256; do
+  C=`echo "$N / $D" | bc`
+  K="ntrain-$D"
+  qsub -N $K -o $WD/sge-logs \
+    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
+    ./scripts/precompute-features/train2.sh \
+      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
+      featureSetFile $DEFAULT_FEATURES \
+      nTrain $C
+done
 
 
 

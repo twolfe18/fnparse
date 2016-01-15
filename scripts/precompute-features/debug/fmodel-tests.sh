@@ -7,6 +7,7 @@
 
 echo "starting at `date` on $HOSTNAME in `pwd`"
 echo "args: $@"
+echo "running on:`grep -m 1 '^model name' /proc/cpuinfo | cut -d':' -f2`"
 
 #JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 JAR=/export/projects/twolfe/fnparse-output/experiments/debug/jan13b/fnparse.jar
