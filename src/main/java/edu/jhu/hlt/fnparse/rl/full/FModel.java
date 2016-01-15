@@ -930,9 +930,9 @@ public class FModel implements Serializable {
       File dd = new File("data/debugging/");
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
-      File fsParent = config.getExistingDir("featureSetParent", dd);
-      int fsC = 8;
-      int fsN = 1280;
+      File fsParent = config.getFile("featureSetParent", dd);
+      int fsC = config.getInt("fsC", 8);
+      int fsN = config.getInt("fsN", 1280);
       File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }

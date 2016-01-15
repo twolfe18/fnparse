@@ -205,6 +205,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   public FNParseTransitionScheme(CFLike cf, Primes primes) {
+    Log.info("cfLike=" + cf);
     this.cachedFeatures = cf;
     this.alph = new Alphabet<>();
 
