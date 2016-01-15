@@ -49,6 +49,20 @@ import edu.jhu.prim.tuple.Pair;
  */
 public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRandom> {
 
+  public static int COUNTER_NEXT = 0;
+  public static int COUNTER_ZIPPER = 0;
+  public static int COUNTER_MISC = 0;
+  public static void zeroCounters() {
+    COUNTER_NEXT = 0;
+    COUNTER_ZIPPER = 0;
+    COUNTER_MISC = 0;
+  }
+  public static void logCounters() {
+    Log.info("COUNTER_NEXT=" + COUNTER_NEXT
+        + " COUNTER_ZIPPER=" + COUNTER_ZIPPER
+        + " COUNTER_MISC=" + COUNTER_MISC);
+  }
+
   public static boolean DEBUG = false;
   public static boolean DEBUG_SEARCH = false;
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
@@ -249,6 +263,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
    * and returns a node representing the modified parent (first in spine).
    */
   public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild, Z info) {
+    COUNTER_ZIPPER++;
     if (DEBUG && DEBUG_REPLACE_NODE) {
       System.out.println("searchChild.loss=" + searchChild.getLoss());
       System.out.println("replaceChild.loss=" + replaceChild.getLoss());
@@ -382,6 +397,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       throw new IllegalArgumentException("prev may not be null, needed at "
           + "least for Info (e.g. search coefs)");
     }
+    COUNTER_NEXT++;
 
     Node2 wife = spine.car();
     if (DEBUG && DEBUG_SEARCH) {
@@ -401,6 +417,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       LL<Node2> spine2 = new LL<>(cur.car(), spine);
       added += nextStates(root, spine2, addTo);
     }
+
+    if (wife.eggs != null && added > 0)
+      COUNTER_MISC++;
 
     if (wife.eggs == null) {
       // No-op! Nothing more can be done with this node

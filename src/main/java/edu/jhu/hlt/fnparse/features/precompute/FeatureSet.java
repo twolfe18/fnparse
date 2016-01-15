@@ -94,7 +94,7 @@ public class FeatureSet {
             Log.info("skipping because " + tn + " was not in the alphabet");
             continue;
           }
-          assert t >= 0;
+          assert t >= 0 : "couldn't find \"" + tn + "\" in " + bialph.getSource().getPath();
           intTemplates[i] = t;
           templates.set(t);
         }

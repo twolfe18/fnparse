@@ -42,6 +42,8 @@ public class ProductIndex {
     this.cardProd = derivedFrom.cardProd * card;
     this.derivedFrom = derivedFrom;
     this.arity = derivedFrom.arity + 1;
+    assert featProd >= 0;
+    assert cardProd >= 0;
   }
 
   public ProductIndex(int feat, int card, int thisIsTheNilConstructor, int foo) {
@@ -165,14 +167,14 @@ public class ProductIndex {
     return prod(b ? 1 : 0, 2);
   }
 
-  public ProductIndex prod(int feat, int card) {
+  public ProductIndex prod(long feat, long card) {
     assert feat < card && feat >= 0 : "feat=" + feat + " card=" + card;
     return new ProductIndex(feat, card, this);
   }
 
   /** You loose the chain in the argument, calls getProd(Feat|Card)Safe */
   public ProductIndex flatProd(ProductIndex other) {
-    return prod(other.getProdFeatureSafe(), other.getProdCardinalitySafe());
+    return prod(other.getProdFeature(), other.getProdCardinality());
   }
 
   /** Destroys cardinality, may be used once */

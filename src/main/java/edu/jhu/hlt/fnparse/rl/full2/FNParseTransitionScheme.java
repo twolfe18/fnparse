@@ -60,6 +60,20 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public static boolean MAIN_LOGGING = true;
 
+  public static int COUNTER_MISC = 0;
+  public static int COUNTER_COMPUTE_FEATS = 0;
+  public static int COUNTER_GEN_EGGS_CACHE_MISS = 0;
+  public static void zeroCounters() {
+    COUNTER_MISC = 0;
+    COUNTER_COMPUTE_FEATS = 0;
+    COUNTER_GEN_EGGS_CACHE_MISS = 0;
+  }
+  public static void logCounters() {
+    Log.info("COUNTER_COMPUTE_FEATS=" + COUNTER_COMPUTE_FEATS
+        + " COUNTER_GEN_EGGS_CACHE_MISS=" + COUNTER_GEN_EGGS_CACHE_MISS
+        + " COUNTER_MISC=" + COUNTER_MISC);
+  }
+
   public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
 
   public enum SortEggsMode {
@@ -270,8 +284,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] sortEggsKmaxS=" + sortEggsKmaxS);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
+      Log.info("[main] ARG_LOC=" + LLSSPatF.ARG_LOC);
+      Log.info("[main] NUM_ARGS=" + LLSSPatF.NUM_ARGS);
+      Log.info("[main] ROLE_COOC=" + LLSSPatF.ROLE_COOC);
 //      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
-      Log.info("[main] useGlobalFeats=" + useGlobalFeats);
+//      Log.info("[main] useGlobalFeats=" + useGlobalFeats);
       LLSSPatF.logGlobalFeatures(true);
     }
   }
@@ -333,10 +350,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public boolean oneAtATime(int type) {
-//    if (type == TFKS.F || type == TFKS.K)
-//      return true;
-    if (type <= oneAtATime)
+    if (type <= oneAtATime) {
+      COUNTER_MISC++;
       return true;
+    }
     return super.oneAtATime(type);
   }
 
@@ -643,6 +660,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // Generate all (k,s) possibilities given the known (t,f)
       SortedEggCache eggs = info.getSortedEggs(momPrefix.t, momPrefix.f);
       if (eggs == null) {
+        COUNTER_GEN_EGGS_CACHE_MISS++;
         List<Pair<TFKS, EggWithStaticScore>> egF = new ArrayList<>();
         List<Pair<TFKS, EggWithStaticScore>> egK = new ArrayList<>();
 
@@ -961,6 +979,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Frame frame = fi.getFrame(motherPrefix.f);
 
         // These are exact feature indices (from disk, who precompute pipeline)
+        COUNTER_COMPUTE_FEATS++;
         List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
 
         if (featProdBase) {
@@ -1034,7 +1053,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Caching pia = m.get(memoKey);
     if (pia == null) {
       List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
-      pia = new Caching(weights.score(feats));
+      boolean convertList2Array = true;
+      pia = new Caching(weights.score(feats, convertList2Array));
       m.put(memoKey, pia);
     }
 

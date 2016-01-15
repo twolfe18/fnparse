@@ -1317,8 +1317,13 @@ public class RerankerTrainer {
     String fs = config.getBoolean("simpleFeatures", false)
         ? featureTemplates : featureTemplatesSearch;
     String otherFs = config.getString("featureSetFile", "");
-    if (!otherFs.isEmpty())
-      fs = getFeatureSetFromFileNewNew(otherFs);
+    if (!otherFs.isEmpty()) {
+      File f = new File(otherFs);
+      if (!f.isFile())
+        throw new RuntimeException("not a valid feature file: " + otherFs);
+      fs = FeatureSet.getFeatureSetString(f);
+//      fs = getFeatureSetFromFileNewNew(otherFs);
+    }
     Log.info("using featureSet=" + fs);
 
     // Enable the CachedFeatures module
@@ -2012,29 +2017,6 @@ public class RerankerTrainer {
       */
       + " + frameRole * span1span2Overlap"
       + " + frameRole * Dist(SemaforPathLengths,Head1,Head2)";
-
-  /**
-   * Reads the 7 column tab-separated format:
-   * score, ig, hx, selectivity, arity, intTemplates, stringTemplates
-   */
-  private static String getFeatureSetFromFileNewNew(String path) {
-    Log.info("[main] reading from " + path);
-    File f = new File(path);
-    if (!f.isFile())
-      throw new IllegalArgumentException("not a file: " + path);
-    List<String> features = new ArrayList<>();
-    try (BufferedReader r = FileUtil.getReader(f)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        String[] toks = line.split("\t");
-        if (toks.length != 7)
-          Log.warn("unknown line format: " + line);
-        features.add(toks[6]);
-      }
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
-    return StringUtils.join(" + ", features);
-  }
 
   @SuppressWarnings("unused")
   private static String getFeatureSetFromFileNew(String path) {
