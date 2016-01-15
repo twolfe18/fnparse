@@ -40,8 +40,12 @@ import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
+import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
 import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
+import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
+import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -536,6 +540,32 @@ public class FModel implements Serializable {
     private int[][] featureSet; // TODO initialize
     private int[] template2cardinality;
 
+    public SimpleCFLike(List<CachedFeatures.Item> items) {
+      Object old;
+      if (!CACHE_FLATTEN)
+        sentTS2feats = new HashMap<>();
+      parses = new ArrayList<>();
+      s2i = new HashMap<>();
+      for (CachedFeatures.Item i : items) {
+        FNParse y = i.getParse();
+        y.featuresAndSpans = i;  // evil
+        parses.add(y);
+        Sentence s = y.getSentence();
+        old = s2i.put(s, i);
+        assert old == null;
+        if (!CACHE_FLATTEN) {
+          Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
+          while (btIter.hasNext()) {
+            Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
+            List<ProductIndex> feats2 = bt2pi(st2feats.get2());
+            Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
+            old = sentTS2feats.put(key, feats2);
+            assert old == null;
+          }
+        }
+      }
+    }
+
     public void setFeatureset(File featureSetFile, BiAlph bialph) {
       Log.info("[main] using featureSetFile=" + featureSetFile.getPath()
         + " and bialph=" + bialph.getSource().getPath()
@@ -549,29 +579,6 @@ public class FModel implements Serializable {
         for (Item i : s2i.values())
           i.convertToFlattenedRepresentation(featureSet, template2cardinality);
         Log.info("done caching flatten operation");
-      }
-    }
-
-    public SimpleCFLike(List<CachedFeatures.Item> items) {
-      Object old;
-      sentTS2feats = new HashMap<>();
-      parses = new ArrayList<>();
-      s2i = new HashMap<>();
-      for (CachedFeatures.Item i : items) {
-        FNParse y = i.getParse();
-        y.featuresAndSpans = i;  // evil
-        parses.add(y);
-        Sentence s = y.getSentence();
-        old = s2i.put(s, i);
-        assert old == null;
-        Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
-        while (btIter.hasNext()) {
-          Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
-          List<ProductIndex> feats2 = bt2pi(st2feats.get2());
-          Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
-          old = sentTS2feats.put(key, feats2);
-          assert old == null;
-        }
       }
     }
 
@@ -617,8 +624,10 @@ public class FModel implements Serializable {
   public static List<CachedFeatures.Item> fooMemo() {
     File f = new File("/tmp/fooMemo");
     f = ExperimentProperties.getInstance().getFile("fooMemoFile", f);
-    if (f.isFile())
+    if (f.isFile()) {
+      FileUtil.VERBOSE = true;
       return (List<CachedFeatures.Item>) FileUtil.deserialize(f);
+    }
     List<CachedFeatures.Item> l = foo();
     FileUtil.serialize(l, f);
     return l;
@@ -833,7 +842,19 @@ public class FModel implements Serializable {
    * Prints info on how much work is being done every time inference is run.
    */
   public static void featureAudit(FNParse y, FModel m, boolean predict) {
+
+    // Check possible for each T/F node
+    Info inf = m.getPredictInfo(y);
+    Node2 n = m.ts.genRootNode(inf);
+    int X = 0;
+    for (LLTVN cur = n.eggs; cur != null; cur = cur.cdr())
+      X += cur.car().numPossible;
+
     ProductIndexAdjoints.zeroCounters();
+    AveragedPerceptronWeights.zeroCounters();
+    FNParseTransitionScheme.zeroCounters();
+    AbstractTransitionScheme.zeroCounters();
+    DoubleBeam.zeroCounters();
     Info.zeroCounters();
 
     m.ts.zeroOutWeights(true);
@@ -856,8 +877,12 @@ public class FModel implements Serializable {
       Kmax = Math.max(Kmax, k);
     }
     Log.info("id=" + y.getId() + " nFI=" + nFI + " nI=" + nI + " nTok=" + nTok
-        + " Ksum=" + Ksum + " Kmax=" + Kmax);
+        + " Ksum=" + Ksum + " Kmax=" + Kmax + " X=" + X);
     ProductIndexAdjoints.logCounters();
+    AveragedPerceptronWeights.logCounters();
+    FNParseTransitionScheme.logCounters();
+    AbstractTransitionScheme.logCounters();
+    DoubleBeam.logCounters();
     Info.logCounters();
   }
 
@@ -880,11 +905,10 @@ public class FModel implements Serializable {
   public static void main3(String[] args) {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.putIfAbsent("oracleMode", "RAND");
-    config.putIfAbsent("useGlobalFeatures", "true");
-    config.putIfAbsent("forceLeftRightInference", "false");
     config.putIfAbsent("beamSize", "1");
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
-    config.putIfAbsent("learningRate", "" + 0.1);
+
+//    config.putIfAbsent("ANY_GLOBALS", "false");
 
 //    config.putIfAbsent("sortEggsMode", "NONE");
     config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
@@ -894,9 +918,7 @@ public class FModel implements Serializable {
     config.putIfAbsent("sortEggsKmaxS", "true");
 
     Log.info("oracleMode=" + config.getString("oracleMode"));
-    Log.info("forceLeftRightInference=" + config.getBoolean("forceLeftRightInference"));
     Log.info("beamSize=" + config.getInt("beamSize"));
-    Log.info("learningRate=" + config.getDouble("learningRate"));
 
 //    config.put("globalFeatArgLocSimple", "false");
 //    config.put("globalFeatNumArgs", "false");
@@ -913,16 +935,6 @@ public class FModel implements Serializable {
     SimpleCFLike cfLike = new SimpleCFLike(stuff);
     m.setCachedFeatures(cfLike);
 
-    boolean speedAudit = false;
-    if (speedAudit) {
-      int n = Math.min(stuff.size(), 15);
-      for (int i = 0; i < n; i++) {
-        featureAudit(stuff.get(i).parse, m, true);
-        featureAudit(stuff.get(i).parse, m, false);
-      }
-      return;
-    }
-
     // Try to mimic the code in CachedFeatures.Params.
     // This is the data needed to create the state that CachedFeatures.Params has.
     boolean mimicRT = true;
@@ -937,6 +949,16 @@ public class FModel implements Serializable {
       cfLike.setFeatureset(featureSetFile, bialph);
     }
     Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
+
+    boolean speedAudit = false;
+    if (speedAudit) {
+      int n = Math.min(stuff.size(), 15);
+      for (int i = 0; i < n; i++) {
+        featureAudit(stuff.get(i).parse, m, true);
+        featureAudit(stuff.get(i).parse, m, false);
+      }
+      return;
+    }
 
     int folds = 10;
     int n = stuff.size();
@@ -954,7 +976,6 @@ public class FModel implements Serializable {
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double lr = config.getDouble("learningRate");  // TODO Remove
       double maxIters = config.getInt("maxIters", 15);
       boolean zeroSumsToo = true;
       m.ts.zeroOutWeights(zeroSumsToo);
@@ -964,7 +985,7 @@ public class FModel implements Serializable {
         Collections.shuffle(train, m.getConfig().rand);
         for (FNParse y : train) {
           if (pedantic) Log.info("training against: " + y.getId());
-          m.getUpdate(y).apply(lr);
+          m.getUpdate(y).apply(1);
         }
         assert !overlappingIds(train, test);
         showLoss(test, m, "after-epoch-" + i + "-TEST");

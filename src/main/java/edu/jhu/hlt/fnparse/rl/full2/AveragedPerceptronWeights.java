@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 
@@ -15,8 +16,22 @@ import edu.jhu.prim.vector.IntDoubleDenseVector;
 public class AveragedPerceptronWeights implements Serializable, ProductIndexWeights {
   private static final long serialVersionUID = 708063405325278777L;
 
+  public static int COUNTER_CONSTRUCT = 0;
+  public static int COUNTER_FORWARDS = 0;
+  public static int COUNTER_BACKWARDS = 0;
+  public static void zeroCounters() {
+    COUNTER_CONSTRUCT = 0;
+    COUNTER_FORWARDS = 0;
+    COUNTER_BACKWARDS = 0;
+  }
+  public static void logCounters() {
+    Log.info("nConstruct=" + COUNTER_CONSTRUCT
+        + " nForwards=" + COUNTER_FORWARDS
+        + " nBacwards=" + COUNTER_BACKWARDS);
+  }
+
   // false=>649243 true=>546725
-  public static final boolean EAGER_FEATURE_MODULO = true;
+//  public static final boolean EAGER_FEATURE_MODULO = false;
 
   private IntDoubleDenseVector w;
   private IntDoubleDenseVector u;
@@ -48,8 +63,13 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   @Override
-  public Adjoints score(List<ProductIndex> features) {
+  public Adjoints score(LL<ProductIndex> features) {
     return this.new Adj(features);
+  }
+
+  @Override
+  public Adjoints score(List<ProductIndex> features, boolean convertToIntArray) {
+    return this.new Adj(features, convertToIntArray);
   }
 
   /** Aliased to getWeight */
@@ -89,6 +109,23 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return c;
   }
 
+//  public class Adj1 implements Adjoints {
+//    private final int index;
+//    public Adj1(long idx) {
+//      long d = dimension();
+//      index = (int) (idx % d);
+//    }
+//    @Override
+//    public double forwards() {
+//      return getWeight(index);
+//    }
+//    @Override
+//    public void backwards(double dErr_dForwards) {
+//      w.add(features[i], -dErr_dForwards);
+//      u.add(features[i], c * -dErr_dForwards);
+//    }
+//  }
+
   /**
    * Reads from weights (not averaged weights). Backwards performs update to
    * weights and average, but you must still call
@@ -97,37 +134,53 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   public class Adj implements Adjoints {
     private int[] features;
     private List<ProductIndex> features2;
+    private LL<ProductIndex> features3;
 
-    public Adj(List<ProductIndex> features) {
-      if (EAGER_FEATURE_MODULO) {
+    public Adj(LL<ProductIndex> features) {
+      features3 = features;
+    }
+
+    public Adj(List<ProductIndex> features, boolean convertToIntArray) {
+      if (convertToIntArray) {
         this.features = new int[features.size()];
         for (int i = 0; i < this.features.length; i++)
           this.features[i] = features.get(i).getProdFeatureModulo(dimension);
       } else {
         this.features2 = features;
       }
+      COUNTER_CONSTRUCT++;
     }
 
     @Override
     public double forwards() {
       double d = 0;
-      if (EAGER_FEATURE_MODULO) {
+      if (features3 != null) {
+        for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr())
+          d += getWeight(pi.car().getProdFeatureModulo(dimension));
+      } else if (features != null) {
         for (int i = 0; i < features.length; i++)
           d += getWeight(features[i]);
       } else {
         for (ProductIndex pi : features2)
           d += getWeight(pi.getProdFeatureModulo(dimension));
       }
+      COUNTER_FORWARDS++;
       return d;
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
-      if (EAGER_FEATURE_MODULO) {
-      for (int i = 0; i < features.length; i++) {
-        w.add(features[i], -dErr_dForwards);
-        u.add(features[i], c * -dErr_dForwards);
-      }
+      if (features3 != null) {
+        for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr()) {
+          int i = pi.car().getProdFeatureModulo(dimension);
+          w.add(i, -dErr_dForwards);
+          u.add(i, c * -dErr_dForwards);
+        }
+      } else if (features != null) {
+        for (int i = 0; i < features.length; i++) {
+          w.add(features[i], -dErr_dForwards);
+          u.add(features[i], c * -dErr_dForwards);
+        }
       } else {
         for (ProductIndex pi : features2) {
           int i = pi.getProdFeatureModulo(dimension);
@@ -135,6 +188,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
           u.add(i, c * -dErr_dForwards);
         }
       }
+      COUNTER_BACKWARDS++;
     }
   }
 }

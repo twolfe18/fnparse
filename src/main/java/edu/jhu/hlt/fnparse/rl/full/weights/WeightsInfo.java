@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full.weights;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.fnparse.rl.full2.LL;
 import edu.jhu.hlt.fnparse.rl.full2.ProductIndexWeights;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -56,7 +57,9 @@ public class WeightsInfo implements ProductIndexWeights {
   }
 
   @Override
-  public Adjoints score(List<ProductIndex> features) {
+  public Adjoints score(List<ProductIndex> features, boolean convertToArray) {
+    if (!convertToArray)
+      throw new RuntimeException("implement me");
     boolean attemptApplyL2Update = false;
     return new ProductIndexAdjoints(this, features, attemptApplyL2Update);
   }
@@ -69,5 +72,10 @@ public class WeightsInfo implements ProductIndexWeights {
   public String summary() {
     return String.format("(L2=%.3f D=%d L2Reg=%.2g lr=%.2g)",
         getL2Norm(), dimension, l2Reg, learningRate);
+  }
+
+  @Override
+  public Adjoints score(LL<ProductIndex> features) {
+    throw new RuntimeException("implement me");
   }
 }

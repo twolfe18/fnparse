@@ -107,6 +107,15 @@ public interface Beam<T extends StateLike> {
    * to add a little jitter to the scores.
    */
   public static class DoubleBeam<T extends StateLike> implements Beam<T> {
+
+    public static int COUNTER_OFFER = 0;
+    public static void zeroCounters() {
+      COUNTER_OFFER = 0;
+    }
+    public static void logCounters() {
+      Log.info("COUNTER_OFFER=" + COUNTER_OFFER);
+    }
+
     // This is sort of like a bijection because:
     // scores: BeamItem -> State + ...
     // table: State -> BeamItem
@@ -174,6 +183,7 @@ public interface Beam<T extends StateLike> {
      */
     @Override
     public boolean offer(T s) {
+      COUNTER_OFFER++;
       numOffers++;
       double sc = coefs.forwards(s.getStepScores());
 

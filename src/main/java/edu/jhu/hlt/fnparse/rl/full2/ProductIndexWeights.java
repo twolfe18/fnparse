@@ -6,6 +6,7 @@ import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 
 public interface ProductIndexWeights {
-  public Adjoints score(List<ProductIndex> features);
+  public Adjoints score(List<ProductIndex> features, boolean convertToIntArray);
+  public Adjoints score(LL<ProductIndex> features);
   public int dimension();
 }

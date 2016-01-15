@@ -119,12 +119,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
   // Just construct a scaled version on the fly...
 //  public Map<TFKS, Scale2<Caching2<ProductIndexAdjoints>>> staticSquashFeatCache = new HashMap<>();
 
-  /** Probably don't need to do this because Info's should only last for one search, get GC'd quickly */
-  public void clearStaticFeatureCache() {
-    staticHatchFeatCache.clear();
-//    staticSquashFeatCache.clear();
-  }
-
   // copy between oracle and MV Info instances?
   // easy 2x...
   /** Sets this instances cache to the same cache as other */
