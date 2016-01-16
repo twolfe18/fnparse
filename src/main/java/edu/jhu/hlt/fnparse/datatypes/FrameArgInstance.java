@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.Arrays;
 
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.hash.Hash;
 
@@ -61,9 +62,15 @@ public class FrameArgInstance extends FrameRoleInstance {
     if (role < 0) {
       fi = FrameInstance.frameMention(frame, target, sent);
     } else {
+      int r = role;
+      int K = frame.numRoles();
+      if (role >= K) {
+        Log.warn("not designed for cont/ref roles!");
+        r = role % K;
+      }
       Span[] arguments = new Span[frame.numRoles()];
       Arrays.fill(arguments, Span.nullSpan);
-      arguments[role] = argument;
+      arguments[r] = argument;
       fi = FrameInstance.newFrameInstance(
           frame, target, arguments, sent);
     }

@@ -960,7 +960,7 @@ public class FModel implements Serializable {
       return;
     }
 
-    int folds = 10;
+    int folds = 15;
     int n = stuff.size();
     for (int testIdx = 0; testIdx < stuff.size(); testIdx++) {
       Log.info("starting fold " + (testIdx % folds));
@@ -976,7 +976,7 @@ public class FModel implements Serializable {
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double maxIters = config.getInt("maxIters", 15);
+      double maxIters = config.getInt("maxIters", 30);
       boolean zeroSumsToo = true;
       m.ts.zeroOutWeights(zeroSumsToo);
       m.ts.showWeights("after-zeroing");

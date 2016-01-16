@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.rl.rerank;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -25,7 +26,8 @@ import edu.jhu.hlt.tutils.TimeMarker;
 /**
  * This is a shim designed to replace {@link Reranker}.
  */
-public class ShimModel {
+public class ShimModel implements Serializable {
+  private static final long serialVersionUID = 1841248078348564919L;
 
   private boolean verbose;
 
@@ -34,7 +36,7 @@ public class ShimModel {
 
   private final FModel fmodel;
 
-  private CachedFeatures cachedFeatures;
+  private transient CachedFeatures cachedFeatures;
 
   public ShimModel(Reranker r, RTConfig conf) {
     Log.info("[main] starting with Reranker");

@@ -1,11 +1,13 @@
 package edu.jhu.hlt.fnparse.features.precompute;
 
+import java.io.Serializable;
 import java.util.Comparator;
 
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.tutils.hash.MurmurHash3;
 
-public class ProductIndex {
+public class ProductIndex implements Serializable {
+  private static final long serialVersionUID = 8195810997213491777L;
 
   public static final int SEED = 9001;
 
