@@ -9,8 +9,10 @@ set -eu
 
 echo "starting at `date` on $HOSTNAME in `pwd`"
 echo "args: $@"
+CPU=`grep -m 1 '^model name' /proc/cpuinfo | cut -d':' -f2 | xargs`
+echo "running on an $CPU"
 
-if [[ $# != 15 ]]; then
+if [[ $# -lt 5 ]]; then
   echo "1) a working directory (WD) for output"
   echo "2) a data directory (DD) which contains coherent-shards-filtered-small"
   echo "3) dataset, i.e. either \"propbank\" or \"framenet\""
@@ -34,8 +36,10 @@ LOG=$WD/log.txt
 # derived inside CachedFeatures now.
 if [[ $DATASET == "propbank" ]]; then
   NR=30
+  PROPBANK=true
 elif [[ $DATASET == "framenet" ]]; then
   NR=60
+  PROPBANK=false
 else
   echo "unknown dataset: $DATASET"
   exit 2
@@ -47,7 +51,7 @@ DATA_HOME=/export/projects/twolfe/fnparse-data
 TIME_LIMIT_MINS=5
 
 #mvn compile exec:java -Dexec.mainClass=edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer \
-java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
+java -Xmx${MEM} -XX:+UseSerialGC -ea -server -cp $JAR \
   -DworkingDir=$WD \
   -DuseCachedFeatures=true \
   -DallowDynamicStopping=true \
@@ -59,6 +63,7 @@ java -Xmx${MEM}G -XX:+UseSerialGC -ea -server -cp $JAR \
   -DcachedFeatures.featuresGlob="glob:**/*" \
   -DcachedFeatures.numDataLoadThreads=2 \
   -DcachedFeatures.hashingTrickDim=`echo "2 * 1024 * 1024" | bc` \
+  -DstoppingScript=/home/hltcoe/twolfe/fnparse-build/fnparse/scripts/stop.sh \
   -DstoppingConditionFrequency=4 \
   -DpretrainBatchSize=1 \
   -DtrainBatchSize=1 \

@@ -604,6 +604,8 @@ public class CachedFeatures implements Serializable {
       List<ProductIndex> feats = cur.getFlattenedCachedFeatures(t, s);
       if (feats != null)
         return feats;
+      Log.info("didn't find any cached flattened features! t=" + t.shortString()
+        + " s=" + s.shortString() + " sent=" + sent.getId());
       return statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
 //      final int fsLen = featureSet.length;
 //
@@ -913,6 +915,9 @@ public class CachedFeatures implements Serializable {
 
   private void addItem(Item cur, Set<String> devSentIds, Set<String> testSentIds) {
     if (FModel.CACHE_FLATTEN) {
+      Log.info("converting to flattened representation for storage: " + cur.getParse().getId());
+      assert featureSet != null && featureSet.length > 0;
+      assert template2cardinality != null && template2cardinality.length > 0;
       cur.convertToFlattenedRepresentation(featureSet, template2cardinality);
     }
     // I think this might still be wrong...
