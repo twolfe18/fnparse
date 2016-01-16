@@ -129,39 +129,60 @@ public class CachedFeatures implements Serializable {
     private Map<Span, Map<Span, BaseTemplates>> features3;
 
     // These are for caching InformationGain.flatten
-    private Map<Span, Map<Span, List<ProductIndex>>> features4;
+//    private Map<Span, Map<Span, List<ProductIndex>>> features4;
+    private Map<SpanPair, long[]> features4b;   // not taken any modulo, hoping PI from disk/flatten fit in 64 bits
+    private Map<Span, List<Span>> argsForTarget;
 
     public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
-      assert features4 == null;
+//      assert features4 == null;
+      assert features4b == null;
       Sentence sent = parse.getSentence();
-      features4 = new HashMap<>();
+//      features4 = new HashMap<>();
+      features4b = new HashMap<>();
+      argsForTarget = new HashMap<>();
       for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
-        Map<Span, List<ProductIndex>> m1 = new HashMap<>();
+        List<Span> args = new ArrayList<>(x1.getValue().size());
+//        Map<Span, List<ProductIndex>> m1 = new HashMap<>();
         for (Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
           Span s = x2.getKey();
           List<ProductIndex> features = statelessGetFeaturesNoModulo(sent, t, s, this, featureSet, template2cardinality);
-          m1.put(s, features);
+//          m1.put(s, features);
+          Object old = features4b.put(new SpanPair(t, s), lpi2la(features));
+          assert old == null;
+          args.add(s);
         }
-        features4.put(t, m1);
+        Object old = argsForTarget.put(t, args);
+        assert old == null;
+//        features4.put(t, m1);
       }
       features3 = null;
     }
+
     public List<ProductIndex> getFlattenedCachedFeatures(Span t, Span s) {
-      if (features4 == null)
+//      if (features4 == null)
+//        return null;
+//      return features4.get(t).get(s);
+      if (features4b == null)
         return null;
-      return features4.get(t).get(s);
+      long[] x = features4b.get(new SpanPair(t, s));
+      List<ProductIndex> l = new ArrayList<>(x.length);
+      for (int i = 0; i < x.length; i++)
+        l.add(new ProductIndex(x[i]));
+      return l;
+    }
+
+    public static long[] lpi2la(List<ProductIndex> x) {
+      long[] a = new long[x.size()];
+      for (int i = 0; i < a.length; i++)
+        a[i] = x.get(i).getProdFeature();
+      return a;
     }
 
     public Item(FNParse parse) {
       if (parse == null)
         throw new IllegalArgumentException();
       this.parse = parse;
-//      int T = parse.numFrameInstances();
-//      this.features = new Map[T];
-//      for (int t = 0; t < T; t++)
-//        this.features[t] = new HashMap<>();
-//      this.features2 = new HashMap<>();
       this.features3 = new HashMap<>();
     }
 
@@ -170,19 +191,18 @@ public class CachedFeatures implements Serializable {
     }
 
     public List<Span> getArgSpansForTarget(Span t) {
-      List<Span> args = new ArrayList<>();
-      if (features4 != null) {
-        args.addAll(features4.get(t).keySet());
-        return args;
-      }
+      if (argsForTarget != null)
+        return argsForTarget.get(t);
       Map<Span, BaseTemplates> f = features3.get(t);
       if (f == null)
         throw new RuntimeException("don't know about this target: " + t.shortString());
+      List<Span> args = new ArrayList<>();
       args.addAll(f.keySet());
       return args;
     }
 
     public Iterator<Pair<SpanPair, BaseTemplates>> getFeatures() {
+      assert false : "re-implement based on features4";
       List<Pair<SpanPair, BaseTemplates>> l = new ArrayList<>();
       for (Map.Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
@@ -194,13 +214,12 @@ public class CachedFeatures implements Serializable {
       return l.iterator();
     }
 
+    // Comes before conversion to features4
     public void setFeatures(Span t, Span arg, BaseTemplates features) {
       if (arg.start < 0 || arg.end < 0)
         throw new IllegalArgumentException("span=" + arg);
       if (features.getTemplates() == null)
         throw new IllegalArgumentException();
-//      BaseTemplates old = this.features[t].put(new IntPair(arg.start, arg.end), features);
-//      BaseTemplates old = this.features2.get(new SpanPair(t, arg));
       Map<Span, BaseTemplates> m = features3.get(t);
       if (m == null) {
         m = new HashMap<>();
@@ -210,9 +229,8 @@ public class CachedFeatures implements Serializable {
       assert old == null;
     }
 
+    /** @deprecated use getFlattenedCachedFeatures */
     public BaseTemplates getFeatures(Span t, Span arg) {
-//      BaseTemplates feats = this.features[t].get(new IntPair(arg.start, arg.end));
-//      BaseTemplates feats = this.features2.get(new SpanPair(t, arg));
       BaseTemplates feats = this.features3.get(t).get(arg);
       assert feats != null : "t=" + t.shortString() + " arg=" + arg.shortString() + " y=" + parse.getId();
       return feats;
@@ -236,12 +254,6 @@ public class CachedFeatures implements Serializable {
             values.add(s);
           else
             sawNullSpan = true;
-//        for (IntPair s : this.features[t].keySet()) {
-//          if (s.first == Span.nullSpan.start && s.second == Span.nullSpan.end) {
-//            sawNullSpan = true;
-//          } else {
-//            values.add(Span.getSpan(s.first, s.second));
-//          }
         }
         if (!sawNullSpan && pedantic)
           Log.warn("no features for nullSpan!");
@@ -492,7 +504,7 @@ public class CachedFeatures implements Serializable {
 
     // k -> feature -> weight
     // Intercept is stored at position 0, followed by this.dimension non-intercept features
-    private int dimension = 1 * 1024 * 1024;    // hashing trick
+    private int dimension;
 
     // These must all have the same dimension for IO
     private LazyL2UpdateVector[] weightsCommit;
