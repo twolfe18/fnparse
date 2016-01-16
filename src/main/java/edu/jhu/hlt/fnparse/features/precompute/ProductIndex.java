@@ -48,7 +48,7 @@ public class ProductIndex implements Serializable {
     assert cardProd >= 0;
   }
 
-  public ProductIndex(int feat, int card, int thisIsTheNilConstructor, int foo) {
+  public ProductIndex(long feat, long card, long thisIsTheNilConstructor, long foo) {
     this.feat = feat;
     this.card = card;
     this.featProd = feat;
@@ -57,11 +57,11 @@ public class ProductIndex implements Serializable {
     this.arity = 0;
   }
 
-  public ProductIndex(int feat, int card) {
+  public ProductIndex(long feat, long card) {
     this(feat, card, NIL);
   }
 
-  public ProductIndex(int feat) {
+  public ProductIndex(long feat) {
     this(feat, 0, NIL);
   }
 
