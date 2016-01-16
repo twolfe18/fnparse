@@ -960,23 +960,23 @@ public class FModel implements Serializable {
       return;
     }
 
-    int folds = 15;
+    int folds = 12;
     int n = stuff.size();
-    for (int testIdx = 0; testIdx < stuff.size(); testIdx++) {
-      Log.info("starting fold " + (testIdx % folds));
+    for (int fold = 0; fold < folds; fold++) {
+      Log.info("starting fold " + fold);
 
       // Training set (all data minus one instance)
       List<FNParse> train = new ArrayList<>();
       List<FNParse> test = new ArrayList<>();
       for (int i = 0; i < n; i++)
-        if ((i % folds) == (testIdx % folds))
+        if ((i % folds) == fold)
           test.add(stuff.get(i).parse);
         else
           train.add(stuff.get(i).parse);
       assert !overlappingIds(train, test);
 
       // Do some learning (few epochs)
-      double maxIters = config.getInt("maxIters", 30);
+      double maxIters = config.getInt("maxIters", 12);
       boolean zeroSumsToo = true;
       m.ts.zeroOutWeights(zeroSumsToo);
       m.ts.showWeights("after-zeroing");
@@ -1000,7 +1000,7 @@ public class FModel implements Serializable {
       if (pedantic) 
         for (FNParse y : test)
           Log.info("testing against: " + y.getId());
-      showLoss(test, m, "on-fold-" + (testIdx%folds));
+      showLoss(test, m, "on-fold-" + fold);
 //      FNParse yhat = m.predict(yTest);
 //      SentenceEval se = new SentenceEval(yTest, yhat);
 //      Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
