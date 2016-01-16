@@ -130,7 +130,7 @@ public class CachedFeatures implements Serializable {
 
     // These are for caching InformationGain.flatten
 //    private Map<Span, Map<Span, List<ProductIndex>>> features4;
-    private Map<SpanPair, long[]> features4b;   // not taken any modulo, hoping PI from disk/flatten fit in 64 bits
+    private Map<SpanPair, Object> features4b;   // values either int[] (if they can fit) or long[]. not taken any modulo, hoping PI from disk/flatten fit in 64 bits
     private Map<Span, List<Span>> argsForTarget;
 
     public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
@@ -148,7 +148,7 @@ public class CachedFeatures implements Serializable {
           Span s = x2.getKey();
           List<ProductIndex> features = statelessGetFeaturesNoModulo(sent, t, s, this, featureSet, template2cardinality);
 //          m1.put(s, features);
-          Object old = features4b.put(new SpanPair(t, s), lpi2la(features));
+          Object old = features4b.put(new SpanPair(t, s), lpi2la2(features));
           assert old == null;
           args.add(s);
         }
@@ -165,17 +165,59 @@ public class CachedFeatures implements Serializable {
 //      return features4.get(t).get(s);
       if (features4b == null)
         return null;
-      long[] x = features4b.get(new SpanPair(t, s));
-      List<ProductIndex> l = new ArrayList<>(x.length);
-      for (int i = 0; i < x.length; i++)
-        l.add(new ProductIndex(x[i]));
-      return l;
+      Object x = features4b.get(new SpanPair(t, s));
+      if (x instanceof int[]) {
+        int[] xx = (int[]) x;
+        List<ProductIndex> l = new ArrayList<>(xx.length);
+        for (int i = 0; i < xx.length; i++)
+          l.add(new ProductIndex(xx[i]));
+        return l;
+      } else {
+        long[] xx = (long[]) x;
+        List<ProductIndex> l = new ArrayList<>(xx.length);
+        for (int i = 0; i < xx.length; i++)
+          l.add(new ProductIndex(xx[i]));
+        return l;
+      }
     }
 
     public static long[] lpi2la(List<ProductIndex> x) {
       long[] a = new long[x.size()];
       for (int i = 0; i < a.length; i++)
         a[i] = x.get(i).getProdFeature();
+      return a;
+    }
+
+    private static int SAVED = 0, TOTAL = 0;
+    /** Returns either an int[] if possible or a long[] */
+    public static Object lpi2la2(List<ProductIndex> x) {
+      int n = x.size();
+      long[] a = null;
+      int[] b = new int[n];
+      for (int i = 0; i < n; i++) {
+        long f = x.get(i).getProdFeature();
+        if (a != null) {
+          // Someone earlier couldn't fit, so might as well make this one a long
+          a[i] = f;
+        } else if (f > Integer.MAX_VALUE) {
+          // Too big, give up, copy b -> a
+          a = new long[n];
+          for (int j = 0; j < i; j++)
+            a[j] = b[j];
+          b = null;
+          a[i] = f;
+        } else {
+          // Can fit in an int and so can all of the previous ones
+          b[i] = (int) f;
+        }
+      }
+      if (TOTAL % 100 == 0)
+        Log.info("saved=" + SAVED + " total=" + TOTAL);
+      TOTAL++;
+      if (b != null) {
+        SAVED++;
+        return b;
+      }
       return a;
     }
 
