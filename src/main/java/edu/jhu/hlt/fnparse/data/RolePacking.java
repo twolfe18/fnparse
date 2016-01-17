@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.data;
 
+import java.io.Serializable;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,11 +26,12 @@ import edu.jhu.util.Alphabet;
  *
  * @author travis
  */
-public class RolePacking {
+public class RolePacking implements Serializable {
+  private static final long serialVersionUID = 398134887330885598L;
 
   private int[][] fk2UniversalK;
   private Alphabet<String> roleNames;
-  private FrameIndex fi;
+  private transient FrameIndex fi;
 
   public RolePacking(FrameIndex fi) {
     this.fi = fi;

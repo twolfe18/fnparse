@@ -87,7 +87,6 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.Span;
-import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.hlt.tutils.net.NetworkParameterAveraging;
@@ -132,7 +131,7 @@ public class RerankerTrainer {
     public double stoppingTimeMinutes = 55 * 60;  // maintain this as the tightest time constraint
     public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
-    public int stoppingConditionMaxExamples = 1000;
+    public int stoppingConditionMaxExamples = 500;
 
     // If true (and dev settings permit), train2 will automatically add a
     // StoppingCondition.DevSet to the list of stopping conditions.
@@ -164,7 +163,7 @@ public class RerankerTrainer {
 
     // F1-Tuning parameters
     private double propDev = 0.2d;
-    private int maxDev = 1000;
+    private int maxDev = 500;
     public StdEvalFunc objective = BasicEvaluation.argOnlyMicroF1;
     public double recallBiasLo = ExperimentProperties.getInstance().getDouble("recallBiasLo", -1);
     public double recallBiasHi = ExperimentProperties.getInstance().getDouble("recallBiasHi", 1);
@@ -970,9 +969,11 @@ public class RerankerTrainer {
     boolean showViolation = true;
     double violationRunningAvg = 1.0;
     double violationRunningAvgLambda = 0.9;
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    int maxEpoch = config.getInt("maxEpoch", 10);
     int epoch = 0;
     outer:
-    for (int iter = 0; true; ) {
+    for (int iter = 0; epoch < maxEpoch; epoch++) {
       int step = conf.batchSize == 0 ? train.size() : conf.batchSize;
       Log.info("[main] epoch=" + epoch + " iter=" + iter
           + " train.size=" + train.size() + " step=" + step
@@ -1035,7 +1036,7 @@ public class RerankerTrainer {
         }
         // Santity backup
         if (t.secondsSinceFirstMark() > conf.stoppingTimeMinutes * 60) {
-          Log.info("[main] hit time check backup!");
+          Log.info("[main] stopping because hit time check backup!");
           break outer;
         }
 
@@ -1091,7 +1092,6 @@ public class RerankerTrainer {
 
         iter++;
       }
-      epoch++;
     }
     if (es != null)
       es.shutdown();
@@ -1231,7 +1231,7 @@ public class RerankerTrainer {
 
     trainer.trainConf.stoppingConditionMaxExamples
       = trainer.pretrainConf.stoppingConditionMaxExamples
-        = config.getInt("stoppingConditionMaxExamples", 1000);
+        = config.getInt("stoppingConditionMaxExamples", 500);
 
     trainer.secsBetweenShowingWeights = config.getDouble("secsBetweenShowingWeights", 5 * 60);
 
@@ -1659,7 +1659,7 @@ public class RerankerTrainer {
             ItemProvider trainAndDev = new ItemProvider.ParseWrapper(DataUtil.iter2list(
                 FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
             double propDev = 0.2;
-            int maxDev = 1000;
+            int maxDev = 500;
             ItemProvider.TrainTestSplit foo =
                 new ItemProvider.TrainTestSplit(trainAndDev, propDev, maxDev, trainer.rand);
             train = foo.getTrain();
@@ -1673,7 +1673,7 @@ public class RerankerTrainer {
               FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences()));
           if (testOnTrain) {
             double propDev = 0.2;
-            int maxDev = 1000;
+            int maxDev = 500;
             ItemProvider.TrainTestSplit foo =
                 new ItemProvider.TrainTestSplit(trainAndTest, propDev, maxDev, trainer.rand);
             train = foo.getTrain();

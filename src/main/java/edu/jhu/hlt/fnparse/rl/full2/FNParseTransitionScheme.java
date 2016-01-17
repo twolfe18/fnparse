@@ -305,6 +305,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Log.info("[main] " + key + " wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
   }
 
+  public void makeWeightUnitLength() {
+    if (wHatch != null) wHatch.makeWeightsUnitLength();
+    if (wSquash != null) wSquash.makeWeightsUnitLength();
+    if (wGlobal != null) wGlobal.makeWeightsUnitLength();
+  }
+
   @Override
   public boolean isLeaf(Node2 n) {
     boolean b1 = super.isLeaf(n);

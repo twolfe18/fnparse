@@ -156,6 +156,9 @@ public class ShimModel implements Serializable {
       if (verbose)
         Log.info("setting fmodel params to average");
       fmodel.getTransitionSystem().setParamsToAverage();
+      // For tuning P/R, we need to know the scores will be in some standard
+      // range, so we normalize the average (perceptron is invariant to scaling)
+      fmodel.getTransitionSystem().makeWeightUnitLength();
     }
   }
 

@@ -7,6 +7,7 @@ import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
+import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
  * See http://www.ciml.info/dl/v0_8/ciml-v0_8-ch03.pdf
@@ -51,6 +52,19 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   public void zeroWeightsAverage() {
     u = new IntDoubleDenseVector(dimension);
     c = 0;
+  }
+
+  public void makeWeightsUnitLength() {
+    makeUnitLength(w);
+  }
+  public void makeWeightsAverageUnitLength() {
+    makeUnitLength(u);
+    c = 1;
+  }
+  private static void makeUnitLength(IntDoubleVector u) {
+    double l2 = u.getL2Norm();
+    assert l2 > 1e-16 : "l2=" + l2;
+    u.scale(1d / l2);
   }
 
   public String summary() {

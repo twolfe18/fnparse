@@ -134,35 +134,28 @@ public class CachedFeatures implements Serializable {
     private Map<Span, List<Span>> argsForTarget;
 
     public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
-//      assert features4 == null;
+      Log.info("converting to flattened representation: " + parse.getId());
       assert features4b == null;
       Sentence sent = parse.getSentence();
-//      features4 = new HashMap<>();
       features4b = new HashMap<>();
       argsForTarget = new HashMap<>();
       for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
         List<Span> args = new ArrayList<>(x1.getValue().size());
-//        Map<Span, List<ProductIndex>> m1 = new HashMap<>();
         for (Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
           Span s = x2.getKey();
           List<ProductIndex> features = statelessGetFeaturesNoModulo(sent, t, s, this, featureSet, template2cardinality);
-//          m1.put(s, features);
           Object old = features4b.put(new SpanPair(t, s), lpi2la2(features));
           assert old == null;
           args.add(s);
         }
         Object old = argsForTarget.put(t, args);
         assert old == null;
-//        features4.put(t, m1);
       }
       features3 = null;
     }
 
     public List<ProductIndex> getFlattenedCachedFeatures(Span t, Span s) {
-//      if (features4 == null)
-//        return null;
-//      return features4.get(t).get(s);
       if (features4b == null)
         return null;
       Object x = features4b.get(new SpanPair(t, s));
@@ -651,6 +644,7 @@ public class CachedFeatures implements Serializable {
       return getFeatures(f.getSentence(), t, s);
     }
 
+    @Override
     public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
       if (dropoutMode != DropoutMode.OFF)
         throw new RuntimeException("fixme");

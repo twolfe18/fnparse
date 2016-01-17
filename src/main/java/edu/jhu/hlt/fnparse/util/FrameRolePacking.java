@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.io.Serializable;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -12,12 +13,13 @@ import edu.jhu.hlt.tutils.rand.ReservoirSample;
  *
  * @author travis
  */
-public class FrameRolePacking {
+public class FrameRolePacking implements Serializable {
+  private static final long serialVersionUID = -1492407223469836768L;
 
   private int specialValues;  // TODO can be used to store more special values per frame
   private int[] roleOffsets;
   private int size;
-  private FrameIndex frameIndex;
+  private transient FrameIndex frameIndex;
 
   public FrameRolePacking(FrameIndex fi) {
     frameIndex = fi;
