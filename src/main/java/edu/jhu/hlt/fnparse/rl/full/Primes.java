@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -14,7 +15,8 @@ import edu.jhu.hlt.tutils.FileUtil;
  *
  * TODO Consider using {@link java.math.BigInteger#probablePrime(int, Random)} instead.
  */
-public class Primes {
+public class Primes implements Serializable {
+  private static final long serialVersionUID = -9175448034311452870L;
 
   // the 1M-th prime is 15,485,863 -- no where near Integer.MAX_VALUE
   private int[] primes;
