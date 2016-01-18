@@ -4,6 +4,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicLong;
 
 import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
 import edu.jhu.hlt.tutils.Log;
@@ -43,7 +44,8 @@ public interface Beam<T extends StateLike> {
    * thus you should only ever construct pairs of instances s.t. (score,sig) are unique!
    */
   public static class BeamItem<R extends StateLike> implements Comparable<BeamItem<R>> {
-    public static long INSTANCE_COUNTER = 0;
+    // I doubt I'll wrap... 2^63 is a lot of adds to a beam...
+    public static AtomicLong INSTANCE_COUNTER = new AtomicLong();
 
     public final R state;
     public final double score;
@@ -52,7 +54,7 @@ public interface Beam<T extends StateLike> {
     public BeamItem(R state, double score) {
       this.state = state;
       this.score = score;
-      this.inst = INSTANCE_COUNTER++;
+      this.inst = INSTANCE_COUNTER.getAndIncrement();
     }
     @Override
     public int compareTo(BeamItem<R> o) {
@@ -63,7 +65,6 @@ public interface Beam<T extends StateLike> {
       if (this == o)
         return 0;
       if (LLSSP.DISABLE_PRIMES) {
-//        return 0;
         assert inst != o.inst || this == o;
         assert inst >= 0 && o.inst >= 0;
         return inst < o.inst ? +1 : -1;
