@@ -63,8 +63,6 @@ import edu.jhu.prim.tuple.Pair;
 /**
  * Don't ask me why its called FModel. This is is a wrapper around {@link State}.
  *
- * NOTE: NOT THREAD SAFE!
- *
  * @author travis
  */
 public class FModel implements Serializable {
@@ -87,8 +85,6 @@ public class FModel implements Serializable {
   // will have their featuresAndSpans:CachedFeatures.Item fields set.
   private DeterministicRolePruning drp;
 
-//  private CachedFeatures cachedFeatures;
-//  private FNParseTransitionScheme ts;
   /*
    * trainWeights are weights trained on separate shards using distributed
    * perceptron training:

@@ -74,7 +74,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         + " COUNTER_MISC=" + COUNTER_MISC);
   }
 
-  public static MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(15);
+  public MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(30);
 
   public enum SortEggsMode {
     BY_EXPECTED_UTILITY,
@@ -206,33 +206,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       wSquash = wSquash.computeAverageWeights();
     if (wGlobal != null)
       wGlobal = wGlobal.computeAverageWeights();
-//    Log.info("[main] numAverages=" + numAverages);
-//    if (numAverages <= 1) {
-//      Log.warn("[main] not modifying weights!");
-//    } else {
-//      double s = 1d / numAverages;
-//      wHatch = new WeightsInfo(wHatchSum);
-//      wHatch.scale(s);
-//      if (wSquash != null) {
-//        wSquash = new WeightsInfo(wSquashSum);
-//        wSquash.scale(s);
-//      }
-//      if (wGlobal != null) {
-//        wGlobal = new WeightsInfo(wGlobalSum);
-//        wGlobal.scale(s);
-//      }
-//    }
     showWeights("after-param-avg");
     timer.stop("setParamsToAverage");
   }
 
 
   public void maybeApplyL2Reg() {
-//    wHatch.maybeApplyL2Reg();
-//    if (wSquash != null)
-//      wSquash.maybeApplyL2Reg();
-//    if (wGlobal != null)
-//      wGlobal.maybeApplyL2Reg();
     throw new RuntimeException("using averaged perceptron, think again");
   }
 
@@ -256,10 +235,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.featProdFK = config.getBoolean("featProdFK", true);
     this.featProdK = config.getBoolean("featProdK", true);
 
-//    boolean g = config.getBoolean("useGlobalFeatures", true);
-//    LLSSPatF.ARG_LOC = config.getBoolean("globalFeatArgLocSimple", g);
-//    LLSSPatF.NUM_ARGS = config.getBoolean("globalFeatNumArgs", g);
-//    LLSSPatF.ROLE_COOC = config.getBoolean("globalFeatRoleCoocSimple", g);
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
 
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
@@ -270,26 +245,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       wSquash = new AveragedPerceptronWeights(dimension, 0);
     if (useGlobalFeats)
       wGlobal = new AveragedPerceptronWeights(dimension, 0);
-
-//    int updateInterval = config.getInt("updateL2Every", 8);
-//    double lrLocal = config.getDouble("lrLocal", 1);
-//    double l2Local = config.getDouble("l2Penalty", 1e-8);
-//    double lrGlobal = config.getDouble("lrGlobal", 1);
-//    double l2Global = config.getDouble("globalL2Penalty", 1e-7);
-
-//    wHatch = new WeightsInfo(
-//        new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-//        dimension, lrLocal, l2Local);
-//    if (!onlyUseHatchWeights) {
-//      wSquash = new WeightsInfo(
-//          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-//          dimension, lrLocal, l2Local);
-//    }
-//    if (useGlobalFeats) {
-//      wGlobal = new WeightsInfo(
-//          new LazyL2UpdateVector(new IntDoubleDenseVector(dimension), updateInterval),
-//          dimension, lrGlobal, l2Global);
-//    }
 
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
@@ -307,8 +262,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] ARG_LOC=" + LLSSPatF.ARG_LOC);
       Log.info("[main] NUM_ARGS=" + LLSSPatF.NUM_ARGS);
       Log.info("[main] ROLE_COOC=" + LLSSPatF.ROLE_COOC);
-//      Log.info("[main] Node2.MYOPIC_LOSS=" + Node2.MYOPIC_LOSS);
-//      Log.info("[main] useGlobalFeats=" + useGlobalFeats);
       LLSSPatF.logGlobalFeatures(true);
     }
   }
