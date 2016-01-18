@@ -64,12 +64,12 @@ framenet-mix-%.fs: framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt fr
 
 framenet-all-features:
 	make -j 5 framenet-ig-feat.4.dedup.txt framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt framenet-ig-feat.32.dedup.txt framenet-ig-feat.64.dedup.txt
-	make framenet-4-40.fs framenet-4-160.fs framenet-4-640.fs framenet-4-1280.fs framenet-4-2560.fs
-	make framenet-8-40.fs framenet-8-160.fs framenet-8-640.fs framenet-8-1280.fs framenet-8-2560.fs
-	make framenet-16-40.fs framenet-16-160.fs framenet-16-640.fs framenet-16-1280.fs framenet-16-2560.fs
-	make framenet-32-40.fs framenet-32-160.fs framenet-32-640.fs framenet-32-1280.fs framenet-32-2560.fs
-	make framenet-64-40.fs framenet-64-160.fs framenet-64-640.fs framenet-64-1280.fs framenet-64-2560.fs
-	make framenet-mix-40.fs framenet-mix-160.fs framenet-mix-640.fs framenet-mix-1280.fs framenet-mix-2560.fs
+	make framenet-4-40.fs framenet-4-160.fs framenet-4-320.fs framenet-4-640.fs framenet-4-1280.fs framenet-4-2560.fs
+	make framenet-8-40.fs framenet-8-160.fs framenet-8-320.fs framenet-8-640.fs framenet-8-1280.fs framenet-8-2560.fs
+	make framenet-16-40.fs framenet-16-160.fs framenet-16-320.fs framenet-16-640.fs framenet-16-1280.fs framenet-16-2560.fs
+	make framenet-32-40.fs framenet-32-160.fs framenet-32-320.fs framenet-32-640.fs framenet-32-1280.fs framenet-32-2560.fs
+	make framenet-64-40.fs framenet-64-160.fs framenet-64-320.fs framenet-64-640.fs framenet-64-1280.fs framenet-64-2560.fs
+	make framenet-mix-40.fs framenet-mix-160.fs framenet-mix-320.fs framenet-mix-640.fs framenet-mix-1280.fs framenet-mix-2560.fs
 
 
 
@@ -128,12 +128,12 @@ propbank-mix-%.fs: propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt pr
 
 propbank-all-features:
 	make -j 5 propbank-ig-feat.4.dedup.txt propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt propbank-ig-feat.32.dedup.txt propbank-ig-feat.64.dedup.txt
-	make propbank-4-40.fs propbank-4-160.fs propbank-4-640.fs propbank-4-1280.fs propbank-4-2560.fs
-	make propbank-8-40.fs propbank-8-160.fs propbank-8-640.fs propbank-8-1280.fs propbank-8-2560.fs
-	make propbank-16-40.fs propbank-16-160.fs propbank-16-640.fs propbank-16-1280.fs propbank-16-2560.fs
-	make propbank-32-40.fs propbank-32-160.fs propbank-32-640.fs propbank-32-1280.fs propbank-32-2560.fs
-	make propbank-64-40.fs propbank-64-160.fs propbank-64-640.fs propbank-64-1280.fs propbank-64-2560.fs
-	make propbank-mix-40.fs propbank-mix-160.fs propbank-mix-640.fs propbank-mix-1280.fs propbank-mix-2560.fs
+	make propbank-4-40.fs propbank-4-160.fs propbank-4-320.fs propbank-4-640.fs propbank-4-1280.fs propbank-4-2560.fs
+	make propbank-8-40.fs propbank-8-160.fs propbank-8-320.fs propbank-8-640.fs propbank-8-1280.fs propbank-8-2560.fs
+	make propbank-16-40.fs propbank-16-160.fs propbank-16-320.fs propbank-16-640.fs propbank-16-1280.fs propbank-16-2560.fs
+	make propbank-32-40.fs propbank-32-160.fs propbank-32-320.fs propbank-32-640.fs propbank-32-1280.fs propbank-32-2560.fs
+	make propbank-64-40.fs propbank-64-160.fs propbank-64-320.fs propbank-64-640.fs propbank-64-1280.fs propbank-64-2560.fs
+	make propbank-mix-40.fs propbank-mix-160.fs propbank-mix-320.fs propbank-mix-640.fs propbank-mix-1280.fs propbank-mix-2560.fs
 
 
 
@@ -141,22 +141,22 @@ propbank-all-features:
 propbank-clean:
 	rm -f propbank-ig-feat.8.txt propbank-ig-feat.16.txt propbank-ig-feat.32.txt propbank-ig-feat.64.txt
 	rm -f propbank-ig-feat.8.dedup.txt propbank-ig-feat.16.dedup.txt propbank-ig-feat.32.dedup.txt propbank-ig-feat.64.dedup.txt
-	rm -f propbank-4-40.fs propbank-4-160.fs propbank-4-640.fs propbank-4-1280.fs propbank-4-2560.fs
-	rm -f propbank-8-40.fs propbank-8-160.fs propbank-8-640.fs propbank-8-1280.fs propbank-8-2560.fs
-	rm -f propbank-16-40.fs propbank-16-160.fs propbank-16-640.fs propbank-16-1280.fs propbank-16-2560.fs
-	rm -f propbank-32-40.fs propbank-32-160.fs propbank-32-640.fs propbank-32-1280.fs propbank-32-2560.fs
-	rm -f propbank-64-40.fs propbank-64-160.fs propbank-64-640.fs propbank-64-1280.fs propbank-64-2560.fs
-	rm -f propbank-mix-40.fs propbank-mix-160.fs propbank-mix-640.fs propbank-mix-1280.fs propbank-mix-2560.fs
+	rm -f propbank-4-40.fs propbank-4-160.fs propbank-4-320.fs propbank-4-640.fs propbank-4-1280.fs propbank-4-2560.fs
+	rm -f propbank-8-40.fs propbank-8-160.fs propbank-8-320.fs propbank-8-640.fs propbank-8-1280.fs propbank-8-2560.fs
+	rm -f propbank-16-40.fs propbank-16-160.fs propbank-16-320.fs propbank-16-640.fs propbank-16-1280.fs propbank-16-2560.fs
+	rm -f propbank-32-40.fs propbank-32-160.fs propbank-32-320.fs propbank-32-640.fs propbank-32-1280.fs propbank-32-2560.fs
+	rm -f propbank-64-40.fs propbank-64-160.fs propbank-64-320.fs propbank-64-640.fs propbank-64-1280.fs propbank-64-2560.fs
+	rm -f propbank-mix-40.fs propbank-mix-160.fs propbank-mix-320.fs propbank-mix-640.fs propbank-mix-1280.fs propbank-mix-2560.fs
 
 framenet-clean:
 	rm -f framenet-ig-feat.8.txt framenet-ig-feat.16.txt framenet-ig-feat.32.txt framenet-ig-feat.64.txt
 	rm -f framenet-ig-feat.8.dedup.txt framenet-ig-feat.16.dedup.txt framenet-ig-feat.32.dedup.txt framenet-ig-feat.64.dedup.txt
-	rm -f framenet-4-40.fs framenet-4-160.fs framenet-4-640.fs framenet-4-1280.fs framenet-4-2560.fs
-	rm -f framenet-8-40.fs framenet-8-160.fs framenet-8-640.fs framenet-8-1280.fs framenet-8-2560.fs
-	rm -f framenet-16-40.fs framenet-16-160.fs framenet-16-640.fs framenet-16-1280.fs framenet-16-2560.fs
-	rm -f framenet-32-40.fs framenet-32-160.fs framenet-32-640.fs framenet-32-1280.fs framenet-32-2560.fs
-	rm -f framenet-64-40.fs framenet-64-160.fs framenet-64-640.fs framenet-64-1280.fs framenet-64-2560.fs
-	rm -f framenet-mix-40.fs framenet-mix-160.fs framenet-mix-640.fs framenet-mix-1280.fs framenet-mix-2560.fs
+	rm -f framenet-4-40.fs framenet-4-160.fs framenet-4-320.fs framenet-4-640.fs framenet-4-1280.fs framenet-4-2560.fs
+	rm -f framenet-8-40.fs framenet-8-160.fs framenet-8-320.fs framenet-8-640.fs framenet-8-1280.fs framenet-8-2560.fs
+	rm -f framenet-16-40.fs framenet-16-160.fs framenet-16-320.fs framenet-16-640.fs framenet-16-1280.fs framenet-16-2560.fs
+	rm -f framenet-32-40.fs framenet-32-160.fs framenet-32-320.fs framenet-32-640.fs framenet-32-1280.fs framenet-32-2560.fs
+	rm -f framenet-64-40.fs framenet-64-160.fs framenet-64-320.fs framenet-64-640.fs framenet-64-1280.fs framenet-64-2560.fs
+	rm -f framenet-mix-40.fs framenet-mix-160.fs framenet-mix-320.fs framenet-mix-640.fs framenet-mix-1280.fs framenet-mix-2560.fs
 
 clean: propbank-clean framenet-clean
 
