@@ -107,7 +107,8 @@ public class FModel implements Serializable {
    */
   public FModel(
       RTConfig config,
-      DeterministicRolePruning.Mode pruningMode) {
+      DeterministicRolePruning.Mode pruningMode,
+      int numShards) {
 
     ExperimentProperties p = ExperimentProperties.getInstance();
     FrameIndex fi;
@@ -141,10 +142,9 @@ public class FModel implements Serializable {
     CFLike params = null;
 //    ts = new FNParseTransitionScheme(params, primes);
 
-    int t = p.getInt("threads");
     testWeights = new FNParseTransitionScheme(params, primes);
-    trainWeights = new FNParseTransitionScheme[t];
-    for (int i = 0; i < t; i++)
+    trainWeights = new FNParseTransitionScheme[numShards];
+    for (int i = 0; i < numShards; i++)
       trainWeights[i] = new FNParseTransitionScheme(params, primes);
   }
 
@@ -163,25 +163,26 @@ public class FModel implements Serializable {
     return trainWeights.length;
   }
 
-  /**
-   * Reads from trainWeights[*] and puts the average into testWeights. Expects
-   * that testWeights starts at 0.
-   * @deprecated this doesn't actually compute the full average
-   */
-  public void updateAverageShardWeights() {
-    Log.info("[main] updating the average based on " + trainWeights.length + " independent perceptrons");
-    double coef = 1d / trainWeights.length;
-    for (int i = 0; i < trainWeights.length; i++)
-      testWeights.addWeights(coef, trainWeights[i]);
-    testWeights.addWeightsIntoAverageAndZeroOutWeights();
-  }
+  public void combineWeightShards(boolean redistribute) {
+    Log.info("[main] combining the average based on "
+        + trainWeights.length + " independent perceptrons"
+        + " redistribute=" + redistribute);
 
-  public void combineWeightShards() {
-    Log.info("[main] combining the average based on " + trainWeights.length + " independent perceptrons");
+    // Set w for testWeights equal to the average for each shard's current w
+    // Set u for testWeights equal to the sum of each shard's u (average over all history)
+    testWeights.zeroOutWeights(false);
     double coef = 1d / trainWeights.length;
     for (int i = 0; i < trainWeights.length; i++)
       testWeights.addWeightsAndAverage(coef, trainWeights[i]);
-    testWeights.addWeightsIntoAverageAndZeroOutWeights();
+
+    // Re-distribute the average as the initial weights for each shard
+    if (redistribute) {
+      for (int i = 0; i < trainWeights.length; i++) {
+        boolean includeWeightSums = false;
+        trainWeights[i].zeroOutWeights(includeWeightSums);
+        trainWeights[i].addWeights(1, testWeights);
+      }
+    }
   }
 
   public void zeroWeights(boolean includeAverage) {
@@ -374,6 +375,10 @@ public class FModel implements Serializable {
     return decInf;
   }
 
+  public FNParse predict(FNParse y) {
+    return predict(y, getAverageWeights());
+  }
+
   public FNParse predict(FNParse y, FNParseTransitionScheme ts) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting prediction");
@@ -433,7 +438,9 @@ public class FModel implements Serializable {
 
 //    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
     // CachedFeatures version
-    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), null);
+//    int numShards = 1;
+    int numShards = config.getInt("shards");
+    FModel m = new FModel(new RTConfig("rtc", workingDir, rand), null, numShards);
 
 //    m.ts.useGlobalFeats = false;
 //    m.rtConf.oracleMode = OracleMode.MIN;

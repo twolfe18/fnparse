@@ -90,6 +90,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // the S hatch actions beneath it.
   public boolean sortEggsKmaxS = true;
 
+  public int oneAtATime = TFKS.F;  // F => try hatch/squash for every K,  K => try hatch/squash for newest K
+
   /*
    * Automatically hatches any nodes which are not s-valued.
    * Since all the s-valued eggs can be pruned, this does not imply that we have
@@ -103,7 +105,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public boolean useGlobalFeats;
   public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
-  public int oneAtATime = TFKS.F;  // F => try hatch/squash for every K,  K => try hatch/squash for newest K
+
+  // Only relevant if onlyUseHatchWeights is true.
+  public boolean addConstantToSquashParams = false;
 
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
@@ -168,14 +172,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       wGlobal.addWeightsAndAverage(coef, w.wGlobal);
   }
 
-  public void addWeightsIntoAverageAndZeroOutWeights() {
-    boolean alsoZeroOutNonAvgWeights = false;
+  public void addWeightsIntoAverage(boolean alsoZeroOutNonAvgWeights) {
     if (wHatch != null)
-      wHatch.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+      wHatch.addWeightsIntoAverage(alsoZeroOutNonAvgWeights);
     if (wSquash != null)
-      wSquash.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+      wSquash.addWeightsIntoAverage(alsoZeroOutNonAvgWeights);
     if (wGlobal != null)
-      wGlobal.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+      wGlobal.addWeightsIntoAverage(alsoZeroOutNonAvgWeights);
   }
 
   public void scaleWeights(double alpha) {
@@ -261,11 +264,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
 
-    wHatch = new AveragedPerceptronWeights(dimension);
+    int numIntercept = addConstantToSquashParams ? 1 : 0;
+    wHatch = new AveragedPerceptronWeights(dimension, numIntercept);
     if (!onlyUseHatchWeights)
-      wSquash = new AveragedPerceptronWeights(dimension);
+      wSquash = new AveragedPerceptronWeights(dimension, 0);
     if (useGlobalFeats)
-      wGlobal = new AveragedPerceptronWeights(dimension);
+      wGlobal = new AveragedPerceptronWeights(dimension, 0);
 
 //    int updateInterval = config.getInt("updateL2Every", 8);
 //    double lrLocal = config.getDouble("lrLocal", 1);
@@ -1055,6 +1059,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return staticFeats0(egg, n.prefix, info, weights);
   }
   public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, ProductIndexWeights weights) {
+    assert (weights == wHatch) != (weights == wSquash);
     boolean flip = false;
     if (onlyUseHatchWeights && weights != wHatch) {
       flip = true;
@@ -1063,14 +1068,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     // This should be memoized because there is still a loop over all the features in ProductIndexAdjoints.init
     Map<TFKS, Caching> m;
-    m = info.staticHatchFeatCache;
-//    if (weights == wHatch) {
-//      m = info.staticHatchFeatCache;
-//    } else if (weights == wSquash) {
-//      m = info.staticSquashFeatCache;
-//    } else {
-//      throw new RuntimeException();
-//    }
+    if (onlyUseHatchWeights) {
+      m = info.staticHatchFeatCache;
+    } else {
+      m = weights == wHatch ? info.staticHatchFeatCache : info.staticSquashFeatCache;
+    }
     TFKS memoKey = motherPrefix.dumbPrepend(egg);
     Caching pia = m.get(memoKey);
     if (pia == null) {
@@ -1082,8 +1084,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     // This way if you compute the dot product for hatch, you've also computed
     // it for squash!
-    if (flip)
-      return new Adjoints.Scale(-1, pia);
+    if (flip) {
+      if (addConstantToSquashParams) {
+        // Setup for score(squash) = intercept - score(hatch)
+        // I seemed to be having problems in bias towards precision when I used:
+        //   score(squash) = -score(hatch)
+        Adjoints interceptA = wHatch.intercept(0);
+        return new Adjoints.CachingBinarySum(interceptA, new Adjoints.Scale(-1, pia));
+      } else {
+        return new Adjoints.Scale(-1, pia);
+      }
+    }
     return pia;
   }
 
@@ -1215,7 +1226,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     FNParse y = dummyParse();
     Log.info(Describe.fnParse(y));
 
-    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
+    int numShards = 1;
+    FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN, numShards);
     FNParseTransitionScheme ts = m.getAverageWeights();
 
     boolean thinKS = true;  // prune out some wrong answers to make the tree smaller (easier to see)

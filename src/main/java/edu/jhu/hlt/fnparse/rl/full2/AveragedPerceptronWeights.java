@@ -39,11 +39,26 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   private double c;
   private int dimension;
 
-  public AveragedPerceptronWeights(int dimension) {
+  // Reserves the first K indices in w and u for special "intercept" features
+  // which are not given out when score() is called. Calls to dimension() will
+  // include these intercept indices.
+  private int numInterceptFeatures;
+
+  public AveragedPerceptronWeights(int dimension, int numIntercept) {
     this.w = new IntDoubleDenseVector(dimension);
     this.u = new IntDoubleDenseVector(dimension);
     this.c = 0;
     this.dimension = dimension;
+    this.numInterceptFeatures = numIntercept;
+  }
+
+  public Adjoints intercept(int i) {
+    assert i >= 0;
+    if (i >= numInterceptFeatures) {
+      throw new IllegalArgumentException("you didn't reserve enough intercepts: "
+          + " i=" + i + " numIntercept=" + numInterceptFeatures);
+    }
+    return new Intercept(i);
   }
 
   public void zeroWeights() {
@@ -74,8 +89,9 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     c += coef * other.c;
   }
 
+  // I don't need to do this if I average u and w from the train shards
   /** Does u += w, with a sign flip due to how Adj works, and zeros out w */
-  public void addWeightsIntoAverageAndZeroOutWeights(boolean alsoZeroOutWeights) {
+  public void addWeightsIntoAverage(boolean alsoZeroOutWeights) {
     c += 1;
     for (int i = 0; i < dimension; i++) {
       // u -= w because of how getAverageWeight works
@@ -141,7 +157,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   /** Returns a new instance with the weights set to the average */
   public AveragedPerceptronWeights computeAverageWeights() {
     assert c > 0;
-    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension);
+    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, numInterceptFeatures);
     for (int i = 0; i < dimension; i++) {
       double wi = getAveragedWeight(i);
       a.w.set(i, wi);
@@ -158,13 +174,32 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return c;
   }
 
+  public class Intercept implements Adjoints {
+    private int index;
+    public Intercept(int index) {
+      this.index = index;
+    }
+    @Override
+    public double forwards() {
+      return getWeight(index);
+    }
+    @Override
+    public void backwards(double dErr_dForwards) {
+      double lr = 1;
+      w.add(index, -lr * dErr_dForwards);
+      u.add(index, c * -lr * dErr_dForwards);
+    }
+  }
+
   /**
    * Reads from weights (not averaged weights). Backwards performs update to
    * weights and average, but you must still call
    * {@link AveragedPerceptronWeights#completedObservation()} separately.
    */
   public class Adj implements Adjoints {
+    // Contains correct feature indices (x -> numIntercept + x % (dimension-numIntercept))
     private int[] features;
+    // Contains raw feature indices
     private List<ProductIndex> features2;
     private LL<ProductIndex> features3;
 
@@ -176,35 +211,44 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
       if (convertToIntArray) {
         this.features = new int[features.size()];
         for (int i = 0; i < this.features.length; i++)
-          this.features[i] = features.get(i).getProdFeatureModulo(dimension);
+          this.features[i] = reindex(features.get(i).getProdFeature());
       } else {
         this.features2 = features;
       }
       COUNTER_CONSTRUCT++;
     }
 
+    private int reindex(long rawIndex) {
+      assert rawIndex >= 0;
+      long d = dimension - numInterceptFeatures;
+      long x = ((long) numInterceptFeatures) + rawIndex % d;
+      assert x <= ((long) dimension) && x >= 0;
+      return (int) x;
+    }
+
     @Override
     public double forwards() {
-      double d = 0;
+      double dot = 0;
       if (features3 != null) {
         for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr())
-          d += getWeight(pi.car().getProdFeatureModulo(dimension));
+          dot += getWeight(reindex(pi.car().getProdFeature()));
       } else if (features != null) {
+        // No shift needed, done in constructor
         for (int i = 0; i < features.length; i++)
-          d += getWeight(features[i]);
+          dot += getWeight(features[i]);
       } else {
         for (ProductIndex pi : features2)
-          d += getWeight(pi.getProdFeatureModulo(dimension));
+          dot += getWeight(reindex(pi.getProdFeature()));
       }
       COUNTER_FORWARDS++;
-      return d;
+      return dot;
     }
 
     @Override
     public void backwards(double dErr_dForwards) {
       if (features3 != null) {
         for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr()) {
-          int i = pi.car().getProdFeatureModulo(dimension);
+          int i = reindex(pi.car().getProdFeature());
           w.add(i, -dErr_dForwards);
           u.add(i, c * -dErr_dForwards);
         }
@@ -215,7 +259,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
         }
       } else {
         for (ProductIndex pi : features2) {
-          int i = pi.getProdFeatureModulo(dimension);
+          int i = reindex(pi.getProdFeature());
           w.add(i, -dErr_dForwards);
           u.add(i, c * -dErr_dForwards);
         }

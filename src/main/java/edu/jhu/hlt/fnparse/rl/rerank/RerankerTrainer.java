@@ -573,7 +573,8 @@ public class RerankerTrainer {
       assert cachedFeatures != null;
       assert cachedFeatures.params != null;
       //sm = new ShimModel(new FModel(trainConf, DeterministicRolePruning.Mode.CACHED_FEATURES));
-      FModel fm = new FModel(trainConf, null);
+      int S = config.getInt("perceptronShards");
+      FModel fm = new FModel(trainConf, null, S);
       fm.setCachedFeatures(cachedFeatures.params);
       sm = new ShimModel(fm);
     } else {
@@ -799,8 +800,7 @@ public class RerankerTrainer {
           final int ii = i;
           futures.add(es.submit(() -> {
             FNParse y = devUse.label(ii);
-            Update u = model.getUpdate(y);
-            double loss = u.violation();
+            double loss = model.getViolation(y);
             assert Double.isFinite(loss) && !Double.isNaN(loss);
 
             // Requires me to do prediction (slower) => optional

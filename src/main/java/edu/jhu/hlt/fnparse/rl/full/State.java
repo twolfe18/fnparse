@@ -40,6 +40,7 @@ import edu.jhu.hlt.fnparse.rl.full.Config.ArgActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.Config.FrameActionTransitionSystem;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
 import edu.jhu.hlt.fnparse.rl.full.weights.WeightsPerActionType;
+import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
@@ -51,6 +52,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -1944,16 +1946,17 @@ public class State implements StateLike {
 //          + " prunedSpans=" + inf.prunedSpans.describe());
     }
 
-    FModel fmodel = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN);
+    int numShards = 1;
+    FModel fmodel = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_DEP_HERMANN, numShards);
     fmodel.setConfig(conf);
+    FNParseTransitionScheme ts = fmodel.getShardWeights(new Shard(0, numShards));
 
     int successesInARow = 0;
-    double lr = 1;
     int maxiter = 500;
     FNParse yhat = null;
     for (int i = 0; i < maxiter; i++) {
 
-      Update u = fmodel.getUpdate(y);
+      Update u = fmodel.getUpdate(y, ts);
       u.apply(1);
 
       if (i % 5 == 0) {
@@ -2090,15 +2093,17 @@ public class State implements StateLike {
     // Try to get some updates using the FNParses in CachedFeatures
     if (testCachedFeatures) {
       Log.info("trying out some updates when using CachedFeatures.ItemProvider");
-      FModel m = new FModel(null, DeterministicRolePruning.Mode.CACHED_FEATURES);
+      int numShards = 1;
+      FModel m = new FModel(null, DeterministicRolePruning.Mode.CACHED_FEATURES, numShards);
       m.setCachedFeatures(cf.params);
+      FNParseTransitionScheme ts = m.getShardWeights(new Shard(0, numShards));
       CachedFeatures.ItemProvider ip = cf.new ItemProvider(100, false, false);
       Log.info("ip.loaded=" + ip.getNumActuallyLoaded());
       for (int i = 0; i < ip.size(); i++) {
         System.out.println("starting on parse " + (i+1));
         FNParse y = ip.label(i);
         System.out.println("getting update for " + y.getId());
-        Update u = m.getUpdate(y);
+        Update u = m.getUpdate(y, ts);
         System.out.println("applying update for " + y.getId());
         u.apply(1);
       }

@@ -106,25 +106,15 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   /* Static feature cache *****************************************************/
 
-  // NOTE: We are now hard-coded to the method of caching Adjoints.Caching
-  // instances and constructing a new Adjoints.Scale(-1,wHatchAdjoints) for
-  // every call of scoreSquash.
-  // ASSUMPTION NEEDED: weights don't change during the life of an Info (e.g.
-  // getUpdate, perceptronUpdate, predictNew).
-
-//  public Map<TFKS, ProductIndexAdjoints> staticHatchFeatCache = new HashMap<>();
-//  public Map<TFKS, ProductIndexAdjoints> staticSquashFeatCache = new HashMap<>();
-//  public Map<TFKS, Caching2<ProductIndexAdjoints>> staticHatchFeatCache = new HashMap<>();
   public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>();
-  // Just construct a scaled version on the fly...
-//  public Map<TFKS, Scale2<Caching2<ProductIndexAdjoints>>> staticSquashFeatCache = new HashMap<>();
+  public Map<TFKS, Caching> staticSquashFeatCache = new HashMap<>();
 
   // copy between oracle and MV Info instances?
   // easy 2x...
   /** Sets this instances cache to the same cache as other */
   public void shareStaticFeatureCacheWith(Info other) {
     staticHatchFeatCache = other.staticHatchFeatCache;
-//    staticSquashFeatCache = other.staticSquashFeatCache;
+    staticSquashFeatCache = other.staticSquashFeatCache;
   }
 
   /* ************************************************************************ */

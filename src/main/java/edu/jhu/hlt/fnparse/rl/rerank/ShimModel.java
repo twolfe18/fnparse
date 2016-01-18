@@ -66,7 +66,15 @@ public class ShimModel implements Serializable {
   }
 
   public void callEveryIter(int iter) {
-    // no-op
+    if (fmodel != null) {
+      // Maybe average each shard's perceptron weights
+      int interval = ExperimentProperties.getInstance()
+          .getInt("distributedPerceptron.combineEvery", 1000);
+      if (iter > 0 && iter % interval == 0) {
+        boolean redistribute = true;
+        fmodel.combineWeightShards(redistribute);
+      }
+    }
   }
 
   public boolean isFModel() {
@@ -146,8 +154,8 @@ public class ShimModel implements Serializable {
     } else {
       if (verbose)
         Log.info("predicting on " + y.getId() + " with fmodel");
-//      return fmodel.predict(y);
-      throw new RuntimeException("implement me");
+      FNParseTransitionScheme ts = fmodel.getAverageWeights();
+      return fmodel.predict(y, ts);
     }
   }
 
@@ -161,14 +169,9 @@ public class ShimModel implements Serializable {
     } else {
       if (verbose)
         Log.info("setting fmodel params to average");
-
-//      fmodel.getTransitionSystem().setParamsToAverage();
-//      // For tuning P/R, we need to know the scores will be in some standard
-//      // range, so we normalize the average (perceptron is invariant to scaling)
-//      fmodel.getTransitionSystem().makeWeightUnitLength();
-
-//      fmodel.updateAverageShardWeights();
-      fmodel.combineWeightShards();
+      boolean redistribute = false;
+      fmodel.combineWeightShards(redistribute);
+      fmodel.getAverageWeights().setParamsToAverage();
       fmodel.getAverageWeights().makeWeightUnitLength();
     }
   }
@@ -201,18 +204,56 @@ public class ShimModel implements Serializable {
   }
 
   public List<Update> getUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
+    if (reranker != null) {
+      return getRerankerUpdate(batch, ip, es, verbose);
+    } else {
+      return getFModelUpdate(batch, ip, es, verbose);
+    }
+  }
+
+  /** Return a single update which also does the combine operation */
+  public List<Update> getFModelUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
+
+    int n = batch.size();
+    if (n != fmodel.getNumShards()) {
+      throw new IllegalStateException("you must match batch size with fmodel num shards:"
+          + " batchSize=" + n
+          + " numShards=" + fmodel.getNumShards());
+    }
+    List<Future<Update>> fus = new ArrayList<>();
+    for (int i = 0; i < n; i++) {
+      FNParseTransitionScheme ts = fmodel.getShardWeights(new Shard(i, n));
+      FNParse y = ip.label(batch.get(i));
+      Future<Update> fu = es.submit(() -> {
+        return fmodel.getUpdate(y, ts);
+      });
+      fus.add(fu);
+    }
+
+    List<Update> us = new ArrayList<>();
+    for (Future<Update> fu : fus) {
+      try {
+        us.add(fu.get());
+      } catch (Exception e) {
+        e.printStackTrace();
+      }
+    }
+    return us;
+  }
+
+  public List<Update> getRerankerUpdate(List<Integer> batch, ItemProvider ip, ExecutorService es, boolean verbose) {
     List<Update> finishedUpdates = new ArrayList<>(batch.size());
     if (es == null) {
       for (int idx : batch) {
         FNParse y = ip.label(idx);
-        finishedUpdates.add(getUpdate(y));
+        finishedUpdates.add(getRerankerUpdate(y));
       }
     } else {
       List<Future<Update>> futures = new ArrayList<>(batch.size());
       for (int idx : batch) {
         futures.add(es.submit( () -> {
           FNParse y = ip.label(idx);
-          return getUpdate(y);
+          return getRerankerUpdate(y);
         } ));
       }
       try {
@@ -225,22 +266,34 @@ public class ShimModel implements Serializable {
     return finishedUpdates;
   }
 
-  public Update getUpdate(FNParse y) {
+  public Update getRerankerUpdate(FNParse y) {
+    assert reranker != null;
+    if (verbose)
+      Log.info("getting update for " + y.getId() + " with reranker");
+    State init = reranker.getInitialStateWithPruning(y, y);
+    return reranker.hasStatefulFeatures() || conf.forceGlobalTrain
+        ? reranker.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
+            : reranker.getStatelessUpdate(init, y);
+  }
+
+  // NOTE: There is no getUpdate(FNParse) since for fmodel it is abiguous what
+  // weights this update should be with respect to.
+
+  public double getViolation(FNParse y) {
     if (reranker != null) {
-      if (verbose)
-        Log.info("getting update for " + y.getId() + " with reranker");
-      State init = reranker.getInitialStateWithPruning(y, y);
-      return reranker.hasStatefulFeatures() || conf.forceGlobalTrain
-          ? reranker.getFullUpdate(init, y, conf.oracleMode, conf.rand, null, null)
-              : reranker.getStatelessUpdate(init, y);
+      return getRerankerUpdate(y).violation();
     } else {
-      if (verbose)
-        Log.info("getting update for " + y.getId() + " with fmodel");
-//      return fmodel.getUpdate(y);
-      throw new RuntimeException("implement me");
+      FNParseTransitionScheme ts = fmodel.getAverageWeights();
+      return fmodel.getUpdate(y, ts).violation();
     }
   }
 
+  /**
+   * This is only for main, RerankerTrainer implements distributed perceptron
+   * a little differently: instead of doing one epoch (via one shard per thread)
+   * and then combine, every batch must be size numThreads and then a combine
+   * operation is done every once in a while via calledEveryIter.
+   */
   private void runPerceptronOneShard(ExecutorService es, FModel m, Shard s, List<CachedFeatures.Item> ys) {
     es.submit(() -> {
       FNParseTransitionScheme ts = m.getShardWeights(s);
@@ -253,12 +306,13 @@ public class ShimModel implements Serializable {
 
   public static void main(String[] args) throws InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.putIfAbsent("oracleMode", "RAND");
+    config.putIfAbsent("oracleMode", "MIN");
     config.putIfAbsent("beamSize", "1");
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
     config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
     config.putIfAbsent("sortEggsKmaxS", "true");
     config.putIfAbsent("threads", "3");
+    config.putIfAbsent("shards", "10");
     config.putIfAbsent("hashingTrickDim", "" + (1<<20));
 
     FModel m = FModel.getFModel(config);
@@ -276,13 +330,21 @@ public class ShimModel implements Serializable {
     BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
     File fsParent = config.getFile("featureSetParent", dd);
     int fsC = config.getInt("fsC", 8);
-    int fsN = config.getInt("fsN", 1280);
+    int fsN = config.getInt("fsN", 640);
     File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
     cfLike.setFeatureset(featureSetFile, bialph);
 
     ShimModel sm = new ShimModel(m);
 
+    // If true, on every combine operation, the average is sent to each shard.
+    // This has the effect of letting each shard see all of the data. If you want
+    // to compare against the data sub-sampling approach, each shard should only
+    // see its data, and never an average, which is what happens if you set this
+    // to false.
+    boolean redistribute = config.getBoolean("redistribute", true);
+
     int threads = config.getInt("threads");
+    int shards = config.getInt("shards", threads);
     int numFold = 10;
     for (int fold = 0; fold < numFold; fold++) {
       List<CachedFeatures.Item> train = new ArrayList<>();
@@ -305,24 +367,24 @@ public class ShimModel implements Serializable {
 
         // Run perceptron on each shard separately
         ExecutorService es = Executors.newFixedThreadPool(threads);
-        for (int t = 0; t < threads; t++) {
-          Shard s = new Shard(t, threads);
+        for (int i = 0; i < shards; i++) {
+          Shard s = new Shard(i, shards);
           sm.runPerceptronOneShard(es, m, s, train);
         }
         es.shutdown();
         es.awaitTermination(1, TimeUnit.DAYS);
 
-        // Compute the average and re-distribute
-//        m.updateAverageShardWeights();
-        m.combineWeightShards();
-
         // Measure test set performance
         FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-avg-" + epoch);
-        FModel.showLoss2(test, m, m.getShardWeights(new Shard(0, threads)), "TEST-itr-" + epoch);
+        FModel.showLoss2(test, m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-" + epoch);
         int n = Math.min(train.size(), 60);
         FModel.showLoss2(train.subList(0, n), m, m.getAverageWeights(), "TRAIN-avg-" + epoch);
-        FModel.showLoss2(train.subList(0, n), m, m.getShardWeights(new Shard(0, threads)), "TRAIN-itr-" + epoch);
+        FModel.showLoss2(train.subList(0, n), m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-" + epoch);
         testAverage(m);
+
+        // Compute the average and re-distribute
+//        m.updateAverageShardWeights();
+        m.combineWeightShards(redistribute);
       }
       // Before we were using the average of the shards current iterates.
       // This takes the average of those.
