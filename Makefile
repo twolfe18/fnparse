@@ -2,14 +2,15 @@
 # Maven on NFS is basically unusable, this is a replacement
 M2_LOCAL=/state/partition1/twolfe/m2-local
 
+#jar:
+#	rm -f target/*.jar
+#	mkdir -p $(M2_LOCAL)
+#	time mvn -Dmaven.repo.local=$(M2_LOCAL) clean compile assembly:single -DskipTests
+#jarLocal:
+#	rm -f target/*.jar
+#	time mvn clean compile assembly:single -DskipTests
 jar:
 	rm -f target/*.jar
-	mkdir -p $(M2_LOCAL)
-	time mvn -Dmaven.repo.local=$(M2_LOCAL) clean compile assembly:single -DskipTests
-
-jarLocal:
-	rm -f target/*.jar
-	mkdir -p $(M2_LOCAL)
 	time mvn clean compile assembly:single -DskipTests
 
 install:
