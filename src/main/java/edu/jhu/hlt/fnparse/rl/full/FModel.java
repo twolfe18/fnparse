@@ -42,7 +42,6 @@ import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
 import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
 import edu.jhu.hlt.fnparse.rl.full2.Node2;
@@ -56,6 +55,7 @@ import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.prim.tuple.Pair;
@@ -88,7 +88,15 @@ public class FModel implements Serializable {
   private DeterministicRolePruning drp;
 
 //  private CachedFeatures cachedFeatures;
-  private FNParseTransitionScheme ts;
+//  private FNParseTransitionScheme ts;
+  /*
+   * trainWeights are weights trained on separate shards using distributed
+   * perceptron training:
+   *   http://www.cslu.ogi.edu/~bedricks/courses/cs506-pslc/articles/week3/dpercep.pdf
+   * testWeights tracks the average/mixed weights of the training weights.
+   */
+  private FNParseTransitionScheme testWeights;      // average of train
+  private FNParseTransitionScheme[] trainWeights;   // indexed by shard
 
   private boolean maxViolation;
   public PerceptronUpdateMode perceptronUpdateMode;
@@ -131,11 +139,57 @@ public class FModel implements Serializable {
 
     Primes primes = new Primes(ExperimentProperties.getInstance());
     CFLike params = null;
-    ts = new FNParseTransitionScheme(params, primes);
+//    ts = new FNParseTransitionScheme(params, primes);
+
+    int t = p.getInt("threads");
+    testWeights = new FNParseTransitionScheme(params, primes);
+    trainWeights = new FNParseTransitionScheme[t];
+    for (int i = 0; i < t; i++)
+      trainWeights[i] = new FNParseTransitionScheme(params, primes);
   }
 
-  public FNParseTransitionScheme getTransitionSystem() {
-    return ts;
+//  public FNParseTransitionScheme getTransitionSystem() {
+//    return ts;
+//  }
+  public FNParseTransitionScheme getAverageWeights() {
+    return testWeights;
+  }
+  public FNParseTransitionScheme getShardWeights(Shard shard) {
+    if (shard.getNumShards() != trainWeights.length)
+      throw new IllegalArgumentException("shard=" + shard);
+    return trainWeights[shard.getShard()];
+  }
+  public int getNumShards() {
+    return trainWeights.length;
+  }
+
+  /**
+   * Reads from trainWeights[*] and puts the average into testWeights. Expects
+   * that testWeights starts at 0.
+   * @deprecated this doesn't actually compute the full average
+   */
+  public void updateAverageShardWeights() {
+    Log.info("[main] updating the average based on " + trainWeights.length + " independent perceptrons");
+    double coef = 1d / trainWeights.length;
+    for (int i = 0; i < trainWeights.length; i++)
+      testWeights.addWeights(coef, trainWeights[i]);
+    testWeights.addWeightsIntoAverageAndZeroOutWeights();
+  }
+
+  public void combineWeightShards() {
+    Log.info("[main] combining the average based on " + trainWeights.length + " independent perceptrons");
+    double coef = 1d / trainWeights.length;
+    for (int i = 0; i < trainWeights.length; i++)
+      testWeights.addWeightsAndAverage(coef, trainWeights[i]);
+    testWeights.addWeightsIntoAverageAndZeroOutWeights();
+  }
+
+  public void zeroWeights(boolean includeAverage) {
+    boolean includeWeightSums = true;
+    if (includeAverage)
+      testWeights.zeroOutWeights(includeWeightSums);
+    for (int i = 0; i < trainWeights.length; i++)
+      trainWeights[i].zeroOutWeights(includeWeightSums);
   }
 
   public void setConfig(Config c) {
@@ -148,10 +202,13 @@ public class FModel implements Serializable {
 
   public void setCachedFeatures(CFLike cf) {
     assert cf != null;
-    ts.setCachedFeatures(cf);
+//    ts.setCachedFeatures(cf);
+    testWeights.setCachedFeatures(cf);
+    for (FNParseTransitionScheme ts : trainWeights)
+      ts.setCachedFeatures(cf);
   }
 
-  private Pair<Info, Info> getOracleAndMvInfo(FNParse y) {
+  private Pair<Info, Info> getOracleAndMvInfo(FNParse y, FNParseTransitionScheme ts) {
     timer.start("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
@@ -174,35 +231,8 @@ public class FModel implements Serializable {
     return new Pair<>(oracleInf, mvInf);
   }
 
-  public Update getUpdate(FNParse y) {
-    if (HIJACK_GET_UPDATE_FOR_DEBUG)
-      hijack(y);
-
-    return getUpdateNew(y);
-  }
-
-  private void hijack(FNParse y) {
-    Log.info("presumably with CachedFeatures enabled, lets try to see if we can make an update work");
-
-    AbstractTransitionScheme.DEBUG = true;
-    FNParseTransitionScheme.DEBUG_FEATURES = true;
-    Update u = getUpdateNew(y);
-    u.apply(1);
-
-    FNParse yhat = predict(y);
-    SentenceEval se = new SentenceEval(y, yhat);
-    Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
-    double f1 = r.get("ArgumentMicroF1");
-    Log.info("result: " + y.getSentence().getId() 
-        + " f1=" + f1
-        + " p=" + r.get("ArgumentMicroPRECISION")
-        + " r=" + r.get("ArgumentMicroRECALL"));
-
-    Log.info("done hijacking");
-  }
-
-  public Update getUpdateNew(FNParse y) {
-    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+  public Update getUpdate(FNParse y, FNParseTransitionScheme ts) {
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y, ts);
     Info oracleInf = ormv.get1();
     Info mvInf = ormv.get2();
 
@@ -260,11 +290,15 @@ public class FModel implements Serializable {
       System.err.println("oracleInf=" + oracleInf);
     }
 
-    return buildUpdate(oracleB, mvB, false);
+    return buildUpdate(oracleB, mvB, ts, false);
   }
   private int badThings = 0;
 
-  private Update buildUpdate(CoefsAndScoresAdjoints oracle, CoefsAndScoresAdjoints mv, boolean ignoreHinge) {
+  private Update buildUpdate(
+      CoefsAndScoresAdjoints oracle,
+      CoefsAndScoresAdjoints mv,
+      FNParseTransitionScheme ts,
+      boolean ignoreHinge) {
 
     assert oracle.scores.getLoss().noLoss() : "oracle has loss: " + oracle.scores.getLoss();
     double a = mv.scores.getModel().forwards() + mv.scores.getLoss().maxLoss();
@@ -324,10 +358,10 @@ public class FModel implements Serializable {
     }
   }
 
-  public Info getPredictInfo(FNParse y) {
-    return getPredictInfo(y, false);
+  public Info getPredictInfo(FNParse y, FNParseTransitionScheme ts) {
+    return getPredictInfo(y, ts, false);
   }
-  public Info getPredictInfo(FNParse y, boolean oracleArgPruning) {
+  public Info getPredictInfo(FNParse y, FNParseTransitionScheme ts, boolean oracleArgPruning) {
     Info decInf = new Info(conf).setLike(rtConf).setDecodeCoefs();
     decInf.setLabel(y, ts);
     decInf.setTargetPruningToGoldLabels();
@@ -340,15 +374,11 @@ public class FModel implements Serializable {
     return decInf;
   }
 
-  public FNParse predict(FNParse y) {
-    return predictNew(y);
-  }
-
-  public FNParse predictNew(FNParse y) {
+  public FNParse predict(FNParse y, FNParseTransitionScheme ts) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting prediction");
     timer.start("predictNew");
-    Info inf = getPredictInfo(y);
+    Info inf = getPredictInfo(y, ts);
     State2<Info> s0 = ts.genRootState(inf);
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> i = ts.runInference(s0, inf);
@@ -362,19 +392,10 @@ public class FModel implements Serializable {
     return yhat;
   }
 
-//  public FNParse predictOld(FNParse y) {
-//    Log.warn("using old predict method");
-//    timer.start("predict");
-//    Info decInf = getPredictInfo(y);
-//    FNParse yhat = State.runInference2(decInf);
-//    timer.stop("predict");
-//    return yhat;
-//  }
-
-  State2<Info> oracleS(FNParse y) {
+  State2<Info> oracleS(FNParse y, FNParseTransitionScheme ts) {
     assert !maxViolation;
     AbstractTransitionScheme.DEBUG_ORACLE_FN = true;
-    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y, ts);
     Info oracleInf = ormv.get1();
     if (AbstractTransitionScheme.DEBUG)
       Log.info("doing oracle search...");
@@ -385,13 +406,13 @@ public class FModel implements Serializable {
     AbstractTransitionScheme.DEBUG_ORACLE_FN = false;
     return s;
   }
-  FNParse oracleY(FNParse y) {
-    return ts.decode(oracleS(y));
+  FNParse oracleY(FNParse y, FNParseTransitionScheme ts) {
+    return ts.decode(oracleS(y, ts));
   }
 
-  State2<Info> mostViolatedS(FNParse y) {
+  State2<Info> mostViolatedS(FNParse y, FNParseTransitionScheme ts) {
     assert !maxViolation;
-    Pair<Info, Info> ormv = getOracleAndMvInfo(y);
+    Pair<Info, Info> ormv = getOracleAndMvInfo(y, ts);
     Info mvInf = ormv.get2();
     if (AbstractTransitionScheme.DEBUG)
       Log.info("doing most violated search...");
@@ -401,12 +422,12 @@ public class FModel implements Serializable {
     State2<Info> s = mvS.get1();
     return s;
   }
-  FNParse mostVoilatedY(FNParse y) {
-    return ts.decode(mostViolatedS(y));
+  FNParse mostVoilatedY(FNParse y, FNParseTransitionScheme ts) {
+    return ts.decode(mostViolatedS(y, ts));
   }
 
 
-  private static FModel getFModel(ExperimentProperties config) {
+  public static FModel getFModel(ExperimentProperties config) {
     Random rand = new Random(config.getInt("seed", 9001));
     File workingDir = config.getOrMakeDir("workingDir", new File("/tmp/fmodel-wd-debug"));
 
@@ -442,6 +463,12 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
 
+    // This code was written before introducing multiple FNParseTransitionSystems
+    // for distributed training. Therefore I will use the testWeights directly
+    // as the weights we are manipulating. This is not how RerankerTrainer
+    // will interface with FModel.
+    FNParseTransitionScheme ts = m.testWeights;
+
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
         continue;
@@ -450,8 +477,8 @@ public class FModel implements Serializable {
 
       // We seem to be having some problems with lock-in (bad initialization) :)
       // We can get every example right if we start from 0 weights.
-      m.ts.zeroOutWeights(true);
-      m.ts.flushAlphabet();
+      ts.zeroOutWeights(true);
+      ts.flushAlphabet();
 
 //      // skipping to interesting example...
 //      if (!y.getSentence().getId().equals("FNFUTXT1272003"))
@@ -463,13 +490,13 @@ public class FModel implements Serializable {
           + " numItems=" + State.numItems(y));
 
       if (backToBasics) {
-        Update u = m.getUpdate(y);
+        Update u = m.getUpdate(y, ts);
         u.apply(1);
         for (int i = 0; i < 5; i++)
-          m.getUpdate(y).apply(1);
+          m.getUpdate(y, ts).apply(1);
         AbstractTransitionScheme.DEBUG = true;
         AbstractTransitionScheme.DEBUG_SEARCH = true;
-        FNParse yhat = m.predict(y);
+        FNParse yhat = m.predict(y, ts);
         SentenceEval se = new SentenceEval(y, yhat);
         Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
         double f1 = r.get("ArgumentMicroF1");
@@ -487,14 +514,14 @@ public class FModel implements Serializable {
       for (int i = 0; i < clim * 5; i++) {
 
         for (int j = 0; j < updatesPerPredict; j++) {
-          Update u = m.getUpdate(y);
+          Update u = m.getUpdate(y, ts);
           u.apply(1);
         }
 
         // Check k upon creation of TFKS
-        TFKS.dbgFrameIndex = m.getPredictInfo(y).getConfig().frPacking.getFrameIndex();
+        TFKS.dbgFrameIndex = m.getPredictInfo(y, ts).getConfig().frPacking.getFrameIndex();
 
-        FNParse yhat = m.predict(y);
+        FNParse yhat = m.predict(y, ts);
         SentenceEval se = new SentenceEval(y, yhat);
         Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
         double f1 = r.get("ArgumentMicroF1");
@@ -515,9 +542,9 @@ public class FModel implements Serializable {
         AbstractTransitionScheme.DEBUG = true;
         FNParseTransitionScheme.DEBUG_FEATURES = true;
         LabelIndex.DEBUG_COUNTS = true;
-        m.getUpdate(y).apply(1);
+        m.getUpdate(y, ts).apply(1);
         AbstractTransitionScheme.DEBUG_SEARCH = true;
-        m.predict(y);
+        m.predict(y, ts);
         throw new RuntimeException();
       }
     }
@@ -599,6 +626,8 @@ public class FModel implements Serializable {
         // This was the simplest way...
         Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
         feats = sentTS2feats.get(key);
+
+        assert false : "this is a dead code path, make sure you call setFeatureset";
       }
       assert feats != null;
       return feats;
@@ -722,7 +751,14 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
     m.setCachedFeatures(cfLike);
-    Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
+
+    // This code was written before introducing multiple FNParseTransitionSystems
+    // for distributed training. Therefore I will use the testWeights directly
+    // as the weights we are manipulating. This is not how RerankerTrainer
+    // will interface with FModel.
+    FNParseTransitionScheme ts = m.testWeights;
+
+    Log.info("[main] m.ts.useGlobalFeatures=" + ts.useGlobalFeats);
 
     int checked = 0;
     for (FNParse y : cfLike.getParses()) {
@@ -736,12 +772,12 @@ public class FModel implements Serializable {
           + " numItems=" + State.numItems(y));
       System.out.println(new SentenceEval(y, y));
 
-      m.ts.setParamsToAverage();
+      ts.setParamsToAverage();
 
       if (!config.getBoolean("perceptron")) {
         // make sure that oracle can get F1=1 regardless of model scores.
         Log.info("testing the oracle");
-        FNParse yOracle = m.oracleY(y);
+        FNParse yOracle = m.oracleY(y, ts);
         se = new SentenceEval(y, yOracle);
         r = BasicEvaluation.evaluate(Arrays.asList(se));
         f1 = r.get("ArgumentMicroF1");
@@ -751,7 +787,7 @@ public class FModel implements Serializable {
             + " r=" + r.get("ArgumentMicroRECALL"));
         if (f1 < 1) {
           Log.warn("oracle with non-perfect f1=" + f1 + ":");
-          m.oracleS(y).getRoot().show(System.err);
+          m.oracleS(y, ts).getRoot().show(System.err);
         }
         assert f1 == 1;
         if (justOracle)
@@ -774,18 +810,18 @@ public class FModel implements Serializable {
         // Do some learning
         double hinge = 0;
         for (int j = 0; j < lim; j++) {
-          hinge += m.getUpdate(y).apply(lr);
+          hinge += m.getUpdate(y, ts).apply(lr);
           updates++;
         }
         hinge /= updates;
 
-        System.out.println("wHatch: " + m.ts.wHatch);
-        System.out.println("wSquash: " + m.ts.wSquash);
-        System.out.println("wGlobal: " + m.ts.wGlobal);
+        System.out.println("wHatch: " + ts.wHatch);
+        System.out.println("wSquash: " + ts.wSquash);
+        System.out.println("wGlobal: " + ts.wGlobal);
         System.out.println("hinge: " + hinge);
 
         // Test
-        yhat = m.predict(y);
+        yhat = m.predict(y, ts);
         se = new SentenceEval(y, yhat);
         r = BasicEvaluation.evaluate(Arrays.asList(se));
         f1 = r.get("ArgumentMicroF1");
@@ -811,24 +847,24 @@ public class FModel implements Serializable {
         LLSSPatF.DEBUG_SHOW_BACKWARDS = true;
 
         // Check an update
-        m.getUpdate(y).apply(lr);
+        m.getUpdate(y, ts).apply(lr);
 
         // Show a run of the decoder
-        m.predict(y);
+        m.predict(y, ts);
 
         if (!config.getBoolean("perceptron")) {
           // Run the oracle by itself
           Log.info("about to run most violated search for the last time");
-          State2<Info> as = m.oracleS(y);
+          State2<Info> as = m.oracleS(y, ts);
           Log.info("about to decode oracle state for the last time");
-          FNParse a = m.ts.decode(as);
+          FNParse a = ts.decode(as);
           showLoss(y, a, "oracle");
 
           // Run most violated by itself
           Log.info("about to run most violated search for the last time");
-          State2<Info> bs = m.mostViolatedS(y);
+          State2<Info> bs = m.mostViolatedS(y, ts);
           Log.info("about to decode most violated state for the last time");
-          FNParse b = m.ts.decode(bs);
+          FNParse b = ts.decode(bs);
           showLoss(y, b, "MV");
         }
       }
@@ -841,11 +877,11 @@ public class FModel implements Serializable {
   /**
    * Prints info on how much work is being done every time inference is run.
    */
-  public static void featureAudit(FNParse y, FModel m, boolean predict) {
+  public static void featureAudit(FNParse y, FModel m, FNParseTransitionScheme ts, boolean predict) {
 
     // Check possible for each T/F node
-    Info inf = m.getPredictInfo(y);
-    Node2 n = m.ts.genRootNode(inf);
+    Info inf = m.getPredictInfo(y, ts);
+    Node2 n = ts.genRootNode(inf);
     int X = 0;
     for (LLTVN cur = n.eggs; cur != null; cur = cur.cdr())
       X += cur.car().numPossible;
@@ -857,14 +893,14 @@ public class FModel implements Serializable {
     DoubleBeam.zeroCounters();
     Info.zeroCounters();
 
-    m.ts.zeroOutWeights(true);
+    ts.zeroOutWeights(true);
 
     if (predict) {
       Log.info("predict");
-      m.predict(y);
+      m.predict(y, ts);
     } else {
       Log.info("update");
-      m.getUpdate(y).apply(1);
+      m.getUpdate(y, ts).apply(1);
     }
 
     int nFI  = y.numFrameInstances();
@@ -886,6 +922,13 @@ public class FModel implements Serializable {
     Info.logCounters();
   }
 
+  public static boolean overlappingIds2(Collection<CachedFeatures.Item> a, Collection<CachedFeatures.Item> b) {
+    List<FNParse> aa = new ArrayList<>();
+    List<FNParse> bb = new ArrayList<>();
+    for (CachedFeatures.Item x : a) aa.add(x.getParse());
+    for (CachedFeatures.Item x : b) bb.add(x.getParse());
+    return overlappingIds(aa, bb);
+  }
   public static boolean overlappingIds(Collection<FNParse> a, Collection<FNParse> b) {
     // Ensure a.size <= b.size
     if (a.size() > b.size()) {
@@ -929,6 +972,12 @@ public class FModel implements Serializable {
 
     FModel m = getFModel(config);
 
+    // This code was written before introducing multiple FNParseTransitionSystems
+    // for distributed training. Therefore I will use the testWeights directly
+    // as the weights we are manipulating. This is not how RerankerTrainer
+    // will interface with FModel.
+    FNParseTransitionScheme ts = m.testWeights;
+
     List<CachedFeatures.Item> stuff = fooMemo();
 //    stuff = stuff.subList(0, 50);
 
@@ -948,14 +997,14 @@ public class FModel implements Serializable {
       File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
       cfLike.setFeatureset(featureSetFile, bialph);
     }
-    Log.info("[main] m.ts.useGlobalFeatures=" + m.ts.useGlobalFeats);
+    Log.info("[main] m.ts.useGlobalFeatures=" + ts.useGlobalFeats);
 
     boolean speedAudit = false;
     if (speedAudit) {
       int n = Math.min(stuff.size(), 15);
       for (int i = 0; i < n; i++) {
-        featureAudit(stuff.get(i).parse, m, true);
-        featureAudit(stuff.get(i).parse, m, false);
+        featureAudit(stuff.get(i).parse, m, ts, true);
+        featureAudit(stuff.get(i).parse, m, ts, false);
       }
       return;
     }
@@ -978,29 +1027,29 @@ public class FModel implements Serializable {
       // Do some learning (few epochs)
       double maxIters = config.getInt("maxIters", 12);
       boolean zeroSumsToo = true;
-      m.ts.zeroOutWeights(zeroSumsToo);
-      m.ts.showWeights("after-zeroing");
+      ts.zeroOutWeights(zeroSumsToo);
+      ts.showWeights("after-zeroing");
       for (int i = 0; i < maxIters; i++) {
         Log.info("[main] training on " + train.size() + " examples");
         Collections.shuffle(train, m.getConfig().rand);
         for (FNParse y : train) {
           if (pedantic) Log.info("training against: " + y.getId());
-          m.getUpdate(y).apply(1);
+          m.getUpdate(y, ts).apply(1);
         }
         assert !overlappingIds(train, test);
-        showLoss(test, m, "after-epoch-" + i + "-TEST");
+        showLoss(test, m, ts, "after-epoch-" + i + "-TEST");
         int tn = Math.min(100, train.size());
-        showLoss(train.subList(0, tn), m, "after-epoch-" + i + "-TRAIN");
+        showLoss(train.subList(0, tn), m, ts, "after-epoch-" + i + "-TRAIN");
       }
 
       // See what we get on the test example
-      m.ts.setParamsToAverage();
-      m.ts.showWeights("after-averaging");
+      ts.setParamsToAverage();
+      ts.showWeights("after-averaging");
       assert !overlappingIds(train, test);
       if (pedantic) 
         for (FNParse y : test)
           Log.info("testing against: " + y.getId());
-      showLoss(test, m, "on-fold-" + fold);
+      showLoss(test, m, ts, "on-fold-" + fold);
 //      FNParse yhat = m.predict(yTest);
 //      SentenceEval se = new SentenceEval(yTest, yhat);
 //      Map<String, Double> r = BasicEvaluation.evaluate(Arrays.asList(se));
@@ -1013,10 +1062,17 @@ public class FModel implements Serializable {
     }
   }
 
-  private static void showLoss(List<FNParse> ys, FModel m, String label) {
+  public static void showLoss2(List<CachedFeatures.Item> ys, FModel m, FNParseTransitionScheme ts, String label) {
+    List<FNParse> ys2 = new ArrayList<>();
+    for (CachedFeatures.Item yy : ys)
+      ys2.add(yy.getParse());
+    showLoss(ys2, m, ts, label);
+  }
+
+  public static void showLoss(List<FNParse> ys, FModel m, FNParseTransitionScheme ts, String label) {
     List<SentenceEval> se = new ArrayList<>();
     for (FNParse y : ys) {
-      FNParse yhat = m.predict(y);
+      FNParse yhat = m.predict(y, ts);
       se.add(new SentenceEval(y, yhat));
     }
     Map<String, Double> r = BasicEvaluation.evaluate(se);

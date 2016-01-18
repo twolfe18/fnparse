@@ -142,33 +142,48 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public AveragedPerceptronWeights wHatch;
   public AveragedPerceptronWeights wSquash;
   public AveragedPerceptronWeights wGlobal;
-//  public WeightsInfo wHatch, wSquash;
-//  public WeightsInfo wGlobal;    // for ROLE_COOC, NUM_ARGS, ARG_LOCATION
-//
-//  // For averaged perceptron
-//  private WeightsInfo wHatchSum, wSquashSum, wGlobalSum;
-//  private int numAverages = 0;
 
-//  public void takeAverageOfWeights() {
-//    Log.info("[main] taking " + numAverages + " average");
-//    timer.start("takeAverageOfWeights");
-//    if (wHatchSum == null) {
-//      assert numAverages == 0;
-//      wHatchSum = new WeightsInfo(wHatch);
-//      if (wSquash != null)
-//        wSquashSum = new WeightsInfo(wSquash);
-//      if (wGlobal != null)
-//        wGlobalSum = new WeightsInfo(wGlobal);
-//    } else {
-//      wHatchSum.add(wHatch);
-//      if (wSquash != null)
-//        wSquashSum.add(wSquash);
-//      if (wGlobal != null)
-//        wGlobalSum.add(wGlobal);
-//    }
-//    numAverages++;
-//    timer.stop("takeAverageOfWeights");
-//  }
+  /** Does this += coef * w */
+  public void addWeights(double coef, FNParseTransitionScheme w) {
+    assert (wHatch == null) == (w.wHatch == null);
+    assert (wSquash == null) == (w.wSquash == null);
+    assert (wGlobal == null) == (w.wGlobal == null);
+    if (wHatch != null)
+      wHatch.addWeights(coef, w.wHatch.getInternalWeights());
+    if (wSquash != null)
+      wSquash.addWeights(coef, w.wSquash.getInternalWeights());
+    if (wGlobal != null)
+      wGlobal.addWeights(coef, w.wGlobal.getInternalWeights());
+  }
+
+  public void addWeightsAndAverage(double coef, FNParseTransitionScheme w) {
+    assert (wHatch == null) == (w.wHatch == null);
+    assert (wSquash == null) == (w.wSquash == null);
+    assert (wGlobal == null) == (w.wGlobal == null);
+    if (wHatch != null)
+      wHatch.addWeightsAndAverage(coef, w.wHatch);
+    if (wSquash != null)
+      wSquash.addWeightsAndAverage(coef, w.wSquash);
+    if (wGlobal != null)
+      wGlobal.addWeightsAndAverage(coef, w.wGlobal);
+  }
+
+  public void addWeightsIntoAverageAndZeroOutWeights() {
+    boolean alsoZeroOutNonAvgWeights = false;
+    if (wHatch != null)
+      wHatch.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+    if (wSquash != null)
+      wSquash.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+    if (wGlobal != null)
+      wGlobal.addWeightsIntoAverageAndZeroOutWeights(alsoZeroOutNonAvgWeights);
+  }
+
+  public void scaleWeights(double alpha) {
+    boolean includeAverage = false;
+    if (wHatch != null) wHatch.scale(alpha, includeAverage);
+    if (wSquash != null) wSquash.scale(alpha, includeAverage);
+    if (wGlobal != null) wGlobal.scale(alpha, includeAverage);
+  }
 
   @Override
   public void calledAfterEveryUpdate() {
@@ -1201,10 +1216,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Log.info(Describe.fnParse(y));
 
     FModel m = new FModel(null, DeterministicRolePruning.Mode.XUE_PALMER_HERMANN);
-    FNParseTransitionScheme ts = m.getTransitionSystem();
+    FNParseTransitionScheme ts = m.getAverageWeights();
 
     boolean thinKS = true;  // prune out some wrong answers to make the tree smaller (easier to see)
-    Info inf = m.getPredictInfo(y, thinKS);
+    Info inf = m.getPredictInfo(y, ts, thinKS);
     State2<Info> s0 = ts.genRootState(inf);
     Log.info("this is the root:");
     s0.getRoot().show(System.out);

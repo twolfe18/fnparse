@@ -36,7 +36,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
 
   private IntDoubleDenseVector w;
   private IntDoubleDenseVector u;
-  private int c;
+  private double c;
   private int dimension;
 
   public AveragedPerceptronWeights(int dimension) {
@@ -52,6 +52,37 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   public void zeroWeightsAverage() {
     u = new IntDoubleDenseVector(dimension);
     c = 0;
+  }
+
+  public void scale(double alpha, boolean includeAverage) {
+    w.scale(alpha);
+    if (includeAverage)
+      u.scale(alpha);
+  }
+
+  /** Performs this += coef * w, does not affect c or u */
+  public void addWeights(double coef, IntDoubleDenseVector w) {
+    for (int i = 0; i < dimension; i++)
+      this.w.add(i, coef * w.get(i));
+  }
+
+  public void addWeightsAndAverage(double coef, AveragedPerceptronWeights other) {
+    for (int i = 0; i < dimension; i++)
+      this.w.add(i, coef * other.w.get(i));
+    for (int i = 0; i < dimension; i++)
+      this.u.add(i, coef * other.u.get(i));
+    c += coef * other.c;
+  }
+
+  /** Does u += w, with a sign flip due to how Adj works, and zeros out w */
+  public void addWeightsIntoAverageAndZeroOutWeights(boolean alsoZeroOutWeights) {
+    c += 1;
+    for (int i = 0; i < dimension; i++) {
+      // u -= w because of how getAverageWeight works
+      u.add(i, -w.get(i));
+    }
+    if (alsoZeroOutWeights)
+      w.scale(0);
   }
 
   public void makeWeightsUnitLength() {
@@ -103,6 +134,10 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return w.get(i) - (1d/c) * u.get(i);
   }
 
+  public IntDoubleDenseVector getInternalWeights() {
+    return w;
+  }
+
   /** Returns a new instance with the weights set to the average */
   public AveragedPerceptronWeights computeAverageWeights() {
     assert c > 0;
@@ -117,28 +152,11 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   public void completedObservation() {
-    c++;
+    c += 1;
   }
-  public int numObervations() {
+  public double numObervations() {
     return c;
   }
-
-//  public class Adj1 implements Adjoints {
-//    private final int index;
-//    public Adj1(long idx) {
-//      long d = dimension();
-//      index = (int) (idx % d);
-//    }
-//    @Override
-//    public double forwards() {
-//      return getWeight(index);
-//    }
-//    @Override
-//    public void backwards(double dErr_dForwards) {
-//      w.add(features[i], -dErr_dForwards);
-//      u.add(features[i], c * -dErr_dForwards);
-//    }
-//  }
 
   /**
    * Reads from weights (not averaged weights). Backwards performs update to

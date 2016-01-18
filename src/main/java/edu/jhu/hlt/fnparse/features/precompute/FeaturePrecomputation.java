@@ -39,10 +39,10 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
-import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -425,7 +425,7 @@ public class FeaturePrecomputation {
     FrameIndex fi;
     Iterable<FNParse> data;
     String dataset = config.getString("dataset");
-    IntPair shard = ShardUtils.getShard(config);
+    Shard shard = ShardUtils.getShard(config);
     if ("propbank".equalsIgnoreCase(dataset)) {
       Log.info("reading propbank");
       fi = FrameIndex.getPropbank();

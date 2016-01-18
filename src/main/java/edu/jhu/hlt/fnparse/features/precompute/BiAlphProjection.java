@@ -21,6 +21,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
 
@@ -113,7 +114,7 @@ public class BiAlphProjection {
     } else {
       Log.info("dir->dir mode");
       File out = config.getExistingDir("outputFeatures");
-      IntPair shard = ShardUtils.getShard(config);
+      Shard shard = ShardUtils.getShard(config);
       boolean stripOutputSuf = config.getBoolean("stripOutputSuf", false);
       File featuresParent = config.getExistingDir("featuresParent");
 

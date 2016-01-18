@@ -33,6 +33,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
+import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.tuple.Pair;
@@ -729,7 +730,7 @@ public class InformationGainProducts {
     // over the same number of features from all orders) is a hedge against the
     // feature scoring heuristic being bad.
     boolean showSkipCard = config.getBoolean("showSkipCard", false);
-    IntPair shard = ShardUtils.getShard(config);
+    Shard shard = ShardUtils.getShard(config);
     List<String[]> prod1 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 1, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod2 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 2, showSkipCard), InformationGainProducts::stringArrayHash, shard);
     List<String[]> prod3 = ShardUtils.shard(getProductsHeuristicallySorted(config, bialph, 3, showSkipCard), InformationGainProducts::stringArrayHash, shard);
