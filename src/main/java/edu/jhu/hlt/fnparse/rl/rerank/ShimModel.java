@@ -162,13 +162,13 @@ public class ShimModel implements Serializable {
   public void doneTraining() {
     if (reranker != null) {
       if (verbose)
-        Log.info("telling reranker params that we're done training");
+        Log.info("[main] telling reranker params that we're done training");
       reranker.getStatelessParams().doneTraining();
       reranker.getStatefulParams().doneTraining();
       reranker.getPruningParams().doneTraining();
     } else {
       if (verbose)
-        Log.info("setting fmodel params to average");
+        Log.info("[main] setting fmodel params to average");
       boolean redistribute = false;
       fmodel.combineWeightShards(redistribute);
       fmodel.getAverageWeights().setParamsToAverage();
