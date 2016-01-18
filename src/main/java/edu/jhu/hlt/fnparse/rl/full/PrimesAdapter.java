@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
+import java.io.Serializable;
+
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.rl.full.State.SpecialFrame;
@@ -12,7 +14,9 @@ import edu.jhu.prim.map.LongIntHashMap;
  * Finds an index for every sub-set of (t,f,k,s) assignments via hashing.
  * There will be collisions either way, and I need something working now!
  */
-public class PrimesAdapter {
+public class PrimesAdapter implements Serializable {
+  private static final long serialVersionUID = -3267402547765020302L;
+
   private Primes primes;
   private int nPrimes;
   private FrameRolePacking frp;
