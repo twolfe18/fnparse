@@ -4,7 +4,6 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.TreeSet;
-import java.util.concurrent.atomic.AtomicLong;
 
 import edu.jhu.hlt.fnparse.rl.full2.LLSSP;
 import edu.jhu.hlt.tutils.Log;
@@ -44,17 +43,14 @@ public interface Beam<T extends StateLike> {
    * thus you should only ever construct pairs of instances s.t. (score,sig) are unique!
    */
   public static class BeamItem<R extends StateLike> implements Comparable<BeamItem<R>> {
-    // I doubt I'll wrap... 2^63 is a lot of adds to a beam...
-    public static AtomicLong INSTANCE_COUNTER = new AtomicLong();
-
     public final R state;
     public final double score;
     public final long inst;
 
-    public BeamItem(R state, double score) {
+    public BeamItem(R state, double score, long instanceCount) {
       this.state = state;
       this.score = score;
-      this.inst = INSTANCE_COUNTER.getAndIncrement();
+      this.inst = instanceCount;
     }
     @Override
     public int compareTo(BeamItem<R> o) {
@@ -108,6 +104,8 @@ public interface Beam<T extends StateLike> {
    * to add a little jitter to the scores.
    */
   public static class DoubleBeam<T extends StateLike> implements Beam<T> {
+    // I doubt I'll wrap... 2^63 is a lot of adds to a beam...
+    public long instanceCounter = 0;
 
     public static int COUNTER_OFFER = 0;
     public static void zeroCounters() {
@@ -204,7 +202,7 @@ public interface Beam<T extends StateLike> {
           // If this state is the same as something on our beam,
           // then choose the higher scoring of the two.
           scores.remove(old);
-          BeamItem<T> si = new BeamItem<>(s, sc);
+          BeamItem<T> si = new BeamItem<>(s, sc, instanceCounter++);
           boolean added = scores.add(si);
           assert added;
           table.put(s, si);
@@ -214,7 +212,7 @@ public interface Beam<T extends StateLike> {
         return false;
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
-        BeamItem<T> si = new BeamItem<>(s, sc);
+        BeamItem<T> si = new BeamItem<>(s, sc, instanceCounter++);
         int j = scores.size();
         scores.add(si);
         int k = scores.size();
@@ -228,7 +226,7 @@ public interface Beam<T extends StateLike> {
         if (table != null)
           table.remove(worst.state);
         // Add this item
-        BeamItem<T> si = new BeamItem<>(s, sc);
+        BeamItem<T> si = new BeamItem<>(s, sc, instanceCounter++);
         scores.add(si);
         if (table != null) {
           BeamItem<T> old2 = table.put(s, si);
