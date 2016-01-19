@@ -55,18 +55,18 @@ public class FeatureFile {
    */
   public static class Line {
     private boolean sorted;
-    private String line;
+    private final String line;
     private String[] tokenized;
     private List<Feature> features;
 
     public Line(String line, boolean sorted) {
       features = new ArrayList<>();
+      this.line = line;
       init(line, sorted);
     }
 
     public void init(String line, boolean sorted) {
       this.sorted = sorted;
-      this.line = line;
       tokenized = null;
       features.clear();
     }
@@ -78,8 +78,10 @@ public class FeatureFile {
     private void tokenize() {
       tokenized = line.split("\t");
       for (int i = 5; i < tokenized.length; i++) {
-        String[] tfs = tokenized[i].split(":");
-        assert tfs.length == 2;
+        String tf = tokenized[i];
+        if (tf.trim().isEmpty()) continue;
+        String[] tfs = tf.split(":");
+        assert tfs.length == 2 : "tokenized[" + i + "]=\"" + tokenized[i] + "\"";
         int t = Integer.parseInt(tfs[0]);
         int f = Integer.parseInt(tfs[1]);
         features.add(new Feature(null, t, null, f, 1));
@@ -172,6 +174,7 @@ public class FeatureFile {
     }
     @Override
     public Iterator<Line> iterator() {
+      Log.info("reading from " + file.getPath());
       return new Iterator<Line>() {
         private BufferedReader r = FileUtil.getReaderOrBlowup(file);
         private String line = readLineOrBlowup(r);
@@ -183,6 +186,15 @@ public class FeatureFile {
         public Line next() {
           String l = line;
           line = readLineOrBlowup(r);
+          if (line == null) {
+            try {
+              r.close();
+              Log.info("successfully closed " + file.getPath());
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
+            r = null;
+          }
           return new Line(l, sorted);
         }
       };
@@ -190,6 +202,7 @@ public class FeatureFile {
   }
 
   public static Iterable<Line> getLines(File f, boolean featuresSorted) {
+    Log.info("reading features from=" + f.getPath() + " sorted=" + featuresSorted);
     return new Iterbl(f, featuresSorted);
   }
 

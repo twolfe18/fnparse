@@ -114,9 +114,15 @@ public class InformationGainProducts {
           if (DEBUG)
             System.out.println("keeping: " + line.substring(se.first, se.second));
           String fs = line.substring(colon + 1, se.second);
-          int f = Integer.parseInt(fs);
-          assert f >= 0;
-          templateFeatures.add(new IntPair(t, f));
+          if (fs.isEmpty()) {
+            Log.warn("line: " + line);
+            Log.warn("bad feature: " + line.substring(se.first, se.second));
+            Log.warn("         at: " + se);
+          } else {
+            int f = Integer.parseInt(fs);
+            assert f >= 0;
+            templateFeatures.add(new IntPair(t, f));
+          }
         }
       }
       int n = templateFeatures.size();

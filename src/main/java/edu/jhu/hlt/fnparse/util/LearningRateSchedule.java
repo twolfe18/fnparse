@@ -14,7 +14,8 @@ public interface LearningRateSchedule {
     throw new RuntimeException("need to implement scale for " + toString());
   }
 
-  public static class Constant implements LearningRateSchedule {
+  public static class Constant implements LearningRateSchedule, Serializable {
+    private static final long serialVersionUID = 2066756721704010203L;
     private double learningRate;
     public Constant(double learningRate) {
       if (Double.isInfinite(learningRate) || Double.isNaN(learningRate))
@@ -42,7 +43,6 @@ public interface LearningRateSchedule {
 
   public static class Normal implements LearningRateSchedule, Serializable {
     private static final long serialVersionUID = -4795477673582194196L;
-
     private double initial;
     private double smooth;
     private double squish;
@@ -83,7 +83,8 @@ public interface LearningRateSchedule {
     }
   }
 
-  public static class Exp implements LearningRateSchedule {
+  public static class Exp implements LearningRateSchedule, Serializable {
+    private static final long serialVersionUID = 2767659932114484317L;
     private final double decayRate;
     private int iter;
     public Exp(double decayRate) {

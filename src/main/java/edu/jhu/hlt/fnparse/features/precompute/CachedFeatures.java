@@ -85,6 +85,8 @@ import edu.jhu.prim.vector.IntDoubleVector;
 public class CachedFeatures implements Serializable {
   private static final long serialVersionUID = 1063789546828258765L;
 
+  public static boolean DEBUG_FLATTEN_CACHE = false;
+
   // If true sort features and remove any which have the same feature product
   // (does not check against cardinality, though I guess they should probably
   // be equal for all features).
@@ -134,8 +136,12 @@ public class CachedFeatures implements Serializable {
     private Map<Span, List<Span>> argsForTarget;
 
     public void convertToFlattenedRepresentation(int[][] featureSet, int[] template2cardinality) {
-      Log.info("converting to flattened representation: " + parse.getId());
-      assert features4b == null;
+      if (DEBUG_FLATTEN_CACHE)
+        Log.info("converting to flattened representation: " + parse.getId());
+      if (features4b != null) {
+        assert features3 == null;
+        return;
+      }
       Sentence sent = parse.getSentence();
       features4b = new HashMap<>();
       argsForTarget = new HashMap<>();
@@ -204,7 +210,7 @@ public class CachedFeatures implements Serializable {
           b[i] = (int) f;
         }
       }
-      if (TOTAL % 100 == 0)
+      if (TOTAL % 100 == 0 && DEBUG_FLATTEN_CACHE)
         Log.info("saved=" + SAVED + " total=" + TOTAL);
       TOTAL++;
       if (b != null) {

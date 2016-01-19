@@ -85,6 +85,7 @@ public class PropbankReader {
     cio.readPropbank();
     cio.log_cons_id_conversion = false;
 //    cio.debug_propbank = true;
+    cio.keepConcrete = false;
 
     if (!on5.isDirectory())
       throw new IllegalArgumentException("not a valid ON5 directory: " + on5.getPath());

@@ -19,6 +19,7 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
@@ -30,6 +31,7 @@ import edu.jhu.hlt.fnparse.rl.params.Params;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
@@ -304,6 +306,7 @@ public class ShimModel implements Serializable {
     });
   }
 
+  @SuppressWarnings("unchecked")
   public static void main(String[] args) throws InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
     config.putIfAbsent("oracleMode", "MIN");
@@ -311,29 +314,81 @@ public class ShimModel implements Serializable {
     config.putIfAbsent("oneAtATime", "" + TFKS.F);
     config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
     config.putIfAbsent("sortEggsKmaxS", "true");
-    config.putIfAbsent("threads", "3");
-    config.putIfAbsent("shards", "10");
-    config.putIfAbsent("hashingTrickDim", "" + (1<<20));
+    config.putIfAbsent("hashingTrickDim", "" + (1<<24));
+//    config.putIfAbsent("threads", "1");
+    int threads = config.getInt("threads", 1);
+    int shards = config.getInt("shards", threads);
 
     FModel m = FModel.getFModel(config);
     Random rand = m.getConfig().rand;
 
-    List<CachedFeatures.Item> stuff = FModel.fooMemo();
-//    stuff = stuff.subList(0, 150);
-
-    SimpleCFLike cfLike = new SimpleCFLike(stuff);
-    m.setCachedFeatures(cfLike);
-
     // Load the feature set
+    // NOTE: This must match the cached data files!
     File dd = new File("data/debugging/");
     File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
     BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
     File fsParent = config.getFile("featureSetParent", dd);
     int fsC = config.getInt("fsC", 8);
-    int fsN = config.getInt("fsN", 640);
+    int fsN = config.getInt("fsN", 1280);
     File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
-    cfLike.setFeatureset(featureSetFile, bialph);
+    int[] template2cardinality = bialph.makeTemplate2Cardinality();
+    int[][] featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
 
+    List<CachedFeatures.Item> train, dev, test;
+    // Try to get data from memo
+    File trainF = config.getFile("trainData");
+    File devF = config.getFile("devData");
+    File testF = config.getFile("testData");
+    Log.info("[main] trainF=" + trainF.getPath()
+        + " devF=" + devF.getPath()
+        + " testF=" + testF.getPath());
+    assert trainF.isFile() == devF.isFile() && devF.isFile() == testF.isFile();
+    if (trainF.isFile()) {
+      Log.info("[main] loading data from disk");
+      train = (List<CachedFeatures.Item>) FileUtil.deserialize(trainF);
+      dev = (List<CachedFeatures.Item>) FileUtil.deserialize(devF);
+      test = (List<CachedFeatures.Item>) FileUtil.deserialize(testF);
+    } else {
+      Log.info("[main] generating data from scratch");
+      File featuresParent = config.getExistingDir("featuresParent");
+      String featuresGlob = config.getString("featuresGlob", "glob:**/shard*.txt*");
+      List<CachedFeatures.Item>[] trainDevTest = FModel.foo2(
+          featuresParent, featuresGlob, featureSet, template2cardinality);
+      train = trainDevTest[0]; 
+      dev = trainDevTest[1]; 
+      test = trainDevTest[2]; 
+
+      // Shuffle so that prefixes are random samples
+      Random r = new Random(9001);
+      Collections.shuffle(train, r);
+      Collections.shuffle(dev, r);
+      Collections.shuffle(test, r);
+
+      Log.info("[main] saving data");
+      FileUtil.serialize(train, trainF);  //new File("/tmp/shimmodel-propbank-train.jser.gz"));
+      FileUtil.serialize(dev, devF);  //new File("/tmp/shimmodel-propbank-dev.jser.gz"));
+      FileUtil.serialize(test, testF);  //new File("/tmp/shimmodel-propbank-test.jser.gz"));
+    }
+    Log.info("[main] done reading data");
+
+    if (config.getBoolean("dontTrain", false)) {
+      Log.info("[main] exiting because the dontTrain flag was given");
+      return;
+    }
+
+    int ntl = config.getInt("nTrain", 0);
+    if (ntl > 0 && ntl < train.size()) {
+      Log.info("[main] limiting train set size to ntl=" + ntl);
+      train = train.subList(0, ntl);
+    }
+
+    // This indexes features and computes: templates -> featureSet -> features
+    SimpleCFLike cfLike = new SimpleCFLike();
+    cfLike.addItems(train);
+    cfLike.addItems(dev);
+    cfLike.addItems(test);
+    cfLike.setFeatureset(featureSetFile, bialph);
+    m.setCachedFeatures(cfLike);
     ShimModel sm = new ShimModel(m);
 
     // If true, on every combine operation, the average is sent to each shard.
@@ -342,56 +397,59 @@ public class ShimModel implements Serializable {
     // see its data, and never an average, which is what happens if you set this
     // to false.
     boolean redistribute = config.getBoolean("redistribute", true);
+    Log.info("starting"
+        + " nTrain=" + train.size()
+        + " nDev=" + dev.size()
+        + " nTest=" + test.size()
+        + " shards=" + shards
+        + " threads=" + threads
+        + " redistribute=" + redistribute);
+    assert !FModel.overlappingIds2(train, test);
+    assert !FModel.overlappingIds2(train, dev);
+    assert !FModel.overlappingIds2(test, dev);
 
-    int threads = config.getInt("threads");
-    int shards = config.getInt("shards", threads);
-    int numFold = 10;
-    for (int fold = 0; fold < numFold; fold++) {
-      List<CachedFeatures.Item> train = new ArrayList<>();
-      List<CachedFeatures.Item> test = new ArrayList<>();
-      for (int i = 0; i < stuff.size(); i++)
-        (i % numFold == fold ? test : train).add(stuff.get(i));
-      Log.info("starting fold=" + fold
-          + " nTrain=" + train.size()
-          + " nTest=" + test.size());
-      assert !FModel.overlappingIds2(train, test);
+    // After this many epochs, spend time to compute the full average
+    int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
+    int numInstApprox = config.getInt("numInstApprox", 100);
+    int maxEpoch = config.getInt("maxEpoch", 5);
+    for (int epoch = 0; epoch < maxEpoch; epoch++) {
+      Log.info("starting epoch=" + epoch);
 
-      boolean includeAverage = true;
-      m.zeroWeights(includeAverage);
-
-      for (int epoch = 0; epoch < 150; epoch++) {
-        Log.info("starting epoch=" + epoch);
-        // Split the data
-        Collections.shuffle(train, rand);
-        // We'll just take each thread to be on shard t%N
-
-        // Run perceptron on each shard separately
-        ExecutorService es = Executors.newFixedThreadPool(threads);
-        for (int i = 0; i < shards; i++) {
-          Shard s = new Shard(i, shards);
-          sm.runPerceptronOneShard(es, m, s, train);
-        }
-        es.shutdown();
-        es.awaitTermination(1, TimeUnit.DAYS);
-
-        // Measure test set performance
-        FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-avg-" + epoch);
-        FModel.showLoss2(test, m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-" + epoch);
-        int n = Math.min(train.size(), 60);
-        FModel.showLoss2(train.subList(0, n), m, m.getAverageWeights(), "TRAIN-avg-" + epoch);
-        FModel.showLoss2(train.subList(0, n), m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-" + epoch);
-        testAverage(m);
-
-        // Compute the average and re-distribute
-//        m.updateAverageShardWeights();
-        m.combineWeightShards(redistribute);
+      // Run perceptron on each shard separately
+      Collections.shuffle(train, rand);
+      ExecutorService es = Executors.newFixedThreadPool(threads);
+      for (int i = 0; i < shards; i++) {
+        Shard s = new Shard(i, shards);
+        sm.runPerceptronOneShard(es, m, s, train);
       }
-      // Before we were using the average of the shards current iterates.
-      // This takes the average of those.
-      // TODO This is not the same as averaging over all shard-iterates!
-      m.getAverageWeights().setParamsToAverage();
-      FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-final");
+      es.shutdown();
+      es.awaitTermination(999, TimeUnit.DAYS);
+
+      // Measure performance
+      // TEST
+      int nTestLim = epoch >= noApproxAfter ? test.size() : Math.min(test.size(), numInstApprox);
+      if (shards > 1)
+        FModel.showLoss2(test.subList(0, nTestLim), m, m.getAverageWeights(), "TEST-avg-" + epoch);
+      FModel.showLoss2(test.subList(0, nTestLim), m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-" + epoch);
+      // DEV
+      int nDevLim = epoch >= noApproxAfter ? dev.size() : Math.min(dev.size(), numInstApprox);
+      if (shards > 1)
+        FModel.showLoss2(dev.subList(0, nDevLim), m, m.getAverageWeights(), "DEV-avg-" + epoch);
+      FModel.showLoss2(dev.subList(0, nDevLim), m, m.getShardWeights(new Shard(0, shards)), "DEV-itr-" + epoch);
+      // TRAIN
+      int nTrainLim = Math.min(train.size(), numInstApprox);
+      if (shards > 1)
+        FModel.showLoss2(train.subList(0, nTrainLim), m, m.getAverageWeights(), "TRAIN-avg-" + epoch);
+      FModel.showLoss2(train.subList(0, nTrainLim), m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-" + epoch);
+
+      // Compute the average and re-distribute
+//      testAverage(m);
+      m.combineWeightShards(redistribute);
     }
+    m.setAllWeightsToAverage();
+    FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-itr-final");
+    FModel.showLoss2(dev, m, m.getAverageWeights(), "DEV-itr-final");
+    FModel.showLoss2(train, m, m.getAverageWeights(), "TRAIN-itr-final");
   }
 
   private static void testAverage(FModel m) {

@@ -15,6 +15,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import com.google.common.collect.Iterables;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -49,6 +55,7 @@ import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
+import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
@@ -145,9 +152,11 @@ public class FModel implements Serializable {
       trainWeights[i] = new FNParseTransitionScheme(params, primes);
   }
 
-//  public FNParseTransitionScheme getTransitionSystem() {
-//    return ts;
-//  }
+  public void setAllWeightsToAverage() {
+    testWeights.setParamsToAverage();
+    for (int i = 0; i < trainWeights.length; i++)
+      trainWeights[i].setParamsToAverage();
+  }
   public FNParseTransitionScheme getAverageWeights() {
     return testWeights;
   }
@@ -580,12 +589,15 @@ public class FModel implements Serializable {
     private int[][] featureSet; // TODO initialize
     private int[] template2cardinality;
 
-    public SimpleCFLike(List<CachedFeatures.Item> items) {
-      Object old;
+    public SimpleCFLike() {
       if (!CACHE_FLATTEN)
         sentTS2feats = new HashMap<>();
       parses = new ArrayList<>();
       s2i = new HashMap<>();
+    }
+
+    public void addItems(List<CachedFeatures.Item> items) {
+      Object old;
       for (CachedFeatures.Item i : items) {
         FNParse y = i.getParse();
         y.featuresAndSpans = i;  // evil
@@ -683,9 +695,6 @@ public class FModel implements Serializable {
     ff = config.getExistingFile("fooFeatureFile", ff);
     boolean templatesSorted = true;
     Iterable<FeatureFile.Line> itr = FeatureFile.getLines(ff, templatesSorted);
-//    String x = StreamSupport.stream(itr.spliterator(), false)
-//      .collect(Collectors.groupingBy(FeatureFile.Line::getSentenceId));
-//    Collectors.groupingBy(FeatureFile.Line::getSentenceId, LinkedHashMap::new, Collectors.toList())
     Iterator<List<FeatureFile.Line>> bySent = new GroupBy<>(itr.iterator(), FeatureFile.Line::getSentenceId);
 
     // We also need the FNParses
@@ -729,6 +738,106 @@ public class FModel implements Serializable {
     return all;
   }
 
+  /** @return [train, dev, test] */
+  public static List<CachedFeatures.Item>[] foo2(
+      File featuresParent, String glob,
+      int[][] featureSet, int[] template2cardinality) {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+
+    // Read some features out of one file eagerly
+    boolean templatesSorted = true;
+    Iterable<FeatureFile.Line> itr = null;
+    for (File f : FileUtil.find(featuresParent, glob)) {
+      Log.info("reading features from " + f.getPath());
+      Iterable<FeatureFile.Line> fi = FeatureFile.getLines(f, templatesSorted);
+      if (itr == null)
+        itr = fi;
+      else
+        itr = Iterables.concat(itr, fi);
+    }
+    Iterator<List<FeatureFile.Line>> bySent = new GroupBy<>(itr.iterator(), FeatureFile.Line::getSentenceId);
+
+    // We also need the FNParses
+    // Just read in the dev data.
+    Map<String, FNParse> parseByIdTrain = new HashMap<>();
+    Map<String, FNParse> parseByIdDev = new HashMap<>();
+    Map<String, FNParse> parseByIdTest = new HashMap<>();
+    ParsePropbankData.Redis propbankAutoParses = null;
+    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+    for (FNParse y : pbr.getTrainData()) {
+      FNParse old = parseByIdTrain.put(y.getId(), y);
+      assert old == null;
+    }
+    for (FNParse y : pbr.getDevData()) {
+      FNParse old = parseByIdDev.put(y.getId(), y);
+      assert old == null;
+    }
+    for (FNParse y : pbr.getTestData()) {
+      FNParse old = parseByIdTest.put(y.getId(), y);
+      assert old == null;
+    }
+    Log.info("[main] nTrainMax=" + parseByIdTrain.size()
+      + " nDevMax=" + parseByIdDev.size()
+      + " nTestMax=" + parseByIdTest.size());
+
+    Log.info("[main] " + Describe.memoryUsage());
+    pbr = null;
+
+    // Perform join
+    List<CachedFeatures.Item> train = new ArrayList<>();
+    List<CachedFeatures.Item> dev = new ArrayList<>();
+    List<CachedFeatures.Item> test = new ArrayList<>();
+    for (int it = 0; bySent.hasNext(); it++) {
+      if (it % 500 == 0)
+        Log.info("on sentence " + it);
+      List<FeatureFile.Line> feats;
+      try {
+        feats = bySent.next();
+      } catch (Exception | AssertionError e) {
+        e.printStackTrace();
+        continue;
+      }
+      String id = feats.get(0).getSentenceId();
+      boolean tr = false, dv = false, te = false;
+      FNParse y;
+      y = parseByIdTrain.get(id);
+      if (y != null) {
+        tr = true;
+      } else {
+        y = parseByIdDev.get(id);
+        if (y != null) {
+          dv = true;
+        } else {
+          y = parseByIdTest.get(id);
+          assert y != null;
+          te = true;
+        }
+      }
+      CachedFeatures.Item i = new CachedFeatures.Item(y);
+      for (FeatureFile.Line l : feats) {
+        Span t = l.getTarget();
+        Span s = l.getArgSpan();
+        BitSet relTemplates = null; // null means all
+        boolean storeTemplates = true;
+        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
+        i.setFeatures(t, s, bt);
+      }
+      i.convertToFlattenedRepresentation(featureSet, template2cardinality);
+      if (tr) train.add(i);
+      if (dv) dev.add(i);
+      if (te) test.add(i);
+    }
+    Log.info("[main] nTrain=" + train.size()
+      + " nDev=" + dev.size()
+      + " nTest=" + test.size());
+    Log.info("[main] nTrainMissed=" + (parseByIdTrain.size() - train.size())
+      + " nDevMissed=" + (parseByIdDev.size() - dev.size())
+      + " nTestMissed=" + (parseByIdTest.size() - test.size()));
+    Log.info("[main] " + Describe.memoryUsage());
+
+    return new List[] { train, dev, test };
+  }
+
   /*
    * This isn't working... CachedFeatures is too complex due to its parallel
    * nature and its difficult to figure out if something is a timing issue or
@@ -744,7 +853,8 @@ public class FModel implements Serializable {
     config.put("beamSize", "1");
 
     List<CachedFeatures.Item> stuff = fooMemo();
-    SimpleCFLike cfLike = new SimpleCFLike(stuff);
+    SimpleCFLike cfLike = new SimpleCFLike();
+    cfLike.addItems(stuff);
 
     // Try to mimic the code in CachedFeatures.Params.
     // This is the data needed to create the state that CachedFeatures.Params has.
@@ -994,7 +1104,8 @@ public class FModel implements Serializable {
     List<CachedFeatures.Item> stuff = fooMemo();
 //    stuff = stuff.subList(0, 50);
 
-    SimpleCFLike cfLike = new SimpleCFLike(stuff);
+    SimpleCFLike cfLike = new SimpleCFLike();
+    cfLike.addItems(stuff);
     m.setCachedFeatures(cfLike);
 
     // Try to mimic the code in CachedFeatures.Params.
@@ -1084,16 +1195,43 @@ public class FModel implements Serializable {
 
   public static void showLoss(List<FNParse> ys, FModel m, FNParseTransitionScheme ts, String label) {
     List<SentenceEval> se = new ArrayList<>();
-    for (FNParse y : ys) {
-      FNParse yhat = m.predict(y, ts);
-      se.add(new SentenceEval(y, yhat));
+    int t = ExperimentProperties.getInstance().getInt("threads", 1);
+    if (t == 1) {
+      for (FNParse y : ys) {
+        FNParse yhat = m.predict(y, ts);
+        se.add(new SentenceEval(y, yhat));
+      }
+    } else {
+      ExecutorService es = Executors.newWorkStealingPool(t);
+      List<Future<SentenceEval>> fu = new ArrayList<>();
+      for (FNParse y : ys) {
+        Future<SentenceEval> f = es.submit(() -> {
+          FNParse yhat = m.predict(y, ts);
+          return new SentenceEval(y, yhat);
+        });
+        fu.add(f);
+      }
+      es.shutdown();
+      try {
+        es.awaitTermination(999, TimeUnit.DAYS);
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      for (Future<SentenceEval> fse : fu) {
+        try {
+          se.add(fse.get());
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+      }
     }
     Map<String, Double> r = BasicEvaluation.evaluate(se);
     double f1 = r.get("ArgumentMicroF1");
     Log.info(label + " result: "
         + " f1=" + f1
         + " p=" + r.get("ArgumentMicroPRECISION")
-        + " r=" + r.get("ArgumentMicroRECALL"));
+        + " r=" + r.get("ArgumentMicroRECALL")
+        + " n=" + se.size());
   }
 
   private static void showLoss(FNParse y, FNParse yhat, String label) {
@@ -1103,7 +1241,8 @@ public class FModel implements Serializable {
     Log.info(label + " result: " + y.getSentence().getId()
         + " f1=" + f1
         + " p=" + r.get("ArgumentMicroPRECISION")
-        + " r=" + r.get("ArgumentMicroRECALL"));
+        + " r=" + r.get("ArgumentMicroRECALL")
+        + " n=" + se.size());
   }
 
 }

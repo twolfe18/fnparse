@@ -1030,7 +1030,7 @@ public class RerankerTrainer {
           boolean stop = conf.stopping.stop(iter, violation);
           conf.tStoppingCondition.stop();
           if (stop) {
-            Log.info("[main] stopping due to " + conf.stopping);
+            Log.info("[main] stopping because " + conf.stopping);
             break outer;
           }
         }
