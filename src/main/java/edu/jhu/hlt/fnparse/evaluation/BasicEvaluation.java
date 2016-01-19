@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.evaluation;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -42,7 +43,8 @@ public class BasicEvaluation {
   public static final StdEvalFunc argOnlyMicroRecall =    new StdEvalFunc(false, true, false, FPR.Mode.RECALL);
   public static final StdEvalFunc argOnlyMicroF1 =        new StdEvalFunc(false, true, false, FPR.Mode.F1);
 
-  public static class StdEvalFunc implements EvalFunc {
+  public static class StdEvalFunc implements EvalFunc, Serializable {
+    private static final long serialVersionUID = -2221568620563572126L;
 
     private boolean macro;
     private boolean includeTargets;

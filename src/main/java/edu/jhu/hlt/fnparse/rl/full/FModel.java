@@ -74,9 +74,8 @@ public class FModel implements Serializable {
   public static boolean DEBUG_ORACLE_MV_CONF = true;
   public static boolean DEBUG_HINGE_COMPUTATION = true;
 
-  public static boolean HIJACK_GET_UPDATE_FOR_DEBUG = false;
-
-  private MultiTimer.ShowPeriodically timer;
+  public static boolean MULTI_THREADED = true;
+  private transient MultiTimer.ShowPeriodically timer;
 
   private Config conf;
   private RTConfig rtConf;
@@ -132,7 +131,9 @@ public class FModel implements Serializable {
       drp = new DeterministicRolePruning(pruningMode, null, null);
     else
       drp = null;
-    timer = new MultiTimer.ShowPeriodically(15);
+
+    if (!MULTI_THREADED)
+      timer = new MultiTimer.ShowPeriodically(30);
 
     Primes primes = new Primes(ExperimentProperties.getInstance());
     CFLike params = null;
@@ -205,20 +206,29 @@ public class FModel implements Serializable {
       ts.setCachedFeatures(cf);
   }
 
+  private void tstart(String s) {
+    if (timer != null)
+      timer.start(s);
+  }
+  public void tstop(String s) {
+    if (timer != null)
+      timer.stop(s);
+  }
+
   private Pair<Info, Info> getOracleAndMvInfo(FNParse y, FNParseTransitionScheme ts) {
-    timer.start("update.setup.other");
+    tstart("update.setup.other");
     Info oracleInf = new Info(conf).setLike(rtConf).setOracleCoefs();
     Info mvInf = new Info(conf).setLike(rtConf).setMostViolatedCoefs();
     oracleInf.shareStaticFeatureCacheWith(mvInf);
     oracleInf.setLabel(y, ts);
     mvInf.copyLabel(oracleInf);
     oracleInf.setTargetPruningToGoldLabels(mvInf);
-    timer.stop("update.setup.other");
+    tstop("update.setup.other");
 
-    timer.start("update.setup.argPrune");
+    tstart("update.setup.argPrune");
     boolean includeGoldSpansIfMissing = true;
     oracleInf.setArgPruning(drp, includeGoldSpansIfMissing, mvInf);
-    timer.stop("update.setup.argPrune");
+    tstop("update.setup.argPrune");
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_ORACLE_MV_CONF) {
       Log.info("oracleInf: " + oracleInf);
@@ -234,15 +244,15 @@ public class FModel implements Serializable {
     Info mvInf = ormv.get2();
 
     if (maxViolation) {
-      timer.start("update.perceptron");
+      tstart("update.perceptron");
       ts.flushPrimes();
       State2<Info> s0 = ts.genRootState(oracleInf);
       Update u = ts.perceptronUpdate(s0, perceptronUpdateMode, rtConf.oracleMode);
-      timer.stop("update.perceptron");
+      tstop("update.perceptron");
       return u;
     }
 
-    timer.start("update.oracle");
+    tstart("update.oracle");
     if (AbstractTransitionScheme.DEBUG)
       Log.info("doing oracle search...");
     AbstractTransitionScheme.DEBUG_ORACLE_FN = true;
@@ -250,15 +260,15 @@ public class FModel implements Serializable {
     Pair<State2<Info>, DoubleBeam<State2<Info>>> oracleS =
         ts.runInference(ts.genRootState(oracleInf), oracleInf);
     AbstractTransitionScheme.DEBUG_ORACLE_FN = false;
-    timer.stop("update.oracle");
+    tstop("update.oracle");
 
-    timer.start("update.mv");
+    tstart("update.mv");
     if (AbstractTransitionScheme.DEBUG)
       Log.info("doing most violated search...");
     ts.flushPrimes();
     Pair<State2<Info>, DoubleBeam<State2<Info>>> mvS =
         ts.runInference(ts.genRootState(mvInf), mvInf);
-    timer.stop("update.mv");
+    tstop("update.mv");
 
     // Oracle gets the last state because that enforces the constraint that Proj(z) == {y}
     State2<?> oracleSt = oracleS.get1();
@@ -315,7 +325,7 @@ public class FModel implements Serializable {
       @Override
       public double apply(double learningRate) {
         if (hinge > 0 || ignoreHinge) {
-          timer.start("update.apply");
+          tstart("update.apply");
 
           if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the oracle updates");
@@ -327,7 +337,7 @@ public class FModel implements Serializable {
 
           ts.maybeApplyL2Reg();
 
-          timer.stop("update.apply");
+          tstop("update.apply");
         }
         return hinge;
       }
@@ -378,7 +388,7 @@ public class FModel implements Serializable {
   public FNParse predict(FNParse y, FNParseTransitionScheme ts) {
     if (AbstractTransitionScheme.DEBUG)
       Log.info("starting prediction");
-    timer.start("predictNew");
+    tstart("predictNew");
     Info inf = getPredictInfo(y, ts);
     State2<Info> s0 = ts.genRootState(inf);
     ts.flushPrimes();
@@ -389,7 +399,7 @@ public class FModel implements Serializable {
       beamLast.getRoot().show(System.out);
     }
     FNParse yhat = ts.decode(beamLast);
-    timer.stop("predictNew");
+    tstop("predictNew");
     return yhat;
   }
 

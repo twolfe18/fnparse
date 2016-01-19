@@ -1,5 +1,7 @@
 package edu.jhu.hlt.fnparse.util;
 
+import java.io.Serializable;
+
 import edu.jhu.hlt.tutils.Log;
 
 public interface LearningRateSchedule {
@@ -38,7 +40,9 @@ public interface LearningRateSchedule {
     }
   }
 
-  public static class Normal implements LearningRateSchedule {
+  public static class Normal implements LearningRateSchedule, Serializable {
+    private static final long serialVersionUID = -4795477673582194196L;
+
     private double initial;
     private double smooth;
     private double squish;

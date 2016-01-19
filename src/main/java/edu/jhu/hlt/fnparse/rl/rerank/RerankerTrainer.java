@@ -129,7 +129,7 @@ public class RerankerTrainer {
 
     // Stopping condition
     public double stoppingTimeMinutes = 55 * 60;  // maintain this as the tightest time constraint
-    public StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
+    public transient StoppingCondition stopping = new StoppingCondition.Time(stoppingTimeMinutes);
     public double stoppingConditionFrequency = 5;   // Higher means check the stopping condition less frequently, time multiple of hammingTrain
     public int stoppingConditionMaxExamples = 500;
 
@@ -173,7 +173,7 @@ public class RerankerTrainer {
     // Convenient extras
     public final File workingDir;
     public final Random rand;
-    public Consumer<Integer> calledEveryIter = i -> {};
+    public transient Consumer<Integer> calledEveryIter = i -> {};
     public boolean performTuning() { return propDev > 0 && maxDev > 0; }
     public void dontPerformTuning() { propDev = 0; maxDev = 0; }
     public void spreadTuneRange(double factor) {
@@ -1124,7 +1124,10 @@ public class RerankerTrainer {
 
     if (verbose)
       Log.info("[hammingTrainBatch] applying updates");
-    assert finishedUpdates.size() == batch.size();
+    if (finishedUpdates.size() != batch.size()) {
+      Log.warn("[hammingTrainBatch] " + batch.size() + " in the batch, got "
+          + finishedUpdates.size() + " updates out");
+    }
 
     t = timer.get(timerStrPartial + ".batch.apply", true).setPrintInterval(50).ignoreFirstTime();
     t.start();

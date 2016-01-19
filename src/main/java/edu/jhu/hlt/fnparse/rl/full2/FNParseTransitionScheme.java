@@ -74,7 +74,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         + " COUNTER_MISC=" + COUNTER_MISC);
   }
 
-  public MultiTimer.ShowPeriodically timer = new MultiTimer.ShowPeriodically(30);
+  public static boolean MULTI_THREADED = true;
+  public MultiTimer.ShowPeriodically timer;
 
   public enum SortEggsMode {
     BY_EXPECTED_UTILITY,
@@ -197,7 +198,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public void setParamsToAverage() {
     showWeights("before-param-avg");
-    timer.start("setParamsToAverage");
+    tstart("setParamsToAverage");
     if (wHatch != null) {
       Log.info("[main] numObservations=" + wHatch.numObervations());
       wHatch = wHatch.computeAverageWeights();
@@ -207,9 +208,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (wGlobal != null)
       wGlobal = wGlobal.computeAverageWeights();
     showWeights("after-param-avg");
-    timer.stop("setParamsToAverage");
+    tstop("setParamsToAverage");
   }
 
+  private void tstart(String s) {
+    if (timer != null)
+      timer.start(s);
+  }
+  public void tstop(String s) {
+    if (timer != null)
+      timer.stop(s);
+  }
 
   public void maybeApplyL2Reg() {
     throw new RuntimeException("using averaged perceptron, think again");
@@ -236,6 +245,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     this.featProdK = config.getBoolean("featProdK", true);
 
     useGlobalFeats = LLSSPatF.ARG_LOC || LLSSPatF.NUM_ARGS || LLSSPatF.ROLE_COOC;
+
+    if (!MULTI_THREADED)
+      timer = new MultiTimer.ShowPeriodically(30);
 
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
 
@@ -351,14 +363,20 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
    * the lifetime of this transition system.
    */
   public void flushPrimes() {
-    prefix2primeIdx = new Alphabet<>();
+    if (!LLSSP.DISABLE_PRIMES) {
+      synchronized (this) {
+        prefix2primeIdx = new Alphabet<>();
+      }
+    }
   }
 
   public long primeFor(TFKS prefix) {
     if (LLSSP.DISABLE_PRIMES)
       return 0;
-    int i = prefix2primeIdx.lookupIndex(prefix, true);
-    return primes.get(i);
+    synchronized (prefix2primeIdx) {
+      int i = prefix2primeIdx.lookupIndex(prefix, true);
+      return primes.get(i);
+    }
   }
 
   @Override
@@ -411,7 +429,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE)
       Log.info("encoding y=" + Describe.fnParse(y));
-    timer.start("encode");
+    tstart("encode");
     List<LL<TVN>> yy = new ArrayList<>();
     int n = y.getSentence().size();
     for (FrameInstance fi : y.getFrameInstances()) {
@@ -448,7 +466,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (AbstractTransitionScheme.DEBUG && DEBUG_ENCODE) {
       Log.info("yy.size=" + yy.size());
     }
-    timer.stop("encode");
+    tstop("encode");
     return yy;
   }
 

@@ -1,5 +1,6 @@
 package edu.jhu.hlt.fnparse.pruning;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -25,6 +26,7 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.inference.stages.IDecodable;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatum;
 import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList;
+import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList.LFgExample;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.fnparse.util.DependencyBasedXuePalmerRolePruning;
 import edu.jhu.hlt.fnparse.util.Describe;
@@ -34,9 +36,8 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 
-import edu.jhu.hlt.fnparse.inference.stages.StageDatumExampleList.LFgExample;
-
-public class DeterministicRolePruning {
+public class DeterministicRolePruning implements Serializable {
+  private static final long serialVersionUID = -7855499046834746665L;
 
   public static enum Mode {
     // Take all constituents in Stanford's constituency parse
@@ -80,11 +81,11 @@ public class DeterministicRolePruning {
 
   private Mode mode = Mode.XUE_PALMER_HERMANN;
   //private ConcreteStanfordWrapper parser;
-  private Function<Sentence, ConstituencyParse> cParser;
-  private Function<Sentence, DependencyParse> dParser;
+  private transient Function<Sentence, ConstituencyParse> cParser;
+  private transient Function<Sentence, DependencyParse> dParser;
 
   // May be null if mode != CACHED_FEATURES
-  public CachedFeatures cachedFeatures;
+  public transient CachedFeatures cachedFeatures;
 
   //public DeterministicRolePruning(Mode mode, ConcreteStanfordWrapper parser) {
   public DeterministicRolePruning(
