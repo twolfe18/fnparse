@@ -54,7 +54,7 @@ fi
 
 DATA_HOME=/export/projects/twolfe/fnparse-data
 
-java -Xmx30G -XX:+UseSerialGC -ea -server -cp $CD/fnparse.jar \
+java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR \
   edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
   primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
   data.framenet.root ${DATA_HOME} \
@@ -63,12 +63,10 @@ java -Xmx30G -XX:+UseSerialGC -ea -server -cp $CD/fnparse.jar \
   data.ontonotes5 /export/common/data/corpora/LDC/LDC2013T19/data/files/data/english/annotations \
   data.propbank.conll ${DATA_HOME}/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data \
   data.propbank.frames ${DATA_HOME}/ontonotes-release-5.0-fixed-frames/frames \
-  bialph $DD/coherent-shards-filtered-small/alphabet.txt \
-  featuresParent $DD/coherent-shards-filtered-small/features \
-  featureSet $DD/features/$DATASET-$C-${D}.fs \
-  trainData $CD/$K/train.jser.gz \
-  devData $CD/$K/dev.jser.gz \
-  testData $CD/$K/test.jser.gz
+  trainData $DD/train.jser.gz \
+  devData $DD/dev.jser.gz \
+  testData $DD/test.jser.gz \
+  $@
 
 
 echo "ret code: $?"

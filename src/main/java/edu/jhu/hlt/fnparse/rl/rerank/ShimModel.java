@@ -449,9 +449,11 @@ public class ShimModel implements Serializable {
       m.combineWeightShards(redistribute);
     }
     m.setAllWeightsToAverage();
-    FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-avg-final");
-    FModel.showLoss2(dev, m, m.getAverageWeights(), "DEV-avg-final");
-    FModel.showLoss2(train, m, m.getAverageWeights(), "TRAIN-avg-final");
+    if (shards > 1) {
+      FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-avg-final");
+      FModel.showLoss2(dev, m, m.getAverageWeights(), "DEV-avg-final");
+      FModel.showLoss2(train, m, m.getAverageWeights(), "TRAIN-avg-final");
+    }
     FModel.showLoss2(test, m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-final");
     FModel.showLoss2(dev, m, m.getShardWeights(new Shard(0, shards)), "DEV-itr-final");
     FModel.showLoss2(train, m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-final");
