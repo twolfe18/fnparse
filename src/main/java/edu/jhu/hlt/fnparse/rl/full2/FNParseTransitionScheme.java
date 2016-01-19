@@ -114,7 +114,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
   private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
-  private double nextGaussian() {
+  private synchronized double nextGaussian() {
     return rnorm.sample();
   }
 

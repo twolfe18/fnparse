@@ -641,19 +641,19 @@ public class FModel implements Serializable {
     @Override
     public List<ProductIndex> getFeaturesNoModulo(Sentence sent, Span t, Span s) {
       List<ProductIndex> feats;
-      if (featureSet != null) {
+//      if (featureSet != null) {
         // Try to match as closely as possible how CachedFeatures.Params get features
         Item cur = s2i.get(sent);
         feats = cur.getFlattenedCachedFeatures(t, s);
         if (feats == null)
           feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
-      } else {
-        // This was the simplest way...
-        Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
-        feats = sentTS2feats.get(key);
-
-        assert false : "this is a dead code path, make sure you call setFeatureset";
-      }
+//      } else {
+//        // This was the simplest way...
+//        Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));
+//        feats = sentTS2feats.get(key);
+//
+//        assert false : "this is a dead code path, make sure you call setFeatureset";
+//      }
       assert feats != null;
       return feats;
     }

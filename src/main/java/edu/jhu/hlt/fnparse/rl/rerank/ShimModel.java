@@ -322,18 +322,6 @@ public class ShimModel implements Serializable {
     FModel m = FModel.getFModel(config);
     Random rand = m.getConfig().rand;
 
-    // Load the feature set
-    // NOTE: This must match the cached data files!
-    File dd = new File("data/debugging/");
-    File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
-    BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
-    File fsParent = config.getFile("featureSetParent", dd);
-    int fsC = config.getInt("fsC", 8);
-    int fsN = config.getInt("fsN", 1280);
-    File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
-    int[] template2cardinality = bialph.makeTemplate2Cardinality();
-    int[][] featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
-
     List<CachedFeatures.Item> train, dev, test;
     // Try to get data from memo
     File trainF = config.getFile("trainData");
@@ -350,6 +338,20 @@ public class ShimModel implements Serializable {
       test = (List<CachedFeatures.Item>) FileUtil.deserialize(testF);
     } else {
       Log.info("[main] generating data from scratch");
+
+      // Load the feature set
+      // NOTE: This must match the cached data files!
+      File dd = new File("data/debugging/");
+      File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
+      BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+      File fsParent = config.getFile("featureSetParent", dd);
+      int fsC = config.getInt("fsC", 8);
+      int fsN = config.getInt("fsN", 1280);
+      File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
+      int[] template2cardinality = bialph.makeTemplate2Cardinality();
+      int[][] featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
+
+      // Load features
       File featuresParent = config.getExistingDir("featuresParent");
       String featuresGlob = config.getString("featuresGlob", "glob:**/shard*.txt*");
       List<CachedFeatures.Item>[] trainDevTest = FModel.foo2(
@@ -387,7 +389,7 @@ public class ShimModel implements Serializable {
     cfLike.addItems(train);
     cfLike.addItems(dev);
     cfLike.addItems(test);
-    cfLike.setFeatureset(featureSetFile, bialph);
+//    cfLike.setFeatureset(featureSetFile, bialph);
     m.setCachedFeatures(cfLike);
     ShimModel sm = new ShimModel(m);
 
@@ -411,7 +413,7 @@ public class ShimModel implements Serializable {
     // After this many epochs, spend time to compute the full average
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
     int numInstApprox = config.getInt("numInstApprox", 100);
-    int maxEpoch = config.getInt("maxEpoch", 5);
+    int maxEpoch = config.getInt("maxEpoch", 20);
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
       Log.info("starting epoch=" + epoch);
 
@@ -447,9 +449,12 @@ public class ShimModel implements Serializable {
       m.combineWeightShards(redistribute);
     }
     m.setAllWeightsToAverage();
-    FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-itr-final");
-    FModel.showLoss2(dev, m, m.getAverageWeights(), "DEV-itr-final");
-    FModel.showLoss2(train, m, m.getAverageWeights(), "TRAIN-itr-final");
+    FModel.showLoss2(test, m, m.getAverageWeights(), "TEST-avg-final");
+    FModel.showLoss2(dev, m, m.getAverageWeights(), "DEV-avg-final");
+    FModel.showLoss2(train, m, m.getAverageWeights(), "TRAIN-avg-final");
+    FModel.showLoss2(test, m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-final");
+    FModel.showLoss2(dev, m, m.getShardWeights(new Shard(0, shards)), "DEV-itr-final");
+    FModel.showLoss2(train, m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-final");
   }
 
   private static void testAverage(FModel m) {
