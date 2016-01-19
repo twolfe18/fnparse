@@ -24,6 +24,7 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.SimpleCFLike;
+import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -383,6 +384,8 @@ public class ShimModel implements Serializable {
       Log.info("[main] limiting train set size to ntl=" + ntl);
       train = train.subList(0, ntl);
     }
+    double expectedEpochs = config.getDouble("expectedEpochs", 2.5);
+    config.putIfAbsent("kPerceptronAvg", "" + (expectedEpochs * train.size()));
 
     // This indexes features and computes: templates -> featureSet -> features
     SimpleCFLike cfLike = new SimpleCFLike();
@@ -414,8 +417,13 @@ public class ShimModel implements Serializable {
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
     int numInstApprox = config.getInt("numInstApprox", 100);
     int maxEpoch = config.getInt("maxEpoch", 20);
+    double alphaCum = 0;
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
-      Log.info("starting epoch=" + epoch);
+      double alpha = m.getAverageWeights().wHatch.getAlpha();
+      alphaCum += alpha;
+      Log.info("starting epoch=" + epoch
+          + " alpha=" + alpha
+          + " alphaCum=" + alphaCum);
 
       // Run perceptron on each shard separately
       Collections.shuffle(train, rand);

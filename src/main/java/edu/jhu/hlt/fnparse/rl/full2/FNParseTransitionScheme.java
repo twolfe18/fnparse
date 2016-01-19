@@ -252,11 +252,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
 
     int numIntercept = addConstantToSquashParams ? 1 : 0;
-    wHatch = new AveragedPerceptronWeights(dimension, numIntercept);
+    double kPerceptronAvg = config.getDouble("kPerceptronAvg");
+    wHatch = new AveragedPerceptronWeights(dimension, numIntercept, kPerceptronAvg);
     if (!onlyUseHatchWeights)
-      wSquash = new AveragedPerceptronWeights(dimension, 0);
+      wSquash = new AveragedPerceptronWeights(dimension, 0, kPerceptronAvg);
     if (useGlobalFeats)
-      wGlobal = new AveragedPerceptronWeights(dimension, 0);
+      wGlobal = new AveragedPerceptronWeights(dimension, 0, kPerceptronAvg);
 
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
