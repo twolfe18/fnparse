@@ -500,10 +500,12 @@ for B in 01 02 04 08 16 32 64; do
 done
 
 # Train size (-DnTrain)
-if [[ $DATASET == PROPBANK ]]; then
+if [[ $DATASET == "propbank" ]]; then
   N=115812
-else
+elif [[ $DATASET == "framnet" ]]; then
   N=3500
+else
+  echo "unknown dataset: $DATASET"
 fi
 for D in 2 4 8 16 32 64 128 256; do
   C=`echo "$N / $D" | bc`
