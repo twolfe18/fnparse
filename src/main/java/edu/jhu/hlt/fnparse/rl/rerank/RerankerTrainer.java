@@ -138,7 +138,7 @@ public class RerankerTrainer {
     public boolean allowDynamicStopping = true;
 
     // Go as long as is allowed by time, take argmin_{iter} loss(dev).
-    public boolean conventionalDevSetStopping = true;
+    public boolean conventionalDevSetStopping = false;
 
     // Normally if a model has no Params.Stateful features, then getStatelessUpdate
     // is used to train the model. If this is true, getFullUpdate will always
@@ -1206,6 +1206,10 @@ public class RerankerTrainer {
     trainer.trainConf.allowDynamicStopping =
       trainer.pretrainConf.allowDynamicStopping =
         config.getBoolean("allowDynamicStopping", true);
+
+    trainer.trainConf.conventionalDevSetStopping =
+      trainer.pretrainConf.conventionalDevSetStopping =
+        config.getBoolean("conventionalDevSetStopping", false);
 
     trainer.bailOutOfTrainingASAP = config.getBoolean("bailOutOfTrainingASAP", false);
 
