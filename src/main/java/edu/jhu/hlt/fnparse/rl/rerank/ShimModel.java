@@ -427,7 +427,7 @@ public class ShimModel implements Serializable {
 
       // Run perceptron on each shard separately
       Collections.shuffle(train, rand);
-      ExecutorService es = Executors.newFixedThreadPool(threads);
+      ExecutorService es = Executors.newWorkStealingPool(threads);
       for (int i = 0; i < shards; i++) {
         Shard s = new Shard(i, shards);
         sm.runPerceptronOneShard(es, m, s, train);

@@ -7,7 +7,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -112,11 +112,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
 //  private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
-  private Random rand = new Random(9001);
+//  private Random rand = new Random(9001);
 //  private synchronized double nextGaussian() {
 //    return rnorm.sample();
   public double nextGaussian() {
-    return rand.nextGaussian();
+//    return rand.nextGaussian();
+    return ThreadLocalRandom.current().nextGaussian();
   }
 
   public boolean useContRoles = false;
@@ -684,9 +685,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //            modelK.nameOfWeights = "pre-computed genEggs(K) features";
 //            modelK.showUpdatesWith = alph;
 //          }
-
-            if (goldK > 0)
-              Log.info("yay1");
 
           double randK = nextGaussian();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
