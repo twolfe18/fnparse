@@ -108,23 +108,16 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // Only relevant if onlyUseHatchWeights is true.
   public boolean addConstantToSquashParams = false;
 
-//  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
-//  private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
-//  private Random rand = new Random(9001);
-//  private synchronized double nextGaussian() {
-//    return rnorm.sample();
-  public double nextGaussian() {
-//    return rand.nextGaussian();
-    return ThreadLocalRandom.current().nextGaussian();
+
+  public double nextRand() {
+    float r = ThreadLocalRandom.current().nextFloat();
+    return 2*r - 1;
   }
 
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
-
-//  // Higher values will raise the score of all (legal) hatches
-//  public Adjoints recallBias = new Adjoints.Constant(0);
 
   // Features
   private CFLike cachedFeatures;
@@ -686,7 +679,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //            modelK.showUpdatesWith = alph;
 //          }
 
-          double randK = nextGaussian();
+          double randK = nextRand();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
           EggWithStaticScore ef = new EggWithStaticScore(
               TFKS.K, k, possK, goldK, primeK, modelK, randK);
@@ -721,7 +714,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //              assert possS >= goldS;
 //            }
 
-            double randS = nextGaussian();
+            double randS = nextRand();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
             EggWithStaticScore es = new EggWithStaticScore(
                 TFKS.S, s, possS, goldS, primeS, staticScore, randS);
@@ -1134,7 +1127,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     double r = info.getConfig().recallBias;
     if (r != 0)
       score = Adjoints.sum(score, new Adjoints.Constant(r));
-    return egg.withScore(score, nextGaussian());
+    return egg.withScore(score, nextRand());
   }
 
   @Override
@@ -1164,7 +1157,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //    }
 //    score = new Adjoints.Sum(score, dynScore);
 
-    return egg.withScore(score, nextGaussian());
+    return egg.withScore(score, nextRand());
   }
 
 
