@@ -143,6 +143,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public AveragedPerceptronWeights wSquash;
   public AveragedPerceptronWeights wGlobal;
 
+  public FNParseTransitionScheme getAverageView() {
+    FNParseTransitionScheme t = new FNParseTransitionScheme(cachedFeatures, primes);
+    t.wHatch = wHatch == null ? null : wHatch.averageView();
+    t.wSquash = wSquash == null ? null : wSquash.averageView();
+    t.wGlobal = wGlobal == null ? null : wGlobal.averageView();
+    return t;
+  }
+
   /** Does this += coef * w */
   public void addWeights(double coef, FNParseTransitionScheme w) {
     assert (wHatch == null) == (w.wHatch == null);
@@ -247,19 +255,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
 
     int numIntercept = addConstantToSquashParams ? 1 : 0;
-    double kPerceptronAvg = config.getDouble("kPerceptronAvg");
-    wHatch = new AveragedPerceptronWeights(dimension, numIntercept, kPerceptronAvg);
+    wHatch = new AveragedPerceptronWeights(dimension, numIntercept);
     if (!onlyUseHatchWeights)
-      wSquash = new AveragedPerceptronWeights(dimension, 0, kPerceptronAvg);
+      wSquash = new AveragedPerceptronWeights(dimension, 0);
     if (useGlobalFeats)
-      wGlobal = new AveragedPerceptronWeights(dimension, 0, kPerceptronAvg);
+      wGlobal = new AveragedPerceptronWeights(dimension, 0);
 
     if (MAIN_LOGGING) {
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
-      Log.info("[main] kPerceptronAvg=" + kPerceptronAvg);
       Log.info("[main] featOverfit=" + featOverfit);
       Log.info("[main] featProdBase=" + featProdBase);
       Log.info("[main] featProdF=" + featProdF);
@@ -901,8 +907,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     for (String fs : dynFeats1(n, info)) {
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-        Log.info("wHatch[this]=" + wHatch.get(i)
-          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
+        Log.info("wHatch[this]=" + wHatch.getWeight(i)
+          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.getWeight(i) : wSquash.getWeight(i))
           + " fs=" + fs);
       }
       addTo.add(PI_DYN.prod(i, dimension));
@@ -926,8 +932,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       String fs = prefix.str();
       int i = alph.lookupIndex(fs, true);
       if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-        Log.info("wHatch[this]=" + wHatch.get(i)
-          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.get(i) : wSquash.get(i))
+        Log.info("wHatch[this]=" + wHatch.getWeight(i)
+          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.getWeight(i) : wSquash.getWeight(i))
           + " fs=" + fs);
       }
       addTo.add(PI_STAT_S.destructiveProd(i)); // destroys card, can't prod in any more features

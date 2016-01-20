@@ -24,7 +24,6 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.SimpleCFLike;
-import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -384,8 +383,6 @@ public class ShimModel implements Serializable {
       Log.info("[main] limiting train set size to ntl=" + ntl);
       train = train.subList(0, ntl);
     }
-    double expectedEpochs = config.getDouble("expectedEpochs", 2.5);
-    config.putIfAbsent("kPerceptronAvg", "" + (expectedEpochs * train.size()));
 
     // This indexes features and computes: templates -> featureSet -> features
     SimpleCFLike cfLike = new SimpleCFLike();
@@ -417,13 +414,8 @@ public class ShimModel implements Serializable {
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
     int numInstApprox = config.getInt("numInstApprox", 100);
     int maxEpoch = config.getInt("maxEpoch", 20);
-    double alphaCum = 0;
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
-      double alpha = m.getAverageWeights().wHatch.getAlpha();
-      alphaCum += alpha;
-      Log.info("starting epoch=" + epoch
-          + " alpha=" + alpha
-          + " alphaCum=" + alphaCum);
+      Log.info("starting epoch=" + epoch);
 
       // Run perceptron on each shard separately
       Collections.shuffle(train, rand);
@@ -438,19 +430,11 @@ public class ShimModel implements Serializable {
       // Measure performance
       // TEST
       int nTestLim = epoch >= noApproxAfter ? test.size() : Math.min(test.size(), numInstApprox);
-      if (shards > 1)
-        FModel.showLoss2(test.subList(0, nTestLim), m, m.getAverageWeights(), "TEST-avg-" + epoch);
-      FModel.showLoss2(test.subList(0, nTestLim), m, m.getShardWeights(new Shard(0, shards)), "TEST-itr-" + epoch);
-      // DEV
+      foo(test, "TEST", nTestLim, m, shards, epoch);
       int nDevLim = epoch >= noApproxAfter ? dev.size() : Math.min(dev.size(), numInstApprox);
-      if (shards > 1)
-        FModel.showLoss2(dev.subList(0, nDevLim), m, m.getAverageWeights(), "DEV-avg-" + epoch);
-      FModel.showLoss2(dev.subList(0, nDevLim), m, m.getShardWeights(new Shard(0, shards)), "DEV-itr-" + epoch);
-      // TRAIN
+      foo(dev, "DEV", nDevLim, m, shards, epoch);
       int nTrainLim = Math.min(train.size(), numInstApprox);
-      if (shards > 1)
-        FModel.showLoss2(train.subList(0, nTrainLim), m, m.getAverageWeights(), "TRAIN-avg-" + epoch);
-      FModel.showLoss2(train.subList(0, nTrainLim), m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-" + epoch);
+      foo(train, "TRAIN", nTrainLim, m, shards, epoch);
 
       // Compute the average and re-distribute
 //      testAverage(m);
@@ -467,25 +451,14 @@ public class ShimModel implements Serializable {
     FModel.showLoss2(train, m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-final");
   }
 
-  private static void testAverage(FModel m) {
-    int D = ExperimentProperties.getInstance().getInt("hashingTrickDim");
-    Random rand = new Random(9001);
-    int numWeightsToShow = 10;
-    for (int i = 0; i < numWeightsToShow; i++) {
-      int d = rand.nextInt(D);
-      double avg = m.getAverageWeights().wHatch.getWeight(d);
-      Log.info("w[testW," + d + "]=" + avg);
-      double avg2 = m.getAverageWeights().wHatch.getAveragedWeight(d);
-      Log.info("w[testWavg," + d + "]=" + avg2);
-      int S = m.getNumShards();
-      for (int j = 0; j < S; j++) {
-        Shard s = new Shard(j, S);
-        double wj = m.getShardWeights(s).wHatch.getWeight(d);
-        Log.info("w[trainW" + j + "," + d + "]=" + wj);
-        double wj2 = m.getShardWeights(s).wHatch.getAveragedWeight(d);
-        Log.info("w[trainWavg" + j + "," + d + "]=" + wj2);
-      }
-      System.out.println();
+  private static void foo(List<CachedFeatures.Item> test, String name, int nTestLim, FModel m, int shards, int epoch) {
+    if (shards > 1) {
+      FNParseTransitionScheme avgTS = m.getAverageWeights();
+      FModel.showLoss2(test.subList(0, nTestLim), m, avgTS, name + "-shardAvg-itrVal-" + epoch);
+      FModel.showLoss2(test.subList(0, nTestLim), m, avgTS.getAverageView(), name + "-shardAvg-itrAvg-" + epoch);
     }
+    FNParseTransitionScheme itrTS = m.getShardWeights(new Shard(0, shards));
+    FModel.showLoss2(test.subList(0, nTestLim), m, itrTS, name + "-itrVal-" + epoch);
+    FModel.showLoss2(test.subList(0, nTestLim), m, itrTS.getAverageView(), name + "-itrAvg-" + epoch);
   }
 }

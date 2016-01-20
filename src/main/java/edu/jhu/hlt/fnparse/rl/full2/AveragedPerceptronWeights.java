@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.rl.full2;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -19,10 +20,6 @@ import edu.jhu.prim.vector.IntDoubleVector;
  */
 public class AveragedPerceptronWeights implements Serializable, ProductIndexWeights {
   private static final long serialVersionUID = 708063405325278777L;
-
-  private static final ExperimentProperties C = ExperimentProperties.getInstance();
-  public static final boolean NEW_WAY = C.getBoolean("AveragedPerceptronWeights.NEW_WAY", true);
-  public static final boolean PASSIVE_AGRESSIVE = C.getBoolean("passiveAgressive", true);
 
   public static int COUNTER_CONSTRUCT = 0;
   public static int COUNTER_FORWARDS = 0;
@@ -44,7 +41,6 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   private IntDoubleDenseVector w;
   private IntDoubleDenseVector u;
   private double c;
-  private double k;   // More upates => higher k, e.g. k=numUpdates/2 is a good default
   private int dimension;
 
   // Reserves the first K indices in w and u for special "intercept" features
@@ -52,17 +48,50 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   // include these intercept indices.
   private int numInterceptFeatures;
 
-  public AveragedPerceptronWeights(int dimension, int numIntercept, double k) {
+  public boolean passiveAgressive;
+
+  public AveragedPerceptronWeights(int dimension, int numIntercept) {
     this.w = new IntDoubleDenseVector(dimension);
     this.u = new IntDoubleDenseVector(dimension);
     this.c = 0;
     this.dimension = dimension;
     this.numInterceptFeatures = numIntercept;
-    this.k = k;
+    this.passiveAgressive =
+        ExperimentProperties.getInstance().getBoolean("passiveAggressive", true);
   }
 
-  public double getAlpha() {
-    return k/(k+c);
+  private AveragedPerceptronWeights(int dimension, int numIntercept, double c, boolean pa) {
+    this.dimension = dimension;
+    this.numInterceptFeatures = numIntercept;
+    this.c = c;
+    this.passiveAgressive = pa;
+  }
+
+  /**
+   * Only allows calls to getWeight, which is overriddent to actually call
+   * getAverageWeight. Allocates no space other than a pointer to the
+   * {@link AveragedPerceptronWeights} which it is a view of.
+   */
+  public class AverageView extends AveragedPerceptronWeights {
+    private static final long serialVersionUID = 5844615895964184994L;
+    public AverageView(int dimension, int numIntercept, double c, boolean pa) {
+      super(dimension, numIntercept, c, pa);
+    }
+    @Override
+    public double getWeight(int i) {
+      return AveragedPerceptronWeights.this.getAveragedWeight(i);
+    }
+    @Override
+    public void completedObservation() {
+      throw new RuntimeException("not allowed on a view");
+    }
+    @Override
+    public double numObervations() {
+      throw new RuntimeException("not allowed on a view");
+    }
+  }
+  public AverageView averageView() {
+    return new AverageView(dimension, numInterceptFeatures, c, passiveAgressive);
   }
 
   public Adjoints intercept(int i) {
@@ -105,15 +134,9 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   // I don't need to do this if I average u and w from the train shards
   /** Does u += w, with a sign flip due to how Adj works, and zeros out w */
   public void addWeightsIntoAverage(boolean alsoZeroOutWeights) {
-    if (NEW_WAY) {
-      double alpha = k / (k + c);
-      for (int i = 0; i < dimension; i++)
-        u.add(i, alpha * w.get(i));
-    } else {
-      for (int i = 0; i < dimension; i++) {
-        // u -= w because of how getAverageWeight works
-        u.add(i, -w.get(i));
-      }
+    for (int i = 0; i < dimension; i++) {
+      // u -= w because of how getAverageWeight works
+      u.add(i, -w.get(i));
     }
     if (alsoZeroOutWeights)
       w.scale(0);
@@ -152,10 +175,6 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     return this.new Adj(features, convertToIntArray);
   }
 
-  /** Aliased to getWeight */
-  public double get(int i) {
-    return getWeight(i);
-  }
   public double getWeight(int i) {
     assert i >= 0 && i < dimension;
     return w.get(i);
@@ -166,10 +185,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
       assert w.get(i) == 0;
       return 0;
     }
-    if (NEW_WAY)
-      return u.get(i);
-    else
-      return w.get(i) - (1d/c) * u.get(i);
+    return w.get(i) - (1d/c) * u.get(i);
   }
 
   public IntDoubleDenseVector getInternalWeights() {
@@ -179,7 +195,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   /** Returns a new instance with the weights set to the average */
   public AveragedPerceptronWeights computeAverageWeights() {
     assert c > 0;
-    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, numInterceptFeatures, 1000);
+    AveragedPerceptronWeights a = new AveragedPerceptronWeights(dimension, numInterceptFeatures);
     for (int i = 0; i < dimension; i++) {
       double wi = getAveragedWeight(i);
       a.w.set(i, wi);
@@ -213,13 +229,8 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
 
   // bwh = "backwards helper"
   private void bwh(int i, double dErr_dForwards) {
-    if (NEW_WAY) {
-      w.add(i, -dErr_dForwards);
-      u.add(i, (k / (k+c)) * -dErr_dForwards);
-    } else {
-      w.add(i, -dErr_dForwards);
-      u.add(i, c * -dErr_dForwards);
-    }
+    w.add(i, -dErr_dForwards);
+    u.add(i, c * -dErr_dForwards);
   }
 
   /**
@@ -290,7 +301,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
 
     @Override
     public void backwards(double dErr_dForwards) {
-      if (PASSIVE_AGRESSIVE)
+      if (passiveAgressive)
         dErr_dForwards /= featL2Norm();
       if (features3 != null) {
         for (LL<ProductIndex> pi = features3; pi != null; pi = pi.cdr())
@@ -307,40 +318,45 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   public static void main(String[] args) {
-
-    int D = 20;
     Random rand = new Random(9001);
+    for (int D : Arrays.asList(1<<10, 1<<14, 1<<18, 1<<22, 1<<26)) {  // dimension
+      for (int n : Arrays.asList(1<<10, 1<<12, 1<<14, 1<<16, 1<<18)) {    // num instances
+        Log.info("starting D=" + D + " n=" + n);
 
-    // Params that generate the labels
-    AveragedPerceptronWeights wActual = new AveragedPerceptronWeights(D, 0, 1000);
-    for (int i = 0; i < D; i++)
-      wActual.w.set(i, rand.nextGaussian());
+        // Params that generate the labels
+        AveragedPerceptronWeights wActual = new AveragedPerceptronWeights(D, 0);
+        for (int i = 0; i < D; i++)
+          wActual.w.set(i, rand.nextGaussian());
 
-    // Maintain an explicit average
-    IntDoubleDenseVector wavg = new IntDoubleDenseVector(D);
+        // Maintain an explicit average
+        IntDoubleDenseVector wavg = new IntDoubleDenseVector(D);
 
-    // Do some learning
-    AveragedPerceptronWeights w = new AveragedPerceptronWeights(D, 0, 1000);
-    boolean convertToArray = false;
-    int n = 150;     // num instances
-    int k = D / 5;   // features per instance
-    for (int i = 0; i < n; i++) {
-      List<ProductIndex> f = new ArrayList<>();
-      for (int j = 0; j < k; j++) f.add(new ProductIndex(rand.nextInt(D), D));
-      double y = wActual.score(f, convertToArray).forwards();
-      Adjoints yhat = w.score(f, convertToArray);
-      double a = y * yhat.forwards();
-      if (a <= 0) {
-        yhat.backwards(1);
+        // Do some learning
+        AveragedPerceptronWeights w = new AveragedPerceptronWeights(D, 0);
+        boolean convertToArray = false;
+        int k = D / 5;   // features per instance
+        for (int i = 0; i < n; i++) {
+          List<ProductIndex> f = new ArrayList<>();
+          for (int j = 0; j < k; j++) f.add(new ProductIndex(rand.nextInt(D), D));
+          double y = wActual.score(f, convertToArray).forwards();
+          Adjoints yhat = w.score(f, convertToArray);
+          double a = y * yhat.forwards();
+          if (a <= 0) {
+            yhat.backwards(1);
+          }
+          w.completedObservation();
+          wavg.add(w.w);
+        }
+        wavg.scale(1d / n);
+
+        // Check that the averages are the same
+        for (int i = 0; i < D; i++) {
+          double a = w.getAveragedWeight(i);
+          double b = wavg.get(i);
+          System.out.println(i + ": actual=" + a + " expected=" + b);
+          assert Math.abs(a - b) < 1e-8;
+        }
       }
-      w.completedObservation();
-      wavg.add(w.w);
-    }
-    wavg.scale(1d / n);
-
-    // Check that the averages are the same
-    for (int i = 0; i < D; i++) {
-      System.out.println(i + ": actual=" + w.getAveragedWeight(i) + " expected=" + wavg.get(i));
     }
   }
 }
