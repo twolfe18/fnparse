@@ -153,19 +153,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
     COUNTER_CONSTRUCT++;
     this.config = config;
     this.setDecodeCoefs();
-
-    // deprecated
-//    ExperimentProperties c = ExperimentProperties.getInstance();
-//    this.config.roleDependsOnFrame = c.getBoolean("roleDependsOnFrame");
-
-//    RuntimeException e = new RuntimeException();
-//    for (StackTraceElement ste : e.getStackTrace()) {
-//      System.out.println(ste);
-//    }
-//    System.out.println();
-
-//    Log.info("beam.beam=" + this.htsBeam.beam
-//        + " cons.beam=" + this.htsConstraints.beam);
   }
 
   public Config getConfig() {
@@ -190,12 +177,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
   }
 
   public boolean roleDependsOnFrame() {
-//    ExperimentProperties config = ExperimentProperties.getInstance();
-//    if (config.getBoolean("overrideRoleDependsOnFrame", true))
-//      return true;
-//    boolean b = getConfig().roleDependsOnFrame;
-//    assert b == !config.getBoolean("propbank");
-//    return b;
     return config.roleDependsOnFrame;
   }
 

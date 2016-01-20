@@ -7,9 +7,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.commons.math3.distribution.NormalDistribution;
-import org.apache.commons.math3.random.ISAACRandom;
+import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -113,9 +111,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //  private ToLongFunction<LL<TV>> getPrimes;
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
-  private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
-  private synchronized double nextGaussian() {
-    return rnorm.sample();
+//  private NormalDistribution rnorm = new NormalDistribution(new ISAACRandom(9001), 0, 1);
+  private Random rand = new Random(9001);
+//  private synchronized double nextGaussian() {
+//    return rnorm.sample();
+  public double nextGaussian() {
+    return rand.nextGaussian();
   }
 
   public boolean useContRoles = false;
@@ -264,6 +265,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
+      Log.info("[main] kPerceptronAvg=" + kPerceptronAvg);
       Log.info("[main] featOverfit=" + featOverfit);
       Log.info("[main] featProdBase=" + featProdBase);
       Log.info("[main] featProdF=" + featProdF);
