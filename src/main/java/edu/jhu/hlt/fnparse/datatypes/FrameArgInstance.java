@@ -65,7 +65,7 @@ public class FrameArgInstance extends FrameRoleInstance {
       int r = role;
       int K = frame.numRoles();
       if (role >= K) {
-        Log.warn("not designed for cont/ref roles!");
+//        Log.warn("not designed for cont/ref roles!");
         r = role % K;
       }
       Span[] arguments = new Span[frame.numRoles()];

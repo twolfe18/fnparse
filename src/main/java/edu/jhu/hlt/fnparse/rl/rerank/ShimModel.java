@@ -15,7 +15,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import edu.jhu.hlt.fnparse.data.propbank.Conll2005SrlEval;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
@@ -319,6 +321,11 @@ public class ShimModel implements Serializable {
     int threads = config.getInt("threads", 1);
     int shards = config.getInt("shards", threads);
 
+    // Setup the official CoNLL 2005 evaluation script
+    File evalOutputDir = config.getExistingDir("evalOutputDir");
+    File evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
+    Conll2005SrlEval c2k5Eval = new Conll2005SrlEval(evalOutputDir, evalScript);
+
     FModel m = FModel.getFModel(config);
     Random rand = m.getConfig().rand;
 
@@ -430,11 +437,12 @@ public class ShimModel implements Serializable {
       // Measure performance
       // TEST
       int nTestLim = epoch >= noApproxAfter ? test.size() : Math.min(test.size(), numInstApprox);
-      foo(test, "TEST", nTestLim, m, shards, epoch);
+      foo(test, "TEST", nTestLim, m, shards, epoch, c2k5Eval);
       int nDevLim = epoch >= noApproxAfter ? dev.size() : Math.min(dev.size(), numInstApprox);
-      foo(dev, "DEV", nDevLim, m, shards, epoch);
+      foo(dev, "DEV", nDevLim, m, shards, epoch, c2k5Eval);
       int nTrainLim = Math.min(train.size(), numInstApprox);
-      foo(train, "TRAIN", nTrainLim, m, shards, epoch);
+      foo(train, "TRAIN", nTrainLim, m, shards, epoch, c2k5Eval);
+      Log.info(Conll2005SrlEval.TIMER.toString());
 
       // Compute the average and re-distribute
 //      testAverage(m);
@@ -451,14 +459,23 @@ public class ShimModel implements Serializable {
     FModel.showLoss2(train, m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-final");
   }
 
-  private static void foo(List<CachedFeatures.Item> test, String name, int nTestLim, FModel m, int shards, int epoch) {
+  private static void foo(
+      List<CachedFeatures.Item> test, String name,
+      int nTestLim, FModel m, int shards, int epoch,
+      Conll2005SrlEval extraEval) {
+    List<SentenceEval> avg, itr;
+    String n1, n2;
     if (shards > 1) {
       FNParseTransitionScheme avgTS = m.getAverageWeights();
-      FModel.showLoss2(test.subList(0, nTestLim), m, avgTS, name + "-shardAvg-itrVal-" + epoch);
-      FModel.showLoss2(test.subList(0, nTestLim), m, avgTS.getAverageView(), name + "-shardAvg-itrAvg-" + epoch);
+      itr = FModel.showLoss2(test.subList(0, nTestLim), m, avgTS, (n1 = name + "-shardAvg-itrVal-" + epoch));
+      avg = FModel.showLoss2(test.subList(0, nTestLim), m, avgTS.getAverageView(), (n2 = name + "-shardAvg-itrAvg-" + epoch));
+      extraEval.evaluate(itr, n1);
+      extraEval.evaluate(avg, n2);
     }
     FNParseTransitionScheme itrTS = m.getShardWeights(new Shard(0, shards));
-    FModel.showLoss2(test.subList(0, nTestLim), m, itrTS, name + "-itrVal-" + epoch);
-    FModel.showLoss2(test.subList(0, nTestLim), m, itrTS.getAverageView(), name + "-itrAvg-" + epoch);
+    itr = FModel.showLoss2(test.subList(0, nTestLim), m, itrTS, (n1 = name + "-itrVal-" + epoch));
+    avg = FModel.showLoss2(test.subList(0, nTestLim), m, itrTS.getAverageView(), (n2 = name + "-itrAvg-" + epoch));
+    extraEval.evaluate(itr, n1);
+    extraEval.evaluate(avg, n2);
   }
 }

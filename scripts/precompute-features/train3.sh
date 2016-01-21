@@ -32,6 +32,9 @@ shift 5
 
 LOG=$WD/log.txt
 
+EVAL_DIR=$WD/evaluation
+mkdir -p $EVAL_DIR
+
 # TODO Make this smaller for framenet?
 NUM_MODEL_SHARDS=10
 
@@ -57,6 +60,8 @@ DATA_HOME=/export/projects/twolfe/fnparse-data
 java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR \
   edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
   primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
+  evalOutputDir $EVAL_DIR \
+  conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
   data.framenet.root ${DATA_HOME} \
   data.wordnet ${DATA_HOME}/wordnet/dict \
   data.embeddings ${DATA_HOME}/embeddings \
