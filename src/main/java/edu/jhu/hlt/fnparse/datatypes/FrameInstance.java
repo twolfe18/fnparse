@@ -143,6 +143,7 @@ public class FrameInstance implements Serializable {
   }
 
   /** USE SPARINGLY (for debugging) */
+  @SuppressWarnings("unchecked")
   public void addContinuationRole(int k, Span s) {
     assert arguments[k] != Span.nullSpan : "should be continuing an existing role/k";
     if (argumentContinuations == null) {
@@ -153,6 +154,7 @@ public class FrameInstance implements Serializable {
     argumentContinuations[k].add(s);
   }
   /** USE SPARINGLY (for debugging) */
+  @SuppressWarnings("unchecked")
   public void addReferenceRole(int k, Span s) {
     assert arguments[k] != Span.nullSpan : "should be referring to an existing role/k";
     if (argumentReferences == null) {
@@ -260,17 +262,17 @@ public class FrameInstance implements Serializable {
     }
   }
 
+  /** Left-most targets will appear first in the list */
   public static Comparator<FrameInstance> BY_SENTENCE_POSITION_ASC = new Comparator<FrameInstance>() {
     @Override
     public int compare(FrameInstance o1, FrameInstance o2) {
       Span t1 = o1.getTarget();
       Span t2 = o2.getTarget();
-      // I think this may not be a consistent < operation... gives funny sorts.
-//      if (!t1.overlaps(t2))
-//        return t1.start - t2.start;
-//      if (t1.width() != t2.width())
-//        return t1.width() - t2.width();
-      return t1.end - t2.end;
+      if (t1.start < t2.start)
+        return -1;
+      if (t1.start > t2.start)
+        return +1;
+      return 0;
     }
   };
 }

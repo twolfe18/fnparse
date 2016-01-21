@@ -38,6 +38,9 @@ echo "DATASET=$DATASET"
 echo "MEM=$MEM"
 echo "JAR=$JAR"
 
+EVAL_DIR=$WD/evaluation
+mkdir -p $EVAL_DIR
+
 # TODO Remove and test this. This should be automatically
 # derived inside CachedFeatures now.
 if [[ $DATASET == "propbank" ]]; then
@@ -66,7 +69,8 @@ java -XX:+UseNUMA -Xmx$MEM -server -cp $JAR \
   propbank $PROPBANK \
   threads 1 \
   noApproxAfterEpoch 0 \
-  kPerceptronAvg $K_PERC_AVG \
+  evalOutputDir $EVAL_DIR \
+  conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
   data.framenet.root ${DATA_HOME} \
   data.wordnet ${DATA_HOME}/wordnet/dict \
   data.embeddings ${DATA_HOME}/embeddings \

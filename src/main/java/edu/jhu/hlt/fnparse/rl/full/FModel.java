@@ -1186,14 +1186,14 @@ public class FModel implements Serializable {
     }
   }
 
-  public static void showLoss2(List<CachedFeatures.Item> ys, FModel m, FNParseTransitionScheme ts, String label) {
+  public static List<SentenceEval> showLoss2(List<CachedFeatures.Item> ys, FModel m, FNParseTransitionScheme ts, String label) {
     List<FNParse> ys2 = new ArrayList<>();
     for (CachedFeatures.Item yy : ys)
       ys2.add(yy.getParse());
-    showLoss(ys2, m, ts, label);
+    return showLoss(ys2, m, ts, label);
   }
 
-  public static void showLoss(List<FNParse> ys, FModel m, FNParseTransitionScheme ts, String label) {
+  public static List<SentenceEval> showLoss(List<FNParse> ys, FModel m, FNParseTransitionScheme ts, String label) {
     List<SentenceEval> se = new ArrayList<>();
     int t = ExperimentProperties.getInstance().getInt("threads", 1);
     if (t == 1) {
@@ -1232,6 +1232,7 @@ public class FModel implements Serializable {
         + " p=" + r.get("ArgumentMicroPRECISION")
         + " r=" + r.get("ArgumentMicroRECALL")
         + " n=" + se.size());
+    return se;
   }
 
   private static void showLoss(FNParse y, FNParse yhat, String label) {

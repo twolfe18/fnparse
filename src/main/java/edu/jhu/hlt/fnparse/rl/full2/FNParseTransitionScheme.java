@@ -5,8 +5,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -534,6 +536,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("starting...");
     Sentence sent = info.getSentence();
     List<FrameInstance> fis = new ArrayList<>();
+    Set<FrameInstance> addedTF = new HashSet<>();
     for (Map.Entry<FrameInstance, List<Pair<String, Span>>> tf2ks : groupByFrame(z, info).entrySet()) {
       Span t = tf2ks.getKey().getTarget();
       Frame f = tf2ks.getKey().getFrame();
@@ -541,6 +544,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         Log.info("t=" + t.shortString() + " f=" + f.getName());
       try {
         fis.add(FrameInstance.buildPropbankFrameInstance(f, t, tf2ks.getValue(), sent));
+        addedTF.add(FrameInstance.frameMention(f, t, sent));
       } catch (Exception e) {
         Log.info("t=" + t.shortString() + " f=" + f.getName());
         for (Pair<String, Span> x : tf2ks.getValue())
@@ -548,6 +552,19 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         throw new RuntimeException(e);
       }
     }
+
+    // Method above only adds (t,f) for which we've labeled at least one arg,
+    // but we're assuming we have all (t,f) even if we don't.
+    for (FrameInstance fi : info.getLabelParse().getFrameInstances()) {
+      FrameInstance m = FrameInstance.frameMention(fi.getFrame(), fi.getTarget(), fi.getSentence());
+      if (!addedTF.contains(m))
+        fis.add(m);
+    }
+
+    // The CoNLL 2005 srl-eval.pl doesn't like it if your columns (predicates)
+    // are out of order.
+    Collections.sort(fis, FrameInstance.BY_SENTENCE_POSITION_ASC);
+
     return new FNParse(sent, fis);
   }
 

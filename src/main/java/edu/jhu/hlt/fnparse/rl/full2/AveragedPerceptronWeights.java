@@ -57,7 +57,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     this.dimension = dimension;
     this.numInterceptFeatures = numIntercept;
     this.passiveAgressive =
-        ExperimentProperties.getInstance().getBoolean("passiveAggressive", true);
+        ExperimentProperties.getInstance().getBoolean("passiveAggressive", false);
   }
 
   private AveragedPerceptronWeights(int dimension, int numIntercept, double c, boolean pa) {
