@@ -16,8 +16,10 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.TaggedEvalFunc;
 import edu.jhu.hlt.fnparse.util.ConcreteStanfordWrapper;
 import edu.jhu.hlt.tutils.CLI;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.InputStreamGobbler;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
@@ -27,36 +29,62 @@ import edu.jhu.hlt.tutils.Span;
  *
  * @author travis
  */
-public class SemaforEval {
+public class SemaforEval implements TaggedEvalFunc {
   public static final Logger LOG = Logger.getLogger(SemaforEval.class);
 
+  public static File parent() {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    return config.getExistingDir("semaforEval.scriptDir", new File("."));
+  }
+
   // Make sure SEMAFOR is symlinked in a directory in the root of this project
-  public static File SEMEVAL07_SCRIPT =
-      new File("semafor/scripts/scoring/fnSemScore_modified.pl");
-  public static File SEMAFOR_PREPARE_ANNO_SCRIPT =
-      new File("semafor/prepare_xml_anno.sh");
+  public static File SEMEVAL07_SCRIPT() {
+    return new File(parent(), "semafor/scripts/scoring/fnSemScore_modified.pl");
+  }
+  public static File SEMAFOR_PREPARE_ANNO_SCRIPT() {
+    return new File(parent(), "semafor/prepare_xml_anno.sh");
+  }
 
   // Make sure these files are checked in/available
-  public static File FRAMES_SINGLE_FILE =
-      new File("from-CMU/framenet15/framesSingleFile.xml");
-  public static File RELATION_MODIFIED_FILE =
-      new File("from-CMU/framenet15/frRelationModified.xml");
+  public static File FRAMES_SINGLE_FILE() {
+    return new File(parent(), "from-CMU/framenet15/framesSingleFile.xml");
+  }
+  public static File RELATION_MODIFIED_FILE() {
+    return new File(parent(), "from-CMU/framenet15/frRelationModified.xml");
+  }
 
   private File workingDir;
 
   public SemaforEval(File workingDir) {
     if (!workingDir.isDirectory())
       throw new IllegalArgumentException();
+    Log.info("[main] workingDir=" + workingDir.getPath());
     this.workingDir = workingDir;
   }
 
-  public static void main(String[] args) {
-    List<FNParse> parses = DataUtil.iter2list(
-        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
-    parses = parses.subList(0, 300);
-    SemaforEval eval = new SemaforEval(new File("/tmp"));
-    File output = new File("/tmp/output.txt");
-    eval.evaluate(parses, parses, output);
+  @Override
+  public String getName() {
+    return "SemEval07";
+  }
+
+  @Override
+  public double evaluate(List<SentenceEval> instances) {
+    Log.warn("implement me");
+    return 0;
+  }
+
+  @Override
+  public void evaluateSilently(List<SentenceEval> instances, String tag) {
+    List<FNParse> gold = null;
+    List<FNParse> hyp = null;
+    File d = new File(workingDir, tag);
+    if (d.isFile()) {
+      Log.warn("cannot make directory because this is already file: " + d.getPath());
+      return;
+    }
+    if (!d.isDirectory())
+      d.mkdirs();
+    callScript(gold, hyp, new File(d, "results.txt"));
   }
 
   public static <T> void writeByLine(List<T> items, Function<T, String> show, File f) {
@@ -141,7 +169,7 @@ public class SemaforEval {
     writeByLine(sentences, show, f);
   }
 
-  public void evaluate(List<FNParse> gold, List<FNParse> hyp, File dumpOutput) {
+  public void callScript(List<FNParse> gold, List<FNParse> hyp, File dumpOutput) {
     if (gold.size() != hyp.size())
       throw new IllegalArgumentException();
 
@@ -168,11 +196,11 @@ public class SemaforEval {
     File temp = new File(workingDir, "temp-for-semeval-script");
     if (!temp.isDirectory()) temp.mkdir();
     List<String> r = execAndGetResults(new String[] {
-        SEMEVAL07_SCRIPT.getPath(),
+        SEMEVAL07_SCRIPT().getPath(),
         "-c", temp.getPath(),
         "-l", "-n", "-e", "-v",
-        FRAMES_SINGLE_FILE.getPath(),
-        RELATION_MODIFIED_FILE.getPath(),
+        FRAMES_SINGLE_FILE().getPath(),
+        RELATION_MODIFIED_FILE().getPath(),
         goldXML.getPath(),
         hypXML.getPath()
     });
@@ -195,7 +223,7 @@ public class SemaforEval {
       Log.warn("wc -l " + tokenFile + " " + CLI.wcDashL(tokenFile));
     }
     execAndGetResults(new String[] {
-        SEMAFOR_PREPARE_ANNO_SCRIPT.getPath(),
+        SEMAFOR_PREPARE_ANNO_SCRIPT().getPath(),
         "testFEPredictionsFile:" + tsv.getPath(),
         "startIndex:0",
         "endIndex:" + CLI.wcDashL(tokenFile),
@@ -292,5 +320,14 @@ public class SemaforEval {
       sb.append(String.valueOf(i));
     }
     return sb.toString();
+  }
+
+  public static void main(String[] args) {
+    List<FNParse> parses = DataUtil.iter2list(
+        FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+    parses = parses.subList(0, 300);
+    SemaforEval eval = new SemaforEval(new File("/tmp"));
+    File output = new File("/tmp/output.txt");
+    eval.callScript(parses, parses, output);
   }
 }

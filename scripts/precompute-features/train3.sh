@@ -71,6 +71,7 @@ java -XX:+UseNUMA -Xmx$MEM -server -cp $JAR \
   noApproxAfterEpoch 0 \
   evalOutputDir $EVAL_DIR \
   conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
+  semaforEval.scriptDir /export/projects/twolfe/fnparse-data \
   data.framenet.root ${DATA_HOME} \
   data.wordnet ${DATA_HOME}/wordnet/dict \
   data.embeddings ${DATA_HOME}/embeddings \

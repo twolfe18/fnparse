@@ -13,6 +13,7 @@ import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.EvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.TaggedEvalFunc;
 import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
@@ -34,7 +35,7 @@ import edu.jhu.hlt.tutils.Span;
  *
  * @author travis
  */
-public class Conll2005SrlEval implements EvalFunc {
+public class Conll2005SrlEval implements TaggedEvalFunc {
 
   private static File srlEvalPl =
       new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl");
@@ -82,7 +83,8 @@ public class Conll2005SrlEval implements EvalFunc {
    * Creates a directry called modelName in this instances outputDir and writes
    * out predictions and script output.
    */
-  public void evaluate(List<SentenceEval> instances, String modelName) {
+  @Override
+  public void evaluateSilently(List<SentenceEval> instances, String modelName) {
     File d = new File(outputDir, modelName);
     if (d.isDirectory()) {
       Log.warn("[main] already exists, not over-writing: " + d.getPath());
