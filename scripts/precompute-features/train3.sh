@@ -2,7 +2,7 @@
 #$ -V
 #$ -l h_rt=72:00:00
 #$ -l mem_free=31G
-#$ -l num_proc=1
+#$ -l num_proc=8
 #$ -S /bin/bash
 
 set -eu
@@ -32,11 +32,14 @@ shift 5
 
 LOG=$WD/log.txt
 
+echo "WD=$WD"
+echo "DD=$DD"
+echo "DATASET=$DATASET"
+echo "MEM=$MEM"
+echo "JAR=$JAR"
+
 EVAL_DIR=$WD/evaluation
 mkdir -p $EVAL_DIR
-
-# TODO Make this smaller for framenet?
-NUM_MODEL_SHARDS=10
 
 # TODO Remove and test this. This should be automatically
 # derived inside CachedFeatures now.
@@ -56,10 +59,16 @@ else
 fi
 
 DATA_HOME=/export/projects/twolfe/fnparse-data
+K_PERC_AVG=`echo "3 * $NUM_INST" | bc`
+echo "K_PERC_AVG=$K_PERC_AVG"
 
-java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR \
+#java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR
+java -XX:+UseNUMA -Xmx$MEM -server -cp $JAR \
   edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
   primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
+  propbank $PROPBANK \
+  threads 1 \
+  noApproxAfterEpoch 0 \
   evalOutputDir $EVAL_DIR \
   conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
   data.framenet.root ${DATA_HOME} \
@@ -71,7 +80,7 @@ java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR \
   trainData $DD/train.jser.gz \
   devData $DD/dev.jser.gz \
   testData $DD/test.jser.gz \
-  $@
+  $@ 2>&1 | tee $LOG
 
 
 echo "ret code: $?"

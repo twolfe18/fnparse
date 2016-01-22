@@ -43,14 +43,19 @@ cp $JAR $JAR_STABLE
 
 for C in 4 8 16; do
 for D in 320 640 1280; do
+
+if [[ ! -f $CD/features/$DATASET-$C-${D}.fs ]]; then
+  echo "cant find features: $CD/features/$DATASET-$C-${D}.fs"
+else
 K="C$C-D$D"
 mkdir $CD/$K
 qsub -N "fc-$K" \
   -b y -j y -V -o $CD/sge-logs \
-  -l 'mem_free=32G,num_proc=1,h_rt=12:00:00' \
-  java -Xmx30G -XX:+UseSerialGC -ea -server -cp $CD/fnparse.jar \
+  -l 'mem_free=48G,num_proc=1,h_rt=24:00:00' \
+  java -Xmx46G -XX:+UseSerialGC -server -cp $CD/fnparse.jar \
     edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
     dontTrain true \
+    propbank $PROPBANK \
     primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
     data.framenet.root ${DATA_HOME} \
     data.wordnet ${DATA_HOME}/wordnet/dict \
@@ -60,10 +65,12 @@ qsub -N "fc-$K" \
     data.propbank.frames ${DATA_HOME}/ontonotes-release-5.0-fixed-frames/frames \
     bialph $DD/coherent-shards-filtered-small/alphabet.txt \
     featuresParent $DD/coherent-shards-filtered-small/features \
-    featureSet $DD/features/$DATASET-$C-${D}.fs \
+    featureSet $CD/features/$DATASET-$C-${D}.fs \
     trainData $CD/$K/train.jser.gz \
     devData $CD/$K/dev.jser.gz \
     testData $CD/$K/test.jser.gz
+fi
+
 done
 done
 
