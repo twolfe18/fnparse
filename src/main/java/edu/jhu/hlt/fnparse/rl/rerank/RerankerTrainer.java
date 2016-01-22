@@ -438,7 +438,7 @@ public class RerankerTrainer {
         throw new IllegalArgumentException();
       try {
         SemaforEval semEval = new SemaforEval(semaforEvalDir);
-        semEval.evaluate(y, yHat, new File(semaforEvalDir, "results.txt"));
+        semEval.callScript(y, yHat, new File(semaforEvalDir, "results.txt"));
       } catch (Exception e) {
         Log.warn("semafor evaluation failed! semaforEvalDir"
             + semaforEvalDir.getPath() + " showStr=" + showStr);

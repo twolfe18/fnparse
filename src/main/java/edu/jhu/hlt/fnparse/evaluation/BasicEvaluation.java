@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import edu.jhu.hlt.fnparse.data.propbank.Conll2005SrlEval;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.tutils.FPR;
@@ -17,6 +18,14 @@ public class BasicEvaluation {
   public static interface EvalFunc {
     public String getName();
     public double evaluate(List<SentenceEval> instances);
+  }
+
+  public static interface TaggedEvalFunc extends EvalFunc {
+    /**
+     * Evaluates the given instances and writes out the results to disk with
+     * the tag signifier. See {@link Conll2005SrlEval}.
+     */
+    public void evaluateSilently(List<SentenceEval> instances, String tag);
   }
 
   public static final StdEvalFunc targetMacroPrecision = new StdEvalFunc(true, false, true, FPR.Mode.PRECISION);

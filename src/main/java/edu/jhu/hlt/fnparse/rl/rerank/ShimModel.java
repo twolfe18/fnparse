@@ -17,6 +17,8 @@ import java.util.function.Consumer;
 
 import edu.jhu.hlt.fnparse.data.propbank.Conll2005SrlEval;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
+import edu.jhu.hlt.fnparse.evaluation.BasicEvaluation.TaggedEvalFunc;
+import edu.jhu.hlt.fnparse.evaluation.SemaforEval;
 import edu.jhu.hlt.fnparse.evaluation.SentenceEval;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
@@ -322,14 +324,20 @@ public class ShimModel implements Serializable {
     int shards = config.getInt("shards", threads);
     boolean dontTrain = config.getBoolean("dontTrain", false);
 
+    boolean propbank = config.getBoolean("propbank");
+
     // Setup the official CoNLL 2005 evaluation script
     File evalOutputDir = null;
-    File evalScript = null;
-    Conll2005SrlEval c2k5Eval = null;
+    TaggedEvalFunc evalFunc = null;
     if (!dontTrain) {
       evalOutputDir = config.getExistingDir("evalOutputDir");
-      evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
-      c2k5Eval = new Conll2005SrlEval(evalOutputDir, evalScript);
+      if (propbank) {
+        File evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
+        evalFunc = new Conll2005SrlEval(evalOutputDir, evalScript);
+      } else {
+        evalFunc = new SemaforEval(evalOutputDir);
+      }
+      Log.info("evaluating with " + evalFunc.getName() + " [" + evalFunc.getClass().getName() + "]");
     }
 
     List<CachedFeatures.Item> train, dev, test;
@@ -443,15 +451,13 @@ public class ShimModel implements Serializable {
       // Measure performance
       // TEST
       int nTestLim = epoch >= noApproxAfter ? test.size() : Math.min(test.size(), numInstApprox);
-      foo(test, "TEST", nTestLim, m, shards, epoch, c2k5Eval);
+      evalPerceptrons(test, "TEST", nTestLim, m, shards, epoch, evalFunc);
       int nDevLim = epoch >= noApproxAfter ? dev.size() : Math.min(dev.size(), numInstApprox);
-      foo(dev, "DEV", nDevLim, m, shards, epoch, c2k5Eval);
+      evalPerceptrons(dev, "DEV", nDevLim, m, shards, epoch, evalFunc);
       int nTrainLim = Math.min(train.size(), numInstApprox);
-      foo(train, "TRAIN", nTrainLim, m, shards, epoch, c2k5Eval);
-      Log.info(Conll2005SrlEval.TIMER.toString());
+      evalPerceptrons(train, "TRAIN", nTrainLim, m, shards, epoch, evalFunc);
 
       // Compute the average and re-distribute
-//      testAverage(m);
       m.combineWeightShards(redistribute);
     }
     m.setAllWeightsToAverage();
@@ -465,23 +471,23 @@ public class ShimModel implements Serializable {
     FModel.showLoss2(train, m, m.getShardWeights(new Shard(0, shards)), "TRAIN-itr-final");
   }
 
-  private static void foo(
+  private static void evalPerceptrons(
       List<CachedFeatures.Item> test, String name,
       int nTestLim, FModel m, int shards, int epoch,
-      Conll2005SrlEval extraEval) {
+      TaggedEvalFunc extraEval) {
     List<SentenceEval> avg, itr;
     String n1, n2;
     if (shards > 1) {
       FNParseTransitionScheme avgTS = m.getAverageWeights();
       itr = FModel.showLoss2(test.subList(0, nTestLim), m, avgTS, (n1 = name + "-shardAvg-itrVal-" + epoch));
       avg = FModel.showLoss2(test.subList(0, nTestLim), m, avgTS.getAverageView(), (n2 = name + "-shardAvg-itrAvg-" + epoch));
-      extraEval.evaluate(itr, n1);
-      extraEval.evaluate(avg, n2);
+      extraEval.evaluateSilently(itr, n1);
+      extraEval.evaluateSilently(avg, n2);
     }
     FNParseTransitionScheme itrTS = m.getShardWeights(new Shard(0, shards));
     itr = FModel.showLoss2(test.subList(0, nTestLim), m, itrTS, (n1 = name + "-itrVal-" + epoch));
     avg = FModel.showLoss2(test.subList(0, nTestLim), m, itrTS.getAverageView(), (n2 = name + "-itrAvg-" + epoch));
-    extraEval.evaluate(itr, n1);
-    extraEval.evaluate(avg, n2);
+    extraEval.evaluateSilently(itr, n1);
+    extraEval.evaluateSilently(avg, n2);
   }
 }
