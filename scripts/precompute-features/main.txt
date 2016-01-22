@@ -421,7 +421,7 @@ echo "using MEM=$MEM MEM_FREE=$MEM_FREE"
 # Train size (-DnTrain)
 if [[ $DATASET == "propbank" ]]; then
   N=115812
-elif [[ $DATASET == "framnet" ]]; then
+elif [[ $DATASET == "framenet" ]]; then
   N=3500
 else
   echo "unknown dataset: $DATASET"
@@ -509,7 +509,7 @@ done
 # Beam size (-DbeamSize)
 if [[ $DATASET == "propbank" ]]; then
   N=115812
-elif [[ $DATASET == "framnet" ]]; then
+elif [[ $DATASET == "framenet" ]]; then
   N=3500
 else
   echo "unknown dataset: $DATASET"
@@ -652,7 +652,7 @@ done
 # Train size (-DnTrain)
 if [[ $DATASET == "propbank" ]]; then
   N=115812
-elif [[ $DATASET == "framnet" ]]; then
+elif [[ $DATASET == "framenet" ]]; then
   N=3500
 else
   echo "unknown dataset: $DATASET"

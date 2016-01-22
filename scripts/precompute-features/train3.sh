@@ -62,8 +62,7 @@ DATA_HOME=/export/projects/twolfe/fnparse-data
 K_PERC_AVG=`echo "3 * $NUM_INST" | bc`
 echo "K_PERC_AVG=$K_PERC_AVG"
 
-#java -Xmx$MEM -XX:+UseSerialGC -ea -server -cp $JAR
-java -XX:+UseNUMA -Xmx$MEM -server -cp $JAR \
+java -XX:+UseNUMA -XX:+UseSerialGC -Xmx$MEM -server -cp $JAR \
   edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
   primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \
   propbank $PROPBANK \

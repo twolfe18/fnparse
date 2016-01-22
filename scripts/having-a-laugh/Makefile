@@ -183,5 +183,5 @@ knapsack-framenet-%.fs: framenet-ig-feat.txt
 		| grep '^<Feat' >/tmp/temp-knapsack-raw-framenet-$*
 	key-values mi hx </tmp/temp-knapsack-raw-framenet-$* >/tmp/temp-knapsack-$*
 	octave --eval "knapsack_feature_set('/tmp/temp-knapsack-$*', '/tmp/temp-knapsack-soln-$*', $*);"
-	lines /tmp/temp-knapsack-raw-framnet-$* /tmp/temp-knapsack-soln-$* true >knapsack-test-$*.fs
+	lines /tmp/temp-knapsack-raw-framenet-$* /tmp/temp-knapsack-soln-$* true >knapsack-test-$*.fs
 
