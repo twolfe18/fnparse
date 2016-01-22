@@ -22,8 +22,10 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.collect.Iterables;
 
+import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
+import edu.jhu.hlt.fnparse.data.framenet.DipanjanSplits;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -48,7 +50,6 @@ import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme.PerceptronUpdateMode;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
-import edu.jhu.hlt.fnparse.rl.full2.LLSSPatF;
 import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
 import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
@@ -766,26 +767,51 @@ public class FModel implements Serializable {
     Map<String, FNParse> parseByIdTrain = new HashMap<>();
     Map<String, FNParse> parseByIdDev = new HashMap<>();
     Map<String, FNParse> parseByIdTest = new HashMap<>();
-    ParsePropbankData.Redis propbankAutoParses = null;
-    PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
-    for (FNParse y : pbr.getTrainData()) {
-      FNParse old = parseByIdTrain.put(y.getId(), y);
-      assert old == null;
-    }
-    for (FNParse y : pbr.getDevData()) {
-      FNParse old = parseByIdDev.put(y.getId(), y);
-      assert old == null;
-    }
-    for (FNParse y : pbr.getTestData()) {
-      FNParse old = parseByIdTest.put(y.getId(), y);
-      assert old == null;
+
+    if (config.getBoolean("propbank")) {
+      Log.info("[main] reading propank");
+      ParsePropbankData.Redis propbankAutoParses = null;
+      PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
+      for (FNParse y : pbr.getTrainData()) {
+        FNParse old = parseByIdTrain.put(y.getId(), y);
+        assert old == null;
+      }
+      for (FNParse y : pbr.getDevData()) {
+        FNParse old = parseByIdDev.put(y.getId(), y);
+        assert old == null;
+      }
+      for (FNParse y : pbr.getTestData()) {
+        FNParse old = parseByIdTest.put(y.getId(), y);
+        assert old == null;
+      }
+    } else {
+      Log.info("[main] reading framenet");
+      DipanjanSplits ds = new DipanjanSplits(config);
+      Iterator<FNParse> it = FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+      while (it.hasNext()) {
+        FNParse y = it.next();
+        if (ds.isDev(y)) {
+          FNParse old = parseByIdDev.put(y.getId(), y);
+          assert old == null;
+        } else if (ds.isTrain(y)) {
+          FNParse old = parseByIdTrain.put(y.getId(), y);
+          assert old == null;
+        } else {
+          throw new RuntimeException("y=" + y.getId());
+        }
+      }
+      it = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
+      while (it.hasNext()) {
+        FNParse y = it.next();
+        assert ds.isTest(y);
+        FNParse old = parseByIdTest.put(y.getId(), y);
+        assert old == null;
+      }
     }
     Log.info("[main] nTrainMax=" + parseByIdTrain.size()
       + " nDevMax=" + parseByIdDev.size()
       + " nTestMax=" + parseByIdTest.size());
-
     Log.info("[main] " + Describe.memoryUsage());
-    pbr = null;
 
     // Perform join
     List<CachedFeatures.Item> train = new ArrayList<>();
