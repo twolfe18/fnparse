@@ -793,17 +793,14 @@ public class FModel implements Serializable {
         if (ds.isDev(y)) {
           FNParse old = parseByIdDev.put(y.getId(), y);
           assert old == null;
-        } else if (ds.isTrain(y)) {
+        } else {
           FNParse old = parseByIdTrain.put(y.getId(), y);
           assert old == null;
-        } else {
-          throw new RuntimeException("y=" + y.getId());
         }
       }
       it = FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
       while (it.hasNext()) {
         FNParse y = it.next();
-        assert ds.isTest(y);
         FNParse old = parseByIdTest.put(y.getId(), y);
         assert old == null;
       }
