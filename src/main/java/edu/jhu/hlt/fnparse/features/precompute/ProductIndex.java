@@ -37,15 +37,17 @@ public class ProductIndex implements Serializable {
   private ProductIndex derivedFrom;
 
   private ProductIndex(long feat, long card, ProductIndex derivedFrom) {
-    assert feat >= 0 && card >= 0;
     this.feat = feat;
     this.card = card;
     this.featProd = feat + derivedFrom.featProd * card;
     this.cardProd = derivedFrom.cardProd * card;
     this.derivedFrom = derivedFrom;
     this.arity = derivedFrom.arity + 1;
+    assert feat >= 0 && card >= 0;
     assert featProd >= 0;
     assert cardProd >= 0;
+    assert featProd < cardProd || cardProd == 0;
+    assert feat < card || card == 0;
   }
 
   public ProductIndex(long feat, long card, long thisIsTheNilConstructor, long foo) {

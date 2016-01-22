@@ -122,7 +122,11 @@ public class FModel implements Serializable {
 
     rtConf = config;
     maxViolation = true;
-    perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
+//    perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
+    perceptronUpdateMode = PerceptronUpdateMode.valueOf(
+        p.getString("perceptronUpdateMode",
+            PerceptronUpdateMode.MAX_VIOLATION.name()));
+
     // OracleMode is what modulates behavior
     Log.info("[main] perceptron=" + maxViolation
         + " mode=" + perceptronUpdateMode
@@ -967,7 +971,6 @@ public class FModel implements Serializable {
         AbstractTransitionScheme.DEBUG = true;
 //        FNParseTransitionScheme.DEBUG_DECODE = true;
         FModel.DEBUG_SEARCH_FINAL_SOLN = true;
-        LLSSPatF.DEBUG_SHOW_BACKWARDS = true;
 
         // Check an update
         m.getUpdate(y, ts).apply(lr);

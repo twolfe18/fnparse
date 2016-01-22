@@ -268,6 +268,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
       Log.info("[main] wGlobal=" + (wGlobal == null ? "null" : wGlobal.summary()));
+      Log.info("[main] beamSize=" + config.getInt("beamSize", 1));
       Log.info("[main] featOverfit=" + featOverfit);
       Log.info("[main] featProdBase=" + featProdBase);
       Log.info("[main] featProdF=" + featProdF);

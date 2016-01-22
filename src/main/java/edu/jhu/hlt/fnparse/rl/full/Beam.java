@@ -86,15 +86,6 @@ public interface Beam<T extends StateLike> {
     }
   }
 
-  /** See methods in {@link MaxLoss} for what these mean */
-  public enum Mode {
-    MIN_LOSS,
-    H_LOSS,
-    MAX_LOSS,
-    MAX_LOSS_LIN,
-    MAX_LOSS_POW,
-  }
-
   /**
    * Differs from tutils Beam in that it checks for State equality first (taking
    * the higher scoring of two items) before resorting to beam pruning.
@@ -104,6 +95,9 @@ public interface Beam<T extends StateLike> {
    * to add a little jitter to the scores.
    */
   public static class DoubleBeam<T extends StateLike> implements Beam<T> {
+
+    public static boolean DEBUG = false;
+
     // I doubt I'll wrap... 2^63 is a lot of adds to a beam...
     public long instanceCounter = 0;
 
@@ -149,6 +143,8 @@ public interface Beam<T extends StateLike> {
     }
 
     public void clear() {
+      if (DEBUG)
+        Log.info("clearing: " + this.toString());
       scores.clear();
       if (table != null)
         table.clear();
@@ -201,6 +197,7 @@ public interface Beam<T extends StateLike> {
         if (old.score < sc) {
           // If this state is the same as something on our beam,
           // then choose the higher scoring of the two.
+          if (DEBUG) Log.info("collapse where old state had LOWER score");
           scores.remove(old);
           BeamItem<T> si = new BeamItem<>(s, sc, instanceCounter++);
           boolean added = scores.add(si);
@@ -208,10 +205,12 @@ public interface Beam<T extends StateLike> {
           table.put(s, si);
           return true;
         }
+        if (DEBUG) Log.info("collapse where old state had HIGHER score");
         // else no op: we've proven this state is equivalent and lower-scoring than something we know about
         return false;
       } else if (scores.size() < capacity) {
         // If this is a new state and we have room, then add this item without eviction
+        if (DEBUG) Log.info("free add, size=" + scores.size() + " capacity=" + capacity);
         BeamItem<T> si = new BeamItem<>(s, sc, instanceCounter++);
         int j = scores.size();
         scores.add(si);
@@ -221,6 +220,7 @@ public interface Beam<T extends StateLike> {
           table.put(s, si);
         return true;
       } else if (sc > lowerBound()) {
+        if (DEBUG) Log.info("evicting someone with a lower score, sc=" + sc + " lowerBound=" + lowerBound());
         // Remove the worst item on the beam.
         BeamItem<T> worst = scores.pollFirst();
         if (table != null)
@@ -234,6 +234,7 @@ public interface Beam<T extends StateLike> {
         }
         return true;
       } else {
+        if (DEBUG) Log.info("not good enough, sc=" + sc + " lowerBound=" + lowerBound());
         return false;
       }
     }

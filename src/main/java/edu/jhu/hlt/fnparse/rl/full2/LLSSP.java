@@ -15,18 +15,22 @@ public class LLSSP extends LL<Node2> {
 
   public static final boolean DISABLE_PRIMES = true;
 
-  private BigInteger primeProd;
+//  private BigInteger primeProd;
+//  private long primeProd2;
   private StepScores<?> scoreSum;
 
   public LLSSP(Node2 item, LLSSP next) {
     super(item, next);
     if (next == null) {
-      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig();
+//      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig();
+//      primeProd2 = DISABLE_PRIMES ? 0 : item.getSig().longValue();
       scoreSum = item.getStepScores();
     } else {
-      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig().multiply(next.primeProd);
+//      primeProd = DISABLE_PRIMES ? BigInteger.ZERO : item.getSig().multiply(next.primeProd);
+//      primeProd2 = DISABLE_PRIMES ? 0 : item.getSig().longValue() * next.primeProd2;
       scoreSum = StepScores.sum(item.getStepScores(), next.scoreSum);
     }
+    assert DISABLE_PRIMES;
   }
 
   public static int sumPossible(LLSSP l) {
@@ -63,10 +67,12 @@ public class LLSSP extends LL<Node2> {
   public static BigInteger getPrimeProd(LLSSP l) {
     if (l == null)
       return BigInteger.ONE;
-    return l.primeProd;
+    return l.getPrimeProd();
   }
   public BigInteger getPrimeProd() {
-    return primeProd;
+//    return primeProd;
+//    return BigInteger.valueOf(primeProd2);
+    throw new RuntimeException("implement me");
   }
 
   @Override

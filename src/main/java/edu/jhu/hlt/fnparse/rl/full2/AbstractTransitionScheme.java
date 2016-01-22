@@ -678,7 +678,6 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           State2<Z> z2 = oracleNext.peek();
 
           assert z2.getStepScores().getLoss().noLoss();
-//          assert z2.getStepScores().getLoss().fn == 0;
 
           double margin = 0;
           double s1 = z1.getStepScores().getModel().forwards();

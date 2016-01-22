@@ -26,7 +26,7 @@ import edu.jhu.prim.tuple.Pair;
  * need later.
  */
 public class SortedEggCache {
-  public static boolean DEBUG = true;
+  public static final boolean DEBUG = false;
 
   /**
    * When {@link Node2#INTERNAL_NODES_COUNT} == false, the K-valued eggs will
