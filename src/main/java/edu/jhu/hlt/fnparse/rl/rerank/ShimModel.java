@@ -320,14 +320,17 @@ public class ShimModel implements Serializable {
 //    config.putIfAbsent("threads", "1");
     int threads = config.getInt("threads", 1);
     int shards = config.getInt("shards", threads);
+    boolean dontTrain = config.getBoolean("dontTrain", false);
 
     // Setup the official CoNLL 2005 evaluation script
-    File evalOutputDir = config.getExistingDir("evalOutputDir");
-    File evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
-    Conll2005SrlEval c2k5Eval = new Conll2005SrlEval(evalOutputDir, evalScript);
-
-    FModel m = FModel.getFModel(config);
-    Random rand = m.getConfig().rand;
+    File evalOutputDir = null;
+    File evalScript = null;
+    Conll2005SrlEval c2k5Eval = null;
+    if (!dontTrain) {
+      evalOutputDir = config.getExistingDir("evalOutputDir");
+      evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
+      c2k5Eval = new Conll2005SrlEval(evalOutputDir, evalScript);
+    }
 
     List<CachedFeatures.Item> train, dev, test;
     // Try to get data from memo
@@ -380,7 +383,7 @@ public class ShimModel implements Serializable {
     }
     Log.info("[main] done reading data");
 
-    if (config.getBoolean("dontTrain", false)) {
+    if (dontTrain) {
       Log.info("[main] exiting because the dontTrain flag was given");
       return;
     }
@@ -390,6 +393,9 @@ public class ShimModel implements Serializable {
       Log.info("[main] limiting train set size to ntl=" + ntl);
       train = train.subList(0, ntl);
     }
+
+    FModel m = FModel.getFModel(config);
+    Random rand = m.getConfig().rand;
 
     // This indexes features and computes: templates -> featureSet -> features
     SimpleCFLike cfLike = new SimpleCFLike();
