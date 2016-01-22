@@ -2,6 +2,7 @@ package edu.jhu.hlt.fnparse.data.framenet;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.util.HashSet;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
@@ -18,6 +19,9 @@ public class DipanjanSplits {
   public DipanjanSplits(File splitFile) {
     Log.info("[main] reading Dipanjan's splits from splitFile=" + splitFile.getPath());
     this.splitFile = splitFile;
+    this.train = new HashSet<>();
+    this.dev = new HashSet<>();
+    this.test = new HashSet<>();
     try (BufferedReader r = FileUtil.getReader(splitFile)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
         String[] toks = line.split("\t");
