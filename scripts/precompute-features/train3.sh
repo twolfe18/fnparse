@@ -47,12 +47,10 @@ mkdir -p $EVAL_DIR
 if [[ $DATASET == "propbank" ]]; then
   NR=30
   PROPBANK=true
-  MAX_EPOCH=2
   NUM_INST=115000
 elif [[ $DATASET == "framenet" ]]; then
   NR=60
   PROPBANK=false
-  MAX_EPOCH=20
   NUM_INST=3500
 else
   echo "unknown dataset: $DATASET"
@@ -69,6 +67,7 @@ java -XX:+UseNUMA -XX:+UseSerialGC -Xmx$MEM -server -cp $JAR \
   propbank $PROPBANK \
   threads 1 \
   noApproxAfterEpoch 0 \
+  maxEpoch 10 \
   evalOutputDir $EVAL_DIR \
   conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
   semaforEval.scriptDir /export/projects/twolfe/fnparse-data \

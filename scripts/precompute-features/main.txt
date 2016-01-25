@@ -393,9 +393,13 @@ done
 ./scripts/precompute-features/train3-setup.sh
 
 DATASET="propbank"
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan22a
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan24a
 FEAT_PARENT=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/coherent-shards-filtered-small-jser
-FEAT_DIR=$FEAT_PARENT/C16-D1280
+if $DATASET == "framenet"; then
+  FEAT_DIR=$FEAT_PARENT/C16-D1280
+else
+  FEAT_DIR=$FEAT_PARENT/C8-D1280
+fi
 
 ### Setup
 mkdir -p $WD/sge-logs
@@ -426,7 +430,7 @@ elif [[ $DATASET == "framenet" ]]; then
 else
   echo "unknown dataset: $DATASET"
 fi
-for D in 2 4 8 16 32 64 128 256; do
+for D in 3 9 27 81 243; do
   C=`echo "$N / $D" | bc`
   if [[ $C -lt 100 ]]; then
     echo "data is too small (skipping): $C"
@@ -493,6 +497,30 @@ for KMAX in true false; do
 done
 done
 
+# Beam size (-DbeamSize)
+if [[ $DATASET == "propbank" ]]; then
+  N=115812
+elif [[ $DATASET == "framenet" ]]; then
+  N=3500
+else
+  echo "unknown dataset: $DATASET"
+fi
+for D in 64 16 4; do
+  C=`echo "$N / $D" | bc`
+  if [[ $C -lt 100 ]]; then
+    echo "data is too small (skipping): $C"
+  else
+    for B in 01 02 04 08 16 32; do
+      K="beam-${B}-D${D}"
+      qsub -N $K -o $WD/sge-logs \
+        -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
+        ./scripts/precompute-features/train3.sh \
+          $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
+          beamSize $B nTrain $C
+    done
+  fi
+done
+
 # Feature set (-DfeatureSetFile)
 #for D in 640 1280 160 2560; do
 for D in 640 1280 320; do
@@ -509,31 +537,6 @@ for C in 4 8 16; do
   fi
 done
 done
-
-# Beam size (-DbeamSize)
-if [[ $DATASET == "propbank" ]]; then
-  N=115812
-elif [[ $DATASET == "framenet" ]]; then
-  N=3500
-else
-  echo "unknown dataset: $DATASET"
-fi
-for D in 128 32 8 2; do
-  C=`echo "$N / $D" | bc`
-  if [[ $C -lt 100 ]]; then
-    echo "data is too small (skipping): $C"
-  else
-    for B in 01 02 04 08 16 32 64; do
-      K="beam-${B}-D${D}"
-      qsub -N $K -o $WD/sge-logs \
-        -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
-        ./scripts/precompute-features/train3.sh \
-          $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
-          beamSize $B nTrain $C
-    done
-  fi
-done
-
 
 
 
