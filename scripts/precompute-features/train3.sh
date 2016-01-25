@@ -4,6 +4,7 @@
 #$ -l mem_free=31G
 #$ -l num_proc=8
 #$ -S /bin/bash
+#$ -q intel.q
 
 set -eu
 

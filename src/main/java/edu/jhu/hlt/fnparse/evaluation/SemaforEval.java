@@ -75,8 +75,6 @@ public class SemaforEval implements TaggedEvalFunc {
 
   @Override
   public void evaluateSilently(List<SentenceEval> instances, String tag) {
-    List<FNParse> gold = null;
-    List<FNParse> hyp = null;
     File d = new File(workingDir, tag);
     if (d.isFile()) {
       Log.warn("cannot make directory because this is already file: " + d.getPath());
@@ -84,6 +82,12 @@ public class SemaforEval implements TaggedEvalFunc {
     }
     if (!d.isDirectory())
       d.mkdirs();
+    List<FNParse> gold = new ArrayList<>();
+    List<FNParse> hyp = new ArrayList<>();
+    for (SentenceEval se : instances) {
+      gold.add(se.getGoldParse());
+      hyp.add(se.getHypothesisParse());
+    }
     callScript(gold, hyp, new File(d, "results.txt"));
   }
 

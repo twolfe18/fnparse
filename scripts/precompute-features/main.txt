@@ -393,7 +393,7 @@ done
 ./scripts/precompute-features/train3-setup.sh
 
 DATASET="propbank"
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan20a
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan22a
 FEAT_PARENT=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/coherent-shards-filtered-small-jser
 FEAT_DIR=$FEAT_PARENT/C16-D1280
 
@@ -407,8 +407,8 @@ echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
 if [[ $DATASET == "propbank" ]]; then
-  MEM="40G"
-  MEM_FREE="42G"
+  MEM="46G"
+  MEM_FREE="48G"
 elif [[ $DATASET == "framenet" ]]; then
   MEM="10G"
   MEM_FREE="12G"
@@ -428,12 +428,16 @@ else
 fi
 for D in 2 4 8 16 32 64 128 256; do
   C=`echo "$N / $D" | bc`
-  K="ntrain-$D"
-  qsub -N $K -o $WD/sge-logs \
-    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
-    ./scripts/precompute-features/train3.sh \
-      $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
-      nTrain $C
+  if [[ $C -lt 100 ]]; then
+    echo "data is too small (skipping): $C"
+  else
+    K="ntrain-$D"
+    qsub -N $K -o $WD/sge-logs \
+      -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
+      ./scripts/precompute-features/train3.sh \
+        $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
+        nTrain $C
+  fi
 done
 
 # Oracle (-DoracleMode)
@@ -516,14 +520,18 @@ else
 fi
 for D in 128 32 8 2; do
   C=`echo "$N / $D" | bc`
-  for B in 01 02 04 08 16 32 64; do
-    K="beam-${B}-D${D}"
-    qsub -N $K -o $WD/sge-logs \
-      -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
-      ./scripts/precompute-features/train3.sh \
-        $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
-        beamSize $B nTrain $C
-  done
+  if [[ $C -lt 100 ]]; then
+    echo "data is too small (skipping): $C"
+  else
+    for B in 01 02 04 08 16 32 64; do
+      K="beam-${B}-D${D}"
+      qsub -N $K -o $WD/sge-logs \
+        -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
+        ./scripts/precompute-features/train3.sh \
+          $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
+          beamSize $B nTrain $C
+    done
+  fi
 done
 
 
@@ -566,8 +574,8 @@ echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
 if [[ $DATASET == "propbank" ]]; then
-  MEM="50G"
-  MEM_FREE="53G"
+  MEM="54G"
+  MEM_FREE="56G"
 elif [[ $DATASET == "framenet" ]]; then
   MEM="10G"
   MEM_FREE="12G"
