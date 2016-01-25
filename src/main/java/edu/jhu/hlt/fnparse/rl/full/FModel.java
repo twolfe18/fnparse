@@ -122,7 +122,7 @@ public class FModel implements Serializable {
     }
 
     rtConf = config;
-    maxViolation = true;
+    maxViolation = p.getBoolean("maxViolation", true);
 //    perceptronUpdateMode = PerceptronUpdateMode.MAX_VIOLATION;
     perceptronUpdateMode = PerceptronUpdateMode.valueOf(
         p.getString("perceptronUpdateMode",
@@ -349,7 +349,8 @@ public class FModel implements Serializable {
             Log.info("about to apply the most violated updates");
           mv.backwards(-learningRate);
 
-          ts.maybeApplyL2Reg();
+//          ts.maybeApplyL2Reg();
+          ts.calledAfterEveryUpdate();
 
           tstop("update.apply");
         }

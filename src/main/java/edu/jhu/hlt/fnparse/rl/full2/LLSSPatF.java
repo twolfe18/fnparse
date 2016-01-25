@@ -71,9 +71,9 @@ public class LLSSPatF extends LLSSP {
   public static final ProductIndex ROLE_COOC_TA_F =
       ROLE_COOC && C.getBoolean("ROLE_COOC_TA_F", true) ? new ProductIndex(9, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_FK =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_FK", false) ? new ProductIndex(10, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_FK", true) ? new ProductIndex(10, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_K =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", false) ? new ProductIndex(11, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", true) ? new ProductIndex(11, 16) : null;
 
   public static final ProductIndex NUM_ARGS_TA =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA", true) ? new ProductIndex(12, 16) : null;
@@ -260,6 +260,11 @@ public class LLSSPatF extends LLSSP {
 
   private LL<ProductIndex> roleCooc(Node2 item, LLSSPatF prev, Info info, LL<ProductIndex> addTo) {
 
+    // No roles co-occurring
+    if (!item.firstChildMatchesType(TFKS.S))
+      return addTo;
+    Span s1 = FNParseTransitionScheme.getArgSpan(item.children.item.prefix, info);
+
     Frame frame = FNParseTransitionScheme.getFrame(item.prefix, info);
     FrameRolePacking frp = info.getFRPacking();
     RolePacking rp = info.getRPacking();
@@ -271,8 +276,8 @@ public class LLSSPatF extends LLSSP {
     int f = frame.getId();
     int F = frp.getNumFrames();
 
-    int fk = frp.index(frame, item.getValue());
-    int FK = frp.size();
+//    int fk = frp.index(frame, item.getValue());
+//    int FK = frp.size();
 
     // Other targets?
     // If we want features on other targets, we would have to:
@@ -290,6 +295,9 @@ public class LLSSPatF extends LLSSP {
       // Only count roles that have *appeared*
       if (!otherK.firstChildMatchesType(TFKS.S))
         continue;
+
+      Span s2 = FNParseTransitionScheme.getArgSpan(otherK.children.item.prefix, info);
+      ProductIndex spanRel = BasicFeatureTemplates.spanPosRel2(s1, s2);
 
       assert otherK.getType() == TFKS.K;
       int k2 = rp.getRole(frame, otherK.getValue());
@@ -309,12 +317,16 @@ public class LLSSPatF extends LLSSP {
         addTo = new LL<>(ROLE_COOC_TA_F.flatProd(p2).prod(f, F), addTo);
       }
       if (ROLE_COOC_TA_FK != null) {
-        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p1).prod(fk, FK), addTo);
-        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p2).prod(fk, FK), addTo);
+//        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p1).prod(fk, FK), addTo);
+//        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p2).prod(fk, FK), addTo);
+        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p1).flatProd(spanRel), addTo);
+        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p2).flatProd(spanRel), addTo);
       }
       if (ROLE_COOC_TA_K != null) {
-        addTo = new LL<>(ROLE_COOC_TA_K.flatProd(p1).prod(k1, K), addTo);
-        addTo = new LL<>(ROLE_COOC_TA_K.flatProd(p2).prod(k1, K), addTo);
+//        addTo = new LL<>(ROLE_COOC_TA_K.flatProd(p1).prod(k1, K), addTo);
+//        addTo = new LL<>(ROLE_COOC_TA_K.flatProd(p2).prod(k1, K), addTo);
+        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p1).flatProd(spanRel).prod(f, F), addTo);
+        addTo = new LL<>(ROLE_COOC_TA_FK.flatProd(p2).flatProd(spanRel).prod(f, F), addTo);
       }
 
       if (AbstractTransitionScheme.DEBUG && DEBUG) {
@@ -322,7 +334,8 @@ public class LLSSPatF extends LLSSP {
         Log.info("p1=" + p1);
         Log.info("p2=" + p2);
         Log.info("f=" + f + "/" + F);
-        Log.info("fk=" + fk + "/" + FK);
+        Log.info("spanRel=" + spanRel);
+//        Log.info("fk=" + spanRel + "/" + FK);
         System.out.println();
       }
     }
