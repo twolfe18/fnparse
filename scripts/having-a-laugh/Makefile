@@ -109,6 +109,23 @@ propbank-ig-feat.32.dedup.txt: propbank-ig-feat.32.txt
 propbank-ig-feat.64.dedup.txt: propbank-ig-feat.64.txt
 	python dedup_sim_feats.py 7.0 propbank-ig-feat.64.txt 2560 propbank-ig-feat.64.dedup.txt
 
+
+# special case modification
+removeK: propbank-ig-feat.4.dedup.txt
+	@echo "propbank"
+	python remove_role.py <propbank-ig-feat.4.dedup.txt >temp && mv temp propbank-ig-feat.4.dedup.txt
+	python remove_role.py <propbank-ig-feat.8.dedup.txt >temp && mv temp propbank-ig-feat.8.dedup.txt
+	python remove_role.py <propbank-ig-feat.16.dedup.txt >temp && mv temp propbank-ig-feat.16.dedup.txt
+	python remove_role.py <propbank-ig-feat.32.dedup.txt >temp && mv temp propbank-ig-feat.32.dedup.txt
+	python remove_role.py <propbank-ig-feat.64.dedup.txt >temp && mv temp propbank-ig-feat.64.dedup.txt
+	@echo "framenet"
+	python remove_role.py <framenet-ig-feat.4.dedup.txt >temp && mv temp framenet-ig-feat.4.dedup.txt
+	python remove_role.py <framenet-ig-feat.8.dedup.txt >temp && mv temp framenet-ig-feat.8.dedup.txt
+	python remove_role.py <framenet-ig-feat.16.dedup.txt >temp && mv temp framenet-ig-feat.16.dedup.txt
+	python remove_role.py <framenet-ig-feat.32.dedup.txt >temp && mv temp framenet-ig-feat.32.dedup.txt
+	python remove_role.py <framenet-ig-feat.64.dedup.txt >temp && mv temp framenet-ig-feat.64.dedup.txt
+
+
 propbank-4-%.fs: propbank-ig-feat.4.dedup.txt
 	head -n $* propbank-ig-feat.4.dedup.txt >propbank-4-$*.fs
 propbank-8-%.fs: propbank-ig-feat.8.dedup.txt

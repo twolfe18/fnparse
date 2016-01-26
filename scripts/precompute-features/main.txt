@@ -388,11 +388,11 @@ done
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
 
+DATASET="propbank"
 
 # Generate java serialized data for the final step
-./scripts/precompute-features/train3-setup.sh
+./scripts/precompute-features/train3-setup.sh $DATASET
 
-DATASET="propbank"
 WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan24a
 FEAT_PARENT=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/coherent-shards-filtered-small-jser
 if $DATASET == "framenet"; then
