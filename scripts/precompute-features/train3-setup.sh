@@ -50,6 +50,14 @@ echo "    $JAR"
 echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
+# This is needed due to a last-minute mess up on my part:
+# the coherent-shards-filtered-small alphabet and features
+# were generated with some role features and I have since
+# removed them in scripts/having-a-laugh/Makefile with remove_role.py.
+# This made space for new templates/features which are not in
+# coherent-shards-filtered-small
+ALLOW_LOSS_ALPH=true
+
 for C in 4 8 16; do
 for D in 320 640 1280; do
 
@@ -57,12 +65,13 @@ if [[ ! -f $CD/features/$DATASET-$C-${D}.fs ]]; then
   echo "cant find features: $CD/features/$DATASET-$C-${D}.fs"
 else
 K="C$C-D$D"
-mkdir $CD/$K
+mkdir -p $CD/$K
 qsub -N "fc-$K" \
   -b y -j y -V -o $CD/sge-logs \
   -l 'mem_free=48G,num_proc=1,h_rt=24:00:00' \
-  java -Xmx46G -XX:+UseSerialGC -server -cp $CD/fnparse.jar \
+  java -ea -Xmx46G -XX:+UseSerialGC -server -cp $CD/fnparse.jar \
     edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
+    allowLossyAlphForFS $ALLOW_LOSS_ALPH \
     dontTrain true \
     propbank $PROPBANK \
     primesFile ${DATA_HOME}/primes/primes1.byLine.txt.gz \

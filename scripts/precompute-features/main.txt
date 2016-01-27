@@ -388,14 +388,19 @@ done
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
 
-DATASET="propbank"
+DATASET="framenet"
 
 # Generate java serialized data for the final step
 ./scripts/precompute-features/train3-setup.sh $DATASET
 
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan24a
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan26a
+if [[ -d $WD ]]; then
+  echo "already exists: $WD"
+  echo "ARE YOUR SURE YOU WANT TO POSSIBLY OVERWRITE???"
+  sleep 15
+fi
 FEAT_PARENT=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/coherent-shards-filtered-small-jser
-if $DATASET == "framenet"; then
+if [[ $DATASET == "framenet" ]]; then
   FEAT_DIR=$FEAT_PARENT/C16-D1280
 else
   FEAT_DIR=$FEAT_PARENT/C8-D1280
