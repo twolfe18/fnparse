@@ -444,6 +444,7 @@ for D in 3 9 27 81 243; do
   fi
 done
 
+
 # Oracle (-DoracleMode)
 for OM in RAND RAND_MIN RAND_MAX MIN MAX; do
   K="oracleMode-$OM"
@@ -453,6 +454,7 @@ for OM in RAND RAND_MIN RAND_MAX MIN MAX; do
       $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
       oracleMode $OM
 done
+
 
 # Global features (see LLSSPatF)
 qsub -N "global-NONE" -o $WD/sge-logs \
@@ -485,6 +487,7 @@ qsub -N "global-FULL" -o $WD/sge-logs \
     $WD/global-FULL $FEAT_DIR $DATASET $MEM $JAR_STABLE \
     ARG_LOC true ROLE_COOC true NUM_ARGS true
 
+
 # Egg sorting * Kmax
 for SORT_MODE in NONE BY_MODEL_SCORE BY_EXPECTED_UTILITY; do
 for KMAX in true false; do
@@ -496,6 +499,33 @@ for KMAX in true false; do
       sortEggsMode $SORT_MODE sortEggsKmaxS $KMAX
 done
 done
+
+
+# oneAtATime
+# TODO I would like to do this jointly with the oracle if possible
+if [[ $DATASET == "propbank" ]]; then
+  N=115812
+elif [[ $DATASET == "framenet" ]]; then
+  N=3500
+else
+  echo "unknown dataset: $DATASET"
+fi
+for D in 64 16 4; do
+  C=`echo "$N / $D" | bc`
+  if [[ $C -lt 100 ]]; then
+    echo "data is too small (skipping): $C"
+  else
+    for OAAT in K F; do
+      K="oaat-${OAAT}-D${D}"
+      qsub -N $K -o $WD/sge-logs \
+        -l "num_proc=1,mem_free=$MEM_FREE,h_rt=240:00:00" \
+        ./scripts/precompute-features/train3.sh \
+          $WD/$K $FEAT_DIR $DATASET $MEM $JAR_STABLE \
+          oneAtATime $OAAT nTrain $C
+    done
+  fi
+done
+
 
 # Beam size (-DbeamSize)
 if [[ $DATASET == "propbank" ]]; then
@@ -520,6 +550,7 @@ for D in 64 16 4; do
     done
   fi
 done
+
 
 # Feature set (-DfeatureSetFile)
 #for D in 640 1280 160 2560; do
@@ -546,156 +577,6 @@ done
 
 
 
-
-
-#DATASET="framenet"
-DATASET="propbank"
-
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan18a
-DD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
-
-### Setup
-mkdir -p $WD/sge-logs
-
-echo "Copying the features into place..."
-mkdir $WD/features
-for f in scripts/having-a-laugh/$DATASET-*.fs; do
-  echo "$f  ==>  $WD/features"
-  cp $f $WD/features
-done
-DEFAULT_FEATURES=$WD/features/$DATASET-8-1280.fs
-if [[ ! -f $DEFAULT_FEATURES ]]; then
-  echo "something went wrong with copying features, default doesn't exist:"
-  echo $DEFAULT_FEATURES
-fi
-
-JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
-JAR_STABLE=$WD/fnparse.jar
-echo "copying the jar to a safe place..."
-echo "    $JAR"
-echo "==> $JAR_STABLE"
-cp $JAR $JAR_STABLE
-
-if [[ $DATASET == "propbank" ]]; then
-  MEM="54G"
-  MEM_FREE="56G"
-elif [[ $DATASET == "framenet" ]]; then
-  MEM="10G"
-  MEM_FREE="12G"
-else
-  echo "unknown dataset: $DATASET"
-fi
-echo "using MEM=$MEM MEM_FREE=$MEM_FREE"
-
-
-
-# Oracle (-DoracleMode)
-for OM in RAND RAND_MIN RAND_MAX MIN MAX; do
-  K="oracleMode-$OM"
-  qsub -N $K -o $WD/sge-logs \
-    -l "num_proc=12,mem_free=$MEM_FREE,h_rt=72:00:00" \
-    ./scripts/precompute-features/train2.sh \
-      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
-      featureSetFile $DEFAULT_FEATURES \
-      oracleMode $OM
-done
-
-# Global features (see LLSSPatF)
-qsub -N "global-NONE" -o $WD/sge-logs \
-  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-  ./scripts/precompute-features/train2.sh \
-    $WD/global-NONE $DD $DATASET $MEM $JAR_STABLE \
-    featureSetFile $DEFAULT_FEATURES \
-    ARG_LOC false ROLE_COOC false NUM_ARGS false
-
-qsub -N "global-ARG_LOC" -o $WD/sge-logs \
-  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-  ./scripts/precompute-features/train2.sh \
-    $WD/global-ARG_LOC $DD $DATASET $MEM $JAR_STABLE \
-    featureSetFile $DEFAULT_FEATURES \
-    ARG_LOC true ROLE_COOC false NUM_ARGS false
-
-qsub -N "global-ROLE_COOC" -o $WD/sge-logs \
-  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-  ./scripts/precompute-features/train2.sh \
-    $WD/global-ROLE_COOC $DD $DATASET $MEM $JAR_STABLE \
-    featureSetFile $DEFAULT_FEATURES \
-    ARG_LOC false ROLE_COOC true NUM_ARGS false
-
-qsub -N "global-NUM_ARGS" -o $WD/sge-logs \
-  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-  ./scripts/precompute-features/train2.sh \
-    $WD/global-NUM_ARGS $DD $DATASET $MEM $JAR_STABLE \
-    featureSetFile $DEFAULT_FEATURES \
-    ARG_LOC false ROLE_COOC false NUM_ARGS true
-
-qsub -N "global-FULL" -o $WD/sge-logs \
-  -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-  ./scripts/precompute-features/train2.sh \
-    $WD/global-FULL $DD $DATASET $MEM $JAR_STABLE \
-    featureSetFile $DEFAULT_FEATURES \
-    ARG_LOC true ROLE_COOC true NUM_ARGS true
-
-# Egg sorting * Kmax
-for SORT_MODE in NONE BY_MODEL_SCORE BY_EXPECTED_UTILITY; do
-for KMAX in true false; do
-  K="eggSort-${SORT_MODE}-kmax-${KMAX}"
-  qsub -N $K -o $WD/sge-logs \
-    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-    ./scripts/precompute-features/train2.sh \
-      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
-      featureSetFile $DEFAULT_FEATURES \
-      sortEggsMode $SORT_MODE sortEggsKmaxS $KMAX
-done
-done
-
-# Beam size (-DbeamSize)
-for B in 01 02 04 08 16 32 64; do
-  K="beam-${B}"
-  qsub -N $K -o $WD/sge-logs \
-    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-    ./scripts/precompute-features/train2.sh \
-      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
-      featureSetFile $DEFAULT_FEATURES \
-      beamSize $B
-done
-
-# Train size (-DnTrain)
-if [[ $DATASET == "propbank" ]]; then
-  N=115812
-elif [[ $DATASET == "framenet" ]]; then
-  N=3500
-else
-  echo "unknown dataset: $DATASET"
-fi
-for D in 2 4 8 16 32 64 128 256; do
-  C=`echo "$N / $D" | bc`
-  K="ntrain-$D"
-  qsub -N $K -o $WD/sge-logs \
-    -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-    ./scripts/precompute-features/train2.sh \
-      $WD/$K $DD $DATASET $MEM $JAR_STABLE \
-      featureSetFile $DEFAULT_FEATURES \
-      nTrain $C
-done
-
-# Feature set (-DfeatureSetFile)
-#for D in 640 1280 160 2560; do
-for D in 640 1280 320; do
-for C in 4 8 16; do
-  FS=${WD}/features/${DATASET}-${C}-${D}.fs
-  if [[ ! -f $FS ]]; then
-    echo "missing feature file: $FS"
-  else
-    K="features-C${C}-D${D}"
-    qsub -N $K -o $WD/sge-logs \
-      -l "num_proc=1,mem_free=$MEM_FREE,h_rt=72:00:00" \
-      ./scripts/precompute-features/train2.sh \
-        $WD/$K $DD $DATASET $MEM $JAR_STABLE \
-        featureSetFile $FS
-  fi
-done
-done
 
 
 
