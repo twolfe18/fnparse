@@ -82,7 +82,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
   protected int perceptronUpdatePrintInterval = 100;
 
 
-  /**
+  /*
    * This is a hook for clamping down on the set of actions which are considered
    * out of a given state. What this means is that you can only perform actions
    * generated from one sub-tree (of a node of the specified type), for example
@@ -105,9 +105,15 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
    * @param type is the type for which you may only generate actions from one
    * sub-tree at a time.
    */
-  boolean oneAtATime(int type) {
-    return false;
+//  boolean oneAtATime(int type) {
+//    return false;
+//  }
+  int oneAtATime() {
+    return 0;
   }
+
+  // Optimization: In TFKS, return K.
+  abstract int preterminalType();
 
   /**
    * How to glue stuff together. Hide instantiations of LL which keep track of
@@ -398,77 +404,189 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           + "least for Info (e.g. search coefs)");
     }
     COUNTER_NEXT++;
-
     Node2 wife = spine.car();
+    int added = 0;
+    final int oaat = oneAtATime();
+    final int wt = wife.getType();
+
     if (DEBUG && DEBUG_SEARCH) {
       Log.info("expanding from wife:");
       System.out.println("root score: " + root.getStepScores());
+      System.out.println("ooat=" + Node2.typeName(oaat));
       System.out.print("wife: ");
       wife.show(System.out);
     }
 
-    int added = 0;
+    // oaat=F,wt=* => leftChild.actions || hatch(T)
+    // oaat=F,wt=T => leftChild.actions || hatch(F)
+    // oaat=F,wt=F => allChildren.actions && hatch(K)
+    // oaat=F,wt=K => hatch(S)
+    // oaat=F,wt=S => emptyset
 
-    // Recurse
-    int i = 0;
-    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
-      if (DEBUG && DEBUG_SEARCH)
-        Log.info("recursing on child " + i);
-      LL<Node2> spine2 = new LL<>(cur.car(), spine);
-      added += nextStates(root, spine2, addTo);
+    // oaat=K,wt=* => leftChild.actions || hatch(T)
+    // oaat=K,wt=T => leftChild.actions || hatch(F)
+    // oaat=K,wt=F => leftChild.actions || hatch(K)
+    // oaat=K,wt=K => allChildren.actions && hatch(S)
+    // oaat=K,wt=S => emptyset
+
+    if (wt >= oaat) {
+      if (DEBUG && DEBUG_SEARCH) Log.info("CASE 1: take all CHILDREN actions **AND** THIS H/P, wt=" + Node2.typeName(wt));
+      // Collect actions from all children.
+      // Add a hatch/prune from this type, e.g. oaat=F,wt=K means you should leave the option of making more K nodes
+      if (wt == preterminalType()) {
+        if (DEBUG && DEBUG_SEARCH) Log.info("(1) wt=" + Node2.typeName(wt) + " is preterminal type, skipping loop over children");
+      } else {
+        for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr()) {
+          LL<Node2> spine2 = new LL<>(cur.car(), spine);
+          added += nextStates(root, spine2, addTo);
+        }
+      }
+      if (DEBUG && DEBUG_SEARCH) Log.info("(1) added=" + added + " wife.eggsNull=" + (wife.eggs == null) + " wife.type=" + Node2.typeName(wt));
+      if (wife.eggs != null) {
+        // Consider hatch or squash
+        // Play-out the actions which lead to modified versions of this node (wife)
+        Z info = root.getInfo();
+        Node2 mother = hatch(wife, info);
+        Node2 wife2 = squash(wife, info);
+
+        // Zip everything back up to get a root reflecting these modifications
+        LL<Node2> momInLaw = spine.cdr();
+
+        Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+        Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
+
+        // Santity check to ensure replaceNode worked:
+        assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
+        assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
+        assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
+        assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
+
+        if (rootHatch != null) {
+          if (DEBUG && DEBUG_SEARCH) Log.info("adding HATCH(" + Node2.typeName(wife.eggs.car().type) + ")");
+          addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
+          added++;
+        }
+        if (rootSquash != null) {
+          if (DEBUG && DEBUG_SEARCH) Log.info("adding SQUASH(" + Node2.typeName(wife.eggs.car().type) + ")");
+          addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+          added++;
+        }
+      }
+    } else {  // oaat > wt
+      if (DEBUG && DEBUG_SEARCH) Log.info("CASE 2: take first CHILDREN actions **OR** THIS H/P, wt=" + Node2.typeName(wt));
+      // IF the first child has actions, use that set
+      // ELSE make a hatch/prune for this node (e.g. oaat=K,wt=F and the first child has no actions, then we need a new F to make a new K)
+      if (wt == preterminalType()) {
+        if (DEBUG && DEBUG_SEARCH) Log.info("(2) wt=" + Node2.typeName(wt) + " is preterminal type, skipping loop over children");
+      } else {
+        for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr()) {
+          LL<Node2> spine2 = new LL<>(cur.car(), spine);
+          added += nextStates(root, spine2, addTo);
+        }
+      }
+      if (DEBUG && DEBUG_SEARCH) Log.info("(2) added=" + added + " wife.eggsNull=" + (wife.eggs == null) + " wife.type=" + Node2.typeName(wt));
+      if (added == 0 && wife.eggs != null) {
+        // Consider hatch or squash
+        // Play-out the actions which lead to modified versions of this node (wife)
+        Z info = root.getInfo();
+        Node2 mother = hatch(wife, info);
+        Node2 wife2 = squash(wife, info);
+
+        // Zip everything back up to get a root reflecting these modifications
+        LL<Node2> momInLaw = spine.cdr();
+
+        Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+        Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
+
+        // Santity check to ensure replaceNode worked:
+        assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
+        assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
+        assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
+        assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
+
+        if (rootHatch != null) {
+          if (DEBUG && DEBUG_SEARCH) Log.info("adding HATCH(" + Node2.typeName(wife.eggs.car().type) + ")");
+          addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
+          added++;
+        }
+        if (rootSquash != null) {
+          if (DEBUG && DEBUG_SEARCH) Log.info("adding SQUASH(" + Node2.typeName(wife.eggs.car().type) + ")");
+          addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+          added++;
+        }
+      }
     }
 
-    if (wife.eggs != null && added > 0)
-      COUNTER_MISC++;
+//    // Recurse
+//    int i = 0;
+//    for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr(), i++) {
+//      if (DEBUG && DEBUG_SEARCH)
+//        Log.info("recursing on child " + i);
+//      LL<Node2> spine2 = new LL<>(cur.car(), spine);
+//      added += nextStates(root, spine2, addTo);
+//
+//      if (added > 0 && oneAtATime(wife.getType())) {
+//        // If we used break, then when oneAtATime=K we would also try to hatch
+//        // a new K node, which would then be the leftmost item in the tree and
+//        // would be the focus of attention.
+//        if (DEBUG && DEBUG_SEARCH)
+//          Log.info("returning early, wife.type=" + Node2.typeName(wife.getType()) + " added=" + added);
+//        break;
+////        return added;
+//      }
+//      if (added > 0 && DEBUG && DEBUG_SEARCH)
+//        Log.info("going down the children list, wife.type=" + Node2.typeName(wife.getType()));
+//    }
+//
+//    if (wife.eggs != null && added > 0)
+//      COUNTER_MISC++;
+//
+//    if (wife.eggs != null) {
+//      // Consider hatch or squash
+//      // Play-out the actions which lead to modified versions of this node (wife)
+//      Z info = root.getInfo();
+//      Node2 mother = hatch(wife, info);
+//      Node2 wife2 = squash(wife, info);
+//
+//      // Zip everything back up to get a root reflecting these modifications
+//      LL<Node2> momInLaw = spine.cdr();
+//
+//      if (DEBUG && DEBUG_REPLACE_NODE && mother != null)
+//        Log.info("replaceNode for HATCH at wife.type=" + Node2.typeName(wife.getType()));
+//      Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+//
+//      if (DEBUG && DEBUG_REPLACE_NODE && wife2 != null)
+//        Log.info("replaceNode for SQUASH at wife.type=" + Node2.typeName(wife.getType()));
+//      Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
+//
+//      // Santity check to ensure replaceNode worked:
+//      if (DEBUG && DEBUG_REPLACE_NODE) {
+//        Log.info("rootHatch.loss=" + Node2.getLoss(rootHatch));
+//        Log.info("rootSquash.loss=" + Node2.getLoss(rootSquash));
+//        Log.info("rootHatch.model=" + Node2.getModelScore(rootHatch));
+//        Log.info("rootSquash.model=" + Node2.getModelScore(rootSquash));
+//      }
+//      assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
+//      assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
+//      assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
+//      assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
+//
+//      if (rootHatch != null) {
+//        if (DEBUG && DEBUG_SEARCH) Log.info("adding HATCH at wife.type=" + Node2.typeName(wife.getType()));
+//        addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
+//        added++;
+//      }
+//      if (rootSquash != null) {
+//        if (DEBUG && DEBUG_SEARCH) Log.info("adding SQUASH at wife.type=" + Node2.typeName(wife.getType()));
+//        addTo.offer(new State2<Z>(rootSquash, info, "squash"));
+//        added++;
+//      }
+//    } else {
+//      if (DEBUG && DEBUG_SEARCH)
+//        Log.info("wife.eggs is null at wife.type=" + Node2.typeName(wife.getType()));
+//    }
 
-    if (wife.eggs == null) {
-      // No-op! Nothing more can be done with this node
-      // TODO add in LL<Node2> frozen (pointer) for increased efficiency
-      if (DEBUG && DEBUG_SEARCH)
-        Log.info("wife.eggs is null");
-    } else if (added == 0 || !oneAtATime(wife.getType())) {
-      // Consider hatch or squash
-      // Play-out the actions which lead to modified versions of this node (wife)
-      Z info = root.getInfo();
-      Node2 mother = hatch(wife, info);
-      Node2 wife2 = squash(wife, info);
-
-      // Zip everything back up to get a root reflecting these modifications
-      LL<Node2> momInLaw = spine.cdr();
-
-      if (DEBUG && DEBUG_REPLACE_NODE && mother != null)
-        Log.info("replaceNode for HATCH");
-      Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
-
-      if (DEBUG && DEBUG_REPLACE_NODE && wife2 != null)
-        Log.info("replaceNode for SQUASH");
-      Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
-
-      // Santity check to ensure replaceNode worked:
-      if (DEBUG && DEBUG_REPLACE_NODE) {
-        Log.info("rootHatch.loss=" + Node2.getLoss(rootHatch));
-        Log.info("rootSquash.loss=" + Node2.getLoss(rootSquash));
-        Log.info("rootHatch.model=" + Node2.getModelScore(rootHatch));
-        Log.info("rootSquash.model=" + Node2.getModelScore(rootSquash));
-      }
-      assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
-      assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
-      assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
-      assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
-
-      if (rootHatch != null) {
-        addTo.offer(new State2<Z>(rootHatch, info, "hatch"));
-        added++;
-      }
-      if (rootSquash != null) {
-        addTo.offer(new State2<Z>(rootSquash, info, "squash"));
-        added++;
-      }
-    } else {
-      if (DEBUG && DEBUG_SEARCH)
-        Log.info("skipping this node because one at a time: " + wife.prefix);
-    }
-
+    if (DEBUG && DEBUG_SEARCH) Log.info("returning from " + Node2.typeName(wife.getType()));
     return added;
   }
 
@@ -617,12 +735,14 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       assert oracleNext.size() == 0;
 
       // Expand decoder
+      if (DEBUG && DEBUG_SEARCH) Log.info("start of decoder at iter=" + iter);
       while (decCur.size() > 0) {
         State2<Z> s = decCur.pop();
         nextStates(s, decNext);
       }
 
       // Expand oracle
+      if (DEBUG && DEBUG_SEARCH) Log.info("start of oracle at iter=" + iter);
       while (oracleCur.size() > 0) {
         State2<Z> s = oracleCur.pop();
         nextStates(s, oracleNext);

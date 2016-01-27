@@ -93,17 +93,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   public int oneAtATime = TFKS.F;  // F => try hatch/squash for every K,  K => try hatch/squash for newest K
 
-  /*
-   * Automatically hatches any nodes which are not s-valued.
-   * Since all the s-valued eggs can be pruned, this does not imply that we have
-   * to add any items to the final prediction. The reason for doing this is that
-   * there is some difficulty in doing MV search when you can prune non-leaf
-   * nodes.
-   * Operationally, for a non-leaf node n, this makes scoreHatch(n)=Constant(0)
-   * and scoreSquash(n)=null
-   */
-//  public boolean disallowNonLeafPruning = true;
-
   public boolean useGlobalFeats;
   public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
 
@@ -346,12 +335,17 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public boolean oneAtATime(int type) {
-    if (type <= oneAtATime) {
-      COUNTER_MISC++;
-      return true;
-    }
-    return super.oneAtATime(type);
+//  public boolean oneAtATime(int type) {
+  public int oneAtATime() {
+    return oneAtATime;
+//    if (type <= oneAtATime) {
+//      COUNTER_MISC++;
+//      return true;
+//    }
+//    return super.oneAtATime(type);
+  }
+  public int preterminalType() {
+    return TFKS.K;
   }
 
   /**
@@ -766,7 +760,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     // BY NOW we're assuming that eggs don't have a static score/ordering
     // (at least for the node types that would be affected by this).
 
-    // () -> T
+    // () -> T*
     LLTVN l = null;
     if (momPrefix == null) {
       for (Span ts : info.getPossibleTargets()) {
@@ -1111,9 +1105,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public TVNS scoreHatch(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing hatching
 
-    if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
-      if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
-        Log.info("immediately requiring hatch of egg: " + egg);
+    if (n.getType() <= TFKS.F) {
+      // These are always right, since squash is disallowed, score of hatch is irrelevant
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
 
@@ -1158,9 +1151,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public TVNS scoreSquash(Node2 n, Info info) {
     TVN egg = n.eggs.car(); // what we're featurizing squashing
 
-    if (!Node2.INTERNAL_NODES_COUNT && n.getType() < TFKS.K) {
-      if (AbstractTransitionScheme.DEBUG && DEBUG_SEARCH)
-        Log.info("immediately preventing squash of egg: " + egg);
+    if (n.getType() <= TFKS.F) {
+      // These are always right, disallow squash
       return null;
     }
 

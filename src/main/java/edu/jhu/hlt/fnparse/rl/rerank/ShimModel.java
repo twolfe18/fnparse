@@ -28,6 +28,7 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.SimpleCFLike;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
@@ -313,18 +314,19 @@ public class ShimModel implements Serializable {
   @SuppressWarnings("unchecked")
   public static void main(String[] args) throws InterruptedException {
     ExperimentProperties config = ExperimentProperties.init(args);
-    config.putIfAbsent("oracleMode", "MIN");
+    config.putIfAbsent("oracleMode", "RAND_MIN");
     config.putIfAbsent("beamSize", "1");
-    config.putIfAbsent("oneAtATime", "" + TFKS.F);
+    config.putIfAbsent("oneAtATime", "" + TFKS.K);
     config.putIfAbsent("sortEggsMode", "BY_MODEL_SCORE");
-    config.putIfAbsent("sortEggsKmaxS", "true");
+    config.putIfAbsent("sortEggsKmaxS", "false");
     config.putIfAbsent("hashingTrickDim", "" + (1<<24));
-//    config.putIfAbsent("threads", "1");
     int threads = config.getInt("threads", 1);
     int shards = config.getInt("shards", threads);
     boolean dontTrain = config.getBoolean("dontTrain", false);
-
     boolean propbank = config.getBoolean("propbank");
+
+//    AbstractTransitionScheme.DEBUG = true;
+//    AbstractTransitionScheme.DEBUG_SEARCH = true;
 
     // Setup the official CoNLL 2005 evaluation script
     File evalOutputDir = null;
