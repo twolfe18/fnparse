@@ -48,18 +48,18 @@ if [[ $DATASET == "propbank" ]]; then
   NR=30
   PROPBANK=true
   NUM_INST=115000
+  MAX_EPOCH=20
 elif [[ $DATASET == "framenet" ]]; then
   NR=60
   PROPBANK=false
   NUM_INST=3500
+  MAX_EPOCH=50
 else
   echo "unknown dataset: $DATASET"
   exit 2
 fi
 
 DATA_HOME=/export/projects/twolfe/fnparse-data
-K_PERC_AVG=`echo "3 * $NUM_INST" | bc`
-echo "K_PERC_AVG=$K_PERC_AVG"
 
 java -XX:+UseNUMA -XX:+UseSerialGC -Xmx$MEM -server -cp $JAR \
   edu.jhu.hlt.fnparse.rl.rerank.ShimModel \
@@ -67,7 +67,7 @@ java -XX:+UseNUMA -XX:+UseSerialGC -Xmx$MEM -server -cp $JAR \
   propbank $PROPBANK \
   threads 1 \
   noApproxAfterEpoch 0 \
-  maxEpoch 10 \
+  maxEpoch $MAX_EPOCH \
   evalOutputDir $EVAL_DIR \
   conll2005srlEval /export/projects/twolfe/fnparse-data/srl-eval.pl \
   semaforEval.scriptDir /export/projects/twolfe/fnparse-data \
