@@ -102,6 +102,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // score(HATCH(K))=max_S SCORE(HATCH(S)).
   public boolean forceAllKHatches = true;
 
+  // How many S-valued eggs to look at (one hatch per) at every state?
+  private int hatchesPerK;
+
   public boolean useGlobalFeats;
   public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
 
@@ -246,6 +249,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     sortEggsKmaxS = config.getBoolean("sortEggsKmaxS", true);
     oneAtATime = config.getInt("oneAtATime", TFKS.F);
 
+    this.hatchesPerK = config.getInt("hatchesPerK", 1);
+
     this.featOverfit = config.getBoolean("featOverfit", false);
 
     this.featProdBase = config.getBoolean("featProdBase", false);
@@ -359,8 +364,18 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 //    }
 //    return super.oneAtATime(type);
   }
+
+  @Override
   public int preterminalType() {
     return TFKS.K;
+  }
+
+  @Override
+  public int hatchesPer(int type) {
+    if (type == TFKS.K)
+      return hatchesPerK;
+    else
+      return 1;
   }
 
   /**
@@ -1117,8 +1132,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   }
 
   @Override
-  public TVNS scoreHatch(Node2 n, Info info) {
-    TVN egg = n.eggs.car(); // what we're featurizing hatching
+  public TVNS scoreHatch2(Node2 n, TVN egg, Info info) {
 
     if (n.getType() <= TFKS.F) {
       // These are always right, since squash is disallowed, score of hatch is irrelevant
@@ -1165,6 +1179,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (r != 0)
       score = Adjoints.sum(score, new Adjoints.Constant(r));
     return egg.withScore(score, nextRand());
+  }
+
+  @Override
+  public TVNS scoreHatch(Node2 n, Info info) {
+    return scoreHatch2(n, n.eggs.car(), info);
   }
 
   @Override

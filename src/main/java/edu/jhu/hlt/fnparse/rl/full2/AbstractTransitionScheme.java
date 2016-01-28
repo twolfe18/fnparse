@@ -114,6 +114,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     return 0;
   }
 
+  abstract int hatchesPer(int type);
+
   // Optimization: In TFKS, return K.
   abstract int preterminalType();
 
@@ -145,6 +147,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
    */
   abstract TVNS scoreSquash(Node2 parentWhoseNextEggWillBeSquashed, Z info);
   abstract TVNS scoreHatch(Node2 parentWhoseNextEggWillBeHatched, Z info);
+  abstract TVNS scoreHatch2(Node2 parent, TVN egg, Z info);
 
   /**
    * Construct a node. Needed to be a method so that if you want to instantiate
@@ -227,16 +230,25 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     return mother;
   }
 
-  public Node2 hatchN(Node2 wife, int n, Z info) {
-    TVNS cracked = scoreHatch(wife, info); // contains score(hatch)
-    if (cracked == null)
+  public Node2 hatchN(Node2 wife, int eggI, Z info) {
+    // Store the eggs before i
+    ArrayDeque<TVN> beforeEggs = new ArrayDeque<>();
+    LLTVN cur = wife.eggs;
+    for (int i = 0; cur != null && i < eggI; cur = cur.cdr(), i++) {
+      beforeEggs.offerLast(cur.car());
+    }
+    if (cur == null) {
+      // There weren't enough eggs
       return null;
-    
-    
-    TFKS egg = wife.prefix;
-    LLTVN remainingEggs = wife.eggs.cdr();
-
-    TFKS newPrefix = consPrefix(cracked, egg, info);
+    }
+    // Take the i^th egg
+    TVNS cracked = scoreHatch2(wife, cur.car(), info);
+    // Reconstruct the eggs list with that one egg removed
+    LLTVN remainingEggs = cur.cdr();
+    while (!beforeEggs.isEmpty())
+      remainingEggs = consEggs(beforeEggs.pollLast(), remainingEggs, info);
+    // Build the new node
+    TFKS newPrefix = consPrefix(cracked, wife.prefix, info);
     LLTVN newEggs = genEggs(newPrefix, info);
     Node2 hatched = newNode(newPrefix, newEggs, null, null);
     LLSSP newChildrenhildren = consChild(hatched, wife.children, info);
@@ -463,43 +475,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       // Consider hatch or squash
       // Play-out the actions which lead to modified versions of this node (wife)
       Z info = root.getInfo();
-      Node2 mother = hatch(wife, info);
-      Node2 wife2 = squash(wife, info);
-
-      // Zip everything back up to get a root reflecting these modifications
       LL<Node2> momInLaw = spine.cdr();
 
-      Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+      Node2 wife2 = squash(wife, info);
       Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
-
-      // Santity check to ensure replaceNode worked:
-      assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
-      assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
       assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
       assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
 
-      if (rootHatch != null) {
-        String at = "HATCH(" + Node2.typeName(wife.eggs.car().type) + ")";
-        String atf = at;
-        if (fineActionString) {
-//          atf = "HATCH(" + wife.eggs.car().tvStr() + ")";
-          atf = "HATCH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
-        }
-        if (DEBUG && DEBUG_SEARCH) Log.info("adding " + at);
-        if (actionsPerStateCur != null)
-          actionsPerStateCur.increment(at);
-        State2<Z> s = new State2<Z>(rootHatch, info, at);
-        s.dbgString = root.dbgString + " " + atf;
-        addTo.offer(s);
-        added++;
-      }
       if (rootSquash != null) {
         String at = "SQUASH(" + Node2.typeName(wife.eggs.car().type) + ")";
         String atf = at;
-        if (fineActionString) {
-//          atf = "SQUASH(" + wife.eggs.car().tvStr() + ")";
+        if (fineActionString)
           atf = "SQUASH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
-        }
         if (DEBUG && DEBUG_SEARCH) Log.info("adding " + at);
         if (actionsPerStateCur != null)
           actionsPerStateCur.increment(at);
@@ -507,6 +494,29 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         s.dbgString = root.dbgString + " " + atf;
         addTo.offer(s);
         added++;
+      }
+
+      int H = hatchesPer(wife.getType());
+      for (int i = 0; i < H; i++) {
+        Node2 mother = hatchN(wife, i, info);
+        if (mother == null)
+          break;
+        Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
+        assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
+        assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
+        if (rootHatch != null) {
+          String at = "HATCH(" + Node2.typeName(wife.eggs.car().type) + ")";
+          String atf = at;
+          if (fineActionString)
+            atf = "HATCH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
+          if (DEBUG && DEBUG_SEARCH) Log.info("adding " + at);
+          if (actionsPerStateCur != null)
+            actionsPerStateCur.increment(at);
+          State2<Z> s = new State2<Z>(rootHatch, info, at);
+          s.dbgString = root.dbgString + " " + atf;
+          addTo.offer(s);
+          added++;
+        }
       }
     }
 
