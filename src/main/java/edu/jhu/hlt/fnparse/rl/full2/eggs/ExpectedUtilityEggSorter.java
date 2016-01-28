@@ -4,12 +4,14 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.IntFunction;
 
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
 import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
@@ -66,8 +68,9 @@ public class ExpectedUtilityEggSorter {
         List<Pair<TFKS, EggWithStaticScore>> fEggs,
         List<Pair<TFKS, EggWithStaticScore>> kEggs,
         boolean fEggsAreMaxOverKEggs,
-        HowToSearch howToScore) {
-      super(fEggs, kEggs, fEggsAreMaxOverKEggs, howToScore);
+        HowToSearch howToScore,
+        IntFunction<Span> decodeSpan) {
+      super(fEggs, kEggs, fEggsAreMaxOverKEggs, howToScore, decodeSpan);
 
       // In super implementation, eggs will have hts score; for K valued eggs
       // (computed as a max_S) and S valued eggs. We just need to use this as a

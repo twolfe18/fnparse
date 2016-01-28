@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.IntFunction;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -283,6 +284,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] featProdF=" + featProdF);
       Log.info("[main] featProdFK=" + featProdFK);
       Log.info("[main] featProdK=" + featProdK);
+      Log.info("[main] hatchesPerK=" + hatchesPerK);
+      Log.info("[main] sortSByL2R=" + SortedEggCache.sortSByL2R(config));
       Log.info("[main] sortEggsMode=" + sortEggsMode);
       Log.info("[main] sortEggsKmaxS=" + sortEggsKmaxS);
       Log.info("[main] oneAtATime=" + Node2.typeName(oneAtATime));
@@ -770,9 +773,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           }
         }
         if (sortEggsMode == SortEggsMode.BY_MODEL_SCORE) {
-          eggs = new SortedEggCache(egF, egK, sortEggsKmaxS, info.htsBeam);
+          IntFunction<Span> decodeSpan = s -> Span.decodeSpan(s, sentLen);
+          eggs = new SortedEggCache(egF, egK, sortEggsKmaxS, info.htsBeam, decodeSpan);
         } else if (sortEggsMode == SortEggsMode.BY_EXPECTED_UTILITY) {
-          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, sortEggsKmaxS, info.htsBeam);
+          IntFunction<Span> decodeSpan = s -> Span.decodeSpan(s, sentLen);
+          eggs = new ExpectedUtilityEggSorter.Adapter(egF, egK, sortEggsKmaxS, info.htsBeam, decodeSpan);
         } else {
           throw new RuntimeException("unknown mode: " + sortEggsMode);
         }
@@ -825,10 +830,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         int poss = subtreeSize(TFKS.K, k, momPrefix, info);
         int c = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
         long prime = primeFor(TFKS.K, k);
-
-        // TODO disallowNonLeaf pruning modification to avoid FP problems on
-        // non leaf nodes?
-
         if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
           Log.info("K poss=" + poss + " c=" + c);
         l = consEggs(new TVN(TFKS.K, k, poss, c, prime), l, info);

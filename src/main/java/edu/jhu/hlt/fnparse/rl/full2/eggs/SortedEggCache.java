@@ -1,11 +1,13 @@
 package edu.jhu.hlt.fnparse.rl.full2.eggs;
 
 import java.io.PrintStream;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.IntFunction;
 
 import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full.MaxLoss;
@@ -15,7 +17,9 @@ import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
 import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.full2.TVN;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
@@ -57,6 +61,15 @@ public class SortedEggCache {
   protected LLTVN fEggs;                      // children of F node, K values
   protected IntObjectHashMap<LLTVN> k2Eggs;   // children of K node, S values
 
+  // If you want the ability to sort spans by left-to-right while keeping your
+  // ordering over K (via either their own features or KmaxS), then flip this
+  // flag to true.
+  protected boolean sortSByL2R;
+
+  // faux pre order traversal span sort:
+  // span -> span.start + span.width/sent.length
+  // descending
+
   public static StepScores<?> e2ss(EggWithStaticScore egg) {
     // TODO We are sorting this list with the intention of doing as many
     // hatches right away followed by prunes, so we are either sorting for
@@ -64,6 +77,10 @@ public class SortedEggCache {
     // Is there a way to replace loss with a "loss assuming we hatch it" (scoreHatch)
     // or "delta loss if we hatch it vs prune it" (scoreHatch-scoreSquash).
     return new StepScores<>(null, egg.getModel(), MaxLoss.ZERO, egg.getRand());
+  }
+
+  public static boolean sortSByL2R(ExperimentProperties config) {
+    return config.getBoolean("sortSByL2R", false);
   }
 
   /**
@@ -86,7 +103,11 @@ public class SortedEggCache {
       List<Pair<TFKS, EggWithStaticScore>> fEggs,
       List<Pair<TFKS, EggWithStaticScore>> kEggs,
       boolean fEggsAreMaxOverKEggs,
-      HowToSearch howToScore) {
+      HowToSearch howToScore,
+      IntFunction<Span> decodeSpan) {
+
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    sortSByL2R = sortSByL2R(config);
 
     /*
      * TODO Current sort is based on *model score*, not *search objective*
@@ -96,7 +117,7 @@ public class SortedEggCache {
      * Should we sort by search objective instead? Probably...
      */
     this.fEggsAreMaxOverKEggs = fEggsAreMaxOverKEggs;
-    final Map<Integer, EggWithStaticScore> kScores = initKEggs(kEggs, howToScore);
+    final Map<Integer, EggWithStaticScore> kScores = initKEggs(kEggs, howToScore, decodeSpan);
 
     if (kScores != null) {
       // fEggs should all be TVNS with score of Constant(0)
@@ -189,7 +210,11 @@ public class SortedEggCache {
    * Returns a k -> Adjoints representing the best (k,s) from an s-valued egg.
    * Use this to sort k-vauled eggs if !Node.INTERNAL_NODES_COUNT
    */
-  private Map<Integer, EggWithStaticScore> initKEggs(List<Pair<TFKS, EggWithStaticScore>> kEggs, HowToSearch howToScore) {
+  private Map<Integer, EggWithStaticScore> initKEggs(
+      List<Pair<TFKS, EggWithStaticScore>> kEggs,
+      HowToSearch howToScore,
+      final IntFunction<Span> decodeSpan) {
+
     // Sort by (k,s) then score (low -> high)
     Collections.sort(kEggs, byEggScore(howToScore, true));
 
@@ -245,7 +270,54 @@ public class SortedEggCache {
       EggWithStaticScore old = kScores.put(curK, bestScore);
       assert old == null;
     }
+
+    if (sortSByL2R) {
+      // Just did sort based on model score, which we need at the very least
+      // for kScores, which determines how k-valued eggs are sorted (maybe).
+      // BUT NOW we need s-valued eggs to be sorted by left2right.
+      sortSValuedEggsByL2R(decodeSpan);
+    }
+
     return kScores;
+  }
+
+  private void sortSValuedEggsByL2R(IntFunction<Span> decodeSpan) {
+    ArrayList<TVN> buf = new ArrayList<>();
+    Comparator<TVN> left2Right = new Comparator<TVN>() {
+      /** Sort left (front of list) to right (end of list) */
+      @Override
+      public int compare(TVN o1, TVN o2) {
+        assert o1.type == TFKS.S;
+        assert o2.type == TFKS.S;
+        Span s1 = decodeSpan.apply(o1.value);
+        Span s2 = decodeSpan.apply(o2.value);
+        if (s1.start < s2.start)
+          return -1;
+        if (s1.start > s2.start)
+          return +1;
+        if (s1.width() < s2.width())
+          return -1;
+        if (s1.width() > s2.width())
+          return +1;
+        return 0;
+      }
+    };
+    // For each k->[s], pull out the values, sort them, and put them back in
+    for (int k : k2Eggs.keys()) {
+      buf.clear();
+      for (LLTVN cur = k2Eggs.get(k); cur != null; cur = cur.cdr())
+        buf.add(cur.car());
+      Collections.sort(buf, left2Right);
+      // Take in reverse order since your prepending to a LL
+      LLTVN sll = null;
+      for (int i = buf.size()-1; i >= 0; i--) {
+        if (DEBUG) {
+          Log.info("[sortSByL2R=true] i=" + i + " egg.span=" + decodeSpan.apply(buf.get(i).value));
+        }
+        sll = new LLTVN(buf.get(i), sll);
+      }
+      k2Eggs.put(k, sll);
+    }
   }
 
   public void show(PrintStream ps) {
