@@ -16,12 +16,18 @@ public class LLTVN extends LL<TVN> {
       sumGoldMatching = item.goldMatching;
       sumPossible = item.numPossible;
       numGoldMachingEqZero = a;
-      primesProd = BigInteger.valueOf(item.prime);
+      if (LLSSP.DISABLE_PRIMES)
+        primesProd = null;
+      else
+        primesProd = BigInteger.valueOf(item.prime);
     } else {
       sumGoldMatching = item.goldMatching + next.sumGoldMatching;
       sumPossible = item.numPossible + next.sumPossible;
       numGoldMachingEqZero = a + next.numGoldMachingEqZero;
-      primesProd = next.primesProd.multiply(BigInteger.valueOf(item.prime));
+      if (LLSSP.DISABLE_PRIMES)
+        primesProd = null;
+      else
+        primesProd = next.primesProd.multiply(BigInteger.valueOf(item.prime));
     }
   }
 
@@ -31,6 +37,8 @@ public class LLTVN extends LL<TVN> {
     return l.primesProd;
   }
   public BigInteger getPrimesProd() {
+    if (primesProd == null)
+      return BigInteger.ZERO;
     return primesProd;
   }
 
