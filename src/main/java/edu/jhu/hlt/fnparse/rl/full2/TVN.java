@@ -44,6 +44,10 @@ public class TVN {
     return "(TVN " + Node2.typeName(type) + ":" + value + " poss=" + numPossible + " goldMatching=" + goldMatching + ")";
   }
 
+  public String tvStr() {
+    return Node2.typeName(type) + ":" + value;
+  }
+
   public TVNS withScore(Adjoints model, double rand) {
     return new TVNS(type, value, numPossible, goldMatching, prime, model, rand);
   }

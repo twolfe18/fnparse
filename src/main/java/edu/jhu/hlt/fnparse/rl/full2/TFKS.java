@@ -115,6 +115,11 @@ public class TFKS extends LL<TVNS> {
     return dumbPrepend(typeValue.type, typeValue.value);
   }
 
+  public static TFKS dumbCons(TVN car, TFKS cdr) {
+    TVNS t = new TVNS(car.type, car.value, -1, -1, 1, null, Double.NaN);
+    return new TFKS(t, cdr);
+  }
+
   public boolean isFull() {
     if (s >= 0) {
       assert t >= 0;

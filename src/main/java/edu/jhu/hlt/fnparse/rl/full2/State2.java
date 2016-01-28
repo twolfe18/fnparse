@@ -14,7 +14,7 @@ import edu.jhu.hlt.fnparse.rl.full.StepScores;
  *
  * @author travis
  */
-public class State2<T>/* extends HowToSearch>*/ implements StateLike {
+public class State2<T> implements StateLike {
   private Node2 root;
   private T info;
   private int hash;

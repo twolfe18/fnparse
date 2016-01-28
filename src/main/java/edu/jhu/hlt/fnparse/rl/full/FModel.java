@@ -55,6 +55,7 @@ import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
+import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
@@ -210,6 +211,10 @@ public class FModel implements Serializable {
 
   public Config getConfig() {
     return conf;
+  }
+
+  public OracleMode getOracleMode() {
+    return rtConf.oracleMode;
   }
 
   public void setCachedFeatures(CFLike cf) {
@@ -418,8 +423,10 @@ public class FModel implements Serializable {
     return yhat;
   }
 
-  State2<Info> oracleS(FNParse y, FNParseTransitionScheme ts) {
-    assert !maxViolation;
+  public State2<Info> oracleS(FNParse y, FNParseTransitionScheme ts) {
+//    assert !maxViolation;
+    if (maxViolation)
+      Log.warn("perceptron has its own oracle, use getUpdate or predict; maxViolation=true");
     AbstractTransitionScheme.DEBUG_ORACLE_FN = true;
     Pair<Info, Info> ormv = getOracleAndMvInfo(y, ts);
     Info oracleInf = ormv.get1();
@@ -432,11 +439,11 @@ public class FModel implements Serializable {
     AbstractTransitionScheme.DEBUG_ORACLE_FN = false;
     return s;
   }
-  FNParse oracleY(FNParse y, FNParseTransitionScheme ts) {
+  public FNParse oracleY(FNParse y, FNParseTransitionScheme ts) {
     return ts.decode(oracleS(y, ts));
   }
 
-  State2<Info> mostViolatedS(FNParse y, FNParseTransitionScheme ts) {
+  public State2<Info> mostViolatedS(FNParse y, FNParseTransitionScheme ts) {
     assert !maxViolation;
     Pair<Info, Info> ormv = getOracleAndMvInfo(y, ts);
     Info mvInf = ormv.get2();
@@ -448,7 +455,7 @@ public class FModel implements Serializable {
     State2<Info> s = mvS.get1();
     return s;
   }
-  FNParse mostVoilatedY(FNParse y, FNParseTransitionScheme ts) {
+  public FNParse mostVoilatedY(FNParse y, FNParseTransitionScheme ts) {
     return ts.decode(mostViolatedS(y, ts));
   }
 

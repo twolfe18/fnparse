@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -91,7 +92,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   // the S hatch actions beneath it.
   public boolean sortEggsKmaxS = true;
 
-  public int oneAtATime = TFKS.F;  // F => try hatch/squash for every K,  K => try hatch/squash for newest K
+  public int oneAtATime = TFKS.F;
+
+  // Does what it says. Only reason to do SQUASH(K) is to skip a whole bunch of
+  // PRUNE(S)s, but I'm not sure it is worth it now given that I have no confidence
+  // in this model's ability to properly score SQUASH(K)s.
+  // The main problem is the interaction between onlyUseHatchWeights, meaning
+  // score(SQUASH(K))=-score(HATCH(K)), and eggScoresKmaxS=true, meaning
+  // score(HATCH(K))=max_S SCORE(HATCH(S)).
+  public boolean forceAllKHatches = true;
 
   public boolean useGlobalFeats;
   public boolean onlyUseHatchWeights = true;    // and thus scoreHatch(n) = -scoreSquash(n) unless other special cases apply
@@ -181,6 +190,12 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     if (wHatch != null) wHatch.scale(alpha, includeAverage);
     if (wSquash != null) wSquash.scale(alpha, includeAverage);
     if (wGlobal != null) wGlobal.scale(alpha, includeAverage);
+  }
+
+  public void gaussianFill(Random r) {
+    if (wHatch != null) wHatch.gaussianFill(r);
+    if (wSquash != null) wSquash.gaussianFill(r);
+    if (wGlobal != null) wGlobal.gaussianFill(r);
   }
 
   @Override
@@ -1110,6 +1125,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
 
+    if (forceAllKHatches && n.getType() == TFKS.F) {
+      // scoreSquash always returns null (-infinity), so 0 is fine
+      return egg.withScore(Adjoints.Constant.ZERO, 0);
+    }
+
     if (unlicensedContOrRefRole(n, info)) {
       // Don't allow this to be hatched
       return null;
@@ -1153,6 +1173,10 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     if (n.getType() <= TFKS.F) {
       // These are always right, disallow squash
+      return null;
+    }
+
+    if (forceAllKHatches && n.getType() == TFKS.F) {
       return null;
     }
 

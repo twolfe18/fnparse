@@ -67,6 +67,14 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
     this.passiveAgressive = pa;
   }
 
+  public void gaussianFill(Random r) {
+    int D = dimension();
+    for (int i = 0; i < D; i++)
+      w.set(i, r.nextGaussian());
+    u.scale(0);
+    c = 0;
+  }
+
   /**
    * Only allows calls to getWeight, which is overriddent to actually call
    * getAverageWeight. Allocates no space other than a pointer to the

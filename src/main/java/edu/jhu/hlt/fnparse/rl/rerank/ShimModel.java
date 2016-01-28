@@ -28,8 +28,9 @@ import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.SimpleCFLike;
-import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
+import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.params.DecoderBias;
 import edu.jhu.hlt.fnparse.rl.params.Params;
@@ -40,6 +41,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**
  * This is a shim designed to replace {@link Reranker}.
@@ -365,7 +367,7 @@ public class ShimModel implements Serializable {
       File bf = config.getExistingFile("bialph", new File(dd, "coherent-shards-filtered-small/alphabet.txt"));
       BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
       File fsParent = config.getFile("featureSetParent", dd);
-      int fsC = config.getInt("fsC", 8);
+      int fsC = config.getInt("fsC", 16);
       int fsN = config.getInt("fsN", 1280);
       File featureSetFile = config.getExistingFile("featureSet", new File(fsParent, "propbank-" + fsC + "-" + fsN + ".fs"));
       int[] template2cardinality = bialph.makeTemplate2Cardinality();
@@ -432,6 +434,8 @@ public class ShimModel implements Serializable {
     assert !FModel.overlappingIds2(train, test);
     assert !FModel.overlappingIds2(train, dev);
     assert !FModel.overlappingIds2(test, dev);
+    
+    boolean debugTS = config.getBoolean("debugTS", false);
 
     // After this many epochs, spend time to compute the full average
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
@@ -439,6 +443,43 @@ public class ShimModel implements Serializable {
     int maxEpoch = config.getInt("maxEpoch", 20);
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
       Log.info("starting epoch=" + epoch);
+      
+      
+      
+      
+      
+      // DEBUGGING!
+      if (debugTS) {
+        // Count the number of actions per state there are.
+        // Use prediction inference with randomly initialized parameters.
+        FNParseTransitionScheme ts = m.getShardWeights(new Shard(0, shards));
+        ts.gaussianFill(rand);
+        FNParse y = ReservoirSample.sampleOne(train, rand).parse;
+
+//        m.predict(y, ts);
+
+//        AbstractTransitionScheme.DEBUG = true;
+//        AbstractTransitionScheme.DEBUG_BEAM = true;
+//        m.getUpdate(y, ts);
+
+        State2<Info> os = m.oracleS(y, ts);
+        System.out.println(y.getId());
+        System.out.println(m.getOracleMode());
+        System.out.println(os.dbgString);
+
+        List<String> aps = ts.getActionsPerState();
+        for (int i = 0; i < aps.size(); i++) {
+          System.out.println("counts of actions out of state[" + i + "]: " + aps.get(i));
+        }
+
+//        continue;
+        return;
+      }
+      
+      
+      
+      
+      
 
       // Run perceptron on each shard separately
       Collections.shuffle(train, rand);
