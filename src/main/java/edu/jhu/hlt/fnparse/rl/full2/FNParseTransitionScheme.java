@@ -715,14 +715,14 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           int goldK = info.getLabel().getCounts2(TFKS.K, k, momPrefix);
           long primeK = primeFor(TFKS.K, k);
 
-          Adjoints modelK = staticFeats0(
-              new TVN(TFKS.K, k, -1, -1, 1), momPrefix, info, wHatch);
-
-          double randK = nextRand();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
+          Adjoints modelK = staticFeats0(
+              prefixK, info, wHatch);
+          double randK = nextRand();
           EggWithStaticScore ef = new EggWithStaticScore(
               TFKS.K, k, possK, goldK, primeK, modelK, randK);
           egF.add(new Pair<>(prefixK, ef));
+
           for (Span argSpan : possArgSpans) {
             int s = Span.encodeSpan(argSpan, sentLen);
             int possS = subtreeSize(TFKS.S, s, prefixK, info);
@@ -736,11 +736,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
              *
              * NOTE: In scoreHatch, I need to catch these features!
              */
-            Adjoints staticScore = staticFeats0(
-                new TVN(TFKS.S, s, -1, -1, 1), prefixK, info, wHatch);
-
-            double randS = nextRand();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
+            double randS = nextRand();
+            Adjoints staticScore = staticFeats0(prefixS, info, wHatch);
             EggWithStaticScore es = new EggWithStaticScore(
                 TFKS.S, s, possS, goldS, primeS, staticScore, randS);
             egK.add(new Pair<>(prefixS, es));
@@ -941,112 +939,121 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     return a;
   }
 
-  private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
+//  private List<ProductIndex> staticFeats1Compute(TVN egg, TFKS motherPrefix, Info info, List<ProductIndex> addTo, int dimension) {
+  private List<ProductIndex> staticFeats1Compute(TFKS eggPrefix, Info info, List<ProductIndex> addTo, int dimension) {
     // TODO Same refactoring as in dynFeats1
     if (featOverfit) {
-      TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
-      TFKS prefix = consPrefix(removeMe, motherPrefix, info);
-      String fs = prefix.str();
-      int i = alph.lookupIndex(fs, true);
-      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-        Log.info("wHatch[this]=" + wHatch.getWeight(i)
-          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.getWeight(i) : wSquash.getWeight(i))
-          + " fs=" + fs);
-      }
-      addTo.add(PI_STAT_S.destructiveProd(i)); // destroys card, can't prod in any more features
-    } else {
-
-      // What to do if this is a T-valued or F-valued egg?
-      // The only eggs which will be present are positive examples, so one indicator feature should be sufficient
-      if (motherPrefix == null || motherPrefix.car().type == TFKS.T) {
-        // I'm ok with this possible collision...
-        addTo.add(PI_STAT_T.prod(42, dimension));
-        return addTo;
-      }
-
-      if (motherPrefix.car().type == TFKS.F) {
-        // Simple features for k-valued children
-        assert egg.type == TFKS.K;
-        int k = egg.value;
-//        ProductIndex fk = PI_STAT_K
-//            .prod(motherPrefix.f, info.numFrames())
-//            .prod(k, numRoles(motherPrefix, info));
-//        addTo.add(fk);
-        // F features don't discriminate K values
-        // K features may not generalize well, don't have time to tune this.
-        // Stick with just a FK feature here.
-        FrameRolePacking frp = info.getFRPacking();
-        int fk = frp.index(getFrame(motherPrefix, info), k);
-        int FK = frp.size();
-        addTo.add(PI_STAT_K.prod(fk, FK));
-        return addTo;
-      }
-
-      if (motherPrefix.car().type == TFKS.K) {
-        // Rich (static) features for s-valued children
-        assert cachedFeatures != null : "forget to set CachedFeatures?";
-        Sentence sent = info.getSentence();
-        int sentLen = sent.size();
-        Span t = Span.decodeSpan(motherPrefix.t, sentLen);
-        Span s = Span.decodeSpan(egg.value, sentLen); assert egg.type == TFKS.S;
-        FrameIndex fi = info.getFrameIndex();
-        Frame frame = fi.getFrame(motherPrefix.f);
-
-        // These are exact feature indices (from disk, who precompute pipeline)
-        COUNTER_COMPUTE_FEATS++;
-        List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
-
-        if (featProdBase) {
-          for (ProductIndex pi : feats) {
-            long i = pi.getProdFeature();
-            addTo.add(PI_STAT_S.destructiveProd(i));
-          }
-        }
-
-        if (featProdF) {
-          int f = frame.getId();
-          int F = fi.getNumFrames();
-          for (ProductIndex pi : feats) {
-            long i = pi.getProdFeature();
-            addTo.add(PI_STAT_S_F.prod(f, F).destructiveProd(i));
-          }
-        }
-
-        if (featProdFK) {
-          FrameRolePacking frp = info.getFRPacking();
-          int fk = frp.index(frame, motherPrefix.k);
-          int FK = frp.size();
-          for (ProductIndex pi : feats) {
-            long i = pi.getProdFeature();
-            addTo.add(PI_STAT_S_FK.prod(fk, FK).destructiveProd(i));
-          }
-        }
-
-        if (featProdK) {
-//          int k = motherPrefix.k;
-//          int K = frame.numRoles();
-          RolePacking rp = info.getRPacking();
-          int k = rp.getRole(frame, motherPrefix.k);
-          int K = rp.size();
-          for (ProductIndex pi : feats) {
-            long i = pi.getProdFeature();
-            addTo.add(PI_STAT_S_K.prod(k, K).destructiveProd(i));
-          }
-        }
-
-        return addTo;
-      }
-
-      throw new RuntimeException("forget a case? " + motherPrefix);
+      //      TVNS removeMe = egg.withScore(Adjoints.Constant.ZERO, 0);
+      //      TFKS prefix = consPrefix(removeMe, motherPrefix, info);
+      //      String fs = prefix.str();
+      //      int i = alph.lookupIndex(fs, true);
+      //      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+      //        Log.info("wHatch[this]=" + wHatch.getWeight(i)
+      //          + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.getWeight(i) : wSquash.getWeight(i))
+      //          + " fs=" + fs);
+      //      }
+      //      addTo.add(PI_STAT_S.destructiveProd(i)); // destroys card, can't prod in any more features
+      throw new RuntimeException("re-implement me");
     }
-    return addTo;
+
+    final int eggType = eggPrefix.car().type;
+
+    // What to do if this is a T-valued or F-valued egg?
+    // The only eggs which will be present are positive examples, so one indicator feature should be sufficient
+    //      if (motherPrefix == null || motherPrefix.car().type == TFKS.T) {
+    if (eggType == TFKS.F) {
+      // I'm ok with this possible collision...
+      addTo.add(PI_STAT_T.prod(42, dimension));
+      return addTo;
+    }
+
+    //      if (motherPrefix.car().type == TFKS.F) {
+    if (eggType == TFKS.K) {
+      // Simple features for k-valued children
+      //        int k = egg.value;
+      int k = eggPrefix.car().value;
+      //        ProductIndex fk = PI_STAT_K
+      //            .prod(motherPrefix.f, info.numFrames())
+      //            .prod(k, numRoles(motherPrefix, info));
+      //        addTo.add(fk);
+      // F features don't discriminate K values
+      // K features may not generalize well, don't have time to tune this.
+      // Stick with just a FK feature here.
+      FrameRolePacking frp = info.getFRPacking();
+      int fk = frp.index(getFrame(eggPrefix, info), k);
+      int FK = frp.size();
+      addTo.add(PI_STAT_K.prod(fk, FK));
+      return addTo;
+    }
+
+    //      if (motherPrefix.car().type == TFKS.K) {
+    if (eggType == TFKS.S) {
+      // Rich (static) features for s-valued children
+      assert cachedFeatures != null : "forget to set CachedFeatures?";
+      Sentence sent = info.getSentence();
+      int sentLen = sent.size();
+      Span t = Span.decodeSpan(eggPrefix.t, sentLen);
+      Span s = Span.decodeSpan(eggPrefix.s, sentLen);
+      FrameIndex fi = info.getFrameIndex();
+      Frame frame = fi.getFrame(eggPrefix.f);
+
+      // These are exact feature indices (from disk, who precompute pipeline)
+      COUNTER_COMPUTE_FEATS++;
+      List<ProductIndex> feats = cachedFeatures.getFeaturesNoModulo(sent, t, s);
+
+      if (featProdBase) {
+        for (ProductIndex pi : feats) {
+          long i = pi.getProdFeature();
+          addTo.add(PI_STAT_S.destructiveProd(i));
+        }
+      }
+
+      if (featProdF) {
+        int f = frame.getId();
+        int F = fi.getNumFrames();
+        ProductIndex p = PI_STAT_S_F.prod(f, F);
+        for (ProductIndex pi : feats) {
+          long i = pi.getProdFeature();
+          addTo.add(p.destructiveProd(i));
+        }
+      }
+
+      if (featProdFK) {
+        FrameRolePacking frp = info.getFRPacking();
+        int fk = frp.index(frame, eggPrefix.k);
+        int FK = frp.size();
+        ProductIndex p = PI_STAT_S_FK.prod(fk, FK);
+        for (ProductIndex pi : feats) {
+          long i = pi.getProdFeature();
+          addTo.add(p.destructiveProd(i));
+        }
+      }
+
+      if (featProdK) {
+        //          int k = motherPrefix.k;
+        //          int K = frame.numRoles();
+        RolePacking rp = info.getRPacking();
+        int k = rp.getRole(frame, eggPrefix.k);
+        int K = rp.size();
+        ProductIndex p = PI_STAT_S_K.prod(k, K);
+        for (ProductIndex pi : feats) {
+          long i = pi.getProdFeature();
+          addTo.add(p.destructiveProd(i));
+        }
+      }
+
+      return addTo;
+    }
+
+    throw new RuntimeException("forget a case? " + eggPrefix);
   }
-  public Adjoints staticFeats0(Node2 n, Info info, ProductIndexWeights weights) {
-    assert n.eggs != null : "hatch/squash both require an egg!";
-    TVN egg = n.eggs.car();
-    return staticFeats0(egg, n.prefix, info, weights);
-  }
-  public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, ProductIndexWeights weights) {
+//  public Adjoints staticFeats0(Node2 n, Info info, ProductIndexWeights weights) {
+//    assert n.eggs != null : "hatch/squash both require an egg!";
+//    TVN egg = n.eggs.car();
+//    return staticFeats0(egg, n.prefix, info, weights);
+//  }
+//  public Adjoints staticFeats0(TVN egg, TFKS motherPrefix, Info info, ProductIndexWeights weights) {
+  public Adjoints staticFeats0(TFKS eggPrefix, Info info, ProductIndexWeights weights) {
     assert (weights == wHatch) != (weights == wSquash);
     boolean flip = false;
     if (onlyUseHatchWeights && weights != wHatch) {
@@ -1061,10 +1068,11 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     } else {
       m = weights == wHatch ? info.staticHatchFeatCache : info.staticSquashFeatCache;
     }
-    TFKS memoKey = motherPrefix.dumbPrepend(egg);
+    TFKS memoKey = eggPrefix; //motherPrefix.dumbPrepend(egg);
     Caching pia = m.get(memoKey);
     if (pia == null) {
-      List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
+//      List<ProductIndex> feats = staticFeats1Compute(egg, motherPrefix, info, new ArrayList<>(), weights.dimension());
+      List<ProductIndex> feats = staticFeats1Compute(eggPrefix, info, new ArrayList<>(), weights.dimension());
       boolean convertList2Array = true;
       pia = new Caching(weights.score(feats, convertList2Array));
       m.put(memoKey, pia);
@@ -1136,7 +1144,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       // Compute static features for the first time
       if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("computing static features for the first time");
-      score = staticFeats0(n, info, wHatch);
+      TFKS eggPrefix = TFKS.dumbCons(egg, n.prefix);
+      score = staticFeats0(eggPrefix, info, wHatch);
     }
 
     // Dynamic score
@@ -1181,7 +1190,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return egg.withScore(Adjoints.Constant.ZERO, 0);
     }
 
-    Adjoints score = staticFeats0(n, info, wSquash);
+    TFKS eggPrefix = TFKS.dumbCons(egg, n.prefix);
+    Adjoints score = staticFeats0(eggPrefix, info, wSquash);
 //    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
 //    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
 //      staticScore.nameOfWeights = "squashStatic";
