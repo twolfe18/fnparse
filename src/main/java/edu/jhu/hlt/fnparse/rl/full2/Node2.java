@@ -49,10 +49,10 @@ public class Node2 implements HasStepScores, HasSig {
   // If this is true, then internal nodes count towards FPs and FNs. This is more
   // important for FPs because a FN on an internal node still implies a FN on a
   // leaf. Transition schemes which implement encode should respect this flag.
-  public static boolean INTERNAL_NODES_COUNT = false;
+  public static final boolean INTERNAL_NODES_COUNT = false;
 
-  public static boolean DEBUG = false;
-  public static boolean DEBUG_INIT = false;
+  public static final boolean DEBUG = false;
+  public static final boolean DEBUG_INIT = false;
 
   // Conceptual note: each of these is a sub-class of either LL<TVN> or LL<Node2>
   public final TFKS prefix;   // path from root, including this nodes (type,value)

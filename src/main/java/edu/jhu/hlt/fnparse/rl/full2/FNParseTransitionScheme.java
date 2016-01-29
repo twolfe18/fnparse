@@ -339,14 +339,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public void zeroOutWeights(boolean includeWeightSums) {
     if (MAIN_LOGGING)
       Log.info("[main] zeroing weights, includeWeightSums=" + includeWeightSums);
-//    if (wHatch != null) wHatch.scale(0);
-//    if (wSquash != null) wSquash.scale(0);
-//    if (wGlobal != null) wGlobal.scale(0);
-//    if (includeWeightSums) {
-//      if (wHatchSum != null) wHatchSum.scale(0);
-//      if (wSquashSum != null) wSquashSum.scale(0);
-//      if (wGlobalSum != null) wGlobalSum.scale(0);
-//    }
     if (wHatch != null) wHatch.zeroWeights();
     if (wSquash != null) wSquash.zeroWeights();
     if (wGlobal != null) wGlobal.zeroWeights();
@@ -654,7 +646,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
   @Override
   public LLTVN genEggs(TFKS momPrefix, Info info) {
-    if (AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
+    if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_GEN_EGGS)
       Log.info("prefix=" + momPrefix);
     int momType = momPrefix == null ? -1 : momPrefix.car().type;
     if (momType == TFKS.S)
@@ -693,7 +685,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
         (momPrefix.car().type == TFKS.F
         || momPrefix.car().type == TFKS.K)
         && sortEggsMode != SortEggsMode.NONE) {
-      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+      if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("using SortedEggCache to pre-compute static scores for eggs and sort them");
 
       // TODO Right now we compute all K and S valued eggs, refactor so that
@@ -725,10 +717,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
           Adjoints modelK = staticFeats0(
               new TVN(TFKS.K, k, -1, -1, 1), momPrefix, info, wHatch);
-//          if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-//            modelK.nameOfWeights = "pre-computed genEggs(K) features";
-//            modelK.showUpdatesWith = alph;
-//          }
 
           double randK = nextRand();
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
@@ -750,20 +738,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
              */
             Adjoints staticScore = staticFeats0(
                 new TVN(TFKS.S, s, -1, -1, 1), prefixK, info, wHatch);
-
-//            if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-//              staticScore.nameOfWeights = "pre-computed genEggs(S) features";
-//              staticScore.showUpdatesWith = alph;
-//              Log.info("staticScore for egg: " + staticScore);
-//            }
-
-//            if (AbstractTransitionScheme.DEBUG) {
-//              System.out.println("possible problem with prefix:");
-//              System.out.println("momPrefix=" + momPrefix);
-//              System.out.println("goldS=" + goldS);
-//              System.out.println("possS=" + possS);
-//              assert possS >= goldS;
-//            }
 
             double randS = nextRand();
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
@@ -949,7 +923,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private List<ProductIndex> dynFeats2(Node2 n, Info info, List<ProductIndex> addTo, int dimension) {
     for (String fs : dynFeats1(n, info)) {
       int i = alph.lookupIndex(fs, true);
-      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
+      if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
         Log.info("wHatch[this]=" + wHatch.getWeight(i)
           + " wSquash[this]=" + (onlyUseHatchWeights ? -wHatch.getWeight(i) : wSquash.getWeight(i))
           + " fs=" + fs);
@@ -1154,13 +1128,13 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     Adjoints score;
     if (egg instanceof EggWithStaticScore) {
       // Recover the static features which were computed in genEggs
-      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+      if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("recovering static features from EggWithStaticScore");
       EggWithStaticScore eggSS = (EggWithStaticScore) egg;
       score = eggSS.getModel();
     } else {
       // Compute static features for the first time
-      if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
+      if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("computing static features for the first time");
       score = staticFeats0(n, info, wHatch);
     }

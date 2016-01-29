@@ -64,6 +64,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         + " COUNTER_MISC=" + COUNTER_MISC);
   }
 
+  // Set this to false to statically remove debugging statements
+  public static final boolean DEBUG_KIBASH = false;
+
   public static boolean DEBUG = false;
   public static boolean DEBUG_SEARCH = false;
   public static boolean DEBUG_ACTION_MAX_LOSS = false;
@@ -71,6 +74,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
   public static boolean DEBUG_REPLACE_NODE = false;
   public static boolean DEBUG_PERCEPTRON = false;
   public static boolean DEBUG_BEAM = false;
+  public static boolean DEBUG_KEEP_STATE_DERIVATION_STRINGS = false;
 
   // Only turn this one during oracle searches
   public static boolean DEBUG_ORACLE_FN = false;
@@ -221,7 +225,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     Node2 hatched = newNode(newPrefix, newEggs, null, null);
     LLSSP newChildrenhildren = consChild(hatched, wife.children, info);
     Node2 mother = newNode(wife.prefix, wife.eggs.cdr(), wife.pruned, newChildrenhildren);
-    if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = mother.getStepScores().getLoss();
       Log.info("wife:   " + wl);
@@ -263,7 +267,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       return null;
     LLTVNS newPruned = consPruned(cracked, wife.pruned, info);
     Node2 wife2 = newNode(wife.prefix, wife.eggs.cdr(), newPruned, wife.children);
-    if (DEBUG && DEBUG_ACTION_MAX_LOSS) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_ACTION_MAX_LOSS) {
       MaxLoss wl = wife.getStepScores().getLoss();
       MaxLoss ml = wife2.getStepScores().getLoss();
       Log.info("wife:  " + wl);
@@ -301,18 +305,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
    */
   public Node2 replaceNode(LL<Node2> spine, Node2 searchChild, Node2 replaceChild, Z info) {
     COUNTER_ZIPPER++;
-    if (DEBUG && DEBUG_REPLACE_NODE) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_REPLACE_NODE) {
       System.out.println("searchChild.loss=" + searchChild.getLoss());
       System.out.println("replaceChild.loss=" + replaceChild.getLoss());
       System.out.println("searchChild.model=" + searchChild.getModelScore());
       System.out.println("replaceChild.model=" + replaceChild.getModelScore());
     }
     if (spine == null) {
-      if (DEBUG && DEBUG_REPLACE_NODE)
+      if (DEBUG_KIBASH && DEBUG && DEBUG_REPLACE_NODE)
         System.out.println("returning b/c spine is null");
       return replaceChild;
     }
-    if (DEBUG && DEBUG_REPLACE_NODE) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_REPLACE_NODE) {
       System.out.println("starting:");
       if (replaceChild.getLoss().fn > 0)
         System.out.println("break");
@@ -327,7 +331,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       newChildren = newChildren.cdr();
     }
 
-    if (DEBUG && DEBUG_REPLACE_NODE) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_REPLACE_NODE) {
       System.out.println("parent.children.length=" + parent.children.length
           + " stack.size=" + stack.size());
     }
@@ -346,7 +350,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     Node2 newParent = newNode(parent.prefix, parent.eggs, parent.pruned, newChildren);
 
     // Santity check
-    if (DEBUG && DEBUG_REPLACE_NODE) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_REPLACE_NODE) {
       System.out.println("newParent.loss=" + newParent.getLoss());
       System.out.println("parent.loss=" + parent.getLoss());
       System.out.println("newParent.model=" + newParent.getModelScore());
@@ -368,7 +372,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         boolean a = false;
         if (nextBeam != null) {
           boolean b = nextBeam.offer(next);
-          if (DEBUG && DEBUG_SEARCH) {
+          if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) {
             SearchCoefficients c = nextBeam.getCoefficients();
             StepScores<?> ss = next.getStepScores();
             System.out.println("[nextBeam offer] add=" + b
@@ -402,13 +406,16 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     return actionsPerStateAll;
   }
   public void nextStates(State2<Z> root, Beam<State2<Z>> addTo) {
-    actionsPerStateCur = new Counts<>();
+    if (DEBUG_KIBASH)
+      actionsPerStateCur = new Counts<>();
 
     LL<Node2> spine = new LL<>(root.getRoot(), null);
     nextStates(root, spine, addTo);
 
-    String aps = actionsPerStateCur.toString();
-    actionsPerStateAll.add(aps);
+    if (DEBUG_KIBASH) {
+      String aps = actionsPerStateCur.toString();
+      actionsPerStateAll.add(aps);
+    }
   }
 
   /**
@@ -429,9 +436,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     int added = 0;
     final int oaat = oneAtATime();
     final int wt = wife.getType();
-    final String wts = Node2.typeName(wt);
+    final String wts = DEBUG_KIBASH ? null : Node2.typeName(wt);
 
-    if (DEBUG && DEBUG_SEARCH) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) {
       Log.info("expanding from wife:");
       System.out.println("root score: " + root.getStepScores());
       System.out.println("ooat=" + Node2.typeName(oaat));
@@ -451,7 +458,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     // oaat=K,wt=K => allChildren.actions && hatch(S)
     // oaat=K,wt=S => emptyset
 
-    if (DEBUG && DEBUG_SEARCH) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) {
       if (wt >= oaat)
         Log.info("CASE 1: take all CHILDREN actions **AND** THIS H/P, wt=" + wts);
       else
@@ -460,7 +467,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     // IF the first child has actions, use that set
     // ELSE make a hatch/prune for this node (e.g. oaat=K,wt=F and the first child has no actions, then we need a new F to make a new K)
     if (wt == preterminalType()) {
-      if (DEBUG && DEBUG_SEARCH)
+      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH)
         Log.info("wt=" + Node2.typeName(wt) + " is preterminal type, skipping loop over children");
     } else {
       for (LL<Node2> cur = wife.children; cur != null; cur = cur.cdr()) {
@@ -468,7 +475,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         added += nextStates(root, spine2, addTo);
       }
     }
-    if (DEBUG && DEBUG_SEARCH)
+    if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH)
       Log.info("added=" + added + " wife.eggsNull=" + (wife.eggs == null) + " wife.type=" + wts);
 
     if (wife.eggs != null && (wt >= oaat || added == 0)) {
@@ -479,19 +486,23 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
 
       Node2 wife2 = squash(wife, info);
       Node2 rootSquash = wife2 == null ? null : replaceNode(momInLaw, wife, wife2, info);
-      assert rootSquash == null || rootSquash.getLoss().fn >= wife2.getLoss().fn;
-      assert rootSquash == null || rootSquash.getLoss().fp >= wife2.getLoss().fp;
-
       if (rootSquash != null) {
-        String at = "SQUASH(" + Node2.typeName(wife.eggs.car().type) + ")";
-        String atf = at;
-        if (fineActionString)
-          atf = "SQUASH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
-        if (DEBUG && DEBUG_SEARCH) Log.info("adding " + at);
-        if (actionsPerStateCur != null)
-          actionsPerStateCur.increment(at);
+        assert rootSquash.getLoss().fn >= wife2.getLoss().fn;
+        assert rootSquash.getLoss().fp >= wife2.getLoss().fp;
+        String at = null, atf = null;
+        if (DEBUG_KIBASH) {
+          at = "SQUASH(" + Node2.typeName(wife.eggs.car().type) + ")";
+          atf = at;
+          if (fineActionString)
+            atf = "SQUASH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
+          if (DEBUG && DEBUG_SEARCH)
+            Log.info("adding " + at);
+          if (actionsPerStateCur != null)
+            actionsPerStateCur.increment(at);
+        }
         State2<Z> s = new State2<Z>(rootSquash, info, at);
-        s.dbgString = root.dbgString + " " + atf;
+        if (DEBUG_KIBASH && DEBUG_KEEP_STATE_DERIVATION_STRINGS)
+          s.dbgString = root.dbgString + " " + atf;
         addTo.offer(s);
         added++;
       }
@@ -502,25 +513,31 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         if (mother == null)
           break;
         Node2 rootHatch = mother == null ? null : replaceNode(momInLaw, wife, mother, info);
-        assert rootHatch == null || rootHatch.getLoss().fn >= mother.getLoss().fn;
-        assert rootHatch == null || rootHatch.getLoss().fp >= mother.getLoss().fp;
         if (rootHatch != null) {
-          String at = "HATCH(" + Node2.typeName(wife.eggs.car().type) + ")";
-          String atf = at;
-          if (fineActionString)
-            atf = "HATCH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
-          if (DEBUG && DEBUG_SEARCH) Log.info("adding " + at);
-          if (actionsPerStateCur != null)
-            actionsPerStateCur.increment(at);
+          assert rootHatch.getLoss().fn >= mother.getLoss().fn;
+          assert rootHatch.getLoss().fp >= mother.getLoss().fp;
+          String at = null, atf = null;
+          if (DEBUG_KIBASH) {
+            at = "HATCH(" + Node2.typeName(wife.eggs.car().type) + ")";
+            atf = at;
+            if (fineActionString)
+              atf = "HATCH(" + TFKS.dumbCons(wife.eggs.car(), wife.prefix).str() + ")";
+            if (DEBUG && DEBUG_SEARCH)
+              Log.info("adding " + at);
+            if (actionsPerStateCur != null)
+              actionsPerStateCur.increment(at);
+          }
           State2<Z> s = new State2<Z>(rootHatch, info, at);
-          s.dbgString = root.dbgString + " " + atf;
+          if (DEBUG_KIBASH && DEBUG_KEEP_STATE_DERIVATION_STRINGS)
+            s.dbgString = root.dbgString + " " + atf;
           addTo.offer(s);
           added++;
         }
       }
+
     }
 
-    if (DEBUG && DEBUG_SEARCH)
+    if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH)
       Log.info("returning from " + wts);
 
     return added;
@@ -538,7 +555,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       HowToSearch beamSearch,
       HowToSearch constraints,
       List<State2<Z>> storeBestItemOnBeamAtEveryIter) {
-    if (DEBUG && (DEBUG_SEARCH || DEBUG_COLLAPSE)) {
+    if (DEBUG_KIBASH && DEBUG && (DEBUG_SEARCH || DEBUG_COLLAPSE)) {
 //      Log.info("starting inference from state:");
       Log.info("starting inference...");
       Log.info("htsBeam=" + beamSearch);
@@ -559,10 +576,10 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     State2<Z> lastState = null;
     next.offer(s0); all.offer(s0);
     for (int i = 0; true; i++) {
-      if (DEBUG && DEBUG_SEARCH) Log.debug("starting iter=" + i);
+      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.debug("starting iter=" + i);
       DoubleBeam<State2<Z>> t = cur; cur = next; next = t;
       assert next.size() == 0;
-      if (DEBUG && DEBUG_COLLAPSE)
+      if (DEBUG_KIBASH && DEBUG && DEBUG_COLLAPSE)
         Log.info("cur.size=" + cur.size());
       for (int b = 0; cur.size() > 0; b++) {
         State2<Z> s = cur.pop();
@@ -573,18 +590,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         }
         nextStatesB(s, next, all);
       }
-      if (DEBUG && DEBUG_COLLAPSE) {
+      if (DEBUG_KIBASH && DEBUG && DEBUG_COLLAPSE) {
         Log.info("next.size=" + next.size());
         Log.info("collapseRate=" + next.getCollapseRate());
       }
       if (next.size() == 0) {
-        if (DEBUG && DEBUG_SEARCH) Log.info("returning because next.size==0");
+        if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("returning because next.size==0");
         break;
       }
     }
 
     assert lastState != null;
-    if (DEBUG && DEBUG_SEARCH) {
+    if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) {
       StepScores<?> ss;
 
       Log.info("lastState:");
@@ -616,7 +633,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
 
   /** Returns (updateTowardsState, updateAwayState) */
   public Update perceptronUpdate(State2<Z> s0, PerceptronUpdateMode mode, OracleMode oracleMode) {
-    final boolean fineLog = false;
+    boolean fineLog = false;
 
     // Away
     double marginCoef = 0;    // Should be 0 to remain consistent with perceptron
@@ -644,7 +661,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         new GeneralizedCoef.Loss.Oracle(),
         rand);
 
-    if (DEBUG && (DEBUG_SEARCH || DEBUG_PERCEPTRON || DEBUG_BEAM)) {
+    if (DEBUG_KIBASH && DEBUG && (DEBUG_SEARCH || DEBUG_PERCEPTRON || DEBUG_BEAM)) {
       Log.info("starting perceptron update, mode=" + mode);
       Log.info("decoder=" + decoder);
       Log.info("htsOracle=" + htsOracle);
@@ -671,14 +688,14 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       assert oracleNext.size() == 0;
 
       // Expand decoder
-      if (DEBUG && DEBUG_SEARCH) Log.info("start of decoder at iter=" + iter);
+      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("start of decoder at iter=" + iter);
       while (decCur.size() > 0) {
         State2<Z> s = decCur.pop();
         nextStates(s, decNext);
       }
 
       // Expand oracle
-      if (DEBUG && DEBUG_SEARCH) Log.info("start of oracle at iter=" + iter);
+      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("start of oracle at iter=" + iter);
       while (oracleCur.size() > 0) {
         State2<Z> s = oracleCur.pop();
         nextStates(s, oracleNext);
@@ -691,9 +708,9 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       }
       assert oracleNext.size() > 0;
 
-      if (DEBUG && DEBUG_BEAM)
+      if (DEBUG_KIBASH && DEBUG && DEBUG_BEAM)
         Log.info("iter=" + iter + " decNext.size=" + decNext.size() + " oracleNext.size=" + oracleNext.size());
-      if (DEBUG && DEBUG_PERCEPTRON && fineLog) {
+      if (DEBUG_KIBASH && DEBUG && DEBUG_PERCEPTRON && fineLog) {
         State2<Z> s1 = decNext.peek();
         State2<Z> s2 = oracleNext.peek();
         System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
@@ -740,7 +757,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           double margin = 0;
           double s1 = z1.getStepScores().getModel().forwards();
           double s2 = z2.getStepScores().getModel().forwards();
-          if (DEBUG && DEBUG_PERCEPTRON) {
+          if (DEBUG_KIBASH && DEBUG && DEBUG_PERCEPTRON) {
             Log.info("some loss, and decBest.model=" + s1
                 + " oracleBest.model=" + s2
                 + " maybeViolation=" + (s1-s2));
@@ -748,7 +765,8 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
           // Second: the score of the predicted z must be greater than the oracle (y) score
           double violation = Math.max(0, (margin + s1) - s2);
           if (violation >= maxViolation) {
-            if (DEBUG && DEBUG_BEAM) Log.info("new MAX_VIOLATION! " + maxViolation + " => " + violation);
+            if (DEBUG_KIBASH && DEBUG && DEBUG_BEAM)
+              Log.info("new MAX_VIOLATION! " + maxViolation + " => " + violation);
             maxViolation = violation;
             violator = new Pair<>(z2, z1);
           }
@@ -765,7 +783,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
      * => they have coefMode = ZERO
      * => their update is zero!
      */
-    if (DEBUG && DEBUG_PERCEPTRON)
+    if (DEBUG_KIBASH && DEBUG && DEBUG_PERCEPTRON)
       System.out.println(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>");
     if (perceptronUpdatesTotal % perceptronUpdatePrintInterval == 0 && perceptronUpdatesTotal > 0) {
       Log.info("[main] " + perceptronUpdatesViolated + "/" + perceptronUpdatesTotal
@@ -784,7 +802,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     perceptronUpdatesTotal++;
     perceptronRecentUpdatesTotal++;
     if (violator == null) {
-      if (DEBUG && DEBUG_PERCEPTRON)
+      if (DEBUG_KIBASH && DEBUG && DEBUG_PERCEPTRON)
         Log.info("no violator!");
 //      return Update.NONE;
       return new Update() {
@@ -799,7 +817,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
     } else {
       perceptronUpdatesViolated++;
       perceptronRecentUpdatesViolated++;
-      if (DEBUG && DEBUG_PERCEPTRON) {
+      if (DEBUG_KIBASH && DEBUG && DEBUG_PERCEPTRON) {
         Log.info("best item on oracle beam:");
         violator.get1().getRoot().show(System.out, htsOracle);
         System.out.println();
@@ -815,11 +833,11 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
         public double apply(double learningRate) {
 
           // Take step
-          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+          if (DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the oracle updates");
           good.backwards(-learningRate);
 
-          if (AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
+          if (DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && FNParseTransitionScheme.DEBUG_FEATURES)
             Log.info("about to apply the most violated updates");
           bad.backwards(-learningRate);
 

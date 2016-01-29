@@ -106,8 +106,8 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   /* Static feature cache *****************************************************/
 
-  public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>();
-  public Map<TFKS, Caching> staticSquashFeatCache = new HashMap<>();
+  public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>(1<<10);
+  public Map<TFKS, Caching> staticSquashFeatCache = new HashMap<>(1<<10);
 
   // copy between oracle and MV Info instances?
   // easy 2x...
