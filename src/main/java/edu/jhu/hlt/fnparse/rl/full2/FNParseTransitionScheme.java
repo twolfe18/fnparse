@@ -115,11 +115,6 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   private Alphabet<TFKS> prefix2primeIdx;
   private Primes primes;
 
-  public double nextRand() {
-    float r = ThreadLocalRandom.current().nextFloat();
-    return 2*r - 1;
-  }
-
   public boolean useContRoles = false;
   public boolean useRefRoles = false;
 
@@ -718,7 +713,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
           TFKS prefixK = momPrefix.dumbPrepend(TFKS.K, k);
           Adjoints modelK = staticFeats0(
               prefixK, info, wHatch);
-          double randK = nextRand();
+          double randK = info.getRand(prefixK);
           EggWithStaticScore ef = new EggWithStaticScore(
               TFKS.K, k, possK, goldK, primeK, modelK, randK);
           egF.add(new Pair<>(prefixK, ef));
@@ -737,7 +732,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
              * NOTE: In scoreHatch, I need to catch these features!
              */
             TFKS prefixS = prefixK.dumbPrepend(TFKS.S, s);
-            double randS = nextRand();
+            double randS = info.getRand(prefixS);
             Adjoints staticScore = staticFeats0(prefixS, info, wHatch);
             EggWithStaticScore es = new EggWithStaticScore(
                 TFKS.S, s, possS, goldS, primeS, staticScore, randS);
@@ -1132,37 +1127,25 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       return null;
     }
 
+    double r = info.getConfig().recallBias;
+
     // Static score
-    Adjoints score;
     if (egg instanceof EggWithStaticScore) {
       // Recover the static features which were computed in genEggs
       if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("recovering static features from EggWithStaticScore");
       EggWithStaticScore eggSS = (EggWithStaticScore) egg;
-      score = eggSS.getModel();
+      if (r != 0)
+        eggSS.setModel(Adjoints.cacheSum(eggSS.getModel(), new Adjoints.Constant(r)));
+      return eggSS;
     } else {
       // Compute static features for the first time
       if (AbstractTransitionScheme.DEBUG_KIBASH && AbstractTransitionScheme.DEBUG && DEBUG_FEATURES)
         Log.info("computing static features for the first time");
       TFKS eggPrefix = TFKS.dumbCons(egg, n.prefix);
-      score = staticFeats0(eggPrefix, info, wHatch);
+      Adjoints score = staticFeats0(eggPrefix, info, wHatch);
+      return egg.withScore(score, info.getRand(eggPrefix));
     }
-
-    // Dynamic score
-    // TODO Remove this distinction, staticFeatures now does stuff like this, why have separate dynamic?
-//    ProductIndexAdjoints dynScore = dynFeats0(n, info, wHatch);
-//    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-//      Log.info(String.format("wHatch.l2=%.3f weights=%s", wHatch.getL2Norm(), System.identityHashCode(wHatch)));
-//      dynScore.nameOfWeights = "hatch";
-//      dynScore.showUpdatesWith = alph;
-//    }
-//    score = new Adjoints.Sum(score, dynScore);
-
-    // Wrap up static + dynamic score into TVNS
-    double r = info.getConfig().recallBias;
-    if (r != 0)
-      score = Adjoints.sum(score, new Adjoints.Constant(r));
-    return egg.withScore(score, nextRand());
   }
 
   @Override
@@ -1192,16 +1175,8 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
     TFKS eggPrefix = TFKS.dumbCons(egg, n.prefix);
     Adjoints score = staticFeats0(eggPrefix, info, wSquash);
-//    ProductIndexAdjoints dynScore = dynFeats0(n, info, wSquash);
-//    if (AbstractTransitionScheme.DEBUG && DEBUG_FEATURES) {
-//      staticScore.nameOfWeights = "squashStatic";
-//      staticScore.showUpdatesWith = alph;
-//      dynScore.nameOfWeights = "squashDyn";
-//      dynScore.showUpdatesWith = alph;
-//    }
-//    score = new Adjoints.Sum(score, dynScore);
 
-    return egg.withScore(score, nextRand());
+    return egg.withScore(score, info.getRand(eggPrefix));
   }
 
 

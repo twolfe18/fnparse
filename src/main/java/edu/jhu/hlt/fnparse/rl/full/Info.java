@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -72,9 +73,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
 
   /* ************************************************************************ */
 
-
-
-
   Sentence sentence;
   LabelIndex label;     // may be null
 
@@ -86,28 +84,15 @@ public class Info implements Serializable, HasCounts, HasRandom {
   Config config;
   private RTConfig likeConf;  // legacy support :(
 
-//  /* Parameters of search.
-//   * objective(s,a) = b0 * modelScore(s,a) + b1 * deltaLoss(s,a) + b2 * rand()
-//   *   oracle: {b0: 0.1, b1: -10, b2: 0}
-//   *   mv:     {b0: 1.0, b1: 1.0, b2: 0}
-//   *   dec:    {b0: 1.0, b1: 0.0, b2: 0}
-//   */
-//  private GeneralizedCoef coefLoss;
-//  private GeneralizedCoef coefModel;
-//  private GeneralizedCoef coefRand;
-//  // TODO These should be replaced with SearchCoefficients search, constraints;
-//
-//  private int beamSize = 1;          // How many states to keep at every step
-//  private int numConstraints = 1;    // How many states to keep for forming margin constraints (a la k-best MIRA)
-
   public HowToSearchImpl htsBeam;
   public HowToSearchImpl htsConstraints;
 
 
   /* Static feature cache *****************************************************/
+  private int cacheSize = 1<<10;
 
-  public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>(1<<10);
-  public Map<TFKS, Caching> staticSquashFeatCache = new HashMap<>(1<<10);
+  public Map<TFKS, Caching> staticHatchFeatCache = new HashMap<>(cacheSize);
+  public Map<TFKS, Caching> staticSquashFeatCache = new HashMap<>(cacheSize);
 
   // copy between oracle and MV Info instances?
   // easy 2x...
@@ -115,6 +100,20 @@ public class Info implements Serializable, HasCounts, HasRandom {
   public void shareStaticFeatureCacheWith(Info other) {
     staticHatchFeatCache = other.staticHatchFeatCache;
     staticSquashFeatCache = other.staticSquashFeatCache;
+  }
+
+  /* Random number cache **************************************************** */
+  // These are cached so that they are equivalent in both the decoder and the
+  // oracle rather than for performance reasons.
+  public Map<TFKS, Double> randCache = new HashMap<>(cacheSize);
+  public double getRand(TFKS item) {
+    Double r = randCache.get(item);
+    if (r == null) {
+      double rr = ThreadLocalRandom.current().nextFloat();
+      r = 2*rr - 1;
+      randCache.put(item, r);
+    }
+    return r;
   }
 
   /* ************************************************************************ */
@@ -519,31 +518,6 @@ public class Info implements Serializable, HasCounts, HasRandom {
     }
     return this;
   }
-
-//  @Override
-//  public GeneralizedCoef coefLoss() {
-//    return coefLoss;
-//  }
-//
-//  @Override
-//  public GeneralizedCoef coefModel() {
-//    return coefModel;
-//  }
-//
-//  @Override
-//  public GeneralizedCoef coefRand() {
-//    return coefRand;
-//  }
-
-//  @Override
-//  public int beamSize() {
-//    return beamSize;
-//  }
-//
-//  @Override
-//  public int numConstraints() {
-//    return numConstraints;
-//  }
 
   @Override
   public Counts<HashableIntArray> getCounts() {

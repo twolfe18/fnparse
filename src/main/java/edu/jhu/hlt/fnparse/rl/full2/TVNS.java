@@ -27,6 +27,10 @@ public class TVNS extends TVN {
     return model;
   }
 
+  public void setModel(Adjoints a) {
+    this.model = a;
+  }
+
   public double getRand() {
     return rand;
   }

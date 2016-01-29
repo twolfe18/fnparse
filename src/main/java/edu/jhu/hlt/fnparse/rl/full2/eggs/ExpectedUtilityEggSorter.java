@@ -10,6 +10,7 @@ import edu.jhu.hlt.fnparse.rl.full.HowToSearch;
 import edu.jhu.hlt.fnparse.rl.full2.LLTVN;
 import edu.jhu.hlt.fnparse.rl.full2.Node2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
@@ -63,7 +64,7 @@ public class ExpectedUtilityEggSorter {
    */
   public static class Adapter extends SortedEggCache {
     private ExpectedUtilityEggSorter kEggsEU;
-    private IntObjectHashMap<ExpectedUtilityEggSorter> sEggsEU;
+    private IntObjectHashMap<SortedEggCache> sEggsEU;
     public Adapter(
         List<Pair<TFKS, EggWithStaticScore>> fEggs,
         List<Pair<TFKS, EggWithStaticScore>> kEggs,
@@ -72,10 +73,14 @@ public class ExpectedUtilityEggSorter {
         IntFunction<Span> decodeSpan) {
       super(fEggs, kEggs, fEggsAreMaxOverKEggs, howToScore, decodeSpan);
 
+      // Preserve left-to-right ordering for S-valued eggs
+      final boolean sL2R = SortedEggCache.sortSByL2R(ExperimentProperties.getInstance());
+
       // In super implementation, eggs will have hts score; for K valued eggs
       // (computed as a max_S) and S valued eggs. We just need to use this as a
       // log-prob and use that to compute EU.
-      sEggsEU = new IntObjectHashMap<>();
+      if (!sL2R)
+        sEggsEU = new IntObjectHashMap<>();
       kEggsEU = new ExpectedUtilityEggSorter(howToScore);
       for (LLTVN cur = super.fEggs; cur != null; cur = cur.cdr()) {
         // Compute EU for K valued egg
@@ -85,31 +90,36 @@ public class ExpectedUtilityEggSorter {
         kEggsEU.addEgg(egg);
 
         // Compute EU for S valued eggs
-        assert egg.type == TFKS.K;
-        int k = egg.value;
-        ExpectedUtilityEggSorter euS = new ExpectedUtilityEggSorter(howToScore);
-        LLTVN cur2 = super.k2Eggs.get(k);
-        assert cur2 != null;
-        for (; cur2 != null; cur2 = cur2.cdr()) {
-          EggWithStaticScore egg2 = (EggWithStaticScore) cur2.car();
-          assert egg2.type == TFKS.S;
-          euS.addEgg(egg2);
+        if (!sL2R) {
+          assert egg.type == TFKS.K;
+          int k = egg.value;
+          ExpectedUtilityEggSorter euS = new ExpectedUtilityEggSorter(howToScore);
+          LLTVN cur2 = super.k2Eggs.get(k);
+          assert cur2 != null;
+          for (; cur2 != null; cur2 = cur2.cdr()) {
+            EggWithStaticScore egg2 = (EggWithStaticScore) cur2.car();
+            assert egg2.type == TFKS.S;
+            euS.addEgg(egg2);
+          }
+          SortedEggCache old = sEggsEU.put(k, euS);
+          assert old == null;
         }
-        ExpectedUtilityEggSorter old = sEggsEU.put(k, euS);
-        assert old == null;
       }
     }
     @Override
     public LLTVN getSortedEggs() {
-//      return fEggs;
       return kEggsEU.getSortedEggs();
     }
     @Override
     public LLTVN getSortedEggs(int k) {
-//      return k2Eggs.get(k);
-      ExpectedUtilityEggSorter eu = sEggsEU.get(k);
-      LLTVN ll = eu.getSortedEggs();
-      return ll;
+      final boolean sL2R = SortedEggCache.sortSByL2R(ExperimentProperties.getInstance());
+      if (sL2R) {
+        return super.getSortedEggs(k);
+      } else {
+        SortedEggCache eu = sEggsEU.get(k);
+        LLTVN ll = eu.getSortedEggs();
+        return ll;
+      }
     }
   }
 
