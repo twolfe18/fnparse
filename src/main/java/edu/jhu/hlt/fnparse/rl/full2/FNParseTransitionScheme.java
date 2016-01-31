@@ -691,7 +691,9 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
 
       // Generate all (k,s) possibilities given the known (t,f)
       SortedEggCache eggs = info.getSortedEggs(momPrefix.t, momPrefix.f);
-      if (eggs == null) {
+      if (eggs != null) {
+//        System.out.println("who won this race?");
+      } else {
         COUNTER_GEN_EGGS_CACHE_MISS++;
         List<Pair<TFKS, EggWithStaticScore>> egF = new ArrayList<>();
         List<Pair<TFKS, EggWithStaticScore>> egK = new ArrayList<>();

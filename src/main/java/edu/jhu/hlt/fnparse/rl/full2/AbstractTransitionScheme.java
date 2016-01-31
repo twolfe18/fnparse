@@ -65,7 +65,7 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
   }
 
   // Set this to false to statically remove debugging statements
-  public static final boolean DEBUG_KIBASH = false;
+  public static final boolean DEBUG_KIBASH = true;
 
   public static boolean DEBUG = false;
   public static boolean DEBUG_SEARCH = false;
@@ -687,18 +687,18 @@ public abstract class AbstractTransitionScheme<Y, Z extends HasCounts & HasRando
       assert decNext.size() == 0;
       assert oracleNext.size() == 0;
 
-      // Expand decoder
-      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("start of decoder at iter=" + iter);
-      while (decCur.size() > 0) {
-        State2<Z> s = decCur.pop();
-        nextStates(s, decNext);
-      }
-
       // Expand oracle
       if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("start of oracle at iter=" + iter);
       while (oracleCur.size() > 0) {
         State2<Z> s = oracleCur.pop();
         nextStates(s, oracleNext);
+      }
+
+      // Expand decoder
+      if (DEBUG_KIBASH && DEBUG && DEBUG_SEARCH) Log.info("start of decoder at iter=" + iter);
+      while (decCur.size() > 0) {
+        State2<Z> s = decCur.pop();
+        nextStates(s, decNext);
       }
 
       if (decNext.size() == 0) {

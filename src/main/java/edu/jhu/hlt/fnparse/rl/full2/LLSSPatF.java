@@ -49,7 +49,7 @@ public class LLSSPatF extends LLSSP {
   public static final boolean NUM_ARGS = C.getBoolean("NUM_ARGS", ANY_GLOBALS);
 
   public static final ProductIndex ARG_LOC_TA =
-      ARG_LOC && C.getBoolean("ARG_LOC_TA", true) ? new ProductIndex(0, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_TA", false) ? new ProductIndex(0, 16) : null;
   public static final ProductIndex ARG_LOC_TA_F =
       ARG_LOC && C.getBoolean("ARG_LOC_TA_F", true) ? new ProductIndex(1, 16) : null;
   public static final ProductIndex ARG_LOC_TA_FK =
@@ -58,7 +58,7 @@ public class LLSSPatF extends LLSSP {
       ARG_LOC && C.getBoolean("ARG_LOC_TA_K", true) ? new ProductIndex(3, 16) : null;
 
   public static final ProductIndex ARG_LOC_AA =
-      ARG_LOC && C.getBoolean("ARG_LOC_AA", true) ? new ProductIndex(4, 16) : null;
+      ARG_LOC && C.getBoolean("ARG_LOC_AA", false) ? new ProductIndex(4, 16) : null;
   public static final ProductIndex ARG_LOC_AA_F =
       ARG_LOC && C.getBoolean("ARG_LOC_AA_F", true) ? new ProductIndex(5, 16) : null;
   public static final ProductIndex ARG_LOC_AA_FK =
@@ -67,22 +67,22 @@ public class LLSSPatF extends LLSSP {
       ARG_LOC && C.getBoolean("ARG_LOC_AA_K", true) ? new ProductIndex(7, 16) : null;
 
   public static final ProductIndex ROLE_COOC_TA =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA", true) ? new ProductIndex(8, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA", false) ? new ProductIndex(8, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_F =
       ROLE_COOC && C.getBoolean("ROLE_COOC_TA_F", true) ? new ProductIndex(9, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_FK =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_FK", true) ? new ProductIndex(10, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_FK", false) ? new ProductIndex(10, 16) : null;
   public static final ProductIndex ROLE_COOC_TA_K =
-      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", true) ? new ProductIndex(11, 16) : null;
+      ROLE_COOC && C.getBoolean("ROLE_COOC_TA_K", false) ? new ProductIndex(11, 16) : null;
 
   public static final ProductIndex NUM_ARGS_TA =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA", true) ? new ProductIndex(12, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_F =
       NUM_ARGS && C.getBoolean("NUM_ARGS_TA_F", true) ? new ProductIndex(13, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_FK =
-      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_FK", true) ? new ProductIndex(14, 16) : null;
+      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_FK", false) ? new ProductIndex(14, 16) : null;
   public static final ProductIndex NUM_ARGS_TA_K =
-      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_K", true) ? new ProductIndex(15, 16) : null;
+      NUM_ARGS && C.getBoolean("NUM_ARGS_TA_K", false) ? new ProductIndex(15, 16) : null;
 
   public static void logGlobalFeatures(boolean oneLine) {
     String sep = oneLine ? " " : "\n";
@@ -286,8 +286,20 @@ public class LLSSPatF extends LLSSP {
     //    This is difficult because these features are fired from consChild.
 
     int T = 5;
-//    int t = Math.min(T-1, LLSSP.length(prev));
+    //    int t = Math.min(T-1, LLSSP.length(prev));
     int t = Math.min(T-1, numArgsRealized);
+
+    if (numArgsRealized == 0) {
+      int kk = 0;
+      ProductIndex p0 = new ProductIndex(kk, K*K);
+      ProductIndex p1 = p0.prod(1, T+1);
+      if (ROLE_COOC_TA != null)
+        addTo = new LL<>(ROLE_COOC_TA.flatProd(p1), addTo);
+      if (ROLE_COOC_TA_F != null)
+        addTo = new LL<>(ROLE_COOC_TA_F.flatProd(p1).prod(f, F), addTo);
+      return addTo;
+    }
+
     for (LLSSPatF cur = prev; cur != null; cur = cur.cdr()) {
 
       Node2 otherK = cur.car();
@@ -335,7 +347,7 @@ public class LLSSPatF extends LLSSP {
         Log.info("p2=" + p2);
         Log.info("f=" + f + "/" + F);
         Log.info("spanRel=" + spanRel);
-//        Log.info("fk=" + spanRel + "/" + FK);
+        //        Log.info("fk=" + spanRel + "/" + FK);
         System.out.println();
       }
     }

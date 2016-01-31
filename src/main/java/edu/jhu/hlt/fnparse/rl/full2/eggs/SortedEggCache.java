@@ -144,7 +144,7 @@ public class SortedEggCache {
     }
 
     this.fEggs = null;
-    if (AbstractTransitionScheme.DEBUG && DEBUG)
+    if (DEBUG)
       Log.info("sorted " + fEggs.size() + " k-valued eggs");
     for (int i = 0; i < fEggs.size(); i++) {
       EggWithStaticScore fe = fEggs.get(i).get2();
@@ -158,11 +158,11 @@ public class SortedEggCache {
 //        feMod = fe.withScore(feMod.getModel(), feMod.getRand());
         feMod = new EWSSMax(fe, feMod);
 
-        if (AbstractTransitionScheme.DEBUG && DEBUG)
+        if (DEBUG)
           System.out.println("k=" + k + " -> max_s model(k,s): " + howToScore.forwards(e2ss(feMod)));
       } else {
         feMod = fe;
-        if (AbstractTransitionScheme.DEBUG && DEBUG)
+        if (DEBUG)
           System.out.println("k=" + k + " -> model(k): " + howToScore.forwards(e2ss(feMod)));
       }
       assert feMod.type == TFKS.K && feMod.type == fe.type;
@@ -177,7 +177,7 @@ public class SortedEggCache {
 //      this.fEggs = new LLTVN(egg, this.fEggs);
 //    }
 
-    if (AbstractTransitionScheme.DEBUG && DEBUG)
+    if (DEBUG)
       show(System.out);
   }
 
@@ -197,6 +197,8 @@ public class SortedEggCache {
         StepScores<?> ss2 = e2ss(p2.get2());
         double s1 = howToScore.forwards(ss1);
         double s2 = howToScore.forwards(ss2);
+        assert Double.isFinite(s1) && !Double.isNaN(s1);
+        assert Double.isFinite(s2) && !Double.isNaN(s2);
         if (s1 < s2)
           return -1;
         if (s2 < s1)
@@ -238,7 +240,7 @@ public class SortedEggCache {
       assert t == i.t && f == i.f;
       assert i.k >= 0 && i.s >= 0;
       assert egg.getModel() != null : "s-valued eggs must have a model score (Adjoints)";
-      if (AbstractTransitionScheme.DEBUG && DEBUG)
+      if (DEBUG)
         System.out.println("s-valued egg after sorting: " + i.str() + "\t" + egg + "\thts.forwards=" + howToScore.forwards(e2ss(egg)));
 
       // New k value

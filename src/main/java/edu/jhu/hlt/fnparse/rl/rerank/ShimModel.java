@@ -29,6 +29,7 @@ import edu.jhu.hlt.fnparse.rl.full.Config;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
 import edu.jhu.hlt.fnparse.rl.full.FModel.SimpleCFLike;
 import edu.jhu.hlt.fnparse.rl.full.Info;
+import edu.jhu.hlt.fnparse.rl.full2.AbstractTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.FNParseTransitionScheme;
 import edu.jhu.hlt.fnparse.rl.full2.State2;
 import edu.jhu.hlt.fnparse.rl.full2.TFKS;
@@ -439,7 +440,7 @@ public class ShimModel implements Serializable {
 
     // After this many epochs, spend time to compute the full average
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
-    int numInstApprox = config.getInt("numInstApprox", 100);
+    int numInstApprox = config.getInt("numInstApprox", 200);
     int maxEpoch = config.getInt("maxEpoch", 20);
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
       Log.info("starting epoch=" + epoch);
@@ -458,9 +459,9 @@ public class ShimModel implements Serializable {
 
 //        m.predict(y, ts);
 
-//        AbstractTransitionScheme.DEBUG = true;
-//        AbstractTransitionScheme.DEBUG_BEAM = true;
-//        m.getUpdate(y, ts);
+        AbstractTransitionScheme.DEBUG = true;
+        AbstractTransitionScheme.DEBUG_BEAM = true;
+        m.getUpdate(y, ts);
 
         State2<Info> os = m.oracleS(y, ts);
         System.out.println(y.getId());
