@@ -67,7 +67,8 @@ public class ConstituencyParse implements Serializable {
     public Node(edu.jhu.hlt.tutils.Document.Constituent c) {
       base = null;
       base2 = c;
-      tag = "LHS-" + base2.getLhs();
+//      tag = "LHS-" + c.getLhs();
+      tag = c.getDocument().getAlphabet().cfg(c.getLhs());
       parent = null;
       children = new ArrayList<>();
     }
@@ -79,7 +80,7 @@ public class ConstituencyParse implements Serializable {
     }
 
     public String toString() {
-      return String.format("<Node %s @%d-%d D=%d>",
+      return String.format("<Node %s %d-%d D=%d>",
           getTag(), start, end, depth);
     }
 
@@ -209,6 +210,7 @@ public class ConstituencyParse implements Serializable {
     this.sentenceId = sentenceId;
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
+    buildPointers();
   }
 
   public ConstituencyParse(String sentenceId, edu.jhu.hlt.concrete.Parse parse, int n) {
@@ -219,6 +221,7 @@ public class ConstituencyParse implements Serializable {
     for (edu.jhu.hlt.concrete.Constituent c : parse.getConstituentList())
       addConstituent(c);
     checkSpans(n);
+    buildPointers();
   }
 
   private transient int firstTokenIndex = -1;
@@ -307,6 +310,12 @@ public class ConstituencyParse implements Serializable {
         best = n;
     }
     return best;
+  }
+
+  public List<Node> getAllConstituents() {
+    List<Node> cons = new ArrayList<>();
+    cons.addAll(nodes.values());
+    return cons;
   }
 
   public Node getCommonParent(Node n1, Node n2) {

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
 
 /**
@@ -66,6 +67,46 @@ public class DependencyParse implements Serializable {
       throw new IllegalArgumentException();
     this.heads = heads;
     this.labels = labels;
+  }
+
+  /**
+   * tutils.LabeledDirectedGraph has globally indexed nodes, whereas this parse
+   * is relatively indexed. You provide (start, end) to determine where to look
+   * in the global indices.
+   * @param tokenIndexFirst inclusive
+   * @param tokenIndexLast inclusive
+   */
+  public DependencyParse(
+      edu.jhu.hlt.tutils.LabeledDirectedGraph deps,
+      MultiAlphabet forConvertingEdgeLabels,
+      int tokenIndexFirst,
+      int tokenIndexLast) {
+    int n = (tokenIndexLast - tokenIndexFirst) + 1;
+    if (n <= 0)
+      throw new IllegalArgumentException();
+    heads = new int[n];
+    labels = new String[n];
+    for (int j = 0, i = tokenIndexFirst; i <= tokenIndexLast; i++, j++) {
+      edu.jhu.hlt.tutils.LabeledDirectedGraph.Node node = deps.getNode(i);
+      if (node.numParents() == 0) {
+        // Root
+        labels[j] = "ROOT";
+        heads[j] = -1;
+      } else {
+        assert node.numParents() == 1;
+        int h = node.getParent(0);
+        if (h > tokenIndexLast) {
+          // ConcreteToDocument uses numTokensInDocument as root for all dep trees.
+          heads[j] = -1;
+        } else {
+          heads[j] = h - tokenIndexFirst;
+          assert heads[j] < n && heads[j] >= 0 : "h=" + h + " first=" + tokenIndexFirst + " last=" + tokenIndexLast + " n=" + n + " heads[" + j + "]=" + heads[j];
+        }
+        int l = node.getParentEdgeLabel(0);
+        assert l >= 0;
+        labels[j] = forConvertingEdgeLabels.dep(l);
+      }
+    }
   }
 
   /**

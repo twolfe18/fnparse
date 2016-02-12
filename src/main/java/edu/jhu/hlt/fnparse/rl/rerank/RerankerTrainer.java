@@ -111,7 +111,7 @@ public class RerankerTrainer {
     RAND_MIN,
     RAND,       // ignores model score
   }
-  public static String DEFAULT_ORACLE_MODE = OracleMode.RAND_MIN.name();
+  public static String DEFAULT_ORACLE_MODE = OracleMode.MIN.name();
 
   // may differ across pretrain/train
   public static class RTConfig implements Serializable {

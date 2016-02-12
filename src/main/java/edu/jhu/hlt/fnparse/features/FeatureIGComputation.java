@@ -6,11 +6,10 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.Random;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
-
-import java.util.Random;
 
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
 import edu.jhu.hlt.fnparse.data.propbank.PropbankReader;
@@ -30,6 +29,7 @@ import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 import edu.jhu.prim.tuple.Pair;
 
@@ -79,7 +79,17 @@ public class FeatureIGComputation {
     this.data = Iterables.concat(x1, x2);
   }
 
-  public static void setContext(FNParse y, Action commit, TemplateContext ctx, HeadFinder hf) {
+  public static void setFrameIdContext(FNParse y, Span t, TemplateContext ctx, HeadFinder hf) {
+    Sentence sent = y.getSentence();
+    ctx.clear();
+    ctx.setSentence(sent);
+    ctx.setSpan1(t);
+    ctx.setTarget(t);
+    ctx.setHead1(hf.head(t, sent));
+    ctx.setTargetHead(ctx.getHead1());
+  }
+
+  public static void setRoleIdContext(FNParse y, Action commit, TemplateContext ctx, HeadFinder hf) {
     FrameInstance fi = y.getFrameInstance(commit.t);
     Sentence sent = y.getSentence();
     ctx.clear();
@@ -135,7 +145,7 @@ public class FeatureIGComputation {
           String role = fi.getFrame().getRole(commit.k);
 
           // Setup the context for feature extraction
-          setContext(y, commit, ctx, hf);
+          setRoleIdContext(y, commit, ctx, hf);
 
           // c(y), c(x), c(y,x)
           // y = role name

@@ -1087,7 +1087,7 @@ public class CachedFeatures implements Serializable {
 
           // What we would have gotten had we extracted on the fly.
           Template template = ti.getBasicTemplate(templateName);
-          FeatureIGComputation.setContext(y, a, ctx, hf);
+          FeatureIGComputation.setRoleIdContext(y, a, ctx, hf);
           Iterable<String> featureStringValues = template.extract(ctx);
           if (featureStringValues == null) {
             if (blowUpOnProblem)

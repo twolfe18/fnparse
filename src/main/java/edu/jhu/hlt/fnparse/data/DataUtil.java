@@ -39,10 +39,53 @@ public class DataUtil {
   public static boolean DEBUG = false;
 
   /**
+   * Convenience wrapper around
+   * {@link Sentence#convertFromTutils(String, String, edu.jhu.hlt.tutils.Document, int, int, boolean)}
+   */
+  public static List<Sentence> getSentences(edu.jhu.hlt.tutils.Document doc,
+      boolean addGoldParse,
+      boolean addStanfordCParse,
+      boolean addStanfordBasicDParse,
+      boolean addStanfordCollapsedDParse) {
+    Log.info("doc=" + doc.getId() + " cons_sentences=" + doc.cons_sentences + " cons_propbank_gold=" + doc.cons_propbank_gold + " cons_propbank_auto=" + doc.cons_propbank_auto);
+    List<Sentence> sents = new ArrayList<>();
+
+    // TODO add gold parse?
+
+    int sentIndex = 0;
+    ConstituentItr sent = doc.getConstituentItr(doc.cons_sentences);
+    for (; sent.isValid(); sent.gotoRightSib()) {
+      if (DEBUG)
+        System.out.println("reading new sentence @ " + sent.getFirstToken());
+      int paragraph = sent.getLhs();
+      assert paragraph <= sentIndex;
+
+      // Build the sentence that the parses lies in
+      String dataset = null;
+      String id = doc.getId() + "/" + (sentIndex++);
+      Sentence s = Sentence.convertFromTutils(dataset, id, doc,
+          sent.getFirstToken(), sent.getLastToken(),
+          addGoldParse, addStanfordCParse,
+          addStanfordBasicDParse, addStanfordCollapsedDParse);
+      if (DEBUG) {
+        System.out.println("working on sentence " + id);
+        System.out.println(Describe.sentence(s));
+      }
+      sents.add(s);
+    }
+    Log.info("read " + sents.size() + " sentences");
+    return sents;
+  }
+
+  /**
    * Converts a tutils.Document with a Propbank parse (as a constituency parse)
    * into a collection of FNParses. Alphabet must be set for doc.
    */
-  public static List<FNParse> convert(edu.jhu.hlt.tutils.Document doc) {
+  public static List<FNParse> convert(edu.jhu.hlt.tutils.Document doc,
+      boolean addGoldParse,
+      boolean addStanfordParse,
+      boolean addStanfordBasicDParse,
+      boolean addStanfordCollapsedDParse) {
     if (doc.getAlphabet() == null)
       throw new IllegalArgumentException();
     List<FNParse> l = new ArrayList<>();
@@ -66,9 +109,14 @@ public class DataUtil {
       // Build the sentence that the parses lies in
       String dataset = null;
       String id = doc.getId() + "/" + (sentIndex++);
-      boolean addStanfordParse = true;
+//      boolean addGoldParse = true;
+//      boolean addStanfordParse = true;
+//      boolean addStanfordBasicDParse = true;
+//      boolean addStanfordCollapsedDParse = true;
       Sentence s = Sentence.convertFromTutils(dataset, id, doc,
-          sent.getFirstToken(), sent.getLastToken(), addStanfordParse);
+          sent.getFirstToken(), sent.getLastToken(),
+          addGoldParse, addStanfordParse,
+          addStanfordBasicDParse, addStanfordCollapsedDParse);
       if (DEBUG) {
         System.out.println("working on sentence " + id);
         System.out.println(Describe.sentence(s));
@@ -94,9 +142,10 @@ public class DataUtil {
 
         // Lookup the frame
         Constituent pred = prop.getLeftChildC();
+        String frameName = "propbank/" + alph.srl(pred.getLhs());
         if (DEBUG)
-          System.out.println("frame=" + alph.srl(pred.getLhs()));
-        Frame f = propbank.getFrame(alph.srl(pred.getLhs()));
+          System.out.println("frameName=" + frameName);
+        Frame f = propbank.getFrame(frameName);
         if (f == null) {
           //throw new RuntimeException("no frame for: " + alph.srl(pred.getLhs()));
           Log.warn("found error, missing frame in " + s.getId()

@@ -175,7 +175,11 @@ public class PropbankReader {
       if (debug)
         System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
       Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
-      for (FNParse p : DataUtil.convert(d)) {
+      boolean addGoldParse = true;
+      boolean addStanfordParse = false;
+      boolean addStanfordBasicDParse = false;
+      boolean addStanfordCollapsedDParse = false;
+      for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse)) {
         if (debug)
           System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
         Sentence s = p.getSentence();

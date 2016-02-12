@@ -165,7 +165,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
               Integer.parseInt(prevTargetCharEnd),
               tokenCharStart,
               tokenCharEnd);
-          Frame f = frameByName.get(framename);
+          Frame f = frameByName.get("framenet/" + framename);
           if(f==null){
             // There is a frame in the fulltext data called Test35, which is clearly erroeneous.
             // Earlier I just manually filtered it out.
@@ -177,7 +177,7 @@ public class FileFrameInstanceProvider implements FrameInstanceProvider {
             Arrays.fill(roleSpans, Span.nullSpan);
             for(int i=0; i<roleSpans.length; i++){
               Span tmp = triggeredRoles.get(f.getRole(i));
-              if(tmp != null) roleSpans[i] = tmp;					
+              if(tmp != null) roleSpans[i] = tmp;
             }
             FrameInstance fi = FrameInstance.newFrameInstance(f, targetSpan, roleSpans, s);
             frameInstancesForFNTagging.add(fi);

@@ -141,17 +141,28 @@ public class FrameIndex implements FrameIndexInterface {
   private static FrameIndex frameNet;
   private static FrameIndex propbank;
 
+  private final String name;
   private List<Frame> allFrames;
   private Map<String, Frame> nameToFrameMap;
   private Map<Integer, String> indexToNameMap;
   private Frame[] byId;
   private boolean checkFrameNotNull = true;
 
-  public FrameIndex(int nFrames) {
+  public FrameIndex(String name, int nFrames) {
+    this.name = name;
     allFrames = new ArrayList<Frame>(nFrames);;
     nameToFrameMap = new HashMap<String, Frame>();
     indexToNameMap = new HashMap<Integer, String>();
     byId = new Frame[nFrames + 1];
+  }
+
+  public String getName() {
+    return name;
+  }
+
+  @Override
+  public String toString() {
+    return "<FrameIndex " + name + " numFrames=" + getNumFrames() + ">";
   }
 
   public static FrameIndex getPropbank() {
@@ -172,7 +183,7 @@ public class FrameIndex implements FrameIndexInterface {
           return o1.id.compareTo(o2.id);
         }
       });
-      FrameIndex fi = new FrameIndex(frames.size());
+      FrameIndex fi = new FrameIndex("propbank", frames.size());
       int numericId = 0;
       for (PropbankFrame pf : frames) {
         Frame f = new Frame(pf, numericId, PropbankFrameIndex.MODIFIER_ROLES, universalRoles);
@@ -195,7 +206,7 @@ public class FrameIndex implements FrameIndexInterface {
     if(frameNet == null) {
 
       LOG.info("reading framenet frames");
-      frameNet = new FrameIndex(framesInFrameNet);
+      frameNet = new FrameIndex("framenet", framesInFrameNet);
       int idx = 0;
       for(Frame f: new FrameNetIterator()){
         frameNet.allFrames.add(f);

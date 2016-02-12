@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 
@@ -30,6 +31,7 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.FeatureIGComputation;
 import edu.jhu.hlt.fnparse.features.TemplateContext;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
+import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning.Mode;
 import edu.jhu.hlt.fnparse.rl.Action;
 import edu.jhu.hlt.fnparse.rl.ActionType;
@@ -216,24 +218,33 @@ public class FeaturePrecomputation {
   private IntObjectBimap<String> kNames;    // all strings output for k
   private int frUkn, fUkn, rUkn;
 
+  // If false, then frame mode. the "k" slot is used for the frame id, the
+  // arg span slot is set to copy the target, and all of the features are based
+  // on just the target.
+  private final boolean roleMode;
+
   /**
    * You need to provide a {@link FrameIndex} so that a stable bijection from
    * role/frameRole names to ints can be made. This needs to be stable across
    * shards since k names are not merged.
    */
-  public FeaturePrecomputation(FrameIndex fi) {
+  public FeaturePrecomputation(FrameIndex fi, boolean roleMode) {
+    this.roleMode = roleMode;
     kNames = new IntObjectBimap<>();
     rUkn = kNames.lookupIndex("r=UKN", true);
     frUkn = kNames.lookupIndex("fr=UKN", true);
     fUkn = kNames.lookupIndex("f=UKN", true);
     for (Frame f : fi.allFrames()) {
       kNames.lookupIndex("f=" + f.getName(), true);
-      for (int k = 0; k < f.numRoles(); k++) {
-        kNames.lookupIndex("r=" + f.getRole(k), true);
-        kNames.lookupIndex("fr=" + f.getName() + "-" + f.getRole(k), true);
+      if (roleMode) {
+        for (int k = 0; k < f.numRoles(); k++) {
+          kNames.lookupIndex("r=" + f.getRole(k), true);
+          kNames.lookupIndex("fr=" + f.getFrameRole(k), true);
+        }
       }
     }
     Log.info("kNames.size=" + kNames.size());
+    Log.info("roleMode=" + roleMode);
   }
 
   /**
@@ -247,12 +258,15 @@ public class FeaturePrecomputation {
     Log.info("writing features to " + outputData.getPath());
     Log.info("writing alphabet to " + outputAlphabet.getPath());
     Log.info("writing role names to " + outputRoleNames.getPath());
+    Log.info("extracting features for " + (roleMode ? "role" : "frame") + " id");
 
     // Setup features
     Alphabet templates = new Alphabet();
 
     // This is how we prune spans
-    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
+    Reranker r = null;
+    if (roleMode)
+      r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
  
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -266,7 +280,11 @@ public class FeaturePrecomputation {
       while (data.hasNext() && (max <= 0 || tm.numMarks() < max)) {
         FNParse y = data.next();
 
-        emitAll(w, y, templates, r);
+        if (roleMode)
+          emitAllRoleId(w, y, templates, r);
+        else
+          emitAllFrameId(w, y, templates);
+
         if (tm.enoughTimePassed(15)) {
           Log.info("processed " + tm.numMarks()
               + " sentences in " + tm.secondsSinceFirstMark() + " seconds");
@@ -309,15 +327,51 @@ public class FeaturePrecomputation {
     Log.info("done");
   }
 
+  private void emitAllFrameId(Writer w, FNParse y,
+      edu.jhu.hlt.fnparse.features.precompute.Alphabet templates) throws IOException {
+    assert !roleMode;
+
+    // I'm going to use all width=1 spans as possible targets
+    Map<Span, FrameInstance> frameLocations = y.getFrameLocations();
+    HeadFinder hf = templates.getHeadFinder();
+    Sentence s = y.getSentence();
+    TemplateContext ctx = new TemplateContext();
+    int n = s.size();
+    for (int i = 0; i < n; i++) {
+      Span t = Span.getSpan(i, i+1);
+
+      String docId = "na";  // Not currently needed
+      Target ta = new Target(docId, y.getId(), t);
+
+      // Extract features
+      List<Feature> features = new ArrayList<>();
+      for (TemplateAlphabet tmpl : templates) {
+        FeatureIGComputation.setFrameIdContext(y, t, ctx, hf);
+        Iterable<String> feats = tmpl.template.extract(ctx);
+        if (feats != null) {
+          for (String feat : feats) {
+            int featIdx = tmpl.alph.lookupIndex(feat, true);
+            features.add(new Feature(tmpl.name, tmpl.index, feat, featIdx, 1.0));
+          }
+        }
+      }
+
+      FrameInstance fi = frameLocations.get(t);
+      int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
+      emit(w, ta, t, String.valueOf(k), features);
+    }
+  }
+
   /**
    * Will emit k values for just the role (ignoring the frame, i.e. proper for PB)
    * and for the frame and role (via {@link FrameRolePacking}).
    */
-  private void emitAll(
+  private void emitAllRoleId(
       Writer w,
       FNParse y,
       edu.jhu.hlt.fnparse.features.precompute.Alphabet templates,
       Reranker r) throws IOException {
+    assert roleMode;
 
     // Keep track of what (t,s) I have already emitted and not emit duplicates
     Set<IntTrip> emittedTS = new HashSet<>();
@@ -345,7 +399,7 @@ public class FeaturePrecomputation {
 
             String fs = f.getName();
             String rs = f.getRole(ki);
-            String frs = fs + "-" + rs;
+            String frs = f.getFrameRole(ki);
 
             int role = kNames.lookupIndex("r=" + rs, false);
             int frameRole = kNames.lookupIndex("fr=" + frs, false);
@@ -380,7 +434,7 @@ public class FeaturePrecomputation {
       // Extract features
       List<Feature> features = new ArrayList<>();
       for (TemplateAlphabet tmpl : templates) {
-        FeatureIGComputation.setContext(y, commit, ctx, templates.getHeadFinder());
+        FeatureIGComputation.setRoleIdContext(y, commit, ctx, templates.getHeadFinder());
         Iterable<String> feats = tmpl.template.extract(ctx);
         if (feats != null) {
           for (String feat : feats) {
@@ -467,7 +521,11 @@ public class FeaturePrecomputation {
     // Allows you to change compression, ["", ".gz", ".bz2"]
     String suffix = config.getString("suffix", ".gz");
 
-    FeaturePrecomputation fp = new FeaturePrecomputation(fi);
+    // True means extract features for role id.
+    // False means extract features for frame id.
+    boolean roleMode = config.getBoolean("roleMode");
+
+    FeaturePrecomputation fp = new FeaturePrecomputation(fi, roleMode);
     fp.run(data.iterator(),
         new File(wd, "features.txt" + suffix),
         new File(wd, "template-feat-indices.txt" + suffix),

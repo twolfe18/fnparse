@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
@@ -20,6 +21,17 @@ public class Describe {
     for(int i=s.start; i<s.end; i++) {
       if(i > s.start) sb.append(" ");
       sb.append(sent.getWord(i));
+    }
+    return sb.toString();
+  }
+
+  public static String cparse(ConstituencyParse cp) {
+    if (cp == null)
+      return "null";
+    StringBuilder sb = new StringBuilder();
+    for (ConstituencyParse.Node n : cp.getAllConstituents()) {
+      sb.append(n.toString());
+      sb.append('\n');
     }
     return sb.toString();
   }
@@ -58,19 +70,20 @@ public class Describe {
   public static String spanWithDeps(Span s, Sentence sent, boolean basicDeps) {
     DependencyParse deps =
         basicDeps ? sent.getBasicDeps() : sent.getCollapsedDeps();
-    if (deps == null)
-      throw new IllegalStateException("deps not populated or wrong deps");
+//    if (deps == null) {
+//      throw new IllegalStateException("deps not populated or wrong deps, askedForBasic=" + basicDeps);
+//    }
     StringBuilder sb = new StringBuilder();
     for (int i = s.start; i < s.end; i++) {
-      int head = deps.getHead(i);
-      String label = deps.getLabel(i);
+      int head = deps == null ? -1 : deps.getHead(i);
+      String label = deps == null ? "null" : deps.getLabel(i);
       boolean root = head < 0 || head >= sent.size();
       sb.append(String.format("% 3d %-20s %-20s %-20s %-20s\n",
           i,
           sent.getWord(i),
           sent.getPos(i),
           label,
-          root ? "ROOT" : sent.getWord(head)));
+          deps == null ? "null" : (root ? "ROOT" : sent.getWord(head))));
     }
     return sb.toString();
   }

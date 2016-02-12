@@ -171,7 +171,7 @@ public class LearningTest {
     trainer.statelessParams = theta;
     LOG.info("[getsItRight] before: ");
     theta.showWeights();
-    Reranker model = trainer.train1(ip, null);
+    Reranker model = trainer.train1(ip, null).getReranker();
     LOG.info("[getsItRight] after " + iters + ": ");
     theta.showWeights();
     evaluate(model, ip, 0.99d, 0.99d);
@@ -220,7 +220,7 @@ public class LearningTest {
         RerankerTrainer trainer = new RerankerTrainer(rand, new File("/tmp/fnparse-test"));
         trainer.statelessParams = theta;
         trainer.pretrainConf.batchSize = 20;
-        model = trainer.train1(ip, null);
+        model = trainer.train1(ip, null).getReranker();
       }
     } else {
       // Intersect the items dumped to disk with oracle parameters,

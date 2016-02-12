@@ -24,6 +24,7 @@ public class Frame implements Serializable {
       String[] roles) {
     if(roles == null || roles.length == 0)
       throw new IllegalArgumentException();
+    assert name.startsWith("propbank/") || name.startsWith("framenet/");
     this.idx = id;
     this.name = name;
     this.lexicalUnits = lexicalUnits;
@@ -46,7 +47,7 @@ public class Frame implements Serializable {
    */
   public Frame(PropbankFrame pf, int idx, List<String> modifierRoles, boolean universalRoles) {
     this.idx = idx;
-    this.name = pf.id;
+    this.name = "propbank/" + pf.id;
     this.lexicalUnits = null;
 
     Set<String> seenRoles = new HashSet<>();
@@ -127,8 +128,18 @@ public class Frame implements Serializable {
     return lexicalUnits.length;
   }
 
+  /**
+   * @return the raw role name, irrespective of frame.
+   */
   public String getRole(int i) {
     return roles[i];
+  }
+
+  /**
+   * @return the raw role name conditioned on the frame.
+   */
+  public String getFrameRole(int i) {
+    return name + "/" + roles[i];
   }
 
   public String getRoleSafe(int i) {
@@ -153,16 +164,20 @@ public class Frame implements Serializable {
 
   @Override
   public int hashCode() {
-    return idx * 3571;
+//    return idx * 3571;
+    return name.hashCode();
   }
 
   @Override
   public boolean equals(Object other) {
     if (other instanceof Frame) {
       Frame f = (Frame) other;
-      return idx == f.idx;
+      if (idx == f.idx) {
+        assert name.equals(f.name);
+        return true;
+      }
     }
-    else return false;
+    return false;
   }
 
   /**

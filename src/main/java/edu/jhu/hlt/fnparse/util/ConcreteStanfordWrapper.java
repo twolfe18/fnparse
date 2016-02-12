@@ -8,9 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import edu.jhu.hlt.tutils.ExperimentProperties;
-import edu.jhu.hlt.tutils.Span;
-
 import org.apache.log4j.Logger;
 
 import edu.jhu.hlt.concrete.AnnotationMetadata;
@@ -30,12 +27,16 @@ import edu.jhu.hlt.concrete.UUID;
 import edu.jhu.hlt.concrete.stanford.AnnotateTokenizedConcrete;
 import edu.jhu.hlt.concrete.stanford.PipelineLanguage;
 import edu.jhu.hlt.concrete.stanford.StanfordPostNERCommunication;
+import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory;
+import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory.AnalyticUUIDGenerator;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.datatypes.ConstituencyParse;
 import edu.jhu.hlt.fnparse.datatypes.DependencyParse;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.Timer;
 
 /**
@@ -92,8 +93,9 @@ public class ConcreteStanfordWrapper {
   private Timer parseTimer;
 
   public ConcreteStanfordWrapper() {
-    aUUID = new UUID();
-    aUUID.setUuidString("some uuid");
+    AnalyticUUIDGeneratorFactory a = new AnalyticUUIDGeneratorFactory();
+    AnalyticUUIDGenerator ag = a.create();
+    aUUID = ag.next();
     metadata = new AnnotationMetadata();
     metadata.setTool("fnparse");
     metadata.setTimestamp(System.currentTimeMillis() / 1000);

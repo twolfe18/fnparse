@@ -48,15 +48,24 @@ public class Sentence implements HasId, Serializable {
   private ConstituencyParse goldParse;
   private boolean hideSyntax = false;
 
+  /**
+   * Stanford col-cc and UD parses are not supported right now.
+   * @param firstToken inclusive
+   * @param lastToken inclusive
+   */
   public static Sentence convertFromTutils(
       String dataset, String id,
       edu.jhu.hlt.tutils.Document doc,
       int firstToken, int lastToken,
-      boolean addStanfordParse) {
+      boolean addGoldParse,
+      boolean addStanfordCParse,
+      boolean addStandordBasicDParse,
+      boolean addStanfordColDParse) {
     if (firstToken < 0)
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
     if (lastToken < 0 || lastToken < firstToken)
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
+
     MultiAlphabet a = doc.getAlphabet();
     int width = (lastToken - firstToken) + 1;
     String[] tokens = new String[width];
@@ -65,15 +74,22 @@ public class Sentence implements HasId, Serializable {
     for (int i = 0; i < width; i++) {
       edu.jhu.hlt.tutils.Document.Token t = doc.getToken(firstToken + i);
       tokens[i] = t.getWordStr();
-      pos[i] = a.pos(t.getPosG());
+      pos[i] = a.pos(t.getPos());
       if (t.getLemma() >= 0)
         lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
 
     Sentence s = new Sentence(dataset, id, tokens, pos, lemmas);
 
-    // Gold constituency parse
-    if (addStanfordParse) {
+    if (addStandordBasicDParse) {
+      assert doc.stanfordDepsBasic != null;
+      s.basicDeps = new DependencyParse(doc.stanfordDepsBasic, a, firstToken, lastToken);
+    }
+    if (addStanfordColDParse) {
+      assert doc.stanfordDepsCollapsed != null;
+      s.collapsedDeps = new DependencyParse(doc.stanfordDepsCollapsed, a, firstToken, lastToken);
+    }
+    if (addGoldParse) {
       assert doc.cons_ptb_gold >= 0;
       ConstituentItr p = doc.getConstituentItr(doc.cons_ptb_gold);
       while (p.isValid() && !(p.getFirstToken() == firstToken && p.getLastToken() == lastToken))
@@ -82,6 +98,16 @@ public class Sentence implements HasId, Serializable {
         throw new RuntimeException("didn't find parse");
       s.goldParse = new ConstituencyParse(id, firstToken, p);
       s.goldParse.buildPointers();
+    }
+    if (addStanfordCParse) {
+      assert doc.cons_ptb_auto >= 0;
+      ConstituentItr p = doc.getConstituentItr(doc.cons_ptb_auto);
+      while (p.isValid() && !(p.getFirstToken() == firstToken && p.getLastToken() == lastToken))
+        p.gotoRightSib();
+      if (!p.isValid())
+        throw new RuntimeException("didn't find parse");
+      s.stanfordParse = new ConstituencyParse(id, firstToken, p);
+      s.stanfordParse.buildPointers();
     }
 
     return s;
