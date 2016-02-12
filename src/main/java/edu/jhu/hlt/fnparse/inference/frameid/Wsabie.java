@@ -54,6 +54,7 @@ public class Wsabie implements Serializable {
   private int numTemplates;
   private double[][] V;       // frame embeddings
   private double[][] M;       // feature -> frame embedding projection
+  private double[] lossAtRank;
   private List<Example> g;    // features of (target, sentence)
   private int gPtr = 0;       // pointer to first element of next mini-batch
   private int epoch = 0;
@@ -84,6 +85,13 @@ public class Wsabie implements Serializable {
     V = new double[numFrames][dimEmb];
     M = new double[dimFeat][dimEmb];
     randInit();
+
+    lossAtRank = new double[numFrames];
+    double lossSum = 0;
+    for (int i = 1; i < lossAtRank.length; i++) {
+      lossSum += 1d / i;
+      lossAtRank[i] = lossSum;
+    }
   }
 
   public void randInit() {
@@ -148,7 +156,7 @@ public class Wsabie implements Serializable {
       for (int j = 0; j < dimEmb; j++)
         scGold += V[e.frame][j] * gProj[b][j];
 
-      // Sample some negatives
+      // Search for a violator
       int numFrames = V.length;
       int N = 0;
       violator[b] = -1;
@@ -163,8 +171,10 @@ public class Wsabie implements Serializable {
         if (scOther + margin > scGold)
           violator[b] = otherY;
       }
-      if (violator[b] >= 0)
-        loss[b] = Math.floor((numFrames - 1) / ((double) N));
+      if (violator[b] >= 0) {
+        int estRank = (numFrames - 1) / N;
+        loss[b] = lossAtRank[estRank];
+      }
     }
 
     // Take stochastic sub-gradient steps
