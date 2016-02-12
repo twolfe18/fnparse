@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -228,18 +229,20 @@ public class FeaturePrecomputation {
    * role/frameRole names to ints can be made. This needs to be stable across
    * shards since k names are not merged.
    */
-  public FeaturePrecomputation(FrameIndex fi, boolean roleMode) {
+  public FeaturePrecomputation(boolean roleMode) {
     this.roleMode = roleMode;
     kNames = new IntObjectBimap<>();
     rUkn = kNames.lookupIndex("r=UKN", true);
     frUkn = kNames.lookupIndex("fr=UKN", true);
     fUkn = kNames.lookupIndex("f=UKN", true);
-    for (Frame f : fi.allFrames()) {
-      kNames.lookupIndex("f=" + f.getName(), true);
-      if (roleMode) {
-        for (int k = 0; k < f.numRoles(); k++) {
-          kNames.lookupIndex("r=" + f.getRole(k), true);
-          kNames.lookupIndex("fr=" + f.getFrameRole(k), true);
+    for (FrameIndex fi : Arrays.asList(FrameIndex.getFrameNet(), FrameIndex.getPropbank())) {
+      for (Frame f : fi.allFrames()) {
+        kNames.lookupIndex("f=" + f.getName(), true);
+        if (roleMode) {
+          for (int k = 0; k < f.numRoles(); k++) {
+            kNames.lookupIndex("r=" + f.getRole(k), true);
+            kNames.lookupIndex("fr=" + f.getFrameRole(k), true);
+          }
         }
       }
     }
@@ -476,29 +479,27 @@ public class FeaturePrecomputation {
     // Poorly named: provides parses via redis for both propbank/framenet
     ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
 
-    FrameIndex fi;
-    Iterable<FNParse> data;
+    Iterable<FNParse> data = Collections.emptyList();
     String dataset = config.getString("dataset");
     Shard shard = ShardUtils.getShard(config);
-    if ("propbank".equalsIgnoreCase(dataset)) {
+
+    if ("propbank".equalsIgnoreCase(dataset) || "both".equalsIgnoreCase(dataset)) {
       Log.info("reading propbank");
-      fi = FrameIndex.getPropbank();
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
-      data = config.getBoolean("debug", false)
-          ? pbr.getDevData()
-              : Iterables.concat(pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
-    } else if ("framenet".equalsIgnoreCase(dataset)) {
+      data = Iterables.concat(data, pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
+    }
+
+    if ("framenet".equalsIgnoreCase(dataset) || "both".equalsIgnoreCase(dataset)) {
       Log.info("reading framenet");
-      fi = FrameIndex.getFrameNet();
       Iterable<FNParse> train = () -> FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
       Iterable<FNParse> test = () -> FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
-      data = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
+      Iterable<FNParse> unparsed = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
 
       // Just load it into memory and parse
       boolean parse = config.getBoolean("parseFN", true);
-      List<FNParse> get = new ArrayList<>();
-      for (FNParse y : data) {
+      List<FNParse> parsed = new ArrayList<>();
+      for (FNParse y : unparsed) {
         if (parse) {
           Sentence s = y.getSentence();
           if (s.getStanfordParse(false) == null) {
@@ -510,12 +511,9 @@ public class FeaturePrecomputation {
             s.setBasicDeps(dp);
           }
         }
-        get.add(y);
+        parsed.add(y);
       }
-      data = get;
-
-    } else {
-      throw new RuntimeException("unknown dataset: " + dataset);
+      data = Iterables.concat(data, parsed);
     }
 
     // Allows you to change compression, ["", ".gz", ".bz2"]
@@ -525,7 +523,7 @@ public class FeaturePrecomputation {
     // False means extract features for frame id.
     boolean roleMode = config.getBoolean("roleMode");
 
-    FeaturePrecomputation fp = new FeaturePrecomputation(fi, roleMode);
+    FeaturePrecomputation fp = new FeaturePrecomputation(roleMode);
     fp.run(data.iterator(),
         new File(wd, "features.txt" + suffix),
         new File(wd, "template-feat-indices.txt" + suffix),
