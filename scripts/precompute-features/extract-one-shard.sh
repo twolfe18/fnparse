@@ -12,7 +12,7 @@
 
 set -e
 
-if [[ $# != 7 ]]; then
+if [[ $# != 8 ]]; then
   echo "please provide:"
   echo "1) a working directory for output"
   echo "2) a jar file in a stable location"
@@ -20,7 +20,8 @@ if [[ $# != 7 ]]; then
   echo "4) how many shards"
   echo "5) a redis parse server"
   echo "6) a dataset, e.g. \"propbank\" or \"framenet\""
-  echo "7) a file suffix to control compression, e.g. \".gz\" or \".bz2\""
+  echo "7) either \"true\" for role id features or \"false\" for frame id features"
+  echo "8) a file suffix to control compression, e.g. \".gz\" or \".bz2\""
   echo "   script: $0"
   echo "   args: $@"
   exit 1
@@ -32,7 +33,8 @@ SHARD=$3
 NUM_SHARDS=$4
 PARSE_REDIS_SERVER=$5
 DATASET=$6
-SUF=$7
+ROLE_MODE=$7
+SUF=$8
 
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
 

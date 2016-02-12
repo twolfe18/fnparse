@@ -2,20 +2,15 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
-#SUF=".gz"
-SUF=".bz2"
+SUF=".gz"
+CAT="zcat"
+ZIP="gzip -c"
+#SUF=".bz2"
+#CAT="bzcat"
+#ZIP="bzip2 -c"
 
-# TODO Put these in case statement
-CAT="bzcat"
-ZIP="bzip2 -c"
-
-DATASET=framenet
-#WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b/raw-shards
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a/raw-shards
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/framenet/oct21a/
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
+DATASET=both
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/frame-id/$DATASET
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 ############################################################################################
@@ -34,9 +29,7 @@ qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CON
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
-#NUM_SHARDS=256   # propbank
-NUM_SHARDS=32    # framenet
-#PARSE_REDIS_SERVERS=(r5n07 r5n20 r5n34 r6n28)
+NUM_SHARDS=256
 PARSE_REDIS_SERVERS=(r6n27 r6n35 r6n24 r6n03)
 
 mkdir -p $WORKING_DIR/raw-shards/sge-logs
@@ -48,9 +41,9 @@ echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
 echo "starting at `date`" >>$WORKING_DIR/raw-shards/commands.txt
+ROLE_ID=false
 for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   WD=$WORKING_DIR/raw-shards/job-$i-of-$NUM_SHARDS
-  #J=`echo $i | awk '{print $1 % 4}'`
   J=0
   PS=${PARSE_REDIS_SERVERS[$J]}
   echo "dispatching to $PS"
@@ -64,6 +57,7 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $NUM_SHARDS \
       $PS \
       $DATASET \
+      $ROLE_ID \
       $SUF"
    echo $COMMAND >>$WORKING_DIR/raw-shards/commands.txt
    eval $COMMAND
@@ -72,7 +66,6 @@ done
 
 ############################################################################################
 ### MERGE MANY SHARDS INTO A COHERENT ALPHABET
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 python -u scripts/precompute-features/bialph-merge-pipeline.py \
   $WORKING_DIR \
   $NUM_SHARDS \
@@ -181,8 +174,6 @@ $CAT $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF | awk -F"\t" 'BEGIN{
 
 ############################################################################################
 ### COMPUTE INFORMATION GAIN
-#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b
-#WD=/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a
 FNPARSE_DATA=/export/projects/twolfe/fnparse-data/
 
 # 0) Find the sentence ids of the test set and don't use these for computing information gain
@@ -286,20 +277,20 @@ PROD_IG_WD=$WORKING_DIR/ig/products
 mkdir -p $PROD_IG_WD/ig-files
 mkdir -p $PROD_IG_WD/sge-logs
 cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar $PROD_IG_WD/fnparse.jar
-NUM_SHARDS=500
+NUM_SHARDS_IGP=500
 FEATS_PER_SHARD=500
-for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
+for i in `seq $NUM_SHARDS_IGP | awk '{print $1 - 1}'`; do
   qsub -N prod-ig-$i -o $PROD_IG_WD/sge-logs \
     ./scripts/precompute-features/compute-ig-products.sh \
       $i \
-      $NUM_SHARDS \
+      $NUM_SHARDS_IGP \
       $FEATS_PER_SHARD \
       $TEMPLATE_IG_FILE \
       $WORKING_DIR/coherent-shards-filtered/features \
       "glob:**/*" \
       $WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF \
       $TEST_SET_SENT_IDS \
-      $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS}.txt \
+      $PROD_IG_WD/ig-files/shard-${i}-of-${NUM_SHARDS_IGP}.txt \
       $PROD_IG_WD/fnparse.jar \
       $NUM_ROLES
 done
@@ -311,13 +302,6 @@ done
 ############################################################################################
 ### Build feature sets
 # see Makefile in scripts/having-a-laugh
-
-#DATASET=propbank
-#NUM_SHARDS=256
-DATASET=framenet
-NUM_SHARDS=32
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/for-oct-tacl/$DATASET/oct21a/
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET
 WD=$WORKING_DIR/coherent-shards-filtered-small
 
 ## Build a filtered bilaph
@@ -327,7 +311,6 @@ WD=$WORKING_DIR/coherent-shards-filtered-small
 # feature (order of hundreds of templates).
 # This step just removes unused templates from the full bialph.
 BIALPH_FULL=$WORKING_DIR/coherent-shards-filtered/alphabet.txt$SUF
-#BIALPH_SMALL=$WORKING_DIR/coherent-shards-filtered/alphabet.onlyTemplatesInFs.txt
 BIALPH_SMALL=$WD/alphabet.txt
 
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar

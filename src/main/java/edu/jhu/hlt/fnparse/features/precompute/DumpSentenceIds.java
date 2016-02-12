@@ -2,9 +2,12 @@ package edu.jhu.hlt.fnparse.features.precompute;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Set;
+
+import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
@@ -18,24 +21,26 @@ public class DumpSentenceIds {
   public static Iterator<FNParse> getData(ExperimentProperties config) {
     String ds = config.getString("data");
     String part = config.getString("part");
-    if (ds.equalsIgnoreCase("propbank")) {
+    Iterator<FNParse> data = Collections.emptyIterator();
+    if (ds.equalsIgnoreCase("propbank") || ds.equalsIgnoreCase("both")) {
       ParsePropbankData.Redis propbankAutoParses = null;
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       if (part.equalsIgnoreCase("test")) {
-        return pbr.getTestData().iterator();
+        data = Iterators.concat(data, pbr.getTestData().iterator());
       } else if (part.equalsIgnoreCase("dev")) {
-        return pbr.getDevData().iterator();
+        data = Iterators.concat(data, pbr.getDevData().iterator());
       } else if (part.equalsIgnoreCase("train")) {
-        return pbr.getTrainData().iterator();
-      }
-    } else if (ds.equalsIgnoreCase("framenet")) {
-      if (part.equalsIgnoreCase("test")) {
-        return FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences();
-      } else if (part.equalsIgnoreCase("train")) {
-        return FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences();
+        data = Iterators.concat(data, pbr.getTrainData().iterator());
       }
     }
-    throw new RuntimeException("unknow: ds=" + ds + " part=" + part);
+    if (ds.equalsIgnoreCase("framenet") || ds.equalsIgnoreCase("both")) {
+      if (part.equalsIgnoreCase("test")) {
+        data = Iterators.concat(data, FileFrameInstanceProvider.dipanjantestFIP.getParsedSentences());
+      } else if (part.equalsIgnoreCase("train")) {
+        data = Iterators.concat(data, FileFrameInstanceProvider.dipanjantrainFIP.getParsedSentences());
+      }
+    }
+    return data;
   }
 
   public static Set<String> getSentenceIds(Iterator<FNParse> itr) {
