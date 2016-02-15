@@ -8,6 +8,11 @@
   <artifactId>fnparse</artifactId>
   <version>1.0.6-SNAPSHOT</version>
 
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <concrete-util-version>4.8.7-SNAPSHOT</concrete-util-version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>org.apache.commons</groupId>
@@ -29,7 +34,7 @@
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-ingesters-simple</artifactId>
-      <version>4.8.6-SNAPSHOT</version>
+      <version>4.8.7-SNAPSHOT</version>
     </dependency>
     <!--
     <dependency>
@@ -42,19 +47,19 @@
     <!-- For ingesting propbank data -->
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
-      <artifactId>concrete-conll</artifactId>
-      <version>4.6.3-SNAPSHOT</version>
+      <artifactId>concrete-ingesters-conll</artifactId>
+      <version>${concrete-util-version}</version>
     </dependency>
 
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>miscommunication</artifactId>
-      <version>4.6.3-SNAPSHOT</version>
+      <version>${concrete-util-version}</version>
     </dependency>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
       <artifactId>concrete-analytics-base</artifactId>
-      <version>4.6.3-SNAPSHOT</version>
+      <version>${concrete-util-version}</version>
     </dependency>
     <dependency>
       <groupId>edu.jhu.hlt</groupId>
@@ -73,7 +78,7 @@
       <artifactId>concrete-stanford</artifactId>
       <!-- <version>4.5.2</version> -->
       <!-- <version>4.6.3</version> -->
-      <version>4.8.1-SNAPSHOT</version>
+      <version>4.8.1</version>
     </dependency>
     <dependency>
       <groupId>dk.ange.octave</groupId>
@@ -161,10 +166,6 @@
       </plugin>
     </plugins>
   </build>
-
-  <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-  </properties>
 
   <!-- I believe this is where deploys are pushed to, not dependencies read from... -->
   <distributionManagement>
