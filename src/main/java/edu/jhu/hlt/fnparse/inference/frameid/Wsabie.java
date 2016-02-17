@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
@@ -15,8 +16,11 @@ import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.tutils.Beam;
+import edu.jhu.hlt.tutils.Counts;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.rand.ReservoirSample;
 
 /**
  * Based on:
@@ -55,9 +59,6 @@ public class Wsabie implements Serializable {
   private double[][] V;       // frame embeddings
   private double[][] M;       // feature -> frame embedding projection
   private double[] lossAtRank;
-  private List<Example> g;    // features of (target, sentence)
-  private int gPtr = 0;       // pointer to first element of next mini-batch
-  private int epoch = 0;
   private int batchSize = 128;
   private double learningRate = 0.05;
   private Random rand;
@@ -79,7 +80,6 @@ public class Wsabie implements Serializable {
     Log.info("batchSize=" + batchSize);
     Log.info("V requires " + Math.ceil((numFrames*dimEmb*8d)/(1<<20)) + " MB");
     Log.info("M requires " + Math.ceil((dimFeat*dimEmb*8d)/(1<<20)) + " MB");
-    g = new ArrayList<>();
     rand = new Random(9001);
     this.numTemplates = numTemplates;
     V = new double[numFrames][dimEmb];
@@ -108,29 +108,36 @@ public class Wsabie implements Serializable {
       vec[i] = r.nextDouble() * range * 2 - range;
   }
 
-  public void train(int numEpoch) {
-    int n = (int) (g.size() / batchSize + 0.5);
+  /** Will shuffle given list, so don't expect same order */
+  public void train(List<Example> data, int numEpoch) {
+    int n = (int) (data.size() / batchSize + 0.5);
+    int gPtr = 0;
     double r = 0.95;
-    double loss = batch();
+    double loss = -1;
     int batches = 0;
     for (int e = 0; e < numEpoch; e++) {
+      Collections.shuffle(data, rand);
       for (int i = 0; i < n; i++, batches++) {
+        double l = batch(data, gPtr);
+        if (loss < 0)
+          loss = l;
+        else
+          loss = r * loss + (1-r) * l;
+        gPtr += batchSize;
+        if (gPtr + batchSize >= data.size()) {
+          Collections.shuffle(data, rand);
+          gPtr = 0;
+        }
         if (i % 10 == 0)
           Log.info("ema(loss)=" + loss + " batches=" + batches);
-        double l = batch();
-        loss = r * loss + (1-r) * l;
       }
     }
   }
 
   /** returns average loss before update */
-  public double batch() {
-    if (gPtr + batchSize > g.size()) {
-      Log.info("end of epoch " + epoch);
-      epoch++;
-      gPtr = 0;
-      Collections.shuffle(g, rand);
-    }
+  public double batch(List<Example> g, int gPtr) {
+    if (gPtr + batchSize >= g.size())
+      throw new IllegalArgumentException("gPtr=" + gPtr + " batchSize=" + batchSize + " g.size=" + g.size());
 
     // Measure losses
     double[] loss = new double[batchSize];
@@ -262,17 +269,6 @@ public class Wsabie implements Serializable {
     return b;
   }
 
-  public void readFileForTraining(File f) throws IOException {
-    Log.info("reading from: " + f.getPath());
-    try (BufferedReader r = FileUtil.getReader(f)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
-        Example e = readLine(line);
-        g.add(e);
-      }
-    }
-    Collections.shuffle(g, rand);
-  }
-
   public List<Example> readFile(File f) throws IOException {
     Log.info("reading from: " + f.getPath());
     List<Example> l = new ArrayList<>();
@@ -293,24 +289,100 @@ public class Wsabie implements Serializable {
     assert y.length == 1;
     int frame = y[0];
     int[] features = new int[l.getFeatures().size()];
+    int trunc = 0;
     int i = 0;
     for (Feature f : l.getFeatures()) {
-      features[i++] = new ProductIndex(f.template, numTemplates)
-          .destructiveProd(f.feature)
-          .getProdFeatureModulo(dimFeat);
+      ProductIndex fi = new ProductIndex(f.template, numTemplates)
+          .destructiveProd(f.feature);
+      features[i++] = fi.getProdFeatureModulo(dimFeat);
+      if (fi.getProdFeature() >= dimFeat)
+        trunc++;
     }
+    Log.info("truncated " + trunc + "/" + features.length + " (" + ((100d*trunc)/features.length) + " %), dimFeat=" + dimFeat);
     return new Example(frame, features);
+  }
+
+  public double accuracy(List<Example> instances) {
+    int right = 0;
+    for (Example e : instances) {
+      int yhat = predict(e, 1).pop();
+      if (yhat == e.frame)
+        right++;
+    }
+    return ((double) right) / instances.size();
+  }
+
+  public double mrr(List<Example> instances, int maxRank) {
+    double right = 0;
+    for (Example e : instances) {
+      Beam<Integer> yhat = predict(e, maxRank);
+      int rank = 0;
+      while (yhat.size() > 0) {
+        rank++;
+        int yh = yhat.pop();
+        if (yh == e.frame) {
+          right += 1d / rank;
+          break;
+        }
+      }
+    }
+    return ((double) right) / instances.size();
+  }
+
+  /** Shuffles all/first arg */
+  public static <T> void split(List<T> all, List<T> testAddTo, List<T> trainAddTo, int maxTest, double maxTestProp, Random rand) {
+    Collections.shuffle(all, rand);
+    int n = (int) Math.min(maxTest, maxTestProp * all.size());
+    for (int i = 0; i < all.size(); i++)
+      (i < n ? testAddTo : trainAddTo).add(all.get(i));
+  }
+
+  public void showPerf(List<Example> examples, String prefix) {
+    int mrrMaxRank = 500;
+    double acc = accuracy(examples);
+    double mrr = mrr(examples, mrrMaxRank);
+    Log.info(prefix + " acc=" + acc + " mrr=" + mrr + " n=" + examples.size());
+  }
+
+  public static void showStats(List<Example> examples, String prefix) {
+    BitSet frames = new BitSet();
+    OrderStatistics<Integer> numFeats = new OrderStatistics<>();
+    Counts<Integer> yCounts = new Counts<>();
+    for (Example e : examples) {
+      frames.set(e.frame);
+      numFeats.add(e.targetFeatures.length);
+      yCounts.increment(e.frame);
+    }
+    int k = Math.min(yCounts.numNonZero(), 10);
+    Log.info(prefix
+        + " numFrames=" + frames.cardinality()
+        + " numInstances=" + examples.size()
+        + " numFeats=" + numFeats.getOrdersStr()
+        + " mostCommonFrames=" + yCounts.getKeysSortedByCount(true).subList(0, k));
   }
 
   public static void main(String[] args) throws IOException {
     int numFrames = 9500;
     int numTemplates = 2004;
     Wsabie w = new Wsabie(numFrames, numTemplates);
-    w.readFileForTraining(new File("/tmp/frame-id-features/features.txt.gz"));
+
+    List<Example> data = w.readFile(new File("/tmp/frame-id-features/features.txt.gz"));
+    List<Example> train = new ArrayList<>();
+    List<Example> test = new ArrayList<>();
+    int maxTest = 300;
+    double maxTestProp = 0.25;
+    split(data, test, train, maxTest, maxTestProp, w.rand);
+    showStats(train, "[train]");
+    showStats(test, "[test]");
+
+    int passes = 0;
     int k = 10;
     for (int i = 0; i < 10; i++) {
-      w.train(k);
-      FileUtil.serialize(w, new File("/tmp/wsabie-" + (i+1)*k + ".jser"));
+      w.train(train, k);
+      passes += k;
+      w.showPerf(train, "train passes=" + passes);
+      w.showPerf(test, "test passes=" + passes);
+      FileUtil.serialize(w, new File("/tmp/wsabie-" + passes + ".jser"));
     }
   }
 }
