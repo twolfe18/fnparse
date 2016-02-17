@@ -2,12 +2,18 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
+#export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
+export FNPARSE_DATA=$HOME/scratch/fnparse-data
+
 #SUF=".gz"
 SUF=".bz2"
 
 # TODO Put these in case statement
 CAT="bzcat"
 ZIP="bzip2 -c"
+
+BACKEND=slurm
+export CLUSTERLIB_BACKEND=$BACKEND
 
 DATASET=framenet
 #WORKING_DIR=experiments/precompute-features/propbank/sep14a/raw-shards
@@ -28,6 +34,7 @@ JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 # 3) I can fit all of the FNParses in memory, but not with the parses as well
 #REDIS_CONF=scripts/propbank-train-redis-parse-server.redisconf
 REDIS_CONF=/export/projects/twolfe/fnparse-data/cache/parses/propbank/redis/propbank-train-redis-parse-server.redisconf
+PORT=6379   # default
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
@@ -64,6 +71,7 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
       $i \
       $NUM_SHARDS \
       $PS \
+      $PORT \
       $DATASET \
       $ROLE_ID \
       $SUF"
@@ -79,6 +87,7 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
   $WORKING_DIR \
   $NUM_SHARDS \
   $SUF \
+  $JAR \
   | tee /tmp/merge-job-launch-log.txt
 
 
