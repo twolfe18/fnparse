@@ -121,7 +121,7 @@ public class FrameIndex implements FrameIndexInterface {
           // At this point curFrameIDLU has advanced.
           // But the prevFrameID's values should be passed on
           int frameid = Integer.parseInt(prevFrameID)+1;
-          String framename = prevFrameName;
+          String framename = "framenet/" + prevFrameName;
           ret = new Frame(frameid, framename, lu.toArray(new LexicalUnit[0]), fename.toArray(new String[0]));
           //assert curFrameIDLU.equals(curFrameIDFE); 
           prevFrameID = curFrameIDFE;
@@ -224,7 +224,10 @@ public class FrameIndex implements FrameIndexInterface {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
           String[] toks = line.split("\\t");
           assert toks.length == 3;
-          Frame f = frameNet.nameToFrameMap.get(toks[0]);
+          String fn = "framenet/" + toks[0];
+          Frame f = frameNet.nameToFrameMap.get(fn);
+          if (f == null)
+            throw new RuntimeException("couldn't find frame by name=" + fn);
           int k = Arrays.asList(f.getRoles()).indexOf(toks[1]);
           if (k < 0) {
             LOG.warn("missing " + toks[1] + " role for " + toks[0] + "?");

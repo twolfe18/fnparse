@@ -5,22 +5,45 @@
 # Author: Travis Wolfe <twolfe18@gmail.com>
 # Date: Sep. 16, 2015
 
-import glob, itertools, sys, os, math, subprocess, shutil, re, collections
+import glob, itertools, sys, os, math, subprocess, shutil, re, collections, time
 
 #SUF = '.gz'
 SUF = '.bz2'
 
 def qsub_and_parse_jid(command):
   s = subprocess.check_output(command)
-  # Your job 443510 ("foo-bar") has been submitted
+  # SGE: Your job 443510 ("foo-bar") has been submitted
+  # SLURM: Submitted batch job 3976002
   m = re.search('^Your job (\d+) \("(.+?)"\) has been submitted$', s)
   if m:
     jid = int(m.group(1))
     name_maybe_trunc = m.group(2)
-    print '  launched job', jid
+    print '  (qsub) launched job', jid
     return jid
   else:
     raise Exception('couldn\'t parse qsub output: ' + s)
+
+def jcl_and_parse_jid(command):
+
+  # I seem to be having some problems with slurm recognizing and
+  # respecting my dependencies. Its possible that this is because
+  # its missing/dropping jobs. This is a last resort... it works with COE/SGE...
+  time.sleep(0.5)
+
+  # This is the actual command (that calls slurm)
+  print 'command:', command
+  c = subprocess.check_output(command)
+  # This submits the job and prints the jid
+  print 'c:', c
+  s = subprocess.check_output(c, shell=True)
+  print 's:', s
+  m = re.search('^(\d+)$', s)
+  if m:
+    jid = int(m.group(1))
+    print '  (jcl) launched job', jid
+    return jid
+  else:
+    raise Exception('couldn\'t parse jcl output: ' + s)
 
 
 class WorkingDir:
@@ -50,17 +73,18 @@ class WorkingDir:
 
 class BiAlphMerger:
   '''
-  This class creates the jobs (qsub calls to edu.jhu.hlt.fnparse.features.precompute.BiAlphMerger)
+  This class creates the jobs (jcl/qsub calls to edu.jhu.hlt.fnparse.features.precompute.BiAlphMerger)
   needed to merge a whole bunch of alphabets.
   1) Holds state like working_dir, job id counter
   2) Provides some SGE specific functionality like parsing job ids upon launching a job
   '''
-  def __init__(self, alph_glob, working_dir, mock=False):
+  def __init__(self, alph_glob, working_dir, mock=False, jcl=True):
     self.alph_glob = alph_glob
     self.working_dir = working_dir
     self.job_counter = 0
+    self.jcl = jcl
 
-    # If mock=True, then don't actually qsub anything, just pretend as if you did
+    # If mock=True, then don't actually qsub/jcl anything, just pretend as if you did
     self.mock = mock
 
     self.bialph_dir = os.path.join(working_dir.path, 'bialphs')
@@ -112,16 +136,25 @@ class BiAlphMerger:
           f2deps[f] += deps
       for f, deps in f2deps.iteritems():
         n = os.path.basename(f)
-        command = ['qsub']
-        command += ['-N', 'cleanup-' + n]
-        command += ['-o', self.working_dir.log_dir]
-        command += ['-b', 'y']
-        command += ['-j', 'y']
-        command += ['-hold_jid', ','.join(map(str, deps))]
-        command += ['rm', f]
+        if self.jcl:
+          command = ['jcl']
+          command.append('rm ' + f)
+          command.append("--job_name=cleanup-%s" % (n,))
+          command.append("--log_directory=%s" % (self.working_dir.log_dir,))
+          command.append("--depends_on=%s" % (','.join(map(str, deps))))
+        else:
+          command = ['qsub']
+          command += ['-N', 'cleanup-' + n]
+          command += ['-o', self.working_dir.log_dir]
+          command += ['-b', 'y']
+          command += ['-j', 'y']
+          command += ['-hold_jid', ','.join(map(str, deps))]
+          command += ['rm', f]
         print 'Creating job to remove', n, 'after it is done being used by', deps
         print '\n\t'.join(command)
-        jid = qsub_and_parse_jid(command)
+        if not self.mock:
+          jid = self.submit_and_parse_jid(command)
+          print jid
 
     print 'done launching jobs, created', self.job_counter, 'jobs'
     return buf.pop()
@@ -129,36 +162,79 @@ class BiAlphMerger:
   def output(self, depth, i):
     return os.path.join(self.bialph_dir, "bialph_d%d_%s.txt%s" % (depth, i, SUF))
 
+  def interesting_info(self, inputname, default_return_val):
+    # bialph_d4_shard98.txt.gz
+    p = re.compile('.*_(d\d+_shard\d+).*')
+    m = re.match(p, inputname)
+    if m:
+      return m.group(1)
+
+    # raw-shards/job-0-of-256/features.txt.gz
+    p = re.compile('.*job-(\d+)-of-(\d+).*')
+    m = re.match(p, inputname)
+    if m:
+      return m.group(1)
+
+    print '[interesting info] failed for:', inputname
+    return default_return_val
+
   def make_merge_job(self, dep1, dep2, in1, in2, out1, out2):
     ''' returns a jid '''
-    name = 'merge-' + str(self.job_counter)
+    i1 = self.interesting_info(in1, None)
+    i2 = self.interesting_info(in2, None)
+    if i1 and i2:
+      name = "merge-%s-%s" % (i1, i2)
+    else:
+      name = 'merge-' + str(self.job_counter)
     self.job_counter += 1
-    command = ['qsub']
-    command += ['-N', name]
-    command += ['-o', self.working_dir.log_dir]
-    command += ['-hold_jid', "%d,%d" % (dep1, dep2)]
-    command += ['scripts/precompute-features/bialph-merge.sh']
-    command += [in1, in2, out1, out2, self.working_dir.jar_file]
+    if self.jcl:
+      command = ['jcl']
+      command.append(' '.join(['scripts/precompute-features/bialph-merge.sh', \
+        in1, in2, out1, out2, self.working_dir.jar_file]))
+      command.append("--job_name=%s" % (name,))
+      command.append("--log_directory=%s" % (self.working_dir.log_dir,))
+      command.append("--depends_on=%d,%d" % (dep1, dep2))
+    else:
+      command = ['qsub']
+      command += ['-N', name]
+      command += ['-o', self.working_dir.log_dir]
+      command += ['-hold_jid', "%d,%d" % (dep1, dep2)]
+      command += ['scripts/precompute-features/bialph-merge.sh']
+      command += [in1, in2, out1, out2, self.working_dir.jar_file]
     print 'make_merge_job:', '\n\t'.join(command)
     if self.mock:
       return self.job_counter + 40000
-    jid = qsub_and_parse_jid(command)
-    return jid
+    return self.submit_and_parse_jid(command)
+
+  def submit_and_parse_jid(self, command):
+    if self.jcl:
+      return jcl_and_parse_jid(command)
+    else:
+      return qsub_and_parse_jid(command)
 
   def make_create_job(self, alphabet_filename, bialph_filename):
     ''' returns a jid '''
-    name = 'create-' + str(self.job_counter)
+    i = self.interesting_info(bialph_filename, None)
+    if i:
+      name = "create-%s" % (i,)
+    else:
+      name = 'create-' + str(self.job_counter)
     self.job_counter += 1
-    command = ['qsub']
-    command += ['-N', name]
-    command += ['-o', self.working_dir.log_dir]
-    command += ['scripts/precompute-features/alph-to-bialph.sh']
-    command += [alphabet_filename, bialph_filename]
+    if self.jcl:
+      command = ['jcl']
+      command.append(' '.join(['scripts/precompute-features/alph-to-bialph.sh', alphabet_filename, bialph_filename]))
+      command.append("--job_name=%s" % (name,))
+      command.append("--log_directory=%s" % (self.working_dir.log_dir,))
+    else:
+      command = ['qsub']
+      command += ['-N', name]
+      command += ['-o', self.working_dir.log_dir]
+      command += ['scripts/precompute-features/alph-to-bialph.sh']
+      command += [alphabet_filename, bialph_filename]
     print 'make_create_job:', '\n\t'.join(command)
     if self.mock:
       return self.job_counter + 40000
-    jid = qsub_and_parse_jid(command)
-    return jid
+    return self.submit_and_parse_jid(command)
 
 
 class Merge:
@@ -235,44 +311,63 @@ class Merge:
     for (name, depth, jid) in self.items:
       yield jid
 
-def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False):
+def bialph2alph(in_file, out_file, dep_jid, working_dir, mock=False, jcl=True):
   # TODO Add a command to compute feature cardinalties:
   # awk -F"\t" '{print $3}' <$INPUT | uniq -c >$OUTPUT
-  command = ['qsub']
-  command += ['-N', 'make-final-alph']
-  command += ['-o', working_dir.log_dir]
-  command += ['-hold_jid', str(dep_jid)]
-  command += ['scripts/precompute-features/bialph-to-alph.sh']
-  command += [in_file, out_file]
+  if jcl:
+    command = ['jcl']
+    command.append(' '.join(['scripts/precompute-features/bialph-to-alph.sh', in_file, out_file]))
+    command.append('--job_name=make-final-alph')
+    command.append("--log_directory=%s" % (working_dir.log_dir,))
+    command.append("--depends_on=%d" % (dep_jid,))
+  else:
+    command = ['qsub']
+    command += ['-N', 'make-final-alph']
+    command += ['-o', working_dir.log_dir]
+    command += ['-hold_jid', str(dep_jid)]
+    command += ['scripts/precompute-features/bialph-to-alph.sh']
+    command += [in_file, out_file]
   print 'Projecting a bialph down to an alph:'
   print '\n\t'.join(command)
-  if not mock:
-    jid = qsub_and_parse_jid(command)
-    return jid
-  else:
+  if mock:
     return -1
+  elif jcl:
+    return jcl_and_parse_jid(command)
+  else:
+    return qsub_and_parse_jid(command)
 
-def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, cleanup_input=True, mock=False):
+def make_bialph_projection_job(feature_file, bialph_file, output_feature_file, dep_jid, working_dir, cleanup_input=True, mock=False, jcl=True):
   r = 'Y' if cleanup_input else 'N'
-  command = ['qsub']
-  command += ['-hold_jid', str(dep_jid)]
-  command += ['-o', working_dir.log_dir]
-  command += ['scripts/precompute-features/bialph-proj-features.sh']
-  command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file, r]
+  if jcl:
+    command = ['jcl']
+    command.append(' '.join(['scripts/precompute-features/bialph-proj-features.sh', \
+      feature_file, bialph_file, output_feature_file, working_dir.jar_file, r]))
+    command.append("--depends_on=%d" % (dep_jid,))
+    command.append("--log_directory=%s" % (working_dir.log_dir,))
+  else:
+    command = ['qsub']
+    command += ['-hold_jid', str(dep_jid)]
+    command += ['-o', working_dir.log_dir]
+    command += ['scripts/precompute-features/bialph-proj-features.sh']
+    command += [feature_file, bialph_file, output_feature_file, working_dir.jar_file, r]
   print 'Projecting features through a bialph to build a coherent feature file:'
   print '\n\t'.join(command)
-  if not mock:
-    jid = qsub_and_parse_jid(command)
-    return jid
+  if mock:
+    return -1
+  elif jcl:
+    return jcl_and_parse_jid(command)
+  else:
+    return qsub_and_parse_jid(command)
 
 if __name__ == '__main__':
   # TODO Generalize these inputs to be suitable for a library.
   m = False # mock
-  if len(sys.argv) != 4:
+  if len(sys.argv) != 5:
     print 'please provide:'
     print '1) a working dir, e.g. /export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
     print '2) how many shards are in the WD/raw-shards directory, e.g. 400 when job dirs are named job-*-of-400'
     print '3) a compression suffix, e.g. ".gz" or ".bz2"'
+    print '4) a JAR file'
     sys.exit(1)
   #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/propbank/sep14b'
   #p = '/export/projects/twolfe/fnparse-output/experiments/precompute-features/framenet/sep29a'
@@ -281,7 +376,12 @@ if __name__ == '__main__':
   SUF = sys.argv[3]
   alph_glob = os.path.join(p, 'raw-shards/job-*-of-' + shards + '/template-feat-indices.txt' + SUF)
   merge_bialph_dir = os.path.join(p, 'merged-bialphs')
-  jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
+  #jar = 'target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar'
+  jar = sys.argv[4]
+
+  if not os.path.isfile(jar):
+    print 'JAR is not a file:', jar
+    sys.exit(-1)
 
   print 'alph_glob:', alph_glob
   print 'merge_bialph_dir:', merge_bialph_dir

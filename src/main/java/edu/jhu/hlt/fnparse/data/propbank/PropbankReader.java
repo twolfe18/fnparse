@@ -3,11 +3,12 @@ package edu.jhu.hlt.fnparse.data.propbank;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Iterator;
 import java.util.function.Predicate;
 
 import edu.jhu.hlt.concrete.Communication;
-import edu.jhu.hlt.concrete.ingest.conll.Conll2011;
-import edu.jhu.hlt.concrete.ingest.conll.Ontonotes5;
+import edu.jhu.hlt.concrete.ingesters.conll.Conll2011;
+import edu.jhu.hlt.concrete.ingesters.conll.Ontonotes5;
 import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
@@ -31,15 +32,6 @@ public class PropbankReader {
 
   public static final int LAPTOP = 0;
   public static final int COE_GRID = 1;
-
-//  public static File[] ON5_CONLL_PARENT = new File[] {
-//    new File("/home/travis/code/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
-//    new File("/home/hltcoe/twolfe/conll-formatted-ontonotes-5.0/conll-formatted-ontonotes-5.0/data"),
-//  };
-//  public static File[] ON5_RAW = new File[] {
-//    new File("/home/travis/code/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
-//    new File("/home/hltcoe/twolfe/fnparse/data/ontonotes-release-5.0/LDC2013T19/data/files/data/english/annotations"),
-//  };
 
   private File on5;
   private File trainSkels;
@@ -161,54 +153,61 @@ public class PropbankReader {
       Log.info("reading from onotnotes=" + on5.getPath());
       Log.info("reading from skels=" + skelsDir.getPath());
     }
+    try {
+      Conll2011 skels = new Conll2011(skelsDir.toPath(), f -> f.getFileName().endsWith(".gold_skel"));
+      skels.warnOnEmptyCoref = false;
+      Ontonotes5 on5 = new Ontonotes5(skels, this.on5.toPath());
 
-    Conll2011 skels = new Conll2011(f -> f.getName().endsWith(".gold_skel"));
-    skels.warnOnEmptyCoref = false;
-    Ontonotes5 on5 = new Ontonotes5(skels, this.on5);
-
-    Log.info("reading Communications, " + Describe.memoryUsage());
-    List<FNParse> parses = new ArrayList<>();
-    int docIndex = 0;
-    if (debug)
-      Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
-    for (Communication c : on5.ingest(skelsDir)) {
+      Log.info("reading Communications, " + Describe.memoryUsage());
+      List<FNParse> parses = new ArrayList<>();
+      int docIndex = 0;
       if (debug)
-        System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
-      Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
-      boolean addGoldParse = true;
-      boolean addStanfordParse = false;
-      boolean addStanfordBasicDParse = false;
-      boolean addStanfordCollapsedDParse = false;
-      for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse)) {
+        Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
+      //for (Communication c : on5.ingest()) {  // doesn't work because Stream doesn't implement Iterable...
+      //on5.stream().forEach(c -> {   // doesn't work because I mutate the docIndex variable...
+      Iterator<Communication> itr = on5.stream().iterator();
+      while (itr.hasNext()) {
+        Communication c = itr.next();
         if (debug)
-          System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
-        Sentence s = p.getSentence();
-        if (keep != null && !keep.test(s))
-          continue;
-        // Add predicted parse information
-        if (autoParses != null) {
+          System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
+        Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
+        boolean addGoldParse = true;
+        boolean addStanfordParse = false;
+        boolean addStanfordBasicDParse = false;
+        boolean addStanfordCollapsedDParse = false;
+        for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse)) {
           if (debug)
-            Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
-          if (s.getStanfordParse(false) == null)
-            s.setStanfordParse(autoParses.parse(s));
-          if (s.getBasicDeps(false) == null)
-            s.setBasicDeps(autoParses.getBasicDeps(s));
+            System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
+          Sentence s = p.getSentence();
+          if (keep != null && !keep.test(s))
+            continue;
+          // Add predicted parse information
+          if (autoParses != null) {
+            if (debug)
+              Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
+            if (s.getStanfordParse(false) == null)
+              s.setStanfordParse(autoParses.parse(s));
+            if (s.getBasicDeps(false) == null)
+              s.setBasicDeps(autoParses.getBasicDeps(s));
+          }
+          if (duplicateBasicDeps) {
+            if (s.getCollapsedDeps(false) != null)
+              Log.warn("overwriting collapsed depdencies!");
+            s.setCollapsedDeps(s.getBasicDeps(false));
+          }
+          parses.add(p);
         }
-        if (duplicateBasicDeps) {
-          if (s.getCollapsedDeps(false) != null)
-            Log.warn("overwriting collapsed depdencies!");
-          s.setCollapsedDeps(s.getBasicDeps(false));
-        }
-        parses.add(p);
+        if (docIndex % 500 == 0)
+          Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
       }
-      if (docIndex % 500 == 0)
-        Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
-    }
 
-    boolean lazy = true;
-    ParseWrapper pw = new ParseWrapper(parses, lazy);
-    Log.info("done, read " + parses.size() + " parses");
-    return pw;
+      boolean lazy = true;
+      ParseWrapper pw = new ParseWrapper(parses, lazy);
+      Log.info("done, read " + parses.size() + " parses");
+      return pw;
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
   }
 
   public static void main(String[] args) {

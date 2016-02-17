@@ -35,5 +35,10 @@ java -Xmx1G -ea -server -cp $5 \
 # DON'T remove the inputs!
 
 echo "ret code: $?"
+
+K=20
+echo "sleeping for $K seconds to ensure that dependent jobs don't see stale NFS data..."
+sleep $K
+
 echo "done at `date`"
 

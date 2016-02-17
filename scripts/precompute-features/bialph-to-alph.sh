@@ -43,5 +43,10 @@ echo "ZIP=\"$ZIP\""
 $CAT $1 | awk -F"\t" 'BEGIN{OFS="\t"} {print $1, $2, $3, $4}' | $ZIP >$2
 
 echo "ret code: $?"
+
+K=20
+echo "sleeping for $K seconds to ensure that dependent jobs don't see stale NFS data..."
+sleep $K
+
 echo "done at `date`"
 

@@ -2,6 +2,9 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
+#export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
+export FNPARSE_DATA=$HOME/scratch/fnparse-data
+
 SUF=".gz"
 CAT="zcat"
 ZIP="gzip -c"
@@ -9,8 +12,12 @@ ZIP="gzip -c"
 #CAT="bzcat"
 #ZIP="bzip2 -c"
 
+BACKEND=slurm
+export CLUSTERLIB_BACKEND=$BACKEND
+
 DATASET=both
-WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/frame-id/$DATASET
+#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/frame-id/$DATASET
+WORKING_DIR=$HOME/scratch/fnparse-output/frame-id/$DATASET/feb15a
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 ############################################################################################
@@ -21,20 +28,33 @@ JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 # 1) I didn't originally serialize the parses with the Propbank data
 # 2) I wanted a way to cache parses across machines
 # 3) I can fit all of the FNParses in memory, but not with the parses as well
+
+# COE version
 #REDIS_CONF=scripts/propbank-train-redis-parse-server.redisconf
 REDIS_CONF=/export/projects/twolfe/fnparse-data/cache/parses/propbank/redis/propbank-train-redis-parse-server.redisconf
+PORT=6379   # default
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 qsub -N parse-fPreComp ./scripts/propbank-train-redis-parse-server.sh $REDIS_CONF
 # Now look up the machines these were dispatched to and copy those namaes into the array below.
 
+# MARCC version
+PORT=8865   # non-default, default seems to be taken on MARCC
+for i in `seq 4`; do
+eval `jcl "module load anaconda-python/2.7.10 && redis-server --port $PORT --dir $HOME/scratch/fnparse-data/cache/parses/propbank/redis" \
+  --job_name="parse-fPreComp" --memory=8G --backend=$BACKEND --log_directory=$HOME/logs/fnparse/redis-syntax-parse-server`
+done
+
+
+
 NUM_SHARDS=256
-PARSE_REDIS_SERVERS=(r6n27 r6n35 r6n24 r6n03)
+#PARSE_REDIS_SERVERS=(r6n27 r6n35 r6n24 r6n03)
+PARSE_REDIS_SERVERS=(compute0001 compute0049)
 
 mkdir -p $WORKING_DIR/raw-shards/sge-logs
 
-echo "copyinig jar to a safe place..."
+echo "copying jar to a safe place..."
 JAR_STABLE=$WORKING_DIR/raw-shards/fnparse.jar
 echo "    $JAR"
 echo "==> $JAR_STABLE"
@@ -48,17 +68,22 @@ for i in `seq $NUM_SHARDS | awk '{print $1 - 1}'`; do
   PS=${PARSE_REDIS_SERVERS[$J]}
   echo "dispatching to $PS"
   mkdir -p $WD
-  COMMAND="qsub -N fPreComp-$i-$NUM_SHARDS \
-    -o $WORKING_DIR/raw-shards/sge-logs \
-    scripts/precompute-features/extract-one-shard.sh \
+  META="jcl \
+    \"scripts/precompute-features/extract-one-shard.sh \
       $WD \
       $JAR_STABLE \
       $i \
       $NUM_SHARDS \
       $PS \
+      $PORT \
       $DATASET \
       $ROLE_ID \
-      $SUF"
+      $SUF\" \
+    --job_name=fPreComp-$i-$NUM_SHARDS \
+    --memory=14G --time=48:00:00 --pass_env=True \
+    --log_directory=$WORKING_DIR/raw-shards/sge-logs"
+   echo $META >>$WORKING_DIR/raw-shards/meta.txt
+   COMMAND=`eval $META`
    echo $COMMAND >>$WORKING_DIR/raw-shards/commands.txt
    eval $COMMAND
 done
@@ -70,7 +95,8 @@ python -u scripts/precompute-features/bialph-merge-pipeline.py \
   $WORKING_DIR \
   $NUM_SHARDS \
   $SUF \
-  | tee /tmp/merge-job-launch-log.txt
+  $JAR \
+  | tee $WORKING_DIR/merge-pipeline-log.txt
 
 
 ############################################################################################

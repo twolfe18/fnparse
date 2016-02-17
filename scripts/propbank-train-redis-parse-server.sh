@@ -17,6 +17,6 @@ fi
 #cd data/cache/parses/propbank/redis
 #cd /export/projects/twolfe/fnparse-data/cache/parses/propbank/redis
 
-#redis-server
-/export/projects/twolfe/bin/redis-server $1
+#/export/projects/twolfe/bin/redis-server $1
+redis-server $1
 
