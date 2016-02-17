@@ -24,7 +24,8 @@ public class Frame implements Serializable {
       String[] roles) {
     if(roles == null || roles.length == 0)
       throw new IllegalArgumentException();
-    assert name.startsWith("propbank/") || name.startsWith("framenet/");
+    assert name.startsWith("propbank/") || name.startsWith("framenet/")
+      : "frame names must now be prefixed with \"propbank/\" or \"framenet/\": " + name;
     this.idx = id;
     this.name = name;
     this.lexicalUnits = lexicalUnits;
