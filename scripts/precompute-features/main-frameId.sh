@@ -2,8 +2,8 @@
 # How to run all the scripts in this directory by hand.
 # By hand because it needs to be asyncronous (qsub takes a while and doesn't block)
 
-#export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
-export FNPARSE_DATA=$HOME/scratch/fnparse-data
+export FNPARSE_DATA=/export/projects/twolfe/fnparse-data
+#export FNPARSE_DATA=$HOME/scratch/fnparse-data
 
 SUF=".gz"
 CAT="zcat"
@@ -12,12 +12,12 @@ ZIP="gzip -c"
 #CAT="bzcat"
 #ZIP="bzip2 -c"
 
-BACKEND=slurm
+BACKEND=sge
 export CLUSTERLIB_BACKEND=$BACKEND
 
 DATASET=both
-#WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/frame-id/$DATASET
-WORKING_DIR=$HOME/scratch/fnparse-output/frame-id/$DATASET/feb15a
+WORKING_DIR=/export/projects/twolfe/fnparse-output/experiments/frame-id/$DATASET/feb15a
+#WORKING_DIR=$HOME/scratch/fnparse-output/frame-id/$DATASET/feb15a
 JAR=target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar
 
 ############################################################################################

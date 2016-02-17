@@ -10,7 +10,7 @@
 echo "starting at `date` on $HOSTNAME"
 echo "args: $@"
 
-set -e
+set -eu
 
 if [[ $# != 5 ]]; then
   echo "please provide:"
