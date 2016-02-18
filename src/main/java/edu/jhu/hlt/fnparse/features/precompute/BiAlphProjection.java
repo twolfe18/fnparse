@@ -74,12 +74,16 @@ public class BiAlphProjection {
     public void replace(File inputFile, File outputFile, boolean append) throws IOException {
       TimeMarker tm = new TimeMarker();
       Log.info(inputFile.getPath() + "  ==>  " + outputFile.getPath() + "  append=" + append);
+      int lines = 0;
       try (BufferedReader r = FileUtil.getReader(inputFile);
           BufferedWriter w = FileUtil.getWriter(outputFile, append)) {
         for (String line = r.readLine(); line != null; line = r.readLine()) {
+          lines++;
           StringBuilder sb = new StringBuilder();
           replace(line, sb);
-          w.write(sb.toString());
+          String converted = sb.toString();
+          assert converted.indexOf('\n') < 0;
+          w.write(converted);
           w.newLine();
 
           if (tm.enoughTimePassed(15)) {
@@ -89,6 +93,7 @@ public class BiAlphProjection {
           }
         }
       }
+      Log.info("done, converted " + lines + " lines");
     }
   }
 

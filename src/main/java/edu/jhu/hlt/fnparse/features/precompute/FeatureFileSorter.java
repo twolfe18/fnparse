@@ -54,9 +54,11 @@ public class FeatureFileSorter {
   public static void rewrite(File input, File output, boolean append) throws IOException {
     Log.info("sorting features in every line: " + input.getPath() + "  ==>  " + output.getPath());
     TimeMarker tm = new TimeMarker();
+    int lines = 0;
     try (BufferedReader r = FileUtil.getReader(input);
         BufferedWriter w = FileUtil.getWriter(output, append)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
+        lines++;
         String outline = rewrite(line);
         w.write(outline);
         w.newLine();
@@ -67,7 +69,7 @@ public class FeatureFileSorter {
         }
       }
     }
-    Log.info("done");
+    Log.info("done, processed " + lines + " lines");
   }
 
   public static void main(String[] args) throws IOException {

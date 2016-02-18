@@ -23,7 +23,7 @@ if [[ $# != 5 ]]; then
   echo "2) input bialph"
   echo "3) output features"
   echo "4) a jar file"
-  echo "5) whether to remove the input bialph (Y|N)"
+  echo "5) whether to remove the input bialph and temp file (Y|N)"
   exit 1
 fi
 
@@ -47,11 +47,11 @@ java -Xmx1G -ea -server -cp $4 \
 
 echo "ret code: $?"
 
-rm $TEMP
-
 if [[ $5 == "Y" ]]; then
   echo "removing input file: $2"
   rm $2
+  echo "removing temp file: $TEMP"
+  rm $TEMP
 fi
 
 echo "done at `date`"
