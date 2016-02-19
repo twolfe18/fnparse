@@ -20,6 +20,7 @@ import edu.mit.jwi.item.IIndexWord;
 import edu.mit.jwi.item.IWord;
 import edu.mit.jwi.item.IWordID;
 import edu.mit.jwi.morph.WordnetStemmer;
+import edu.stanford.nlp.process.Morphology;
 
 public class Sentence implements HasId, Serializable {
   private static final long serialVersionUID = 4441193252111939157L;
@@ -60,7 +61,8 @@ public class Sentence implements HasId, Serializable {
       boolean addGoldParse,
       boolean addStanfordCParse,
       boolean addStandordBasicDParse,
-      boolean addStanfordColDParse) {
+      boolean addStanfordColDParse,
+      boolean takeGoldPos) {
     if (firstToken < 0)
       throw new IllegalArgumentException("firstToken=" + firstToken + " lastToken=" + lastToken);
     if (lastToken < 0 || lastToken < firstToken)
@@ -74,7 +76,9 @@ public class Sentence implements HasId, Serializable {
     for (int i = 0; i < width; i++) {
       edu.jhu.hlt.tutils.Document.Token t = doc.getToken(firstToken + i);
       tokens[i] = t.getWordStr();
-      pos[i] = a.pos(t.getPos());
+      int p = takeGoldPos ? t.getPosG() : t.getPosH();
+      assert p >= 0;
+      pos[i] = a.pos(p);
       if (t.getLemma() >= 0)
         lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
@@ -151,6 +155,12 @@ public class Sentence implements HasId, Serializable {
       stanfordParse.stripCategories();
     if (goldParse != null)
       goldParse.stripCategories();
+  }
+
+  public void lemmatize() {
+    boolean lowercase = true;
+    for (int i = 0; i < lemmas.length; i++)
+      lemmas[i] = Morphology.lemmaStatic(tokens[i], pos[i], lowercase);
   }
 
   public int size() { return tokens.length; }
@@ -247,6 +257,10 @@ public class Sentence implements HasId, Serializable {
   public String getPos(int i) { return pos[i]; }
   public String[] getLemmas() { return lemmas; }
   public String getLemma(int i){return lemmas[i];}
+
+  public String getCoarsePos(int i) {
+    return pos[i].substring(0, 1).toUpperCase();
+  }
 
   public String[] getWordFor(Span s) {
     return Arrays.copyOfRange(tokens, s.start, s.end);

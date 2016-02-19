@@ -16,8 +16,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -77,8 +79,6 @@ import edu.jhu.prim.bimap.IntObjectBimap;
  * NOTE: Now k takes on values of (role,), (frame,role), and (frame,). The
  * values are stable across shards (so they do not need to be merged) and the
  * values are written out to WD/role-names.txt.gz.
- *
- * TODO t is represented as Span.shortString and s is represented as "start,end"
  *
  * @author travis
  */
@@ -454,7 +454,7 @@ public class FeaturePrecomputation {
   /** Emits one line */
   public static void emit(Writer w, Target t, Span s, String k, List<Feature> features) throws IOException {
     w.write(Target.toLine(t));
-    w.write("\t" + s.start + "," + s.end);
+    w.write("\t" + s.shortString());
     w.write("\t" + k);
     for (Feature f : features)
       w.write("\t" + f.template + ":" + f.feature);
@@ -469,25 +469,38 @@ public class FeaturePrecomputation {
     for (int i = 0; i < rolesS.length; i++)
       rolesI[i] = Integer.parseInt(rolesS[i]);
     return rolesI;
-//    return Integer.parseInt(line.split("\t", field + 2)[field]);
   }
 
-  public static void main(String[] args) {
-    ExperimentProperties config = ExperimentProperties.init(args);
-    File wd = config.getExistingDir("workingDir", new File("/tmp"));
+  public static Iterable<FNParse> getData(String dataset, boolean addParses) {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    Iterable<FNParse> data = Collections.emptyList();
+    Shard shard = ShardUtils.getShard(config);
 
     // Poorly named: provides parses via redis for both propbank/framenet
-    ParsePropbankData.Redis propbankAutoParses = new ParsePropbankData.Redis(config);
-
-    Iterable<FNParse> data = Collections.emptyList();
-    String dataset = config.getString("dataset");
-    Shard shard = ShardUtils.getShard(config);
+    ParsePropbankData.Redis propbankAutoParses = null;
+    if (addParses)
+      propbankAutoParses = new ParsePropbankData.Redis(config);
 
     if ("propbank".equalsIgnoreCase(dataset) || "both".equalsIgnoreCase(dataset)) {
       Log.info("reading propbank");
       PropbankReader pbr = new PropbankReader(config, propbankAutoParses);
       pbr.setKeep(s -> Math.floorMod(s.getId().hashCode(), shard.second) == shard.first);
-      data = Iterables.concat(data, pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
+//      data = Iterables.concat(data, pbr.getTrainData(), pbr.getDevData(), pbr.getTestData());
+      data = new Iterable<FNParse>() {
+        @Override
+        public Iterator<FNParse> iterator() {
+//          Stream<FNParse> s = Stream.empty();
+//          s = Stream.concat(s, pbr.getTrainDataStream());
+//          s = Stream.concat(s, pbr.getDevDataStream());
+//          s = Stream.concat(s, pbr.getTestDataStream());
+//          return s.iterator();
+          Iterator<FNParse> i = Collections.emptyIterator();
+          i = Iterators.concat(i, pbr.getTrainDataStream().iterator());
+          i = Iterators.concat(i, pbr.getDevDataStream().iterator());
+          i = Iterators.concat(i, pbr.getTestDataStream().iterator());
+          return i;
+        }
+      };
     }
 
     if ("framenet".equalsIgnoreCase(dataset) || "both".equalsIgnoreCase(dataset)) {
@@ -497,10 +510,9 @@ public class FeaturePrecomputation {
       Iterable<FNParse> unparsed = ShardUtils.shard(Iterables.concat(train, test), p -> p.getSentence().getId().hashCode(), shard);
 
       // Just load it into memory and parse
-      boolean parse = config.getBoolean("parseFN", true);
       List<FNParse> parsed = new ArrayList<>();
       for (FNParse y : unparsed) {
-        if (parse) {
+        if (addParses) {
           Sentence s = y.getSentence();
           if (s.getStanfordParse(false) == null) {
             ConstituencyParse cp = propbankAutoParses.parse(s);
@@ -515,6 +527,16 @@ public class FeaturePrecomputation {
       }
       data = Iterables.concat(data, parsed);
     }
+    return data;
+  }
+
+  public static void main(String[] args) {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    File wd = config.getExistingDir("workingDir", new File("/tmp"));
+
+    String dataset = config.getString("dataset");
+    boolean addParses = config.getBoolean("addParses", true);
+    Iterable<FNParse> data = getData(dataset, addParses);
 
     // Allows you to change compression, ["", ".gz", ".bz2"]
     String suffix = config.getString("suffix", ".gz");

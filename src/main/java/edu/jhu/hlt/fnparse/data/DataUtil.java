@@ -46,7 +46,8 @@ public class DataUtil {
       boolean addGoldParse,
       boolean addStanfordCParse,
       boolean addStanfordBasicDParse,
-      boolean addStanfordCollapsedDParse) {
+      boolean addStanfordCollapsedDParse,
+      boolean takeGoldPos) {
     Log.info("doc=" + doc.getId() + " cons_sentences=" + doc.cons_sentences + " cons_propbank_gold=" + doc.cons_propbank_gold + " cons_propbank_auto=" + doc.cons_propbank_auto);
     List<Sentence> sents = new ArrayList<>();
 
@@ -66,7 +67,8 @@ public class DataUtil {
       Sentence s = Sentence.convertFromTutils(dataset, id, doc,
           sent.getFirstToken(), sent.getLastToken(),
           addGoldParse, addStanfordCParse,
-          addStanfordBasicDParse, addStanfordCollapsedDParse);
+          addStanfordBasicDParse, addStanfordCollapsedDParse,
+          takeGoldPos);
       if (DEBUG) {
         System.out.println("working on sentence " + id);
         System.out.println(Describe.sentence(s));
@@ -81,11 +83,13 @@ public class DataUtil {
    * Converts a tutils.Document with a Propbank parse (as a constituency parse)
    * into a collection of FNParses. Alphabet must be set for doc.
    */
-  public static List<FNParse> convert(edu.jhu.hlt.tutils.Document doc,
+  public static List<FNParse> convert(
+      edu.jhu.hlt.tutils.Document doc,
       boolean addGoldParse,
       boolean addStanfordParse,
       boolean addStanfordBasicDParse,
-      boolean addStanfordCollapsedDParse) {
+      boolean addStanfordCollapsedDParse,
+      boolean takeGoldPos) {
     if (doc.getAlphabet() == null)
       throw new IllegalArgumentException();
     List<FNParse> l = new ArrayList<>();
@@ -116,7 +120,8 @@ public class DataUtil {
       Sentence s = Sentence.convertFromTutils(dataset, id, doc,
           sent.getFirstToken(), sent.getLastToken(),
           addGoldParse, addStanfordParse,
-          addStanfordBasicDParse, addStanfordCollapsedDParse);
+          addStanfordBasicDParse, addStanfordCollapsedDParse,
+          takeGoldPos);
       if (DEBUG) {
         System.out.println("working on sentence " + id);
         System.out.println(Describe.sentence(s));

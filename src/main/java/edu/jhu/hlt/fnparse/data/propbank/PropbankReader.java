@@ -1,12 +1,13 @@
 package edu.jhu.hlt.fnparse.data.propbank;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Iterator;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
-import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.ingesters.base.IngestException;
 import edu.jhu.hlt.concrete.ingesters.conll.Conll2011;
 import edu.jhu.hlt.concrete.ingesters.conll.Ontonotes5;
 import edu.jhu.hlt.fnparse.data.DataUtil;
@@ -15,7 +16,12 @@ import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider;
 import edu.jhu.hlt.fnparse.rl.rerank.ItemProvider.ParseWrapper;
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.*;
+import edu.jhu.hlt.tutils.ConcreteToDocument;
+import edu.jhu.hlt.tutils.Document;
+import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.tuple.Pair;
 
@@ -28,10 +34,8 @@ import edu.jhu.prim.tuple.Pair;
  */
 public class PropbankReader {
 
+  /** @deprecated */
   public static File CACHE_DIR = new File("/tmp/");
-
-  public static final int LAPTOP = 0;
-  public static final int COE_GRID = 1;
 
   private File on5;
   private File trainSkels;
@@ -99,13 +103,21 @@ public class PropbankReader {
   public ItemProvider getTrainData() {
     return getPropbankItemWrapper(trainSkels);
   }
-
   public ItemProvider getDevData() {
     return getPropbankItemWrapper(devSkels);
   }
-
   public ItemProvider getTestData() {
     return getPropbankItemWrapper(testSkels);
+  }
+
+  public Stream<FNParse> getTrainDataStream() {
+    return getParseStreamSafe(trainSkels);
+  }
+  public Stream<FNParse> getDevDataStream() {
+    return getParseStreamSafe(devSkels);
+  }
+  public Stream<FNParse> getTestDataStream() {
+    return getParseStreamSafe(testSkels);
   }
 
   public Pair<ItemProvider, ItemProvider> getTrainTestData() {
@@ -147,40 +159,58 @@ public class PropbankReader {
         + ".jser.gz");
   }
 
-  private ItemProvider getPropbankItemWrapper(File skelsDir) {
+  private int docIndex = 0;
+  private int getDocIndex() {
+    return docIndex++;
+  }
+
+  public Stream<FNParse> getParseStreamSafe(File skelsDir) {
+    try {
+      return getParseStream(skelsDir);
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  public Stream<FNParse> getParseStream(File skelsDir) throws IOException, IngestException {
     if (debug) {
       Log.info("starting, " + Describe.memoryUsage());
       Log.info("reading from onotnotes=" + on5.getPath());
       Log.info("reading from skels=" + skelsDir.getPath());
     }
-    try {
-      Conll2011 skels = new Conll2011(skelsDir.toPath(), f -> f.getFileName().endsWith(".gold_skel"));
-      skels.warnOnEmptyCoref = false;
-      Ontonotes5 on5 = new Ontonotes5(skels, this.on5.toPath());
+    Conll2011 skels = new Conll2011(skelsDir.toPath(), f -> {
+      return f.toFile().getName().endsWith(".gold_skel");
+    });
+    skels.warnOnEmptyCoref = false;
+    Ontonotes5 on5 = new Ontonotes5(skels, this.on5.toPath());
+    if (debug) {
+      skels.debug = true;
+      on5.debug = true;
+    }
 
-      Log.info("reading Communications, " + Describe.memoryUsage());
-      List<FNParse> parses = new ArrayList<>();
-      int docIndex = 0;
-      if (debug)
-        Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
-      //for (Communication c : on5.ingest()) {  // doesn't work because Stream doesn't implement Iterable...
-      //on5.stream().forEach(c -> {   // doesn't work because I mutate the docIndex variable...
-      Iterator<Communication> itr = on5.stream().iterator();
-      while (itr.hasNext()) {
-        Communication c = itr.next();
+    Log.info("reading Communications, " + Describe.memoryUsage());
+    if (debug)
+      Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
+
+    return on5.stream().flatMap(c -> {
         if (debug)
           System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
-        Document d = cio.communication2Document(c, docIndex++, alph, Language.EN).getDocument();
+        List<FNParse> parses = new ArrayList<>();
+        Document d = cio.communication2Document(c, /*docIndex++*/getDocIndex(), alph, Language.EN).getDocument();
         boolean addGoldParse = true;
         boolean addStanfordParse = false;
         boolean addStanfordBasicDParse = false;
         boolean addStanfordCollapsedDParse = false;
-        for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse)) {
+        boolean takeGoldPos = true;
+        boolean runLemmatizer = true;
+        for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse, takeGoldPos)) {
           if (debug)
             System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
           Sentence s = p.getSentence();
           if (keep != null && !keep.test(s))
             continue;
+          if (runLemmatizer)
+            s.lemmatize();
           // Add predicted parse information
           if (autoParses != null) {
             if (debug)
@@ -199,7 +229,72 @@ public class PropbankReader {
         }
         if (docIndex % 500 == 0)
           Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
+        return parses.stream();
+    });
+  }
+
+  private ItemProvider getPropbankItemWrapper(File skelsDir) {
+    try {
+      Conll2011 skels = new Conll2011(skelsDir.toPath(), f -> {
+        return f.toFile().getName().endsWith(".gold_skel");
+      });
+      skels.warnOnEmptyCoref = false;
+      Ontonotes5 on5 = new Ontonotes5(skels, this.on5.toPath());
+      if (debug) {
+        skels.debug = true;
+        on5.debug = true;
       }
+
+      Log.info("reading Communications, " + Describe.memoryUsage());
+      List<FNParse> parses = new ArrayList<>();
+//      int docIndex = 0;
+      if (debug)
+        Log.info("converting Communications to Documents/FNParses, " + Describe.memoryUsage());
+      //for (Communication c : on5.ingest()) {  // doesn't work because Stream doesn't implement Iterable...
+      on5.stream().forEach(c -> {   // doesn't work because I mutate the docIndex variable...
+//      int n = 0;
+//      Iterator<Communication> itr = on5.stream().iterator();
+//      while (itr.hasNext()) {
+//        n++;
+//        Communication c = itr.next();
+        if (debug)
+          System.out.println("[getPropbankItemWrapper] c.id=" + c.getId());
+        Document d = cio.communication2Document(c, /*docIndex++*/getDocIndex(), alph, Language.EN).getDocument();
+        boolean addGoldParse = true;
+        boolean addStanfordParse = false;
+        boolean addStanfordBasicDParse = false;
+        boolean addStanfordCollapsedDParse = false;
+        boolean takeGoldPos = true;
+        boolean runLemmatizer = true;
+        for (FNParse p : DataUtil.convert(d, addGoldParse, addStanfordParse, addStanfordBasicDParse, addStanfordCollapsedDParse, takeGoldPos)) {
+          if (debug)
+            System.out.println("[parse] p.id=" + p.getId() + " keepIsNull=" + (keep==null));
+          Sentence s = p.getSentence();
+          if (keep != null && !keep.test(s))
+            continue;
+          if (runLemmatizer)
+            s.lemmatize();
+          // Add predicted parse information
+          if (autoParses != null) {
+            if (debug)
+              Log.info("adding Sentence.stanfordCParse using the provided parser for " + d.getId());
+            if (s.getStanfordParse(false) == null)
+              s.setStanfordParse(autoParses.parse(s));
+            if (s.getBasicDeps(false) == null)
+              s.setBasicDeps(autoParses.getBasicDeps(s));
+          }
+          if (duplicateBasicDeps) {
+            if (s.getCollapsedDeps(false) != null)
+              Log.warn("overwriting collapsed depdencies!");
+            s.setCollapsedDeps(s.getBasicDeps(false));
+          }
+          parses.add(p);
+        }
+        if (docIndex % 500 == 0)
+          Log.info("converted " + docIndex + " docs so far, " + Describe.memoryUsage());
+      });
+//      if (n == 0)
+//        Log.warn("didn't iterate over any Communications?");
 
       boolean lazy = true;
       ParseWrapper pw = new ParseWrapper(parses, lazy);

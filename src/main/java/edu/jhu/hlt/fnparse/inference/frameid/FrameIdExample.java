@@ -15,6 +15,7 @@ public class FrameIdExample implements Serializable {
     this.targetFeatures = tf;
   }
 
+  /** Assign a new dropout vector with 50% probability on every dimension */
   public void newDropout(Random r) {
     if (targetFeaturesDropout == null)
       targetFeaturesDropout = new boolean[targetFeatures.length];
@@ -22,6 +23,7 @@ public class FrameIdExample implements Serializable {
       targetFeaturesDropout[i] = r.nextBoolean();
   }
 
+  /** returs whether the i^th feature should be dropped out */
   public boolean dropout(int i) {
     assert i >= 0 && i < targetFeatures.length;
     return targetFeaturesDropout != null && targetFeaturesDropout[i];
