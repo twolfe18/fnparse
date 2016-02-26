@@ -12,14 +12,15 @@ import java.util.List;
 import java.util.Random;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
-import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameSchemaHelper.Schema;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -48,16 +49,18 @@ public class Wsabie implements Serializable {
   public static final boolean USE_FLOATS = true;
 
   private double margin = 0.001;
-  private int dimFeat = 1<<16;
-  private int dimEmb = 1024;
+  private int dimFeat = 1<<20;
+  private int dimEmb = 512;
   private int numTemplates;
   private double[][] V;       // frame embeddings
   private double[][] M;       // feature -> frame embedding projection
   private float[][] Mf;       // feature -> frame embedding projection
   private double[] lossAtRank;
-  private int batchSize = 1;
+  private int batchSize = 1;    // 1 is better for fast learning, 2 may win after many iterations
   private double learningRate = 0.5;
   private Random rand;
+
+  // Tells you what frames are relevant (in the same schema) to each other
   private FrameSchemaHelper schemas;
 
   // Note: If you set this to true, the effective learning rate goes way down
@@ -66,10 +69,18 @@ public class Wsabie implements Serializable {
   // Seems to hurt performance a good bit, haven't tried on larger dim embeddings
   private boolean dropout = false;
 
+  // If false, readFile skips over instances that have goldFrame=NONE
+  public boolean onlyKeepGoldTargets = true;
+
   // Wrapping means an actual feature value was greater than dimFeat and had
   // to wrap around using modulo.
   private int wrappedFeatures = 0;
   private int totalFeatures = 0;
+
+  // Count of number of times where the gold frame was not in the generated
+  // confusion set (this is a failure, total is number of targets).
+  private int frameTriageFailures = 0;
+  private int frameTriageTotal = 0;
 
   // Used to determine template cardinalities
   private BiAlph bialph;
@@ -224,11 +235,14 @@ public class Wsabie implements Serializable {
 
       // Search for a violator
       Schema s = schemas.getSchema(e.frame);
-      int numFrames = schemas.numFrames(s);
+      int[] confusion = e.getConfusionSet();
+      if (confusion == null)
+        confusion = getDefaultConfusionSet();
+      int numFrames = confusion.length; //schemas.numFrames(s);
       int N = 0;
       violator[b] = -1;
       while (N < numFrames - 1 && violator[b] < 0) {
-        int otherY = rand.nextInt(numFrames);
+        int otherY = confusion[rand.nextInt(numFrames)];
         if (schemas.getSchema(otherY) != s)
           continue;
         if (otherY == e.frame)
@@ -362,7 +376,12 @@ public class Wsabie implements Serializable {
     Schema sc = null;
     if (e.frame >= 0)
       sc = schemas.getSchema(e.frame);
-    for (int frame = 0; frame < V.length; frame++) {
+    int[] confusion = e.getConfusionSet();
+    if (confusion == null)
+      confusion = getDefaultConfusionSet();
+    for (int i = 0; i < confusion.length; i++) {
+      int frame = confusion[i];
+//    for (int frame = 0; frame < V.length; frame++) {
       if (schemas.getSchema(frame) != sc)
         continue;
       double s = 0;
@@ -373,21 +392,65 @@ public class Wsabie implements Serializable {
     return b;
   }
 
-  public List<FrameIdExample> readFile(File f) throws IOException {
+  private transient int[] defaultConfusionSet;
+  private int[] getDefaultConfusionSet() {
+    if (defaultConfusionSet == null) {
+      defaultConfusionSet = new int[V.length];
+      for (int i = 0; i < defaultConfusionSet.length; i++)
+        defaultConfusionSet[i] = i;
+    }
+    return defaultConfusionSet;
+  }
+  private transient int[][] schemaConfusionSet; // first index is schema
+  private int[] getDefaultConfusionSet(int frame) {
+    if (schemaConfusionSet == null)
+      schemaConfusionSet = new int[FrameSchemaHelper.Schema.values().length][];
+    Schema sc = schemas.getSchema(frame);
+    int s = sc.ordinal();
+    if (schemaConfusionSet[s] == null) {
+      schemaConfusionSet[s] = new int[schemas.numFrames(sc)];
+      for (int i = 0, j = 0; i < V.length; i++) {
+        if (sc == schemas.getSchema(i))
+          schemaConfusionSet[s][j++] = i;
+      }
+    }
+    return schemaConfusionSet[s];
+  }
+  
+
+  /**
+   * @param confusionSet may be null in which case the confusion set will not be
+   * set for the returned example.
+   */
+  public List<FrameIdExample> readFile(File f, FrameConfusionSetCreation.FromDisk confusionSet) throws IOException {
     Log.info("reading from: " + f.getPath());
     List<FrameIdExample> l = new ArrayList<>();
     try (BufferedReader r = FileUtil.getReader(f)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
-        FrameIdExample e = readLine(line);
-        if (e.frame == schemas.nullFrameId())
+        FrameIdExample e = readLine(line, confusionSet);
+        if (onlyKeepGoldTargets && e.frame == schemas.nullFrameId())
           continue;
+
         l.add(e);
+
+        if (e.confusionSetFailure()) {
+          frameTriageFailures++;
+          if (frameTriageFailures % 10 == 0) {
+            Log.info(String.format("frame triage failure %d/%d (%.1f %%) of targets",
+                frameTriageFailures, frameTriageTotal, (100d*frameTriageFailures)/frameTriageTotal));
+          }
+        }
+        frameTriageTotal++;
       }
     }
     return l;
   }
 
-  public FrameIdExample readLine(String line) {
+  /**
+   * @param confusionSet may be null in which case the confusion set will not be
+   * set for the returned example.
+   */
+  public FrameIdExample readLine(String line, FrameConfusionSetCreation.FromDisk confusionSet) {
     // NOTE: By this point we're assuming that input feature files have been
     // filtered so that all features in the file are relevant to classification.
     FeatureFile.Line l = new FeatureFile.Line(line, true);
@@ -421,7 +484,17 @@ public class Wsabie implements Serializable {
         }
       }
     }
-    return new FrameIdExample(frame, features);
+    FrameIdExample e = new FrameIdExample(frame, features);
+    if (confusionSet != null) {
+      List<Integer> frames = confusionSet.getCofusionSet(l.getSentenceId(), l.getTarget());
+      if (frames.isEmpty()) {
+        // Then leave the confusion set as null, which means loop over all frames.
+      } else {
+        boolean addGoldIfNotPresent = true;
+        e.setFrameConfusionSet(frames, addGoldIfNotPresent);
+      }
+    }
+    return e;
   }
 
   public FPR accuracy(List<FrameIdExample> instances, int noFrameId) {
@@ -492,37 +565,56 @@ public class Wsabie implements Serializable {
     BitSet frames = new BitSet();
     OrderStatistics<Integer> numFeats = new OrderStatistics<>();
     Counts<Integer> yCounts = new Counts<>();
+    int haveConfusion = 0;
+    int confusionMisses = 0;
     for (FrameIdExample e : examples) {
       frames.set(e.frame);
       numFeats.add(e.targetFeatures.length);
       yCounts.increment(e.frame);
+      if (e.getConfusionSet() != null)
+        haveConfusion++;
+      if (e.confusionSetFailure())
+        confusionMisses++;
     }
     int k = Math.min(yCounts.numNonZero(), 10);
     Log.info(prefix
         + " numFrames=" + frames.cardinality()
         + " numInstances=" + examples.size()
         + " numFeats=" + numFeats.getOrdersStr()
-        + " mostCommonFrames=" + yCounts.getKeysSortedByCount(true).subList(0, k));
+        + " mostCommonFrames=" + yCounts.getKeysSortedByCount(true).subList(0, k)
+        + " haveConfusionSet=" + haveConfusion
+        + " confusionSetFailures=" + confusionMisses);
   }
 
   public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
     FrameSchemaHelper fsh = new FrameSchemaHelper(
         new File("data/frameid/feb15a/raw-shards/job-0-of-256/role-names.txt.gz"));
     int numTemplates = 2004;
     Wsabie w = new Wsabie(fsh, numTemplates);
 
     // This triggers a different way of indexing features, see readLine
-//    w.setBialph(new BiAlph(new File("data/frameid/feb15a/coherent-shards/alphabet.txt.gz"), LineMode.ALPH));
+    boolean useTightFeatureIndexing = config.getBoolean("useTightFeatureIndexing", true);
+    if (useTightFeatureIndexing)
+      w.setBialph(new BiAlph(new File("data/frameid/feb15a/coherent-shards/alphabet.txt.gz"), LineMode.ALPH));
 
+    // What frames are allowable for each target?
+    // If this is null, then all frames are allowable.
+    boolean useConfusionSet = config.getBoolean("useConfusionSet", true);
+    FrameConfusionSetCreation.FromDisk confusionSet = null;
+    if (useConfusionSet)
+      confusionSet = new FrameConfusionSetCreation.FromDisk(new File("data/frameid/feb15a/lex2frames.txt.gz"));
+
+    boolean quick = false;
     List<FrameIdExample> data = new ArrayList<>();
-    for (int i = 0; i < 256 /*&& data.size() < 5000*/; i++) {
+    for (int i = 0; i < 256 && (!quick || data.size() < 1000); i++) {
 //      data.addAll(w.readFile(new File("/tmp/frame-id-features/features.txt.gz")));
       File f = new File("data/frameid/feb15a/coherent-shards/features/shard" + i + ".txt.gz");
       if (!f.isFile()) {
         Log.info("skpping: " + f.getPath());
         continue;
       }
-      data.addAll(w.readFile(f));
+      data.addAll(w.readFile(f, confusionSet));
     }
     List<FrameIdExample> train = new ArrayList<>();
     List<FrameIdExample> test = new ArrayList<>();

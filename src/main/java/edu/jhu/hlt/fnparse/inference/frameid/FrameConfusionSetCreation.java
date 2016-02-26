@@ -29,6 +29,7 @@ import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.prim.bimap.IntObjectBimap;
+import edu.jhu.prim.tuple.Pair;
 
 /**
  * List a subset of all possible frames for a given target.
@@ -36,6 +37,45 @@ import edu.jhu.prim.bimap.IntObjectBimap;
  * @author travis
  */
 public class FrameConfusionSetCreation {
+
+  /**
+   * Reads the confusion set from disk and serves it up.
+   */
+  public static class FromDisk {
+    Map<Pair<String, Span>, List<Integer>> sentTarget2frames;
+    public FromDisk(File f) {
+      Log.info("reading confusion sets from " + f.getPath());
+      sentTarget2frames = new HashMap<>();
+      try (BufferedReader r = FileUtil.getReader(f)) {
+        for (String line = r.readLine(); line != null; line = r.readLine()) {
+          String[] toks = line.split("\\s+");
+          assert toks.length >= 3;
+//          String docId = toks[0];
+          String sentId = toks[1];
+          Span target = Span.inverseShortString(toks[2]);
+
+          List<Integer> frames = new ArrayList<>();
+          for (int i = 3; i < toks.length; i++)
+            frames.add(Integer.parseInt(toks[i]));
+
+          Pair<String, Span> key = new Pair<>(sentId, target);
+          List<Integer> old = sentTarget2frames.put(key, frames);
+          assert old == null : "duplicate: " + key;
+        }
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+      Log.info("done, read confusion sets for " + sentTarget2frames.size() + " targets");
+    }
+    /**
+     * returns null if it hasn't been seen and empty list if there really are
+     * no frame candidates.
+     */
+    public List<Integer> getCofusionSet(String sentId, Span target) {
+      Pair<String, Span> key = new Pair<>(sentId, target);
+      return sentTarget2frames.get(key);
+    }
+  }
 
   enum LexicalUnitType {
     WORD,
@@ -191,7 +231,6 @@ public class FrameConfusionSetCreation {
       Iterator<FNParse> itr = data.iterator();
       while (itr.hasNext()) {
         FNParse y = itr.next();
-//      for (FNParse y : data) {
         out++;
         if (tm.enoughTimePassed(15))
           Log.info("output " + out + " sentences");
