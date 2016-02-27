@@ -75,6 +75,7 @@ public class TNode {
     // Both may be null
     TransitionGenerator tg;
     GlobalFactor gf;
+    UbertsFrontend u;
   }
 
   private TKey key;
@@ -127,17 +128,18 @@ public class TNode {
     return cur;
   }
 
-  public static void match(UbertsFrontend.State state, HypEdge newEdge, TNode trie) {
+  public static void match(UbertsFrontend u, HypEdge newEdge, TNode trie) {
     Log.info("matching after " + newEdge + " was popped");
 //    HNode cur = new HNode(newEdge);
     HNode cur = new HNode(newEdge.getHead());
     GraphTraversalTrace gtt = new GraphTraversalTrace();
-    match(state, cur, gtt, trie);
+    match(u, cur, gtt, trie);
   }
 
-  private static void match(UbertsFrontend.State state, HNode cur, GraphTraversalTrace traversal, TNode trie) {
+  private static void match(UbertsFrontend u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
+    UbertsFrontend.State state = u.getState();
     if (trie.value != null)
-      emit(state, traversal, trie.value);
+      emit(u, traversal, trie.value);
 
     if (trie.isLeaf())
       return;
@@ -145,7 +147,7 @@ public class TNode {
     TNode childTrie = trie.getChild(GOTO_PARENT);
     if (childTrie != null) {
       HNode r = traversal.stack.pop();
-      match(state, r, traversal, childTrie);
+      match(u, r, traversal, childTrie);
       traversal.stack.push(r);
     }
 
@@ -167,7 +169,7 @@ public class TNode {
         traversal.stack.push(n);
         traversal.visited.add(n);
         traversal.bindings.put(key, n);
-        match(state, n, traversal, childTrie);
+        match(u, n, traversal, childTrie);
         traversal.stack.pop();
         traversal.visited.remove(n);
         traversal.bindings.remove(key);
@@ -179,14 +181,16 @@ public class TNode {
    * This is the only time you can read all of the values of out {@link GraphTraversalTrace},
    * since they will be removed later.
    */
-  private static void emit(UbertsFrontend.State state, GraphTraversalTrace traversal, TVal tval) {
-    Log.info("matching graph fragment!");
+  private static void emit(UbertsFrontend u, GraphTraversalTrace traversal, TVal tval) {
+//    Log.info("matching graph fragment!");
     if (tval.tg != null) {
-      for (HypEdge e : tval.tg.generate(traversal))
-        Log.info("generated " + e);
+      for (HypEdge e : tval.tg.generate(traversal)) {
+//        Log.info("generated " + e);
+        tval.u.addEdgeToAgenda(e);
+      }
     }
     if (tval.gf != null) {
-      Log.info("implement global features");
+      tval.gf.rescore(u.getAgenda(), traversal);
     }
   }
 }

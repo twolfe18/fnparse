@@ -5,14 +5,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 import edu.jhu.hlt.tutils.Either;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.mock.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.mock.TNode.TKey;
-import edu.jhu.hlt.uberts.mock.traversals.TrieTraversal;
-import edu.jhu.hlt.uberts.mock.traversals.TrieTraversal.DfsTraversalAction;
 import edu.jhu.prim.tuple.Pair;
 
 public class UbertsFrontend {
@@ -153,27 +153,17 @@ public class UbertsFrontend {
   }
   public static class NodeTypeNodeSpecifier implements NodeSpecifier {
     private NodeType nt;
-//    private Object lastCapture;
     public NodeTypeNodeSpecifier(NodeType nt) {
       this.nt = nt;
     }
     @Override
     public boolean matches(HypNode n) {
-      if (n.getNodeType() == nt) {
-//        lastCapture = n.getValue();
-        return true;
-      } else {
-//        lastCapture = null;
-        return false;
-      }
+      return n.getNodeType() == nt;
     }
     @Override
     public boolean matches(HypEdge e) {
       return false;
     }
-//    public Object getLastCapture() {
-//      return lastCapture;
-//    }
   }
   public static class RelationNodeSpecifier implements NodeSpecifier {
     private Relation rel;
@@ -229,52 +219,63 @@ public class UbertsFrontend {
       return a;
     }
   }
-  static class Agenda {
-    HypEdge[] heap1;
-    double[] heap2;
-    int top;
-    Map<HypNode, LL<HypEdge>> adjacency;
-    public Agenda() {
-      this.top = 0;
-      int initSize = 16;
-      this.heap1 = new HypEdge[initSize];
-      this.heap2 = new double[initSize];
-      this.adjacency = new HashMap<>();
-    }
-    public void add(HypEdge e) {
-      throw new RuntimeException("implement me");
-    }
-  }
-
   /* Transition Grammar *******************************************************/
   public static interface TransitionGenerator {
-//    Iterable<HypEdge> generate(LL<NodeSpecifier> lhs);
     Iterable<HypEdge> generate(GraphTraversalTrace lhsValues);
   }
 
   /* Global Factors ***********************************************************/
   public static interface GlobalFactor {
-    // TODO
+    /** Do whatever you want to the edges in the agenda */
+    public void rescore(Agenda a, GraphTraversalTrace match);
+  }
+  /** Only works for 2 arg relations now */
+  public static class AtMost1 implements GlobalFactor {
+    // Right now this is pos(i,T) => !pos(i,S) s.t. S \not\eq T
+    private Relation rel2;
+//    private NodeType freeVar;   // range over which AtMost1 applies
+    private NodeType boundVar;  // should be able to find this value in matches
+    public AtMost1(Relation twoArgRelation, NodeType range) {
+      if (twoArgRelation.getNumArgs() != 2)
+        throw new IllegalArgumentException();
+      this.rel2 = twoArgRelation;
+      this.boundVar = range;
+    }
+    public void rescore(Agenda a, GraphTraversalTrace match) {
+      HypNode observedValue = match.getValueFor(boundVar);
+      Log.info("removing all nodes adjacent to " + observedValue + " matching " + rel2 + " from agenda");
+      for (HypEdge e : a.adjacent(observedValue)) {
+        if (e.getRelation() == rel2) {
+          Log.info("actually removing: " + e);
+          a.remove(e);
+        }
+      }
+    }
   }
 
   private State state;
   private Agenda agenda;
   private Map<String, Relation> relations;
-////  private GraphFragmentTrie graphFragments;
-//  private Trie<DfsTraversalAction, Either<GlobalFactor, TransitionGenerator>> trie;
   private TNode trie;
+  private Random rand;
 
   // Alphabet of HypNodes which appear in either state or agenda.
   private Map<Pair<NodeType, Object>, HypNode> nodes;
 
-  public UbertsFrontend() {
+  public UbertsFrontend(Random rand) {
+    this.rand = rand;
     this.relations = new HashMap<>();
     this.agenda = new Agenda();
     this.nodes = new HashMap<>();
     this.state = new State();
-////    this.graphFragments = new GraphFragmentTrie();
-//    this.trie = new Trie<>(null, null);
     this.trie = new TNode(null, null);
+  }
+  
+  public State getState() {
+    return state;
+  }
+  public Agenda getAgenda() {
+    return agenda;
   }
 
   /**
@@ -309,21 +310,13 @@ public class UbertsFrontend {
     Log.info(e.toString());
     assert nodesContains(e);
     state.add(e);
-    TNode.match(state, e, trie);
-//    List<Either<GlobalFactor, TransitionGenerator>> matches = TrieTraversal.match(state, e, trie);
-//    for (Either<GlobalFactor, TransitionGenerator> a : matches) {
-//      if (a.isLeft()) {
-//        Log.warn("TODO search through agenda to rescore actions affected by this factor: " + a.getLeft());
-//      } else {
-//        TransitionGenerator tg = a.getRight();
-//        tg.generate(lhs);
-//      }
-//    }
+    TNode.match(this, e, trie);
   }
   public void addEdgeToAgenda(HypEdge e) {
     Log.info(e.toString());
     assert nodesContains(e);
-    agenda.add(e);
+    Adjoints score = new Adjoints.Constant(rand.nextGaussian());
+    agenda.add(e, score);
   }
 
   public void addEdgeType(Relation r) {
@@ -356,7 +349,7 @@ public class UbertsFrontend {
    * coref(i,j,k,l) ~ dist(j,k)
    */
   public static void main(String[] args) {
-    UbertsFrontend u = new UbertsFrontend();
+    UbertsFrontend u = new UbertsFrontend(new Random(9001));
     NodeType tokenIndex = new NodeType("tokenIndex");
     NodeType word = new NodeType("word");
     NodeType posTag = new NodeType("posTag");
@@ -385,21 +378,21 @@ public class UbertsFrontend {
 
     // This captures the actual POS tag.
     TNode t;
-    t = u.trie.lookup(new TKey[] {
-        new TKey(u.getEdgeType("pos")),
-        new TKey(posTag),
-        TNode.GOTO_PARENT,
-        new TKey(tokenIndex)}, true);
+//    t = u.trie.lookup(new TKey[] {
+//        new TKey(u.getEdgeType("pos")),
+//        new TKey(posTag),
+//        TNode.GOTO_PARENT,
+//        new TKey(tokenIndex)}, true);
     // If we don't actually need the POS tag, I suppose we could write:
     t = u.trie.lookup(new TKey[] {
         new TKey(u.getEdgeType("pos")),
         new TKey(tokenIndex)}, true);
-
     assert t.getValue().tg == null;
     t.getValue().tg = new TransitionGenerator() {
       @Override
       public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
         int i = (Integer) lhsValues.getValueFor(tokenIndex).getValue();
+        i++;
         HypNode[] tail = new HypNode[] { tokens.get(i) };
         Relation r = u.getEdgeType("pos");
         List<HypEdge> pos = new ArrayList<>();
@@ -410,11 +403,23 @@ public class UbertsFrontend {
         return pos;
       }
     };
+    t.getValue().u = u;
+
+    // Lets have a global factor of -inf for pos(i,T) => pos(i,S) if S!=T.
+    t.getValue().gf = new AtMost1(u.getEdgeType("pos"), tokenIndex);
 
     // This should kick off pos(i,*) => pos(i+1,*)
     HypNode head = u.lookupNode(posTag, "<s>");
     HypNode tail = u.lookupNode(tokenIndex, 0);
     HypEdge e = new HypEdge(u.getEdgeType("pos"), head, new HypNode[] {tail});
     u.addEdgeToState(e);
+
+    for (int i = 0; i < sent.length - 1; i++) {
+      Log.info("chosing the best action, i=" + (i++) + " size=" + u.agenda.size() + " cap=" + u.agenda.capacity());
+      u.agenda.dbgShowScores();
+      HypEdge best = u.agenda.pop();
+      Log.info("best=" + best);
+      u.addEdgeToState(best);
+    }
   }
 }
