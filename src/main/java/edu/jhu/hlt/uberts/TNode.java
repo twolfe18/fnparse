@@ -1,4 +1,4 @@
-package edu.jhu.hlt.uberts.mock;
+package edu.jhu.hlt.uberts;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -8,11 +8,8 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.Log;
-import edu.jhu.hlt.uberts.mock.UbertsFrontend.GlobalFactor;
-import edu.jhu.hlt.uberts.mock.UbertsFrontend.HNode;
-import edu.jhu.hlt.uberts.mock.UbertsFrontend.HypEdge;
-import edu.jhu.hlt.uberts.mock.UbertsFrontend.HypNode;
-import edu.jhu.hlt.uberts.mock.UbertsFrontend.TransitionGenerator;
+import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 
 public class TNode {
 
@@ -75,7 +72,7 @@ public class TNode {
     // Both may be null
     TransitionGenerator tg;
     GlobalFactor gf;
-    UbertsFrontend u;
+    Uberts u;
   }
 
   private TKey key;
@@ -128,7 +125,7 @@ public class TNode {
     return cur;
   }
 
-  public static void match(UbertsFrontend u, HypEdge newEdge, TNode trie) {
+  public static void match(Uberts u, HypEdge newEdge, TNode trie) {
     Log.info("matching after " + newEdge + " was popped");
 //    HNode cur = new HNode(newEdge);
     HNode cur = new HNode(newEdge.getHead());
@@ -136,8 +133,8 @@ public class TNode {
     match(u, cur, gtt, trie);
   }
 
-  private static void match(UbertsFrontend u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
-    UbertsFrontend.State state = u.getState();
+  private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
+    State state = u.getState();
     if (trie.value != null)
       emit(u, traversal, trie.value);
 
@@ -181,7 +178,7 @@ public class TNode {
    * This is the only time you can read all of the values of out {@link GraphTraversalTrace},
    * since they will be removed later.
    */
-  private static void emit(UbertsFrontend u, GraphTraversalTrace traversal, TVal tval) {
+  private static void emit(Uberts u, GraphTraversalTrace traversal, TVal tval) {
 //    Log.info("matching graph fragment!");
     if (tval.tg != null) {
       for (HypEdge e : tval.tg.generate(traversal)) {

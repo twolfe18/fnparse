@@ -1,4 +1,4 @@
-package edu.jhu.hlt.uberts.mock;
+package edu.jhu.hlt.uberts;
 
 public class Relation {
 
