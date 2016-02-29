@@ -25,4 +25,11 @@ public class HNode extends Either<HypNode, HypEdge> {
     return hc;
   }
 
+  @Override
+  public String toString() {
+    if (isLeft())
+      return "HNode(Node, " + getLeft().toString() + ")";
+    else
+      return "HNode(Edge, " + getRight().toString() + ")";
+  }
 }

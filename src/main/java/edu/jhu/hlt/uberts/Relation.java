@@ -1,5 +1,7 @@
 package edu.jhu.hlt.uberts;
 
+import java.util.Comparator;
+
 public class Relation {
 
   private String name;
@@ -26,4 +28,11 @@ public class Relation {
   public String toString() {
     return "(Relation " + name + ")";
   }
+
+  public static Comparator<Relation> BY_NAME = new Comparator<Relation>() {
+    @Override
+    public int compare(Relation o1, Relation o2) {
+      return o1.getName().compareTo(o2.getName());
+    }
+  };
 }

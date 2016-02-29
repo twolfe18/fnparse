@@ -1,6 +1,7 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -69,16 +70,54 @@ public class HypEdge {
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
-    sb.append("(Edge [");
-    for (int i = 0; i < tail.length; i++) {
-      if (i > 0) sb.append(", ");
-      sb.append(tail[i].toString());
-    }
-    sb.append("] -");
+//    sb.append("(Edge [");
+//    for (int i = 0; i < tail.length; i++) {
+//      if (i > 0) sb.append(", ");
+//      sb.append(tail[i].toString());
+//    }
+//    sb.append("] -");
+//    sb.append(relation.getName());
+//    sb.append("-> ");
+//    sb.append(head == null ? "null" : head.toString());
+//    sb.append(')');
     sb.append(relation.getName());
-    sb.append("-> ");
-    sb.append(head == null ? "null" : head.toString());
-    sb.append(')');
+    sb.append('(');
+    for (int i = 0; i < tail.length; i++) {
+      if (i > 0)
+        sb.append(", ");
+//      sb.append(tail[i].getValue() + ":" + tail[i].getNodeType().getName());
+      sb.append(tail[i].getValue());
+    }
+//    sb.append(", head=" + head.getValue() + ":" + head.getNodeType().getName());
+    sb.append(", head=" + head.getValue());
+    sb.append(")");
     return sb.toString();
   }
+
+  public static Comparator<HypEdge> BY_RELATION = new Comparator<HypEdge>() {
+    @Override
+    public int compare(HypEdge o1, HypEdge o2) {
+      return Relation.BY_NAME.compare(o1.getRelation(), o2.getRelation());
+    }
+  };
+  /** Lexicographic sort of tail values */
+  public static Comparator<HypEdge> BY_RELATION_THEN_TAIL = new Comparator<HypEdge>() {
+    @SuppressWarnings("unchecked")
+    @Override
+    public int compare(HypEdge o1, HypEdge o2) {
+      int c = Relation.BY_NAME.compare(o1.getRelation(), o2.getRelation());
+      if (c != 0)
+        return c;
+      int n = o1.tail.length;
+      assert n == o2.tail.length;
+      for (int i = 0; i < n; i++) {
+        Object x1 = o1.tail[i].getValue();
+        Object x2 = o2.tail[i].getValue();
+        int ci = ((Comparable<Object>) x1).compareTo(x2);
+        if (ci != 0)
+          return ci;
+      }
+      return 0;
+    }
+  };
 }

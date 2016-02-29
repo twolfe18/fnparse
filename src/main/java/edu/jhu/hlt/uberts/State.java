@@ -1,9 +1,12 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
@@ -20,10 +23,23 @@ public class State {
 
   public void dbgShowEdges() {
     System.out.println("State with " + adjacencyView1.size() + " nodes:");
-    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {
-      System.out.println(x.getKey());
-      for (LL<HypEdge> cur = x.getValue(); cur != null; cur = cur.next)
-        System.out.println("\t" + cur.item);
+//    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {
+//      System.out.println(x.getKey());
+//      for (LL<HypEdge> cur = x.getValue(); cur != null; cur = cur.next)
+//        System.out.println("\t" + cur.item);
+//    }
+    Set<HypEdge> es = new HashSet<>();
+    List<HypEdge> el = new ArrayList<>();
+    for (LL<HypEdge> l : adjacencyView1.values()) {
+      for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
+        if (es.add(cur.item))
+          el.add(cur.item);
+      }
+    }
+//    Collections.sort(el, HypEdge.BY_RELATION);
+    Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
+    for (HypEdge e : el) {
+      System.out.println(e);
     }
     System.out.println();
   }
