@@ -8,8 +8,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.prim.tuple.Pair;
 
 public class Agenda {
   private HypEdge[] heap1;      // ei2e
@@ -73,7 +73,15 @@ public class Agenda {
       siftUp(i);
   }
 
+  public boolean parentInvariantSatisfied() {
+    for (int i = 0; i < top; i++)
+      if (!parentInvariantSatisfied(i))
+        return false;
+    return true;
+  }
   public boolean parentInvariantSatisfied(int i) {
+    if (i == 0)
+      return true;
     int parent = (i - 1) >>> 1;
     return heap2[parent].forwards() >= heap2[i].forwards();
   }
@@ -110,30 +118,44 @@ public class Agenda {
     assert top > 0;
     return heap1[0];
   }
+  public Pair<HypEdge, Adjoints> peekBoth() {
+    return new Pair<>(heap1[0], heap2[0]);
+  }
   public HypEdge pop() {
+    assert top > 0;
     HypEdge e = heap1[0];
-    int t = --top;
-    moveAndFree(t, 0);
-    siftDown(0);
+    moveAndFree(top-1, 0);
+    top--;
+    if (top > 0)
+      siftDown(0);
     return e;
+  }
+  public Pair<HypEdge, Adjoints> popBoth() {
+    assert top > 0;
+    HypEdge e = heap1[0];
+    Adjoints a = heap2[0];
+    moveAndFree(top-1, 0);
+    top--;
+    if (top > 0)
+      siftDown(0);
+    return new Pair<>(e, a);
   }
 
   public void siftDown(int i) {
+//    Log.info("i=" + i);
     double sc = heap2[i].forwards();
-    while (true) {
-      int lc = (i << 1) + 1;
-      int rc = lc + 1;
-      double lcScore = lc < top ? heap2[lc].forwards() : sc;
-      double rcScore = rc < top ? heap2[rc].forwards() : sc;
-      if (sc >= lcScore && sc >= rcScore)
-        return;
-      if (lcScore > rcScore) {
-        swap(i, lc);
-        siftDown(lc);
-      } else {
-        swap(i, rc);
-        siftDown(rc);
-      }
+    int lc = (i << 1) + 1;
+    int rc = lc + 1;
+    double lcScore = lc < top ? heap2[lc].forwards() : sc;
+    double rcScore = rc < top ? heap2[rc].forwards() : sc;
+    if (sc >= lcScore && sc >= rcScore)
+      return;
+    if (lcScore > rcScore) {
+      swap(i, lc);
+      siftDown(lc);
+    } else {
+      swap(i, rc);
+      siftDown(rc);
     }
   }
 
@@ -148,16 +170,18 @@ public class Agenda {
   }
 
   private void swap(int i, int j) {
+//    Log.info("i=" + i + " j=" + j);
+    assert i != j;
     HypEdge ei = heap1[i];
     HypEdge ej = heap1[j];
     n2eiSet(i, ei, false);
     n2eiSet(j, ej, false);
     n2eiSet(j, ei, true);
     n2eiSet(i, ej, true);
-    heap1[i] = ej;
-    heap1[j] = ei;
     e2i.put(ei, j);
     e2i.put(ej, i);
+    heap1[i] = ej;
+    heap1[j] = ei;
     Adjoints ai = heap2[i];
     Adjoints aj = heap2[j];
     heap2[i] = aj;
@@ -169,6 +193,8 @@ public class Agenda {
    * to items are over-written and from items are assigned to null.
    */
   private void moveAndFree(int from, int to) {
+    if (from == to)
+      return;
     n2eiSet(from, heap1[from], false);
     n2eiSet(to, heap1[to], false);
     n2eiSet(to, heap1[from], true);
@@ -176,7 +202,7 @@ public class Agenda {
     e2i.remove(heap1[to]);
     heap1[to] = heap1[from];
     heap1[from] = null;
-    heap2[to] = heap2[to];
+    heap2[to] = heap2[from];
     heap2[from] = null;
   }
 

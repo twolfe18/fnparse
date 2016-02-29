@@ -112,7 +112,7 @@ public class Uberts {
    * ner(i,j,PER) ~ word(k) if i<=k<=j
    * coref(i,j,k,l) ~ dist(j,k)
    */
-  public static void main(String[] args) {
+  public static void main(String[] arg) {
     Uberts u = new Uberts(new Random(9001));
     NodeType tokenIndex = new NodeType("tokenIndex");
     NodeType word = new NodeType("word");
