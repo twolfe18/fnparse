@@ -61,12 +61,17 @@ public class Uberts {
     return n2 == n;
   }
   private boolean nodesContains(HypEdge e) {
-    if (!nodesContains(e.getHead()))
+    if (e.getHead() != null && !nodesContains(e.getHead())) {
+      Log.warn("missing head=" + e.getHead());
       return false;
+    }
     int n = e.getNumTails();
-    for (int i = 0; i < n; i++)
-      if (!nodesContains(e.getTail(i)))
+    for (int i = 0; i < n; i++) {
+      if (!nodesContains(e.getTail(i))) {
+        Log.info("missing: tail[" + i + "]=" + e.getTail(i));
         return false;
+      }
+    }
     return true;
   }
 
@@ -76,6 +81,7 @@ public class Uberts {
     state.add(e);
     TNode.match(this, e, trie);
   }
+
   public void addEdgeToAgenda(HypEdge e) {
     Log.info(e.toString());
     assert nodesContains(e);
@@ -95,6 +101,26 @@ public class Uberts {
 
   public void addGlobalFactor(String... terms) {
     throw new RuntimeException("implement me");
+  }
+
+  private Map<String, NodeType> witnessNodeTypes = new HashMap<>();
+  private NodeType getWitnessNodeType(Relation r) {
+    String wntName = "witness-" + r.getName();
+    NodeType nt = witnessNodeTypes.get(wntName);
+    if (nt == null) {
+      nt = new NodeType(wntName);
+      witnessNodeTypes.put(wntName, nt);
+    }
+    return nt;
+  }
+  private Object witnessValue = "yup";
+//  private Counts<NodeType> numNodesByType = new Counts<>();
+  public HypEdge makeEdge(String relationName, HypNode... tail) {
+    Relation r = getEdgeType(relationName);
+    NodeType headType = getWitnessNodeType(r);
+//    int c = numNodesByType.increment(headType);
+    HypNode head = lookupNode(headType, witnessValue);
+    return new HypEdge(r, head, tail);
   }
 
   /**
@@ -127,10 +153,11 @@ public class Uberts {
     List<HypNode> tokens = new ArrayList<>();
     String[] sent = new String[] {"<s>", "John", "loves", "Mary", "more", "than", "himself"};
     for (int i = 0; i < sent.length; i++) {
-      Relation edgeType = u.getEdgeType("word");
-      HypNode token = u.lookupNode(tokenIndex, i);
-      HypNode head = u.lookupNode(word, sent[i]);
-      HypEdge e = new HypEdge(edgeType, head, new HypNode[] {token});
+      HypNode[] tail = new HypNode[] {
+          u.lookupNode(tokenIndex, i),
+          u.lookupNode(word, sent[i]),
+      };
+      HypEdge e = u.makeEdge("word", tail);
       u.addEdgeToState(e);
       tokens.add(u.lookupNode(tokenIndex, i));
     }
@@ -157,12 +184,11 @@ public class Uberts {
       public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
         int i = (Integer) lhsValues.getValueFor(tokenIndex).getValue();
         i++;
-        HypNode[] tail = new HypNode[] { tokens.get(i) };
-        Relation r = u.getEdgeType("pos");
         List<HypEdge> pos = new ArrayList<>();
         for (HypNode pt : posTags) {
           Log.info("adding pos(" + i + ", " + pt.getValue() + ")");
-          pos.add(new HypEdge(r, pt, tail));
+          HypNode[] tail = new HypNode[] { tokens.get(i), pt };
+          pos.add(u.makeEdge("pos", tail));
         }
         return pos;
       }
@@ -173,17 +199,23 @@ public class Uberts {
     t.getValue().gf = new AtMost1(u.getEdgeType("pos"), tokenIndex);
 
     // This should kick off pos(i,*) => pos(i+1,*)
-    HypNode head = u.lookupNode(posTag, "<s>");
-    HypNode tail = u.lookupNode(tokenIndex, 0);
-    HypEdge e = new HypEdge(u.getEdgeType("pos"), head, new HypNode[] {tail});
+    HypNode[] tail = new HypNode[] {
+        u.lookupNode(tokenIndex, 0),
+        u.lookupNode(posTag, "<s>"),
+    };
+    HypEdge e = u.makeEdge("pos", tail);
     u.addEdgeToState(e);
 
-    for (int i = 0; i < sent.length - 1; i++) {
-      Log.info("chosing the best action, i=" + (i++) + " size=" + u.agenda.size() + " cap=" + u.agenda.capacity());
+//    for (int i = 0; i < sent.length - 1; i++) {
+    for (int i = 0; u.agenda.size() > 0; i++) {
+      Log.info("choosing the best action, i=" + i + " size=" + u.agenda.size() + " cap=" + u.agenda.capacity());
       u.agenda.dbgShowScores();
       HypEdge best = u.agenda.pop();
       Log.info("best=" + best);
       u.addEdgeToState(best);
     }
+
+    // Print out the state graph
+    u.state.dbgShowEdges();
   }
 }

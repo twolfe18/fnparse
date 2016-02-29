@@ -179,10 +179,9 @@ public class TNode {
    * since they will be removed later.
    */
   private static void emit(Uberts u, GraphTraversalTrace traversal, TVal tval) {
-//    Log.info("matching graph fragment!");
+    Log.info("EMIT bindings:" + traversal.bindings);
     if (tval.tg != null) {
       for (HypEdge e : tval.tg.generate(traversal)) {
-//        Log.info("generated " + e);
         tval.u.addEdgeToAgenda(e);
       }
     }

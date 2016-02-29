@@ -6,24 +6,55 @@ import java.util.List;
 import java.util.Map;
 
 import edu.jhu.hlt.tutils.LL;
+import edu.jhu.hlt.tutils.Log;
 
 public class State {
+
+  public static boolean DEBUG = true;
+
   private Map<HypNode, LL<HypEdge>> adjacencyView1;
+
   public State() {
     this.adjacencyView1 = new HashMap<>();
   }
+
+  public void dbgShowEdges() {
+    System.out.println("State with " + adjacencyView1.size() + " nodes:");
+    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {
+      System.out.println(x.getKey());
+      for (LL<HypEdge> cur = x.getValue(); cur != null; cur = cur.next)
+        System.out.println("\t" + cur.item);
+    }
+    System.out.println();
+  }
+
   public void add(HypEdge e) {
     add(e.getHead(), e);
     int n = e.getNumTails();
     for (int i = 0; i < n; i++)
       add(e.getTail(i), e);
+
+    if (DEBUG) {
+      Log.info("just added to State: " + e);
+      Log.info("Adjacent" + e.getHead() + "\t" + neighbors(e.getHead()));
+      for (int i = 0; i < e.getNumTails(); i++) {
+        HypNode x = e.getTail(i);
+        Log.info("Adjacent" + x + "\t" + neighbors(x));
+      }
+      System.out.println();
+    }
   }
+
   private void add(HypNode n, HypEdge e) {
     LL<HypEdge> es = adjacencyView1.get(n);
     adjacencyView1.put(n, new LL<>(e, es));
   }
-  public LL<HypEdge> getEdges(HypNode n) {
-    return adjacencyView1.get(n);
+
+  public List<HypEdge> neighbors(HypNode n) {
+    List<HypEdge> el = new ArrayList<>();
+    for (LL<HypEdge> cur = adjacencyView1.get(n); cur != null; cur = cur.next)
+      el.add(cur.item);
+    return el;
   }
   public List<HNode> neighbors(HNode node) {
     List<HNode> a = new ArrayList<>();

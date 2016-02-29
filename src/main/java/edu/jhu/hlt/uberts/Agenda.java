@@ -5,18 +5,25 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
+import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
 public class Agenda {
-  private HypEdge[] heap1;      // ei2e
+  public static boolean DEBUG = false;
+
+  // ei == "edge index" in the heap
+  // e == "edge"
+  private HypEdge[] heap1;              // ei2e
   private Adjoints[] heap2;
-  private int top;
-  private Map<HypNode, BitSet> n2ei;
-  private Map<HypEdge, Integer> e2i; 
+  private int top;                      // aka size
+  private Map<HypNode, BitSet> n2ei;    // node adjacency matrix, may contain old nodes as keys
+  private Map<HypEdge, Integer> e2i;    // location of edges in heap
 
   // TODO Can play around with more indices which may make things like AtMost1
   // faster (can also look up by relation), but may make swap and everything else
@@ -45,8 +52,36 @@ public class Agenda {
     this.e2i = new HashMap<>();
   }
 
+  /**
+   * Removes node->[edge index] entries in n2ei where the node is orphaned (no
+   * edges are adjacent because they have been removed).
+   */
+  public void cleanN2Ei() {
+    List<HypNode> l = new ArrayList<>();
+    for (Map.Entry<HypNode, BitSet> x : n2ei.entrySet()) {
+      if (x.getValue().cardinality() == 0)
+        l.add(x.getKey());
+    }
+    for (HypNode n : l)
+      n2ei.remove(n);
+  }
+  /** Don't use this, its slow */
+  public Set<HypNode> nodeSet1() {
+    cleanN2Ei();
+    return n2ei.keySet();
+  }
+  public Set<HypNode> nodeSet2() {
+    Set<HypNode> s = new HashSet<>();
+    for (int i = 0; i < top; i++) {
+      HypEdge e = heap1[i];
+      for (HypNode n : e.getNeighbors())
+        s.add(n);
+    }
+    return s;
+  }
+
   public List<HypEdge> adjacent(HypNode n) {
-    List<HypEdge> e = new ArrayList<>();
+    List<HypEdge> el = new ArrayList<>();
     BitSet bs = n2ei.get(n);
     if (bs == null) {
 //      for (HypNode nn : n2ei.keySet())
@@ -54,18 +89,35 @@ public class Agenda {
 //      throw new RuntimeException("could not lookup any nodes attached to " + n);
       return Collections.emptyList();
     }
-    for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1))
-      e.add(heap1[i]);
-    return e;
+    for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
+      assert i < top;
+      HypEdge e = heap1[i];
+      assert e != null;
+      el.add(e);
+    }
+    return el;
   }
 
   public void remove(HypEdge e) {
+    if (DEBUG) {
+      Log.info("before remove " + e);
+      dbgShowScores();
+      System.out.println();
+    }
+
     int i = e2i.get(e);
     removeAt(i);
+
+    if (DEBUG) {
+      Log.info("after remove " + e);
+      dbgShowScores();
+      System.out.println();
+    }
   }
 
-  public void removeAt(int i) {
-    int t = top--;
+  private void removeAt(int i) {
+    assert i < top;
+    int t = --top;
     moveAndFree(t, i);
     if (parentInvariantSatisfied(i))
       siftDown(i);
@@ -82,11 +134,19 @@ public class Agenda {
   public boolean parentInvariantSatisfied(int i) {
     if (i == 0)
       return true;
+    if (i == top)
+      return true;
     int parent = (i - 1) >>> 1;
+    if (DEBUG)
+      Log.info("i=" + i + " parent=" + parent + " top=" + top);
     return heap2[parent].forwards() >= heap2[i].forwards();
   }
 
   public void add(HypEdge edge, Adjoints score) {
+    if (edge == null)
+      throw new IllegalArgumentException();
+    if (score == null)
+      throw new IllegalArgumentException();
     int t = top++;
     if (t == heap1.length)
       grow();
@@ -95,6 +155,15 @@ public class Agenda {
     e2i.put(edge, t);
     n2eiSet(t, edge, true);
     siftUp(t);
+
+//    if (DEBUG) {
+//      Log.info("just added " + edge + " with score " + score);
+//      for (int i = 0; i < edge.getNumTails(); i++) {
+//        HypNode n = edge.getTail(i);
+//        System.out.println("Adjacent" + n + "\t" + adjacent(n));
+//      }
+//      System.out.println();
+//    }
   }
 
   public int size() {
@@ -114,13 +183,16 @@ public class Agenda {
     assert top > 0;
     return heap2[0];
   }
+
   public HypEdge peek() {
     assert top > 0;
     return heap1[0];
   }
+
   public Pair<HypEdge, Adjoints> peekBoth() {
     return new Pair<>(heap1[0], heap2[0]);
   }
+
   public HypEdge pop() {
     assert top > 0;
     HypEdge e = heap1[0];
@@ -130,6 +202,7 @@ public class Agenda {
       siftDown(0);
     return e;
   }
+
   public Pair<HypEdge, Adjoints> popBoth() {
     assert top > 0;
     HypEdge e = heap1[0];
@@ -142,7 +215,8 @@ public class Agenda {
   }
 
   public void siftDown(int i) {
-//    Log.info("i=" + i);
+    if (i >= top)
+      return;
     double sc = heap2[i].forwards();
     int lc = (i << 1) + 1;
     int rc = lc + 1;
@@ -160,6 +234,7 @@ public class Agenda {
   }
 
   public void siftUp(int i) {
+    assert i < top && i >= 0;
     while (i > 0) {
       int parent = (i - 1) >>> 1;
       if (heap2[parent].forwards() >= heap2[i].forwards())
@@ -184,6 +259,8 @@ public class Agenda {
     heap1[j] = ei;
     Adjoints ai = heap2[i];
     Adjoints aj = heap2[j];
+    assert ai != null;
+    assert aj != null;
     heap2[i] = aj;
     heap2[j] = ai;
   }
@@ -193,11 +270,15 @@ public class Agenda {
    * to items are over-written and from items are assigned to null.
    */
   private void moveAndFree(int from, int to) {
-    if (from == to)
+    if (DEBUG)
+      Log.info("from=" + from + " to=" + to);
+    if (from == to) {
+      free(from);
       return;
-    n2eiSet(from, heap1[from], false);
+    }
     n2eiSet(to, heap1[to], false);
     n2eiSet(to, heap1[from], true);
+    n2eiSet(from, heap1[from], false);
     e2i.put(heap1[from], to);
     e2i.remove(heap1[to]);
     heap1[to] = heap1[from];
@@ -205,14 +286,29 @@ public class Agenda {
     heap2[to] = heap2[from];
     heap2[from] = null;
   }
+  private void free(int i) {
+    n2eiSet(i, heap1[i], false);
+    e2i.remove(heap1[i]);
+    heap1[i] = null;
+    heap2[i] = null;
+  }
 
+  /**
+   * Looks up the edge-index adjacency list (BitSet) for each node neighboring e,
+   * and sets the i^{th} index (an edge index) to b.
+   */
   private void n2eiSet(int i, HypEdge e, boolean b) {
     if (e == null)
       throw new IllegalArgumentException();
+    if (DEBUG)
+      Log.info("setting " + e.getHead() + " (heapIndex, " + i + ") to " + b);
     n2eiGetOrInit(e.getHead()).set(i, b);
     int n = e.getNumTails();
-    for (int j = 0; j < n; j++)
+    for (int j = 0; j < n; j++) {
+      if (DEBUG)
+        Log.info("setting " + e.getTail(j) + " (heapIndex, " + i + ") to " + b);
       n2eiGetOrInit(e.getTail(j)).set(i, b);
+    }
   }
   private BitSet n2eiGetOrInit(HypNode n) {
     BitSet bs = n2ei.get(n);
