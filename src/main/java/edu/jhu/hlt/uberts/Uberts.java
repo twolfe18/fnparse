@@ -2,6 +2,7 @@ package edu.jhu.hlt.uberts;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -115,11 +116,13 @@ public class Uberts {
   }
   private Object witnessValue = "yup";
 //  private Counts<NodeType> numNodesByType = new Counts<>();
+  private int factCounter = 0;
   public HypEdge makeEdge(String relationName, HypNode... tail) {
     Relation r = getEdgeType(relationName);
     NodeType headType = getWitnessNodeType(r);
-//    int c = numNodesByType.increment(headType);
-    HypNode head = lookupNode(headType, witnessValue);
+////    int c = numNodesByType.increment(headType);
+//    HypNode head = lookupNode(headType, witnessValue);
+    HypNode head = lookupNode(headType, factCounter++);
     return new HypEdge(r, head, tail);
   }
 
@@ -184,6 +187,8 @@ public class Uberts {
       public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
         int i = (Integer) lhsValues.getValueFor(tokenIndex).getValue();
         i++;
+        if (i == sent.length)
+          return Collections.emptyList();
         List<HypEdge> pos = new ArrayList<>();
         for (HypNode pt : posTags) {
           Log.info("adding pos(" + i + ", " + pt.getValue() + ")");

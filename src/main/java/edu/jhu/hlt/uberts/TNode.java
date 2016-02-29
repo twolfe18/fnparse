@@ -126,11 +126,12 @@ public class TNode {
   }
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
-    Log.info("matching after " + newEdge + " was popped");
+    Log.info("START MATCH: after " + newEdge + " was popped");
 //    HNode cur = new HNode(newEdge);
     HNode cur = new HNode(newEdge.getHead());
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie);
+    Log.info("END MATCH: after " + newEdge + " was popped");
   }
 
   private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
@@ -179,12 +180,16 @@ public class TNode {
    * since they will be removed later.
    */
   private static void emit(Uberts u, GraphTraversalTrace traversal, TVal tval) {
-    Log.info("EMIT bindings:" + traversal.bindings);
+    Log.info("EMIT");
+    System.out.println("\tbindings:" + traversal.bindings);
+    System.out.println("\tstack:" + traversal.stack);
+    // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
       for (HypEdge e : tval.tg.generate(traversal)) {
         tval.u.addEdgeToAgenda(e);
       }
     }
+    // Good to put this second so that any new actions generated above get rescored immediately
     if (tval.gf != null) {
       tval.gf.rescore(u.getAgenda(), traversal);
     }
