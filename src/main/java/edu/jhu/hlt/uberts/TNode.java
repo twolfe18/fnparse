@@ -1,18 +1,21 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.hash.Hash;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 
 public class TNode {
+
+  public static boolean DEBUG = false;
 
   // Singleton, both NodeType and Relation are null
   public static final TKey GOTO_PARENT = new TKey();
@@ -25,21 +28,56 @@ public class TNode {
   public static class GraphTraversalTrace {
     // TODO bindings has the wrong type: there could be more than one TKey(posTag)
     // in a graph fragment, how to tell them apart? Probably need a name for each variable.
-    private Map<TKey, HNode> bindings;  // never shrinks
+//    private Map<TKey, HNode> bindings;  // never shrinks
+    private List<HNode> boundVals;
     private Deque<HNode> stack;         // shrinks when you gotoParent
     private Set<HNode> visited;         // never shrinks
 
     public GraphTraversalTrace() {
-        this.bindings = new HashMap<>();
-        this.stack = new ArrayDeque<>();
-        this.visited = new HashSet<>();
+//      this.bindings = new HashMap<>();
+      this.boundVals = new ArrayList<>();
+      this.stack = new ArrayDeque<>();
+      this.visited = new HashSet<>();
     }
 
-    public HypNode getValueFor(NodeType nt) {
-      TKey k = new TKey(nt);
-      HNode hn = bindings.get(k);
-      return hn.getLeft();
+    public HypNode getBoundNode(int i) {
+      return boundVals.get(i).getLeft();
     }
+    public HypEdge getBoundEdge(int i) {
+      return boundVals.get(i).getRight();
+    }
+
+//    /**
+//     * @deprecated use getBoundNode and getBoundEdge
+//     */
+//    public HypNode getValueFor(NodeType nt) {
+//      TKey k = new TKey(nt);
+//      HNode hn = bindings.get(k);
+//      return hn.getLeft();
+//    }
+
+//    public HypNode getBoundNode(TKey variable) {
+//      assert variable.nodeNameInFragment != null;
+//      HNode hn = bindings.get(variable);
+//      return hn.getLeft();
+//    }
+//    public HypEdge getBoundEdge(TKey variable) {
+//      assert variable.nodeNameInFragment != null;
+//      HNode hn = bindings.get(variable);
+//      return hn.getRight();
+//    }
+//
+//    public void addBinding(TKey variable, HNode value) {
+//      assert variable.nodeNameInFragment != null;
+//      HNode old = bindings.put(variable, value);
+//      assert old == null;
+//    }
+//
+//    public void removeBinding(TKey variable) {
+//      assert variable.nodeNameInFragment != null;
+//      HNode old = bindings.remove(variable);
+//      assert old != null;
+//    }
   }
 
   /**
@@ -49,6 +87,15 @@ public class TNode {
    * - relation match, equality defined using {@link Relation#equals(Object)}
    * - node type match, equality defined using == on {@link NodeType}
    * - node type and value match, equality using == on {@link NodeType} and equals on nodeValue
+   *
+   * The nodeNameInFragment:String field in this class is used for retrieving
+   * the matched values. It should be set (not null) for TKeys which are a part
+   * of rule graph fragments (stored in the trie) and it should NOT BE SET (null)
+   * for TKeys constructed from the state graph during the match process. In
+   * {@link GraphTraversalTrace}, this name is used to disambiguate TKeys which
+   * would otherwise look the same with respect to their state node matching
+   * properties (hashcode/equals must correspond to these properties due to
+   * {@link TNode#children}).
    */
   static class TKey {
     static final int RELATION = 0;
@@ -59,7 +106,11 @@ public class TNode {
     private Relation relationType;
     private int mode;
     private int hc;
+//    private String nodeNameInFragment;
 
+    public TKey(HypNode n) {  // Sugar
+      this(n.getNodeType(), n.getValue());
+    }
     public TKey(NodeType nodeType, Object nodeValue) {
       this.nodeType = nodeType;
       this.nodeValue = nodeValue;
@@ -89,6 +140,13 @@ public class TNode {
       this.mode = -1;
     }
 
+//    /** Use this with builder-style syntax when creating graph fragment rules */
+//    public TKey withName(String name) {
+//      nodeNameInFragment = name;
+//      hc = Hash.mix(hc, name.hashCode());
+//      return this;
+//    }
+
     @Override
     public int hashCode() {
       return hc;
@@ -100,6 +158,8 @@ public class TNode {
         TKey tk = (TKey) other;
         if (mode != tk.mode)
           return false;
+//        if (nodeNameInFragment != null && !nodeNameInFragment.equals(tk.nodeValue))
+//          return false;
         switch (mode) {
         case RELATION:
           return relationType == tk.relationType;
@@ -134,7 +194,7 @@ public class TNode {
 
   private TKey key;
   private TVal value;
-  private Map<TKey, TNode> children;  // Note: hashcode IGNORES nodeValue
+  private Map<TKey, TNode> children;
 
   public TNode(TKey key, TVal value) {
     this.key = key;
@@ -192,12 +252,13 @@ public class TNode {
   }
 
   public static void match(Uberts u, HypEdge newEdge, TNode trie) {
-    System.out.println("START MATCH: after " + newEdge + " was popped, numNodes=" + trie.getNumNodes());
-//    HNode cur = new HNode(newEdge);
+    if (DEBUG)
+      System.out.println("START MATCH: after " + newEdge + " was popped, numNodes=" + trie.getNumNodes());
     HNode cur = new HNode(newEdge.getHead());
     GraphTraversalTrace gtt = new GraphTraversalTrace();
     match(u, cur, gtt, trie);
-    System.out.println("END MATCH: after " + newEdge + " was popped");
+    if (DEBUG)
+      System.out.println("END MATCH: after " + newEdge + " was popped");
   }
 
   private String dbgChildKeys() {
@@ -207,16 +268,18 @@ public class TNode {
   }
   private static void match(Uberts u, HNode cur, GraphTraversalTrace traversal, TNode trie) {
 
-    System.out.println("TRACE cur=" + cur);
-    System.out.println("childKeys: " + trie.dbgChildKeys());
-//    System.out.println();
+    if (DEBUG) {
+      System.out.println("TRACE cur=" + cur);
+      System.out.println("childKeys: " + trie.dbgChildKeys());
+    }
 
     State state = u.getState();
     if (trie.value != null)
       emit(u, traversal, trie.value);
 
     if (trie.isLeaf()) {
-      System.out.println("isLeaf, returning");
+      if (DEBUG)
+        System.out.println("isLeaf, returning");
       return;
     }
 
@@ -230,10 +293,12 @@ public class TNode {
 
     for (HNode n : state.neighbors(cur)) {
       if (traversal.visited.contains(n)) {
-        System.out.println("skipping visited node: " + n);
+        if (DEBUG)
+          System.out.println("skipping visited node: " + n);
         continue;
       }
-      System.out.println("trying to go to " + n);
+      if (DEBUG)
+        System.out.println("trying to go to " + n);
       TKey key;
       if (n.isLeft()) {
         HypNode node = n.getLeft();
@@ -250,19 +315,24 @@ public class TNode {
       }
     }
   }
-  private static void tryMatch(TKey key, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie) {
+  /**
+   * @param keyConstructedFromState should not have a name set!
+   */
+  private static void tryMatch(TKey keyConstructedFromState, Uberts u, HNode n, GraphTraversalTrace traversal, TNode trie) {
       // This is the intersection of:
       // 1) unvisited neighbors (DFS style)
       // 2) allowed DFS strings in the trie
-      TNode childTrie = trie.getChild(key);
+      TNode childTrie = trie.getChild(keyConstructedFromState);
       if (childTrie != null) {
         traversal.stack.push(n);
         traversal.visited.add(n);
-        traversal.bindings.put(key, n);
+//        traversal.bindings.put(keyConstructedFromState, n);
+        traversal.boundVals.add(n);
         match(u, n, traversal, childTrie);
         traversal.stack.pop();
         traversal.visited.remove(n);
-        traversal.bindings.remove(key);
+//        traversal.bindings.remove(keyConstructedFromState);
+        traversal.boundVals.remove(traversal.boundVals.size() - 1);
       }
   }
 

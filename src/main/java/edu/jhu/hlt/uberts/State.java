@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.Log;
 
 public class State {
 
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   private Map<HypNode, LL<HypEdge>> adjacencyView1;
 

@@ -176,7 +176,7 @@ public class Agenda {
   public void dbgShowScores() {
     Log.info("Agenda has " + top + " items:");
     for (int i = 0; i < top; i++) {
-      System.out.printf("%d\t%.4f\t%s\n", i, heap2[i].forwards(), heap1[i]);
+      System.out.printf("%d\t%+.4f\t%s\n", i, heap2[i].forwards(), heap1[i]);
     }
   }
 

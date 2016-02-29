@@ -99,8 +99,11 @@ public class Uberts {
   // TODO a version that can parse input like "pos(i,*) => pos(i+1,*)"
 
   private Map<String, NodeType> witnessNodeTypes = new HashMap<>();
-  private NodeType getWitnessNodeType(Relation r) {
-    String wntName = "witness-" + r.getName();
+  public NodeType getWitnessNodeType(String relationName) {
+    return getWitnessNodeType(getEdgeType(relationName));
+  }
+  public NodeType getWitnessNodeType(Relation relation) {
+    String wntName = "witness-" + relation.getName();
     NodeType nt = witnessNodeTypes.get(wntName);
     if (nt == null) {
       nt = new NodeType(wntName);
