@@ -29,20 +29,6 @@ public class Agenda {
   // faster (can also look up by relation), but may make swap and everything else
   // slower.
 
-  /*
-   * Indices I actually need:
-   * 1) heap over HypEdge
-   * 2) probably: HypNode -> LL<HypEdge>
-   * 3) maybe: Relation -> LL<HypEdge>
-   *
-   * swap doesn't affect 2 or 3.
-   * remove does affect 1.
-   *
-   * If I store my indices as HypNode -> LL<int>, then I implicitly have an
-   * HypNode -> LL<HypEdge> via the heap
-   * and I can use these locations to do removes.
-   */
-
   public Agenda() {
     this.top = 0;
     int initSize = 16;
@@ -81,19 +67,37 @@ public class Agenda {
   }
 
   public List<HypEdge> adjacent(HypNode n) {
-    List<HypEdge> el = new ArrayList<>();
     BitSet bs = n2ei.get(n);
-    if (bs == null) {
-//      for (HypNode nn : n2ei.keySet())
-//        Log.warn(nn);
-//      throw new RuntimeException("could not lookup any nodes attached to " + n);
+    if (bs == null)
       return Collections.emptyList();
-    }
+    List<HypEdge> el = new ArrayList<>();
     for (int i = bs.nextSetBit(0); i >= 0; i = bs.nextSetBit(i + 1)) {
       assert i < top;
       HypEdge e = heap1[i];
       assert e != null;
       el.add(e);
+    }
+    return el;
+  }
+
+  /**
+   * Returns a list of {@link HypEdge}s which are adjacent to both nodes.
+   */
+  public List<HypEdge> adjacent(HypNode n1, HypNode n2) {
+    BitSet bs1 = n2ei.get(n1);
+    if (bs1 == null)
+      return Collections.emptyList();
+    BitSet bs2 = n2ei.get(n2);
+    if (bs2 == null)
+      return Collections.emptyList();
+    List<HypEdge> el = new ArrayList<>();
+    for (int i = bs1.nextSetBit(0); i >= 0; i = bs1.nextSetBit(i + 1)) {
+      assert i < top;
+      if (bs2.get(i)) {
+        HypEdge e = heap1[i];
+        assert e != null;
+        el.add(e);
+      }
     }
     return el;
   }

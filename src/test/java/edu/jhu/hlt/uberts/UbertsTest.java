@@ -25,7 +25,6 @@ public class UbertsTest {
   NodeType word = new NodeType("word");
   NodeType posTag = new NodeType("posTag");
   NodeType nerTag = new NodeType("nerTag");
-  NodeType bool = new NodeType("bool");
   String[] sent;
   List<HypNode> tokens;
   List<HypNode> posTags;
@@ -36,15 +35,14 @@ public class UbertsTest {
     word = new NodeType("word");
     posTag = new NodeType("posTag");
     nerTag = new NodeType("nerTag");
-    bool = new NodeType("bool");
     u.addEdgeType(new Relation("word", tokenIndex, word));
     u.addEdgeType(new Relation("pos", tokenIndex, posTag));
-    u.addEdgeType(new Relation("ner", tokenIndex, tokenIndex, nerTag));
-    u.addEdgeType(new Relation("coref", tokenIndex, tokenIndex, tokenIndex, tokenIndex));//, bool));
+    u.addEdgeType(new Relation("ner", tokenIndex, tokenIndex, nerTag)); // (inclusive, exclusive, tag)
+    u.addEdgeType(new Relation("coref", tokenIndex, tokenIndex, tokenIndex, tokenIndex)); // (inclusive, exclusive, inclusive, exclusive)
 
     tokens = new ArrayList<>();
-    sent = new String[] {"<s>", "This", "is", "a", "very", "long", "run", "on", "sentence", "designed" , "to", "help", "me", "observe", "interesting", "events", "which", "do", "not", "occur", "in", "shorter", "sentences"};
-//    sent = new String[] {"<s>", "John", "loves", "Mary", "more", "than", "himself"};
+//    sent = new String[] {"<s>", "This", "is", "a", "very", "long", "run", "on", "sentence", "designed" , "to", "help", "me", "observe", "interesting", "events", "which", "do", "not", "occur", "in", "shorter", "sentences"};
+    sent = new String[] {"<s>", "John", "loves", "Mary", "more", "than", "himself"};
 //    sent = new String[] {"<s>", "short", "sentence"};
     for (int i = 0; i < sent.length; i++) {
       HypNode[] tail = new HypNode[] {
@@ -55,11 +53,12 @@ public class UbertsTest {
       u.addEdgeToState(e);
       tokens.add(u.lookupNode(tokenIndex, i));
     }
+    Log.info("sent.length=" + sent.length);
 
     // This is how we convert "pos(i,*) => pos(i+1,*)" into code
     posTags = new ArrayList<>();
-    for (String p : Arrays.asList("N", "V", "PP", "PRP", "DT", "A", "J"))
-//    for (String p : Arrays.asList("N", "V", "OTHER"))
+//    for (String p : Arrays.asList("N", "V", "PP", "PRP", "DT", "A", "J"))
+    for (String p : Arrays.asList("N", "V", "OTHER"))
 //    for (String p : Arrays.asList("N", "V"))
 //    for (String p : Arrays.asList("N"))
       posTags.add(u.lookupNode(posTag, p.intern()));
@@ -82,7 +81,6 @@ public class UbertsTest {
     newPosGraphFragment.getValue().tg = new TransitionGenerator() {
       @Override
       public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
-//        int i = (Integer) lhsValues.getValueFor(tokenIndex).getValue();
         int i = (Integer) lhsValues.getBoundNode(1).getValue();
         i++;
         if (i == sent.length)
@@ -98,8 +96,7 @@ public class UbertsTest {
     };
     // Lets have a global factor of -inf for pos(i,T) => pos(i,S) if S!=T.
     Function<GraphTraversalTrace, HypNode> tokIdx = gtt -> gtt.getBoundNode(1);
-//    newPosGraphFragment.getValue().gf = new AtMost1(u.getEdgeType("pos"), tokenIndex);
-    newPosGraphFragment.getValue().gf = new AtMost1(u.getEdgeType("pos"), tokIdx);
+    newPosGraphFragment.getValue().gf = new AtMost1.RelNode1(u.getEdgeType("pos"), tokIdx);
   }
 
   public void posTestKickoff() {
@@ -130,7 +127,7 @@ public class UbertsTest {
    * Just do pos tagging with the transition rule `pos(i,*) => pos(i+1,*)` and
    * random scores.
    */
-  @Test
+//  @Test
   public void posTest() {
     generalSetup();
     posTestSetup();
@@ -152,13 +149,14 @@ public class UbertsTest {
     newNounGraphFragment.getValue().tg = new TransitionGenerator() {
       @Override
       public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
+        int i = (Integer) lhsValues.getBoundNode(2).getValue();
+        if (i == sent.length)
+          return Collections.emptyList();
+        HypNode end = u.lookupNode(tokenIndex, i+1);
         List<HypEdge> el = new ArrayList<>();
-        for (String nerType : Arrays.asList("PER", "GPE", "ORG", "LOC")) {
+        for (String nerType : Arrays.asList("PER", "GPE", "ORG", "LOC", "MISC")) {
           HypNode PER = u.lookupNode(nerTag, nerType);
-          //        int i = (Integer) lhsValues.getValueFor(tokenIndex).getValue();
-          int i = (Integer) lhsValues.getBoundNode(2).getValue();
           int j0 = Math.max(0, (i - maxEntWidth) + 1);
-          HypNode end = u.lookupNode(tokenIndex, i);
           for (int j = j0; j <= i; j++) {
             HypNode start = u.lookupNode(tokenIndex, j);
             HypNode[] tail = new HypNode[] {start, end, PER};
@@ -169,25 +167,25 @@ public class UbertsTest {
       }
     };
 
-    // AtMost1 global factor
+    // A given (i,j) span may only have one ner tag
     TNode newNerGraphFragment = trie.lookup(new TKey[] {
         new TKey(u.getEdgeType("ner")),
         new TKey(tokenIndex),
         TNode.GOTO_PARENT,
         new TKey(tokenIndex),
     }, true);
-    // TODO Need to make AtMost1 richer so that it can handle tuples of HypNode
-    // under which things are mutually exclusive.
-//    newNerGraphFragment.getValue().u = u;
-//    Function<GraphTraversalTrace, HypNode> tokIdx = gtt -> gtt.getBoundNode(1);
-//    newNerGraphFragment.getValue().gf = new AtMost1(u.getEdgeType("ner"), tokIdx);
+    newNerGraphFragment.getValue().u = u;
+    newNerGraphFragment.getValue().gf = new AtMost1.RelNode2(
+        u.getEdgeType("ner"),
+        gtt -> gtt.getBoundNode(1),
+        gtt -> gtt.getBoundNode(2));  // 2 and not 3 since GOTO_PARENT doesn't bind anything
   }
 
   /**
    * Manually add POS tags and do NER tagging with
    * `pos(j,N) => ner(i,j,PER) s.t. i<=j and (j-i)+1<=5`
    */
-  @Test
+//  @Test
   public void nerTest() {
     generalSetup();
     nerTestSetup();
@@ -211,7 +209,7 @@ public class UbertsTest {
     while (a.size() > 0) {
       Pair<HypEdge, Adjoints> p = a.popBoth();
       if (p.get2().forwards() > 0.5)
-        s.add(p.get1());
+        u.addEdgeToState(p.get1());
       else
         break;
     }
@@ -246,14 +244,14 @@ public class UbertsTest {
         int l = (Integer) ner2.getTail(1).getValue();
         String tag2 = (String) ner2.getTail(2).getValue();
 
-        assert i <= j;
-        assert k <= l;
+        assert i < j;
+        assert k < l;
 
         if (!tag1.equals(tag2))
           return Collections.emptyList();
 
-        Span s1 = Span.getSpan(i, j+1);
-        Span s2 = Span.getSpan(k, l+1);
+        Span s1 = Span.getSpan(i, j);
+        Span s2 = Span.getSpan(k, l);
         if (s1.crosses(s2))
           return Collections.emptyList();
 
@@ -270,7 +268,7 @@ public class UbertsTest {
   /**
    * Jointly tag POS and NER.
    */
-  @Test
+//  @Test
   public void posAndNerTest() {
     generalSetup();
     posTestSetup();
