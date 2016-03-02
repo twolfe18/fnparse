@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.IntFunction;
 
 import edu.jhu.hlt.fnparse.data.FrameIndex;
@@ -119,7 +118,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public boolean useRefRoles = false;
 
   // Features
-  private CFLike cachedFeatures;
+  private transient CFLike cachedFeatures;
   public final boolean featOverfit;
   public final boolean featProdBase;     // feature for just (t,s), center of shrinkage for others
   public final boolean featProdF;    // finer than (t,s) feature, but ignores role
@@ -135,7 +134,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
   public static final ProductIndex PI_STAT_S_FK = new ProductIndex(6, 8);
   public static final ProductIndex PI_STAT_S_K = new ProductIndex(7, 8);
 
-  public Alphabet<String> alph;  // TODO Remove!
+  public transient Alphabet<String> alph;  // TODO Remove!
 
   // Weights
   public AveragedPerceptronWeights wHatch;
@@ -262,13 +261,23 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     int dimension = config.getInt("hashingTrickDim", 1 << 24);
 
     int numIntercept = addConstantToSquashParams ? 1 : 0;
+    int numWV = 1;
     wHatch = new AveragedPerceptronWeights(dimension, numIntercept);
-    if (!onlyUseHatchWeights)
+    if (!onlyUseHatchWeights) {
+      numWV++;
       wSquash = new AveragedPerceptronWeights(dimension, 0);
-    if (useGlobalFeats)
+    }
+    if (useGlobalFeats) {
+      numWV++;
       wGlobal = new AveragedPerceptronWeights(dimension, 0);
+    }
 
     if (MAIN_LOGGING) {
+      long bytes = numWV * 2 * dimension * 8;
+      Log.info("[main] using " + numWV + " weight vectors (AveragedPerceptronWeights),"
+          + " each of which has two vectors of length " + dimension
+          + " for a total of " + (bytes / (1L<<30)) + " GB of ram");
+
       // Show L2Reg/learningRate for each
       Log.info("[main] wHatch=" + wHatch.summary());
       Log.info("[main] wSquash=" + (wSquash == null ? "null" : wSquash.summary()));
@@ -289,6 +298,15 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
       Log.info("[main] ROLE_COOC=" + LLSSPatF.ROLE_COOC);
       LLSSPatF.logGlobalFeatures(true);
     }
+  }
+
+  public long getNumBytesUsed() {
+    int numWV = 0;
+    if (wHatch != null) numWV++;
+    if (wSquash != null) numWV++;
+    if (wGlobal != null) numWV++;
+    int d = wHatch.dimension();
+    return numWV * d * 2 * 8;
   }
 
   public void showWeights() {

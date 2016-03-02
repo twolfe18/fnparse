@@ -94,13 +94,13 @@ public class FModel implements Serializable {
   private DeterministicRolePruning drp;
 
   /*
-   * trainWeights are weights trained on separate shards using distributed
+   * shardWeights are weights trained on separate shards using distributed
    * perceptron training:
    *   http://www.cslu.ogi.edu/~bedricks/courses/cs506-pslc/articles/week3/dpercep.pdf
-   * testWeights tracks the average/mixed weights of the training weights.
+   * shardAvgWeights tracks the average/mixed weights of the training weights.
    */
-  private FNParseTransitionScheme testWeights;      // average of train
-  private FNParseTransitionScheme[] trainWeights;   // indexed by shard
+  private FNParseTransitionScheme shardAvgWeights;            // average over shards
+  private transient FNParseTransitionScheme[] shardWeights;   // indexed by shard
 
   private boolean maxViolation;
   public PerceptronUpdateMode perceptronUpdateMode;
@@ -152,47 +152,52 @@ public class FModel implements Serializable {
     CFLike params = null;
 //    ts = new FNParseTransitionScheme(params, primes);
 
-    testWeights = new FNParseTransitionScheme(params, primes);
-    trainWeights = new FNParseTransitionScheme[numShards];
+    shardAvgWeights = new FNParseTransitionScheme(params, primes);
+    shardWeights = new FNParseTransitionScheme[numShards];
     for (int i = 0; i < numShards; i++)
-      trainWeights[i] = new FNParseTransitionScheme(params, primes);
+      shardWeights[i] = new FNParseTransitionScheme(params, primes);
+
+    long nb = shardAvgWeights.getNumBytesUsed();
+    for (int i = 0; i < numShards; i++)
+      nb += shardWeights[i].getNumBytesUsed();
+    Log.info("[main] totalMemoryUsageForWeights=" + (nb/(1L<<30)) + "GB");
   }
 
   public void setAllWeightsToAverage() {
-    testWeights.setParamsToAverage();
-    for (int i = 0; i < trainWeights.length; i++)
-      trainWeights[i].setParamsToAverage();
+    shardAvgWeights.setParamsToAverage();
+    for (int i = 0; i < shardWeights.length; i++)
+      shardWeights[i].setParamsToAverage();
   }
   public FNParseTransitionScheme getAverageWeights() {
-    return testWeights;
+    return shardAvgWeights;
   }
   public FNParseTransitionScheme getShardWeights(Shard shard) {
-    if (shard.getNumShards() != trainWeights.length)
+    if (shard.getNumShards() != shardWeights.length)
       throw new IllegalArgumentException("shard=" + shard);
-    return trainWeights[shard.getShard()];
+    return shardWeights[shard.getShard()];
   }
   public int getNumShards() {
-    return trainWeights.length;
+    return shardWeights.length;
   }
 
   public void combineWeightShards(boolean redistribute) {
     Log.info("[main] combining the average based on "
-        + trainWeights.length + " independent perceptrons"
+        + shardWeights.length + " independent perceptrons"
         + " redistribute=" + redistribute);
 
-    // Set w for testWeights equal to the average for each shard's current w
-    // Set u for testWeights equal to the sum of each shard's u (average over all history)
-    testWeights.zeroOutWeights(false);
-    double coef = 1d / trainWeights.length;
-    for (int i = 0; i < trainWeights.length; i++)
-      testWeights.addWeightsAndAverage(coef, trainWeights[i]);
+    // Set w for shardAvgWeights equal to the average for each shard's current w
+    // Set u for shardAvgWeights equal to the sum of each shard's u (average over all history)
+    shardAvgWeights.zeroOutWeights(false);
+    double coef = 1d / shardWeights.length;
+    for (int i = 0; i < shardWeights.length; i++)
+      shardAvgWeights.addWeightsAndAverage(coef, shardWeights[i]);
 
     // Re-distribute the average as the initial weights for each shard
     if (redistribute) {
-      for (int i = 0; i < trainWeights.length; i++) {
+      for (int i = 0; i < shardWeights.length; i++) {
         boolean includeWeightSums = false;
-        trainWeights[i].zeroOutWeights(includeWeightSums);
-        trainWeights[i].addWeights(1, testWeights);
+        shardWeights[i].zeroOutWeights(includeWeightSums);
+        shardWeights[i].addWeights(1, shardAvgWeights);
       }
     }
   }
@@ -200,9 +205,9 @@ public class FModel implements Serializable {
   public void zeroWeights(boolean includeAverage) {
     boolean includeWeightSums = true;
     if (includeAverage)
-      testWeights.zeroOutWeights(includeWeightSums);
-    for (int i = 0; i < trainWeights.length; i++)
-      trainWeights[i].zeroOutWeights(includeWeightSums);
+      shardAvgWeights.zeroOutWeights(includeWeightSums);
+    for (int i = 0; i < shardWeights.length; i++)
+      shardWeights[i].zeroOutWeights(includeWeightSums);
   }
 
   public void setConfig(Config c) {
@@ -220,8 +225,8 @@ public class FModel implements Serializable {
   public void setCachedFeatures(CFLike cf) {
     assert cf != null;
 //    ts.setCachedFeatures(cf);
-    testWeights.setCachedFeatures(cf);
-    for (FNParseTransitionScheme ts : trainWeights)
+    shardAvgWeights.setCachedFeatures(cf);
+    for (FNParseTransitionScheme ts : shardWeights)
       ts.setCachedFeatures(cf);
   }
 
@@ -499,10 +504,10 @@ public class FModel implements Serializable {
     FModel m = getFModel(config);
 
     // This code was written before introducing multiple FNParseTransitionSystems
-    // for distributed training. Therefore I will use the testWeights directly
+    // for distributed training. Therefore I will use the shardAvgWeights directly
     // as the weights we are manipulating. This is not how RerankerTrainer
     // will interface with FModel.
-    FNParseTransitionScheme ts = m.testWeights;
+    FNParseTransitionScheme ts = m.shardAvgWeights;
 
     for (FNParse y : ys) {
       if (y.numFrameInstances() == 0)
@@ -911,10 +916,10 @@ public class FModel implements Serializable {
     m.setCachedFeatures(cfLike);
 
     // This code was written before introducing multiple FNParseTransitionSystems
-    // for distributed training. Therefore I will use the testWeights directly
+    // for distributed training. Therefore I will use the shardAvgWeights directly
     // as the weights we are manipulating. This is not how RerankerTrainer
     // will interface with FModel.
-    FNParseTransitionScheme ts = m.testWeights;
+    FNParseTransitionScheme ts = m.shardAvgWeights;
 
     Log.info("[main] m.ts.useGlobalFeatures=" + ts.useGlobalFeats);
 
@@ -1130,10 +1135,10 @@ public class FModel implements Serializable {
     FModel m = getFModel(config);
 
     // This code was written before introducing multiple FNParseTransitionSystems
-    // for distributed training. Therefore I will use the testWeights directly
+    // for distributed training. Therefore I will use the shardAvgWeights directly
     // as the weights we are manipulating. This is not how RerankerTrainer
     // will interface with FModel.
-    FNParseTransitionScheme ts = m.testWeights;
+    FNParseTransitionScheme ts = m.shardAvgWeights;
 
     List<CachedFeatures.Item> stuff = fooMemo();
 //    stuff = stuff.subList(0, 50);

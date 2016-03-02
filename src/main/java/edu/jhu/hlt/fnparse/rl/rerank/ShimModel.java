@@ -435,8 +435,15 @@ public class ShimModel implements Serializable {
     assert !FModel.overlappingIds2(train, test);
     assert !FModel.overlappingIds2(train, dev);
     assert !FModel.overlappingIds2(test, dev);
-    
+
     boolean debugTS = config.getBoolean("debugTS", false);
+
+    String outputModelKey = "outputModelDir";
+    File outputModelDir = null;
+    if (config.containsKey(outputModelKey)) {
+      outputModelDir = config.getOrMakeDir(outputModelKey);
+      Log.info("[main] saving models to: " + outputModelDir.getPath());
+    }
 
     // After this many epochs, spend time to compute the full average
     int noApproxAfter = config.getInt("noApproxAfterEpoch", 10);
@@ -444,11 +451,7 @@ public class ShimModel implements Serializable {
     int maxEpoch = config.getInt("maxEpoch", 20);
     for (int epoch = 0; epoch < maxEpoch; epoch++) {
       Log.info("starting epoch=" + epoch);
-      
-      
-      
-      
-      
+
       // DEBUGGING!
       if (debugTS) {
         // Count the number of actions per state there are.
@@ -476,11 +479,6 @@ public class ShimModel implements Serializable {
 //        continue;
         return;
       }
-      
-      
-      
-      
-      
 
       // Run perceptron on each shard separately
       Collections.shuffle(train, rand);
@@ -503,6 +501,18 @@ public class ShimModel implements Serializable {
 
       // Compute the average and re-distribute
       m.combineWeightShards(redistribute);
+
+      // Save model to disk
+      if (outputModelDir != null) {
+        File mf = new File(outputModelDir, "FModel.epoch" + epoch + ".jser");
+        Log.info("[main] writing model to " + mf.getPath());
+        try {
+          FileUtil.serialize(m, mf);
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
+        Log.info("done writing model");
+      }
     }
     m.setAllWeightsToAverage();
     if (shards > 1) {
