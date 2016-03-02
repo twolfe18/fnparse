@@ -4,12 +4,22 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import edu.jhu.hlt.tutils.hash.Hash;
+
 /**
- * A hyper-edge in a hyper graph where the tail represents the columns in a
+ * A hyper-edge in a hyper-graph where the tail represents the columns in a
  * relation and the head is the identity of the row (witness of the fact).
+ * See {@link Relation#encodeTail(Object[])} for details on how this head value
+ * is constructed.
  *
- * Tail nodes may be type-checked against the relatoin.
+ * Tail nodes may be type-checked against the relation.
  * For now, the head node is untyped.
+ *
+ * The only real reason I currently see to have head:HypNode is so that this
+ * HypEdge may be an element of the tail of a nother HypNode and type check.
+ * I agreed that allowing head==null is not worth the complexity of doing a
+ * null-check on HypNodes everywhere. As a consequence: head:HypNode and HypEdge
+ * are basically in a bijection.
  *
  * @author travis
  */
@@ -19,14 +29,8 @@ public class HypEdge {
   public static boolean TYPE_CHECK = true;
 
   private Relation relation;    // e.g. 'srl2'
-  private HypNode head;         // this node is the witness of the fact, may be null if not needed
+  private HypNode head;         // this node is the witness of the fact
   private HypNode[] tail;       // argument/columns of relation, e.g. ['arg:span', 'pred:span']
-
-  // TODO Come up with a way to type-check the head node...
-  // Cases I can think of for using head (as opposed to just saying that relation
-  // args are just the tail, no need for head) are cases where you can only build
-  // off of the head node, e.g. head<-srl2(p,a) allows srl3(p,a,k) to be represented as srl3b(head,k)
-  // => head node can be used for partial application (take args from tail -- possibly recursively)
 
   public HypEdge(Relation edgeType, HypNode head, HypNode[] tail) {
     this.relation = edgeType;
@@ -68,6 +72,15 @@ public class HypEdge {
   }
 
   @Override
+  public int hashCode() {
+    throw new RuntimeException("implement me");
+  }
+  @Override
+  public boolean equals(Object other) {
+    throw new RuntimeException("implement me");
+  }
+
+  @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
 //    sb.append("(Edge [");
@@ -92,6 +105,49 @@ public class HypEdge {
     sb.append(", head=" + head.getValue());
     sb.append(")");
     return sb.toString();
+  }
+
+  /**
+   * Use this class whenever you want to put {@link HypEdge}s into a set/map
+   * where hashCode/equals only pays attention to the relation and tail
+   * (arguments/columns/values of the relation). This is useful, e.g., when
+   * ascribing a label to a {@link HypEdge} by checking its membership in a set
+   * of gold edges. I don't want to commit to a particular implementation of
+   * hashCode/equals on HypEdge, let alone a non-standard one like described
+   * (hashCode/equals IGNORES a field), so this is a nice compromise.
+   *
+   * Uses == to check {@link Relation} and {@link HypNode} equality.
+   */
+  public static class HashableHypEdge {
+    private HypEdge edge;
+    private int hc;
+    public HashableHypEdge(HypEdge e) {
+      this.edge = e;
+      long[] h = new long[e.getNumTails() + 1];
+      h[0] = e.getRelation().hashCode();
+      for (int i = 1; i < h.length; i++)
+        h[i] = e.getTail(i-1).hashCode();
+      this.hc = (int) Hash.mix64(h);
+    }
+    @Override
+    public int hashCode() {
+      return hc;
+    }
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof HashableHypEdge) {
+        HashableHypEdge hhe = (HashableHypEdge) other;
+        if (hc != hhe.hc || edge.relation == hhe.edge.relation)
+          return false;
+        int n = edge.relation.getNumArgs();
+        assert n == hhe.edge.relation.getNumArgs();
+        for (int i = 0; i < n; i++)
+          if (edge.getTail(i) != hhe.edge.getTail(i))
+            return false;
+        return true;
+      }
+      return false;
+    }
   }
 
   public static Comparator<HypEdge> BY_RELATION = new Comparator<HypEdge>() {

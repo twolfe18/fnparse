@@ -10,9 +10,16 @@ import java.util.Map;
 import java.util.Set;
 
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
+import edu.jhu.prim.tuple.Pair;
 
+/**
+ * A trie which stores graph fragments.
+ *
+ * @author travis
+ */
 public class TNode {
 
   public static boolean DEBUG = true;
@@ -52,7 +59,7 @@ public class TNode {
    * - node type match, equality defined using == on {@link NodeType}
    * - node type and value match, equality using == on {@link NodeType} and equals on nodeValue
    */
-  static class TKey {
+  public static class TKey {
     static final int RELATION = 0;
     static final int NODE_TYPE = 1;
     static final int NODE_VALUE = 2;
@@ -290,9 +297,8 @@ public class TNode {
 //    System.out.println();
     // NOTE: Both of these operations don't mutate the State, only Agenda
     if (tval.tg != null) {
-      for (HypEdge e : tval.tg.generate(traversal)) {
-        tval.u.addEdgeToAgenda(e);
-      }
+      for (Pair<HypEdge, Adjoints> p : tval.tg.generate(traversal))
+        tval.u.addEdgeToAgenda(p);
     }
     // Good to put this second so that any new actions generated above get rescored immediately
     if (tval.gf != null) {

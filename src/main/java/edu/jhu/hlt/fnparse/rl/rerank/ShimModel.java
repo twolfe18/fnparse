@@ -335,7 +335,7 @@ public class ShimModel implements Serializable {
     File evalOutputDir = null;
     TaggedEvalFunc evalFunc = null;
     if (!dontTrain) {
-      evalOutputDir = config.getExistingDir("evalOutputDir");
+      evalOutputDir = config.getOrMakeDir("evalOutputDir");
       if (propbank) {
         File evalScript = config.getExistingFile("conll2005srlEval", new File("data/conll05st-release-generated-by-mgormley/scripts/srl-eval.pl"));
         evalFunc = new Conll2005SrlEval(evalOutputDir, evalScript);

@@ -10,19 +10,51 @@ import java.util.Set;
 
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.hash.Hash;
 
+/**
+ * A hyper-graph representing joint NLP predictions.
+ *
+ * @see HypEdge, HypNode
+ *
+ * @author travis
+ */
 public class State {
 
   public static boolean DEBUG = false;
 
-  private Map<HypNode, LL<HypEdge>> adjacencyView1;
+  /** Another way to index into edges: lookup by (relation,argument) */
+  public static class Arg {
+    public final Relation rel;
+    public final HypNode arg;
+    public final int hc;
+    public Arg(Relation rel, HypNode arg) {
+      this.rel = rel;
+      this.arg = arg;
+      this.hc = Hash.mix(rel.hashCode(), arg.hashCode());
+    }
+    @Override
+    public int hashCode() { return hc; }
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof Arg) {
+        Arg a = (Arg) other;
+        return rel == a.rel && arg == a.arg;
+      }
+      return false;
+    }
+  }
+
+  private Map<HypNode, LL<HypEdge>> primaryView;
+  private Map<Arg, LL<HypEdge>> fineView;
 
   public State() {
-    this.adjacencyView1 = new HashMap<>();
+    this.primaryView = new HashMap<>();
+    this.fineView = new HashMap<>();
   }
 
   public void dbgShowEdges() {
-    System.out.println("State with " + adjacencyView1.size() + " nodes:");
+    System.out.println("State with " + primaryView.size() + " nodes:");
 //    for (Map.Entry<HypNode, LL<HypEdge>> x : adjacencyView1.entrySet()) {
 //      System.out.println(x.getKey());
 //      for (LL<HypEdge> cur = x.getValue(); cur != null; cur = cur.next)
@@ -30,7 +62,7 @@ public class State {
 //    }
     Set<HypEdge> es = new HashSet<>();
     List<HypEdge> el = new ArrayList<>();
-    for (LL<HypEdge> l : adjacencyView1.values()) {
+    for (LL<HypEdge> l : primaryView.values()) {
       for (LL<HypEdge> cur = l; cur != null; cur = cur.next) {
         if (es.add(cur.item))
           el.add(cur.item);
@@ -62,21 +94,30 @@ public class State {
   }
 
   private void add(HypNode n, HypEdge e) {
-    LL<HypEdge> es = adjacencyView1.get(n);
-    adjacencyView1.put(n, new LL<>(e, es));
+    LL<HypEdge> es = primaryView.get(n);
+    primaryView.put(n, new LL<>(e, es));
+
+    Arg key = new Arg(e.getRelation(), n);
+    es = fineView.get(key);
+    fineView.put(key, new LL<>(e, es));
+  }
+
+  public LL<HypEdge> match(Relation rel, HypNode arg) {
+    return fineView.get(new Arg(rel, arg));
   }
 
   public List<HypEdge> neighbors(HypNode n) {
     List<HypEdge> el = new ArrayList<>();
-    for (LL<HypEdge> cur = adjacencyView1.get(n); cur != null; cur = cur.next)
+    for (LL<HypEdge> cur = primaryView.get(n); cur != null; cur = cur.next)
       el.add(cur.item);
     return el;
   }
+
   public List<HNode> neighbors(HNode node) {
     List<HNode> a = new ArrayList<>();
     if (node.isLeft()) {
       HypNode n = node.getLeft();
-      for (LL<HypEdge> cur = adjacencyView1.get(n); cur != null; cur = cur.next)
+      for (LL<HypEdge> cur = primaryView.get(n); cur != null; cur = cur.next)
         a.add(new HNode(cur.item));
     } else {
       HypEdge e = node.getRight();

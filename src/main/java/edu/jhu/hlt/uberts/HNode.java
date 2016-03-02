@@ -3,26 +3,17 @@ package edu.jhu.hlt.uberts;
 import edu.jhu.hlt.tutils.Either;
 
 /**
- * This is the node type in the graph (i.e. not the hyper-graph).
- * Mostly sugar.
+ * This is the node type in the graph (i.e. not the hyper-graph). This is the
+ * data structure which enables the graph view of the {@link State} hyper-graph.
  */
 public class HNode extends Either<HypNode, HypEdge> {
 
-  private int hc;
-
   public HNode(HypNode l) {
     super(l, null);
-    hc = super.hashCode();
   }
 
   public HNode(HypEdge r) {
     super(null, r);
-    hc = super.hashCode();
-  }
-
-  @Override
-  public int hashCode() {
-    return hc;
   }
 
   @Override

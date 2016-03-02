@@ -6,28 +6,42 @@ import java.util.Random;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.TNode.TKey;
+import edu.jhu.hlt.uberts.factor.GlobalFactor;
+import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
 public class Uberts {
 
   private State state;
   private Agenda agenda;
-  private Map<String, Relation> relations;
-  private TNode trie;
+  private TNode trie;     // stores graph fragments used to match TransitionGenerators and GlobalFactors
   private Random rand;
+
+  // So you can ask for Relations by name and keep them unique
+  private Map<String, Relation> relations;
 
   // Alphabet of HypNodes which appear in either state or agenda.
   private Map<Pair<NodeType, Object>, HypNode> nodes;
+
+  // Never call `new NodeType` outside of Uberts, use lookupNodeType
+  private Map<String, NodeType> nodeTypes;
+
+  // TODO I believe Relations should be kept unique here.
 
   public Uberts(Random rand) {
     this.rand = rand;
     this.relations = new HashMap<>();
     this.agenda = new Agenda();
-    this.nodes = new HashMap<>();
     this.state = new State();
     this.trie = new TNode(null, null);
+    this.nodes = new HashMap<>();
+    this.nodeTypes = new HashMap<>();
   }
 
+  public Random getRandom() {
+    return rand;
+  }
   public State getState() {
     return state;
   }
@@ -39,8 +53,8 @@ public class Uberts {
   }
 
   /**
-   * Use this rather than calling the HypNode constructor so that nodes are
-   * gauranteed to be unique.
+   * Use this rather than calling the {@link HypNode} constructor so that nodes
+   * are gauranteed to be unique.
    */
   public HypNode lookupNode(NodeType nt, Object value) {
     Pair<NodeType, Object> key = new Pair<>(nt, value);
@@ -50,6 +64,35 @@ public class Uberts {
       nodes.put(key, v);
     }
     return v;
+  }
+
+  /**
+   * Use this rather than calling the {@link NodeType} constructor so that nodes
+   * types are gauranteed to be unique.
+   */
+  public NodeType lookupNodeType(String name) {
+    NodeType nt = nodeTypes.get(name);
+    if (nt == null) {
+      nt = new NodeType(name);
+      nodeTypes.put(name, nt);
+    }
+    return nt;
+  }
+
+  public void addGlobalFactor(TKey[] lhs, GlobalFactor gf) {
+    TNode n = trie.lookup(lhs, true);
+    n.getValue().u = this;
+    if (n.getValue().gf != null)
+      gf = new GlobalFactor.Composite(gf, n.getValue().gf);
+    n.getValue().gf = gf;
+  }
+
+  public void addTransitionGenerator(TKey[] lhs, TransitionGenerator tg) {
+    TNode n = trie.lookup(lhs, true);
+    n.getValue().u = this;
+    if (n.getValue().tg != null)
+      tg = new TransitionGenerator.Composite(tg, n.getValue().tg);
+    n.getValue().tg = tg;
   }
 
   private boolean nodesContains(HypNode n) {
@@ -78,16 +121,21 @@ public class Uberts {
     TNode.match(this, e, trie);
   }
 
-  public void addEdgeToAgenda(HypEdge e) {
+  public void addEdgeToAgenda(Pair<HypEdge, Adjoints> p) {
+    addEdgeToAgenda(p.get1(), p.get2());
+  }
+  public void addEdgeToAgenda(HypEdge e, Adjoints score) {
     Log.info(e.toString());
     assert nodesContains(e);
-    Adjoints score = new Adjoints.Constant(rand.nextGaussian());
+//    Adjoints score = new Adjoints.Constant(rand.nextGaussian());
     agenda.add(e, score);
   }
 
-  public void addEdgeType(Relation r) {
+  /** returns its argument */
+  public Relation addEdgeType(Relation r) {
     Relation old = relations.put(r.getName(), r);
     assert old == null;
+    return r;
   }
   public Relation getEdgeType(String name) {
     return relations.get(name);
@@ -98,28 +146,26 @@ public class Uberts {
 
   // TODO a version that can parse input like "pos(i,*) => pos(i+1,*)"
 
-  private Map<String, NodeType> witnessNodeTypes = new HashMap<>();
   public NodeType getWitnessNodeType(String relationName) {
     return getWitnessNodeType(getEdgeType(relationName));
   }
   public NodeType getWitnessNodeType(Relation relation) {
     String wntName = "witness-" + relation.getName();
-    NodeType nt = witnessNodeTypes.get(wntName);
-    if (nt == null) {
-      nt = new NodeType(wntName);
-      witnessNodeTypes.put(wntName, nt);
-    }
-    return nt;
+    return lookupNodeType(wntName);
   }
-//  private Object witnessValue = "yup";
-//  private Counts<NodeType> numNodesByType = new Counts<>();
-  private int factCounter = 0;
+
+  // NOT TRUE: Every edge gets its own fact id
+  // See Relation.encode for how head HypNodes get their values and why.
+//  private int factCounter = 0;
   public HypEdge makeEdge(String relationName, HypNode... tail) {
     Relation r = getEdgeType(relationName);
+    return makeEdge(r, tail);
+  }
+  public HypEdge makeEdge(Relation r, HypNode... tail) {
     NodeType headType = getWitnessNodeType(r);
-////    int c = numNodesByType.increment(headType);
-//    HypNode head = lookupNode(headType, witnessValue);
-    HypNode head = lookupNode(headType, factCounter++);
+//    HypNode head = lookupNode(headType, factCounter++);
+    Object encoded = r.encodeTail(tail);
+    HypNode head = lookupNode(headType, encoded);
     return new HypEdge(r, head, tail);
   }
 

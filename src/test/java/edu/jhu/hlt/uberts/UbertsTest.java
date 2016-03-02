@@ -5,7 +5,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Random;
-import java.util.function.Function;
 
 import org.junit.Test;
 
@@ -21,20 +20,20 @@ import edu.jhu.prim.tuple.Pair;
 public class UbertsTest {
 
   Uberts u;
-  NodeType tokenIndex = new NodeType("tokenIndex");
-  NodeType word = new NodeType("word");
-  NodeType posTag = new NodeType("posTag");
-  NodeType nerTag = new NodeType("nerTag");
+  NodeType tokenIndex;
+  NodeType word;
+  NodeType posTag;
+  NodeType nerTag;
   String[] sent;
   List<HypNode> tokens;
   List<HypNode> posTags;
 
   public void generalSetup() {
     u = new Uberts(new Random(9001));
-    tokenIndex = new NodeType("tokenIndex");
-    word = new NodeType("word");
-    posTag = new NodeType("posTag");
-    nerTag = new NodeType("nerTag");
+    tokenIndex = u.lookupNodeType("tokenIndex");
+    word = u.lookupNodeType("word");
+    posTag = u.lookupNodeType("posTag");
+    nerTag = u.lookupNodeType("nerTag");
     u.addEdgeType(new Relation("word", tokenIndex, word));
     u.addEdgeType(new Relation("pos", tokenIndex, posTag));
     u.addEdgeType(new Relation("ner", tokenIndex, tokenIndex, nerTag)); // (inclusive, exclusive, tag)
@@ -66,37 +65,32 @@ public class UbertsTest {
 
   public void posTestSetup() {
     // pos(i,*) => pos(i+1,*)
-    TNode newPosGraphFragment;
-    //    t = u.trie.lookup(new TKey[] {
-    //        new TKey(u.getEdgeType("pos")),
-    //        new TKey(posTag),
-    //        TNode.GOTO_PARENT,
-    //        new TKey(tokenIndex)}, true);
-    // If we don't actually need the POS tag, I suppose we could write:
-    newPosGraphFragment = u.getGraphFragments().lookup(new TKey[] {
+    TKey[] newPosLHS = new TKey[] {
         new TKey(u.getEdgeType("pos")),
-        new TKey(tokenIndex)}, true);
-    assert newPosGraphFragment.getValue().u == null;
-    newPosGraphFragment.getValue().u = u;
-    newPosGraphFragment.getValue().tg = new TransitionGenerator() {
+        new TKey(tokenIndex),
+    };
+    u.addGlobalFactor(newPosLHS, new AtMost1.RelNode1(
+        u.getEdgeType("pos"),
+        gtt -> gtt.getBoundNode(1)));
+    u.addTransitionGenerator(newPosLHS, new TransitionGenerator() {
       @Override
-      public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
+      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
         int i = (Integer) lhsValues.getBoundNode(1).getValue();
         i++;
         if (i == sent.length)
           return Collections.emptyList();
-        List<HypEdge> pos = new ArrayList<>();
+        List<Pair<HypEdge, Adjoints>> pos = new ArrayList<>();
         for (HypNode pt : posTags) {
           Log.info("adding pos(" + i + ", " + pt.getValue() + ")");
           HypNode[] tail = new HypNode[] { tokens.get(i), pt };
-          pos.add(u.makeEdge("pos", tail));
+          HypEdge e = u.makeEdge("pos", tail);
+          double r = u.getRandom().nextGaussian();
+          Adjoints a = new Adjoints.Constant(r);
+          pos.add(new Pair<>(e, a));
         }
         return pos;
       }
-    };
-    // Lets have a global factor of -inf for pos(i,T) => pos(i,S) if S!=T.
-    Function<GraphTraversalTrace, HypNode> tokIdx = gtt -> gtt.getBoundNode(1);
-    newPosGraphFragment.getValue().gf = new AtMost1.RelNode1(u.getEdgeType("pos"), tokIdx);
+    });
   }
 
   public void posTestKickoff() {
@@ -127,7 +121,7 @@ public class UbertsTest {
    * Just do pos tagging with the transition rule `pos(i,*) => pos(i+1,*)` and
    * random scores.
    */
-//  @Test
+  @Test
   public void posTest() {
     generalSetup();
     posTestSetup();
@@ -148,19 +142,22 @@ public class UbertsTest {
     newNounGraphFragment.getValue().u = u;
     newNounGraphFragment.getValue().tg = new TransitionGenerator() {
       @Override
-      public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
+      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
         int i = (Integer) lhsValues.getBoundNode(2).getValue();
         if (i == sent.length)
           return Collections.emptyList();
         HypNode end = u.lookupNode(tokenIndex, i+1);
-        List<HypEdge> el = new ArrayList<>();
+        List<Pair<HypEdge, Adjoints>> el = new ArrayList<>();
         for (String nerType : Arrays.asList("PER", "GPE", "ORG", "LOC", "MISC")) {
           HypNode PER = u.lookupNode(nerTag, nerType);
           int j0 = Math.max(0, (i - maxEntWidth) + 1);
           for (int j = j0; j <= i; j++) {
             HypNode start = u.lookupNode(tokenIndex, j);
             HypNode[] tail = new HypNode[] {start, end, PER};
-            el.add(u.makeEdge("ner", tail));
+            HypEdge e = u.makeEdge("ner", tail);
+            double r = u.getRandom().nextGaussian();
+            Adjoints a = new Adjoints.Constant(r);
+            el.add(new Pair<>(e, a));
           }
         }
         return el;
@@ -229,7 +226,7 @@ public class UbertsTest {
     cn.getValue().u = u;
     cn.getValue().tg = new TransitionGenerator() {
       @Override
-      public Iterable<HypEdge> generate(GraphTraversalTrace lhsValues) {
+      public Iterable<Pair<HypEdge, Adjoints>> generate(GraphTraversalTrace lhsValues) {
         Log.info("INTERESTING");
         HypEdge ner1 = lhsValues.getBoundEdge(0);
         HypEdge ner2 = lhsValues.getBoundEdge(2);
@@ -260,7 +257,9 @@ public class UbertsTest {
             u.lookupNode(tokenIndex, j),
             u.lookupNode(tokenIndex, k),
             u.lookupNode(tokenIndex, l));
-        return Arrays.asList(e);
+        double r = u.getRandom().nextGaussian();
+        Adjoints a = new Adjoints.Constant(r);
+        return Arrays.asList(new Pair<>(e, a));
       }
     };
   }
@@ -291,7 +290,7 @@ public class UbertsTest {
    * ner(i,j,PER) ~ word(k) if i<=k<=j
    * coref(i,j,k,l) ~ dist(j,k)
    */
-  @Test
+//  @Test
   public void fullTest() {
     generalSetup();
     posTestSetup();
