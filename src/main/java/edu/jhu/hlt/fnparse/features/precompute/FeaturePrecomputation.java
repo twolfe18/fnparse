@@ -4,7 +4,9 @@ import java.io.BufferedWriter;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +22,9 @@ import java.util.Set;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.propbank.ParsePropbankData;
@@ -40,17 +45,24 @@ import edu.jhu.hlt.fnparse.rl.ActionType;
 import edu.jhu.hlt.fnparse.rl.State;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
+import edu.jhu.hlt.tutils.ConcreteToDocument;
 import edu.jhu.hlt.tutils.Counts;
+import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntTrip;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.bimap.IntObjectBimap;
+import edu.mit.jwi.IRAMDictionary;
 
 /**
  * Compute features ahead of time. Only outputs basic templates, not products,
@@ -474,6 +486,48 @@ public class FeaturePrecomputation {
     ExperimentProperties config = ExperimentProperties.getInstance();
     Iterable<FNParse> data = Collections.emptyList();
     Shard shard = ShardUtils.getShard(config);
+
+    // You can specify Communication tar.gz files using the "concrete:" prefix
+    String concretePrefix = "concrete:";
+    if (dataset.startsWith(concretePrefix)) {
+      List<FNParse> parses = new ArrayList<>(); // eagerly reads in Communications/FNParses
+      String[] files = dataset.substring(concretePrefix.length()).split(",");
+      BrownClusters bc256 = null;
+      BrownClusters bc1000 = null;
+      IRAMDictionary wordNet = null;
+      Language lang = Language.EN;
+      ConcreteToDocument c2d = new ConcreteToDocument(bc256, bc1000, wordNet, lang);
+      c2d.readConcreteStanford();
+      boolean addGoldParse = false;
+      boolean addStanfordParse = true;
+      boolean addStanfordBasicDParse = true;
+      boolean addStanfordCollapsedDParse = false;   // dep graphs with >1 parent break
+      boolean takeGoldPos = false;
+      c2d.debug = true;
+//      c2d.debug_cons = true;
+//      c2d.debug_propbank = true;
+      MultiAlphabet alph = new MultiAlphabet();
+      int docIndex = 0;
+      for (String f : files) {
+        Log.info("reading Communications from " + f);
+        try (InputStream is = new FileInputStream(new File(f))) {
+          Iterator<Communication> iter =
+              new TarGzArchiveEntryCommunicationIterator(is);
+          iter = ShardUtils.shardByIndex(iter, shard);
+          while (iter.hasNext()) {
+            Communication c = iter.next();
+            ConcreteDocumentMapping cdm = c2d.communication2Document(c, docIndex++, alph, lang);
+            Document d = cdm.getDocument();
+            parses.addAll(DataUtil.convert(d,
+                addGoldParse, addStanfordParse, addStanfordBasicDParse,
+                addStanfordCollapsedDParse, takeGoldPos));
+          }
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      }
+      data = Iterables.concat(data, parses);
+    }
 
     // Poorly named: provides parses via redis for both propbank/framenet
     ParsePropbankData.Redis propbankAutoParses = null;
