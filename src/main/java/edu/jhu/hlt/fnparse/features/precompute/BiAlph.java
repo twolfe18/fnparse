@@ -33,6 +33,17 @@ public class BiAlph implements Serializable {
   /** When oldInt* isn't populated, -1 is used. */
   public static class Line {
 
+    /** Sorts first by stringTemplate, then stringFeature */
+    public static Comparator<Line> BY_STRINGS = new Comparator<Line>() {
+      @Override
+      public int compare(Line o1, Line o2) {
+        int c = o1.stringTemplate.compareTo(o2.stringTemplate);
+        if (c != 0)
+          return c;
+        return o1.stringFeature.compareTo(o2.stringFeature);
+      }
+    };
+
     public String line;
     public int newIntTemplate;
     public int newIntFeature;
