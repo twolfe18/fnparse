@@ -13,13 +13,11 @@ import edu.jhu.hlt.tutils.hash.Hash;
  * is constructed.
  *
  * Tail nodes may be type-checked against the relation.
- * For now, the head node is untyped.
+ * For now, the head node is untyped (since it is automatically generated).
  *
- * The only real reason I currently see to have head:HypNode is so that this
- * HypEdge may be an element of the tail of a nother HypNode and type check.
- * I agreed that allowing head==null is not worth the complexity of doing a
- * null-check on HypNodes everywhere. As a consequence: head:HypNode and HypEdge
- * are basically in a bijection.
+ * HypEdges in a graph are assumed to be unique up to (relation,tail). That is
+ * we are not using a *multi* hyper-graph, just a hyper-graph. hashCode and
+ * equals only look at (relation,tail).
  *
  * @author travis
  */
@@ -69,15 +67,6 @@ public class HypEdge {
     for (HypNode t : tail)
       n.add(t);
     return n;
-  }
-
-  @Override
-  public int hashCode() {
-    throw new RuntimeException("implement me");
-  }
-  @Override
-  public boolean equals(Object other) {
-    throw new RuntimeException("implement me");
   }
 
   @Override

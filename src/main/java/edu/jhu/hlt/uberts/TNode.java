@@ -49,6 +49,11 @@ public class TNode {
     public HypEdge getBoundEdge(int i) {
       return boundVals.get(i).getRight();
     }
+
+    @Override
+    public String toString(){
+      return "(GTT bound=" + boundVals + ")";
+    }
   }
 
   /**
@@ -73,6 +78,7 @@ public class TNode {
       this(n.getNodeType(), n.getValue());
     }
     public TKey(NodeType nodeType, Object nodeValue) {
+      assert nodeType != null && nodeValue != null;
       this.nodeType = nodeType;
       this.nodeValue = nodeValue;
       this.relationType = null;
@@ -81,6 +87,7 @@ public class TNode {
     }
 
     public TKey(NodeType nodeType) {
+      assert nodeType != null;
       this.nodeType = nodeType;
       this.nodeValue = null;
       this.relationType = null;
@@ -89,6 +96,7 @@ public class TNode {
     }
 
     public TKey(Relation relation) {
+      assert relation != null;
       this.nodeType = null;
       this.nodeValue = null;
       this.relationType = relation;

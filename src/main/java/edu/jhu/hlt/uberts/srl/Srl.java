@@ -75,9 +75,9 @@ public class Srl {
   public Srl(Uberts u) {
     // TODO addEdgeType is probably a problem: want all of these to be idempotent
     this.u = u;
-    this.tokenIndex = u.lookupNodeType("tokenIndex");
-    this.frames = u.lookupNodeType("frames");
-    this.roles = u.lookupNodeType("roles");
+    this.tokenIndex = u.lookupNodeType("tokenIndex", true);
+    this.frames = u.lookupNodeType("frames", true);
+    this.roles = u.lookupNodeType("roles", true);
     this.event1 = u.addEdgeType(new Relation("event1", tokenIndex, tokenIndex));
     this.preds = u.getWitnessNodeType(event1);
     this.event2 = u.addEdgeType(new Relation("event2", preds, frames));
@@ -92,6 +92,7 @@ public class Srl {
   private void setupTransitions() {
     // () => event1(t)
     // From this fragment I can extract the (pos,word) values at every index.
+    // TODO Call pred-patt here.
     TKey[] newPosTagAfterWord = new TKey[] {
         new TKey(u.getEdgeType("pos")),
         new TKey(tokenIndex),

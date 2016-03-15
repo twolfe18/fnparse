@@ -11,6 +11,17 @@ import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
+/**
+ * An uber transition system for joint predictions. Holds a state and agenda,
+ * and you add global features and transition generators to define the state
+ * lattice.
+ *
+ * Remember:
+ * {@link TransitionGenerator} => local features
+ * {@link GlobalFactor} => global features and hard constraints
+ *
+ * @author travis
+ */
 public class Uberts {
 
   private State state;
@@ -37,6 +48,26 @@ public class Uberts {
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();
+  }
+
+  /**
+   * Pops items off the agenda until score is below 0, then stops. Right now this
+   * is a debug method since it prints stuff and inference is not finalized.
+   */
+  public void dbgRunInference() {
+    for (int i = 0; agenda.size() > 0; i++) {
+      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
+      agenda.dbgShowScores();
+      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+      HypEdge best = p.get1();
+      double score = p.get2().forwards();
+      if (score <= 0)
+        break;
+      Log.info("best=" + best);
+      addEdgeToState(best);
+    }
+    Log.info("done adding positive-scoring HypEdges");
+    state.dbgShowEdges();
   }
 
   public Random getRandom() {
@@ -70,9 +101,11 @@ public class Uberts {
    * Use this rather than calling the {@link NodeType} constructor so that nodes
    * types are gauranteed to be unique.
    */
-  public NodeType lookupNodeType(String name) {
+  public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
+      if (!allowNewNodeType)
+        throw new RuntimeException("there is no NodeType called " + name);
       nt = new NodeType(name);
       nodeTypes.put(name, nt);
     }
@@ -151,7 +184,7 @@ public class Uberts {
   }
   public NodeType getWitnessNodeType(Relation relation) {
     String wntName = "witness-" + relation.getName();
-    return lookupNodeType(wntName);
+    return lookupNodeType(wntName, true);
   }
 
   // NOT TRUE: Every edge gets its own fact id

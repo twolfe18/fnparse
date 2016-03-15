@@ -46,7 +46,8 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 public class Wsabie implements Serializable {
   private static final long serialVersionUID = 5688564611134317326L;
 
-  public static final boolean USE_FLOATS = true;
+  // frame embeddings are always doubles since they don't use much mem
+  public static final boolean USE_FLOATS_FEAT_EMB = true;
 
   private double margin = 0.001;
   private int dimFeat = 1<<20;
@@ -101,7 +102,7 @@ public class Wsabie implements Serializable {
     Log.info("batchSize=" + batchSize);
     Log.info("dropout=" + dropout);
     Log.info("V requires " + Math.ceil((numFrames*dimEmb*8d)/(1<<20)) + " MB");
-    if (USE_FLOATS)
+    if (USE_FLOATS_FEAT_EMB)
       Log.info("M requires " + Math.ceil((dimFeat*dimEmb*4d)/(1<<20)) + " MB");
     else
       Log.info("M requires " + Math.ceil((dimFeat*dimEmb*8d)/(1<<20)) + " MB");
@@ -109,7 +110,7 @@ public class Wsabie implements Serializable {
     rand = new Random(9001);
     this.numTemplates = numTemplates;
     V = new double[numFrames][dimEmb];
-    if (USE_FLOATS)
+    if (USE_FLOATS_FEAT_EMB)
       Mf = new float[dimFeat][dimEmb];
     else
       M = new double[dimFeat][dimEmb];
@@ -137,7 +138,7 @@ public class Wsabie implements Serializable {
     double rV = 1d / Math.sqrt(V[0].length);
     for (int i = 0; i < V.length; i++)
       randInit(V[i], rV, rand);
-    if (USE_FLOATS) {
+    if (USE_FLOATS_FEAT_EMB) {
       float rM = (float) (1d / Math.sqrt(Mf[0].length));
       for (int i = 0; i < Mf.length; i++)
         randInit(Mf[i], rM, rand);
@@ -210,7 +211,7 @@ public class Wsabie implements Serializable {
           continue;
         n++;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS) {
+        if (USE_FLOATS_FEAT_EMB) {
           for (int j = 0; j < dimEmb; j++)
             gProj[b][j] += Mf[f][j];
         } else {
@@ -275,7 +276,7 @@ public class Wsabie implements Serializable {
         if (e.dropout(i))
           continue;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS) {
+        if (USE_FLOATS_FEAT_EMB) {
           for (int j = 0; j < dimEmb; j++) {
             Mf[f][j] += s * V[e.frame][j];
             Mf[f][j] -= s * V[otherFr][j];
@@ -309,7 +310,7 @@ public class Wsabie implements Serializable {
         if (e.dropout(i))
           continue;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS)
+        if (USE_FLOATS_FEAT_EMB)
           projectIntoUnitSphere(Mf[f]);
         else
           projectIntoUnitSphere(M[f]);
@@ -360,7 +361,7 @@ public class Wsabie implements Serializable {
     double[] gProj = new double[dimEmb];
     for (int i = 0; i < e.targetFeatures.length; i++) {
       int f = e.targetFeatures[i];
-      if (USE_FLOATS) {
+      if (USE_FLOATS_FEAT_EMB) {
         for (int j = 0; j < dimEmb; j++)
           gProj[j] += Mf[f][j];
       } else {

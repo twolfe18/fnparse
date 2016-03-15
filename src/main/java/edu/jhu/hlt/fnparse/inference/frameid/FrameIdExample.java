@@ -7,7 +7,7 @@ import java.util.Random;
 public class FrameIdExample implements Serializable {
   private static final long serialVersionUID = 4633106939313414511L;
 
-  public final int frame;
+  public final int frame;   // gold label
   public final int[] targetFeatures;
   public boolean[] targetFeaturesDropout; // may be null, co-indexed with targetFeatures
   private int[] frameConfusionSet;  // sub-set of all frames allowable for this target
