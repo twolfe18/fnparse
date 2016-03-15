@@ -152,34 +152,6 @@ public class BiAlphProjection {
         if (!mock)
           m.replace(f, of, append);
       }
-
-//      String featuresGlob = config.getString("featuresGlob", "glob:**/*");
-//      if (!featuresGlob.isEmpty()) {
-//        PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-//        Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-//          @Override
-//          public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-//            if (pm.matches(path)) {
-//              String on = path.getFileName().toString();
-//              if (stripOutputSuf)
-//                on = FilenameUtils.removeExtension(on);
-//              File of = new File(out, on);
-//              Log.info("mapping features: " + path.toFile().getPath() + "  ==>  " + of.getPath() + "\t" + Describe.memoryUsage());
-//              if (!mock)
-//                m.replace(path.toFile(), of, append);
-//            } else {
-//              Log.info("skipping " + path.toFile().getPath());
-//            }
-//            return FileVisitResult.CONTINUE;
-//          }
-//          @Override
-//          public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-//            return FileVisitResult.CONTINUE;
-//          }
-//        });
-//      } else {
-//        Log.info("featureGlob is empty!");
-//      }
     }
     Log.info("done");
   }
