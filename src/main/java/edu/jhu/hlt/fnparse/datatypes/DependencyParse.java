@@ -93,7 +93,7 @@ public class DependencyParse implements Serializable {
         labels[j] = "ROOT";
         heads[j] = -1;
       } else {
-        assert node.numParents() == 1;
+        assert node.numParents() == 1 : "numParents=" + node.numParents();
         int h = node.getParent(0);
         if (h > tokenIndexLast) {
           // ConcreteToDocument uses numTokensInDocument as root for all dep trees.

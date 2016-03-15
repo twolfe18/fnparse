@@ -6,13 +6,19 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.Tokenization;
 import edu.jhu.hlt.fnparse.features.AbstractFeatures;
 import edu.jhu.hlt.fnparse.inference.pruning.TargetPruningData;
 import edu.jhu.hlt.fnparse.util.HasId;
+import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
+import edu.jhu.hlt.tutils.ConcreteToDocument;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.TokenToConstituentIndex;
 import edu.jhu.hlt.tutils.data.WordNetPosUtil;
 import edu.mit.jwi.IDictionary;
 import edu.mit.jwi.IRAMDictionary;
@@ -50,6 +56,24 @@ public class Sentence implements HasId, Serializable {
   private boolean hideSyntax = false;
 
   /**
+   * Helps map back into concrete.Communications.
+   *
+   * If this Sentence was constructed from a {@link Communication} via a
+   * {@link ConcreteDocumentMapping}, then you can use this field to point to
+   * the Consituent in a tutils.Document corresponding to this sentence. With
+   * this information, you can use {@link ConcreteDocumentMapping} to get a
+   * {@link Tokenization} UUID, and add back annotations into their proper
+   * location (primarily {@link TokenRefSequence}).
+   *
+   * Using this field lets {@link ConcreteToDocument} construct the mapping from
+   * {@link Communication} elements (some of which may be skipped over for
+   * example) to tutils.Document, and thus Sentences. Letting {@link ConcreteToDocument}
+   * be in charge is much cleaner than making assumptions like "there is one
+   * FNParse per concrete.Sentence"...
+   */
+  public int tutilsSentenceConsIdx = -1;
+
+  /**
    * Stanford col-cc and UD parses are not supported right now.
    * @param firstToken inclusive
    * @param lastToken inclusive
@@ -77,13 +101,19 @@ public class Sentence implements HasId, Serializable {
       edu.jhu.hlt.tutils.Document.Token t = doc.getToken(firstToken + i);
       tokens[i] = t.getWordStr();
       int p = takeGoldPos ? t.getPosG() : t.getPosH();
-      assert p >= 0;
+      assert p >= 0 : "takeGoldPos=" + takeGoldPos + " posG=" + t.getPosG() + " posH=" + t.getPosH();
       pos[i] = a.pos(p);
       if (t.getLemma() >= 0)
         lemmas[i] = doc.getAlphabet().lemma(t.getLemma());
     }
 
     Sentence s = new Sentence(dataset, id, tokens, pos, lemmas);
+
+    // Leave bread crumbs to get back to tutils elements, and thus concrete elements.
+    TokenToConstituentIndex t2c = doc.getT2cSentence();
+    s.tutilsSentenceConsIdx = t2c.getParent(firstToken);
+    assert s.tutilsSentenceConsIdx >= 0;
+    assert s.tutilsSentenceConsIdx == t2c.getParent(lastToken);
 
     if (addStandordBasicDParse) {
       assert doc.stanfordDepsBasic != null;

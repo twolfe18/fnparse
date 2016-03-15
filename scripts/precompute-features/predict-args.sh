@@ -1,5 +1,15 @@
 #!/bin/bash
 
+# Given some Concrete with targets/predicates/frames labeled, run a serialized
+# SRL model (created by ShimModel) to produce Concrete output with SituationMentions.
+# Handles feature extraction and indexing.
+
+# NOTE: I think I'm going to pause on working on this due to the fact that it doesn't
+# handle frame id (or target id for that matter). I'll keep it in case I change my mind,
+# and as a good example of how to do feature-reindexing, but for the ability to do real
+# predictions, I'm going to use uberts.
+
+
 set -eu
 
 MODEL=$1            # serialized FModel built by ShimModel

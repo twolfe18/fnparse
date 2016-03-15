@@ -341,6 +341,10 @@ public class FeaturePrecomputation {
     Log.info("done");
   }
 
+  /**
+   * Extracts features for every width=1 target in the sentence.
+   * If a target is wider than width=1, it will not be included in output.
+   */
   private void emitAllFrameId(Writer w, FNParse y,
       edu.jhu.hlt.fnparse.features.precompute.Alphabet templates) throws IOException {
     assert !roleMode;

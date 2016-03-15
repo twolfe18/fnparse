@@ -1,6 +1,10 @@
 package edu.jhu.hlt.fnparse.rl.full;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,8 +24,15 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
+
 import com.google.common.collect.Iterables;
 
+import edu.jhu.hlt.acute.archivers.tar.TarArchiver;
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.serialization.archiver.ArchivableCommunication;
+import edu.jhu.hlt.concrete.serialization.iterators.TarGzArchiveEntryCommunicationIterator;
+import edu.jhu.hlt.fnparse.data.DataUtil;
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
 import edu.jhu.hlt.fnparse.data.FrameIndex;
 import edu.jhu.hlt.fnparse.data.RolePacking;
@@ -40,6 +51,7 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Item;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
@@ -57,17 +69,25 @@ import edu.jhu.hlt.fnparse.rl.full2.TFKS;
 import edu.jhu.hlt.fnparse.rl.rerank.Reranker.Update;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.OracleMode;
 import edu.jhu.hlt.fnparse.rl.rerank.RerankerTrainer.RTConfig;
+import edu.jhu.hlt.fnparse.rl.rerank.ShimModel;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.fnparse.util.FNDiff;
 import edu.jhu.hlt.fnparse.util.FrameRolePacking;
+import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
+import edu.jhu.hlt.tutils.ConcreteToDocument;
+import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
+import edu.jhu.hlt.tutils.data.BrownClusters;
+import edu.jhu.hlt.tutils.ling.Language;
 import edu.jhu.prim.tuple.Pair;
+import edu.mit.jwi.IRAMDictionary;
 
 /**
  * Don't ask me why its called FModel. This is is a wrapper around {@link State}.
@@ -591,7 +611,8 @@ public class FModel implements Serializable {
   }
 
   public static void main(String[] args) throws Exception {
-    main3(args);
+    predict(args);
+//    main3(args);
 //    main2(args);
 //    main1(args);
   }
@@ -1285,4 +1306,106 @@ public class FModel implements Serializable {
         + " n=" + se.size());
   }
 
+  /**
+   * Reads in concrete {@link Communication}s, features extracted with
+   * {@link FeaturePrecomputation}, and a pre-trained {@link FModel} created by
+   * {@link ShimModel}.
+   *
+   * @deprecated This ignores target/frame id, I think I will do this through
+   * uberts instead.
+   *
+   * NOTE: This code has NOT BEEN TESTED.
+   */
+  public static void predict(String[] args) throws Exception {
+    if (args.length != 4) {
+      System.err.println("please provide:");
+      System.err.println("1) a serialized FModel");
+      System.err.println("2) a tar.gz file containing concrete.Communications");
+      System.err.println("3) an input features-indexed.txt.gz feature file");
+      System.err.println("   created by scripts/precompute-features/predict.sh");
+      System.err.println("4) a tar.gz file to write annotated concrete.Communications to");
+      return;
+    }
+    FModel m = (FModel) FileUtil.deserialize(new File(args[0]));
+    File concreteInFile = new File(args[1]);
+    File featureFile = new File(args[2]);
+    File concreteOutFile = new File(args[3]);
+    
+    
+    
+    
+    if (true) {
+      if (true) {
+        throw new RuntimeException(
+            "need to figure out how to get input with targets/frames identified");
+      }
+      throw new RuntimeException(
+          "need to stitch in the featureFile information into the inference");
+    }
+    
+    
+    
+    
+    
+
+    BrownClusters bc256 = null;
+    BrownClusters bc1000 = null;
+    IRAMDictionary wordNet = null;
+    Language lang = Language.EN;
+    ConcreteToDocument c2d = new ConcreteToDocument(bc256, bc1000, wordNet, lang);
+    c2d.readConcreteStanford();
+    boolean addGoldParse = false;
+    boolean addStanfordParse = true;
+    boolean addStanfordBasicDParse = true;
+    boolean addStanfordCollapsedDParse = false;   // dep graphs with >1 parent break
+    boolean takeGoldPos = false;
+    c2d.debug = true;
+    //      c2d.debug_cons = true;
+    //      c2d.debug_propbank = true;
+    MultiAlphabet alph = new MultiAlphabet();
+    int docIndex = 0;
+    Log.info("reading Communications from " + concreteInFile.getPath());
+    Log.info("writing results to " + concreteOutFile.getPath());
+
+    // Output
+    try (OutputStream os = new FileOutputStream(concreteOutFile);
+        GzipCompressorOutputStream gout = new GzipCompressorOutputStream(os);
+        TarArchiver arch = new TarArchiver(gout)) {
+
+      // Input
+      try (InputStream is = new FileInputStream(concreteInFile)) {
+
+        // Loop over every input Communication
+        Iterator<Communication> iter =
+            new TarGzArchiveEntryCommunicationIterator(is);
+        while (iter.hasNext()) {
+          Communication c = iter.next();
+
+          // Get raw data into fnparse datatypes
+          ConcreteDocumentMapping cdm = c2d.communication2Document(c, docIndex++, alph, lang);
+          Document d = cdm.getDocument();
+          List<FNParse> unlabeled = DataUtil.convert(d,
+              addGoldParse, addStanfordParse, addStanfordBasicDParse,
+              addStanfordCollapsedDParse, takeGoldPos);
+
+          // TODO Raw data will not have targets/frames predicted
+          // Need to get this from a frame id model :)
+
+          // Predict
+          List<FNParse> labeled = new ArrayList<>();
+          for (FNParse x : unlabeled)
+            labeled.add(m.predict(x));
+
+          // Write to Concrete
+          boolean exportToTutilsDocument = false;
+          boolean exportToConcreteCommunication = true;
+          DataUtil.exportParses(labeled, cdm, exportToTutilsDocument, exportToConcreteCommunication);
+
+          // Save updates
+          arch.addEntry(new ArchivableCommunication(c));
+        }
+      }
+    }
+    Log.info("done");
+  }
 }
