@@ -5,6 +5,8 @@ import java.io.File;
 import java.io.Serializable;
 import java.util.Arrays;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
@@ -22,6 +24,7 @@ public class FrameSchemaHelper implements Serializable {
   private int numFrames;
   private int[] numFramesBySchema;
   private Schema[] frame2schema;  // indexed by frame id, values are "framenet", "propbank", or "other"
+  private String[] frameNames;    // indexed by frame id, values are things like "Commerce_buy" and "kill-v-01"
 
   /**
    * @param roleNames a file like raw-shards/job-0-of-256/role-names.txt.gz which
@@ -33,7 +36,9 @@ public class FrameSchemaHelper implements Serializable {
     Log.info("loading role names from " + roleNames.getPath());
     nullFrameId = -1;
     numFrames = 1;  // this counts nullFrame
-    frame2schema = new Schema[12000];
+    int N = 12000;
+    frame2schema = new Schema[N];
+    frameNames = new String[N];
     numFramesBySchema = new int[Schema.values().length];
     Arrays.fill(frame2schema, Schema.OTHER);
     try (BufferedReader r = FileUtil.getReader(roleNames)) {
@@ -47,10 +52,14 @@ public class FrameSchemaHelper implements Serializable {
           nullFrameId = frameId;
         } else if (roleName.indexOf("f=framenet/") == 0) {
           frame2schema[frameId] = Schema.FRAMENET;
+//          frameNames[frameId] = roleName.substring(roleName.indexOf('/') + 1);
+          frameNames[frameId] = roleName.substring(roleName.indexOf('=') + 1);
           numFrames++;
           numFramesBySchema[Schema.FRAMENET.ordinal()]++;
         } else if (roleName.indexOf("f=propbank/") == 0) {
           frame2schema[frameId] = Schema.PROPBANK;
+//          frameNames[frameId] = roleName.substring(roleName.indexOf('/') + 1);
+          frameNames[frameId] = roleName.substring(roleName.indexOf('=') + 1);
           numFrames++;
           numFramesBySchema[Schema.PROPBANK.ordinal()]++;
         }
@@ -82,5 +91,28 @@ public class FrameSchemaHelper implements Serializable {
 //  public boolean relevant(int y1, int y2) {
 //    return frame2schema[y1] == frame2schema[y2];
 //  }
+
+  public Frame getFrame(int y) {
+    // In construction, you read in roleName which contains stuff like "f=framenet/Commerce_buy"
+    // You can store these frame names and then look them up in the appropriate FrameIndex as per getSchema(int)
+    String fn = frameNames[y];
+    if (fn == null)
+      throw new RuntimeException("found no frame name for " + y);
+    Frame f;
+    switch (getSchema(y)) {
+    case FRAMENET:
+      f = FrameIndex.getFrameNet().getFrame(fn);
+      if (f == null)
+        throw new RuntimeException("couldn't find frame name for " + fn + "/" + y + " in framenet");
+      return f;
+    case PROPBANK:
+      f = FrameIndex.getPropbank().getFrame(fn);
+      if (f == null)
+        Log.warn("couldn't find frame name for " + fn + "/" + y + " in propbank");
+      return f;
+    default:
+      throw new RuntimeException("no schema for " + fn + "/" + y);
+    }
+  }
 
 }
