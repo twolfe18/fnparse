@@ -1,11 +1,14 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
@@ -38,11 +41,45 @@ public class Uberts {
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
 
-  // There are two other things I could keep here:
-  // 1) supervision: set of gold edges
-  // 2) ancillary data: e.g. tutils.Document
-  // This would at least put a fine point on what the scope of inference is.
-  // And just because we commit to one document per Uberts doesn't mean that we have to do one update per document, we can always save those Adjoints somewhere else before applying them
+  // Ancillary data for features which don't look at the State graph.
+  // New data backend (used to be fnparse.Sentence and FNParse)
+  // TODO Update TemplateContext and everything in BasicFeatureTemplates.
+  private edu.jhu.hlt.tutils.Document doc;
+  public edu.jhu.hlt.tutils.Document getDoc() {
+    return doc;
+  }
+  public void setDocument(edu.jhu.hlt.tutils.Document doc) {
+    this.doc = doc;
+  }
+
+  // Supervision (set of gold HypEdges)
+  // Modules may add to this set as they register TransitionGenerators for example.
+  private HashSet<HashableHypEdge> goldEdges;
+  public void clearLabels() {
+    goldEdges = null;
+  }
+  public void addLabel(HypEdge e) {
+    if (goldEdges == null)
+      goldEdges = new HashSet<>();
+    boolean added = goldEdges.add(new HashableHypEdge(e));
+    assert added : "duplicate edge? " + e;
+  }
+  /**
+   * +1 means a gold edge, good thing to add. -1 means a bad edge which
+   * introduces loss. You can play with anything in between.
+   *
+   * TODO This needs to be expanded upon. There are lots of small issues like
+   * you can just add this into the oracle, you have to know when something is
+   * perfectly correct vs not... etc.
+   */
+  public double getLabel(HypEdge e) {
+    if (goldEdges == null)
+      throw new IllegalStateException("no labels available");
+    if (goldEdges.contains(new HashableHypEdge(e)))
+      return +1;
+    return -1;
+  }
+
 
   public Uberts(Random rand) {
     this.rand = rand;
@@ -175,7 +212,9 @@ public class Uberts {
     return r;
   }
   public Relation getEdgeType(String name) {
-    return relations.get(name);
+    Relation r = relations.get(name);
+    assert r != null : "no relation called " + name;
+    return r;
   }
 
   // TODO Add methods which add TransitionGenerators and GlobalFactors without
