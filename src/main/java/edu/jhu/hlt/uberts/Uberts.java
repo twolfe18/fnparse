@@ -38,7 +38,11 @@ public class Uberts {
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
 
-  // TODO I believe Relations should be kept unique here.
+  // There are two other things I could keep here:
+  // 1) supervision: set of gold edges
+  // 2) ancillary data: e.g. tutils.Document
+  // This would at least put a fine point on what the scope of inference is.
+  // And just because we commit to one document per Uberts doesn't mean that we have to do one update per document, we can always save those Adjoints somewhere else before applying them
 
   public Uberts(Random rand) {
     this.rand = rand;

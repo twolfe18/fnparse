@@ -178,7 +178,6 @@ public class Srl {
     });
 
 
-    // event1(t) => event2(t,f) forall f
     // event2(t,f) ^ srl2(t,s) => srl3(t,s,k) for k in roles(f)
     // TODO
     Log.warn("TODO");

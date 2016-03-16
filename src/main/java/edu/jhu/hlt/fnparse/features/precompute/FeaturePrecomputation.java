@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -93,7 +94,7 @@ import edu.mit.jwi.IRAMDictionary;
  *
  * @author travis
  */
-public class FeaturePrecomputation {
+public abstract class FeaturePrecomputation {
 
   public static class Target {
     public static final String NO_DOC_ID = "noDocId".intern();
@@ -227,20 +228,28 @@ public class FeaturePrecomputation {
     };
   }
 
-  private IntObjectBimap<String> kNames;    // all strings output for k
-  private int frUkn, fUkn, rUkn;
+  // Features
+  protected Alphabet templates;
+
+  protected IntObjectBimap<String> kNames;    // all strings output for k
+  protected int frUkn, fUkn, rUkn;
 
   // If false, then frame mode. the "k" slot is used for the frame id, the
   // arg span slot is set to copy the target, and all of the features are based
   // on just the target.
-  private final boolean roleMode;
+  protected final boolean roleMode;
+
+  public FeaturePrecomputation(boolean roleMode) {
+    this(roleMode, new Alphabet()); // use all templates
+  }
 
   /**
    * You need to provide a {@link FrameIndex} so that a stable bijection from
    * role/frameRole names to ints can be made. This needs to be stable across
    * shards since k names are not merged.
    */
-  public FeaturePrecomputation(boolean roleMode) {
+  public FeaturePrecomputation(boolean roleMode, Alphabet templates) {
+    this.templates = templates;
     this.roleMode = roleMode;
     kNames = new IntObjectBimap<>();
     rUkn = kNames.lookupIndex("r=UKN", true);
@@ -264,18 +273,8 @@ public class FeaturePrecomputation {
   /**
    * Compute all of the features and dump them to a file.
    */
-  public void run(
-      Iterator<FNParse> data,
-      File outputData,
-      File outputAlphabet,
-      File outputRoleNames) {
-    Log.info("writing features to " + outputData.getPath());
-    Log.info("writing alphabet to " + outputAlphabet.getPath());
-    Log.info("writing role names to " + outputRoleNames.getPath());
+  public void run(Iterator<FNParse> data) {
     Log.info("extracting features for " + (roleMode ? "role" : "frame") + " id");
-
-    // Setup features
-    Alphabet templates = new Alphabet();
 
     // This is how we prune spans
     Reranker r = null;
@@ -289,54 +288,34 @@ public class FeaturePrecomputation {
 
     // Scan the data
     Counts<String> parseStats = new Counts<>();
-    try (BufferedWriter w = FileUtil.getWriter(outputData)) {
-      TimeMarker tm = new TimeMarker();
-      while (data.hasNext() && (max <= 0 || tm.numMarks() < max)) {
-        FNParse y = data.next();
+    TimeMarker tm = new TimeMarker();
+    while (data.hasNext() && (max <= 0 || tm.numMarks() < max)) {
+      FNParse y = data.next();
 
-        if (roleMode)
-          emitAllRoleId(w, y, templates, r);
-        else
-          emitAllFrameId(w, y, templates);
+      if (roleMode)
+        emitAllRoleId(y, r);
+      else
+        emitAllFrameId(y);
 
-        if (tm.enoughTimePassed(15)) {
-          Log.info("processed " + tm.numMarks()
-              + " sentences in " + tm.secondsSinceFirstMark() + " seconds");
-          w.flush();
-        }
-
-        // Tally up some stats for debugging
-        parseStats.increment("num-parses");
-        if (y.getSentence().getBasicDeps(false) == null)
-          parseStats.increment("no-basic-deps");
-        if (y.getSentence().getCollapsedDeps(false) == null)
-          parseStats.increment("no-collapsed-deps");
-        if (y.getSentence().getStanfordParse(false) == null)
-          parseStats.increment("no-stanford-deps");
+      if (tm.enoughTimePassed(15)) {
+        Log.info("processed " + tm.numMarks()
+        + " sentences in " + tm.secondsSinceFirstMark() + " seconds");
       }
-    } catch (IOException e) {
-      e.printStackTrace();
+
+      // Tally up some stats for debugging
+      parseStats.increment("num-parses");
+      if (y.getSentence().getBasicDeps(false) == null)
+        parseStats.increment("no-basic-deps");
+      if (y.getSentence().getCollapsedDeps(false) == null)
+        parseStats.increment("no-collapsed-deps");
+      if (y.getSentence().getStanfordParse(false) == null)
+        parseStats.increment("no-stanford-deps");
     }
     Log.info("done computing features");
     System.out.println("parseStats=" + parseStats);
 
-    // Save the alphabet
-    // template -> feature -> index
-    Log.info("saving alphabet");
-    try {
-      templates.toFile(outputAlphabet);
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
-
-    Log.info("saving the role names");
-    try (BufferedWriter w = FileUtil.getWriter(outputRoleNames)) {
-      w.write("-1\tnoRole\n");
-      for (int i = 0; i < kNames.size(); i++)
-        w.write(i + "\t" + kNames.lookupObject(i) + "\n");
-    } catch (IOException e) {
-      e.printStackTrace();
-    }
+    Log.info("calling onComplete");
+    onComplete();
 
     Log.info("done");
   }
@@ -344,9 +323,10 @@ public class FeaturePrecomputation {
   /**
    * Extracts features for every width=1 target in the sentence.
    * If a target is wider than width=1, it will not be included in output.
+   *
+   * NOTE: This really shouldn't be public, don't use if you don't have to.
    */
-  private void emitAllFrameId(Writer w, FNParse y,
-      edu.jhu.hlt.fnparse.features.precompute.Alphabet templates) throws IOException {
+  public void emitAllFrameId(FNParse y) {
     assert !roleMode;
 
     // I'm going to use all width=1 spans as possible targets
@@ -376,19 +356,17 @@ public class FeaturePrecomputation {
 
       FrameInstance fi = frameLocations.get(t);
       int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
-      emit(w, ta, t, String.valueOf(k), features);
+      emit(ta, t, String.valueOf(k), features);
     }
   }
 
   /**
    * Will emit k values for just the role (ignoring the frame, i.e. proper for PB)
    * and for the frame and role (via {@link FrameRolePacking}).
+   *
+   * NOTE: This really shouldn't be public, don't use if you don't have to.
    */
-  private void emitAllRoleId(
-      Writer w,
-      FNParse y,
-      edu.jhu.hlt.fnparse.features.precompute.Alphabet templates,
-      Reranker r) throws IOException {
+  public void emitAllRoleId(FNParse y, Reranker r) {
     assert roleMode;
 
     // Keep track of what (t,s) I have already emitted and not emit duplicates
@@ -462,19 +440,105 @@ public class FeaturePrecomputation {
         }
       }
 
-      emit(w, t, s, k.toString(), features);
+      emit(t, s, k.toString(), features);
     }
   }
 
   /** Emits one line */
-  public static void emit(Writer w, Target t, Span s, String k, List<Feature> features) throws IOException {
-    w.write(Target.toLine(t));
-    w.write("\t" + s.shortString());
-    w.write("\t" + k);
-    for (Feature f : features)
-      w.write("\t" + f.template + ":" + f.feature);
-    w.write('\n');
+  public abstract void emit(Target t, Span s, String k, List<Feature> features);
+
+  /** For writing out other things like role names. */
+  public abstract void onComplete();
+
+  /**
+   * Sub-class which writes extracted features and ancillary data to disk.
+   */
+  public static class ToDisk extends FeaturePrecomputation {
+    private Writer outputDataWriter;    // writer for outputData
+//    private File outputData;
+    private File outputAlphabet;
+    private File outputRoleNames;
+
+    public ToDisk(boolean roleMode, Alphabet templates,
+        File outputData, File outputAlphabet, File outputRoleNames)
+            throws IOException {
+      super(roleMode, templates);
+      Log.info("writing features to " + outputData.getPath());
+      Log.info("writing alphabet to " + outputAlphabet.getPath());
+      Log.info("writing role names to " + outputRoleNames.getPath());
+      this.outputAlphabet = outputAlphabet;
+      this.outputRoleNames = outputRoleNames;
+//      this.outputData = outputData;
+      this.outputDataWriter = FileUtil.getWriter(outputData);
+    }
+
+    public void emit(Target t, Span s, String k, List<Feature> features) {
+      try {
+        outputDataWriter.write(Target.toLine(t));
+        outputDataWriter.write("\t" + s.shortString());
+        outputDataWriter.write("\t" + k);
+        for (Feature f : features)
+          outputDataWriter.write("\t" + f.template + ":" + f.feature);
+        outputDataWriter.write('\n');
+      } catch (IOException e) {
+        throw new RuntimeException (e);
+      }
+    }
+
+    public void onComplete() {
+      try {
+        this.outputDataWriter.close();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      // Save the alphabet
+      // template -> feature -> index
+      Log.info("saving alphabet");
+      try {
+        templates.toFile(outputAlphabet);
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+
+      Log.info("saving the role names");
+      try (BufferedWriter w = FileUtil.getWriter(outputRoleNames)) {
+        w.write("-1\tnoRole\n");
+        for (int i = 0; i < kNames.size(); i++)
+          w.write(i + "\t" + kNames.lookupObject(i) + "\n");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
   }
+
+  // TODO support roleMode=true
+  public static class ToMemBuffer extends FeaturePrecomputation {
+    private Map<Span, int[]> targetFeats;
+    public ToMemBuffer(boolean roleMode, Alphabet templates) {
+      super(roleMode, templates);
+      this.targetFeats = new HashMap<>();
+    }
+    public void emit(Target ta, Span s, String k, List<Feature> features) {
+      int T = super.templates.size();
+      int[] newF = new int[features.size()];
+      for (int i = 0; i < newF.length; i++) {
+        int t = features.get(i).template;
+        int f = features.get(i).feature;
+        newF[i] = new ProductIndex(t, T).destructiveProd(f).getProdFeatureSafe();
+      }
+      Span key = ta.target;
+      int[] oldF = targetFeats.put(key, newF);
+      assert oldF == null;
+    }
+    public void onComplete() {
+      targetFeats.clear();
+    }
+    public int[] getTargetFeatures(Span target) {
+      return targetFeats.get(target);
+    }
+  }
+
 
   public static int[] getRoles(String line) {
     int field = 4;
@@ -587,7 +651,7 @@ public class FeaturePrecomputation {
     return data;
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws IOException {
     ExperimentProperties config = ExperimentProperties.init(args);
     File wd = config.getExistingDir("workingDir", new File("/tmp"));
 
@@ -602,10 +666,13 @@ public class FeaturePrecomputation {
     // False means extract features for frame id.
     boolean roleMode = config.getBoolean("roleMode");
 
-    FeaturePrecomputation fp = new FeaturePrecomputation(roleMode);
-    fp.run(data.iterator(),
+    Alphabet templates = new Alphabet();  // read all templates
+    FeaturePrecomputation fp = new FeaturePrecomputation.ToDisk(
+        roleMode,
+        templates,
         new File(wd, "features.txt" + suffix),
         new File(wd, "template-feat-indices.txt" + suffix),
         new File(wd, "role-names.txt" + suffix));
+    fp.run(data.iterator());
   }
 }

@@ -61,6 +61,9 @@ public class Wsabie implements Serializable {
   private double learningRate = 0.5;
   private Random rand;
 
+  // Says whether
+  //  embed(target) = avg_{f \in features} embed(f) or
+  //  embed(target) = sum_{f \in features} embed(f)
   // Tells you what frames are relevant (in the same schema) to each other
   private FrameSchemaHelper schemas;
 

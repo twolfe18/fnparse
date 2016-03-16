@@ -74,19 +74,6 @@ public class PredPatt {
   private NodeType preds;       // head(event1)
   private Relation event1;      // event1(startTokenInclusive, endTokenExclusive)
 
-  public NodeType getPredWitness() {
-    return preds;
-  }
-  public Relation getEvent1Relation() {
-    return event1;
-  }
-  public int getNumTargets() {
-    return targets.size();
-  }
-  public Target getTarget(int i) {
-    return targets.get(i);
-  }
-
   /**
    * @param communicationTarGzFile is a .tar.gz file which pred-patt has been
    * run on, containing {@link SituationMention}s 
@@ -173,6 +160,19 @@ public class PredPatt {
       }
       addTo.add(t);
     }
+  }
+
+  public NodeType getPredWitness() {
+    return preds;
+  }
+  public Relation getEvent1Relation() {
+    return event1;
+  }
+  public int getNumTargets() {
+    return targets.size();
+  }
+  public Target getTarget(int i) {
+    return targets.get(i);
   }
 
 }
