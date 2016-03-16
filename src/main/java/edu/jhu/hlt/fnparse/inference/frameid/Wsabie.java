@@ -61,12 +61,12 @@ public class Wsabie implements Serializable {
   private double learningRate = 0.5;
   private Random rand;
 
-  // Says whether
-  //  embed(target) = avg_{f \in features} embed(f) or
-  //  embed(target) = sum_{f \in features} embed(f)
   // Tells you what frames are relevant (in the same schema) to each other
   private FrameSchemaHelper schemas;
 
+  // Says whether
+  //  embed(target) = avg_{f \in features} embed(f) or
+  //  embed(target) = sum_{f \in features} embed(f)
   // Note: If you set this to true, the effective learning rate goes way down
   private boolean averageFeatures = true;
 
@@ -127,6 +127,10 @@ public class Wsabie implements Serializable {
     }
   }
 
+  public FrameSchemaHelper getSchema() {
+    return schemas;
+  }
+
   public void setBialph(BiAlph ba) {
     this.bialph = ba;
     this.templateOffsets = new int[numTemplates];
@@ -138,6 +142,7 @@ public class Wsabie implements Serializable {
   }
 
   public void randInit() {
+    Log.info("intializing weights...");
     double rV = 1d / Math.sqrt(V[0].length);
     for (int i = 0; i < V.length; i++)
       randInit(V[i], rV, rand);
@@ -150,6 +155,7 @@ public class Wsabie implements Serializable {
       for (int i = 0; i < M.length; i++)
         randInit(M[i], rM, rand);
     }
+    Log.info("done intializing weights");
   }
 
   public static void randInit(float[] vec, float range, Random r) {
@@ -386,7 +392,7 @@ public class Wsabie implements Serializable {
     for (int i = 0; i < confusion.length; i++) {
       int frame = confusion[i];
 //    for (int frame = 0; frame < V.length; frame++) {
-      if (schemas.getSchema(frame) != sc)
+      if (sc != null && schemas.getSchema(frame) != sc)
         continue;
       double s = 0;
       for (int j = 0; j < dimEmb; j++)
