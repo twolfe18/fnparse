@@ -44,6 +44,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class PredPatt {
+  public static boolean DEBUG = false;
 
   // Name of tool in AnnotationMetadata for desired SituationMentionSet
   public static String PRED_PATT_TOOL_NAME = "pred-patt";
@@ -71,6 +72,7 @@ public class PredPatt {
   private List<Target> targets;
 
   // Graph elements created by this class (constructor)
+  private NodeType tokenIndex;
   private NodeType preds;       // head(event1)
   private Relation event1;      // event1(startTokenInclusive, endTokenExclusive)
 
@@ -89,7 +91,7 @@ public class PredPatt {
 
     // Setup simple TransitionGenerator which (maybe) adds the Target which ends
     // at the last POS tag added.
-    NodeType tokenIndex = u.lookupNodeType("tokenIndex", false);
+    this.tokenIndex = u.lookupNodeType("tokenIndex", true);
     this.event1 = u.addEdgeType(new Relation("event1", tokenIndex, tokenIndex));
     this.preds = u.getWitnessNodeType(event1);
     TKey[] newPosTagAfterWord = new TKey[] {
@@ -105,7 +107,8 @@ public class PredPatt {
         assert posTagging.getNumTails() == 2;
         int i = (Integer) posTagging.getTail(0).getValue();
 //        String tag = (String) posTagging.getTail(1).getValue();
-        Log.info("call on " + i + "\t" + lhsValues);
+        if (DEBUG)
+          Log.info("call on " + i + "\t" + lhsValues);
         if (targets.size() > 100)
           throw new RuntimeException("TODO: build index for this");
         List<Pair<HypEdge, Adjoints>> edges = new ArrayList<>();
@@ -113,7 +116,8 @@ public class PredPatt {
         for (Target t : targets) {
 //          position++;
           if (t.matches(i)) {
-            Log.info("match on " + i);
+            if (DEBUG)
+              Log.info("match on " + i);
             int s = t.location.start;
             int e = t.location.end;
             if (!Target.SPANS_ARE_INCLUSIVE)
@@ -134,6 +138,8 @@ public class PredPatt {
   }
 
   public static List<Target> readTargets(File communicationTarGzFile) throws IOException {
+    if (communicationTarGzFile == null)
+      throw new IllegalArgumentException();
     Log.info("reading pred-patt targets from " + communicationTarGzFile.getPath());
     List<Target> targets = new ArrayList<>();
     try (InputStream is = FileUtil.getInputStream(communicationTarGzFile)) {

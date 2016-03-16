@@ -68,8 +68,12 @@ public class State {
           el.add(cur.item);
       }
     }
-//    Collections.sort(el, HypEdge.BY_RELATION);
-    Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
+    try {
+//      Collections.sort(el, HypEdge.BY_RELATION);
+      Collections.sort(el, HypEdge.BY_RELATION_THEN_TAIL);
+    } catch (ClassCastException cce) {
+      Log.warn("couldn't sort HypEdges because: " + cce.getMessage());
+    }
     for (HypEdge e : el) {
       System.out.println(e);
     }

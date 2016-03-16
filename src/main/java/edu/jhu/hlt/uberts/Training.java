@@ -7,6 +7,11 @@ import java.util.List;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.tuple.Pair;
 
+/**
+ * TODO Update to use {@link Uberts#getLabel(HypEdge)} instead of {@link Instance}.
+ *
+ * @author travis
+ */
 public class Training {
 
   private Uberts u;

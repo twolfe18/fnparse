@@ -9,7 +9,6 @@ import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
-import edu.stanford.nlp.ling.tokensregex.SequenceMatchAction.BoundAction;
 
 /**
  * Running examples:

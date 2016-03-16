@@ -21,8 +21,7 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class TNode {
-
-  public static boolean DEBUG = true;
+  public static boolean DEBUG = false;
 
   // Singleton, both NodeType and Relation are null
   public static final TKey GOTO_PARENT = new TKey();
