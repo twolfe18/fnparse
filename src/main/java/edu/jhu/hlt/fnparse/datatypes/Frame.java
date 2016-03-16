@@ -8,7 +8,7 @@ import java.util.Set;
 
 import edu.jhu.hlt.tutils.data.PropbankFrameIndex.PropbankFrame;
 
-public class Frame implements Serializable {
+public class Frame implements Serializable, Comparable<Frame> {
   private static final long serialVersionUID = 8807170122216944787L;
 
   private int idx;
@@ -185,4 +185,9 @@ public class Frame implements Serializable {
    * Frame used to indicate that a word does not evoke a frame
    */
   public static final Frame nullFrame = new Frame();
+
+  @Override
+  public int compareTo(Frame f) {
+    return name.compareTo(f.name);
+  }
 }
