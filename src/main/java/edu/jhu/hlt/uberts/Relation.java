@@ -55,7 +55,7 @@ public class Relation {
       tailValues[i] = tail[i].getValue();
     return encodeTail(tailValues);
   }
-  public static class EqualityArray {
+  public static class EqualityArray implements Comparable<EqualityArray> {
     private Object[] tail;
     public EqualityArray(Object[] tail) {
       this.tail = tail;
@@ -67,6 +67,30 @@ public class Relation {
         return Arrays.equals(tail, ea.tail);
       }
       return false;
+    }
+    @SuppressWarnings("unchecked")
+    @Override
+    public int compareTo(EqualityArray o) {
+      int dtl = tail.length - o.tail.length;
+      if (dtl != 0)
+        return dtl;
+      for (int i = 0; i < tail.length; i++) {
+        int d = ((Comparable<Object>) tail[i]).compareTo(o.tail[i]);
+        if (d != 0)
+          return d;
+      }
+      return 0;
+    }
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder();
+      sb.append("(EqArr");
+      for (int i = 0; i < tail.length; i++) {
+        sb.append(' ');
+        sb.append(tail[i]);
+      }
+      sb.append(')');
+      return sb.toString();
     }
   }
 
