@@ -165,7 +165,7 @@ public class AveragedPerceptronWeights implements Serializable, ProductIndexWeig
   }
 
   public String summary() {
-    long bytes = 2 * dimension * 8;
+    double bytes = 2 * dimension * 8;
     String mem = String.format(" mem=%.1fGB", bytes / (1L<<30));
     return "(APW L2=" + w.getL2Norm() + " dim=" + dimension + " c=" + c + mem + ")";
   }

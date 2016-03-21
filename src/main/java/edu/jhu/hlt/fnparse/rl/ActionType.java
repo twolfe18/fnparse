@@ -703,7 +703,7 @@ public interface ActionType {
   };
 
   public static final CommitActionType COMMIT = new CommitActionType(0,
-      ExperimentProperties.getInstance().getBoolean("handleRCroles"));
+      ExperimentProperties.getInstance().getBoolean("handleRCroles", false));
   public static final PruneActionType PRUNE = new PruneActionType(1);
   public static final ActionType[] ACTION_TYPES = new ActionType[] {
     COMMIT,

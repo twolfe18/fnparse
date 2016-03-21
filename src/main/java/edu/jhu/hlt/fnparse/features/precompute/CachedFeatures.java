@@ -142,7 +142,6 @@ public class CachedFeatures implements Serializable {
         assert features3 == null;
         return;
       }
-      Sentence sent = parse.getSentence();
       features4b = new HashMap<>();
       argsForTarget = new HashMap<>();
       for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
@@ -150,7 +149,7 @@ public class CachedFeatures implements Serializable {
         List<Span> args = new ArrayList<>(x1.getValue().size());
         for (Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
           Span s = x2.getKey();
-          List<ProductIndex> features = statelessGetFeaturesNoModulo(sent, t, s, this, featureSet, template2cardinality);
+          List<ProductIndex> features = statelessGetFeaturesNoModulo(t, s, this, featureSet, template2cardinality);
           Object old = features4b.put(new SpanPair(t, s), lpi2la2(features));
           assert old == null;
           args.add(s);
@@ -221,8 +220,6 @@ public class CachedFeatures implements Serializable {
     }
 
     public Item(FNParse parse) {
-      if (parse == null)
-        throw new IllegalArgumentException();
       this.parse = parse;
       this.features3 = new HashMap<>();
     }
@@ -660,7 +657,7 @@ public class CachedFeatures implements Serializable {
         return feats;
       Log.info("didn't find any cached flattened features! t=" + t.shortString()
         + " s=" + s.shortString() + " sent=" + sent.getId());
-      return statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+      return statelessGetFeaturesNoModulo(t, s, cur, featureSet, template2cardinality);
 //      final int fsLen = featureSet.length;
 //
 //      // pre-computed features don't include nullSpan
@@ -1121,7 +1118,7 @@ public class CachedFeatures implements Serializable {
   }
 
   public static List<ProductIndex> statelessGetFeaturesNoModulo(
-      Sentence sent, Span t, Span s,
+      Span t, Span s,
       Item cur, int[][] featureSet, int[] template2cardinality) {
     //      if (dropoutMode != DropoutMode.OFF)
     //        throw new RuntimeException("fixme");

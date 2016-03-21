@@ -3,7 +3,6 @@ package edu.jhu.hlt.fnparse.datatypes;
 import java.util.Arrays;
 
 import edu.jhu.hlt.fnparse.util.Describe;
-import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.hash.Hash;
 

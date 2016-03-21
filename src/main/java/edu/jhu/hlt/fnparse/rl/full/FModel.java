@@ -685,7 +685,7 @@ public class FModel implements Serializable {
         Item cur = s2i.get(sent);
         feats = cur.getFlattenedCachedFeatures(t, s);
         if (feats == null)
-          feats = CachedFeatures.statelessGetFeaturesNoModulo(sent, t, s, cur, featureSet, template2cardinality);
+          feats = CachedFeatures.statelessGetFeaturesNoModulo(t, s, cur, featureSet, template2cardinality);
 //      } else {
 //        // This was the simplest way...
 //        Pair<Sentence, SpanPair> key = new Pair<>(sent, new SpanPair(t, s));

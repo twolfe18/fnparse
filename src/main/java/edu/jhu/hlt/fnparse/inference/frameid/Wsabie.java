@@ -50,8 +50,8 @@ public class Wsabie implements Serializable {
   public static final boolean USE_FLOATS_FEAT_EMB = true;
 
   private double margin = 0.001;
-  private int dimFeat = 1<<20;
-  private int dimEmb = 512;
+  private int dimFeat = 1<<19;
+  private int dimEmb = 128;       // up to 512 (at least) is good
   private int numTemplates;
   private double[][] V;       // frame embeddings
   private double[][] M;       // feature -> frame embedding projection
@@ -389,9 +389,11 @@ public class Wsabie implements Serializable {
     int[] confusion = e.getConfusionSet();
     if (confusion == null)
       confusion = getDefaultConfusionSet();
+//    for (int frame = 0; frame < V.length; frame++) {
     for (int i = 0; i < confusion.length; i++) {
       int frame = confusion[i];
-//    for (int frame = 0; frame < V.length; frame++) {
+      if (frame < 0 || frame >= V.length)
+        throw new IllegalStateException("confusion set contains illegal frame: " + frame + " V.length=" + V.length);
       if (sc != null && schemas.getSchema(frame) != sc)
         continue;
       double s = 0;

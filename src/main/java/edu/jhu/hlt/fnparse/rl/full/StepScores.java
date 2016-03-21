@@ -13,7 +13,7 @@ import edu.jhu.hlt.tutils.scoring.MutedAdjoints;
  * This is basically the same as {@link MutedAdjoints}, but allows well-structured
  * introspection.
  *
- * @param T TODO Remove this. I used to use this to figure out how to do
+ * @param Inst TODO Remove this. I used to use this to figure out how to do
  * (model,loss,rand) -> Adjoints, but now {@link DoubleBeam} has {@link HowToSearch}
  * which does this. I'll keep info:T around for now, but it probably isn't necessary.
  */

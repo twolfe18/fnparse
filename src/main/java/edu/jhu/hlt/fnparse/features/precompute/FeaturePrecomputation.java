@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
@@ -58,6 +59,7 @@ import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.data.BrownClusters;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -275,11 +277,6 @@ public abstract class FeaturePrecomputation {
    */
   public void run(Iterator<FNParse> data) {
     Log.info("extracting features for " + (roleMode ? "role" : "frame") + " id");
-
-    // This is how we prune spans
-    Reranker r = null;
-    if (roleMode)
-      r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
  
     // For debugging
     ExperimentProperties config = ExperimentProperties.getInstance();
@@ -293,7 +290,7 @@ public abstract class FeaturePrecomputation {
       FNParse y = data.next();
 
       if (roleMode)
-        emitAllRoleId(y, r);
+        emitAllRoleId(y);
       else
         emitAllFrameId(y);
 
@@ -358,6 +355,13 @@ public abstract class FeaturePrecomputation {
       int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
       emit(ta, t, String.valueOf(k), features);
     }
+  }
+
+
+  public void emitAllRoleId(FNParse y) {
+    // This is how we prune spans
+    Reranker r = new Reranker(null, null, null, Mode.XUE_PALMER_HERMANN, null, 1, 1, new Random(9001));
+    emitAllRoleId(y, r);
   }
 
   /**
@@ -472,6 +476,7 @@ public abstract class FeaturePrecomputation {
       this.outputDataWriter = FileUtil.getWriter(outputData);
     }
 
+    @Override
     public void emit(Target t, Span s, String k, List<Feature> features) {
       try {
         outputDataWriter.write(Target.toLine(t));
@@ -485,6 +490,7 @@ public abstract class FeaturePrecomputation {
       }
     }
 
+    @Override
     public void onComplete() {
       try {
         this.outputDataWriter.close();
@@ -512,30 +518,77 @@ public abstract class FeaturePrecomputation {
     }
   }
 
-  // TODO support roleMode=true
+//  // Key for ToMemBuffer when roleMode=true
+//  private class Arg {
+//    Target ta;
+//    Span s;
+//    String k;
+//    int hc;
+//    public Arg(Target ta, Span s, String k) {
+//      this.ta = ta;
+//      this.s = s;
+//      this.k = k;
+//      this.hc = Hash.mix(ta.hash, Span.index(s), k.hashCode());
+//    }
+//    @Override
+//    public int hashCode() { return hc; }
+//    @Override
+//    public boolean equals(Object other) {
+//      if (other instanceof Arg) {
+//        Arg a = (Arg) other;
+//        return ta == a.ta && s == a.s && k.equals(a.k);
+//      }
+//      return false;
+//    }
+//  }
+
   public static class ToMemBuffer extends FeaturePrecomputation {
-    private Map<Span, int[]> targetFeats;
+
+    private Map<Span, List<Feature>> targetFeats; // roleMode=false
+//    private Map<Arg, List<Feature>> argFeats;     // roleMode=true
+    private Map<SpanPair, List<Feature>> argFeats;  // roleMode=true
+
     public ToMemBuffer(boolean roleMode, Alphabet templates) {
       super(roleMode, templates);
-      this.targetFeats = new HashMap<>();
+      if (roleMode)
+        this.argFeats = new HashMap<>();
+      else
+        this.targetFeats = new HashMap<>();
     }
+
+    @Override
     public void emit(Target ta, Span s, String k, List<Feature> features) {
-      int T = super.templates.size();
-      int[] newF = new int[features.size()];
-      for (int i = 0; i < newF.length; i++) {
-        int t = features.get(i).template;
-        int f = features.get(i).feature;
-        newF[i] = new ProductIndex(t, T).destructiveProd(f).getProdFeatureSafe();
+      if (targetFeats != null) {
+        Span key = ta.target;
+        Object oldF = targetFeats.put(key, features);
+        assert oldF == null;
       }
-      Span key = ta.target;
-      int[] oldF = targetFeats.put(key, newF);
-      assert oldF == null;
+      if (argFeats != null) {
+        SpanPair key = new SpanPair(ta.target, s);
+        Object oldF = argFeats.put(key, features);
+        assert oldF == null;
+      }
     }
+
+    @Override
     public void onComplete() {
-      targetFeats.clear();
+      if (targetFeats != null)
+        targetFeats.clear();
+      if (argFeats != null)
+        argFeats.clear();
     }
-    public int[] getTargetFeatures(Span target) {
+
+    public List<Feature> getTargetFeatures(Span target) {
       return targetFeats.get(target);
+    }
+
+    public Iterable<Entry<SpanPair, List<Feature>>> getArgFeatures() {
+      return argFeats.entrySet();
+    }
+
+    public List<Feature> getArgFeaturesFor(Span t, Span s) {
+      SpanPair key = new SpanPair(t, s);
+      return argFeats.get(key);
     }
   }
 
