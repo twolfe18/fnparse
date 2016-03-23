@@ -383,7 +383,7 @@ public class InformationGainProducts {
     List<TemplateIG> out = new ArrayList<>();
     int skipped = 0;
     for (TemplateIG t : all) {
-      if (t.numUpdates() == 0) {
+      if (t.totalCount() == 0) {
         skipped++;
         continue;
       }
@@ -453,6 +453,12 @@ public class InformationGainProducts {
           if (i > 0) sb.append('*');
           sb.append(lastBialph.lookupTemplate(pieces[i]));
         }
+
+        // How many updates we've seen. If no filtering is done, this will just
+        // be the number of lines in the feature files. If however, we create
+        // TemplateIGs with filters, then it will reflect the relative frequency
+        // of the filter passing.
+        sb.append("\t" + t.numObservations());
 
         // frame,framerole restrictions
         sb.append('\t');

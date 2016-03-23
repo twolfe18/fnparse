@@ -368,11 +368,11 @@ public class InformationGain implements Serializable, LineByLine {
     TimeMarker tm = new TimeMarker();
     int nt = 0;
     for (int i = 0; i < templates.length; i++)
-      if (templates[i] != null && templates[i].numUpdates() > 0)
+      if (templates[i] != null && templates[i].totalCount() > 0)
         nt++;
     List<TemplateIG> l = new ArrayList<>();
     for (TemplateIG t : templates) {
-      if (t == null || t.numUpdates() == 0)
+      if (t == null || t.totalCount() == 0)
         continue;
       t.ig();
       l.add(t);

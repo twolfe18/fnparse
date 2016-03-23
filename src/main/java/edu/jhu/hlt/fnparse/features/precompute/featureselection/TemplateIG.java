@@ -147,13 +147,22 @@ public class TemplateIG implements Serializable {
         cyx.add(xpi.prod(yy, numY).getProdFeature(), 1);
         cx.add(xpi.getProdFeature(), 1);
       }
-
       updates++;
     }
     igCache = null;
   }
 
-  public int numUpdates() {
+  /**
+   * How many times you called update.
+   */
+  public int numObservations() {
+    return observations;
+  }
+
+  /**
+   * Sum of the counts in all the tables.
+   */
+  public int totalCount() {
     return updates;
   }
 
