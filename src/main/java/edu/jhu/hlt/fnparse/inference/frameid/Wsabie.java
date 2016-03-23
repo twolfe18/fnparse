@@ -16,7 +16,6 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameSchemaHelper.Schema;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
@@ -25,6 +24,7 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.ProductIndex;
 
 /**
  * Based on:
@@ -466,8 +466,8 @@ public class Wsabie implements Serializable {
     // NOTE: By this point we're assuming that input feature files have been
     // filtered so that all features in the file are relevant to classification.
     FeatureFile.Line l = new FeatureFile.Line(line, true);
-    int[] y = l.getRoles(false);
-    assert y.length == 1;
+    int[] y = l.getFrames(false);
+    assert y.length == 1 : "multiple frames? " + Arrays.toString(y);
     int frame = y[0];
     int[] features = new int[l.getFeatures().size()];
     int i = 0;

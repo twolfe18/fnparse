@@ -8,7 +8,6 @@ import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -52,9 +51,8 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures.Item;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
-import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
 import edu.jhu.hlt.fnparse.rl.full.Beam.DoubleBeam;
 import edu.jhu.hlt.fnparse.rl.full.weights.ProductIndexAdjoints;
@@ -81,6 +79,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiAlphabet;
 import edu.jhu.hlt.tutils.MultiTimer;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.SpanPair;
@@ -645,9 +644,9 @@ public class FModel implements Serializable {
         old = s2i.put(s, i);
         assert old == null;
         if (!CACHE_FLATTEN) {
-          Iterator<Pair<SpanPair, BaseTemplates>> btIter = i.getFeatures();
+          Iterator<Pair<SpanPair, FeatureFile.Line>> btIter = i.getFeatures();
           while (btIter.hasNext()) {
-            Pair<SpanPair, BaseTemplates> st2feats = btIter.next();
+            Pair<SpanPair, FeatureFile.Line> st2feats = btIter.next();
             List<ProductIndex> feats2 = bt2pi(st2feats.get2());
             Pair<Sentence, SpanPair> key = new Pair<>(s, st2feats.get1());
             old = sentTS2feats.put(key, feats2);
@@ -700,13 +699,17 @@ public class FModel implements Serializable {
 
   // TODO This does not do feature sets! This just takes templates rather than their products.
   // CachedFeatures.getFeaturesNoModulo uses InformationGainProducts.flatten
-  public static List<ProductIndex> bt2pi(BaseTemplates bt) {
-    int n = bt.size();
+//  public static List<ProductIndex> bt2pi(BaseTemplates bt) {
+  public static List<ProductIndex> bt2pi(FeatureFile.Line bt) {
+    List<Feature> fs = bt.getFeatures();
+    int n = fs.size();
+//    int n = bt.size();
     List<ProductIndex> pi = new ArrayList<>(n);
     for (int i = 0; i < n; i++) {
       // TODO lookup card from bt.getTemplate(i) and BiAlph?
       ProductIndex t = new ProductIndex(i, n);
-      int f = bt.getValue(i);
+//      int f = bt.getValue(i);
+      int f = fs.get(i).feature;
       ProductIndex p = t.destructiveProd(f);
       pi.add(p);
     }
@@ -765,10 +768,10 @@ public class FModel implements Serializable {
       for (FeatureFile.Line l : feats) {
         Span t = l.getTarget();
         Span s = l.getArgSpan();
-        BitSet relTemplates = null; // null means all
-        boolean storeTemplates = true;
-        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
-        i.setFeatures(t, s, bt);
+//        BitSet relTemplates = null; // null means all
+//        boolean storeTemplates = true;
+//        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
+        i.setFeatures(t, s, l);
       }
       all.add(i);
     }
@@ -878,10 +881,10 @@ public class FModel implements Serializable {
       for (FeatureFile.Line l : feats) {
         Span t = l.getTarget();
         Span s = l.getArgSpan();
-        BitSet relTemplates = null; // null means all
-        boolean storeTemplates = true;
-        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
-        i.setFeatures(t, s, bt);
+//        BitSet relTemplates = null; // null means all
+//        boolean storeTemplates = true;
+//        BaseTemplates bt = new BaseTemplates(relTemplates, l.getLine(), storeTemplates);
+        i.setFeatures(t, s, l);
       }
       i.convertToFlattenedRepresentation(featureSet, template2cardinality);
       if (tr) train.add(i);

@@ -5,36 +5,35 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import org.junit.runner.Describable;
-
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.features.precompute.Alphabet;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameIdExample;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameSchemaHelper;
 import edu.jhu.hlt.fnparse.inference.frameid.Wsabie;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Document;
+import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TokenToConstituentIndex;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
-import edu.jhu.hlt.uberts.Agenda;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypNode;
 import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
-import edu.jhu.hlt.uberts.factor.AtMost1;
-import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.Uberts;
+import edu.jhu.hlt.uberts.factor.AtMost1;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
@@ -159,8 +158,33 @@ public class FrameId {
         }
 
         // Get the features for this target
-        int[] features = getFeatures(target, sent);
-        FrameIdExample ex = new FrameIdExample(-1, features);
+        List<Feature> features = getFeatures(target, sent);
+        int[] flatFeats = new int[features.size()];
+        int T = FrameId.this.featureTemplates.size();
+        for (int i = 0; i < flatFeats.length; i++) {
+          Feature f = features.get(i);
+          // TODO This needs to match how Wsabie did this!
+          
+          
+          flatFeats[i] = new ProductIndex(f.template, T)
+              .destructiveProd(f.feature)
+              .getProdFeatureSafe();
+        }
+        FrameIdExample ex = new FrameIdExample(-1, flatFeats);
+
+        // For now limit frame predictions ot a single schema.
+        // This is needed (at least) because FModel doesn't seem cool with
+        // multi-FrameIndex predictions.
+        FrameSchemaHelper.Schema frameSchema;
+        if (ExperimentProperties.getInstance().getBoolean("propbank")) {
+          frameSchema = FrameSchemaHelper.Schema.PROPBANK;
+        } else {
+          frameSchema = FrameSchemaHelper.Schema.FRAMENET;
+        }
+        List<Integer> frameConfusionSet = wsabie.getSchema().getFramesInSchema(frameSchema);
+        ex.setFrameConfusionSet(frameConfusionSet, false);
+
+        // Actually make the frame predictions
         Beam<Integer> yhatK = wsabie.predict(ex, topKframes);
         if (DEBUG) {
           Log.info("asked for up to " + topKframes + " and received " + yhatK.size());
@@ -234,14 +258,15 @@ public class FrameId {
     return b;
   }
 
-  private int[] getFeatures(Span target, Sentence sent) {
+  private List<Feature> getFeatures(Span target, Sentence sent) {
     // TODO Need to instantiate a new FeaturePrecomputation.ToMemBuffer every time?
     FeaturePrecomputation.ToMemBuffer fp = new FeaturePrecomputation.ToMemBuffer(false, featureTemplates);
     FNParse y = new FNParse(sent, Collections.emptyList());
     fp.emitAllFrameId(y);
-    int[] fx = fp.getTargetFeatures(target);
+    List<Feature> fx = fp.getTargetFeatures(target);
     assert fx != null;
-    Log.info("found " + fx.length + " features for target: " + Describe.span(target, sent));
+    if (DEBUG)
+      Log.info("found " + fx.size() + " features for target: " + Describe.span(target, sent));
     return fx;
   }
 }

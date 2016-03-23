@@ -3,6 +3,7 @@ package edu.jhu.hlt.fnparse.features.precompute;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.io.Serializable;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -17,11 +18,11 @@ import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
-import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 
 public class FeatureFile {
@@ -40,7 +41,8 @@ public class FeatureFile {
     }
 
     /**
-     * Converts features from ints to ProductIndex
+     * Converts features from ints to ProductIndex. Only includes feature value,
+     * not global (doesn't shift based on the template index)
      */
     public ProductIndex[] featureToProductIndex() {
       ProductIndex[] pi = new ProductIndex[features.length];
@@ -53,9 +55,10 @@ public class FeatureFile {
   /**
    * This does group by template, which {@link BaseTemplates} doesn't do.
    */
-  public static class Line {
+  public static class Line implements Serializable {
+    private static final long serialVersionUID = -4805532995670403261L;
     private boolean sorted;
-    private final String line;
+    private String line;
     private String[] tokenized;
     private List<Feature> features;
 
@@ -63,6 +66,11 @@ public class FeatureFile {
       features = new ArrayList<>();
       this.line = line;
       init(line, sorted);
+    }
+
+    public Line(List<Feature> features, boolean sorted) {
+      this.sorted = sorted;
+      this.features = features;
     }
 
     public void init(String line, boolean sorted) {
@@ -111,11 +119,43 @@ public class FeatureFile {
     public int[] getRoles(boolean addOne) {
       if (tokenized == null)
         tokenize();
-      String[] t = tokenized[4].split(",");
-      int[] roles = new int[t.length];
-      for (int i = 0; i < t.length; i++)
-        roles[i] = Integer.parseInt(t[i]) + (addOne ? 1 : 0);
-      return roles;
+//      String[] t = tokenized[4].split(",");
+//      int[] roles = new int[t.length];
+//      for (int i = 0; i < t.length; i++)
+//        roles[i] = Integer.parseInt(t[i]) + (addOne ? 1 : 0);
+//      return roles;
+      int mod3 = FeaturePrecomputation.ROLE_STRING_COLUMN_ROLE_MOD3;
+      int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
+      int[] k = FeaturePrecomputation.getRolesHelperTok(tokenized[ki], mod3);
+      if (addOne) {
+        for (int i = 0; i < k.length; i++)
+          k[i]++;
+      }
+      return k;
+    }
+    public int[] getFrameRoles(boolean addOne) {
+      if (tokenized == null)
+        tokenize();
+      int mod3 = FeaturePrecomputation.ROLE_STRING_COLUMN_FRAMEROLE_MOD3;
+      int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
+      int[] k = FeaturePrecomputation.getRolesHelperTok(tokenized[ki], mod3);
+      if (addOne) {
+        for (int i = 0; i < k.length; i++)
+          k[i]++;
+      }
+      return k;
+    }
+    public int[] getFrames(boolean addOne) {
+      if (tokenized == null)
+        tokenize();
+      int mod3 = FeaturePrecomputation.ROLE_STRING_COLUMN_FRAME_MOD3;
+      int ki = FeaturePrecomputation.ROLE_STRING_COLUMN;
+      int[] k = FeaturePrecomputation.getRolesHelperTok(tokenized[ki], mod3);
+      if (addOne) {
+        for (int i = 0; i < k.length; i++)
+          k[i]++;
+      }
+      return k;
     }
 
     public List<TemplateExtraction> groupByTemplate() {

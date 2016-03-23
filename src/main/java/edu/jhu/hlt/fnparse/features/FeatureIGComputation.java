@@ -98,8 +98,8 @@ public class FeatureIGComputation {
     ctx.setSpan2(fi.getTarget());
     ctx.setHead1(hf.head(ctx.getSpan1(), sent));
     ctx.setHead2(hf.head(ctx.getSpan2(), sent));
-    ctx.setFrame(fi.getFrame());
-    ctx.setRole(commit.k);
+//    ctx.setFrame(fi.getFrame());
+//    ctx.setRole(commit.k);
     ctx.setArg(ctx.getSpan1());
     ctx.setArgHead(ctx.getHead1());
     ctx.setTarget(ctx.getSpan2());

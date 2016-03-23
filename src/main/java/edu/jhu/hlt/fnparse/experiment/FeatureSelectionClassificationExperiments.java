@@ -18,11 +18,10 @@ import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
-import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full2.AveragedPerceptronWeights;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.TimeMarker;
 import edu.jhu.hlt.tutils.hash.Hash;
@@ -39,6 +38,9 @@ import edu.jhu.hlt.tutils.scoring.Adjoints;
  *
  * Right now this uses the progressive validation loss described in:
  * http://hunch.net/~jl/projects/prediction_bounds/progressive_validation/coltfinal.pdf
+ *
+ * TODO Switch from crappy shard-based dev/test set to proper one using sentence
+ * ids file (should already be generated).
  *
  * @author travis
  */
@@ -325,22 +327,19 @@ public class FeatureSelectionClassificationExperiments {
   }
 
   private void learn(File f) {
-    double secBtwLoss = 10;
-    boolean featuresSorted = true;
-    boolean storeTemplates = true;
 
     // Shuffling instances (t,s) within a file improves learning
     List<FeatureFile.Line> lines = new ArrayList<>();
+    boolean featuresSorted = true;
     for (FeatureFile.Line l : FeatureFile.getLines(f, featuresSorted))
       lines.add(l);
     Collections.shuffle(lines, rand);
 
     for (FeatureFile.Line line : lines) {
-      BaseTemplates bt = new BaseTemplates(templates, line.getLine(), storeTemplates);
       CachedFeatures.Item i = new CachedFeatures.Item(null);
       Span t = line.getTarget();
       Span s = line.getArgSpan();
-      i.setFeatures(t, s, bt);
+      i.setFeatures(t, s, line);
       i.convertToFlattenedRepresentation(fs, template2cardinality);
       List<ProductIndex> features = i.getFlattenedCachedFeatures(t, s);
 

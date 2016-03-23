@@ -2,8 +2,8 @@ package edu.jhu.hlt.fnparse.rl.full.weights;
 
 import java.util.List;
 
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.params.Adjoints.LazyL2UpdateVector;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 

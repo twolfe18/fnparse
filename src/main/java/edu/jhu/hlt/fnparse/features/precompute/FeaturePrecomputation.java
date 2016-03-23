@@ -98,6 +98,12 @@ import edu.mit.jwi.IRAMDictionary;
  */
 public abstract class FeaturePrecomputation {
 
+  // TODO fill out the other columns
+  public static final int ROLE_STRING_COLUMN = 4;
+  public static final int ROLE_STRING_COLUMN_ROLE_MOD3 = 0;
+  public static final int ROLE_STRING_COLUMN_FRAMEROLE_MOD3 = 1;
+  public static final int ROLE_STRING_COLUMN_FRAME_MOD3 = 2;
+
   public static class Target {
     public static final String NO_DOC_ID = "noDocId".intern();
     public final String docId;      // must contain corpus id if theres more than one corpus
@@ -161,13 +167,13 @@ public abstract class FeaturePrecomputation {
     public final int template;
     public final String featureName;
     public final int feature;
-    public final double value;
+//    public final double value;
     public Feature(String templateName, int template, String featureName, int feature, double value) {
       this.templateName = templateName;
       this.template = template;
       this.featureName = featureName;
       this.feature = feature;
-      this.value = value;
+//      this.value = value;
     }
     public static Comparator<Feature> BY_TEMPLATE_IDX = new Comparator<Feature>() {
       @Override
@@ -353,7 +359,8 @@ public abstract class FeaturePrecomputation {
 
       FrameInstance fi = frameLocations.get(t);
       int k = fi == null ? fUkn : kNames.lookupIndex("f=" + fi.getFrame().getName(), true);
-      emit(ta, t, String.valueOf(k), features);
+      String ks = "-1,-1," + k;
+      emit(ta, Span.nullSpan, ks, features);
     }
   }
 
@@ -425,8 +432,10 @@ public abstract class FeaturePrecomputation {
           }
         }
       }
-      if (k == null)
+      if (k == null) {
+        // TODO Change to "-1,-1,-1"?
         k = new StringBuilder("-1");
+      }
 
       String docId = "na";  // Not currently needed
       Target t = new Target(docId, y.getId(), ta);
@@ -459,7 +468,6 @@ public abstract class FeaturePrecomputation {
    */
   public static class ToDisk extends FeaturePrecomputation {
     private Writer outputDataWriter;    // writer for outputData
-//    private File outputData;
     private File outputAlphabet;
     private File outputRoleNames;
 
@@ -472,7 +480,6 @@ public abstract class FeaturePrecomputation {
       Log.info("writing role names to " + outputRoleNames.getPath());
       this.outputAlphabet = outputAlphabet;
       this.outputRoleNames = outputRoleNames;
-//      this.outputData = outputData;
       this.outputDataWriter = FileUtil.getWriter(outputData);
     }
 
@@ -518,34 +525,9 @@ public abstract class FeaturePrecomputation {
     }
   }
 
-//  // Key for ToMemBuffer when roleMode=true
-//  private class Arg {
-//    Target ta;
-//    Span s;
-//    String k;
-//    int hc;
-//    public Arg(Target ta, Span s, String k) {
-//      this.ta = ta;
-//      this.s = s;
-//      this.k = k;
-//      this.hc = Hash.mix(ta.hash, Span.index(s), k.hashCode());
-//    }
-//    @Override
-//    public int hashCode() { return hc; }
-//    @Override
-//    public boolean equals(Object other) {
-//      if (other instanceof Arg) {
-//        Arg a = (Arg) other;
-//        return ta == a.ta && s == a.s && k.equals(a.k);
-//      }
-//      return false;
-//    }
-//  }
-
   public static class ToMemBuffer extends FeaturePrecomputation {
 
-    private Map<Span, List<Feature>> targetFeats; // roleMode=false
-//    private Map<Arg, List<Feature>> argFeats;     // roleMode=true
+    private Map<Span, List<Feature>> targetFeats;   // roleMode=false
     private Map<SpanPair, List<Feature>> argFeats;  // roleMode=true
 
     public ToMemBuffer(boolean roleMode, Alphabet templates) {
@@ -592,14 +574,51 @@ public abstract class FeaturePrecomputation {
     }
   }
 
-
+  /**
+   * Returns the roles that appear for this instance (t,s). Will be array of
+   * length 1 for PB, could be longer for FN.
+   *
+   * NOTE: This does not return the int[] seen in the text file, but only the
+   * %3=0 indices of it (the roles).
+   */
   public static int[] getRoles(String line) {
-    int field = 4;
-    String[] toks = line.split("\t", field + 2);
-    String[] rolesS = toks[field].split(",");
-    int[] rolesI = new int[rolesS.length];
-    for (int i = 0; i < rolesS.length; i++)
-      rolesI[i] = Integer.parseInt(rolesS[i]);
+    return getRolesHelper(line, ROLE_STRING_COLUMN_ROLE_MOD3);
+  }
+  /**
+   * Returns the frame-roles that appear for this instance (t,s). Will be array
+   * of length 1 for PB, could be longer for FN.
+   *
+   * NOTE: This does not return the int[] seen in the text file, but only the
+   * %3=1 indices of it (the frame-roles).
+   */
+  public static int[] getFrameRoles(String line) {
+    return getRolesHelper(line, ROLE_STRING_COLUMN_FRAMEROLE_MOD3);
+  }
+  /**
+   * Returns the frames that appear for this instance (t,s). Will be array of
+   * length 1 for PB, could be longer for FN.
+   *
+   * NOTE: This does not return the int[] seen in the text file, but only the
+   * %3=2 indices of it (the frames).
+   */
+  public static int[] getFrames(String line) {
+    return getRolesHelper(line, ROLE_STRING_COLUMN_FRAME_MOD3);
+  }
+  private static int[] getRolesHelper(String line, int mod3) {
+    if (mod3 >= 3 || mod3 < 0)
+      throw new IllegalArgumentException();
+    String[] toks = line.split("\t", ROLE_STRING_COLUMN + 2);
+    return getRolesHelperTok(toks[ROLE_STRING_COLUMN], mod3);
+  }
+  static int[] getRolesHelperTok(String kString, int mod3) {
+    if (kString.equals("-1"))
+      return new int[] {-1};
+    String[] rolesS = kString.split(",");
+    if (rolesS.length % 3 != 0)
+      throw new IllegalArgumentException("malformed roles string: " + kString);
+    int[] rolesI = new int[rolesS.length / 3];
+    for (int i = 0; i < rolesS.length; i += 3)
+      rolesI[i] = Integer.parseInt(rolesS[i + mod3]);
     return rolesI;
   }
 

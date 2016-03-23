@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Random;
+import java.util.Map.Entry;
 import java.util.Set;
 
 import edu.jhu.hlt.fnparse.data.FileFrameInstanceProvider;
@@ -14,13 +14,22 @@ import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.datatypes.FrameInstance;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
+import edu.jhu.hlt.fnparse.features.precompute.Alphabet;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.CachedFeatures;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureSet;
 import edu.jhu.hlt.fnparse.rl.full.FModel;
-import edu.jhu.hlt.tutils.ExperimentProperties;
+import edu.jhu.hlt.tutils.Document;
 import edu.jhu.hlt.tutils.FileUtil;
+import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.LL;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.Span;
+import edu.jhu.hlt.tutils.SpanPair;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.hlt.uberts.HypEdge;
 import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
@@ -30,7 +39,6 @@ import edu.jhu.hlt.uberts.NodeType;
 import edu.jhu.hlt.uberts.Relation;
 import edu.jhu.hlt.uberts.TNode.GraphTraversalTrace;
 import edu.jhu.hlt.uberts.TNode.TKey;
-import edu.jhu.hlt.uberts.Training;
 import edu.jhu.hlt.uberts.Uberts;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
@@ -44,9 +52,24 @@ import edu.jhu.prim.tuple.Pair;
  * @author travis
  */
 public class Srl {
+  public static boolean DEBUG = false;
 
   private Uberts u;
   private FModel model;
+
+  // Needed for feature crap
+  // In fnparse/FMode/ShimModel pipeline, this is stored in CachedFeatures/CFLike
+  // TODO Consider whether I should actually be instantiating a CachedFeatures
+  private BiAlph bialph;              // required
+  private int[][] featureSet;         // derived
+  private int[] template2cardinality; // derived
+  public void setupFeatures(File bialphFile, File featureSetFile) {
+    if (DEBUG)
+      Log.info("");
+    this.bialph = new BiAlph(bialphFile, LineMode.ALPH);
+    this.template2cardinality = bialph.makeTemplate2Cardinality();
+    this.featureSet = FeatureSet.getFeatureSet2(featureSetFile, bialph);
+  }
 
   // Borrowed (assumed to already exist)
   private NodeType tokenIndex;
@@ -67,9 +90,9 @@ public class Srl {
    * Don't create multiple {@link Srl}s per {@link Uberts}s, as the constructor
    * adds without checking if something is there already... TODO fix
    */
-  public Srl(Uberts u) {
-    // TODO addEdgeType is probably a problem: want all of these to be idempotent
+  public Srl(Uberts u, FModel model) {
     this.u = u;
+    this.model = model;
     this.tokenIndex = u.lookupNodeType("tokenIndex", false);
     this.frames = u.lookupNodeType("frames", false);
     this.roles = u.lookupNodeType("roles", true);
@@ -112,9 +135,22 @@ public class Srl {
         Span target = Span.getSpan(ts, te);
 
         // Create FNParse and run non-joint FModel
-        Sentence sent = null;   // TODO
+        // TODO Update BasicFeatureTemplates so they can natively use tutils.Document
+        // instead of doing this conversion to fnparse.Sentence every time.
+        Document tdoc = u.getDoc();
+        IntPair sentBoundary = FrameId.getSentenceBoundaries(ts, tdoc);
+        Sentence sent = Sentence.convertFromTutils(
+            tdoc.getId(), tdoc.getId(), tdoc,
+            sentBoundary.first, sentBoundary.second,
+            false,  // addGoldParse
+            true,   // addStanfordCParse
+            true,   // addStandordBasicDParse
+            true,   // addStanfordColDParse
+            false   // takeGoldPos
+            );
         FrameInstance fi = FrameInstance.frameMention(frame, target, sent);
         FNParse frameInSent = new FNParse(sent, Arrays.asList(fi));
+        setFeatures(frameInSent);
         FNParse args = model.predict(frameInSent);
         assert args.numFrameInstances() == 1;
 
@@ -145,6 +181,41 @@ public class Srl {
         return eds;
       }
     });
+  }
+
+  /**
+   * Creates a {@link CachedFeatures.Item} populated with features and sets it
+   * into the given {@link FNParse}.
+   */
+  private void setFeatures(FNParse y) {
+    y.featuresAndSpans =
+        new CachedFeatures.Item(y);
+    Alphabet templateAlph = new Alphabet();  // TODO all templates
+
+    // Compute the features
+    FeaturePrecomputation.ToMemBuffer fp =
+        new FeaturePrecomputation.ToMemBuffer(true, templateAlph);
+    fp.emitAllRoleId(y);
+
+    // Retrieve the features and put them into a format CachedFeature.Item likes
+    for (Entry<SpanPair, List<Feature>> stfx : fp.getArgFeatures()) {
+      Span t = stfx.getKey().get1();
+      Span s = stfx.getKey().get2();
+      List<Feature> feats = stfx.getValue();
+//      int[] templates = new int[feats.size()];
+//      int[] features = new int[feats.size()];
+//      for (int i = 0; i < templates.length; i++) {
+//        Feature f = feats.get(i);
+//        templates[i] = f.template;
+//        features[i] = f.feature;
+//      }
+//      BaseTemplates bt = new BaseTemplates(templates, features);
+      FeatureFile.Line bt = new FeatureFile.Line(feats, true);
+      assert bt.checkFeaturesAreSortedByTemplate();
+      y.featuresAndSpans.setFeatures(t, s, bt);
+    }
+    y.featuresAndSpans.convertToFlattenedRepresentation(
+        featureSet, template2cardinality);
   }
 
   /**
@@ -266,13 +337,13 @@ public class Srl {
 //    return ys;
   }
 
-  public static void main(String[] args) {
-    ExperimentProperties.init(args);
-    Uberts u = new Uberts(new Random(9001));
-    Srl srl = new Srl(u);
-    List<FNParseInstance> y = getSomeParses(srl);
-    Training t = new Training(u, y);
-    int maxEpoch = 5;
-    t.train(maxEpoch);
-  }
+//  public static void main(String[] args) {
+//    ExperimentProperties.init(args);
+//    Uberts u = new Uberts(new Random(9001));
+//    Srl srl = new Srl(u);
+//    List<FNParseInstance> y = getSomeParses(srl);
+//    Training t = new Training(u, y);
+//    int maxEpoch = 5;
+//    t.train(maxEpoch);
+//  }
 }

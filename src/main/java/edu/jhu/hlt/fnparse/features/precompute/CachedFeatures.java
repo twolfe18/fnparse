@@ -37,8 +37,8 @@ import edu.jhu.hlt.fnparse.features.TemplatedFeatures.Template;
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures.TemplateDescriptionParsingException;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.AlphabetLine;
-import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Target;
-import edu.jhu.hlt.fnparse.features.precompute.InformationGainProducts.BaseTemplates;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
+import edu.jhu.hlt.fnparse.features.precompute.featureselection.InformationGainProducts;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.inference.heads.SemaforicHeadFinder;
 import edu.jhu.hlt.fnparse.pruning.DeterministicRolePruning;
@@ -61,6 +61,7 @@ import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.MultiTimer;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.RedisMap;
 import edu.jhu.hlt.tutils.SerializationUtils;
 import edu.jhu.hlt.tutils.ShardUtils;
@@ -128,7 +129,8 @@ public class CachedFeatures implements Serializable {
     public final FNParse parse;
 //    private Map<IntPair, BaseTemplates>[] features;   // t -> (i,j) -> BaseTemplates
 //    private Map<SpanPair, BaseTemplates> features2;
-    private Map<Span, Map<Span, BaseTemplates>> features3;
+//    private Map<Span, Map<Span, BaseTemplates>> features3;
+    private Map<Span, Map<Span, FeatureFile.Line>> features3;
 
     // These are for caching InformationGain.flatten
 //    private Map<Span, Map<Span, List<ProductIndex>>> features4;
@@ -144,10 +146,10 @@ public class CachedFeatures implements Serializable {
       }
       features4b = new HashMap<>();
       argsForTarget = new HashMap<>();
-      for (Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
+      for (Entry<Span, Map<Span, FeatureFile.Line>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
         List<Span> args = new ArrayList<>(x1.getValue().size());
-        for (Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
+        for (Entry<Span, FeatureFile.Line> x2 : x1.getValue().entrySet()) {
           Span s = x2.getKey();
           List<ProductIndex> features = statelessGetFeaturesNoModulo(t, s, this, featureSet, template2cardinality);
           Object old = features4b.put(new SpanPair(t, s), lpi2la2(features));
@@ -231,7 +233,7 @@ public class CachedFeatures implements Serializable {
     public List<Span> getArgSpansForTarget(Span t) {
       if (argsForTarget != null)
         return argsForTarget.get(t);
-      Map<Span, BaseTemplates> f = features3.get(t);
+      Map<Span, FeatureFile.Line> f = features3.get(t);
       if (f == null)
         throw new RuntimeException("don't know about this target: " + t.shortString());
       List<Span> args = new ArrayList<>();
@@ -239,12 +241,12 @@ public class CachedFeatures implements Serializable {
       return args;
     }
 
-    public Iterator<Pair<SpanPair, BaseTemplates>> getFeatures() {
+    public Iterator<Pair<SpanPair, FeatureFile.Line>> getFeatures() {
       assert false : "re-implement based on features4";
-      List<Pair<SpanPair, BaseTemplates>> l = new ArrayList<>();
-      for (Map.Entry<Span, Map<Span, BaseTemplates>> x1 : features3.entrySet()) {
+      List<Pair<SpanPair, FeatureFile.Line>> l = new ArrayList<>();
+      for (Map.Entry<Span, Map<Span, FeatureFile.Line>> x1 : features3.entrySet()) {
         Span t = x1.getKey();
-        for (Map.Entry<Span, BaseTemplates> x2 : x1.getValue().entrySet()) {
+        for (Map.Entry<Span, FeatureFile.Line> x2 : x1.getValue().entrySet()) {
           Span s = x2.getKey();
           l.add(new Pair<>(new SpanPair(t, s), x2.getValue()));
         }
@@ -253,23 +255,24 @@ public class CachedFeatures implements Serializable {
     }
 
     // Comes before conversion to features4
-    public void setFeatures(Span t, Span arg, BaseTemplates features) {
+//    public void setFeatures(Span t, Span arg, BaseTemplates features) {
+    public void setFeatures(Span t, Span arg, FeatureFile.Line features) {
       if (arg.start < 0 || arg.end < 0)
         throw new IllegalArgumentException("span=" + arg);
-      if (features.getTemplates() == null)
-        throw new IllegalArgumentException();
-      Map<Span, BaseTemplates> m = features3.get(t);
+//      if (features.getTemplates() == null)
+//        throw new IllegalArgumentException();
+      Map<Span, FeatureFile.Line> m = features3.get(t);
       if (m == null) {
         m = new HashMap<>();
         features3.put(t, m);
       }
-      BaseTemplates old = m.put(arg, features);
+      Object old = m.put(arg, features);
       assert old == null;
     }
 
     /** @deprecated use getFlattenedCachedFeatures */
-    public BaseTemplates getFeatures(Span t, Span arg) {
-      BaseTemplates feats = this.features3.get(t).get(arg);
+    public FeatureFile.Line getFeatures(Span t, Span arg) {
+      FeatureFile.Line feats = this.features3.get(t).get(arg);
       assert feats != null : "t=" + t.shortString() + " arg=" + arg.shortString() + " y=" + parse.getId();
       return feats;
     }
@@ -603,7 +606,8 @@ public class CachedFeatures implements Serializable {
     /**
      * Ignores the feature set, just returns all of the templates we have in memory.
      */
-    public BaseTemplates getDebugRawTemplates(FNTagging f, Action a) {
+//    public BaseTemplates getDebugRawTemplates(FNTagging f, Action a) {
+    public FeatureFile.Line getDebugRawTemplates(FNTagging f, Action a) {
       if (a.getActionType() != ActionType.COMMIT)
         throw new RuntimeException();
       Item cur = loadedSentId2Item.get(f.getSentence().getId());
@@ -894,32 +898,35 @@ public class CachedFeatures implements Serializable {
 
     int skipped = 0, kept = 0;
     Item cur = null;
-    try (BufferedReader r = FileUtil.getReader(featureFile)) {
-      for (String line = r.readLine(); line != null; line = r.readLine()) {
+    boolean featuresSorted = true;
+    for (FeatureFile.Line ffl : FeatureFile.getLines(featureFile, featuresSorted)) {
+//    try (BufferedReader r = FileUtil.getReader(featureFile)) {
+//      for (String line = r.readLine(); line != null; line = r.readLine()) {
         numLines++;
-        String[] toks = line.split("\t");
+//        String[] toks = line.split("\t");
 
-        Span ta = Span.inverseShortString(toks[2]);
-        Target t = new Target(toks[0], toks[1], ta);
-
-        String[] spanToks = toks[3].split(",");
-        Span span = Span.getSpan(Integer.parseInt(spanToks[0]), Integer.parseInt(spanToks[1]));
-
-        BaseTemplates data = new BaseTemplates(templateSet, line, true);
-        data.purgeLine();
-        nnz.add(data.getFeatures().length);
+//        Span ta = Span.inverseShortString(toks[2]);
+//        Target t = new Target(toks[0], toks[1], ta);
+//
+//        String[] spanToks = toks[3].split(",");
+//        Span span = Span.getSpan(Integer.parseInt(spanToks[0]), Integer.parseInt(spanToks[1]));
+//
+////        BaseTemplates data = new BaseTemplates(templateSet, line, true);
+//        data.purgeLine();
+//        nnz.add(data.getFeatures().length);
 
         // Group by sentence/parse id
-        if (cur == null || !t.sentId.equals(cur.parse.getSentence().getId())) {
+        String sentId = ffl.getSentenceId();
+        if (cur == null || !sentId.equals(cur.parse.getSentence().getId())) {
           if (cur != null)
             addItem(cur, devSentIds, testSentIds);
-          FNParse parse = sentId2parse.get(t.sentId);
+          FNParse parse = sentId2parse.get(sentId);
           if (parse == null) {
             if (skipEntriesNotInSentId2ParseMap) {
               skipped++;
               continue;
             } else {
-              throw new RuntimeException("no parse for " + t.sentId
+              throw new RuntimeException("no parse for " + sentId
                   + " in featureFile=" + featureFile.getPath()
                   + " in map of size " + sentId2parse.size());
             }
@@ -931,14 +938,15 @@ public class CachedFeatures implements Serializable {
         kept++;
 
         if (keepBoth)
-          cur.setFeatures(t.target, span, data);
+          cur.setFeatures(ffl.getTarget(), ffl.getArgSpan(), ffl);
 
         if (keepKeys)
-          debugKeys.add(sentId2parse.get(t.sentId));
+          debugKeys.add(sentId2parse.get(sentId));
 
         if (keepValues) {
-          for (int f : data.getFeatures())
-            debugFeatures.add(f);
+//          for (int f : data.getFeatures())
+//            debugFeatures.add(f);
+          throw new RuntimeException("implement me");
         }
 
         if (tm.enoughTimePassed(15)) {
@@ -948,7 +956,7 @@ public class CachedFeatures implements Serializable {
             + Describe.memoryUsage());
         }
       }
-    }
+//    }
     addItem(cur, devSentIds, testSentIds);
     Log.info("nnz: " + nnz.getOrdersStr() + " mean=" + nnz.getMean()
         + " nnz/template=" + (nnz.getMean() / templateSetSorted.length));
@@ -1068,17 +1076,17 @@ public class CachedFeatures implements Serializable {
         // 2) lookup via redis (which reflects the contents of the files -- round trip)
 
         // Check 1: extracted template-values match stored template-values
-        BaseTemplates data = params.getDebugRawTemplates(y, a);
+        FeatureFile.Line data = params.getDebugRawTemplates(y, a);
 
         // Right now I don't have parses populated, so the features for those
         // are different. Rather than fix this, I'd rather just ensure that it
         // works for other templates.
         boolean blowUpOnProblem = false;
 
-        for (int i = 0; i < data.size(); i++) {
+        for (Feature f : data.getFeatures()) {
           // What we have from disk.
-          int templateIndex = data.getTemplate(i);
-          int feature = data.getValue(i);
+          int templateIndex = f.template;
+          int feature = f.feature;
           String templateName = bialph.lookupTemplate(templateIndex);
           String featureName = tf2name.get(makeKey(templateIndex, feature));
 
@@ -1134,7 +1142,7 @@ public class CachedFeatures implements Serializable {
 
     // Get the templates needed for all the features.
     //      Item cur = loadedSentId2Item.get(sent.getId());
-    BaseTemplates data = cur.getFeatures(t, s);
+    FeatureFile.Line data = cur.getFeatures(t, s);
 
     List<ProductIndex> buf = new ArrayList<>();
     for (int i = 0; i < fsLen; i++) {
