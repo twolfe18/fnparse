@@ -399,12 +399,13 @@ done
 # 2) launch experiments with scripts/precompute-features/train-all.sh
 
 
-DATASET="framenet"
+DATASET="propbank"
 
 # Generate java serialized data for the final step
+# (NOTE: This is not in $WD, which can be safely deteleted if jobs fail)
 ./scripts/precompute-features/train3-setup.sh $DATASET
 
-WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/jan26a
+WD=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$DATASET/experiment/mar2
 if [[ -d $WD ]]; then
   echo "already exists: $WD"
   echo "ARE YOUR SURE YOU WANT TO POSSIBLY OVERWRITE???"
@@ -414,7 +415,7 @@ FEAT_PARENT=/export/projects/twolfe/fnparse-output/experiments/dec-experiments/$
 if [[ $DATASET == "framenet" ]]; then
   FEAT_DIR=$FEAT_PARENT/C16-D1280
 else
-  FEAT_DIR=$FEAT_PARENT/C8-D1280
+  FEAT_DIR=$FEAT_PARENT/C16-D1280
 fi
 
 ### Setup
@@ -427,11 +428,11 @@ echo "==> $JAR_STABLE"
 cp $JAR $JAR_STABLE
 
 if [[ $DATASET == "propbank" ]]; then
-  MEM="46G"
-  MEM_FREE="48G"
+  MEM="52G"
+  MEM_FREE="54G"
 elif [[ $DATASET == "framenet" ]]; then
-  MEM="10G"
-  MEM_FREE="12G"
+  MEM="12G"
+  MEM_FREE="14G"
 else
   echo "unknown dataset: $DATASET"
 fi

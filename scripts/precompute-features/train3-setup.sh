@@ -31,7 +31,8 @@ CD=$DD/coherent-shards-filtered-small-jser
 if [[ -d $CD ]]; then
   echo "already exists, did you already run?"
   echo $CD
-  exit 3
+  #exit 3
+  sleep 15
 fi
 
 mkdir -p $CD/sge-logs
