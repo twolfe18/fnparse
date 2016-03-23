@@ -692,6 +692,7 @@ public class InformationGainProducts {
    */
   public static void igReplacement() throws IOException {
     ExperimentProperties config = ExperimentProperties.getInstance();
+    TimeMarker tm = new TimeMarker();
     Log.info("computing IG/MI for every template (unigram feature)");
 
     Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
@@ -747,6 +748,14 @@ public class InformationGainProducts {
         if (Math.floorMod(h, shard.getNumShards()) != shard.getShard())
           continue;
 
+        if (tm.enoughTimePassed(15)) {
+          Log.info("added " + t + " of " + t2c.length
+              + " templates, "
+              + templates.size() + " features so far, in "
+              + tm.secondsSinceFirstMark() + " seconds, "
+              + Describe.memoryUsage());
+        }
+
         int K = ff.numRoles();
         for (int k = 0; k < K; k++) {
           String role = "r=" + ff.getRole(k);
@@ -754,8 +763,6 @@ public class InformationGainProducts {
           boolean addOne = false;
           FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, addOne, frameIdx, roleIdx);
           templates.add(new FeatureName(new String[] { templateName }, filteredGetY));
-          if (templates.size() % 10000 == 0)
-            System.out.println(templates.size());
         }
       }
     }
