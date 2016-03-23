@@ -388,7 +388,7 @@ public class InformationGain implements Serializable, LineByLine {
   }
 
   public static Function<FeatureFile.Line, int[]> getGetY(ExperimentProperties config) {
-    String l = config.getString("label");
+    String l = config.getString("labelType");
     Log.info("computing information gaint w.r.t. " + l);
     switch (l) {
     case "frames":

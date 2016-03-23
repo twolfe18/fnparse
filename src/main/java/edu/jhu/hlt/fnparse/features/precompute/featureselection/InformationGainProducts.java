@@ -60,25 +60,13 @@ public class InformationGainProducts {
 
   public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
 
-  /*
-   * With the frame(role) filters, this is too slow...
-   * shard=(0,500) and I get 922k templates :(
-   *
-   * I need some way to do a sparse lookup of TemplateIG given a (t,s)
-   * Right now I loop through all of them even though I'm only updating a handful of them.
-   *
-   * 1) does templates have to be Map<int[], TemplateIG>
-   * 2) I need to do some back of the envelope to show that @frame@role leads to a reasonable number of work
-   *    9k frame * 30 roles/frame = 300k slowdown?
-   *    |y| goes from roles to {0,1}
-   *
-   */
-
-  // NEW
+  // Features being scored and their stats, some are indexed.
+  // These are disjoint collections of TemplateIGs.
   private IntObjectHashMap<List<TemplateIG>> featuresFrameRestricted;
   private Map<IntPair, List<TemplateIG>> featuresFrameRoleRestricted;
   private List<TemplateIG> featuresUnrestricted;
-//  private Map<int[], TemplateIG> products;    // keys (int[]s) are sorted
+
+  // Input, list of relevant features to evaluate, before instantiating TemplateIGs
   private List<FeatureName> baseFeatures;
 
   private BitSet relevantTemplates;   // Union of values in keys of products
@@ -156,7 +144,6 @@ public class InformationGainProducts {
     featuresFrameRestricted = new IntObjectHashMap<>();
     featuresFrameRoleRestricted = new HashMap<>();
     featuresUnrestricted = new ArrayList<>();
-//    products = new HashMap<>();
     int featIdx = 0;
     for (FeatureName fn : baseFeatures) {
       fn.computeTemplateInts(bialph);
@@ -170,7 +157,6 @@ public class InformationGainProducts {
       if (bubEst != null)
         tig.useBubEntropyEstimation(bubEst);
       addFeature(tig);
-//      products.put(fn.templateInt, tig);
       featIdx++;
     }
 
@@ -292,7 +278,6 @@ public class InformationGainProducts {
    * call (or fails or completes).
    */
   public static void flatten(
-//      BaseTemplates data,
       FeatureFile.Line data,
       int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
@@ -328,7 +313,6 @@ public class InformationGainProducts {
     boolean found = false;
     int n = features.size();
     while (startDataIndex < n && !found) {
-//      int t = data.getTemplate(startDataIndex);
       int t = features.get(startDataIndex).template;
       if (t == curTemplate) {
         found = true;
@@ -348,7 +332,6 @@ public class InformationGainProducts {
 
     // Find the last data index that matches the current template
     int endDataIndex = startDataIndex + 1;
-//    while (endDataIndex < data.size() && data.getTemplate(endDataIndex) == curTemplate)
     while (endDataIndex < n && features.get(endDataIndex).template == curTemplate)
       endDataIndex++;
 
@@ -357,12 +340,8 @@ public class InformationGainProducts {
       System.out.println("curTemplateCard=" + curTemplateCard);
     for (int i = startDataIndex; i < endDataIndex; i++) {
       Feature f = features.get(i);
-//      assert data.getValue(i) < curTemplateCard
-//        && data.getTemplate(i) == curTemplate
       assert f.feature < curTemplateCard
         && f.template == curTemplate
-//        : "data.getValue(" + i + ")=" + data.getValue(i)
-//        + " data.getTemplate(" + i + ")=" + data.getTemplate(i)
         : "data.getValue(" + i + ")=" + f.feature
         + " data.getTemplate(" + i + ")=" + f.template
         + " curTemplate=" + curTemplate
@@ -371,12 +350,9 @@ public class InformationGainProducts {
         + " tIndex=" + tIndex
         + " templates=" + Arrays.toString(templates)
         + " baseTemplates=" + data;
-//      int card = template2cardinality[data.getTemplate(i)];
-//      ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
       int card = template2cardinality[f.template];
       ProductIndex newValue2 = cardValue.prod(f.feature, card);
       if (FLATTEN_DEBUG) {
-//        System.out.println("data.getValue(" + i + ")=" + data.getValue(i)
         System.out.println("data.getValue(" + i + ")=" + f.feature
           + " card=" + card + " newValue2=" + newValue2);
       }
@@ -751,7 +727,8 @@ public class InformationGainProducts {
     File bf = config.getExistingFile("bialph");
     BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
 
-    Shard shard = ShardUtils.getShard(config);
+    // What shard of the template@frame@role to take?
+    Shard shard = config.getShard();
 
     // Build a list of unigram features (templates),
     // Each with a @frame@role refinement
@@ -879,6 +856,7 @@ public class InformationGainProducts {
 
     int numRoles = config.getInt("numRoles", 30);
     int hashingTrickDim = config.getInt("hashingTrickDim", 0);
+    Log.info("numRoles=" + numRoles + " hashingTrickDim=" + hashingTrickDim);
     InformationGainProducts igp = new InformationGainProducts(
         products, hashingTrickDim, bubEst, em);
     igp.init(bialph, numRoles);
