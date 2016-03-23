@@ -273,7 +273,7 @@ public class FNParseTransitionScheme extends AbstractTransitionScheme<FNParse, I
     }
 
     if (MAIN_LOGGING) {
-      long bytes = numWV * 2 * dimension * 8;
+      double bytes = numWV * 2 * dimension * 8;
       Log.info("[main] using " + numWV + " weight vectors (AveragedPerceptronWeights),"
           + " each of which has two vectors of length " + dimension
           + " for a total of " + (bytes / (1L<<30)) + " GB of ram");
