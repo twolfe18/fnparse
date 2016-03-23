@@ -30,10 +30,10 @@ public class UbertsTest {
 
   public void generalSetup() {
     u = new Uberts(new Random(9001));
-    tokenIndex = u.lookupNodeType("tokenIndex");
-    word = u.lookupNodeType("word");
-    posTag = u.lookupNodeType("posTag");
-    nerTag = u.lookupNodeType("nerTag");
+    tokenIndex = u.lookupNodeType("tokenIndex", true);
+    word = u.lookupNodeType("word", true);
+    posTag = u.lookupNodeType("posTag", true);
+    nerTag = u.lookupNodeType("nerTag", true);
     u.addEdgeType(new Relation("word", tokenIndex, word));
     u.addEdgeType(new Relation("pos", tokenIndex, posTag));
     u.addEdgeType(new Relation("ner", tokenIndex, tokenIndex, nerTag)); // (inclusive, exclusive, tag)
@@ -182,7 +182,7 @@ public class UbertsTest {
    * Manually add POS tags and do NER tagging with
    * `pos(j,N) => ner(i,j,PER) s.t. i<=j and (j-i)+1<=5`
    */
-//  @Test
+  @Test
   public void nerTest() {
     generalSetup();
     nerTestSetup();
@@ -267,7 +267,7 @@ public class UbertsTest {
   /**
    * Jointly tag POS and NER.
    */
-//  @Test
+  @Test
   public void posAndNerTest() {
     generalSetup();
     posTestSetup();
@@ -290,7 +290,7 @@ public class UbertsTest {
    * ner(i,j,PER) ~ word(k) if i<=k<=j
    * coref(i,j,k,l) ~ dist(j,k)
    */
-//  @Test
+  @Test
   public void fullTest() {
     generalSetup();
     posTestSetup();

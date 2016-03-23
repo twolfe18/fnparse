@@ -1,10 +1,9 @@
-package edu.jhu.hlt.fnparse.features.precompute;
+package edu.jhu.hlt.fnparse.features.precompute.featureselection;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.io.Serializable;
 import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -19,23 +18,29 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.Function;
 
+import edu.jhu.hlt.fnparse.data.FrameIndex;
+import edu.jhu.hlt.fnparse.datatypes.Frame;
+import edu.jhu.hlt.fnparse.features.precompute.BiAlph;
+import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
-import edu.jhu.hlt.fnparse.features.precompute.InformationGain.TemplateIG;
+import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
 import edu.jhu.hlt.fnparse.util.Describe;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.ShardUtils;
 import edu.jhu.hlt.tutils.ShardUtils.Shard;
 import edu.jhu.hlt.tutils.StringUtils;
 import edu.jhu.hlt.tutils.TimeMarker;
+import edu.jhu.hlt.tutils.hash.Hash;
+import edu.jhu.prim.map.IntObjectHashMap;
 import edu.jhu.prim.tuple.Pair;
 
 /**
@@ -47,136 +52,35 @@ import edu.jhu.prim.tuple.Pair;
  *
  * See the main method for the options to run this thing.
  *
- * TODO Rethink what y is when we call update() on counts. I believe it should
- * depend on the dataset:
- *   FrameNet: y1 = roleName (note that k in FI is frame-relative), y2 = (frame,role)
- *   Propbank: same thing actually
- * How does this compare with the fact of y = the COMMIT action was good/no?
- *
  * @author travis
  */
 public class InformationGainProducts {
-  public static boolean DEBUG = false;
-  public static boolean FLATTEN_DEBUG = false;
+  public static final boolean DEBUG = false;
+  public static final boolean FLATTEN_DEBUG = false;
 
   public static String DEBUG_TEMPLATE = null;//"head1ParentBc1000/99";
 
-  /** Extracts just the features needed (given a subset of templates of interet) */
-  public static class BaseTemplates implements Serializable {
-    private static final long serialVersionUID = 1L;
+  /*
+   * With the frame(role) filters, this is too slow...
+   * shard=(0,500) and I get 922k templates :(
+   *
+   * I need some way to do a sparse lookup of TemplateIG given a (t,s)
+   * Right now I loop through all of them even though I'm only updating a handful of them.
+   *
+   * 1) does templates have to be Map<int[], TemplateIG>
+   * 2) I need to do some back of the envelope to show that @frame@role leads to a reasonable number of work
+   *    9k frame * 30 roles/frame = 300k slowdown?
+   *    |y| goes from roles to {0,1}
+   *
+   */
 
-    private String line;                      // debug, be careful with memory usage
-    private int[] roles;
-    private int[] templates;
-    private int[] features;
+  // NEW
+  private IntObjectHashMap<List<TemplateIG>> featuresFrameRestricted;
+  private Map<IntPair, List<TemplateIG>> featuresFrameRoleRestricted;
+  private List<TemplateIG> featuresUnrestricted;
+//  private Map<int[], TemplateIG> products;    // keys (int[]s) are sorted
+  private List<FeatureName> baseFeatures;
 
-    public String detailedString() {
-      StringBuilder sb = new StringBuilder();
-      sb.append("roles=");
-      sb.append(Arrays.toString(roles));
-      int n = features.length;
-      for (int i = 0; i < n; i++) {
-        String t = templates == null ? "null" : "" + templates[i];
-        sb.append(i + " " + t + " " + features[i] + "\n");
-      }
-      return sb.toString();
-    }
-
-    public BaseTemplates(int[] templates, int[] features) {
-      assert templates.length == features.length;
-      this.roles = new int[] {-2};
-      this.templates = templates;
-      this.features = features;
-    }
-
-    /**
-     * @param templates the relevent set templates that should be read in a
-     * stored, or null if all templates should be taken in.
-     * @param line
-     * @param storeTemplates
-     */
-    public BaseTemplates(BitSet templates, String line, boolean storeTemplates) {
-      this.line = line;
-      this.roles = FeaturePrecomputation.getRoles(line);
-      List<IntPair> templateFeatures = new ArrayList<>();
-      Iterator<IntPair> tmplFeatLocs = BiAlphMerger.findTemplateFeatureMentions(line);
-      while (tmplFeatLocs.hasNext()) {
-        IntPair se = tmplFeatLocs.next();
-        int colon = line.indexOf(':', se.first);
-        if (colon < 0 || colon <= se.first) {
-          throw new RuntimeException("bad format for expected "
-              + "\"template:feature\" at " + se + " in " + line);
-        }
-        String ts = line.substring(se.first, colon);
-        int t = Integer.parseInt(ts);
-        assert t >= 0;
-        if (templates == null || templates.get(t)) {
-          if (DEBUG)
-            System.out.println("keeping: " + line.substring(se.first, se.second));
-          String fs = line.substring(colon + 1, se.second);
-          if (fs.isEmpty()) {
-            Log.warn("line: " + line);
-            Log.warn("bad feature: " + line.substring(se.first, se.second));
-            Log.warn("         at: " + se);
-          } else {
-            int f = Integer.parseInt(fs);
-            assert f >= 0;
-            templateFeatures.add(new IntPair(t, f));
-          }
-        }
-      }
-      int n = templateFeatures.size();
-      if (storeTemplates)
-        this.templates = new int[n];
-      this.features = new int[n];
-      for (int i = 0; i < n; i++) {
-        IntPair tfi = templateFeatures.get(i);
-        if (storeTemplates)
-          this.templates[i] = tfi.first;
-        this.features[i] = tfi.second;
-      }
-    }
-    /** Frees memory! */
-    public void purgeLine() {
-      line = null;
-    }
-    public int[] setTemplates(int[] templates) {
-      int[] old = this.templates;
-      this.templates = templates;
-      return old;
-    }
-    public int[] getTemplates() { return templates; }
-    public int[] getFeatures() { return features; }
-    public int getTemplate(int i) {
-      return templates[i];
-    }
-    public int getValue(int i) {
-      return features[i];
-    }
-    public int size() {
-      return features.length;
-    }
-    public int[] getRoles() {
-      return roles;
-    }
-    @Override
-    public String toString() {
-      StringBuilder tf = new StringBuilder();
-      for (int i = 0; i < size(); i++) {
-        if (i > 0)
-          tf.append(" ");
-        tf.append(getTemplate(i) + ":" + getValue(i));
-      }
-      return "(BaseTemplates k=" + (roles.length == 1 ? roles[0] : Arrays.toString(roles))
-          + " features=" + StringUtils.trunc(tf, 80)
-          + " line=" + (line == null ? "null" : StringUtils.trunc(line, 80))
-          + ")";
-    }
-  }
-
-  private Map<int[], TemplateIG> products;    // keys (int[]s) are sorted
-  private List<int[]> baseFeatures;           // items (int[]s) are sorted, populated after first observed (features,bialph)
-  private List<String[]> baseFeatureNames;    // all you know at construction time
   private BitSet relevantTemplates;   // Union of values in keys of products
   private int[] template2cardinality; // Indexed by base template.index, will contain gaps in places of un-necessary templates
 
@@ -201,16 +105,24 @@ public class InformationGainProducts {
   // Actually computes the entropy/MI
   private BubEntropyEstimatorAdapter bubEst;
 
+  // How to commpute entropy/MI
+  private EntropyMethod entropyMethod;
+
   /**
    * @param hashingTrickDim 0 means no hashing trick and >0 is how many dimensions
    * to use for representing features.
    */
-  public InformationGainProducts(List<String[]> features, int hashingTrickDim, BubEntropyEstimatorAdapter bubEstimator) {
-    this.baseFeatureNames = features;
+  public InformationGainProducts(
+      List<FeatureName> features,
+      int hashingTrickDim,
+      BubEntropyEstimatorAdapter bubEstimator,
+      EntropyMethod em) {
+    this.baseFeatures = features;
     this.hashingTrickDim = hashingTrickDim;
     if (this.hashingTrickDim > 0)
       throw new RuntimeException("don't this/not implemented: hashingTrickDim=" + hashingTrickDim);
     this.bubEst = bubEstimator;
+    this.entropyMethod = em;
     ExperimentProperties config = ExperimentProperties.getInstance();
     File ignoreSentenceIdsFile = config.getExistingFile("ignoreSentenceIds");
     Log.info("ignoring the sentence ids in " + ignoreSentenceIdsFile.getPath());
@@ -224,8 +136,9 @@ public class InformationGainProducts {
     }
   }
 
+  private boolean initialized = false;
   public boolean isInitialized() {
-    return baseFeatures != null;
+    return initialized;
   }
 
   /**
@@ -233,39 +146,41 @@ public class InformationGainProducts {
    * (only needs to be called once).
    */
   public void init(BiAlph bialph, int numRoles) {
-    assert baseFeatures == null;
-    assert products == null;
+    assert !initialized;
     assert relevantTemplates == null;
     assert template2cardinality == null;
-
+    initialized = true;
     lastBialph = bialph;
 
     // Map everything over
-    products = new HashMap<>();
-    baseFeatures = new ArrayList<>();
+    featuresFrameRestricted = new IntObjectHashMap<>();
+    featuresFrameRoleRestricted = new HashMap<>();
+    featuresUnrestricted = new ArrayList<>();
+//    products = new HashMap<>();
     int featIdx = 0;
-    for (String[] strTemplates : baseFeatureNames) {
-      int[] intTemplates = new int[strTemplates.length];
-      for (int i = 0; i < intTemplates.length; i++) {
-        intTemplates[i] = bialph.mapTemplate(strTemplates[i]);
-      }
-      Arrays.sort(intTemplates);
-      baseFeatures.add(intTemplates);
-      TemplateIG tig = new TemplateIG(featIdx, StringUtils.join("*", strTemplates), numRoles);
-      tig.useBubEntropyEstimation(bubEst);
-      products.put(intTemplates, tig);
+    for (FeatureName fn : baseFeatures) {
+      fn.computeTemplateInts(bialph);
+      TemplateIG tig = new TemplateIG(
+          featIdx,
+          StringUtils.join("*", fn.templateStr),
+          numRoles,
+          entropyMethod,
+          fn.getY);
+      tig.featureName = fn;
+      if (bubEst != null)
+        tig.useBubEntropyEstimation(bubEst);
+      addFeature(tig);
+//      products.put(fn.templateInt, tig);
       featIdx++;
     }
 
     // Construct the union of base templates
     relevantTemplates = new BitSet();
-    for (int[] prod : baseFeatures)
-      for (int i : prod)
+    for (FeatureName fn : baseFeatures)
+      for (int i : fn.templateInt)
         relevantTemplates.set(i);
 
     // Setup template cardinalities
-//    ExperimentProperties config = ExperimentProperties.getInstance();
-//    template2cardinality = new int[config.getInt("numTemplates", 30000)];   // TODO resizing code
     template2cardinality = new int[bialph.getUpperBoundOnNumTemplates()];
     Arrays.fill(template2cardinality, -1);
     for (int t = relevantTemplates.nextSetBit(0); t >= 0; t = relevantTemplates.nextSetBit(t + 1)) {
@@ -274,9 +189,36 @@ public class InformationGainProducts {
     }
   }
 
+  private void addFeature(TemplateIG tig) {
+    FeatureName fn = tig.featureName;
+    List<TemplateIG> addTo;
+    if (fn.getY instanceof FrameRoleFilter) {
+      FrameRoleFilter frf = (FrameRoleFilter) fn.getY;
+      if (frf.hasRoleRestriction()) {
+        IntPair key = new IntPair(frf.getFrame(), frf.getRole());
+        addTo = featuresFrameRoleRestricted.get(key);
+        if (addTo == null) {
+          addTo = new ArrayList<>();
+          featuresFrameRoleRestricted.put(key, addTo);
+        }
+      } else {
+        int key = frf.getFrame();
+        addTo = featuresFrameRestricted.get(key);
+        if (addTo == null) {
+          addTo = new ArrayList<>();
+          featuresFrameRestricted.put(key, addTo);
+        }
+      }
+    } else {
+      addTo = featuresUnrestricted;
+    }
+    addTo.add(tig);
+  }
+
   private int numUpdates = 0;
   public void update(File features) throws IOException {
     TimeMarker tm = new TimeMarker();
+    Log.info("reading features=" + features.getPath() + " with numFeatures=" + getAllFeatures().size());
     int lines = 0;
     try (BufferedReader r = FileUtil.getReader(features)) {
       for (String line = r.readLine(); line != null; line = r.readLine()) {
@@ -295,34 +237,44 @@ public class InformationGainProducts {
     return numUpdates;
   }
 
+  private void updateMany(List<TemplateIG> updates, FeatureFile.Line ffl, List<ProductIndex> prodBuf) {
+    if (updates == null)
+      return;
+    for (TemplateIG u : updates) {
+      int[] templates = u.featureName.templateInt;
+      assert templates != null;
+      prodBuf.clear();
+      flatten(ffl, 0, templates, 0, ProductIndex.NIL, template2cardinality, prodBuf);
+      for (ProductIndex pi : prodBuf)
+        u.update(ffl, new ProductIndex[] {pi});
+    }
+  }
+
   public void observeLine(String line) {
-    String[] toks = line.split("\t", 3);
-    String sentenceId = toks[1];
-    BaseTemplates bv = new BaseTemplates(relevantTemplates, line, true);
+    boolean sorted = true;
+    FeatureFile.Line ffl = new FeatureFile.Line(line, sorted);
+    String sentenceId = ffl.getSentenceId();
 
-    // y = BaseTemplates.getRoles()
+    // y = is determined by getY:Function<FeatureFile.Line, int[]> in TemplateIG
     // x = feature vector produced by flatten()
-    int[] y;
     if (ignoreSentenceIds.contains(sentenceId)) {
-      y = null;
-    } else {
-      y = bv.getRoles();
-      for (int i = 0; i < y.length; i++)
-        y[i]++;   // k=-1 means no role, shift everything up by one
+      return;
     }
 
-    for (Entry<int[], TemplateIG> entry : products.entrySet()) {
-      int[] templates = entry.getKey();
+    List<ProductIndex> prods = new ArrayList<>();
 
-      // Get the products
-      List<ProductIndex> prods = new ArrayList<>();
-      flatten(bv, 0, templates, 0, ProductIndex.NIL, template2cardinality, prods);
+    boolean addOne = false;
+    int[] frames = ffl.getFrames(addOne);
+    int[] roles = ffl.getRoles(addOne);
 
-      // Measure IG
-      final TemplateIG t = entry.getValue();
-      for (ProductIndex pi : prods)
-        t.update(y, new ProductIndex[] {pi});
+    for (int frame : frames) {
+      updateMany(featuresFrameRestricted.get(frame), ffl, prods);
+      for (int role : roles) {
+        IntPair key = new IntPair(frame, role);
+        updateMany(featuresFrameRoleRestricted.get(key), ffl, prods);
+      }
     }
+    updateMany(featuresUnrestricted, ffl, prods);
   }
 
   /**
@@ -340,7 +292,9 @@ public class InformationGainProducts {
    * call (or fails or completes).
    */
   public static void flatten(
-      BaseTemplates data, int dIndex,   // data has templates needed for *all* products/features
+//      BaseTemplates data,
+      FeatureFile.Line data,
+      int dIndex,   // data has templates needed for *all* products/features
       int[] templates, int tIndex,      // these are the templates for *this* product/feature
       ProductIndex cardValue,
       int[] template2cardinality,
@@ -356,8 +310,7 @@ public class InformationGainProducts {
       for (int i = 0; i < templates.length - 1; i++)
         assert templates[i] < templates[i + 1];
       // Verify data is sorted
-      for (int i = 0; i < data.size() - 1; i++)
-        assert data.getTemplate(i) <= data.getTemplate(i + 1);
+      assert data.checkFeaturesAreSortedByTemplate();
     }
 
     if (tIndex == templates.length) {
@@ -368,12 +321,15 @@ public class InformationGainProducts {
     }
 
     // Find the first data index matching the template we're looking for
+    List<Feature> features = data.getFeatures();
     int curTemplate = templates[tIndex];
     int curTemplateCard = template2cardinality[curTemplate];
     int startDataIndex = dIndex;
     boolean found = false;
-    while (startDataIndex < data.size() && !found) {
-      int t = data.getTemplate(startDataIndex);
+    int n = features.size();
+    while (startDataIndex < n && !found) {
+//      int t = data.getTemplate(startDataIndex);
+      int t = features.get(startDataIndex).template;
       if (t == curTemplate) {
         found = true;
       } else if (t < curTemplate) {
@@ -392,27 +348,36 @@ public class InformationGainProducts {
 
     // Find the last data index that matches the current template
     int endDataIndex = startDataIndex + 1;
-    while (endDataIndex < data.size() && data.getTemplate(endDataIndex) == curTemplate)
+//    while (endDataIndex < data.size() && data.getTemplate(endDataIndex) == curTemplate)
+    while (endDataIndex < n && features.get(endDataIndex).template == curTemplate)
       endDataIndex++;
 
     // Recurse
     if (FLATTEN_DEBUG)
       System.out.println("curTemplateCard=" + curTemplateCard);
     for (int i = startDataIndex; i < endDataIndex; i++) {
-      assert data.getValue(i) < curTemplateCard
-        && data.getTemplate(i) == curTemplate
-        : "data.getValue(" + i + ")=" + data.getValue(i)
-        + " data.getTemplate(" + i + ")=" + data.getTemplate(i)
+      Feature f = features.get(i);
+//      assert data.getValue(i) < curTemplateCard
+//        && data.getTemplate(i) == curTemplate
+      assert f.feature < curTemplateCard
+        && f.template == curTemplate
+//        : "data.getValue(" + i + ")=" + data.getValue(i)
+//        + " data.getTemplate(" + i + ")=" + data.getTemplate(i)
+        : "data.getValue(" + i + ")=" + f.feature
+        + " data.getTemplate(" + i + ")=" + f.template
         + " curTemplate=" + curTemplate
         + " curTemplateCard=" + curTemplateCard
         + " dIndex=" + dIndex
         + " tIndex=" + tIndex
         + " templates=" + Arrays.toString(templates)
         + " baseTemplates=" + data;
-      int card = template2cardinality[data.getTemplate(i)];
-      ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
+//      int card = template2cardinality[data.getTemplate(i)];
+//      ProductIndex newValue2 = cardValue.prod(data.getValue(i), card);
+      int card = template2cardinality[f.template];
+      ProductIndex newValue2 = cardValue.prod(f.feature, card);
       if (FLATTEN_DEBUG) {
-        System.out.println("data.getValue(" + i + ")=" + data.getValue(i)
+//        System.out.println("data.getValue(" + i + ")=" + data.getValue(i)
+        System.out.println("data.getValue(" + i + ")=" + f.feature
           + " card=" + card + " newValue2=" + newValue2);
       }
       flatten(data, endDataIndex,
@@ -423,27 +388,46 @@ public class InformationGainProducts {
     }
   }
 
+  public List<TemplateIG> getAllFeatures() {
+    List<TemplateIG> all = new ArrayList<>();
+    IntObjectHashMap<List<TemplateIG>>.Iterator itr = featuresFrameRestricted.iterator();
+    while (itr.hasNext()) {
+      itr.advance();
+      all.addAll(itr.value());
+    }
+    for (List<TemplateIG> l : featuresFrameRoleRestricted.values())
+      all.addAll(l);
+    all.addAll(featuresUnrestricted);
+    return all;
+  }
+
   public List<TemplateIG> getTemplatesSorted(Comparator<TemplateIG> cmp) {
     TimeMarker tm = new TimeMarker();
-    List<TemplateIG> l = new ArrayList<>();
-    for (TemplateIG t : products.values()) {
-      if (t.numUpdates() == 0)
+    List<TemplateIG> all = getAllFeatures();
+    List<TemplateIG> out = new ArrayList<>();
+    int skipped = 0;
+    for (TemplateIG t : all) {
+      if (t.numUpdates() == 0) {
+        skipped++;
         continue;
+      }
       t.ig();
-      l.add(t);
+      out.add(t);
       if (tm.enoughTimePassed(15)) {
         Log.info("took " + tm.secondsSinceFirstMark()
             + " seconds to compute MI for "
-            + l.size() + " of " + products.size() + " templates");
+            + out.size() + " of " + all.size() + " templates,"
+            + " skipped=" + skipped);
       }
     }
-    Collections.sort(l, cmp);
+    Collections.sort(out, cmp);
     Log.info("done");
-    return l;
+    return out;
   }
 
   public int[] getTemplatesForFeature(int i) {
-    return baseFeatures.get(i);
+    assert initialized;
+    return baseFeatures.get(i).templateInt;
   }
 
   /**
@@ -468,7 +452,8 @@ public class InformationGainProducts {
         sb.append(String.valueOf(t.heuristicScore()));
 
         // mi
-        sb.append("\t" + t.ig().miSmoothed.mi());
+//        sb.append("\t" + t.ig().miSmoothed.mi());
+        sb.append("\t" + t.ig().mi());
 
         // hx
         sb.append("\t" + t.hx());
@@ -491,6 +476,17 @@ public class InformationGainProducts {
         for (int i = 0; i < pieces.length; i++) {
           if (i > 0) sb.append('*');
           sb.append(lastBialph.lookupTemplate(pieces[i]));
+        }
+
+        // frame,framerole restrictions
+        sb.append('\t');
+        if (t.featureName.getY instanceof FrameRoleFilter) {
+          FrameRoleFilter frf = (FrameRoleFilter) t.featureName.getY;
+          sb.append("f=" + frf.getFrame());
+          if (frf.hasRoleRestriction())
+            sb.append(",r=" + frf.getRole());
+        } else {
+          sb.append("noRestrict");
         }
 
         w.write(sb.toString());
@@ -707,27 +703,110 @@ public class InformationGainProducts {
     return (int) (p * n + 0.5);
   }
 
-  public static void main(String[] args) throws IOException {
-    ExperimentProperties config = ExperimentProperties.init(args);
+  /**
+   * {@link InformationGain#main(String[])} does not shard, it just tries to
+   * compute MI for every template. Now that I want to split into the granularity
+   * of template@frame@role, we cannot store all {@link TemplateIG}s in
+   * memory at once, and we must shard even the first step of computing IG for
+   * unigram features (templates).
+   *
+   * This main method uses almost all of the machinery of {@link InformationGainProducts}s,
+   * specifically sharding, as to accomplish the same goal as {@link InformationGain},
+   * but with more machines and less memory per machine.
+   */
+  public static void igReplacement() throws IOException {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    Log.info("computing IG/MI for every template (unigram feature)");
 
-    FLATTEN_DEBUG = config.getBoolean("FLATTEN_DEBUG", false);
+    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
+
+    boolean pb = config.getBoolean("propbank");
+    FrameIndex fi = pb ? FrameIndex.getPropbank() : FrameIndex.getFrameNet();
+
+    // Read in mapping between frame/role ints and their names (e.g. "f=framenet/Commerce_buy"
+    Map<String, Integer> role2name = new HashMap<>();
+    File f = config.getFile("roleNames");
+    Log.info("reading role names from " + f.getPath());
+    try (BufferedReader r = FileUtil.getReader(f)) {
+      for (String line = r.readLine(); line != null; line = r.readLine()) {
+        String[] tok = line.split("\t");
+        int c = Integer.parseInt(tok[0]);
+        assert tok.length == 2;
+        Object old = role2name.put(tok[1], c);
+        assert old == null;
+
+        // Earlier extractions don't have the frame index included in the name.
+        // Add it now for backwards compatibility.
+        int eq = tok[1].indexOf('=');
+        if (eq >= 0) {
+          String fin = pb ? "propbank" : "framenet";
+          String newName = tok[1].substring(0, eq) + "=" + fin + "/" + tok[1].substring(eq + 1);
+          Object old2 = role2name.put(newName, c);
+          assert old2 == null || old2.equals(c);
+        }
+      }
+    }
+
+    // BiAlph gives int<->string for templates
+    File bf = config.getExistingFile("bialph");
+    BiAlph bialph = new BiAlph(bf, LineMode.ALPH);
+
+    Shard shard = ShardUtils.getShard(config);
+
+    // Build a list of unigram features (templates),
+    // Each with a @frame@role refinement
+    List<FeatureName> templates = new ArrayList<>();
+    int[] t2c = bialph.makeTemplate2Cardinality();
+    for (int t = 0; t < t2c.length; t++) {
+      if (t2c[t] == 0)
+        continue;
+      String templateName = bialph.lookupTemplate(t);
+      for (Frame ff : fi.allFrames()) {
+        String frame = "f=" + ff.getName();
+        int frameIdx = role2name.get(frame);
+
+        // A shard will get all roles for a given template@frame
+        long h = Hash.mix64(t, frameIdx);
+        if (Math.floorMod(h, shard.getNumShards()) != shard.getShard())
+          continue;
+
+        int K = ff.numRoles();
+        for (int k = 0; k < K; k++) {
+          String role = "r=" + ff.getRole(k);
+          int roleIdx = role2name.get(role);
+          boolean addOne = false;
+          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, addOne, frameIdx, roleIdx);
+          templates.add(new FeatureName(new String[] { templateName }, filteredGetY));
+          if (templates.size() % 10000 == 0)
+            System.out.println(templates.size());
+        }
+      }
+    }
+
+    Log.info("after taking the " + shard + " shard,"
+        + " numTemplates=" + templates.size());
+
+    computeIG(templates, bialph, config);
+  }
+
+  /**
+   * Read in the scores of templates (unigram features), heuristically come up
+   * with some potential product features to try out, and then take a shard of
+   * the total features to compute actual IG/MI for.
+   */
+  public static void igp() throws IOException {
+    ExperimentProperties config = ExperimentProperties.getInstance();
+    Log.info("computing IG/MI for some product features");
+
+    Function<FeatureFile.Line, int[]> getY = InformationGain.getGetY(config);
 
     // Load the features and compute the IG for the chosen products
-    File featuresParent = config.getExistingDir("featuresParent");
-    String featuresGlob = config.getString("featuresGlob");
     File templateAlph = config.getExistingFile("templateAlph");
     boolean templateAlphIsBialph = config.getBoolean("templateAlphIsBialph");
 
-    final File output = config.getFile("output");
-    Log.info("output=" + output.getPath());
-
-    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 10);
-    Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
-
-
     // Read in the bialph (for things like template cardinality)
     Log.info("reading templateAlph=" + templateAlph.getPath()
-    + " templateAlphIsBialph=" + templateAlphIsBialph);
+        + " templateAlphIsBialph=" + templateAlphIsBialph);
     BiAlph bialph = new BiAlph(templateAlph, templateAlphIsBialph ? LineMode.BIALPH : LineMode.ALPH);
 
     // Find the top K unigrams.
@@ -750,6 +829,13 @@ public class InformationGainProducts {
         take(prod1, n1),
         take(prod2, n2),
         take(prod3, n3));
+
+    // For now we'll ignore frame(role) restrictions and just do selection on the average
+    // TODO make refinements for each feature, @feature@role
+    List<FeatureName> feats = new ArrayList<>();
+    for (String[] pr : products)
+      feats.add(new FeatureName(pr, getY));
+
     Log.info("computing IG for the top " + products.size() + " product features,"
         + " gain=" + gain + " n1=" + n1 + " n2=" + n2 + " n3=" + n3);
     for (int i = 0; i < 10 && i < prod1.size(); i++)
@@ -759,42 +845,82 @@ public class InformationGainProducts {
     for (int i = 0; i < 10 && i < prod3.size(); i++)
       Log.info("product[3," + i + "]=" + Arrays.toString(prod3.get(i)));
 
-    final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
-    Log.info("using BUB code in " + bubFuncParentDir.getPath());
-    try (BubEntropyEstimatorAdapter bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir)) {
+    computeIG(feats, bialph, config);
+  }
+
+  /**
+   * Take some chosen products/features and compute IG for them. Other options
+   * for where to route output, etc are read in through {@link ExperimentProperties}.
+   */
+  public static void computeIG(
+      List<FeatureName> products,
+      BiAlph bialph,
+      ExperimentProperties config) throws IOException {
+
+    final File output = config.getFile("output");
+    Log.info("output=" + output.getPath());
+
+    final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
+    Log.info("using " + em + " to compute entropy");
+
+    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 10);
+    Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
+
+    final File featuresParent = config.getExistingDir("featuresParent");
+    final String featuresGlob = config.getString("featuresGlob");
+
+    BubEntropyEstimatorAdapter bubEst = null;
+    if (em == EntropyMethod.BUB) {
+      final File bubFuncParentDir = config.getExistingDir("bubFuncParentDir");
+      Log.info("using BUB code in " + bubFuncParentDir.getPath());
+      bubEst = new BubEntropyEstimatorAdapter(bubFuncParentDir);
       bubEst.debug = config.getBoolean("bubDebug", false);
-      int numRoles = config.getInt("numRoles", 30);
-      int hashingTrickDim = config.getInt("hashingTrickDim", 0);
-      InformationGainProducts igp = new InformationGainProducts(products, hashingTrickDim, bubEst);
-      igp.init(bialph, numRoles);
-
-      // Scan each of the input files
-      PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
-      Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
-        @Override
-        public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
-          if (pm.matches(path)) {
-            Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
-            igp.update(path.toFile());
-
-            if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
-              igp.writeOutProducts(output);
-          }
-          return FileVisitResult.CONTINUE;
-        }
-        @Override
-        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-          return FileVisitResult.CONTINUE;
-        }
-      });
-
-      // Write out final results
-      igp.writeOutProducts(output);
-//      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
-
-      Log.info("closing matlab/bub connection");
     }
+
+    int numRoles = config.getInt("numRoles", 30);
+    int hashingTrickDim = config.getInt("hashingTrickDim", 0);
+    InformationGainProducts igp = new InformationGainProducts(
+        products, hashingTrickDim, bubEst, em);
+    igp.init(bialph, numRoles);
+
+    // Scan each of the input files
+    PathMatcher pm = FileSystems.getDefault().getPathMatcher(featuresGlob);
+    Files.walkFileTree(featuresParent.toPath(), new SimpleFileVisitor<Path>() {
+      @Override
+      public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+        if (pm.matches(path)) {
+          Log.info("reading features: " + path.toFile().getPath() + "\t" + Describe.memoryUsage());
+          igp.update(path.toFile());
+
+          if (igp.getNumUpdates() % writeTopProductsEveryK == 0)
+            igp.writeOutProducts(output);
+        }
+        return FileVisitResult.CONTINUE;
+      }
+      @Override
+      public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+        return FileVisitResult.CONTINUE;
+      }
+    });
+
+    // Write out final results
+    igp.writeOutProducts(output);
+    //      igp.writeOutProducts(new File("/dev/stdout"), config.getInt("topK", 30));
+
+    if (bubEst != null) {
+      Log.info("closing matlab/bub connection");
+      bubEst.close();
+    }
+
     Log.info("done");
+  }
+
+  public static void main(String[] args) throws IOException {
+    ExperimentProperties config = ExperimentProperties.init(args);
+    if (config.getBoolean("unigrams", false))
+      igReplacement();
+    else
+      igp();
   }
 }
 

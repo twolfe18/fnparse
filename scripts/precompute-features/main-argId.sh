@@ -366,7 +366,7 @@ java -cp target/fnparse-1.0.6-SNAPSHOT-jar-with-dependencies.jar -ea -server \
     scripts/having-a-laugh/${DATASET}-32-${D}.fs
 
 
-# Filter the feature files to only includ ethe features in the alphabet
+# Filter the feature files to only include features in the alphabet
 mkdir -p $WD/sge-logs
 for i in `seq $NUM_SHARDS | awk '{print $1-1}'`; do
   qsub -N "featFilt-$i" -b y -j y -V -o $WD/sge-logs \

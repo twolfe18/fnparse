@@ -1,4 +1,4 @@
-package edu.jhu.hlt.fnparse.features.precompute;
+package edu.jhu.hlt.fnparse.features.precompute.featureselection;
 
 import java.io.File;
 import java.util.ArrayList;

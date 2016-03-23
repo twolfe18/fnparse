@@ -6,15 +6,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 import edu.jhu.prim.vector.IntDoubleDenseVector;
 import edu.jhu.prim.vector.IntDoubleVector;
 
 /**
  * See http://www.ciml.info/dl/v0_8/ciml-v0_8-ch03.pdf
+ *
+ * TODO Add an option to use floats instead of doubles
  *
  * @author travis
  */

@@ -20,6 +20,15 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import edu.jhu.hlt.concrete.AnnotationMetadata;
+import edu.jhu.hlt.concrete.Communication;
+import edu.jhu.hlt.concrete.MentionArgument;
+import edu.jhu.hlt.concrete.SituationMention;
+import edu.jhu.hlt.concrete.SituationMentionSet;
+import edu.jhu.hlt.concrete.TokenRefSequence;
+import edu.jhu.hlt.concrete.UUID;
+import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory;
+import edu.jhu.hlt.concrete.uuid.AnalyticUUIDGeneratorFactory.AnalyticUUIDGenerator;
 import edu.jhu.hlt.fnparse.datatypes.FNParse;
 import edu.jhu.hlt.fnparse.datatypes.FNTagging;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
@@ -28,6 +37,7 @@ import edu.jhu.hlt.fnparse.datatypes.FrameInstance.PropbankDataException;
 import edu.jhu.hlt.fnparse.datatypes.Sentence;
 import edu.jhu.hlt.fnparse.inference.heads.HeadFinder;
 import edu.jhu.hlt.fnparse.util.Describe;
+import edu.jhu.hlt.tutils.ConcreteDocumentMapping;
 import edu.jhu.hlt.tutils.Document.Constituent;
 import edu.jhu.hlt.tutils.Document.ConstituentItr;
 import edu.jhu.hlt.tutils.Log;
@@ -37,6 +47,103 @@ import edu.jhu.prim.tuple.Pair;
 
 public class DataUtil {
   public static boolean DEBUG = false;
+
+//  private static Map<HashableUUID, Tokenization> indexTokenizations(Communication c) {
+//    Map<HashableUUID, Tokenization> m = new HashMap<>();
+//    for (Section s : c.getSectionList()) {
+//      for (edu.jhu.hlt.concrete.Sentence sent : s.getSentenceList()) {
+//        Tokenization t = sent.getTokenization();
+//        Tokenization old = m.put(new HashableUUID(t.getUuid()), t);
+//        assert old == null;
+//      }
+//    }
+//    return m;
+//  }
+
+  /**
+   * Adds {@link FNParse} to either tutils.Document (Constituents, like cons_propbank_auto)
+   * or concrete.Communication (as {@link SituationMention}s).
+   *
+   * NOTE: This code has NOT BEEN TESTED.
+   */
+  public static void exportParses(
+      List<FNParse> parses,
+      ConcreteDocumentMapping cdm,
+      boolean exportToTutilsDocument,
+      boolean exportToConcreteCommunication) {
+
+    if (exportToTutilsDocument)
+      throw new RuntimeException("implement me");
+
+    if (!exportToConcreteCommunication) {
+      return;
+    }
+
+    AnnotationMetadata meta = new AnnotationMetadata();
+    meta.setTimestamp(System.currentTimeMillis() / 1000);
+    meta.setTool("fnparse");
+
+    Communication c = cdm.getCommunication();
+    edu.jhu.hlt.tutils.Document d = cdm.getDocument();
+//    Map<HashableUUID, Tokenization> toks = indexTokenizations(c);
+
+    AnalyticUUIDGeneratorFactory idDoc = new AnalyticUUIDGeneratorFactory(c);
+    AnalyticUUIDGenerator idTool = idDoc.create();
+
+    SituationMentionSet sms = new SituationMentionSet();
+    sms.setMetadata(meta);
+    sms.setUuid(idTool.next());
+
+    c.addToSituationMentionSetList(sms);
+    for (FNParse y : parses) {
+      Sentence sent = y.getSentence();
+      if (sent.tutilsSentenceConsIdx < 0) {
+        throw new RuntimeException("this Sentence doesn't have a"
+            + " mapping back to tutils elements (on the way to concrete elements)");
+      }
+
+      // Lookup the relevant Tokenization
+      UUID tokUUID = cdm.get(d.getConstituent(sent.tutilsSentenceConsIdx));
+      assert tokUUID != null;
+//      Tokenization tokenization = toks.get(tokUUID);
+
+      for (FrameInstance fi : y.getFrameInstances()) {
+        SituationMention sm = new SituationMention();
+        sm.setUuid(idTool.next());
+        sms.addToMentionList(sm);
+
+        TokenRefSequence target = new TokenRefSequence();
+        target.setTokenizationId(tokUUID);
+        Span t = fi.getTarget();
+        for (int i = t.start; i < t.end; i++)
+          target.addToTokenIndexList(i);
+        sm.setTokens(target);
+
+        Frame f = fi.getFrame();
+        sm.setSituationKind(f.getName());
+
+        int K = f.numRoles();
+        for (int k = 0; k < K; k++) {
+          Span a = fi.getArgument(k);
+          if (a == Span.nullSpan)
+            continue;
+          assert fi.getContinuationRoleSpans(k).isEmpty();
+          assert fi.getReferenceRoleSpans(k).isEmpty();
+
+          TokenRefSequence arg = new TokenRefSequence();
+          arg.setTokenizationId(tokUUID);
+          for (int i = a.start; i < a.end; i++)
+            arg.addToTokenIndexList(i);
+
+          MentionArgument ma = new MentionArgument();
+          ma.setSituationMentionId(sm.getUuid());
+          ma.setRole(f.getRole(k));
+          ma.setTokens(arg);
+          sm.addToArgumentList(ma);
+        }
+      }
+    }
+  }
 
   /**
    * Convenience wrapper around

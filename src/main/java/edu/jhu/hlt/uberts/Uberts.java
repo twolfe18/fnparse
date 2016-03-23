@@ -1,16 +1,30 @@
 package edu.jhu.hlt.uberts;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
+import edu.jhu.hlt.uberts.HypEdge.HashableHypEdge;
 import edu.jhu.hlt.uberts.TNode.TKey;
 import edu.jhu.hlt.uberts.factor.GlobalFactor;
 import edu.jhu.hlt.uberts.transition.TransitionGenerator;
 import edu.jhu.prim.tuple.Pair;
 
+/**
+ * An uber transition system for joint predictions. Holds a state and agenda,
+ * and you add global features and transition generators to define the state
+ * lattice.
+ *
+ * Remember:
+ * {@link TransitionGenerator} => local features
+ * {@link GlobalFactor} => global features and hard constraints
+ *
+ * @author travis
+ */
 public class Uberts {
 
   private State state;
@@ -27,7 +41,45 @@ public class Uberts {
   // Never call `new NodeType` outside of Uberts, use lookupNodeType
   private Map<String, NodeType> nodeTypes;
 
-  // TODO I believe Relations should be kept unique here.
+  // Ancillary data for features which don't look at the State graph.
+  // New data backend (used to be fnparse.Sentence and FNParse)
+  // TODO Update TemplateContext and everything in BasicFeatureTemplates.
+  private edu.jhu.hlt.tutils.Document doc;
+  public edu.jhu.hlt.tutils.Document getDoc() {
+    return doc;
+  }
+  public void setDocument(edu.jhu.hlt.tutils.Document doc) {
+    this.doc = doc;
+  }
+
+  // Supervision (set of gold HypEdges)
+  // Modules may add to this set as they register TransitionGenerators for example.
+  private HashSet<HashableHypEdge> goldEdges;
+  public void clearLabels() {
+    goldEdges = null;
+  }
+  public void addLabel(HypEdge e) {
+    if (goldEdges == null)
+      goldEdges = new HashSet<>();
+    boolean added = goldEdges.add(new HashableHypEdge(e));
+    assert added : "duplicate edge? " + e;
+  }
+  /**
+   * +1 means a gold edge, good thing to add. -1 means a bad edge which
+   * introduces loss. You can play with anything in between.
+   *
+   * TODO This needs to be expanded upon. There are lots of small issues like
+   * you can just add this into the oracle, you have to know when something is
+   * perfectly correct vs not... etc.
+   */
+  public double getLabel(HypEdge e) {
+    if (goldEdges == null)
+      throw new IllegalStateException("no labels available");
+    if (goldEdges.contains(new HashableHypEdge(e)))
+      return +1;
+    return -1;
+  }
+
 
   public Uberts(Random rand) {
     this.rand = rand;
@@ -37,6 +89,26 @@ public class Uberts {
     this.trie = new TNode(null, null);
     this.nodes = new HashMap<>();
     this.nodeTypes = new HashMap<>();
+  }
+
+  /**
+   * Pops items off the agenda until score is below 0, then stops. Right now this
+   * is a debug method since it prints stuff and inference is not finalized.
+   */
+  public void dbgRunInference() {
+    for (int i = 0; agenda.size() > 0; i++) {
+      Log.info("choosing the best action, i=" + i + " size=" + agenda.size() + " cap=" + agenda.capacity());
+      agenda.dbgShowScores();
+      Pair<HypEdge, Adjoints> p = agenda.popBoth();
+      HypEdge best = p.get1();
+      double score = p.get2().forwards();
+      if (score <= 0)
+        break;
+      Log.info("best=" + best);
+      addEdgeToState(best);
+    }
+    Log.info("done adding positive-scoring HypEdges");
+    state.dbgShowEdges();
   }
 
   public Random getRandom() {
@@ -70,9 +142,11 @@ public class Uberts {
    * Use this rather than calling the {@link NodeType} constructor so that nodes
    * types are gauranteed to be unique.
    */
-  public NodeType lookupNodeType(String name) {
+  public NodeType lookupNodeType(String name, boolean allowNewNodeType) {
     NodeType nt = nodeTypes.get(name);
     if (nt == null) {
+      if (!allowNewNodeType)
+        throw new RuntimeException("there is no NodeType called " + name);
       nt = new NodeType(name);
       nodeTypes.put(name, nt);
     }
@@ -138,7 +212,9 @@ public class Uberts {
     return r;
   }
   public Relation getEdgeType(String name) {
-    return relations.get(name);
+    Relation r = relations.get(name);
+    assert r != null : "no relation called " + name;
+    return r;
   }
 
   // TODO Add methods which add TransitionGenerators and GlobalFactors without
@@ -151,7 +227,7 @@ public class Uberts {
   }
   public NodeType getWitnessNodeType(Relation relation) {
     String wntName = "witness-" + relation.getName();
-    return lookupNodeType(wntName);
+    return lookupNodeType(wntName, true);
   }
 
   // NOT TRUE: Every edge gets its own fact id

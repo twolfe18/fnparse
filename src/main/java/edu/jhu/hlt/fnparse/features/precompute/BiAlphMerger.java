@@ -111,7 +111,7 @@ public class BiAlphMerger {
   }
 
   /**
-   * Merges two bialphs.
+   * Merges (unions) two bialphs.
    *
    * Reads and writes the format:
    *  (newIntTemplate, newIntFeature, stringTemplate, stringFeature, oldIntTemplate, oldIntFeature)

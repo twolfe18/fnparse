@@ -3,7 +3,7 @@ package edu.jhu.hlt.fnparse.rl.full.weights;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.datatypes.Frame;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 

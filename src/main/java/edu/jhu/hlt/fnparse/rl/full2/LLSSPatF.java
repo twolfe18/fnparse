@@ -4,7 +4,6 @@ import edu.jhu.hlt.fnparse.data.RolePacking;
 import edu.jhu.hlt.fnparse.data.propbank.RoleType;
 import edu.jhu.hlt.fnparse.datatypes.Frame;
 import edu.jhu.hlt.fnparse.features.BasicFeatureTemplates;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.rl.full.Info;
 import edu.jhu.hlt.fnparse.rl.full.StepScores;
 import edu.jhu.hlt.fnparse.rl.params.GlobalFeature;
@@ -12,6 +11,7 @@ import edu.jhu.hlt.fnparse.util.FrameRolePacking;
 import edu.jhu.hlt.tutils.ExperimentProperties;
 import edu.jhu.hlt.tutils.IntPair;
 import edu.jhu.hlt.tutils.Log;
+import edu.jhu.hlt.tutils.ProductIndex;
 import edu.jhu.hlt.tutils.Span;
 import edu.jhu.hlt.tutils.scoring.Adjoints;
 

@@ -1,5 +1,10 @@
 package edu.jhu.hlt.uberts;
 
+/**
+ * @deprecated see goldEdges in {@link Uberts}.
+ *
+ * @author travis
+ */
 public interface Instance {
 
   /**

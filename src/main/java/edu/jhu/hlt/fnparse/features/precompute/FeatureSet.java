@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.List;
 
 import edu.jhu.hlt.fnparse.features.TemplatedFeatures;
@@ -24,6 +25,25 @@ import edu.jhu.hlt.tutils.StringUtils;
  * @author travis
  */
 public class FeatureSet {
+
+  /** Returns a set of templates (in sorted order) contained in the given feature set */
+  public int[] getTemplateSet(int[][] featureSet) {
+    List<Integer> l = new ArrayList<>();
+    BitSet bs = new BitSet();
+    for (int[] f : featureSet) {
+      for (int fi : f) {
+        if (!bs.get(fi)) {
+          bs.set(fi);
+          l.add(fi);
+        }
+      }
+    }
+    Collections.sort(l);
+    int[] uniq = new int[l.size()];
+    for (int i = 0; i < l.size(); i++)
+      uniq[i] = l.get(i);
+    return uniq;
+  }
 
   /**
    * @param f see {@link FeatureSet#getFeatureSetString(File)}

@@ -27,11 +27,6 @@ public class HypNode {
   }
 
   @Override
-  public boolean equals(Object other) {
-    throw new RuntimeException("Uberts should be ensuring uniqueness of HypNodes, use ==");
-  }
-
-  @Override
   public String toString() {
     return "(" + nt + " " + value + ")";
   }

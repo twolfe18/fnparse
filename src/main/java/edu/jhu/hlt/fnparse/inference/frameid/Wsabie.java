@@ -16,7 +16,6 @@ import edu.jhu.hlt.fnparse.features.precompute.BiAlph.LineMode;
 import edu.jhu.hlt.fnparse.features.precompute.FeatureFile;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation;
 import edu.jhu.hlt.fnparse.features.precompute.FeaturePrecomputation.Feature;
-import edu.jhu.hlt.fnparse.features.precompute.ProductIndex;
 import edu.jhu.hlt.fnparse.inference.frameid.FrameSchemaHelper.Schema;
 import edu.jhu.hlt.tutils.Beam;
 import edu.jhu.hlt.tutils.Counts;
@@ -25,6 +24,7 @@ import edu.jhu.hlt.tutils.FPR;
 import edu.jhu.hlt.tutils.FileUtil;
 import edu.jhu.hlt.tutils.Log;
 import edu.jhu.hlt.tutils.OrderStatistics;
+import edu.jhu.hlt.tutils.ProductIndex;
 
 /**
  * Based on:
@@ -46,11 +46,12 @@ import edu.jhu.hlt.tutils.OrderStatistics;
 public class Wsabie implements Serializable {
   private static final long serialVersionUID = 5688564611134317326L;
 
-  public static final boolean USE_FLOATS = true;
+  // frame embeddings are always doubles since they don't use much mem
+  public static final boolean USE_FLOATS_FEAT_EMB = true;
 
   private double margin = 0.001;
-  private int dimFeat = 1<<20;
-  private int dimEmb = 512;
+  private int dimFeat = 1<<19;
+  private int dimEmb = 128;       // up to 512 (at least) is good
   private int numTemplates;
   private double[][] V;       // frame embeddings
   private double[][] M;       // feature -> frame embedding projection
@@ -63,6 +64,9 @@ public class Wsabie implements Serializable {
   // Tells you what frames are relevant (in the same schema) to each other
   private FrameSchemaHelper schemas;
 
+  // Says whether
+  //  embed(target) = avg_{f \in features} embed(f) or
+  //  embed(target) = sum_{f \in features} embed(f)
   // Note: If you set this to true, the effective learning rate goes way down
   private boolean averageFeatures = true;
 
@@ -101,7 +105,7 @@ public class Wsabie implements Serializable {
     Log.info("batchSize=" + batchSize);
     Log.info("dropout=" + dropout);
     Log.info("V requires " + Math.ceil((numFrames*dimEmb*8d)/(1<<20)) + " MB");
-    if (USE_FLOATS)
+    if (USE_FLOATS_FEAT_EMB)
       Log.info("M requires " + Math.ceil((dimFeat*dimEmb*4d)/(1<<20)) + " MB");
     else
       Log.info("M requires " + Math.ceil((dimFeat*dimEmb*8d)/(1<<20)) + " MB");
@@ -109,7 +113,7 @@ public class Wsabie implements Serializable {
     rand = new Random(9001);
     this.numTemplates = numTemplates;
     V = new double[numFrames][dimEmb];
-    if (USE_FLOATS)
+    if (USE_FLOATS_FEAT_EMB)
       Mf = new float[dimFeat][dimEmb];
     else
       M = new double[dimFeat][dimEmb];
@@ -123,6 +127,10 @@ public class Wsabie implements Serializable {
     }
   }
 
+  public FrameSchemaHelper getSchema() {
+    return schemas;
+  }
+
   public void setBialph(BiAlph ba) {
     this.bialph = ba;
     this.templateOffsets = new int[numTemplates];
@@ -134,10 +142,11 @@ public class Wsabie implements Serializable {
   }
 
   public void randInit() {
+    Log.info("intializing weights...");
     double rV = 1d / Math.sqrt(V[0].length);
     for (int i = 0; i < V.length; i++)
       randInit(V[i], rV, rand);
-    if (USE_FLOATS) {
+    if (USE_FLOATS_FEAT_EMB) {
       float rM = (float) (1d / Math.sqrt(Mf[0].length));
       for (int i = 0; i < Mf.length; i++)
         randInit(Mf[i], rM, rand);
@@ -146,6 +155,7 @@ public class Wsabie implements Serializable {
       for (int i = 0; i < M.length; i++)
         randInit(M[i], rM, rand);
     }
+    Log.info("done intializing weights");
   }
 
   public static void randInit(float[] vec, float range, Random r) {
@@ -210,7 +220,7 @@ public class Wsabie implements Serializable {
           continue;
         n++;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS) {
+        if (USE_FLOATS_FEAT_EMB) {
           for (int j = 0; j < dimEmb; j++)
             gProj[b][j] += Mf[f][j];
         } else {
@@ -275,7 +285,7 @@ public class Wsabie implements Serializable {
         if (e.dropout(i))
           continue;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS) {
+        if (USE_FLOATS_FEAT_EMB) {
           for (int j = 0; j < dimEmb; j++) {
             Mf[f][j] += s * V[e.frame][j];
             Mf[f][j] -= s * V[otherFr][j];
@@ -309,7 +319,7 @@ public class Wsabie implements Serializable {
         if (e.dropout(i))
           continue;
         int f = e.targetFeatures[i];
-        if (USE_FLOATS)
+        if (USE_FLOATS_FEAT_EMB)
           projectIntoUnitSphere(Mf[f]);
         else
           projectIntoUnitSphere(M[f]);
@@ -360,7 +370,7 @@ public class Wsabie implements Serializable {
     double[] gProj = new double[dimEmb];
     for (int i = 0; i < e.targetFeatures.length; i++) {
       int f = e.targetFeatures[i];
-      if (USE_FLOATS) {
+      if (USE_FLOATS_FEAT_EMB) {
         for (int j = 0; j < dimEmb; j++)
           gProj[j] += Mf[f][j];
       } else {
@@ -379,10 +389,12 @@ public class Wsabie implements Serializable {
     int[] confusion = e.getConfusionSet();
     if (confusion == null)
       confusion = getDefaultConfusionSet();
+//    for (int frame = 0; frame < V.length; frame++) {
     for (int i = 0; i < confusion.length; i++) {
       int frame = confusion[i];
-//    for (int frame = 0; frame < V.length; frame++) {
-      if (schemas.getSchema(frame) != sc)
+      if (frame < 0 || frame >= V.length)
+        throw new IllegalStateException("confusion set contains illegal frame: " + frame + " V.length=" + V.length);
+      if (sc != null && schemas.getSchema(frame) != sc)
         continue;
       double s = 0;
       for (int j = 0; j < dimEmb; j++)
@@ -454,8 +466,8 @@ public class Wsabie implements Serializable {
     // NOTE: By this point we're assuming that input feature files have been
     // filtered so that all features in the file are relevant to classification.
     FeatureFile.Line l = new FeatureFile.Line(line, true);
-    int[] y = l.getRoles(false);
-    assert y.length == 1;
+    int[] y = l.getFrames(false);
+    assert y.length == 1 : "multiple frames? " + Arrays.toString(y);
     int frame = y[0];
     int[] features = new int[l.getFeatures().size()];
     int i = 0;
