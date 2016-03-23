@@ -186,11 +186,11 @@ public class TemplateIG implements Serializable {
       final double C_yx = updates, C_y = updates, C_x = updates;
 
       if (entropyMethod == EntropyMethod.BUB) {
-        Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
+//        Log.info("calling BUB estimator for H[y,x]\t" + Describe.memoryUsage());
         double hyx = bubEst.entropyUsingDimensionNNZ(cyx);
-        Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
+//        Log.info("calling BUB estimator for H[x]\t" + Describe.memoryUsage());
         double hx = bubEst.entropyUsingDimensionNNZ(cx);
-        Log.info("calling BUB estimator for H[y]\t" + Describe.memoryUsage());
+//        Log.info("calling BUB estimator for H[y]\t" + Describe.memoryUsage());
         double hy = bubEst.entropy(cy);
         igCache.h_x = hx;
         igCache.h_y = hy;

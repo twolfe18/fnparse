@@ -381,19 +381,17 @@ public class InformationGainProducts {
     TimeMarker tm = new TimeMarker();
     List<TemplateIG> all = getAllFeatures();
     List<TemplateIG> out = new ArrayList<>();
-    int skipped = 0;
-    for (TemplateIG t : all) {
-      if (t.totalCount() == 0) {
-        skipped++;
-        continue;
-      }
+    for (TemplateIG t : all)
+      if (t.totalCount() > 0)
+        out.add(t);
+    int done = 0;
+    for (TemplateIG t : out) {
       t.ig();
-      out.add(t);
+      done++;
       if (tm.enoughTimePassed(15)) {
         Log.info("took " + tm.secondsSinceFirstMark()
             + " seconds to compute MI for "
-            + out.size() + " of " + all.size() + " templates,"
-            + " skipped=" + skipped);
+            + done + " of " + out.size() + " templates");
       }
     }
     Collections.sort(out, cmp);
