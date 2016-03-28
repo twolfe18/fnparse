@@ -851,7 +851,7 @@ public class InformationGainProducts {
     final EntropyMethod em = EntropyMethod.valueOf(config.getString("entropyMethod"));
     Log.info("using " + em + " to compute entropy");
 
-    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 10);
+    final int writeTopProductsEveryK = config.getInt("writeTopProductsEveryK", 64);
     Log.info("writeTopProductsEveryK=" + writeTopProductsEveryK);
 
     final File featuresParent = config.getExistingDir("featuresParent");
