@@ -6,6 +6,8 @@
 from dedup_sim_feats import Feature
 import collections
 import sys, copy
+import bisect
+import numpy as np
 
 def harmonic_mean(a, b):
   if a + b <= 0:
@@ -39,8 +41,54 @@ def ig_max_weight(feat):
 def ig_exp_weight(feat):
   return feat.prob
 
+def ig_rank_by_count3(feat, count2cdf, min_count=60):
+  rnk = 0
+  n = 0
+  l = r = feat.count
+  while n < min_count and l > 0:
+    lf = count2cdf[l]
+    rnk += bisect.bisect_right(lf, feat.ig)
+    n += len(lf)
+    if r > l:
+      lf = count2cdf[r]
+      rnk += bisect.bisect_right(lf, feat.ig)
+      n += len(lf)
+    l -= 1
+    r += 1
+  return float(rnk) / float(n)
+
+def ig_rank_by_count2(feat, count2cdf, min_count=60):
+  '''
+  OPTIMIZED, requires count2cdf is defaultdict with values sorted by feat.ig.
+  Looks at all Features which have a count matching the given
+  feature (or a similar count), and returns a score between 0
+  (feat has the smallest IG in the list) and 1 (feat has is the max).
+  '''
+  def rank(needle, haystack):
+    i = 0
+    for v in haystack:
+      if needle <= v:
+        break
+      i += 1
+    return i
+  rnk = 0
+  n = 0
+  l = r = feat.count
+  while n < min_count and l > 0:
+    lf = count2cdf[l]
+    rnk += rank(feat.ig, (f.ig for f in lf))
+    n += len(lf)
+    if r > l:
+      lf = count2cdf[r]
+      rnk += rank(feat.ig, (f.ig for f in lf))
+      n += len(lf)
+    l -= 1
+    r += 1
+  return float(rnk) / float(n)
+
 def ig_rank_by_count(feat, count2cdf, min_count=60):
   '''
+  SLOW, DON'T USE.
   Looks at all Features which have a count matching the given
   feature (or a similar count), and returns a score between 0
   (feat has the smallest IG in the list) and 1 (feat has is the max).
@@ -70,12 +118,18 @@ def combine_scores(coef, out_file='/dev/stdout'):
   coef = {k: v/z for k,v in coef.iteritems()}
 
   # Read in features and IG estimates from file
+  sys.stderr.write('loading features and IG from stdin...\n')
   groups = collections.defaultdict(list)
   for feat in Feature.from_file('/dev/stdin'):
     # This will produce a list of pairs, e.g. [('frame', 1887), ('role', 22)]
     # The rule is that we group by the N-1 values in the list and aggregate over the last
     feat.restrict = parse_restrict_str(feat.restrict)
     assert len(feat.restrict) > 0
+
+    # Reduce memory usage by freeing str_templates
+    # This saves ~10% speed/memory, can pay this for the ability to have strings in output.
+    # NOTE: This tradeoff could change for features which have longer str_templates.
+    #del feat.str_templates
 
     group_by = []
     group_by.append(tuple(feat.int_templates))
@@ -86,44 +140,71 @@ def combine_scores(coef, out_file='/dev/stdout'):
 
 
   # Compute the CDFs for IG based on count
+  sys.stderr.write('computing count2cdf...\n')
   count2cdf = collections.defaultdict(list)
   for k, features in groups.iteritems():
     for feat in features:
       count2cdf[feat.count].append(feat)
-  #count2cdf = {k:sorted(v, lambda feat: feat.count) for k,v in count2cdf.iteritems()}
 
+  # Sort features by PMI, ASCENDING
+  for k in count2cdf.keys():
+    #count2cdf[k] = sorted(count2cdf[k], key=lambda f: f.ig)
+    igs = np.asarray([f.ig for f in count2cdf[k]])
+    count2cdf[k] = sorted(igs)
 
-  for key, values in groups.iteritems():
-    # Sort by PMI
-    groups[key] = sorted(values, key=lambda feat: feat.ig, reverse=True)
+  interval = 25000
+  kvn = len(groups)
 
+  sys.stderr.write('computing rank by ig...\n')
+  for kvi, (key, values) in enumerate(groups.iteritems()):
     # Compute rank
     n = float(len(groups[key]))
     for i, feat in enumerate(groups[key]):
-      feat.ig_rank_by_key = (n-i) / n
+      feat.ig_rank_by_key = float(i+1) / n
+    if kvi % interval == 0:
+      sys.stderr.write(" %d/%d" % (kvi, kvn))
+  sys.stderr.write('\n')
 
+  sys.stderr.write('computing range...\n')
+  for kvi, (key, values) in enumerate(groups.iteritems()):
     # Compute range
-    mx = max(f.ig for f in values)
-    mn = min(f.ig for f in values)
+    mx = values[-1].ig
+    mn = values[0].ig
     if mn == mx:
       for feat in values:
         feat.ig_range = 1 / len(values)
     else:
       for feat in values:
         feat.ig_range = 1 - (mx - feat.ig) / (mx - mn)
+    if kvi % interval == 0:
+      sys.stderr.write(" %d/%d" % (kvi, kvn))
+  sys.stderr.write('\n')
 
+  sys.stderr.write('computing prob...\n')
+  for kvi, (key, values) in enumerate(groups.iteritems()):
     # counts -> probablities
     total_count = 0
     for feat in groups[key]:
       total_count += feat.count
     for feat in groups[key]:
       feat.prob = feat.count / float(total_count)
+    if kvi % interval == 0:
+      sys.stderr.write(" %d/%d" % (kvi, kvn))
+  sys.stderr.write('\n')
 
+  sys.stderr.write('computing rank by count...\n')
+  for kvi, (key, values) in enumerate(groups.iteritems()):
     # IG -> ranked IG
+    # Assumes sorted by IG ASCENDING
     for feat in groups[key]:
-      feat.ig_rank_by_count = ig_rank_by_count(feat, count2cdf)
+      #feat.ig_rank_by_count = ig_rank_by_count(feat, count2cdf)
+      #feat.ig_rank_by_count = ig_rank_by_count2(feat, count2cdf)
+      feat.ig_rank_by_count = ig_rank_by_count3(feat, count2cdf)
+    if kvi % interval == 0:
+      sys.stderr.write(" %d/%d" % (kvi, kvn))
+  sys.stderr.write('\n')
 
-  #output = []   # list of (template, frame, score)
+  sys.stderr.write('writing output...\n')
   with open(out_file, 'w') as f:
     for key, features in groups.iteritems():
       ig_abs = Avg()

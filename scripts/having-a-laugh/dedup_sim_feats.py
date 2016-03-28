@@ -136,16 +136,21 @@ class Feature:
         self.restrict = ar[8]
 
   def __str__(self):
+    st = 'NA'
+    if 'str_templates' in self.__dict__:
+      st = '*'.join(self.str_templates)
     if self.rank:
-      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f sel=%.4g %s>" % (self.rank, self.order, self.ig, self.hx, self.selectivity, str(self.str_templates))
-    return "<Feat n=%d ig=%.4f hx=%.4f sel=%.4g %s>" % (self.order, self.ig, self.hx, self.selectivity, str(self.str_templates))
+      return "<Feat rank=%d n=%d mi=%.4f hx=%.4f sel=%.4g %s>" % (self.rank, self.order, self.ig, self.hx, self.selectivity, st)
+    return "<Feat n=%d ig=%.4f hx=%.4f sel=%.4g %s>" % (self.order, self.ig, self.hx, self.selectivity, st)
 
   def str_like_input(self):
     #y = self.ig / (1 + self.hx * self.hx)
     #y = self.ig / (1 + self.hx)
     y = self.score
     it = '*'.join(map(str, self.int_templates))
-    st = '*'.join(self.str_templates)
+    st = 'NA'
+    if 'str_templates' in self.__dict__:
+      st = '*'.join(self.str_templates)
     return "%f\t%f\t%f\t%f\t%d\t%s\t%s" % \
       (y, self.ig, self.hx, self.selectivity, len(self.int_templates), it, st)
 
