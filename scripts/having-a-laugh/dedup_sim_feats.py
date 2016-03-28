@@ -111,7 +111,7 @@ def debug():
 class Feature:
   def __init__(self, line, rank=None, template_name_bug=False):
     ar = line.rstrip().split('\t')
-    assert len(ar) == 7
+    assert len(ar) >= 7
     self.rank = rank
     self.score = float(ar[0])
     self.ig = float(ar[1])
@@ -125,6 +125,15 @@ class Feature:
     assert self.order == len(self.int_templates)
     assert self.order == len(self.str_templates)
     #print 'just read', self.str_like_input()
+
+    if len(ar) >= 8:
+      self.count = int(ar[7])
+      if len(ar) >= 9:
+        # TODO Can be None, frame, or (frame,role)
+        # TODO Try out this as a list of (key,value) pairs, e.g. [('frame', 1887), ('role', 22)]
+        # Every time you run combine-mutual-information.py, we strip one off the end, grouping
+        # by the prefix.
+        self.restrict = ar[8]
 
   def __str__(self):
     if self.rank:
