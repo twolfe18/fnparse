@@ -38,7 +38,7 @@ import edu.jhu.hlt.tutils.TimeMarker;
 /**
  * Uses output of {@link FeaturePrecomputation} to compute IG for feature selection.
  *
- * @deprecated Use {@link InformationGainProducts} instead.
+ * Deprecated Use {@link InformationGainProducts} instead.
  * Previously {@link TemplateIG} was located here, which is not deprecated.
  *
  *
@@ -168,12 +168,23 @@ import edu.jhu.hlt.tutils.TimeMarker;
 public class InformationGain implements Serializable, LineByLine {
   private static final long serialVersionUID = -5727222496637587197L;
 
-  public static final Function<FeatureFile.Line, int[]> GET_ROLES = ffl -> {
-    return ffl.getRoles(true);  // addOne=true takes -1 (no role) to 0
-  };
-  public static final Function<FeatureFile.Line, int[]> GET_FRAMES = ffl -> {
-    return ffl.getFrames(true); // addOne=true takes -1 (no frame) to 0
-  };
+  // On disk frames/roles use -1 for "no frame/role", and 0 and up for real values.
+  // Various methods that retrieve data from disk will take an addOne option,
+  // and for now I think they must all agree.
+  // Be careful if you want to refer to a frame/role by index, should check this
+  // and adjust accordingly.
+  public static final boolean ADD_ONE = true;
+
+  public static Function<FeatureFile.Line, int[]> getRoles(boolean addOne) {
+    return ffl -> {
+      return ffl.getRoles(addOne);  // addOne=true takes -1 (no role) to 0
+    };
+  }
+  public static Function<FeatureFile.Line, int[]> getFrames(boolean addOne) {
+    return ffl -> {
+      return ffl.getFrames(addOne); // addOne=true takes -1 (no frame) to 0
+    };
+  }
 
   public static class MI implements Serializable {
     private static final long serialVersionUID = -5839206491069959192L;
@@ -392,9 +403,9 @@ public class InformationGain implements Serializable, LineByLine {
     Log.info("computing information gaint w.r.t. " + l);
     switch (l) {
     case "frames":
-      return GET_FRAMES;
+      return getFrames(ADD_ONE);
     case "roles":
-      return GET_ROLES;
+      return getRoles(ADD_ONE);
     default:
       throw new RuntimeException("unknown label: " + l);
     }

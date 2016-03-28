@@ -249,9 +249,8 @@ public class InformationGainProducts {
 
     List<ProductIndex> prods = new ArrayList<>();
 
-    boolean addOne = false;
-    int[] frames = ffl.getFrames(addOne);
-    int[] roles = ffl.getRoles(addOne);
+    int[] frames = ffl.getFrames(InformationGain.ADD_ONE);
+    int[] roles = ffl.getRoles(InformationGain.ADD_ONE);
 
     for (int frame : frames) {
       updateMany(featuresFrameRestricted.get(frame), ffl, prods);
@@ -764,8 +763,7 @@ public class InformationGainProducts {
         for (int k = 0; k < K; k++) {
           String role = "r=" + ff.getRole(k);
           int roleIdx = role2name.get(role);
-          boolean addOne = false;
-          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, addOne, frameIdx, roleIdx);
+          FrameRoleFilter filteredGetY = new FrameRoleFilter(getY, InformationGain.ADD_ONE, frameIdx, roleIdx);
           templates.add(new FeatureName(new String[] { templateName }, filteredGetY));
         }
       }
